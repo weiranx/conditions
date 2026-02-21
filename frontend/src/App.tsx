@@ -6633,6 +6633,13 @@ function App() {
                                     const roseCenterY = 84;
                                     const roseOuterRadius = 70;
                                     const bandWidth = roseOuterRadius / ELEVATION_ROSE_ORDER.length;
+                                    const ringRadiusByBand = ELEVATION_ROSE_ORDER.reduce<Record<TerrainElevationBand, number>>(
+                                      (acc, band, ringIndex) => {
+                                        acc[band] = (ringIndex + 0.5) * bandWidth;
+                                        return acc;
+                                      },
+                                      { upper: bandWidth * 1.5, middle: bandWidth * 2.5, lower: bandWidth * 0.5 },
+                                    );
                                     const legendTextX = 146;
                                     const legendItems: Array<{
                                       band: TerrainElevationBand;
@@ -6642,9 +6649,9 @@ function App() {
                                       anchorAngleDeg: number;
                                       elbowX: number;
                                     }> = [
-                                      { band: 'upper', label: 'Above Treeline', labelY: 210, radius: bandWidth * 2.5, anchorAngleDeg: 234, elbowX: 118 },
-                                      { band: 'middle', label: 'Near Treeline', labelY: 224, radius: bandWidth * 1.5, anchorAngleDeg: 242, elbowX: 125 },
-                                      { band: 'lower', label: 'Below Treeline', labelY: 238, radius: bandWidth * 0.5, anchorAngleDeg: 252, elbowX: 132 },
+                                      { band: 'upper', label: 'Above Treeline', labelY: 210, radius: ringRadiusByBand.upper, anchorAngleDeg: 234, elbowX: 118 },
+                                      { band: 'middle', label: 'Near Treeline', labelY: 224, radius: ringRadiusByBand.middle, anchorAngleDeg: 242, elbowX: 125 },
+                                      { band: 'lower', label: 'Below Treeline', labelY: 238, radius: ringRadiusByBand.lower, anchorAngleDeg: 252, elbowX: 132 },
                                     ];
 
                                     return legendItems.map((item) => {

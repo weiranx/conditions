@@ -8,7 +8,9 @@ export interface AvalancheProblemFields {
 }
 
 export const ASPECT_ROSE_ORDER: TerrainAspect[] = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-export const ELEVATION_ROSE_ORDER: TerrainElevationBand[] = ['lower', 'middle', 'upper'];
+// Ring order is inner -> outer.
+// Keep "upper" (Above Treeline) in the middle ring to match the visual convention used in the planner.
+export const ELEVATION_ROSE_ORDER: TerrainElevationBand[] = ['lower', 'upper', 'middle'];
 const EIGHT_WAY_ASPECTS: TerrainAspect[] = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 export function windDirectionToDegrees(direction: string | null | undefined): number | null {
