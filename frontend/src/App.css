@@ -4837,6 +4837,204 @@ input {
   }
 }
 
+@media (max-width: 980px) {
+  .app-container {
+    padding: 12px 10px 28px;
+  }
+
+  .header-section {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .brand {
+    width: 100%;
+  }
+
+  .brand-copy h1 {
+    font-size: clamp(1.05rem, 4.6vw, 1.28rem);
+  }
+
+  .brand-subtitle {
+    font-size: 0.78rem;
+  }
+
+  .header-controls {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .search-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .search-bar {
+    min-height: 44px;
+    padding: 9px 11px;
+    gap: 8px;
+    backdrop-filter: none;
+  }
+
+  .search-bar input {
+    font-size: 0.92rem;
+  }
+
+  .header-controls > .secondary-btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    justify-content: center;
+    padding: 8px 10px;
+  }
+
+  .map-shell {
+    border-radius: 16px;
+  }
+
+  .map-section {
+    height: min(48vh, 430px);
+    min-height: 230px;
+  }
+
+  .map-actions {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .map-actions-top {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .map-actions-top .date-control,
+  .map-actions-top .now-control-btn {
+    width: 100%;
+    margin: 0;
+  }
+
+  .date-control {
+    width: 100%;
+    min-width: 0;
+    padding: 7px 9px;
+    gap: 6px;
+  }
+
+  .date-control input,
+  .date-control select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .map-actions-bottom {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .map-coords {
+    width: 100%;
+    text-align: center;
+  }
+
+  .map-link-group,
+  .map-actions-bottom .map-link-group:last-child {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .map-link-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .map-link-group .action-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 8px 10px;
+  }
+
+  .data-grid {
+    margin-top: 14px;
+    padding: 12px;
+    gap: 12px;
+    border-radius: 16px;
+  }
+
+  .score-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .score-meta {
+    width: 100%;
+    gap: 7px;
+  }
+
+  .report-action-row {
+    width: 100%;
+  }
+
+  .report-action-btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+  }
+
+  .card,
+  .ai-box {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .card-header {
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .weather-header-meta {
+    justify-items: start;
+    width: 100%;
+  }
+
+  .weather-source-pill,
+  .forecast-badge {
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .weather-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sat-line-preview {
+    font-size: 0.72rem;
+  }
+
+  .help-tooltip {
+    width: min(250px, 88vw);
+  }
+
+  .problem-type-box,
+  .aspect-elevation-box,
+  .vertical-scale {
+    min-height: 240px;
+  }
+
+  .problem-icon.problem-icon-lg {
+    width: 180px;
+    height: 180px;
+  }
+
+  .raw-json-pre {
+    max-height: 280px;
+  }
+}
+
 @media (max-width: 740px) {
   .header-section {
     border-radius: 18px;
@@ -5093,6 +5291,255 @@ input {
 
   .raw-value.raw-value-stack {
     justify-items: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-container {
+    padding: 10px 8px 24px;
+  }
+
+  .header-section {
+    padding: 14px 12px;
+    border-radius: 16px;
+  }
+
+  .brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .brand-mark-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .brand-copy h1 {
+    letter-spacing: 0.05em;
+  }
+
+  .header-controls > .secondary-btn {
+    flex: 1 1 100%;
+  }
+
+  .search-bar {
+    padding: 8px 10px;
+  }
+
+  .search-go-btn {
+    padding: 5px 8px;
+    font-size: 0.7rem;
+  }
+
+  .suggestions-list {
+    max-height: min(52vh, 300px);
+  }
+
+  .map-section {
+    height: 44vh;
+    min-height: 210px;
+  }
+
+  .map-actions-top {
+    grid-template-columns: 1fr;
+  }
+
+  .map-link-group {
+    grid-template-columns: 1fr;
+  }
+
+  .date-control {
+    align-items: flex-start;
+    border-radius: 14px;
+  }
+
+  .date-control span {
+    font-size: 0.68rem;
+  }
+
+  .score-value {
+    font-size: clamp(1.8rem, 13vw, 2.5rem);
+  }
+
+  .condition-text {
+    max-width: none;
+  }
+
+  .weather-row {
+    gap: 10px;
+  }
+
+  .weather-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .report-action-btn {
+    flex: 1 1 100%;
+  }
+
+  .card-title {
+    font-size: 0.88rem;
+  }
+
+  .problem-icon.problem-icon-lg {
+    width: 150px;
+    height: 150px;
+  }
+
+  .problem-type-name {
+    font-size: 1.04rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-container {
+    padding: 8px 6px 20px;
+  }
+
+  .header-section {
+    padding: 12px 10px;
+    gap: 10px;
+  }
+
+  .brand-copy h1 {
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+  }
+
+  .brand-subtitle {
+    font-size: 0.74rem;
+  }
+
+  .search-bar input {
+    font-size: 16px;
+  }
+
+  .search-go-btn,
+  .search-clear-btn {
+    min-height: 26px;
+  }
+
+  .suggestions-list {
+    max-height: min(46vh, 260px);
+    padding: 5px;
+  }
+
+  .suggestion-item {
+    padding: 8px 9px;
+  }
+
+  .map-actions {
+    padding: 8px;
+  }
+
+  .date-control {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 6px;
+    border-radius: 12px;
+    padding: 8px;
+  }
+
+  .date-control span {
+    width: 100%;
+    justify-content: flex-start;
+    white-space: normal;
+  }
+
+  .date-control input,
+  .date-control select {
+    width: 100%;
+  }
+
+  .map-time-help {
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  .map-coords {
+    font-size: 0.72rem;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .action-btn {
+    font-size: 0.76rem;
+  }
+
+  .data-grid {
+    padding: 10px;
+    gap: 10px;
+    border-radius: 14px;
+  }
+
+  .score-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .status-badge,
+  .objective-line,
+  .source-line {
+    line-height: 1.3;
+  }
+
+  .report-action-row {
+    gap: 6px;
+  }
+
+  .card,
+  .ai-box {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .card-header {
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .card-title {
+    font-size: 0.84rem;
+    letter-spacing: 0.05em;
+  }
+
+  .weather-row {
+    gap: 8px;
+  }
+
+  .weather-source-pill,
+  .forecast-badge {
+    font-size: 0.68rem;
+    padding: 5px 8px;
+  }
+
+  .travel-timeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .critical-row {
+    padding: 9px;
+  }
+
+  .critical-metrics {
+    line-height: 1.35;
+  }
+
+  .problem-type-box,
+  .aspect-elevation-box,
+  .vertical-scale {
+    min-height: 200px;
+  }
+
+  .problem-icon.problem-icon-lg {
+    width: 132px;
+    height: 132px;
+  }
+
+  .help-tooltip {
+    width: min(220px, 92vw);
   }
 }
 
