@@ -3352,13 +3352,19 @@ input {
 
 .aspect-rose-cell {
   fill: rgba(245, 247, 250, 0.95);
-  stroke: rgba(36, 44, 54, 0.18);
-  stroke-width: 0.7;
+  stroke: rgba(36, 44, 54, 0.22);
+  stroke-width: 0.75;
 }
 
 .aspect-rose-cell.active {
   fill: rgba(193, 196, 201, 0.96);
-  stroke: rgba(20, 26, 33, 0.5);
+  stroke: rgba(20, 26, 33, 0.56);
+}
+
+.aspect-rose-core {
+  fill: rgba(241, 244, 248, 0.98);
+  stroke: #596069;
+  stroke-width: 1.1;
 }
 
 .aspect-rose-ring,
@@ -4273,6 +4279,21 @@ input {
 
 :root[data-theme='dark'] .avy-problem-card-structured .aspect-rose-label {
   fill: #dce8f2;
+}
+
+:root[data-theme='dark'] .avy-problem-card-structured .aspect-rose-cell {
+  fill: rgba(222, 231, 238, 0.1);
+  stroke: rgba(165, 186, 201, 0.4);
+}
+
+:root[data-theme='dark'] .avy-problem-card-structured .aspect-rose-cell.active {
+  fill: rgba(194, 204, 214, 0.5);
+  stroke: #9baebb;
+}
+
+:root[data-theme='dark'] .avy-problem-card-structured .aspect-rose-core {
+  fill: #203240;
+  stroke: #90a3b3;
 }
 
 :root[data-theme='dark'] .avy-problem-card-structured .aspect-rose-elev-text {

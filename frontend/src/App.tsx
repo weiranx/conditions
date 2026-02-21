@@ -6579,7 +6579,8 @@ function App() {
                                 <svg className="aspect-rose" viewBox="0 0 260 250" role="img" aria-label="Aspect and elevation terrain distribution">
                                   {(() => {
                                     const roseOuterRadius = 70;
-                                    const roseBandWidth = roseOuterRadius / ELEVATION_ROSE_ORDER.length;
+                                    const roseHubRadius = 16;
+                                    const roseBandWidth = (roseOuterRadius - roseHubRadius) / ELEVATION_ROSE_ORDER.length;
 
                                     return ASPECT_ROSE_ORDER.map((aspect, aspectIndex) => {
                                       const startDeg = -112.5 + aspectIndex * 45;
@@ -6587,7 +6588,7 @@ function App() {
                                       const aspectActive = terrain.aspects.has(aspect);
 
                                       return ELEVATION_ROSE_ORDER.map((band, ringIndex) => {
-                                        const innerRadius = ringIndex * roseBandWidth;
+                                        const innerRadius = roseHubRadius + ringIndex * roseBandWidth;
                                         const outerRadius = innerRadius + roseBandWidth;
                                         const elevationActive = terrain.elevations.size === 0 || terrain.elevations.has(band);
                                         const cellActive = aspectActive && elevationActive;
@@ -6602,17 +6603,35 @@ function App() {
                                     });
                                   })()}
 
-                                  {[1, 2, 3].map((ringStep) => (
-                                    <polygon
-                                      key={`ring-${ringStep}`}
-                                      points={ASPECT_ROSE_ORDER.map((_, idx) => {
-                                        const radius = (70 / 3) * ringStep;
-                                        const point = polarPoint(130, 84, radius, -90 + idx * 45);
-                                        return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-                                      }).join(' ')}
-                                      className="aspect-rose-ring"
-                                    />
-                                  ))}
+                                  {(() => {
+                                    const hubPoints = ASPECT_ROSE_ORDER.map((_, idx) => {
+                                      const point = polarPoint(130, 84, 16, -90 + idx * 45);
+                                      return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+                                    }).join(' ');
+                                    return <polygon points={hubPoints} className="aspect-rose-core" />;
+                                  })()}
+
+                                  {(() => {
+                                    const roseOuterRadius = 70;
+                                    const roseHubRadius = 16;
+                                    const roseBandWidth = (roseOuterRadius - roseHubRadius) / ELEVATION_ROSE_ORDER.length;
+                                    const ringRadii = [
+                                      roseHubRadius,
+                                      roseHubRadius + roseBandWidth,
+                                      roseHubRadius + roseBandWidth * 2,
+                                      roseOuterRadius,
+                                    ];
+                                    return ringRadii.map((radius, idx) => (
+                                      <polygon
+                                        key={`ring-${idx}`}
+                                        points={ASPECT_ROSE_ORDER.map((_, pointIndex) => {
+                                          const point = polarPoint(130, 84, radius, -90 + pointIndex * 45);
+                                          return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+                                        }).join(' ')}
+                                        className="aspect-rose-ring"
+                                      />
+                                    ));
+                                  })()}
 
                                   {ASPECT_ROSE_ORDER.map((_, idx) => {
                                     const point = polarPoint(130, 84, 70, -90 + idx * 45);
@@ -6632,13 +6651,18 @@ function App() {
                                     const roseCenterX = 130;
                                     const roseCenterY = 84;
                                     const roseOuterRadius = 70;
-                                    const bandWidth = roseOuterRadius / ELEVATION_ROSE_ORDER.length;
+                                    const roseHubRadius = 16;
+                                    const bandWidth = (roseOuterRadius - roseHubRadius) / ELEVATION_ROSE_ORDER.length;
                                     const ringRadiusByBand = ELEVATION_ROSE_ORDER.reduce<Record<TerrainElevationBand, number>>(
                                       (acc, band, ringIndex) => {
-                                        acc[band] = (ringIndex + 0.5) * bandWidth;
+                                        acc[band] = roseHubRadius + (ringIndex + 0.5) * bandWidth;
                                         return acc;
                                       },
-                                      { upper: bandWidth * 1.5, middle: bandWidth * 2.5, lower: bandWidth * 0.5 },
+                                      {
+                                        upper: roseHubRadius + bandWidth * 1.5,
+                                        middle: roseHubRadius + bandWidth * 0.5,
+                                        lower: roseHubRadius + bandWidth * 2.5,
+                                      },
                                     );
                                     const legendTextX = 146;
                                     const legendItems: Array<{

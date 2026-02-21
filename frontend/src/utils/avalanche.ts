@@ -81,7 +81,7 @@ export function buildRoseSectorPath(
   if (innerRadius <= 0) {
     return [
       `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
-      `A ${outerRadius} ${outerRadius} 0 0 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
+      `L ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
       `L ${cx.toFixed(2)} ${cy.toFixed(2)}`,
       'Z',
     ].join(' ');
@@ -92,9 +92,9 @@ export function buildRoseSectorPath(
 
   return [
     `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
-    `A ${outerRadius} ${outerRadius} 0 0 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
+    `L ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
     `L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
-    `A ${innerRadius} ${innerRadius} 0 0 0 ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
+    `L ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
     'Z',
   ].join(' ');
 }
