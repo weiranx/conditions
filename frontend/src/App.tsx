@@ -35,16 +35,12 @@ import {
 import './App.css';
 import {
   ASPECT_ROSE_ORDER,
-  ELEVATION_ROSE_ORDER,
   leewardAspectsFromWind,
   windDirectionToDegrees,
-  polarPoint,
-  buildRoseSectorPath,
   parseLikelihoodRange,
   parseProblemSizeRange,
   getLocationEntries,
   parseTerrainFromLocation,
-  type TerrainElevationBand,
 } from './utils/avalanche';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -6576,129 +6572,45 @@ function App() {
                             <section className="problem-structured-col">
                               <div className="problem-structured-label">Aspect/Elevation</div>
                               <div className="aspect-elevation-box">
-                                <svg className="aspect-rose" viewBox="0 0 260 250" role="img" aria-label="Aspect and elevation terrain distribution">
-                                  {(() => {
-                                    const roseOuterRadius = 70;
-                                    const roseHubRadius = 16;
-                                    const roseBandWidth = (roseOuterRadius - roseHubRadius) / ELEVATION_ROSE_ORDER.length;
-
-                                    return ASPECT_ROSE_ORDER.map((aspect, aspectIndex) => {
-                                      const startDeg = -112.5 + aspectIndex * 45;
-                                      const endDeg = startDeg + 45;
-                                      const aspectActive = terrain.aspects.has(aspect);
-
-                                      return ELEVATION_ROSE_ORDER.map((band, ringIndex) => {
-                                        const innerRadius = roseHubRadius + ringIndex * roseBandWidth;
-                                        const outerRadius = innerRadius + roseBandWidth;
-                                        const elevationActive = terrain.elevations.size === 0 || terrain.elevations.has(band);
-                                        const cellActive = aspectActive && elevationActive;
+                                <div className="aspect-elevation-simple">
+                                  <div className="aspect-simple-group">
+                                    <span className="aspect-simple-heading">Aspects</span>
+                                    <div className="aspect-chip-grid" role="list" aria-label="Avalanche problem aspects">
+                                      {ASPECT_ROSE_ORDER.map((aspect) => {
+                                        const isActive = terrain.aspects.size === 0 || terrain.aspects.has(aspect);
                                         return (
-                                          <path
-                                            key={`${aspect}-${band}`}
-                                            d={buildRoseSectorPath(130, 84, innerRadius, outerRadius, startDeg, endDeg)}
-                                            className={`aspect-rose-cell ${cellActive ? 'active' : ''}`}
-                                          />
+                                          <span key={`${problem.id || i}-${aspect}`} className={`aspect-chip ${isActive ? 'active' : ''}`} role="listitem">
+                                            {aspect}
+                                          </span>
                                         );
-                                      });
-                                    });
-                                  })()}
+                                      })}
+                                    </div>
+                                    <p className="aspect-simple-note">
+                                      {terrain.aspects.size === 0
+                                        ? 'No specific aspects listed; treat all aspects as potentially involved.'
+                                        : 'Highlighted aspects are identified in the bulletin.'}
+                                    </p>
+                                  </div>
 
-                                  {(() => {
-                                    const hubPoints = ASPECT_ROSE_ORDER.map((_, idx) => {
-                                      const point = polarPoint(130, 84, 16, -90 + idx * 45);
-                                      return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-                                    }).join(' ');
-                                    return <polygon points={hubPoints} className="aspect-rose-core" />;
-                                  })()}
-
-                                  {(() => {
-                                    const roseOuterRadius = 70;
-                                    const roseHubRadius = 16;
-                                    const roseBandWidth = (roseOuterRadius - roseHubRadius) / ELEVATION_ROSE_ORDER.length;
-                                    const ringRadii = [
-                                      roseHubRadius,
-                                      roseHubRadius + roseBandWidth,
-                                      roseHubRadius + roseBandWidth * 2,
-                                      roseOuterRadius,
-                                    ];
-                                    return ringRadii.map((radius, idx) => (
-                                      <polygon
-                                        key={`ring-${idx}`}
-                                        points={ASPECT_ROSE_ORDER.map((_, pointIndex) => {
-                                          const point = polarPoint(130, 84, radius, -90 + pointIndex * 45);
-                                          return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-                                        }).join(' ')}
-                                        className="aspect-rose-ring"
-                                      />
-                                    ));
-                                  })()}
-
-                                  {ASPECT_ROSE_ORDER.map((_, idx) => {
-                                    const point = polarPoint(130, 84, 70, -90 + idx * 45);
-                                    return <line key={`spoke-${idx}`} x1="130" y1="84" x2={point.x.toFixed(2)} y2={point.y.toFixed(2)} className="aspect-rose-spoke" />;
-                                  })}
-
-                                  {ASPECT_ROSE_ORDER.map((aspect, idx) => {
-                                    const labelPoint = polarPoint(130, 84, 86, -90 + idx * 45);
-                                    return (
-                                      <text key={`label-${aspect}`} x={labelPoint.x.toFixed(2)} y={labelPoint.y.toFixed(2)} className="aspect-rose-label">
-                                        {aspect}
-                                      </text>
-                                    );
-                                  })}
-
-                                  {(() => {
-                                    const roseCenterX = 130;
-                                    const roseCenterY = 84;
-                                    const roseOuterRadius = 70;
-                                    const roseHubRadius = 16;
-                                    const bandWidth = (roseOuterRadius - roseHubRadius) / ELEVATION_ROSE_ORDER.length;
-                                    const ringRadiusByBand = ELEVATION_ROSE_ORDER.reduce<Record<TerrainElevationBand, number>>(
-                                      (acc, band, ringIndex) => {
-                                        acc[band] = roseHubRadius + (ringIndex + 0.5) * bandWidth;
-                                        return acc;
-                                      },
-                                      {
-                                        upper: roseHubRadius + bandWidth * 1.5,
-                                        middle: roseHubRadius + bandWidth * 0.5,
-                                        lower: roseHubRadius + bandWidth * 2.5,
-                                      },
-                                    );
-                                    const legendTextX = 146;
-                                    const legendItems: Array<{
-                                      band: TerrainElevationBand;
-                                      label: string;
-                                      labelY: number;
-                                      radius: number;
-                                      anchorAngleDeg: number;
-                                      elbowX: number;
-                                    }> = [
-                                      { band: 'upper', label: 'Above Treeline', labelY: 210, radius: ringRadiusByBand.upper, anchorAngleDeg: 234, elbowX: 118 },
-                                      { band: 'middle', label: 'Near Treeline', labelY: 224, radius: ringRadiusByBand.middle, anchorAngleDeg: 242, elbowX: 125 },
-                                      { band: 'lower', label: 'Below Treeline', labelY: 238, radius: ringRadiusByBand.lower, anchorAngleDeg: 252, elbowX: 132 },
-                                    ];
-
-                                    return legendItems.map((item) => {
-                                      const dotPoint = polarPoint(roseCenterX, roseCenterY, item.radius, item.anchorAngleDeg);
-                                      const isActive = terrain.elevations.size === 0 || terrain.elevations.has(item.band);
-                                      const leaderEndY = item.labelY - 5;
-                                      return (
-                                        <g key={`legend-${item.band}`}>
-                                          <polyline
-                                            points={`${dotPoint.x.toFixed(2)},${dotPoint.y.toFixed(2)} ${dotPoint.x.toFixed(2)},${leaderEndY.toFixed(
-                                              2,
-                                            )} ${item.elbowX},${leaderEndY.toFixed(2)}`}
-                                            className="aspect-rose-elev-line"
-                                          />
-                                          <circle cx={dotPoint.x.toFixed(2)} cy={dotPoint.y.toFixed(2)} r="3" className="aspect-rose-elev-dot" />
-                                          <text x={legendTextX} y={item.labelY} className={`aspect-rose-elev-text ${isActive ? 'active' : ''}`}>
-                                            {item.label}
-                                          </text>
-                                        </g>
-                                      );
-                                    });
-                                  })()}
-                                </svg>
+                                  <div className="aspect-simple-group">
+                                    <span className="aspect-simple-heading">Elevation Bands</span>
+                                    <div className="elevation-band-list" role="list" aria-label="Avalanche problem elevation bands">
+                                      {[
+                                        { band: 'upper', label: 'Above Treeline' },
+                                        { band: 'middle', label: 'Near Treeline' },
+                                        { band: 'lower', label: 'Below Treeline' },
+                                      ].map((entry) => {
+                                        const isActive = terrain.elevations.size === 0 || terrain.elevations.has(entry.band as 'upper' | 'middle' | 'lower');
+                                        return (
+                                          <div key={`${problem.id || i}-${entry.band}`} className={`elevation-band-row ${isActive ? 'active' : ''}`} role="listitem">
+                                            <span className="elevation-band-label">{entry.label}</span>
+                                            <span className="elevation-band-state">{isActive ? 'Included' : 'Not highlighted'}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </section>
 
