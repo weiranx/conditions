@@ -6266,8 +6266,8 @@ function App() {
                   </span>
                 )}
                 {safetyData.avalanche.expiresTime && (
-                  <span className="published-chip">
-                    <Clock size={10} /> Expires: {formatPubTime(safetyData.avalanche.expiresTime)}
+                  <span className={`published-chip ${avalancheExpiredForSelectedStart ? 'published-chip-expired' : ''}`}>
+                    <Clock size={10} /> {avalancheExpiredForSelectedStart ? 'Expired:' : 'Expires:'} {formatPubTime(safetyData.avalanche.expiresTime)}
                   </span>
                 )}
               </div>

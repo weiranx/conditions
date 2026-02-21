@@ -2750,6 +2750,15 @@ input {
   font-weight: 600;
 }
 
+.published-chip-expired {
+  color: #9b2f2f;
+  font-weight: 700;
+  border: 1px solid #e2b1b1;
+  background: #fbe8e8;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
 .danger-summary-box {
   display: grid;
   gap: 10px;
@@ -4241,6 +4250,12 @@ input {
 
 :root[data-theme='dark'] .published-chip {
   color: #a8dbc0;
+}
+
+:root[data-theme='dark'] .published-chip.published-chip-expired {
+  color: #f7c1c1;
+  border-color: #8b4a52;
+  background: #3a2026;
 }
 
 :root[data-theme='dark'] .forecast-badge.future {
