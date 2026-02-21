@@ -2339,7 +2339,150 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
   return { feature: null, mode: 'none', fallbackDistanceKm: nearestDistance };
 };
 
-app.get('/api/safety', async (req, res) => {
+const satDecisionLevelFromScore = (scoreValue) => {
+  const score = Number(scoreValue);
+  if (!Number.isFinite(score)) {
+    return 'CAUTION';
+  }
+  if (score >= 80) return 'GO';
+  if (score >= 50) return 'CAUTION';
+  return 'NO-GO';
+};
+
+const satAvalancheSnippet = (avalancheData) => {
+  if (!avalancheData || avalancheData.relevant === false) {
+    return 'Avy N/A';
+  }
+  if (avalancheData.coverageStatus === 'expired_for_selected_start') {
+    return 'Avy expired';
+  }
+  if (avalancheData.dangerUnknown || avalancheData.coverageStatus !== 'reported') {
+    return 'Avy unk';
+  }
+  const level = Number(avalancheData.dangerLevel);
+  if (!Number.isFinite(level) || level <= 0) {
+    return 'Avy unk';
+  }
+  return `Avy L${Math.round(level)}`;
+};
+
+const satCompactCondition = (text) => {
+  const normalized = String(text || '').toLowerCase().trim();
+  if (!normalized) return 'unknown';
+  if (/thunder|storm|hail|lightning/.test(normalized)) return 'storm';
+  if (/blizzard|snow|sleet|freezing|wintry|ice/.test(normalized)) return 'snow';
+  if (/rain|drizzle|shower/.test(normalized)) return 'rain';
+  if (/fog|mist|haze|smoke/.test(normalized)) return 'visibility';
+  if (/clear|sunny/.test(normalized)) return 'clear';
+  return normalized.replace(/\s+/g, ' ').slice(0, 18);
+};
+
+const satWorst12hSnippet = (weatherData) => {
+  const trend = Array.isArray(weatherData?.trend) ? weatherData.trend.slice(0, 12) : [];
+  if (!trend.length) {
+    return 'Worst12h n/a';
+  }
+
+  let best = null;
+  for (const point of trend) {
+    const gust = Number(point?.gust);
+    const wind = Number(point?.wind);
+    const precip = Number(point?.precipChance);
+    const temp = Number(point?.temp);
+    const feelsLike = computeFeelsLikeF(Number.isFinite(temp) ? temp : 0, Number.isFinite(wind) ? wind : 0);
+    const condition = satCompactCondition(point?.condition);
+    const gustRisk = Number.isFinite(gust) ? Math.max(0, gust - 20) * 1.4 : 0;
+    const precipRisk = Number.isFinite(precip) ? Math.max(0, precip - 25) * 0.85 : 0;
+    const coldRisk = Number.isFinite(feelsLike) ? Math.max(0, 20 - feelsLike) * 0.7 : 0;
+    const weatherRisk = /storm/.test(condition) ? 22 : /snow/.test(condition) ? 12 : /rain|visibility/.test(condition) ? 7 : 0;
+    const severity = gustRisk + precipRisk + coldRisk + weatherRisk;
+
+    if (!best || severity > best.severity) {
+      best = {
+        time: String(point?.time || ''),
+        gust,
+        precip,
+        feelsLike,
+        condition,
+        severity,
+      };
+    }
+  }
+
+  if (!best) {
+    return 'Worst12h n/a';
+  }
+
+  const parts = [];
+  if (best.time) parts.push(best.time);
+  if (best.condition && best.condition !== 'clear') parts.push(best.condition);
+  if (Number.isFinite(best.gust)) parts.push(`g${Math.round(best.gust)}mph`);
+  if (Number.isFinite(best.precip)) parts.push(`p${Math.round(best.precip)}%`);
+  if (Number.isFinite(best.feelsLike)) parts.push(`f${Math.round(best.feelsLike)}F`);
+  return `Worst12h ${parts.join(' ')}`.trim();
+};
+
+const satStartLabel = (startClock) => {
+  const normalized = parseStartClock(startClock);
+  if (!normalized) return '';
+  const [hourRaw, minuteRaw] = normalized.split(':').map((part) => Number(part));
+  if (!Number.isFinite(hourRaw) || !Number.isFinite(minuteRaw)) return normalized;
+  const meridiem = hourRaw >= 12 ? 'PM' : 'AM';
+  const hour12 = hourRaw % 12 === 0 ? 12 : hourRaw % 12;
+  return `${hour12}:${String(minuteRaw).padStart(2, '0')}${meridiem}`;
+};
+
+const buildSatOneLiner = ({ safetyPayload, objectiveName = '', startClock = '', maxLength = 170 }) => {
+  const payload = safetyPayload && typeof safetyPayload === 'object' ? safetyPayload : {};
+  const weather = payload.weather && typeof payload.weather === 'object' ? payload.weather : {};
+  const avalanche = payload.avalanche && typeof payload.avalanche === 'object' ? payload.avalanche : {};
+  const safety = payload.safety && typeof payload.safety === 'object' ? payload.safety : {};
+  const forecastDate = payload.forecast && typeof payload.forecast === 'object' ? payload.forecast.selectedDate : null;
+
+  const label = String(objectiveName || 'Objective')
+    .split(',')[0]
+    .trim()
+    .slice(0, 24);
+  const temp = Number(weather.temp);
+  const feelsLike = Number.isFinite(Number(weather.feelsLike)) ? Number(weather.feelsLike) : computeFeelsLikeF(temp, Number(weather.windSpeed) || 0);
+  const wind = Number(weather.windSpeed);
+  const gust = Number(weather.windGust);
+  const precip = Number(weather.precipChance);
+  const score = Number(safety.score);
+  const decision = satDecisionLevelFromScore(score);
+  const worst12h = satWorst12hSnippet(weather);
+  const startLabel = satStartLabel(startClock);
+
+  const line = [
+    label || 'Objective',
+    forecastDate || new Date().toISOString().slice(0, 10),
+    startLabel ? `start ${startLabel}` : '',
+    '|',
+    Number.isFinite(temp) ? `${Math.round(temp)}F` : 'temp n/a',
+    Number.isFinite(feelsLike) ? `feels ${Math.round(feelsLike)}F` : '',
+    Number.isFinite(wind) ? `w${Math.round(wind)}mph` : '',
+    Number.isFinite(gust) ? `g${Math.round(gust)}mph` : '',
+    Number.isFinite(precip) ? `p${Math.round(precip)}%` : '',
+    '|',
+    satAvalancheSnippet(avalanche),
+    '|',
+    worst12h,
+    '|',
+    decision,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const cap = Number.isFinite(Number(maxLength)) ? Math.max(80, Math.min(320, Math.round(Number(maxLength)))) : 170;
+  if (line.length <= cap) {
+    return line;
+  }
+  return `${line.slice(0, cap - 1).trimEnd()}…`;
+};
+
+const safetyHandler = async (req, res) => {
   const { lat, lon, date, start } = req.query;
 
   if (!lat || !lon) {
@@ -3272,6 +3415,106 @@ app.get('/api/safety', async (req, res) => {
 	    delete fallbackResponsePayload.activity;
 	    res.status(200).json(fallbackResponsePayload);
   }
+};
+
+app.get('/api/safety', safetyHandler);
+
+const invokeSafetyHandler = async (query) =>
+  new Promise((resolve, reject) => {
+    const mockReq = { query };
+    const mockRes = {
+      statusCode: 200,
+      headersSent: false,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.headersSent = true;
+        resolve({ statusCode: this.statusCode, payload });
+        return this;
+      },
+    };
+
+    Promise.resolve(safetyHandler(mockReq, mockRes))
+      .then(() => {
+        if (!mockRes.headersSent) {
+          resolve({ statusCode: mockRes.statusCode, payload: null });
+        }
+      })
+      .catch(reject);
+  });
+
+app.get('/api/sat-oneliner', async (req, res) => {
+  const { lat, lon, date, start, objective, name, maxLength } = req.query;
+
+  if (!lat || !lon) {
+    return res.status(400).json({ error: 'Latitude and longitude are required' });
+  }
+
+  const parsedLat = Number(lat);
+  const parsedLon = Number(lon);
+  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
+    return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
+  }
+
+  const requestedDate = typeof date === 'string' ? date.trim() : '';
+  if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+  }
+
+  const normalizedStart = parseStartClock(typeof start === 'string' ? start : '') || '';
+  const requestedMaxLength = Number(maxLength);
+  if (maxLength !== undefined && (!Number.isFinite(requestedMaxLength) || requestedMaxLength < 80 || requestedMaxLength > 320)) {
+    return res.status(400).json({ error: 'maxLength must be a number between 80 and 320.' });
+  }
+
+  try {
+    const safetyResult = await invokeSafetyHandler({
+      lat: String(parsedLat),
+      lon: String(parsedLon),
+      date: requestedDate || undefined,
+      start: normalizedStart || undefined,
+    });
+
+    if (safetyResult.statusCode !== 200 || !safetyResult.payload || typeof safetyResult.payload !== 'object') {
+      return res.status(safetyResult.statusCode || 502).json(
+        safetyResult.payload && typeof safetyResult.payload === 'object'
+          ? safetyResult.payload
+          : { error: 'Unable to build SAT one-liner from safety report.' },
+      );
+    }
+
+    const objectiveName = String(objective || name || '').trim();
+    const satLine = buildSatOneLiner({
+      safetyPayload: safetyResult.payload,
+      objectiveName,
+      startClock: normalizedStart,
+      maxLength: Number.isFinite(requestedMaxLength) ? requestedMaxLength : 170,
+    });
+
+    return res.status(200).json({
+      line: satLine,
+      length: satLine.length,
+      maxLength: Number.isFinite(requestedMaxLength) ? requestedMaxLength : 170,
+      generatedAt: new Date().toISOString(),
+      sourceGeneratedAt: safetyResult.payload.generatedAt || null,
+      partialData: Boolean(safetyResult.payload.partialData),
+      source: '/api/safety',
+      params: {
+        lat: parsedLat,
+        lon: parsedLon,
+        date: requestedDate || safetyResult.payload?.forecast?.selectedDate || null,
+        start: normalizedStart || null,
+        objective: objectiveName || null,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to generate SAT one-liner.',
+      details: error?.message || 'Unknown backend error.',
+    });
+  }
 });
 
 registerSearchRoutes({
@@ -3340,4 +3583,5 @@ module.exports = {
   normalizeAvalancheProblemCollection,
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
+  buildSatOneLiner,
 };

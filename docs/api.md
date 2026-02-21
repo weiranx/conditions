@@ -65,6 +65,36 @@ Compatibility aliases are also included:
 
 - Legacy rain aliases: `past12h*`, `past24h*`, `past48h*`
 
+## `GET /api/sat-oneliner`
+
+Returns a satellite-friendly one-line condition summary generated from the same planning inputs as `/api/safety`.
+
+### Query Parameters
+
+- `lat` (required): decimal latitude (`-90..90`)
+- `lon` (required): decimal longitude (`-180..180`)
+- `date` (optional): `YYYY-MM-DD`
+- `start` (optional): `HH:mm` (24-hour format)
+- `objective` (optional): objective label to include in the line (alias: `name`)
+- `maxLength` (optional): output cap (`80..320`, default `170`)
+
+### Example
+
+```bash
+curl "http://localhost:3001/api/sat-oneliner?lat=46.8523&lon=-121.7603&date=2026-02-21&start=06:30&objective=Mount%20Rainier"
+```
+
+### Response Shape
+
+- `line`: final one-liner text
+- `length`: character length of `line`
+- `maxLength`: applied max length cap
+- `generatedAt`: SAT endpoint generation timestamp
+- `sourceGeneratedAt`: upstream `/api/safety` payload generation time
+- `partialData`: true when upstream report used degraded data
+- `source`: `"/api/safety"`
+- `params`: normalized request params used to build the line
+
 ## `GET /api/search`
 
 Searches objectives using local peak catalog + Nominatim geocoding.

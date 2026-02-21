@@ -18,6 +18,7 @@ const {
   normalizeAvalancheProblemCollection,
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
+  buildSatOneLiner,
 } = require('../index');
 const { findNearestCardinalFromDegreeSeries, estimateWindGustFromWindSpeed, inferWindGustFromPeriods } = require('../src/utils/wind');
 const { parseIsoTimeToMsWithReference } = require('../src/utils/time');
@@ -117,6 +118,54 @@ test('buildPlannedStartIso falls back to reference ISO for invalid inputs', () =
       referenceIso: '2026-02-20T05:00:00-08:00',
     }),
   ).toBe('2026-02-20T05:00:00-08:00');
+});
+
+test('buildSatOneLiner builds concise line with worst-12h and avalanche snippets', () => {
+  const line = buildSatOneLiner({
+    objectiveName: 'Mount Rainier, Washington',
+    startClock: '06:30',
+    maxLength: 220,
+    safetyPayload: {
+      forecast: { selectedDate: '2026-02-21' },
+      weather: {
+        temp: 24,
+        feelsLike: 17,
+        windSpeed: 14,
+        windGust: 29,
+        precipChance: 45,
+        trend: [
+          { time: '6 AM', temp: 24, wind: 14, gust: 29, precipChance: 45, condition: 'Light Snow' },
+          { time: '8 AM', temp: 19, wind: 24, gust: 42, precipChance: 68, condition: 'Snow Showers' },
+        ],
+      },
+      avalanche: { relevant: true, dangerUnknown: false, coverageStatus: 'reported', dangerLevel: 3 },
+      safety: { score: 44 },
+    },
+  });
+
+  expect(line).toMatch(/Mount Rainier/i);
+  expect(line).toMatch(/2026-02-21/);
+  expect(line).toMatch(/start 6:30AM/i);
+  expect(line).toMatch(/Avy L3/i);
+  expect(line).toMatch(/Worst12h/i);
+  expect(line).toMatch(/NO-GO/i);
+});
+
+test('buildSatOneLiner enforces max length cap with ellipsis', () => {
+  const line = buildSatOneLiner({
+    objectiveName: 'Very Long Objective Name That Keeps Going',
+    startClock: '06:30',
+    maxLength: 100,
+    safetyPayload: {
+      forecast: { selectedDate: '2026-02-21' },
+      weather: { temp: 12, feelsLike: 4, windSpeed: 18, windGust: 35, precipChance: 55, trend: [] },
+      avalanche: { relevant: false },
+      safety: { score: 60 },
+    },
+  });
+
+  expect(line.length).toBeLessThanOrEqual(100);
+  expect(line.endsWith('…') || line.length < 100).toBe(true);
 });
 
 test('parseIsoTimeToMsWithReference applies reference timezone when timestamp omits offset', () => {

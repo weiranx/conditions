@@ -1465,6 +1465,15 @@ function normalizeNumberPreference(rawValue: unknown, fallback: number, min: num
   return Math.max(min, Math.min(max, Math.round(numericValue)));
 }
 
+function normalizeDecimalPreference(rawValue: unknown, fallback: number, min: number, max: number, precision = 2): number {
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  const clamped = Math.max(min, Math.min(max, numericValue));
+  return Number(clamped.toFixed(precision));
+}
+
 function getDefaultUserPreferences(): UserPreferences {
   return {
     defaultActivity: 'backcountry',
@@ -1510,9 +1519,9 @@ function loadUserPreferences(): UserPreferences {
       elevationUnit: normalizeElevationUnit(parsed.elevationUnit),
       windSpeedUnit: normalizeWindSpeedUnit(parsed.windSpeedUnit),
       timeStyle: normalizeTimeStyle(parsed.timeStyle),
-      maxWindGustMph: normalizeNumberPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80),
+      maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
       maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
-      minFeelsLikeF: normalizeNumberPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60),
+      minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
       requireAvalancheCheck:
         typeof parsed.requireAvalancheCheck === 'boolean' ? parsed.requireAvalancheCheck : defaults.requireAvalancheCheck,
     };
@@ -3586,7 +3595,7 @@ function App() {
       return;
     }
     const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    updatePreferences({ maxWindGustMph: Math.max(10, Math.min(80, Math.round(mphValue))) });
+    updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(80, mphValue)).toFixed(2)) });
   };
 
   const handleFeelsLikeThresholdDisplayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3595,7 +3604,7 @@ function App() {
       return;
     }
     const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
-    updatePreferences({ minFeelsLikeF: Math.max(-40, Math.min(60, Math.round(valueF))) });
+    updatePreferences({ minFeelsLikeF: Number(Math.max(-40, Math.min(60, valueF)).toFixed(2)) });
   };
 
   const applyPreferencesToPlanner = () => {
@@ -3803,6 +3812,20 @@ function App() {
   const windUnitLabel = preferences.windSpeedUnit;
   const tempUnitLabel = preferences.temperatureUnit.toUpperCase();
   const elevationUnitLabel = preferences.elevationUnit;
+  const windThresholdPrecision = preferences.windSpeedUnit === 'kph' ? 1 : 0;
+  const windThresholdStep = preferences.windSpeedUnit === 'kph' ? 0.5 : 1;
+  const windThresholdMin = Number(convertWindMphToDisplayValue(10, preferences.windSpeedUnit).toFixed(windThresholdPrecision));
+  const windThresholdMax = Number(convertWindMphToDisplayValue(80, preferences.windSpeedUnit).toFixed(windThresholdPrecision));
+  const windThresholdInputValue = Number(
+    convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit).toFixed(windThresholdPrecision),
+  );
+  const feelsLikeThresholdPrecision = preferences.temperatureUnit === 'c' ? 1 : 0;
+  const feelsLikeThresholdStep = preferences.temperatureUnit === 'c' ? 0.5 : 1;
+  const feelsLikeThresholdMin = Number(convertTempFToDisplayValue(-40, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
+  const feelsLikeThresholdMax = Number(convertTempFToDisplayValue(60, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
+  const feelsLikeThresholdInputValue = Number(
+    convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision),
+  );
   const targetElevationForecast =
     safetyData && hasTargetElevation && Number.isFinite(Number(safetyData.weather.elevation))
       ? (() => {
@@ -4829,10 +4852,10 @@ function App() {
                   <span>Max gust ({windUnitLabel})</span>
                   <input
                     type="number"
-                    min={Math.round(convertWindMphToDisplayValue(10, preferences.windSpeedUnit))}
-                    max={Math.round(convertWindMphToDisplayValue(80, preferences.windSpeedUnit))}
-                    step={1}
-                    value={Math.round(convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit))}
+                    min={windThresholdMin}
+                    max={windThresholdMax}
+                    step={windThresholdStep}
+                    value={windThresholdInputValue}
                     onChange={handleWindThresholdDisplayChange}
                   />
                 </label>
@@ -4844,10 +4867,10 @@ function App() {
                   <span>Min feels-like ({tempUnitLabel})</span>
                   <input
                     type="number"
-                    min={Math.round(convertTempFToDisplayValue(-40, preferences.temperatureUnit))}
-                    max={Math.round(convertTempFToDisplayValue(60, preferences.temperatureUnit))}
-                    step={1}
-                    value={Math.round(convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit))}
+                    min={feelsLikeThresholdMin}
+                    max={feelsLikeThresholdMax}
+                    step={feelsLikeThresholdStep}
+                    value={feelsLikeThresholdInputValue}
                     onChange={handleFeelsLikeThresholdDisplayChange}
                   />
                 </label>

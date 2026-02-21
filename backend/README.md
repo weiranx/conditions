@@ -3,6 +3,7 @@
 Express API for:
 
 - `GET /api/safety`
+- `GET /api/sat-oneliner`
 - `GET /api/search`
 - `GET /healthz` and `GET /api/healthz`
 

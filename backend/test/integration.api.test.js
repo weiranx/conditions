@@ -44,6 +44,24 @@ test('GET /api/safety rejects invalid date format', async () => {
   expect(String(res.body.error || '')).toMatch(/Invalid date format/i);
 });
 
+test('GET /api/sat-oneliner rejects missing coordinates', async () => {
+  const res = await request(app).get('/api/sat-oneliner');
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/Latitude and longitude are required/i);
+});
+
+test('GET /api/sat-oneliner rejects invalid coordinate ranges', async () => {
+  const res = await request(app).get('/api/sat-oneliner?lat=200&lon=-121.7');
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/valid decimal coordinates/i);
+});
+
+test('GET /api/sat-oneliner validates maxLength bounds', async () => {
+  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=20');
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/maxLength/i);
+});
+
 test('GET /api/search supports short local queries without external dependencies', async () => {
   const res = await request(app).get('/api/search?q=ra');
   expect(res.status).toBe(200);
