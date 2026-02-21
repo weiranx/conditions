@@ -4475,12 +4475,26 @@ function App() {
       | 'scoreTrace'
       | 'recommendedGear';
 
+    const clampRiskLevel = (value: number): number => Math.max(0, Math.min(5, Math.round(value)));
+    const alertSeverityRank = (severity: string | undefined | null): number => {
+      const normalized = String(severity || '').trim().toLowerCase();
+      if (!normalized) return 1;
+      if (['extreme', 'severe'].includes(normalized)) return 5;
+      if (['warning'].includes(normalized)) return 4;
+      if (['advisory', 'watch'].includes(normalized)) return 3;
+      if (['moderate'].includes(normalized)) return 2;
+      return 1;
+    };
+
     const trailText = String(safetyData?.terrainCondition?.label || safetyData?.trail || '').toLowerCase();
     const weatherDescription = String(safetyData?.weather.description || '').toLowerCase();
     const windGustNumeric = Number(safetyData?.weather.windGust);
+    const windSpeedNumeric = Number(safetyData?.weather.windSpeed);
+    const feelsLikeNumeric = Number(safetyData?.weather.feelsLike ?? safetyData?.weather.temp);
     const precipChanceNumeric = Number(safetyData?.weather.precipChance);
     const aqiNumeric = Number(safetyData?.airQuality?.usAqi);
     const scoreFactors = Array.isArray(safetyData?.safety?.factors) ? safetyData.safety.factors : [];
+    const safetyScoreNumeric = Number(safetyData?.safety?.score);
     const weatherAvailable =
       Number.isFinite(Number(safetyData?.weather.temp)) ||
       (weatherDescription.length > 0 && weatherDescription !== 'unknown');
@@ -4505,87 +4519,144 @@ function App() {
     const gearAvailable = Array.isArray(safetyData?.gear) && safetyData.gear.length > 0;
     const planAvailable = Boolean(safetyData?.solar?.sunrise || safetyData?.solar?.sunset || safetyData?.forecast?.selectedDate);
     const alertsCardRelevant = alertsForecastRelevantForSelectedTime;
+    const alertsList = safetyData?.alerts?.alerts || [];
     const alertsActive = alertsCardRelevant && nwsAlertCount > 0;
-    const severeWeatherSignal =
-      (Number.isFinite(windGustNumeric) && windGustNumeric >= 30) ||
-      (Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.6) ||
-      (Number.isFinite(precipChanceNumeric) && precipChanceNumeric >= 70);
-    const highAqiSignal = Number.isFinite(aqiNumeric) && aqiNumeric >= 100;
-    const highFireSignal = Number.isFinite(fireRiskLevel) && fireRiskLevel >= 3;
-    const hasStaleSource = sourceFreshnessRows.some((row) => (row.stateOverride || freshnessClass(row.issued, row.staleHours)) === 'stale');
+    const highestAlertSeverity = Math.max(
+      alertSeverityRank(safetyData?.alerts?.highestSeverity),
+      alertsList.reduce((maxSeverity, alert) => Math.max(maxSeverity, alertSeverityRank(alert.severity)), 0),
+    );
+    const staleSourceCount = sourceFreshnessRows.filter((row) => (row.stateOverride || freshnessClass(row.issued, row.staleHours)) === 'stale').length;
+    const missingSourceCount = sourceFreshnessRows.filter((row) => (row.stateOverride || freshnessClass(row.issued, row.staleHours)) === 'missing').length;
     const decisionLevel = decision?.level || 'CAUTION';
+    const stormSignal = /thunder|storm|lightning|hail|blizzard/.test(weatherDescription);
+    const travelFailHours = travelWindowRows.filter((row) => !row.pass).length;
+    const travelFailRatio = travelWindowRows.length > 0 ? travelFailHours / travelWindowRows.length : 0;
+    const criticalHighHours = criticalWindow.filter((row) => row.level === 'high').length;
+    const criticalWatchHours = criticalWindow.filter((row) => row.level === 'watch').length;
+    const daylightCheckFailed = Boolean(
+      decision?.checks?.find((check) => /30 min before sunset/i.test(check.label || '') && check.ok === false),
+    );
+    const maxSnowpackDepth = Math.max(0, ...snowpackDepthSignalValues);
+    const maxSnowpackSwe = Math.max(0, ...snowpackSweSignalValues);
+    const terrainCode = String(safetyData?.terrainCondition?.code || '').toLowerCase();
+    const gustThresholdDelta = Number.isFinite(windGustNumeric) ? windGustNumeric - preferences.maxWindGustMph : 0;
+    const precipThresholdDelta = Number.isFinite(precipChanceNumeric) ? precipChanceNumeric - preferences.maxPrecipChance : 0;
+    const coldThresholdDelta = Number.isFinite(feelsLikeNumeric) ? preferences.minFeelsLikeF - feelsLikeNumeric : 0;
+    const windThresholdDelta = Number.isFinite(windSpeedNumeric) ? windSpeedNumeric - preferences.maxWindGustMph * 0.6 : 0;
 
-    const cards: Array<{ key: SortableCardKey; base: number; available: boolean; relevant: boolean }> = [
-      { key: 'decisionGate', base: 100, available: true, relevant: true },
-      { key: 'criticalChecks', base: 97, available: criticalCheckTotal > 0, relevant: true },
-      { key: 'atmosphericData', base: 95, available: weatherAvailable, relevant: true },
-      { key: 'nwsAlerts', base: 93, available: alertsCardRelevant, relevant: alertsCardRelevant },
-      { key: 'travelWindowPlanner', base: 92, available: travelAvailable, relevant: true },
-      { key: 'terrainTrailCondition', base: 88, available: terrainAvailable, relevant: true },
-      { key: 'snowpackSnapshot', base: 86, available: snowpackAvailable, relevant: true },
-      { key: 'windLoadingHints', base: 84, available: windHintsAvailable, relevant: true },
-      { key: 'recentRainfall', base: 82, available: rainfallAvailable, relevant: true },
-      { key: 'sourceFreshness', base: 80, available: sourceFreshnessAvailable, relevant: true },
-      { key: 'fireRisk', base: 78, available: fireRiskAvailable, relevant: true },
-      { key: 'airQuality', base: 76, available: airQualityAvailable, relevant: true },
-      { key: 'planSnapshot', base: 73, available: planAvailable, relevant: true },
-      { key: 'scoreTrace', base: 70, available: scoreTraceAvailable, relevant: true },
-      { key: 'recommendedGear', base: 66, available: gearAvailable, relevant: true },
+    const decisionRiskLevel = decisionLevel === 'NO-GO' ? 5 : decisionLevel === 'CAUTION' ? 3 : 1;
+    const criticalChecksRiskLevel =
+      criticalCheckFailCount >= 3 ? 5 : criticalCheckFailCount >= 1 ? 4 : decisionLevel === 'NO-GO' ? 4 : 2;
+    const atmosphericRiskLevel = (() => {
+      if (stormSignal || gustThresholdDelta >= 15 || precipThresholdDelta >= 25) return 5;
+      if (gustThresholdDelta >= 8 || precipThresholdDelta >= 10 || coldThresholdDelta >= 10) return 4;
+      if (gustThresholdDelta > 0 || precipThresholdDelta > 0 || coldThresholdDelta > 0 || windThresholdDelta > 0) return 3;
+      return 2;
+    })();
+    const alertsRiskLevel = (() => {
+      if (!alertsCardRelevant) return 0;
+      if (alertsActive && highestAlertSeverity >= 4) return 5;
+      if (alertsActive && highestAlertSeverity >= 3) return 4;
+      if (alertsActive) return 3;
+      if (Number(safetyData?.alerts?.totalActiveCount) > 0) return 2;
+      return 1;
+    })();
+    const travelRiskLevel = (() => {
+      if (!travelAvailable) return 0;
+      if (travelFailRatio >= 0.6 || criticalHighHours >= 3) return 5;
+      if (travelFailRatio >= 0.35 || criticalHighHours >= 1) return 4;
+      if (travelFailRatio > 0 || criticalWatchHours >= 3) return 3;
+      return 2;
+    })();
+    const terrainRiskLevel = (() => {
+      if (!terrainAvailable) return 0;
+      if (terrainCode === 'snow_ice') return 4;
+      if (['wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode)) return 3;
+      if (/snow|icy|wet|muddy|slick|loose/.test(trailText)) return 3;
+      return 2;
+    })();
+    const snowpackRiskLevel = (() => {
+      if (!snowpackAvailable) return 0;
+      if (!avalancheRelevant) return 1;
+      if (avalancheUnknown) return 4;
+      if (maxSnowpackDepth >= 24 || maxSnowpackSwe >= 8) return 4;
+      if (hasSnowpackSignal) return 3;
+      return 2;
+    })();
+    const windLoadingRiskLevel = (() => {
+      if (!windHintsAvailable) return 0;
+      if (!avalancheRelevant) return 1;
+      if (windLoadingConfidence === 'High') return 4;
+      if (windLoadingConfidence === 'Moderate') return 3;
+      return 2;
+    })();
+    const rainfallRiskLevel = (() => {
+      if (!rainfallAvailable) return 0;
+      if ((Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.75) || (Number.isFinite(snowfall24hIn) && snowfall24hIn >= 8)) return 4;
+      if ((Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.25) || (Number.isFinite(snowfall24hIn) && snowfall24hIn >= 2)) return 3;
+      if ((Number.isFinite(rainfall12hIn) && rainfall12hIn > 0) || (Number.isFinite(snowfall12hIn) && snowfall12hIn > 0)) return 2;
+      return 1;
+    })();
+    const sourceFreshnessRiskLevel = (() => {
+      if (!sourceFreshnessAvailable) return 0;
+      if (missingSourceCount >= 2 || staleSourceCount >= 3) return 4;
+      if (missingSourceCount >= 1 || staleSourceCount >= 1) return 3;
+      return 1;
+    })();
+    const fireRiskCardLevel = (() => {
+      if (!fireRiskAvailable) return 0;
+      if (!Number.isFinite(fireRiskLevel)) return 1;
+      if (fireRiskLevel >= 4) return 5;
+      if (fireRiskLevel >= 3) return 4;
+      if (fireRiskLevel >= 2) return 3;
+      return 2;
+    })();
+    const airQualityRiskLevel = (() => {
+      if (!airQualityAvailable) return 0;
+      if (!Number.isFinite(aqiNumeric)) return 1;
+      if (aqiNumeric > 150) return 5;
+      if (aqiNumeric > 100) return 4;
+      if (aqiNumeric > 50) return 3;
+      return 2;
+    })();
+    const planRiskLevel = !planAvailable ? 0 : daylightCheckFailed ? 4 : 2;
+    const scoreTraceRiskLevel = (() => {
+      if (!scoreTraceAvailable) return 0;
+      if (!Number.isFinite(safetyScoreNumeric)) return decisionRiskLevel;
+      if (safetyScoreNumeric < 42) return 5;
+      if (safetyScoreNumeric < 60) return 4;
+      if (safetyScoreNumeric < 75) return 3;
+      return 2;
+    })();
+    const recommendedGearRiskLevel = !gearAvailable ? 0 : Math.max(1, decisionRiskLevel - 1);
+
+    const cards: Array<{ key: SortableCardKey; base: number; available: boolean; relevant: boolean; riskLevel: number }> = [
+      { key: 'decisionGate', base: 100, available: true, relevant: true, riskLevel: decisionRiskLevel },
+      { key: 'criticalChecks', base: 96, available: criticalCheckTotal > 0, relevant: true, riskLevel: criticalChecksRiskLevel },
+      { key: 'atmosphericData', base: 94, available: weatherAvailable, relevant: true, riskLevel: atmosphericRiskLevel },
+      { key: 'nwsAlerts', base: 92, available: alertsCardRelevant, relevant: alertsCardRelevant, riskLevel: alertsRiskLevel },
+      { key: 'travelWindowPlanner', base: 90, available: travelAvailable, relevant: true, riskLevel: travelRiskLevel },
+      { key: 'terrainTrailCondition', base: 84, available: terrainAvailable, relevant: true, riskLevel: terrainRiskLevel },
+      { key: 'snowpackSnapshot', base: 82, available: snowpackAvailable, relevant: true, riskLevel: snowpackRiskLevel },
+      { key: 'windLoadingHints', base: 80, available: windHintsAvailable, relevant: true, riskLevel: windLoadingRiskLevel },
+      { key: 'recentRainfall', base: 78, available: rainfallAvailable, relevant: true, riskLevel: rainfallRiskLevel },
+      { key: 'sourceFreshness', base: 76, available: sourceFreshnessAvailable, relevant: true, riskLevel: sourceFreshnessRiskLevel },
+      { key: 'fireRisk', base: 74, available: fireRiskAvailable, relevant: true, riskLevel: fireRiskCardLevel },
+      { key: 'airQuality', base: 72, available: airQualityAvailable, relevant: true, riskLevel: airQualityRiskLevel },
+      { key: 'planSnapshot', base: 70, available: planAvailable, relevant: true, riskLevel: planRiskLevel },
+      { key: 'scoreTrace', base: 68, available: scoreTraceAvailable, relevant: true, riskLevel: scoreTraceRiskLevel },
+      { key: 'recommendedGear', base: 64, available: gearAvailable, relevant: true, riskLevel: recommendedGearRiskLevel },
     ];
 
     const scored = cards.map((card) => {
-      let score = card.base;
-      if (!card.relevant) score -= 60;
-      if (!card.available) score -= 35;
-
-      if (decisionLevel === 'NO-GO' && ['decisionGate', 'criticalChecks', 'atmosphericData', 'nwsAlerts', 'travelWindowPlanner'].includes(card.key)) {
-        score += 10;
-      } else if (decisionLevel === 'CAUTION' && ['decisionGate', 'criticalChecks', 'atmosphericData', 'travelWindowPlanner'].includes(card.key)) {
-        score += 5;
-      }
-
-      if (card.key === 'criticalChecks') {
-        score += criticalCheckFailCount * 4;
-      }
-      if (card.key === 'nwsAlerts') {
-        if (alertsActive) score += 16;
-        if (!alertsCardRelevant) score -= 25;
-      }
-      if (card.key === 'atmosphericData' && severeWeatherSignal) {
-        score += 11;
-      }
-      if (card.key === 'travelWindowPlanner' && peakCriticalWindow) {
-        score += 8;
-      }
-      if (card.key === 'terrainTrailCondition' && /snow|icy|wet|muddy|slick|loose/.test(trailText)) {
-        score += 7;
-      }
-      if (card.key === 'snowpackSnapshot' && avalancheRelevant) {
-        score += 8;
-      }
-      if (card.key === 'windLoadingHints') {
-        if (avalancheRelevant) score += 8;
-        if (windLoadingConfidence === 'High') score += 9;
-        if (windLoadingConfidence === 'Low') score -= 4;
-      }
-      if (card.key === 'recentRainfall') {
-        if (Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.25) score += 6;
-        if (Number.isFinite(snowfall24hIn) && snowfall24hIn >= 2) score += 5;
-      }
-      if (card.key === 'sourceFreshness' && hasStaleSource) {
-        score += 9;
-      }
-      if (card.key === 'airQuality' && highAqiSignal) {
-        score += 11;
-      }
-      if (card.key === 'fireRisk' && highFireSignal) {
-        score += 12;
-      }
-
-      return { ...card, score };
+      const relevancePenalty = card.relevant ? 0 : 60;
+      const availabilityPenalty = card.available ? 0 : 35;
+      const normalizedRisk = card.relevant && card.available ? clampRiskLevel(card.riskLevel) : 0;
+      const score = card.base + normalizedRisk * 12 - relevancePenalty - availabilityPenalty + (card.available ? 0.25 : 0);
+      return { ...card, riskLevel: normalizedRisk, score };
     });
 
-    scored.sort((a, b) => b.score - a.score || b.base - a.base);
+    scored.sort((a, b) => b.riskLevel - a.riskLevel || b.score - a.score || b.base - a.base);
     const sortedKeys = scored.map((entry) => entry.key);
     const innerOrder = new Map<SortableCardKey, number>();
     sortedKeys.forEach((key, idx) => innerOrder.set(key, idx + 10));
@@ -4915,42 +4986,124 @@ function App() {
   }
 
   if (view === 'home') {
+    const objectiveSummary = hasObjective ? objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}` : 'Not selected yet';
+    const forecastModeSummary = forecastDate > todayDate ? `Future • ${forecastDate}` : `Today • ${forecastDate}`;
+    const decisionSummary = decision ? decision.level : 'Not evaluated';
+    const weatherSourceSummary = safetyData ? weatherSourceDisplay : 'Loads after selecting an objective';
+    const mapStyleSummary = activeBasemap.label;
+    const resumeLabel = hasObjective ? `Resume ${objectiveName || 'Current Objective'}` : 'Open Backcountry Planner';
+
     return (
       <div key="view-home" className={appShellClassName} aria-busy={isViewPending}>
         <section className="home-hero">
-          <div className="home-kicker">Backcountry Conditions</div>
-          <h1>Plan safer backcountry days in one place.</h1>
-          <p>
-            Start with a peak, trailhead, zone, or dropped pin and get date-aware risk checks before committing your plan.
-          </p>
-          <div className="home-actions">
-            <button className="primary-btn" onClick={openPlannerView}>
-              Open Backcountry Planner
-            </button>
-            <button className="settings-btn" onClick={() => navigateToView('settings')}>
-              <SlidersHorizontal size={14} /> Settings
-            </button>
-            <button className="settings-btn" onClick={openStatusView}>
-              <ShieldCheck size={14} /> Status
-            </button>
+          <div className="home-hero-main">
+            <div className="home-kicker">Backcountry Conditions</div>
+            <h1>Plan safer backcountry days in one place.</h1>
+            <p>
+              Build objective-aware weather, avalanche, alert, snowpack, and travel-window checks before committing your route and timing.
+            </p>
+            <div className="home-actions">
+              <button className="primary-btn" onClick={openPlannerView}>
+                {resumeLabel}
+              </button>
+              <button className="settings-btn" onClick={() => navigateToView('settings')}>
+                <SlidersHorizontal size={14} /> Settings
+              </button>
+              <button className="settings-btn" onClick={openStatusView}>
+                <ShieldCheck size={14} /> App Health
+              </button>
+            </div>
+          </div>
+          <aside className="home-hero-panel" aria-label="Current planning context">
+            <div className="home-panel-kicker">Current Plan Context</div>
+            <dl className="home-context-grid">
+              <div className="home-context-item">
+                <dt>Objective</dt>
+                <dd>{objectiveSummary}</dd>
+              </div>
+              <div className="home-context-item">
+                <dt>Forecast</dt>
+                <dd>{forecastModeSummary}</dd>
+              </div>
+              <div className="home-context-item">
+                <dt>{startLabel}</dt>
+                <dd>{displayStartTime}</dd>
+              </div>
+              <div className="home-context-item">
+                <dt>Decision</dt>
+                <dd>{decisionSummary}</dd>
+              </div>
+              <div className="home-context-item">
+                <dt>Weather Source</dt>
+                <dd>{weatherSourceSummary}</dd>
+              </div>
+              <div className="home-context-item">
+                <dt>Map Style</dt>
+                <dd>{mapStyleSummary}</dd>
+              </div>
+            </dl>
+          </aside>
+        </section>
+
+        <section className="home-quick-row" aria-label="Planner quick facts">
+          <div className="home-chip">
+            <CalendarDays size={14} /> Date-aware planning
+          </div>
+          <div className="home-chip">
+            <Clock size={14} /> 12h travel window analysis
+          </div>
+          <div className="home-chip">
+            <MapIcon size={14} /> Shareable objective link
+          </div>
+          <div className="home-chip">
+            <ShieldCheck size={14} /> Risk-ranked report cards
           </div>
         </section>
 
         <section className="home-grid">
           <article className="home-card">
-            <CalendarDays size={18} />
-            <h3>Date-based planning</h3>
-            <p>Select future dates and compare conditions before your weather window.</p>
+            <div className="home-card-head">
+              <CloudRain size={18} />
+              <h3>Atmospheric Conditions</h3>
+            </div>
+            <p>Evaluate temperature, feels-like, wind, precipitation chance, and period timestamps for your selected start time.</p>
+            <ul className="home-card-points">
+              <li>Displays forecast period used in the report</li>
+              <li>Supports elevation-adjusted weather checks</li>
+            </ul>
           </article>
           <article className="home-card">
-            <Route size={18} />
-            <h3>Objective workflow</h3>
-            <p>Search peaks and trail areas, drop a pin, and keep plan details in view while planning.</p>
+            <div className="home-card-head">
+              <Mountain size={18} />
+              <h3>Snowpack & Avalanche</h3>
+            </div>
+            <p>Combines avalanche center products with SNOTEL and NOHRSC signals to show where snow hazards matter and how current data is.</p>
+            <ul className="home-card-points">
+              <li>Keeps avalanche card visible with applicability reason</li>
+              <li>Highlights expired bulletin windows clearly</li>
+            </ul>
           </article>
           <article className="home-card">
-            <ShieldCheck size={18} />
-            <h3>Risk-focused checks</h3>
-            <p>Get weather, avalanche, and daylight risk gates tailored to your selected objective and date.</p>
+            <div className="home-card-head">
+              <AlertTriangle size={18} />
+              <h3>Operational Risk Gates</h3>
+            </div>
+            <p>Decision Gate, Critical Checks, and Travel Window Planner update from your thresholds and start-time window.</p>
+            <ul className="home-card-points">
+              <li>NWS alerts and score trace integrated</li>
+              <li>Cards sorted dynamically by active risk level</li>
+            </ul>
+          </article>
+          <article className="home-card">
+            <div className="home-card-head">
+              <Route size={18} />
+              <h3>Execution Ready Output</h3>
+            </div>
+            <p>Generate printable reports and concise SAT messages for field teams while preserving source links for verification.</p>
+            <ul className="home-card-points">
+              <li>Shareable planner URL for each search</li>
+              <li>One-liner built for satellite messaging limits</li>
+            </ul>
           </article>
         </section>
         <AppDisclaimer />
@@ -5251,7 +5404,7 @@ function App() {
               {Array.isArray(safetyData.safety.sourcesUsed) && safetyData.safety.sourcesUsed.length > 0 && (
                 <div className="source-line">Score sources: {safetyData.safety.sourcesUsed.join(' • ')}</div>
               )}
-              <div className="source-line">Report cards below are sorted by planning importance.</div>
+              <div className="source-line">Report cards below are sorted dynamically by current risk level and data relevance.</div>
               <div className="report-action-row">
                 <button type="button" className="settings-btn report-action-btn" onClick={handlePrintReport}>
                   <Printer size={14} /> Printable Report
