@@ -1800,24 +1800,13 @@ function parseHourLabelToMinutes(label: string | undefined): number | null {
   return hour24 * 60 + rawMinute;
 }
 
-function buildTrendWindowFromStart(trend: WeatherTrendPoint[], startTime: string, windowSize = 12): WeatherTrendPoint[] {
+function buildTrendWindowFromStart(trend: WeatherTrendPoint[], _startTime: string, windowSize = 12): WeatherTrendPoint[] {
   if (!Array.isArray(trend) || trend.length === 0) {
     return [];
   }
-  const startMinutes = parseTimeInputMinutes(startTime);
-  if (startMinutes === null) {
-    return trend.slice(0, windowSize);
-  }
-
-  const startIndex = trend.findIndex((point) => {
-    const pointMinutes = parseHourLabelToMinutes(point.time);
-    return pointMinutes !== null && pointMinutes >= startMinutes;
-  });
-
-  if (startIndex < 0) {
-    return [];
-  }
-  return trend.slice(startIndex, startIndex + windowSize);
+  // Backend trend is already aligned to the selected start time. Re-slicing by clock labels
+  // can mis-handle midnight rollovers and locale-specific hour labels.
+  return trend.slice(0, windowSize);
 }
 
 function weatherConditionEmoji(description: string | undefined, isDaytime?: boolean | null): string {

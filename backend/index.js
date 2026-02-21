@@ -650,12 +650,19 @@ const openMeteoCodeToText = (code) => {
   return 'Unknown';
 };
 
-const hourLabelFromIso = (input) => {
+const hourLabelFromIso = (input, timeZone = null) => {
   const date = new Date(input);
   if (Number.isNaN(date.getTime())) {
     return '';
   }
-  return date.toLocaleTimeString([], { hour: 'numeric', hour12: true });
+  const baseOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+  try {
+    const localized = date.toLocaleTimeString('en-US', timeZone ? { ...baseOptions, timeZone } : baseOptions);
+    return localized.replace(':00 ', ' ');
+  } catch {
+    const fallback = date.toLocaleTimeString('en-US', baseOptions);
+    return fallback.replace(':00 ', ' ');
+  }
 };
 
 const OPEN_METEO_WEATHER_HOURLY_FIELDS = [
@@ -783,7 +790,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
     const rawRowGust = Number(gustSeries[rowIndex]);
     const rowWind = Math.round(readHourlyValue('wind_speed_10m', rowIndex, currentWind));
     trend.push({
-      time: hourLabelFromIso(rowIso),
+      time: hourLabelFromIso(rowIso, payload?.timezone || null),
       temp: Math.round(readHourlyValue('temperature_2m', rowIndex, currentTemp)),
       wind: rowWind,
       gust: Number.isFinite(rawRowGust)
@@ -2444,7 +2451,7 @@ app.get('/api/safety', async (req, res) => {
         const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value) ? p.probabilityOfPrecipitation.value : 0;
 
         return {
-          time: new Date(p.startTime).toLocaleTimeString([], { hour: 'numeric', hour12: true }),
+          time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
           temp: trendTemp,
           wind: windSpeedValue,
           gust: windGustValue,
