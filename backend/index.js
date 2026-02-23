@@ -323,6 +323,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
   ];
 
   let payload = null;
+  let payloadIssuedTime = null;
   let lastError = null;
 
   for (const apiUrl of apiUrls) {
@@ -333,6 +334,16 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
           throw new Error(`Open-Meteo forecast failed with status ${response.status}`);
         }
         payload = await response.json();
+        const responseDateHeader = response.headers.get('date');
+        if (responseDateHeader) {
+          const parsedDate = Date.parse(responseDateHeader);
+          if (Number.isFinite(parsedDate)) {
+            payloadIssuedTime = new Date(parsedDate).toISOString();
+          }
+        }
+        if (!payloadIssuedTime) {
+          payloadIssuedTime = new Date().toISOString();
+        }
         lastError = null;
         break;
       } catch (error) {
@@ -451,7 +462,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
     cloudCover: currentCloud,
     precipChance: currentPrecipProb,
     isDaytime: currentIsDay,
-    issuedTime: selectedHourIso || null,
+    issuedTime: payloadIssuedTime || null,
     timezone: payload?.timezone || null,
     forecastStartTime: selectedHourIso,
     forecastEndTime: selectedHourIso,
@@ -472,7 +483,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
             cloudCover: 'Open-Meteo',
         precipChance: 'Open-Meteo',
         isDaytime: 'Open-Meteo',
-            issuedTime: 'Open-Meteo forecast period timestamp',
+            issuedTime: 'Open-Meteo response timestamp',
         timezone: 'Open-Meteo',
         forecastStartTime: 'Open-Meteo',
         forecastEndTime: 'Open-Meteo',
@@ -2374,33 +2385,12 @@ const safetyHandler = async (req, res) => {
 			              }
 			            }
 
-		            // HOTFIX: Mount Shasta (MSAC) ID 1833
-		            // The user requires specific text that is not available via the public API.
-		            // We inject this specific forecast if the API fails to provide a detailed bottom line.
-		            if (zoneId === 1833 || props.center_id === 'MSAC') {
-	               avyLog('[Avy] Applying MSAC Hotfix data');
-               avalancheData.bottomLine = "Avalanche terrain should be evaluated carefully today. Natural avalanches are possible; human triggered avalanches likely. Cold temps, low density new snow and moderate westerly wind is the vibe. There is plenty of low angle terrain to have fun in out there. The ingredients for avalanches are present -- don't be the chef.";
-               avalancheData.risk = "Moderate";
-               avalancheData.dangerLevel = 2; 
-               // Override elevations to match the text "Moderate above, near, and below treeline"
-               avalancheData.elevations = {
-                 below: { level: 2, label: 'Moderate' },
-                 at: { level: 2, label: 'Moderate' },
-                 above: { level: 2, label: 'Moderate' }
-               };
-            }
-
-		            // HOTFIX: Mount Washington (MWAC) ID 2355
+		            // MWAC occasionally returns generic API link values; prefer a direct forecast page link fallback.
 		            if (props.center_id === 'MWAC') {
-	               avyLog('[Avy] Applying MWAC Hotfix data');
-	               if (!avalancheData.bottomLine || avalancheData.bottomLine.length < 50) {
-	                  avalancheData.bottomLine = "Low avalanche danger. Generally safe avalanche conditions. Watch for unstable snow on isolated terrain features. Safe travel protocols are still recommended. Verify conditions before entering steep terrain.";
-	               }
-	               // Fix generic link if needed
-	               if (!avalancheData.link || avalancheData.link.includes('api.avalanche.org') || avalancheData.link.length < 30) {
-	                  avalancheData.link = "https://www.mountwashingtonavalanchecenter.org/forecasts/#/presidential-range";
-	               }
-	            }
+		              if (!avalancheData.link || avalancheData.link.includes('api.avalanche.org') || avalancheData.link.length < 30) {
+		                avalancheData.link = "https://www.mountwashingtonavalanchecenter.org/forecasts/#/presidential-range";
+		              }
+		            }
 
 		            // CAIC-specific behavior:
 		            // Prefer official center text and do not inject generated summaries.
@@ -2765,11 +2755,11 @@ const safetyHandler = async (req, res) => {
 		      location: { lat: parsedLat, lon: parsedLon },
 	      forecast: {
 	        selectedDate: selectedForecastDate,
-	        selectedStartTime: selectedForecastPeriod?.startTime || null,
-        selectedEndTime: selectedForecastPeriod?.endTime || null,
-        isFuture: selectedForecastDate > todayDate,
-        availableRange: forecastDateRange
-      },
+	        selectedStartTime: selectedForecastPeriod?.startTime || weatherData?.forecastStartTime || null,
+	        selectedEndTime: selectedForecastPeriod?.endTime || weatherData?.forecastEndTime || null,
+	        isFuture: selectedForecastDate > todayDate,
+	        availableRange: forecastDateRange
+	      },
       weather: stampGeneratedTime(weatherData),
       solar: solarData,
       avalanche: stampGeneratedTime(avalancheData),
@@ -2876,11 +2866,11 @@ const safetyHandler = async (req, res) => {
 	      location: { lat: parsedLat, lon: parsedLon },
 	      forecast: {
 	        selectedDate: fallbackSelectedDate,
-	        selectedStartTime: selectedForecastPeriod?.startTime || null,
-        selectedEndTime: selectedForecastPeriod?.endTime || null,
-        isFuture: fallbackSelectedDate > todayDate,
-        availableRange: forecastDateRange
-      },
+	        selectedStartTime: selectedForecastPeriod?.startTime || safeWeatherData?.forecastStartTime || null,
+	        selectedEndTime: selectedForecastPeriod?.endTime || safeWeatherData?.forecastEndTime || null,
+	        isFuture: fallbackSelectedDate > todayDate,
+	        availableRange: forecastDateRange
+	      },
       weather: stampGeneratedTime(safeWeatherData),
       solar: solarData,
       avalanche: stampGeneratedTime(safeAvalancheData),

@@ -2394,6 +2394,7 @@ function App() {
   }, [clearWakeRetry, isProductionBuild]);
 
   const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
+    clearWakeRetry();
     setPosition(nextPosition);
     setMapFocusNonce((prev) => prev + 1);
     setHasObjective(true);
@@ -2408,7 +2409,7 @@ function App() {
     } else {
       setObjectiveName((prev) => prev || 'Dropped pin');
     }
-  }, []);
+  }, [clearWakeRetry]);
 
   const fetchSafetyData = useCallback(
     async (lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => {
@@ -2416,6 +2417,10 @@ function App() {
       const safeStartTime = parseTimeInputMinutes(startTime) === null ? preferences.defaultStartTime : startTime;
       const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime);
       const forceReload = options?.force === true;
+
+      if (wakeRetryStateRef.current?.key && wakeRetryStateRef.current.key !== requestKey) {
+        clearWakeRetry();
+      }
 
       if (!forceReload && lastLoadedSafetyKeyRef.current === requestKey) {
         return;
@@ -2892,7 +2897,12 @@ function App() {
         return false;
       } catch (err) {
         console.error('Search submit error:', err);
-        setSuggestions(getLocalPopularSuggestions(query));
+        const fallbackSuggestions = getLocalPopularSuggestions(query);
+        setSuggestions(fallbackSuggestions);
+        if (fallbackSuggestions[0]) {
+          selectSuggestion(fallbackSuggestions[0]);
+          return true;
+        }
         setShowSuggestions(true);
         setActiveSuggestionIndex(-1);
         return false;
