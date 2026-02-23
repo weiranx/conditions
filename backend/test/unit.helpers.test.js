@@ -4,6 +4,7 @@ const {
   buildPlannedStartIso,
   buildLayeringGearSuggestions,
   buildFireRiskData,
+  buildHeatRiskData,
   calculateSafetyScore,
   findMatchingAvalancheZone,
   resolveAvalancheCenterLink,
@@ -476,6 +477,39 @@ test('buildFireRiskData marks elevated risk for dry/breezy weather without alert
   expect(fireRisk.status).toBe('ok');
   expect(fireRisk.level).toBeGreaterThanOrEqual(2);
   expect(Array.isArray(fireRisk.reasons)).toBe(true);
+});
+
+test('buildHeatRiskData marks high risk for hot/humid window', () => {
+  const heatRisk = buildHeatRiskData({
+    weatherData: {
+      temp: 91,
+      feelsLike: 97,
+      humidity: 62,
+      isDaytime: true,
+      trend: [{ temp: 90 }, { temp: 93 }, { temp: 88 }],
+    },
+  });
+
+  expect(heatRisk.status).toBe('ok');
+  expect(heatRisk.level).toBeGreaterThanOrEqual(3);
+  expect(heatRisk.label).toMatch(/High|Extreme/);
+  expect(Array.isArray(heatRisk.reasons)).toBe(true);
+});
+
+test('buildHeatRiskData returns low risk for cool conditions', () => {
+  const heatRisk = buildHeatRiskData({
+    weatherData: {
+      temp: 52,
+      feelsLike: 50,
+      humidity: 45,
+      isDaytime: true,
+      trend: [{ temp: 50 }, { temp: 54 }],
+    },
+  });
+
+  expect(heatRisk.status).toBe('ok');
+  expect(heatRisk.level).toBe(0);
+  expect(heatRisk.label).toBe('Low');
 });
 
 test('deriveTrailStatus uses snowpack coverage and avoids Hero Dirt label', () => {

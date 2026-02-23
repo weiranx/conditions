@@ -28,6 +28,7 @@ import {
   MessageSquare,
   Info,
   Flame,
+  Sun,
   RefreshCw,
 } from 'lucide-react';
 import './App.css';
@@ -162,6 +163,7 @@ interface SafetyData {
   weather: {
     temp: number;
     feelsLike?: number;
+    dewPoint?: number | null;
     description: string;
     windSpeed: number;
     windGust: number;
@@ -337,6 +339,23 @@ interface SafetyData {
       expires?: string | null;
       link?: string | null;
     }>;
+  };
+  heatRisk?: {
+    source?: string;
+    status?: string;
+    level?: number;
+    label?: string;
+    guidance?: string;
+    reasons?: string[];
+    metrics?: {
+      tempF?: number | null;
+      feelsLikeF?: number | null;
+      humidity?: number | null;
+      peakTemp12hF?: number | null;
+      peakFeelsLike12hF?: number | null;
+      isDaytime?: boolean | null;
+    };
+    generatedTime?: string | null;
   };
   gear?: string[];
   trail?: string;
@@ -941,6 +960,12 @@ function buildSnowpackInterpretation(
     (hasNohrscDepth && nohrscDepth > 0) ||
     (hasSnotelSwe && snotelSwe > 0) ||
     (hasNohrscSwe && nohrscSwe > 0);
+  const maxDepthIn = Math.max(hasSnotelDepth ? snotelDepth : 0, hasNohrscDepth ? nohrscDepth : 0);
+  const maxSweIn = Math.max(hasSnotelSwe ? snotelSwe : 0, hasNohrscSwe ? nohrscSwe : 0);
+  const lowBroadSnowSignal =
+    (hasSnotelDepth || hasNohrscDepth || hasSnotelSwe || hasNohrscSwe) &&
+    maxDepthIn <= 1 &&
+    maxSweIn <= 0.2;
 
   if (!hasSnotelDepth && !hasNohrscDepth && !hasSnotelSwe && !hasNohrscSwe) {
     return null;
@@ -955,15 +980,19 @@ function buildSnowpackInterpretation(
     if (depthDeltaPct <= 30) {
       bullets.push('SNOTEL and NOHRSC depth are broadly aligned, so snow coverage confidence is higher.');
     } else {
-      confidence = 'watch';
+      confidence = lowBroadSnowSignal ? 'solid' : 'watch';
       bullets.push('SNOTEL vs NOHRSC depth diverge significantly, indicating patchy or elevation-sensitive snow distribution.');
     }
   } else {
-    confidence = 'watch';
-    bullets.push('Only one depth source is available; treat this as directional context, not a full snowpack picture.');
+    confidence = lowBroadSnowSignal ? 'solid' : 'watch';
+    bullets.push(
+      lowBroadSnowSignal
+        ? 'Only one depth source is available, but broad snow signal remains minimal.'
+        : 'Only one depth source is available; treat this as directional context, not a full snowpack picture.',
+    );
   }
 
-  if (Number.isFinite(stationDistanceKm)) {
+  if (Number.isFinite(stationDistanceKm) && !lowBroadSnowSignal) {
     const stationDistanceDisplay = formatDistanceForElevationUnit(stationDistanceKm, elevationUnit);
     if (stationDistanceKm <= 10) {
       bullets.push(`Nearest SNOTEL is close (${stationDistanceDisplay}), improving local representativeness.`);
@@ -973,7 +1002,7 @@ function buildSnowpackInterpretation(
     }
   }
 
-  if (Number.isFinite(stationElevationFt) && Number.isFinite(Number(objectiveElevationFt))) {
+  if (Number.isFinite(stationElevationFt) && Number.isFinite(Number(objectiveElevationFt)) && !lowBroadSnowSignal) {
     const elevDelta = Math.abs(stationElevationFt - Number(objectiveElevationFt));
     if (elevDelta >= 2000) {
       confidence = confidence === 'solid' ? 'watch' : confidence;
@@ -988,8 +1017,12 @@ function buildSnowpackInterpretation(
   if (observedDateMs !== null) {
     const ageDays = Math.max(0, Math.floor((Date.now() - observedDateMs) / (24 * 60 * 60 * 1000)));
     if (ageDays >= 3) {
-      confidence = 'low';
-      bullets.push(`SNOTEL observation is ${ageDays} days old; re-verify with latest center/weather products before committing.`);
+      confidence = lowBroadSnowSignal ? 'watch' : 'low';
+      bullets.push(
+        lowBroadSnowSignal
+          ? `SNOTEL observation is ${ageDays} days old; broad no-snow signal is likely still valid, but verify for shaded pockets.`
+          : `SNOTEL observation is ${ageDays} days old; re-verify with latest center/weather products before committing.`,
+      );
     } else if (ageDays >= 1) {
       confidence = confidence === 'solid' ? 'watch' : confidence;
       bullets.push(`SNOTEL observation is ${ageDays} day${ageDays === 1 ? '' : 's'} old; recent weather may have changed conditions.`);
@@ -1009,8 +1042,8 @@ function buildSnowpackInterpretation(
   }
 
   return {
-    headline: 'Limited snow signal in these sources. Do not assume zero hazard on shaded/loaded terrain.',
-    confidence: confidence === 'solid' ? 'watch' : confidence,
+    headline: 'Minimal broad snow signal in these sources. Non-snow travel is more likely, but isolated snow/ice pockets can remain.',
+    confidence: confidence === 'low' ? 'watch' : confidence,
     bullets: bullets.slice(0, 4),
   };
 }
@@ -1057,13 +1090,14 @@ function buildSnowpackInsights(
     Number.isFinite(nohrscDepth) ||
     Number.isFinite(snotelSwe) ||
     Number.isFinite(nohrscSwe);
+  const lowBroadSnowSignal = hasObservedSnowpack && maxDepth <= 1 && maxSwe <= 0.2;
 
   let signal: SnowpackInsightBadge;
   if (!hasObservedSnowpack) {
     signal = {
-      label: 'Signal unknown',
+      label: 'Signal limited',
       detail: 'No usable SNOTEL/NOHRSC snow metrics were returned.',
-      tone: 'warn',
+      tone: 'watch',
     };
   } else if (maxDepth >= 24 || maxSwe >= 8) {
     signal = {
@@ -1079,7 +1113,7 @@ function buildSnowpackInsights(
     };
   } else {
     signal = {
-      label: 'Low broad signal',
+      label: 'Minimal broad signal',
       detail: `Depth/SWE are low (${formatSnowDepthForElevationUnit(maxDepth, elevationUnit)}, ${formatSweForElevationUnit(maxSwe, elevationUnit)}), but isolated snow terrain may still exist.`,
       tone: 'good',
     };
@@ -1100,9 +1134,11 @@ function buildSnowpackInsights(
   let representativeness: SnowpackInsightBadge;
   if (!hasDistance && !hasElevDelta) {
     representativeness = {
-      label: 'Representativeness unknown',
-      detail: 'Nearest SNOTEL distance/elevation context is unavailable.',
-      tone: 'warn',
+      label: lowBroadSnowSignal ? 'Context optional' : 'Representativeness unknown',
+      detail: lowBroadSnowSignal
+        ? 'Distance/elevation context is unavailable, but broad no-snow signal is still informative.'
+        : 'Nearest SNOTEL distance/elevation context is unavailable.',
+      tone: lowBroadSnowSignal ? 'good' : 'warn',
     };
   } else if ((hasDistance && snotelDistanceKm <= 10) && (elevDeltaFt === null || elevDeltaFt <= 1500)) {
     representativeness = {
@@ -1112,9 +1148,9 @@ function buildSnowpackInsights(
     };
   } else if ((hasDistance && snotelDistanceKm > 30) || (elevDeltaFt !== null && elevDeltaFt > 3000)) {
     representativeness = {
-      label: 'Low representativeness',
+      label: lowBroadSnowSignal ? 'Lower representativeness' : 'Low representativeness',
       detail: `Station context is less local (${distanceText}${elevDeltaFt !== null ? `, ~${elevDeltaText} elevation offset` : ''}); verify with on-route observations.`,
-      tone: 'warn',
+      tone: lowBroadSnowSignal ? 'watch' : 'warn',
     };
   } else {
     representativeness = {
@@ -1134,9 +1170,11 @@ function buildSnowpackInsights(
   let freshness: SnowpackInsightBadge;
   if (snotelAgeHours === null && nohrscAgeHours === null) {
     freshness = {
-      label: 'Freshness unknown',
-      detail: 'No observation timestamps were returned.',
-      tone: 'warn',
+      label: lowBroadSnowSignal ? 'Timestamp limited' : 'Freshness unknown',
+      detail: lowBroadSnowSignal
+        ? 'No timestamps were returned; broad no-snow signal is likely still directionally useful.'
+        : 'No observation timestamps were returned.',
+      tone: lowBroadSnowSignal ? 'watch' : 'warn',
     };
   } else if ((nohrscAgeHours === null || nohrscAgeHours <= 8) && (snotelAgeHours === null || snotelAgeHours <= 60)) {
     freshness = {
@@ -1162,14 +1200,14 @@ function buildSnowpackInsights(
     };
   } else {
     freshness = {
-      label: 'Stale data',
+      label: lowBroadSnowSignal ? 'Aging data' : 'Stale data',
       detail: [
         snotelObsAgeLabel ? `SNOTEL ${snotelObsAgeLabel}` : null,
         nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null,
       ]
         .filter(Boolean)
         .join(' • ') || 'Observation times are outdated.',
-      tone: 'warn',
+      tone: lowBroadSnowSignal ? 'watch' : 'warn',
     };
   }
 
@@ -3706,6 +3744,7 @@ function App() {
             rainfall: safetyData.rainfall || null,
             snowpack: safetyData.snowpack || null,
             fireRisk: safetyData.fireRisk || null,
+            heatRisk: safetyData.heatRisk || null,
             safety: safetyData.safety,
             decision,
           })
@@ -3821,6 +3860,26 @@ function App() {
   const nohrscSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.sweIn), preferences.elevationUnit);
   const nohrscDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.snowDepthIn), preferences.elevationUnit);
   const snotelDistanceDisplay = formatDistanceForElevationUnit(Number(safetyData?.snowpack?.snotel?.distanceKm), preferences.elevationUnit);
+  const snotelDepthIn = Number(safetyData?.snowpack?.snotel?.snowDepthIn);
+  const nohrscDepthIn = Number(safetyData?.snowpack?.nohrsc?.snowDepthIn);
+  const snotelSweIn = Number(safetyData?.snowpack?.snotel?.sweIn);
+  const nohrscSweIn = Number(safetyData?.snowpack?.nohrsc?.sweIn);
+  const snowpackMetricAvailable =
+    Number.isFinite(snotelDepthIn) ||
+    Number.isFinite(nohrscDepthIn) ||
+    Number.isFinite(snotelSweIn) ||
+    Number.isFinite(nohrscSweIn);
+  const maxSnowDepthSignalIn = Math.max(Number.isFinite(snotelDepthIn) ? snotelDepthIn : 0, Number.isFinite(nohrscDepthIn) ? nohrscDepthIn : 0);
+  const maxSnowSweSignalIn = Math.max(Number.isFinite(snotelSweIn) ? snotelSweIn : 0, Number.isFinite(nohrscSweIn) ? nohrscSweIn : 0);
+  const lowBroadSnowSignal = snowpackMetricAvailable && maxSnowDepthSignalIn <= 1 && maxSnowSweSignalIn <= 0.2;
+  const snowpackPillClass = lowBroadSnowSignal
+    ? 'go'
+    : safetyData?.snowpack?.status === 'ok'
+      ? 'go'
+      : safetyData?.snowpack?.status === 'partial'
+        ? 'watch'
+        : 'caution';
+  const snowpackStatusLabel = lowBroadSnowSignal ? 'Low snow signal' : String(safetyData?.snowpack?.status || 'unavailable').toUpperCase();
   const snowpackInterpretation = safetyData
     ? buildSnowpackInterpretation(safetyData.snowpack, Number(safetyData.weather?.elevation), preferences.elevationUnit)
     : null;
@@ -3853,6 +3912,39 @@ function App() {
           ? 'watch'
           : 'go';
   const fireRiskAlerts = safetyData?.fireRisk?.alertsConsidered || [];
+  const heatRiskLevel = (() => {
+    const payloadLevel = Number(safetyData?.heatRisk?.level);
+    if (Number.isFinite(payloadLevel)) {
+      return Math.max(0, Math.min(4, Math.round(payloadLevel)));
+    }
+    const feelsLike = Number(safetyData?.weather.feelsLike ?? safetyData?.weather.temp);
+    if (Number.isFinite(feelsLike) && feelsLike >= 100) return 4;
+    if (Number.isFinite(feelsLike) && feelsLike >= 92) return 3;
+    if (Number.isFinite(feelsLike) && feelsLike >= 84) return 2;
+    if (Number.isFinite(feelsLike) && feelsLike >= 76) return 1;
+    return 0;
+  })();
+  const heatRiskLabel = safetyData?.heatRisk?.label || ['Low', 'Guarded', 'Elevated', 'High', 'Extreme'][heatRiskLevel];
+  const heatRiskPillClass =
+    heatRiskLevel >= 4 ? 'nogo'
+      : heatRiskLevel >= 2 ? 'caution'
+        : heatRiskLevel >= 1 ? 'watch'
+          : 'go';
+  const heatRiskGuidance =
+    safetyData?.heatRisk?.guidance ||
+    (heatRiskLevel >= 4
+      ? 'Extreme heat-stress risk. Avoid long exposed pushes during this window.'
+      : heatRiskLevel >= 3
+        ? 'High heat-stress risk. Increase water, shorten pushes, and add cooling breaks.'
+        : heatRiskLevel >= 2
+          ? 'Heat stress is possible. Use conservative pace and hydration.'
+          : heatRiskLevel >= 1
+            ? 'Warm conditions possible; monitor hydration and pace.'
+            : 'No notable heat signal from current forecast inputs.');
+  const heatRiskReasons = Array.isArray(safetyData?.heatRisk?.reasons) && safetyData.heatRisk.reasons.length > 0
+    ? safetyData.heatRisk.reasons.slice(0, 4)
+    : [];
+  const heatRiskMetrics = safetyData?.heatRisk?.metrics || {};
   const weatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '';
   const weatherWithEmoji = safetyData ? `${weatherEmoji} ${safetyData.weather.description}` : '';
   const forecastPeriodLabel = safetyData
@@ -4308,6 +4400,7 @@ function App() {
       | 'decisionGate'
       | 'criticalChecks'
       | 'atmosphericData'
+      | 'heatRisk'
       | 'nwsAlerts'
       | 'travelWindowPlanner'
       | 'planSnapshot'
@@ -4356,6 +4449,10 @@ function App() {
     const snowpackAvailable = ['ok', 'partial'].includes(String(safetyData?.snowpack?.status || '').toLowerCase());
     const windHintsAvailable = Boolean(resolvedWindDirection) || calmOrVariableSignal || lightWindSignal || trendWindDirections.length > 0;
     const fireRiskAvailable = String(safetyData?.fireRisk?.status || '').toLowerCase() !== 'unavailable';
+    const heatRiskAvailable =
+      String(safetyData?.heatRisk?.status || '').toLowerCase() !== 'unavailable' ||
+      Number.isFinite(Number(safetyData?.weather.temp)) ||
+      Number.isFinite(Number(safetyData?.weather.feelsLike));
     const airQualityAvailable =
       Number.isFinite(aqiNumeric) ||
       Number.isFinite(Number(safetyData?.airQuality?.pm25)) ||
@@ -4398,6 +4495,15 @@ function App() {
       if (gustThresholdDelta >= 8 || precipThresholdDelta >= 10 || coldThresholdDelta >= 10) return 4;
       if (gustThresholdDelta > 0 || precipThresholdDelta > 0 || coldThresholdDelta > 0 || windThresholdDelta > 0) return 3;
       return 2;
+    })();
+    const heatRiskCardLevel = (() => {
+      if (!heatRiskAvailable) return 0;
+      if (!Number.isFinite(heatRiskLevel)) return 1;
+      if (heatRiskLevel >= 4) return 5;
+      if (heatRiskLevel >= 3) return 4;
+      if (heatRiskLevel >= 2) return 3;
+      if (heatRiskLevel >= 1) return 2;
+      return 1;
     })();
     const alertsRiskLevel = (() => {
       if (!alertsCardRelevant) return 0;
@@ -4480,6 +4586,7 @@ function App() {
       { key: 'decisionGate', base: 100, available: true, relevant: true, riskLevel: decisionRiskLevel },
       { key: 'criticalChecks', base: 96, available: criticalCheckTotal > 0, relevant: true, riskLevel: criticalChecksRiskLevel },
       { key: 'atmosphericData', base: 94, available: weatherAvailable, relevant: true, riskLevel: atmosphericRiskLevel },
+      { key: 'heatRisk', base: 93, available: heatRiskAvailable, relevant: true, riskLevel: heatRiskCardLevel },
       { key: 'nwsAlerts', base: 92, available: alertsCardRelevant, relevant: alertsCardRelevant, riskLevel: alertsRiskLevel },
       { key: 'travelWindowPlanner', base: 90, available: travelAvailable, relevant: true, riskLevel: travelRiskLevel },
       { key: 'terrainTrailCondition', base: 84, available: terrainAvailable, relevant: true, riskLevel: terrainRiskLevel },
@@ -4515,18 +4622,19 @@ function App() {
       decisionGate: innerOrder.get('decisionGate') ?? 10,
       criticalChecks: innerOrder.get('criticalChecks') ?? 11,
       atmosphericData: innerOrder.get('atmosphericData') ?? 12,
-      nwsAlerts: innerOrder.get('nwsAlerts') ?? 13,
-      travelWindowPlanner: innerOrder.get('travelWindowPlanner') ?? 14,
-      planSnapshot: innerOrder.get('planSnapshot') ?? 15,
-      terrainTrailCondition: innerOrder.get('terrainTrailCondition') ?? 16,
-      snowpackSnapshot: innerOrder.get('snowpackSnapshot') ?? 17,
-      windLoadingHints: innerOrder.get('windLoadingHints') ?? 18,
-      recentRainfall: innerOrder.get('recentRainfall') ?? 19,
-      fireRisk: innerOrder.get('fireRisk') ?? 20,
-      airQuality: innerOrder.get('airQuality') ?? 21,
-      sourceFreshness: innerOrder.get('sourceFreshness') ?? 22,
-      scoreTrace: innerOrder.get('scoreTrace') ?? 23,
-      recommendedGear: innerOrder.get('recommendedGear') ?? 24,
+      heatRisk: innerOrder.get('heatRisk') ?? 13,
+      nwsAlerts: innerOrder.get('nwsAlerts') ?? 14,
+      travelWindowPlanner: innerOrder.get('travelWindowPlanner') ?? 15,
+      planSnapshot: innerOrder.get('planSnapshot') ?? 16,
+      terrainTrailCondition: innerOrder.get('terrainTrailCondition') ?? 17,
+      snowpackSnapshot: innerOrder.get('snowpackSnapshot') ?? 18,
+      windLoadingHints: innerOrder.get('windLoadingHints') ?? 19,
+      recentRainfall: innerOrder.get('recentRainfall') ?? 20,
+      fireRisk: innerOrder.get('fireRisk') ?? 21,
+      airQuality: innerOrder.get('airQuality') ?? 22,
+      sourceFreshness: innerOrder.get('sourceFreshness') ?? 23,
+      scoreTrace: innerOrder.get('scoreTrace') ?? 24,
+      recommendedGear: innerOrder.get('recommendedGear') ?? 25,
       deepDiveData: 140,
     } as const;
   })();
@@ -5467,6 +5575,14 @@ function App() {
                     <span className="stat-label">Precip</span>
                     <strong>{safetyData.weather.precipChance}%</strong>
                   </div>
+                  <div className="metric-chip">
+                    <span className="stat-label">Humidity</span>
+                    <strong>{Number.isFinite(Number(safetyData.weather.humidity)) ? `${Math.round(Number(safetyData.weather.humidity))}%` : 'N/A'}</strong>
+                  </div>
+                  <div className="metric-chip">
+                    <span className="stat-label">Dew Point</span>
+                    <strong>{formatTempDisplay(safetyData.weather.dewPoint)}</strong>
+                  </div>
                 </div>
 
                 {hasTargetElevation && (
@@ -5541,6 +5657,45 @@ function App() {
                     <p className="elevation-note">{localizeUnitText(safetyData.weather.elevationForecastNote)}</p>
                   )}
                 </section>
+              </div>
+
+              <div className="card heat-risk-card" style={{ order: reportCardOrder.heatRisk }}>
+                <div className="card-header">
+                  <span className="card-title">
+                    <Sun size={14} /> Heat Risk
+                    <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, and near-term trend peaks." />
+                  </span>
+                  <span className={`decision-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>
+                </div>
+                <p className="muted-note">{heatRiskGuidance}</p>
+                <div className="plan-grid">
+                  <div>
+                    <span className="stat-label">Temp</span>
+                    <strong>{formatTempDisplay(heatRiskMetrics.tempF ?? safetyData.weather.temp)}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-label">Feels Like</span>
+                    <strong>{formatTempDisplay(heatRiskMetrics.feelsLikeF ?? safetyData.weather.feelsLike ?? safetyData.weather.temp)}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-label">Humidity</span>
+                    <strong>{Number.isFinite(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity)) ? `${Math.round(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity))}%` : 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-label">12h Peak Temp</span>
+                    <strong>{formatTempDisplay(heatRiskMetrics.peakTemp12hF ?? null)}</strong>
+                  </div>
+                </div>
+                {heatRiskReasons.length > 0 ? (
+                  <ul className="signal-list compact">
+                    {heatRiskReasons.map((reason, idx) => (
+                      <li key={`heat-risk-reason-${idx}`}>{localizeUnitText(reason)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted-note">No strong heat-stress signal was detected for this objective/time.</p>
+                )}
+                <p className="muted-note">Source: {safetyData.heatRisk?.source || 'Derived from forecast temperature and humidity signals'}</p>
               </div>
 
               <div className="card terrain-condition-card" style={{ order: reportCardOrder.terrainTrailCondition }}>
@@ -5928,8 +6083,8 @@ function App() {
                     <Mountain size={14} /> Snowpack Snapshot
                     <HelpHint text="Observed snowpack context from nearest SNOTEL station and NOAA NOHRSC snow analysis grid at the objective point." />
                   </span>
-                  <span className={`decision-pill ${safetyData.snowpack?.status === 'ok' ? 'go' : safetyData.snowpack?.status === 'partial' ? 'watch' : 'caution'}`}>
-                    {String(safetyData.snowpack?.status || 'unavailable').toUpperCase()}
+                  <span className={`decision-pill ${snowpackPillClass}`}>
+                    {snowpackStatusLabel}
                   </span>
                 </div>
 
@@ -6591,7 +6746,13 @@ function App() {
                     </li>
                     <li>
                       <span className="raw-key">Humidity</span>
-                      <span className="raw-value">{safetyData.weather.humidity}%</span>
+                      <span className="raw-value">
+                        {Number.isFinite(Number(safetyData.weather.humidity)) ? `${Math.round(Number(safetyData.weather.humidity))}%` : 'N/A'}
+                      </span>
+                    </li>
+                    <li>
+                      <span className="raw-key">Dew Point</span>
+                      <span className="raw-value">{formatTempDisplay(safetyData.weather.dewPoint)}</span>
                     </li>
                     <li>
                       <span className="raw-key">Cloud Cover</span>
@@ -6773,6 +6934,17 @@ function App() {
                       <span className="raw-value">
                         {safetyData.airQuality?.usAqi != null ? `${Math.round(safetyData.airQuality.usAqi)} (${safetyData.airQuality.category || 'N/A'})` : 'N/A'}
                       </span>
+                    </li>
+                    <li>
+                      <span className="raw-key">Heat Risk Level</span>
+                      <span className="raw-value">
+                        {safetyData.heatRisk?.label || heatRiskLabel || 'N/A'}
+                        {Number.isFinite(Number(safetyData.heatRisk?.level)) ? ` (L${Number(safetyData.heatRisk?.level)})` : ''}
+                      </span>
+                    </li>
+                    <li>
+                      <span className="raw-key">Heat Risk Guidance</span>
+                      <span className="raw-value">{safetyData.heatRisk?.guidance || heatRiskGuidance || 'N/A'}</span>
                     </li>
                     <li>
                       <span className="raw-key">Fire Risk Level</span>

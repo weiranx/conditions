@@ -1213,6 +1213,12 @@ input {
   border: 1px solid #e1ca9f;
 }
 
+.decision-pill.watch {
+  background: #eef3f8;
+  color: #35556e;
+  border: 1px solid #bfd0e0;
+}
+
 .decision-pill.nogo {
   background: #fbe8e8;
   color: #9b2f2f;
@@ -4186,6 +4192,12 @@ input {
   background: #4a3a20;
   border-color: #7f6541;
   color: #f2ddb5;
+}
+
+:root[data-theme='dark'] .decision-pill.watch {
+  background: #223645;
+  border-color: #3f6078;
+  color: #d0e5f6;
 }
 
 :root[data-theme='dark'] .decision-pill.nogo {

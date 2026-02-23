@@ -24,6 +24,7 @@ const {
 } = require('./src/utils/wind');
 const { parseIsoTimeToMs, parseIsoTimeToMsWithReference, parseStartClock, buildPlannedStartIso, findClosestTimeIndex } = require('./src/utils/time');
 const { createUnavailableFireRiskData, buildFireRiskData } = require('./src/utils/fire-risk');
+const { createUnavailableHeatRiskData, buildHeatRiskData } = require('./src/utils/heat-risk');
 const { createSnowpackService } = require('./src/utils/snowpack');
 const {
   firstNonEmptyString,
@@ -111,6 +112,27 @@ const computeFeelsLikeF = (tempF, windMph) => {
   return Math.round(tempF);
 };
 
+const celsiusToF = (valueC) => {
+  const numeric = Number(valueC);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return (numeric * 9) / 5 + 32;
+};
+
+const normalizeNoaaDewPointF = (dewpointField) => {
+  const value = Number(dewpointField?.value);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const unitCode = String(dewpointField?.unitCode || '').toLowerCase();
+  if (unitCode.includes('degc') || unitCode.includes('unit:degc') || unitCode.includes('wmo:degc')) {
+    const converted = celsiusToF(value);
+    return Number.isFinite(converted) ? Math.round(converted) : null;
+  }
+  return Math.round(value);
+};
+
 const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
 const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, windGustMph }) => {
@@ -184,6 +206,7 @@ const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, win
 const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
   temp: 0,
   feelsLike: 0,
+  dewPoint: null,
   elevation: null,
   elevationSource: null,
   elevationUnit: 'ft',
@@ -267,6 +290,7 @@ const hourLabelFromIso = (input, timeZone = null) => {
 
 const OPEN_METEO_WEATHER_HOURLY_FIELDS = [
   'temperature_2m',
+  'dew_point_2m',
   'relative_humidity_2m',
   'precipitation_probability',
   'cloud_cover',
@@ -373,6 +397,9 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
     : Math.max(currentWind, estimateWindGustFromWindSpeed(currentWind));
   const windDirectionSeries = Array.isArray(hourly?.wind_direction_10m) ? hourly.wind_direction_10m : [];
   const currentWindDirection = findNearestCardinalFromDegreeSeries(windDirectionSeries, selectedHourIndex);
+  const dewPointSeries = hourly && Array.isArray(hourly.dew_point_2m) ? hourly.dew_point_2m : [];
+  const rawCurrentDewPoint = Number(dewPointSeries[selectedHourIndex]);
+  const currentDewPoint = Number.isFinite(rawCurrentDewPoint) ? Math.round(rawCurrentDewPoint) : null;
   const currentHumidity = Math.round(readHourlyValue('relative_humidity_2m', selectedHourIndex, 0));
   const currentCloud = Math.round(readHourlyValue('cloud_cover', selectedHourIndex, 0));
   const currentPrecipProb = Math.round(readHourlyValue('precipitation_probability', selectedHourIndex, 0));
@@ -412,6 +439,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
   const weatherData = {
     temp: currentTemp,
     feelsLike,
+    dewPoint: currentDewPoint,
     elevation: objectiveElevationFt,
     elevationSource: objectiveElevationSource,
     elevationUnit: 'ft',
@@ -435,6 +463,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
       fieldSources: {
             temp: 'Open-Meteo',
             feelsLike: 'Open-Meteo',
+            dewPoint: 'Open-Meteo',
             description: 'Open-Meteo',
             windSpeed: 'Open-Meteo',
             windGust: hasOpenMeteoGust ? 'Open-Meteo' : 'Estimated from Open-Meteo sustained wind',
@@ -504,7 +533,7 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
     }
   };
 
-  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime'].forEach(tryFillField);
+  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint'].forEach(tryFillField);
 
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
@@ -1962,6 +1991,7 @@ const safetyHandler = async (req, res) => {
   let rainfallData = createUnavailableRainfallData("unavailable");
   let snowpackData = createUnavailableSnowpackData("unavailable");
   let fireRiskData = createUnavailableFireRiskData("unavailable");
+  let heatRiskData = createUnavailableHeatRiskData("unavailable");
 
   try {
     const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
@@ -2061,6 +2091,7 @@ const safetyHandler = async (req, res) => {
             : 'Estimated from NOAA sustained wind';
       const currentTemp = Number.isFinite(selectedForecastPeriod?.temperature) ? selectedForecastPeriod.temperature : 0;
       const feelsLike = computeFeelsLikeF(currentTemp, currentWindSpeed);
+      const currentDewPoint = normalizeNoaaDewPointF(selectedForecastPeriod?.dewpoint);
       const elevationForecastBands = buildElevationForecastBands({
         baseElevationFt: objectiveElevationFt,
         tempF: currentTemp,
@@ -2071,6 +2102,7 @@ const safetyHandler = async (req, res) => {
       weatherData = {
         temp: currentTemp,
         feelsLike: feelsLike,
+        dewPoint: currentDewPoint,
         elevation: objectiveElevationFt,
         elevationSource: objectiveElevationSource,
         elevationUnit: 'ft',
@@ -2094,6 +2126,7 @@ const safetyHandler = async (req, res) => {
           fieldSources: {
             temp: 'NOAA',
             feelsLike: 'NOAA',
+            dewPoint: Number.isFinite(Number(currentDewPoint)) ? 'NOAA' : 'Unavailable',
             description: 'NOAA',
             windSpeed: 'NOAA',
             windGust: windGustSource,
@@ -2668,6 +2701,7 @@ const safetyHandler = async (req, res) => {
       alertsData,
       airQualityData,
     });
+    heatRiskData = buildHeatRiskData({ weatherData });
 
     const avalancheRelevance = evaluateAvalancheRelevance({
       lat: parsedLat,
@@ -2744,6 +2778,7 @@ const safetyHandler = async (req, res) => {
       rainfall: stampGeneratedTime(rainfallData),
       snowpack: stampGeneratedTime(snowpackData),
       fireRisk: fireRiskData,
+      heatRisk: stampGeneratedTime(heatRiskData),
       gear: gearSuggestions,
 	      trail: trailStatus,
       terrainCondition: terrainConditionData,
@@ -2789,6 +2824,10 @@ const safetyHandler = async (req, res) => {
       fireRiskData && typeof fireRiskData === 'object'
         ? fireRiskData
         : createUnavailableFireRiskData("unavailable");
+    const safeHeatRiskData =
+      heatRiskData && typeof heatRiskData === 'object'
+        ? heatRiskData
+        : createUnavailableHeatRiskData("unavailable");
     const safeTerrainCondition = deriveTerrainCondition(safeWeatherData, safeSnowpackData, safeRainfallData);
     const safeTrailStatus = safeTerrainCondition?.label || trailStatus || "⚠️ Data Partially Unavailable";
 
@@ -2850,6 +2889,7 @@ const safetyHandler = async (req, res) => {
       rainfall: stampGeneratedTime(safeRainfallData),
       snowpack: stampGeneratedTime(safeSnowpackData),
       fireRisk: safeFireRiskData,
+      heatRisk: stampGeneratedTime(safeHeatRiskData),
       gear: gearSuggestions,
       trail: safeTrailStatus,
       terrainCondition: safeTerrainCondition,
@@ -2895,6 +2935,7 @@ module.exports = {
   buildPlannedStartIso,
   buildLayeringGearSuggestions,
   buildFireRiskData,
+  buildHeatRiskData,
   calculateSafetyScore,
   findMatchingAvalancheZone,
   resolveAvalancheCenterLink,
