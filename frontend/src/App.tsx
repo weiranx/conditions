@@ -58,6 +58,7 @@ const TEMP_LAPSE_F_PER_1000FT = 3.3;
 const WIND_INCREASE_MPH_PER_1000FT = 2;
 const GUST_INCREASE_MPH_PER_1000FT = 2.5;
 const SEARCH_DEBOUNCE_MS = 180;
+const BACKEND_WAKE_NOTICE_DELAY_MS = 1400;
 const APP_DISCLAIMER_TEXT =
   'Backcountry Conditions is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or wrong. Verify official weather, avalanche, fire, and land-management products, then make final decisions from field observations and team judgment.';
 const APP_CREDIT_TEXT = 'Built by Weiran Xiong with AI support.';
@@ -154,15 +155,17 @@ interface Suggestion {
   class?: string;
 }
 
-const FALLBACK_SEARCH_SUGGESTIONS: Suggestion[] = [
+const LOCAL_POPULAR_SUGGESTIONS: Suggestion[] = [
   { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular' },
   { name: 'Mount Shasta, California', lat: 41.4091, lon: -122.1946, class: 'popular' },
   { name: 'Mount Whitney, California', lat: 36.5786, lon: -118.2923, class: 'popular' },
+  { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular' },
   { name: 'Longs Peak, Colorado', lat: 40.2549, lon: -105.615, class: 'popular' },
   { name: 'Mount Elbert, Colorado', lat: 39.1178, lon: -106.4454, class: 'popular' },
   { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular' },
-  { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular' },
   { name: 'Mount Washington, New Hampshire', lat: 44.2706, lon: -71.3033, class: 'popular' },
+  { name: 'Kings Peak, Utah', lat: 40.7764, lon: -110.3726, class: 'popular' },
+  { name: 'San Jacinto Peak, California', lat: 33.8147, lon: -116.6794, class: 'popular' },
 ];
 
 function normalizeSuggestionText(value: string): string {
@@ -231,18 +234,15 @@ function rankAndDeduplicateSuggestions(items: Suggestion[], query: string): Sugg
     .slice(0, 8);
 }
 
-function getFallbackSuggestions(query: string, allowDefaultIfEmpty = false): Suggestion[] {
-  const cleaned = normalizeSuggestionText(query);
-  if (!cleaned) {
-    return FALLBACK_SEARCH_SUGGESTIONS.slice(0, 5);
+function getLocalPopularSuggestions(query: string): Suggestion[] {
+  const normalizedQuery = normalizeSuggestionText(query);
+  if (!normalizedQuery) {
+    return LOCAL_POPULAR_SUGGESTIONS.slice(0, 8);
   }
-
-  const matches = FALLBACK_SEARCH_SUGGESTIONS.filter((item) => normalizeSuggestionText(item.name).includes(cleaned));
-  if (matches.length > 0) {
-    return rankAndDeduplicateSuggestions(matches, cleaned).slice(0, 5);
-  }
-
-  return allowDefaultIfEmpty ? FALLBACK_SEARCH_SUGGESTIONS.slice(0, 5) : [];
+  return rankAndDeduplicateSuggestions(
+    LOCAL_POPULAR_SUGGESTIONS.filter((item) => normalizeSuggestionText(item.name).includes(normalizedQuery)),
+    query,
+  ).slice(0, 8);
 }
 
 interface AvalancheElevationBand {
@@ -2411,6 +2411,7 @@ function AppDisclaimer({ compact = false }: { compact?: boolean }) {
 }
 
 function App() {
+  const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
   const maxForecastDate = formatDateInput(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7));
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
@@ -2454,6 +2455,7 @@ function App() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [showBackendWakeNotice, setShowBackendWakeNotice] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const searchWrapperRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -2465,6 +2467,7 @@ function App() {
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const satCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const teamBriefCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backendWakeNoticeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
 
   const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
@@ -2586,6 +2589,31 @@ function App() {
       setHealthLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (backendWakeNoticeTimeout.current) {
+      clearTimeout(backendWakeNoticeTimeout.current);
+      backendWakeNoticeTimeout.current = null;
+    }
+
+    if (!isProductionBuild || !loading) {
+      setShowBackendWakeNotice(false);
+      return;
+    }
+
+    setShowBackendWakeNotice(false);
+    backendWakeNoticeTimeout.current = setTimeout(() => {
+      setShowBackendWakeNotice(true);
+      backendWakeNoticeTimeout.current = null;
+    }, BACKEND_WAKE_NOTICE_DELAY_MS);
+
+    return () => {
+      if (backendWakeNoticeTimeout.current) {
+        clearTimeout(backendWakeNoticeTimeout.current);
+        backendWakeNoticeTimeout.current = null;
+      }
+    };
+  }, [isProductionBuild, loading]);
 
   useEffect(() => {
     if (!hasObjective || view !== 'planner') {
@@ -2725,6 +2753,15 @@ function App() {
   const fetchSuggestions = useCallback(async (q: string) => {
     const requestId = ++latestSuggestionRequestId.current;
     const query = q.trim();
+    if (!query || query.length < 2) {
+      const localSuggestions = getLocalPopularSuggestions(query);
+      setSuggestions(localSuggestions);
+      setShowSuggestions(true);
+      setActiveSuggestionIndex(-1);
+      setSearchLoading(false);
+      return;
+    }
+
     const cacheKey = normalizeSuggestionText(query);
     const cached = suggestionCacheRef.current.get(cacheKey);
 
@@ -2744,8 +2781,9 @@ function App() {
 
     setSearchLoading(true);
     try {
+      const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
       const { response, payload, requestId: apiRequestId } = await fetchApi(
-        `/api/search?q=${encodeURIComponent(query)}`,
+        `/api/search${queryParam}`,
         { signal: controller.signal },
       );
       if (!response.ok) {
@@ -2756,10 +2794,7 @@ function App() {
         return;
       }
       const nextSuggestions = Array.isArray(payload) ? payload : [];
-      const resolvedSuggestions = rankAndDeduplicateSuggestions(
-        nextSuggestions.length > 0 ? nextSuggestions : getFallbackSuggestions(query, false),
-        query,
-      );
+      const resolvedSuggestions = rankAndDeduplicateSuggestions(nextSuggestions, query);
       suggestionCacheRef.current.set(cacheKey, resolvedSuggestions);
       if (suggestionCacheRef.current.size > 50) {
         const oldestKey = suggestionCacheRef.current.keys().next().value;
@@ -2777,7 +2812,7 @@ function App() {
       if (requestId !== latestSuggestionRequestId.current) {
         return;
       }
-      const fallback = rankAndDeduplicateSuggestions(getFallbackSuggestions(query, query.length > 0), query);
+      const fallback = getLocalPopularSuggestions(query);
       suggestionCacheRef.current.set(cacheKey, fallback);
       setSuggestions(fallback);
       setShowSuggestions(true);
@@ -2805,13 +2840,6 @@ function App() {
 
     if (value.length > 0) {
       setShowSuggestions(true);
-      const trimmed = value.trim();
-      if (trimmed.length < 2 && !parseCoordinates(trimmed)) {
-        setSearchQuery(value);
-        setSuggestions(rankAndDeduplicateSuggestions(getFallbackSuggestions(trimmed, true), trimmed));
-        setSearchLoading(false);
-        return;
-      }
       searchTimeout.current = setTimeout(() => {
         setSearchQuery(value);
         void fetchSuggestions(value);
@@ -2858,20 +2886,30 @@ function App() {
         return true;
       }
 
+      if (query.length < 2) {
+        const localSuggestions = getLocalPopularSuggestions(query);
+        setSuggestions(localSuggestions);
+        if (localSuggestions[0]) {
+          selectSuggestion(localSuggestions[0]);
+          return true;
+        }
+        setShowSuggestions(true);
+        setActiveSuggestionIndex(-1);
+        return false;
+      }
+
       setSearchLoading(true);
       try {
+        const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
         const { response, payload, requestId: apiRequestId } = await fetchApi(
-          `/api/search?q=${encodeURIComponent(query)}`,
+          `/api/search${queryParam}`,
         );
         if (!response.ok) {
           const baseMessage = readApiErrorMessage(payload, `Search request failed (${response.status})`);
           throw new Error(apiRequestId ? `${baseMessage} (request ${apiRequestId})` : baseMessage);
         }
         const nextSuggestions = Array.isArray(payload) ? payload : [];
-        const resolvedSuggestions = rankAndDeduplicateSuggestions(
-          nextSuggestions.length > 0 ? nextSuggestions : getFallbackSuggestions(query, false),
-          query,
-        );
+        const resolvedSuggestions = rankAndDeduplicateSuggestions(nextSuggestions, query);
         setSuggestions(resolvedSuggestions);
         if (resolvedSuggestions[0]) {
           selectSuggestion(resolvedSuggestions[0]);
@@ -2882,7 +2920,7 @@ function App() {
         return false;
       } catch (err) {
         console.error('Search submit error:', err);
-        setSuggestions(rankAndDeduplicateSuggestions(getFallbackSuggestions(query, false), query));
+        setSuggestions(getLocalPopularSuggestions(query));
         setShowSuggestions(true);
         setActiveSuggestionIndex(-1);
         return false;
@@ -5354,6 +5392,12 @@ function App() {
             <strong>Building forecast brief...</strong>
             <span>Syncing weather, avalanche, alerts, and air-quality feeds.</span>
           </div>
+          {showBackendWakeNotice && (
+            <div className="forecast-loading-wakeup">
+              <strong>Backend API is waking up</strong>
+              <span>Free-tier hosting can sleep when idle. First response can take up to ~60 seconds.</span>
+            </div>
+          )}
           <div className="forecast-loading-steps" aria-hidden="true">
             {['Weather', 'Avalanche', 'Alerts', 'Air Quality'].map((label, idx) => (
               <span key={label} className="forecast-loading-step" style={{ animationDelay: `${idx * 0.18}s` }}>

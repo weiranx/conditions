@@ -1321,6 +1321,27 @@ input {
   animation: forecast-step-pulse 1.2s ease-in-out infinite;
 }
 
+.forecast-loading-wakeup {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d9c792;
+  background: linear-gradient(180deg, #f7f1df 0%, #f2e9d2 100%);
+}
+
+.forecast-loading-wakeup strong {
+  color: #6a5420;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.forecast-loading-wakeup span {
+  color: #6f6245;
+  font-size: 0.78rem;
+}
+
 .error-banner {
   border-color: rgba(200, 68, 68, 0.36);
   background: #fff5f4;
@@ -4191,6 +4212,19 @@ input {
   border-color: #3d5466;
   background: #1c2f3d;
   color: #c9dcea;
+}
+
+:root[data-theme='dark'] .forecast-loading-wakeup {
+  border-color: #5a4d28;
+  background: linear-gradient(180deg, #2f2a1f 0%, #282318 100%);
+}
+
+:root[data-theme='dark'] .forecast-loading-wakeup strong {
+  color: #f2d58b;
+}
+
+:root[data-theme='dark'] .forecast-loading-wakeup span {
+  color: #d4c6a2;
 }
 
 :root[data-theme='dark'] .source-line,
