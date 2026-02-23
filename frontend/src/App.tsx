@@ -2151,6 +2151,7 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const score = data.safety.score || 0;
   const feelsLike = data.weather.feelsLike ?? data.weather.temp;
   const description = data.weather.description || '';
+  const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const hasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
   const avalancheRelevant = data.avalanche.relevant !== false;
   const avalancheUnknown = avalancheRelevant && Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
@@ -2185,7 +2186,7 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   };
 
   const alertsStatus = String(data.alerts?.status || '').toLowerCase();
-  const alertsRelevantForSelectedStart = alertsStatus !== 'future_time_not_supported';
+  const alertsRelevantForSelectedStart = true;
   const alertsNoActiveForSelectedStart = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
   const activeAlertCount = Number(data.alerts?.activeCount);
   const hasActiveAlertCount = Number.isFinite(activeAlertCount);
@@ -2355,7 +2356,13 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
           ? 'Coverage unavailable.'
           : `Current danger level ${danger}.`,
     },
-    { label: 'No thunder/storm signal in forecast', ok: !hasStormSignal, detail: description || 'No forecast condition text available.' },
+    {
+      label: 'No thunderstorm or lightning signal in forecast',
+      ok: !hasStormSignal,
+      detail: hasStormSignal
+        ? `Convective risk keywords detected in forecast text: ${normalizedConditionText}.`
+        : `Current condition: ${normalizedConditionText} (non-convective).`,
+    },
     { label: `Precipitation chance is under ${maxPrecipThreshold}%`, ok: precip < maxPrecipThreshold, detail: `Now ${precip}%` },
     { label: `Wind gusts are under ${displayMaxGustThreshold}`, ok: gust < maxGustThreshold, detail: `Now ${formatWind(gust)}` },
     {
@@ -3453,7 +3460,6 @@ function App() {
         : '<li>No checks available</li>';
     const printAvalancheRelevant = safetyData.avalanche.relevant !== false;
     const printAvalancheExpired = safetyData.avalanche.coverageStatus === 'expired_for_selected_start';
-    const printAlertsRelevant = safetyData.alerts?.status !== 'future_time_not_supported';
     const printNwsAlerts = safetyData.alerts?.alerts || [];
     const printAlertsMarkup =
       printNwsAlerts.length > 0
@@ -3492,12 +3498,10 @@ function App() {
           <li>${escapeHtml(localizeUnitText(safetyData.avalanche.relevanceReason || 'Avalanche forecasting is currently de-emphasized based on season and snowpack context.'))}</li>
         </ul>
       </article>`;
-    const printAlertsSection = printAlertsRelevant
-      ? `<article class="section">
+    const printAlertsSection = `<article class="section">
         <h3>NWS Alerts</h3>
         <ul>${printAlertsMarkup}</ul>
-      </article>`
-      : '';
+      </article>`;
     const printFireAlertRows =
       safetyData.fireRisk?.alertsConsidered && safetyData.fireRisk.alertsConsidered.length > 0
         ? safetyData.fireRisk.alertsConsidered
@@ -4554,7 +4558,6 @@ function App() {
       void fetchSafetyData(position.lat, position.lng, nextDate, nowInputs.time, { force: true });
     }
   };
-  const alertsForecastRelevantForSelectedTime = safetyData ? safetyData.alerts?.status !== 'future_time_not_supported' : true;
   const alertsStatus = safetyData?.alerts?.status || null;
   const alertsNoActiveForSelectedTime = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
   const reportGeneratedAt = safetyData?.generatedAt || null;
@@ -4607,17 +4610,13 @@ function App() {
               },
             ]
           : []),
-        ...(alertsForecastRelevantForSelectedTime
-          ? [
-              {
-                label: 'Alerts',
-                issued: alertsFreshnessTimestamp,
-                staleHours: 6,
-                displayValue: alertsNoActiveForSelectedTime ? 'No active' : undefined,
-                stateOverride: alertsNoActiveForSelectedTime ? ('fresh' as const) : undefined,
-              },
-            ]
-          : []),
+        {
+          label: 'Alerts',
+          issued: alertsFreshnessTimestamp,
+          staleHours: 6,
+          displayValue: alertsNoActiveForSelectedTime ? 'No active' : undefined,
+          stateOverride: alertsNoActiveForSelectedTime ? ('fresh' as const) : undefined,
+        },
         { label: 'Air Quality', issued: airQualityFreshnessTimestamp, staleHours: 8 },
         {
           label: 'Precipitation',
@@ -4642,6 +4641,7 @@ function App() {
       ? 'NOAA / Weather.gov + Open-Meteo'
       : weatherSourceLabel;
   const primaryWindDirection = normalizeWindHintDirection(safetyData?.weather.windDirection || null);
+  const windTrendRows = Array.isArray(safetyData?.weather.trend) ? safetyData.weather.trend.slice(0, 12) : [];
   const trendWindDirections = Array.isArray(safetyData?.weather.trend)
     ? safetyData.weather.trend
         .map((point) => normalizeWindHintDirection(point?.windDirection || null))
@@ -4657,7 +4657,7 @@ function App() {
     primaryWindDirection && primaryWindDirection !== 'CALM' && primaryWindDirection !== 'VRB'
       ? 'Selected start hour'
       : dominantTrendDirection.direction
-        ? 'Nearby trend hours'
+        ? `Trend consensus (${dominantTrendDirection.count}/${dominantTrendDirection.total}h)`
         : 'Unavailable';
   const leewardAspectHints = resolvedWindDirection ? leewardAspectsFromWind(resolvedWindDirection) : [];
   const secondaryWindAspects = resolvedWindDirection ? secondaryCrossLoadingAspects(resolvedWindDirection) : [];
@@ -4669,6 +4669,23 @@ function App() {
     Number.isFinite(windGustMph) &&
     windSpeedMph <= 5 &&
     windGustMph <= 10;
+  const windTransportHours = windTrendRows.filter((point) => {
+    const trendWind = Number(point?.wind);
+    const trendGust = Number(point?.gust);
+    return (Number.isFinite(trendWind) && trendWind >= 12) || (Number.isFinite(trendGust) && trendGust >= 18);
+  }).length;
+  const activeTransportHours = windTrendRows.filter((point) => {
+    const trendWind = Number(point?.wind);
+    const trendGust = Number(point?.gust);
+    return (Number.isFinite(trendWind) && trendWind >= 18) || (Number.isFinite(trendGust) && trendGust >= 28);
+  }).length;
+  const severeTransportHours = windTrendRows.filter((point) => {
+    const trendWind = Number(point?.wind);
+    const trendGust = Number(point?.gust);
+    return (Number.isFinite(trendWind) && trendWind >= 25) || (Number.isFinite(trendGust) && trendGust >= 38);
+  }).length;
+  const trendDirectionalCoverageRatio =
+    trendWindDirections.length > 0 ? directionalTrendWindDirections.length / trendWindDirections.length : null;
   const trendAgreementRatio =
     resolvedWindDirection && directionalTrendWindDirections.length > 0
       ? directionalTrendWindDirections.filter((direction) => {
@@ -4676,19 +4693,49 @@ function App() {
           return delta !== null && delta <= 45;
         }).length / directionalTrendWindDirections.length
       : null;
+  const windLoadingLevel: 'Minimal' | 'Localized' | 'Active' | 'Severe' = (() => {
+    if (!safetyData || calmOrVariableSignal || lightWindSignal) {
+      return 'Minimal';
+    }
+    if (
+      (Number.isFinite(windSpeedMph) && windSpeedMph >= 28) ||
+      (Number.isFinite(windGustMph) && windGustMph >= 40) ||
+      severeTransportHours >= 2
+    ) {
+      return 'Severe';
+    }
+    if (
+      (Number.isFinite(windSpeedMph) && windSpeedMph >= 20) ||
+      (Number.isFinite(windGustMph) && windGustMph >= 30) ||
+      activeTransportHours >= 2
+    ) {
+      return 'Active';
+    }
+    if (
+      (Number.isFinite(windSpeedMph) && windSpeedMph >= 12) ||
+      (Number.isFinite(windGustMph) && windGustMph >= 18) ||
+      windTransportHours >= 1
+    ) {
+      return 'Localized';
+    }
+    return 'Minimal';
+  })();
   const windLoadingConfidence: 'High' | 'Moderate' | 'Low' = (() => {
-    if (!safetyData || calmOrVariableSignal || lightWindSignal || !resolvedWindDirection) {
+    if (!safetyData || windLoadingLevel === 'Minimal' || !resolvedWindDirection) {
       return 'Low';
     }
     if (
       trendAgreementRatio !== null &&
       trendAgreementRatio >= 0.7 &&
+      trendDirectionalCoverageRatio !== null &&
+      trendDirectionalCoverageRatio >= 0.5 &&
       ((Number.isFinite(windSpeedMph) && windSpeedMph >= 14) || (Number.isFinite(windGustMph) && windGustMph >= 22))
     ) {
       return 'High';
     }
     if (
       (trendAgreementRatio !== null && trendAgreementRatio >= 0.45) ||
+      (dominantTrendDirection.ratio >= 0.35 && dominantTrendDirection.total >= 3) ||
       (Number.isFinite(windSpeedMph) && windSpeedMph >= 10) ||
       (Number.isFinite(windGustMph) && windGustMph >= 16)
     ) {
@@ -4699,47 +4746,76 @@ function App() {
   const windLoadingPillClass =
     !safetyData
       ? 'caution'
-      : calmOrVariableSignal || lightWindSignal
+      : windLoadingLevel === 'Minimal'
         ? 'go'
-        : resolvedWindDirection
-          ? windLoadingConfidence === 'High'
-            ? 'nogo'
-            : 'caution'
-          : Number.isFinite(windSpeedMph) && windSpeedMph >= 10
-            ? 'nogo'
-            : 'caution';
+        : windLoadingLevel === 'Severe'
+          ? 'nogo'
+          : windLoadingLevel === 'Active'
+            ? windLoadingConfidence === 'High'
+              ? 'nogo'
+              : 'caution'
+            : 'watch';
+  const windLoadingActiveWindowLabel =
+    windTrendRows.length > 0
+      ? `${activeTransportHours}/${windTrendRows.length} h active`
+      : 'N/A';
   const windLoadingElevationFocus =
     !safetyData
       ? 'Load forecast to see terrain focus.'
-      : Number.isFinite(windSpeedMph) && Number.isFinite(windGustMph) && (windSpeedMph >= 18 || windGustMph >= 28)
-        ? 'Focus above and near treeline; expect active transport on lee ridges and convex rollovers.'
-        : Number.isFinite(windSpeedMph) && Number.isFinite(windGustMph) && (windSpeedMph >= 10 || windGustMph >= 18)
+      : windLoadingLevel === 'Severe'
+        ? 'Above and near treeline are primary hazard zones. Expect rapid slab growth on lee ridges, rollovers, and gully walls.'
+        : windLoadingLevel === 'Active'
           ? 'Focus near and above treeline, plus connected terrain below loaded start zones.'
-          : 'Loading likely stays localized around exposed ridges, gully walls, and terrain breaks.';
+          : windLoadingLevel === 'Localized'
+            ? 'Loading likely stays localized around exposed ridges, terrain breaks, and cross-loaded gully features.'
+            : 'Wind transport is limited; drift pockets can still form near ridgelines.';
+  const windLoadingActionLine =
+    !safetyData
+      ? ''
+      : windLoadingLevel === 'Severe'
+        ? 'Route action: avoid lee convexities and cross-loaded start zones; use sheltered, lower-angle terrain.'
+        : windLoadingLevel === 'Active'
+          ? 'Route action: keep ridgeline exposure short and avoid terrain traps beneath lee start zones.'
+          : windLoadingLevel === 'Localized'
+            ? 'Route action: probe small test slopes and watch for drifted pillows before committing to steeper terrain.'
+            : 'Route action: wind loading is a secondary hazard, but still check for isolated drifts near ridges.';
   const windLoadingSummary =
     !safetyData
       ? 'Wind loading hints unavailable until a forecast is loaded.'
       : calmOrVariableSignal
-        ? `Winds are ${primaryWindDirection === 'CALM' ? 'calm' : 'variable'}. No dominant lee aspect signal; watch for localized drifts.`
+        ? `Winds are ${primaryWindDirection === 'CALM' ? 'calm' : 'variable'}. Broad loading is unlikely, but localized drifts can still form around terrain breaks.`
         : lightWindSignal
           ? 'Winds are light at the selected start window. Broad loading is less likely, but small drift pockets can still form.'
           : resolvedWindDirection
-            ? `Wind from ${resolvedWindDirection} at ${formatWindDisplay(safetyData.weather.windSpeed)} (gust ${formatWindDisplay(
-                safetyData.weather.windGust,
-              )}). Likely lee loading on ${leewardAspectHints.join(', ') || 'unknown'} aspects.`
-            : 'Directional wind signal is unavailable; infer loading from field clues (cornices, drift pillows, textured snow).';
+            ? `${windLoadingLevel} transport signal: wind from ${resolvedWindDirection} at ${formatWindDisplay(
+                safetyData.weather.windSpeed,
+              )} (gust ${formatWindDisplay(safetyData.weather.windGust)}). Primary lee aspects: ${leewardAspectHints.join(', ') || 'unknown'}.`
+            : `${windLoadingLevel} transport signal, but direction is uncertain. Infer loading from field clues (fresh cornices, drift pillows, textured snow).`;
   const windLoadingNotes = safetyData
     ? [
         `Direction source: ${resolvedWindDirectionSource}.`,
+        trendWindDirections.length > 0 && trendDirectionalCoverageRatio !== null
+          ? `Directional coverage: ${Math.round(trendDirectionalCoverageRatio * 100)}% of trend hours reported usable direction.`
+          : 'Directional coverage: not enough trend direction data.',
         directionalTrendWindDirections.length > 0 && trendAgreementRatio !== null
           ? `Trend agreement: ${Math.round(trendAgreementRatio * 100)}% of ${directionalTrendWindDirections.length} nearby hour(s) align within 45 degrees.`
           : 'Trend agreement: not enough directional trend data.',
+        windTrendRows.length > 0
+          ? `Active loading window: ${activeTransportHours}/${windTrendRows.length} hour(s) show active wind-transport signal.`
+          : null,
         secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20
           ? `Secondary cross-loading possible on ${secondaryWindAspects.join(', ')} aspects.`
           : null,
         !resolvedWindDirection && Number.isFinite(windSpeedMph) && windSpeedMph >= 10
           ? 'Stronger winds with missing direction: treat all lee start zones as suspect until confirmed in the field.'
           : null,
+        windLoadingLevel === 'Severe'
+          ? 'Field cues: rapid cornice growth, hollow slab feel, and fresh drifts extending farther below ridges.'
+          : windLoadingLevel === 'Active'
+            ? 'Field cues: fresh drift pillows, shooting cracks, and wind-textured snow near lee features.'
+            : windLoadingLevel === 'Localized'
+              ? 'Field cues: isolated drift pockets near gully walls, sub-ridges, and convex terrain breaks.'
+              : null,
       ].filter((entry): entry is string => Boolean(entry))
     : [];
   const terrainConditionDetails = safetyData
@@ -4889,7 +4965,7 @@ function App() {
     const scoreTraceAvailable = scoreFactors.length > 0 || Boolean(dayOverDay);
     const gearAvailable = Array.isArray(safetyData?.gear) && safetyData.gear.length > 0;
     const planAvailable = Boolean(safetyData?.solar?.sunrise || safetyData?.solar?.sunset || safetyData?.forecast?.selectedDate);
-    const alertsCardRelevant = alertsForecastRelevantForSelectedTime;
+    const alertsCardRelevant = true;
     const alertsList = safetyData?.alerts?.alerts || [];
     const alertsActive = alertsCardRelevant && nwsAlertCount > 0;
     const highestAlertSeverity = Math.max(
@@ -6255,10 +6331,19 @@ function App() {
                     <Wind size={14} /> Wind Loading Hints
                     <HelpHint text="Uses start-time wind plus nearby trend hours to infer likely loaded aspects and where wind transport is most relevant." />
                   </span>
-                  <span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingConfidence} confidence</span>
+                  <span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} • {windLoadingConfidence}</span>
                 </div>
                 <p className="wind-hint-line">{windLoadingSummary}</p>
+                {windLoadingActionLine && <p className="wind-action-line">{windLoadingActionLine}</p>}
                 <div className="wind-hint-meta">
+                  <div className="wind-hint-meta-item">
+                    <span className="stat-label">Transport Level</span>
+                    <strong>{windLoadingLevel}</strong>
+                  </div>
+                  <div className="wind-hint-meta-item">
+                    <span className="stat-label">Active Window</span>
+                    <strong>{windLoadingActiveWindowLabel}</strong>
+                  </div>
                   <div className="wind-hint-meta-item">
                     <span className="stat-label">Direction Source</span>
                     <strong>{resolvedWindDirectionSource}</strong>
@@ -6334,11 +6419,6 @@ function App() {
                 </ul>
                 {reportGeneratedAt && <p className="muted-note">Report generated: {formatPubTime(reportGeneratedAt)}</p>}
                 <p className="muted-note">Freshness badges use upstream publish/observation times when available.</p>
-                {!alertsForecastRelevantForSelectedTime && (
-                  <p className="muted-note">
-                    NWS active alerts are omitted for future start times because this feed is current-state only.
-                  </p>
-                )}
                 {avalancheExpiredForSelectedStart && (
                   <p className="muted-note">
                     Avalanche bulletin expires before your selected start time. Report is shown as stale guidance; verify the latest update before departure.
@@ -6352,8 +6432,7 @@ function App() {
                 )}
               </div>
 
-              {alertsForecastRelevantForSelectedTime && (
-                <div className="card nws-alerts-card" style={{ order: reportCardOrder.nwsAlerts }}>
+              <div className="card nws-alerts-card" style={{ order: reportCardOrder.nwsAlerts }}>
                   <div className="card-header">
                     <span className="card-title">
                       <AlertTriangle size={14} /> NWS Alerts
@@ -6477,7 +6556,6 @@ function App() {
                     <p className="muted-note">No active NWS alerts for this objective point.</p>
                   )}
                 </div>
-              )}
 
               <div className="card air-quality-card" style={{ order: reportCardOrder.airQuality }}>
                 <div className="card-header">
@@ -6524,30 +6602,8 @@ function App() {
                   </span>
                 </div>
 
-                {snowpackInterpretation && (
-                  <div className={`snowpack-read snowpack-read-${snowpackInterpretation.confidence}`}>
-                    <div className="snowpack-read-head">
-                      <strong>{snowpackInterpretation.headline}</strong>
-                      <span className="snowpack-read-chip">
-                        {snowpackInterpretation.confidence === 'solid'
-                          ? 'High signal confidence'
-                          : snowpackInterpretation.confidence === 'watch'
-                            ? 'Moderate confidence'
-                            : 'Low confidence'}
-                      </span>
-                    </div>
-                    {snowpackInterpretation.bullets.length > 0 && (
-                      <ul className="signal-list compact">
-                        {snowpackInterpretation.bullets.map((item, idx) => (
-                          <li key={`snowpack-read-${idx}`}>{item}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
                 {snowpackInsights && (
-                  <div className="snowpack-insight-grid">
+                  <div className="snowpack-insight-grid snowpack-insight-grid-compact">
                     <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.signal.tone}`}>
                       <span className="stat-label">Signal</span>
                       <strong>{snowpackInsights.signal.label}</strong>
@@ -6558,146 +6614,123 @@ function App() {
                       <strong>{snowpackInsights.freshness.label}</strong>
                       <small>{snowpackInsights.freshness.detail}</small>
                     </div>
-                    <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.representativeness.tone}`}>
-                      <span className="stat-label">Representativeness</span>
-                      <strong>{snowpackInsights.representativeness.label}</strong>
-                      <small>{snowpackInsights.representativeness.detail}</small>
-                    </div>
-                    <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.agreement.tone}`}>
-                      <span className="stat-label">Agreement</span>
-                      <strong>{snowpackInsights.agreement.label}</strong>
-                      <small>{snowpackInsights.agreement.detail}</small>
-                    </div>
                   </div>
                 )}
 
-                {snowpackTakeaways.length > 0 && (
-                  <div className="snowpack-takeaways">
-                    <span className="snowpack-takeaway-title">How To Use This Snapshot</span>
-                    <ul className="signal-list compact">
-                      {snowpackTakeaways.map((item, idx) => (
-                        <li key={`snowpack-takeaway-${idx}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="plan-grid">
-                  <div>
+                <div className="snowpack-core-grid">
+                  <div className="snowpack-core-item">
                     <span className="stat-label stat-label-with-help">
                       Nearest SNOTEL
                       <HelpHint text="Closest USDA NRCS snow station to your objective. Station observations are used as local snowpack ground truth." />
                     </span>
                     <strong>{safetyData.snowpack?.snotel?.stationName || 'Unavailable'}</strong>
+                    <small>{snotelDistanceDisplay !== 'N/A' ? `${snotelDistanceDisplay} from objective` : 'Distance unavailable'}</small>
                   </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      SNOTEL SWE
-                      <HelpHint text="Snow Water Equivalent at the nearest SNOTEL station: how much liquid water is stored in the snowpack." />
-                    </span>
-                    <strong>
-                      {snotelSweDisplay}
-                    </strong>
+                  <div className="snowpack-core-item">
+                    <span className="stat-label">SNOTEL Station Snow</span>
+                    <strong>Depth {snotelDepthDisplay} • SWE {snotelSweDisplay}</strong>
+                    <small>{safetyData.snowpack?.snotel?.observedDate ? `Observed ${safetyData.snowpack.snotel.observedDate}` : 'Observation date unavailable'}</small>
                   </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      SNOTEL Depth
-                      <HelpHint text="Measured snow depth at the nearest SNOTEL station. Useful for current snow coverage context." />
-                    </span>
-                    <strong>
-                      {snotelDepthDisplay}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      NOHRSC SWE
-                      <HelpHint text="NOAA modeled Snow Water Equivalent at your objective grid point. This is gridded analysis, not station-observed data." />
-                    </span>
-                    <strong>
-                      {nohrscSweDisplay}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      NOHRSC Depth
-                      <HelpHint text="NOAA modeled snow depth at your objective grid point from NOHRSC Snow Analysis." />
-                    </span>
-                    <strong>
-                      {nohrscDepthDisplay}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      SNOTEL Distance
-                      <HelpHint text="Distance from your objective to the nearest SNOTEL station. Larger distance usually means lower representativeness." />
-                    </span>
-                    <strong>
-                      {snotelDistanceDisplay}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      SNOTEL Observed
-                      <HelpHint text="Date of the latest daily SNOTEL observation used in this snapshot." />
-                    </span>
-                    <strong>
-                      {safetyData.snowpack?.snotel?.observedDate || 'N/A'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      NOHRSC Sampled
-                      <HelpHint text="Time when the NOAA NOHRSC grid sample was taken for this report build." />
-                    </span>
-                    <strong>
+                  <div className="snowpack-core-item">
+                    <span className="stat-label">NOHRSC Grid Snow</span>
+                    <strong>Depth {nohrscDepthDisplay} • SWE {nohrscSweDisplay}</strong>
+                    <small>
                       {safetyData.snowpack?.nohrsc?.sampledTime
-                        ? formatForecastPeriodLabel(safetyData.snowpack.nohrsc.sampledTime, safetyData.weather?.timezone || null)
-                        : 'N/A'}
-                    </strong>
+                        ? `Sampled ${formatForecastPeriodLabel(safetyData.snowpack.nohrsc.sampledTime, safetyData.weather?.timezone || null)}`
+                        : 'Sample time unavailable'}
+                    </small>
                   </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      Recent Snowfall (12h/24h/48h)
-                      <HelpHint text="Rolling snowfall totals from the precipitation feed. This gives recency context around the snowpack snapshot." />
-                    </span>
-                    <strong>{snowfallWindowSummary}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label stat-label-with-help">
-                      Recent Rainfall (12h/24h/48h)
-                      <HelpHint text="Rolling rainfall totals from the precipitation feed. Rain-on-snow can rapidly change snow surface and stability." />
-                    </span>
-                    <strong>{rainfallWindowSummary}</strong>
+                  <div className="snowpack-core-item">
+                    <span className="stat-label">Recent 24h</span>
+                    <strong>Rain {rainfall24hDisplay} • Snow {snowfall24hDisplay}</strong>
+                    <small>Use this for fresh loading context.</small>
                   </div>
                 </div>
 
                 <p className="muted-note">
-                  {snowpackObservationContext}
-                </p>
-                <p className="muted-note">
-                  Data snapshot: {localizeUnitText(safetyData.snowpack?.summary || 'Snowpack observations unavailable.')}
+                  {snowpackInterpretation?.headline
+                    ? localizeUnitText(snowpackInterpretation.headline)
+                    : localizeUnitText(safetyData.snowpack?.summary || 'Snowpack observations unavailable.')}
                 </p>
 
-                <p className="muted-note">
-                  Sources:{' '}
-                  {safeSnotelLink ? (
-                    <>
-                      <a href={safeSnotelLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                        NRCS AWDB / SNOTEL
+                <details className="snowpack-details">
+                  <summary>More snowpack details</summary>
+
+                  {snowpackInsights && (
+                    <div className="snowpack-insight-grid">
+                      <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.representativeness.tone}`}>
+                        <span className="stat-label">Representativeness</span>
+                        <strong>{snowpackInsights.representativeness.label}</strong>
+                        <small>{snowpackInsights.representativeness.detail}</small>
+                      </div>
+                      <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.agreement.tone}`}>
+                        <span className="stat-label">Agreement</span>
+                        <strong>{snowpackInsights.agreement.label}</strong>
+                        <small>{snowpackInsights.agreement.detail}</small>
+                      </div>
+                    </div>
+                  )}
+
+                  {snowpackInterpretation && snowpackInterpretation.bullets.length > 0 && (
+                    <div className={`snowpack-read snowpack-read-${snowpackInterpretation.confidence}`}>
+                      <span className="snowpack-takeaway-title">Interpretation notes</span>
+                      <ul className="signal-list compact">
+                        {snowpackInterpretation.bullets.map((item, idx) => (
+                          <li key={`snowpack-read-${idx}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {snowpackTakeaways.length > 0 && (
+                    <div className="snowpack-takeaways">
+                      <span className="snowpack-takeaway-title">How To Use This Snapshot</span>
+                      <ul className="signal-list compact">
+                        {snowpackTakeaways.map((item, idx) => (
+                          <li key={`snowpack-takeaway-${idx}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="plan-grid">
+                    <div>
+                      <span className="stat-label">Recent Snowfall (12h/24h/48h)</span>
+                      <strong>{snowfallWindowSummary}</strong>
+                    </div>
+                    <div>
+                      <span className="stat-label">Recent Rainfall (12h/24h/48h)</span>
+                      <strong>{rainfallWindowSummary}</strong>
+                    </div>
+                  </div>
+
+                  <p className="muted-note">
+                    {snowpackObservationContext}
+                  </p>
+                  <p className="muted-note">
+                    Data snapshot: {localizeUnitText(safetyData.snowpack?.summary || 'Snowpack observations unavailable.')}
+                  </p>
+                  <p className="muted-note">
+                    Sources:{' '}
+                    {safeSnotelLink ? (
+                      <>
+                        <a href={safeSnotelLink} target="_blank" rel="noreferrer" className="raw-link-value">
+                          NRCS AWDB / SNOTEL
+                        </a>
+                        {' • '}
+                      </>
+                    ) : (
+                      'NRCS AWDB / SNOTEL • '
+                    )}
+                    {safeNohrscLink ? (
+                      <a href={safeNohrscLink} target="_blank" rel="noreferrer" className="raw-link-value">
+                        NOAA NOHRSC Snow Analysis
                       </a>
-                      {' • '}
-                    </>
-                  ) : (
-                    'NRCS AWDB / SNOTEL • '
-                  )}
-                  {safeNohrscLink ? (
-                    <a href={safeNohrscLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                      NOAA NOHRSC Snow Analysis
-                    </a>
-                  ) : (
-                    'NOAA NOHRSC Snow Analysis'
-                  )}
-                </p>
+                    ) : (
+                      'NOAA NOHRSC Snow Analysis'
+                    )}
+                  </p>
+                </details>
               </div>
 
               <div className="card fire-risk-card" style={{ order: reportCardOrder.fireRisk }}>
@@ -7340,47 +7373,38 @@ function App() {
                 <section className="raw-group">
                   <h4>Additional Risk Sources</h4>
                   <ul className="raw-kv-list">
-                    {alertsForecastRelevantForSelectedTime ? (
-                      <>
-                        <li>
-                          <span className="raw-key">NWS Alert Count</span>
-                          <span className="raw-value">{safetyData.alerts?.activeCount ?? 0}</span>
-                        </li>
-                        <li>
-                          <span className="raw-key">Highest Alert Severity</span>
-                          <span className="raw-value">{safetyData.alerts?.highestSeverity || 'N/A'}</span>
-                        </li>
-                        <li>
-                          <span className="raw-key">Alert Events</span>
-                          <span className={`raw-value ${safetyData.alerts?.alerts && safetyData.alerts.alerts.length > 0 ? 'raw-value-stack' : ''}`}>
-                            {safetyData.alerts?.alerts && safetyData.alerts.alerts.length > 0
-                              ? safetyData.alerts.alerts.map((alert, idx) => {
-                                  const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
-                                  return (
-                                    <span key={`${alert.event || 'alert'}-${idx}`}>
-                                      {(alert.event || 'Alert')} • {alert.severity || 'Unknown'} • {alert.urgency || 'Unknown'}
-                                      {safeAlertLink ? (
-                                        <>
-                                          {' '}
-                                          •{' '}
-                                          <a href={safeAlertLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                            Source link
-                                          </a>
-                                        </>
-                                      ) : null}
-                                    </span>
-                                  );
-                                })
-                              : 'None'}
-                          </span>
-                        </li>
-                      </>
-                    ) : (
-                      <li>
-                        <span className="raw-key">NWS Alerts</span>
-                        <span className="raw-value">Not used for future start times.</span>
-                      </li>
-                    )}
+                    <li>
+                      <span className="raw-key">NWS Alert Count</span>
+                      <span className="raw-value">{safetyData.alerts?.activeCount ?? 0}</span>
+                    </li>
+                    <li>
+                      <span className="raw-key">Highest Alert Severity</span>
+                      <span className="raw-value">{safetyData.alerts?.highestSeverity || 'N/A'}</span>
+                    </li>
+                    <li>
+                      <span className="raw-key">Alert Events</span>
+                      <span className={`raw-value ${safetyData.alerts?.alerts && safetyData.alerts.alerts.length > 0 ? 'raw-value-stack' : ''}`}>
+                        {safetyData.alerts?.alerts && safetyData.alerts.alerts.length > 0
+                          ? safetyData.alerts.alerts.map((alert, idx) => {
+                              const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
+                              return (
+                                <span key={`${alert.event || 'alert'}-${idx}`}>
+                                  {(alert.event || 'Alert')} • {alert.severity || 'Unknown'} • {alert.urgency || 'Unknown'}
+                                  {safeAlertLink ? (
+                                    <>
+                                      {' '}
+                                      •{' '}
+                                      <a href={safeAlertLink} target="_blank" rel="noreferrer" className="raw-link-value">
+                                        Source link
+                                      </a>
+                                    </>
+                                  ) : null}
+                                </span>
+                              );
+                            })
+                          : 'None'}
+                      </span>
+                    </li>
                     <li>
                       <span className="raw-key">US AQI</span>
                       <span className="raw-value">
