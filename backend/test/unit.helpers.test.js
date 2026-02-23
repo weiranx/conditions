@@ -512,6 +512,29 @@ test('buildHeatRiskData returns low risk for cool conditions', () => {
   expect(heatRisk.label).toBe('Low');
 });
 
+test('buildHeatRiskData considers warmer lower-terrain approach bands', () => {
+  const heatRisk = buildHeatRiskData({
+    weatherData: {
+      temp: 58,
+      feelsLike: 56,
+      humidity: 40,
+      isDaytime: true,
+      trend: [{ temp: 57 }, { temp: 59 }],
+      elevationForecast: [
+        { label: 'Lower Terrain', elevationFt: 5500, deltaFromObjectiveFt: -3000, temp: 89, feelsLike: 95, windSpeed: 6, windGust: 9 },
+        { label: 'Mid Terrain', elevationFt: 7000, deltaFromObjectiveFt: -1500, temp: 78, feelsLike: 80, windSpeed: 8, windGust: 12 },
+        { label: 'Objective Elevation', elevationFt: 8500, deltaFromObjectiveFt: 0, temp: 58, feelsLike: 56, windSpeed: 12, windGust: 16 },
+      ],
+    },
+  });
+
+  expect(heatRisk.status).toBe('ok');
+  expect(heatRisk.level).toBeGreaterThanOrEqual(3);
+  expect(Number(heatRisk?.metrics?.lowerTerrainFeelsLikeF)).toBeGreaterThanOrEqual(95);
+  expect(Array.isArray(heatRisk.reasons)).toBe(true);
+  expect(heatRisk.reasons.join(' ')).toMatch(/Lower terrain can run warmer/i);
+});
+
 test('deriveTrailStatus uses snowpack coverage and avoids Hero Dirt label', () => {
   const status = deriveTrailStatus(
     {

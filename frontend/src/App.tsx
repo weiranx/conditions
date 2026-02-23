@@ -357,6 +357,10 @@ interface SafetyData {
       humidity?: number | null;
       peakTemp12hF?: number | null;
       peakFeelsLike12hF?: number | null;
+      lowerTerrainTempF?: number | null;
+      lowerTerrainFeelsLikeF?: number | null;
+      lowerTerrainLabel?: string | null;
+      lowerTerrainElevationFt?: number | null;
       isDaytime?: boolean | null;
     };
     generatedTime?: string | null;
@@ -1374,6 +1378,18 @@ function normalizeElevationInput(rawValue: string | null | undefined): string {
     return '';
   }
   return String(Math.round(numeric));
+}
+
+function parseOptionalElevationInput(rawValue: string): number | null {
+  const cleaned = String(rawValue || '').trim().replace(/,/g, '');
+  if (!cleaned) {
+    return null;
+  }
+  const numeric = Number(cleaned);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return numeric;
 }
 
 function currentLocalTimeInput(): string {
@@ -3391,7 +3407,7 @@ function App() {
   const handleTargetElevationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/[^\d]/g, '').slice(0, 5);
     setTargetElevationInput(digitsOnly);
-    setTargetElevationManual(digitsOnly.trim().length > 0);
+    setTargetElevationManual(true);
   };
 
   const handleCopyLink = async () => {
@@ -3843,8 +3859,8 @@ function App() {
     if (elevationUnit === preferences.elevationUnit) {
       return;
     }
-    const parsed = Number(targetElevationInput);
-    if (Number.isFinite(parsed)) {
+    const parsed = parseOptionalElevationInput(targetElevationInput);
+    if (parsed !== null) {
       const asFeet = convertDisplayElevationToFeet(parsed, preferences.elevationUnit);
       const nextDisplay = convertElevationFeetToDisplayValue(asFeet, elevationUnit);
       setTargetElevationInput(String(Math.max(0, Math.round(nextDisplay))));
@@ -4086,8 +4102,9 @@ function App() {
     : -1;
   const peakCriticalWindow = peakCriticalWindowIndex >= 0 ? criticalWindow[peakCriticalWindowIndex] : null;
   const visibleCriticalWindowRows = travelWindowExpanded ? criticalWindow : [];
-  const parsedTargetElevation = Number(targetElevationInput);
-  const targetElevationFt = convertDisplayElevationToFeet(parsedTargetElevation, preferences.elevationUnit);
+  const parsedTargetElevation = parseOptionalElevationInput(targetElevationInput);
+  const targetElevationFt =
+    parsedTargetElevation === null ? Number.NaN : convertDisplayElevationToFeet(parsedTargetElevation, preferences.elevationUnit);
   const hasTargetElevation = Number.isFinite(targetElevationFt) && targetElevationFt >= 0;
   const windThresholdDisplay = formatWindDisplay(preferences.maxWindGustMph);
   const feelsLikeThresholdDisplay = formatTempDisplay(preferences.minFeelsLikeF);
@@ -4395,6 +4412,17 @@ function App() {
     ? safetyData.heatRisk.reasons.slice(0, 4)
     : [];
   const heatRiskMetrics = safetyData?.heatRisk?.metrics || {};
+  const lowerTerrainHeatLabel = (() => {
+    const label = String(heatRiskMetrics.lowerTerrainLabel || '').trim();
+    const elevationFt = Number(heatRiskMetrics.lowerTerrainElevationFt);
+    if (!label && !Number.isFinite(elevationFt)) {
+      return null;
+    }
+    if (label && Number.isFinite(elevationFt)) {
+      return `${label} (${formatElevationDisplay(elevationFt)})`;
+    }
+    return label || formatElevationDisplay(elevationFt);
+  })();
   const weatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '';
   const weatherWithEmoji = safetyData ? `${weatherEmoji} ${safetyData.weather.description}` : '';
   const mapWeatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '🌤️';
@@ -4573,6 +4601,36 @@ function App() {
         { label: 'Surface', value: safetyData.terrainCondition?.label || safetyData.trail || 'Unknown' },
         { label: 'Avalanche', value: dangerSummaryText },
         { label: 'Safety score', value: `${safetyData.safety.score}%` },
+      ]
+    : [];
+  const decisionFailingChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
+  const decisionPassingChecksCount = decision ? decision.checks.filter((check) => check.ok).length : 0;
+  const decisionActionLine = decision
+    ? decision.level === 'NO-GO'
+      ? 'Do not commit to this objective window. Move to a safer backup objective or delay.'
+      : decision.level === 'CAUTION'
+        ? 'Proceed only on conservative terrain with strict timing and explicit abort triggers.'
+        : 'Proceed with normal controls and continue checkpoint-based reassessment.'
+    : '';
+  const decisionKeyDrivers = decision
+    ? decision.blockers.length > 0
+      ? decision.blockers.slice(0, 3)
+      : decision.cautions.length > 0
+        ? decision.cautions.slice(0, 3)
+        : decision.checks
+            .filter((check) => check.ok)
+            .slice(0, 3)
+            .map((check) => check.label)
+    : [];
+  const fieldBriefExecutionSteps = decision
+    ? [
+        `Pre-departure (${displayStartTime}): confirm latest weather, avalanche, alerts, and route assumptions before leaving.`,
+        decision.level === 'GO'
+          ? 'On-route: continue only while observed wind, snowpack, and trail surface match forecast expectations.'
+          : 'On-route: bias to lower-angle / lower-consequence terrain and shorten commitments between safe decision points.',
+        `Abort immediately if ${String(fieldBriefAbortTriggers[0] || 'daylight margin begins collapsing')
+          .replace(/^Abort if\s+/i, '')
+          .replace(/\.$/, '')}.`,
       ]
     : [];
   const objectiveTimezone = safetyData?.weather.timezone || null;
@@ -5836,32 +5894,82 @@ function App() {
                   <span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>
                 </div>
                 <p className="decision-headline">{decision.headline}</p>
-
-                {decision.blockers.length > 0 && (
+                <div className={`decision-action ${decision.level.toLowerCase().replace('-', '')}`}>
+                  <span className="decision-action-label">Recommended action</span>
+                  <p>{decisionActionLine}</p>
+                </div>
+                <div className="decision-summary-grid" role="list" aria-label="Decision check summary">
+                  <article className="decision-summary-item" role="listitem">
+                    <span>Passing checks</span>
+                    <strong>
+                      {decisionPassingChecksCount}/{decision.checks.length}
+                    </strong>
+                  </article>
+                  <article className="decision-summary-item" role="listitem">
+                    <span>Attn checks</span>
+                    <strong>{decisionFailingChecks.length}</strong>
+                  </article>
+                  <article className="decision-summary-item" role="listitem">
+                    <span>Dominant risk</span>
+                    <strong>{decision.blockers.length > 0 ? 'Hard blocker' : decision.cautions.length > 0 ? 'Caution signal' : 'No dominant risk'}</strong>
+                  </article>
+                </div>
+                <div className="decision-group">
+                  <h4>
+                    <AlertTriangle size={14} /> Key drivers
+                  </h4>
+                  {decisionKeyDrivers.length > 0 ? (
+                    <div className="decision-driver-chips" role="list" aria-label="Decision key drivers">
+                      {decisionKeyDrivers.map((item, idx) => (
+                        <span key={`${item}-${idx}`} className="decision-driver-chip" role="listitem">
+                          {localizeUnitText(item)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted-note">No dominant risk trigger detected from current model signals.</p>
+                  )}
+                </div>
+                <details className="decision-details">
+                  <summary>Show detailed blockers, cautions, and check outcomes</summary>
+                  {decision.blockers.length > 0 && (
+                    <div className="decision-group">
+                      <h4>
+                        <XCircle size={14} /> Blockers
+                      </h4>
+                      <ul className="signal-list compact">
+                        {decision.blockers.map((item, idx) => (
+                          <li key={idx}>{localizeUnitText(item)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {decision.cautions.length > 0 && (
+                    <div className="decision-group">
+                      <h4>
+                        <AlertTriangle size={14} /> Cautions
+                      </h4>
+                      <ul className="signal-list compact">
+                        {decision.cautions.map((item, idx) => (
+                          <li key={idx}>{localizeUnitText(item)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="decision-group">
                     <h4>
-                      <XCircle size={14} /> Blockers
+                      <CheckCircle2 size={14} /> Check outcomes
                     </h4>
-                    <ul className="signal-list">
-                      {decision.blockers.map((item, idx) => (
-                        <li key={idx}>{item}</li>
+                    <ul className="signal-list compact">
+                      {decision.checks.map((check, idx) => (
+                        <li key={`${check.label}-${idx}`}>
+                          <strong>{check.ok ? 'PASS' : 'ATTN'}:</strong> {localizeUnitText(check.label)}
+                          {check.detail ? ` - ${localizeUnitText(check.detail)}` : ''}
+                        </li>
                       ))}
                     </ul>
                   </div>
-                )}
-
-                {decision.cautions.length > 0 && (
-                  <div className="decision-group">
-                    <h4>
-                      <AlertTriangle size={14} /> Cautions
-                    </h4>
-                    <ul className="signal-list">
-                      {decision.cautions.map((item, idx) => (
-                        <li key={idx}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                </details>
               </div>
 
               <div className="card projection-card" style={{ order: reportCardOrder.travelWindowPlanner }}>
@@ -6264,7 +6372,7 @@ function App() {
                 <div className="card-header">
                   <span className="card-title">
                     <Sun size={14} /> Heat Risk
-                    <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, and near-term trend peaks." />
+                    <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, near-term trend peaks, and lower-terrain elevation estimates." />
                   </span>
                   <span className={`decision-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>
                 </div>
@@ -6285,6 +6393,11 @@ function App() {
                   <div>
                     <span className="stat-label">12h Peak Temp</span>
                     <strong>{formatTempDisplay(heatRiskMetrics.peakTemp12hF ?? null)}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-label">Lower Terrain Feels</span>
+                    <strong>{formatTempDisplay(heatRiskMetrics.lowerTerrainFeelsLikeF ?? null)}</strong>
+                    {lowerTerrainHeatLabel && <small>{lowerTerrainHeatLabel}</small>}
                   </div>
                 </div>
                 {heatRiskReasons.length > 0 ? (
@@ -7189,8 +7302,9 @@ function App() {
             <p className="field-brief-headline">{fieldBriefHeadline}</p>
 
             <div className="field-brief-primary">
-              <span className="field-brief-primary-label">Primary call</span>
+              <span className="field-brief-primary-label">Command intent</span>
               <p className="field-brief-primary-text">{fieldBriefPrimaryReason}</p>
+              <p className="field-brief-primary-action">{decisionActionLine}</p>
             </div>
 
             <div className="field-brief-glance-grid" role="list" aria-label="Field brief at a glance">
@@ -7202,31 +7316,45 @@ function App() {
               ))}
             </div>
 
-            <div className="field-brief-group">
-              <h4>Top Risks Right Now</h4>
-              <ul className="signal-list compact">
-                {(fieldBriefTopRisks.length > 0 ? fieldBriefTopRisks : ['No dominant risk trigger detected from current model signals.']).map((item, idx) => (
-                  <li key={idx}>{item}</li>
-                ))}
-              </ul>
+            <div className="field-brief-split">
+              <div className="field-brief-group">
+                <h4>Execution Plan (Next 2-4h)</h4>
+                <ol className="field-brief-steps">
+                  {(fieldBriefExecutionSteps.length > 0
+                    ? fieldBriefExecutionSteps
+                    : ['Re-check conditions at departure and continue only if field observations match forecast assumptions.']
+                  ).map((item, idx) => (
+                    <li key={idx}>{localizeUnitText(item)}</li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="field-brief-group">
+                <h4>Top Watchouts</h4>
+                <ul className="signal-list compact">
+                  {(fieldBriefTopRisks.length > 0 ? fieldBriefTopRisks : ['No dominant risk trigger detected from current model signals.']).map((item, idx) => (
+                    <li key={idx}>{localizeUnitText(item)}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
             <div className="field-brief-group">
-              <h4>Immediate Actions (Next 15 min)</h4>
+              <h4>Immediate Actions</h4>
               <ul className="signal-list compact">
                 {(fieldBriefImmediateActions.length > 0 ? fieldBriefImmediateActions : fieldBriefActions).map((item, idx) => (
-                  <li key={idx}>{item}</li>
+                  <li key={idx}>{localizeUnitText(item)}</li>
                 ))}
               </ul>
             </div>
 
             <details className="field-brief-details">
-              <summary>Show detailed snapshot and abort triggers</summary>
+              <summary>Show full snapshot, abort triggers, and all actions</summary>
               <div className="field-brief-group">
                 <h4>Situation Snapshot</h4>
                 <ul className="signal-list compact">
                   {fieldBriefSnapshot.map((item, idx) => (
-                    <li key={idx}>{item}</li>
+                    <li key={idx}>{localizeUnitText(item)}</li>
                   ))}
                 </ul>
               </div>
@@ -7234,7 +7362,15 @@ function App() {
                 <h4>Abort Triggers</h4>
                 <ul className="signal-list compact">
                   {fieldBriefAbortTriggers.map((item, idx) => (
-                    <li key={idx}>{item}</li>
+                    <li key={idx}>{localizeUnitText(item)}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="field-brief-group">
+                <h4>Full Action List</h4>
+                <ul className="signal-list compact">
+                  {fieldBriefActions.map((item, idx) => (
+                    <li key={idx}>{localizeUnitText(item)}</li>
                   ))}
                 </ul>
               </div>

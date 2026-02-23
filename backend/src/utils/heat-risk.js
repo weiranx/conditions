@@ -11,6 +11,10 @@ const createUnavailableHeatRiskData = (status = 'unavailable') => ({
     humidity: null,
     peakTemp12hF: null,
     peakFeelsLike12hF: null,
+    lowerTerrainTempF: null,
+    lowerTerrainFeelsLikeF: null,
+    lowerTerrainLabel: null,
+    lowerTerrainElevationFt: null,
     isDaytime: null,
   },
 });
@@ -38,37 +42,76 @@ const buildHeatRiskData = ({ weatherData }) => {
   const peakFeelsLike12hF = Number.isFinite(feelsLikeF)
     ? Math.max(feelsLikeF, Number.isFinite(peakTemp12hF) ? peakTemp12hF : Number.NEGATIVE_INFINITY)
     : peakTemp12hF;
+  const elevationBands = Array.isArray(weatherData?.elevationForecast) ? weatherData.elevationForecast : [];
+  const lowerTerrainBands = elevationBands.filter((band) => Number(band?.deltaFromObjectiveFt) < 0);
+  const lowerTerrainWarmestBand = lowerTerrainBands.reduce((warmest, band) => {
+    const bandTemp = Number(band?.temp);
+    const bandFeels = Number.isFinite(Number(band?.feelsLike)) ? Number(band?.feelsLike) : bandTemp;
+    if (!Number.isFinite(bandFeels)) {
+      return warmest;
+    }
+    if (!warmest || bandFeels > warmest.feelsLikeF) {
+      return {
+        label: band?.label || 'Lower terrain',
+        elevationFt: Number.isFinite(Number(band?.elevationFt)) ? Number(band.elevationFt) : null,
+        tempF: Number.isFinite(bandTemp) ? bandTemp : null,
+        feelsLikeF: bandFeels,
+      };
+    }
+    return warmest;
+  }, null);
+  const lowerTerrainPeakTempF = Number(lowerTerrainWarmestBand?.tempF);
+  const lowerTerrainPeakFeelsLikeF = Number(lowerTerrainWarmestBand?.feelsLikeF);
+  const effectivePeakTempF = Number.isFinite(lowerTerrainPeakTempF)
+    ? Number.isFinite(peakTemp12hF)
+      ? Math.max(peakTemp12hF, lowerTerrainPeakTempF)
+      : lowerTerrainPeakTempF
+    : peakTemp12hF;
+  const effectivePeakFeelsLikeF = Number.isFinite(lowerTerrainPeakFeelsLikeF)
+    ? Number.isFinite(peakFeelsLike12hF)
+      ? Math.max(peakFeelsLike12hF, lowerTerrainPeakFeelsLikeF)
+      : lowerTerrainPeakFeelsLikeF
+    : peakFeelsLike12hF;
 
   let level = 0;
   const reasons = [];
 
-  if (Number.isFinite(peakFeelsLike12hF)) {
-    if (peakFeelsLike12hF >= 100) {
+  if (Number.isFinite(effectivePeakFeelsLikeF)) {
+    if (effectivePeakFeelsLikeF >= 100) {
       level = Math.max(level, 4);
-      reasons.push(`Peak apparent temperature in the 12h window reaches ${Math.round(peakFeelsLike12hF)}F.`);
-    } else if (peakFeelsLike12hF >= 92) {
+      reasons.push(`Peak apparent temperature in the travel window reaches ${Math.round(effectivePeakFeelsLikeF)}F.`);
+    } else if (effectivePeakFeelsLikeF >= 92) {
       level = Math.max(level, 3);
-      reasons.push(`Peak apparent temperature in the 12h window reaches ${Math.round(peakFeelsLike12hF)}F.`);
-    } else if (peakFeelsLike12hF >= 84) {
+      reasons.push(`Peak apparent temperature in the travel window reaches ${Math.round(effectivePeakFeelsLikeF)}F.`);
+    } else if (effectivePeakFeelsLikeF >= 84) {
       level = Math.max(level, 2);
-      reasons.push(`Apparent temperature near selected start is ${Math.round(peakFeelsLike12hF)}F.`);
-    } else if (peakFeelsLike12hF >= 76 && isDaytime !== false) {
+      reasons.push(`Apparent temperature in the travel window is near ${Math.round(effectivePeakFeelsLikeF)}F.`);
+    } else if (effectivePeakFeelsLikeF >= 76 && isDaytime !== false) {
       level = Math.max(level, 1);
-      reasons.push(`Warm daytime apparent temperature near ${Math.round(peakFeelsLike12hF)}F.`);
+      reasons.push(`Warm daytime apparent temperature near ${Math.round(effectivePeakFeelsLikeF)}F.`);
     }
   }
 
-  if (Number.isFinite(peakTemp12hF) && Number.isFinite(humidity)) {
-    if (peakTemp12hF >= 92 && humidity >= 55) {
+  if (Number.isFinite(effectivePeakTempF) && Number.isFinite(humidity)) {
+    if (effectivePeakTempF >= 92 && humidity >= 55) {
       level = Math.max(level, 4);
-      reasons.push(`Heat + humidity pattern (${Math.round(peakTemp12hF)}F, RH ${Math.round(humidity)}%).`);
-    } else if (peakTemp12hF >= 86 && humidity >= 55) {
+      reasons.push(`Heat + humidity pattern (${Math.round(effectivePeakTempF)}F, RH ${Math.round(humidity)}%).`);
+    } else if (effectivePeakTempF >= 86 && humidity >= 55) {
       level = Math.max(level, 3);
-      reasons.push(`Warm/humid pattern (${Math.round(peakTemp12hF)}F, RH ${Math.round(humidity)}%).`);
-    } else if (peakTemp12hF >= 80 && humidity >= 45) {
+      reasons.push(`Warm/humid pattern (${Math.round(effectivePeakTempF)}F, RH ${Math.round(humidity)}%).`);
+    } else if (effectivePeakTempF >= 80 && humidity >= 45) {
       level = Math.max(level, 2);
-      reasons.push(`Moderate humidity can increase heat load (${Math.round(peakTemp12hF)}F, RH ${Math.round(humidity)}%).`);
+      reasons.push(`Moderate humidity can increase heat load (${Math.round(effectivePeakTempF)}F, RH ${Math.round(humidity)}%).`);
     }
+  }
+  if (lowerTerrainWarmestBand && Number.isFinite(lowerTerrainPeakFeelsLikeF)) {
+    const lowerBandLabel = lowerTerrainWarmestBand.label || 'Lower terrain';
+    const lowerBandElevationText = Number.isFinite(lowerTerrainWarmestBand.elevationFt)
+      ? ` (${Math.round(lowerTerrainWarmestBand.elevationFt)} ft)`
+      : '';
+    reasons.push(
+      `Lower terrain can run warmer: ${lowerBandLabel}${lowerBandElevationText} is estimated near ${Math.round(lowerTerrainPeakFeelsLikeF)}F apparent.`,
+    );
   }
 
   if (Number.isFinite(tempF) && tempF >= 85 && isDaytime === false && level > 0) {
@@ -79,7 +122,7 @@ const buildHeatRiskData = ({ weatherData }) => {
   const guidance = HEAT_GUIDANCE[level] || HEAT_GUIDANCE[0];
 
   return {
-    source: 'Derived from NOAA forecast temperature, apparent temperature, and humidity',
+    source: 'Derived from forecast temperature, apparent temperature, humidity, and lower-terrain elevation estimates',
     status: 'ok',
     level,
     label,
@@ -91,6 +134,10 @@ const buildHeatRiskData = ({ weatherData }) => {
       humidity: Number.isFinite(humidity) ? humidity : null,
       peakTemp12hF: Number.isFinite(peakTemp12hF) ? peakTemp12hF : null,
       peakFeelsLike12hF: Number.isFinite(peakFeelsLike12hF) ? peakFeelsLike12hF : null,
+      lowerTerrainTempF: Number.isFinite(lowerTerrainPeakTempF) ? lowerTerrainPeakTempF : null,
+      lowerTerrainFeelsLikeF: Number.isFinite(lowerTerrainPeakFeelsLikeF) ? lowerTerrainPeakFeelsLikeF : null,
+      lowerTerrainLabel: lowerTerrainWarmestBand?.label || null,
+      lowerTerrainElevationFt: Number.isFinite(lowerTerrainWarmestBand?.elevationFt) ? Number(lowerTerrainWarmestBand.elevationFt) : null,
       isDaytime: typeof isDaytime === 'boolean' ? isDaytime : null,
     },
   };
