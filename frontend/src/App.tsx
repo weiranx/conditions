@@ -828,6 +828,17 @@ function formatSnowfallAmountForElevationUnit(
   return 'N/A';
 }
 
+function parseOptionalFiniteNumber(value: unknown): number {
+  if (value === null || value === undefined) {
+    return Number.NaN;
+  }
+  if (typeof value === 'string' && value.trim() === '') {
+    return Number.NaN;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
 function formatSnowDepthForElevationUnit(
   inches: number | null | undefined,
   elevationUnit: ElevationUnit,
@@ -2208,7 +2219,8 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const terrainCode = String(data.terrainCondition?.code || '').toLowerCase();
   const terrainLabel = data.terrainCondition?.label || data.trail || 'Unknown';
   const terrainConfidence = String(data.terrainCondition?.confidence || '').toLowerCase();
-  const terrainNeedsAttention = ['snow_ice', 'wet_muddy', 'cold_slick', 'weather_unavailable'].includes(terrainCode);
+  const terrainNeedsAttention = ['snow_ice', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode);
+  const terrainCriticalGateFail = terrainCode === 'weather_unavailable';
 
   const weatherFreshnessState = freshnessClass(
     pickOldestIsoTimestamp([
@@ -2410,9 +2422,13 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
 
   if (terrainCode) {
     checks.push({
-      label: 'Terrain / trail condition is within team capability',
-      ok: !terrainNeedsAttention,
-      detail: terrainConfidence ? `${terrainLabel} • confidence ${terrainConfidence}` : terrainLabel,
+      label: 'Terrain / trail signal is available (surface is advisory)',
+      ok: !terrainCriticalGateFail,
+      detail: terrainCriticalGateFail
+        ? 'Surface/trail classification unavailable from current weather inputs.'
+        : terrainConfidence
+          ? `${terrainLabel} • confidence ${terrainConfidence} • use as advisory context, not a hard gate.`
+          : `${terrainLabel} • use as advisory context, not a hard gate.`,
     });
   }
 
@@ -4157,18 +4173,18 @@ function App() {
   const safeSnotelLink = sanitizeExternalUrl(safetyData?.snowpack?.snotel?.link || undefined);
   const safeNohrscLink = sanitizeExternalUrl(safetyData?.snowpack?.nohrsc?.link || undefined);
   const rainfallTotals = safetyData?.rainfall?.totals || null;
-  const rainfall12hIn = Number(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
-  const rainfall24hIn = Number(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
-  const rainfall48hIn = Number(rainfallTotals?.rainPast48hIn ?? rainfallTotals?.past48hIn);
-  const rainfall12hMm = Number(rainfallTotals?.rainPast12hMm ?? rainfallTotals?.past12hMm);
-  const rainfall24hMm = Number(rainfallTotals?.rainPast24hMm ?? rainfallTotals?.past24hMm);
-  const rainfall48hMm = Number(rainfallTotals?.rainPast48hMm ?? rainfallTotals?.past48hMm);
-  const snowfall12hIn = Number(rainfallTotals?.snowPast12hIn);
-  const snowfall24hIn = Number(rainfallTotals?.snowPast24hIn);
-  const snowfall48hIn = Number(rainfallTotals?.snowPast48hIn);
-  const snowfall12hCm = Number(rainfallTotals?.snowPast12hCm);
-  const snowfall24hCm = Number(rainfallTotals?.snowPast24hCm);
-  const snowfall48hCm = Number(rainfallTotals?.snowPast48hCm);
+  const rainfall12hIn = parseOptionalFiniteNumber(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
+  const rainfall24hIn = parseOptionalFiniteNumber(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
+  const rainfall48hIn = parseOptionalFiniteNumber(rainfallTotals?.rainPast48hIn ?? rainfallTotals?.past48hIn);
+  const rainfall12hMm = parseOptionalFiniteNumber(rainfallTotals?.rainPast12hMm ?? rainfallTotals?.past12hMm);
+  const rainfall24hMm = parseOptionalFiniteNumber(rainfallTotals?.rainPast24hMm ?? rainfallTotals?.past24hMm);
+  const rainfall48hMm = parseOptionalFiniteNumber(rainfallTotals?.rainPast48hMm ?? rainfallTotals?.past48hMm);
+  const snowfall12hIn = parseOptionalFiniteNumber(rainfallTotals?.snowPast12hIn);
+  const snowfall24hIn = parseOptionalFiniteNumber(rainfallTotals?.snowPast24hIn);
+  const snowfall48hIn = parseOptionalFiniteNumber(rainfallTotals?.snowPast48hIn);
+  const snowfall12hCm = parseOptionalFiniteNumber(rainfallTotals?.snowPast12hCm);
+  const snowfall24hCm = parseOptionalFiniteNumber(rainfallTotals?.snowPast24hCm);
+  const snowfall48hCm = parseOptionalFiniteNumber(rainfallTotals?.snowPast48hCm);
   const rainfall24hSeverityClass =
     Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.6
       ? 'nogo'
