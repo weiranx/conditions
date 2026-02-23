@@ -27,12 +27,19 @@ import {
   Printer,
   MessageSquare,
   Info,
-  X,
-  LoaderCircle,
   Flame,
   RefreshCw,
 } from 'lucide-react';
 import './App.css';
+import { fetchApi, readApiErrorMessage } from './lib/api-client';
+import {
+  getLocalPopularSuggestions,
+  normalizeSuggestionText,
+  rankAndDeduplicateSuggestions,
+  type Suggestion,
+} from './lib/search';
+import { SearchBox } from './components/planner/SearchBox';
+import { ForecastLoading } from './components/planner/ForecastLoading';
 import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
@@ -49,7 +56,6 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
 const DATE_FMT = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_CENTER = new L.LatLng(39.8283, -98.5795);
 const USER_PREFERENCES_KEY = 'summitsafe:user-preferences:v1';
@@ -62,47 +68,6 @@ const BACKEND_WAKE_NOTICE_DELAY_MS = 1400;
 const APP_DISCLAIMER_TEXT =
   'Backcountry Conditions is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or wrong. Verify official weather, avalanche, fire, and land-management products, then make final decisions from field observations and team judgment.';
 const APP_CREDIT_TEXT = 'Built by Weiran Xiong with AI support.';
-
-function normalizeApiBase(rawBase: string): string | null {
-  const trimmed = rawBase.trim().replace(/\/+$/, '');
-  if (!trimmed) {
-    return null;
-  }
-  if (!/^https?:\/\//i.test(trimmed)) {
-    return null;
-  }
-  return trimmed;
-}
-
-const DEV_BACKEND_FALLBACK_BASES = (() => {
-  const candidates = [
-    (import.meta.env.VITE_DEV_BACKEND_URL as string | undefined) || '',
-    'http://localhost:3001',
-    'http://127.0.0.1:3001',
-  ];
-  const unique = new Set<string>();
-  candidates.forEach((candidate) => {
-    const normalized = normalizeApiBase(candidate);
-    if (normalized) {
-      unique.add(normalized);
-    }
-  });
-  return Array.from(unique);
-})();
-
-function buildApiUrl(path: string): string {
-  const normalizedBase = API_BASE.replace(/\/+$/, '');
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return normalizedBase ? `${normalizedBase}${normalizedPath}` : normalizedPath;
-}
-
-function buildDevFallbackApiUrls(path: string): string[] {
-  if (!import.meta.env.DEV || API_BASE) {
-    return [];
-  }
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return DEV_BACKEND_FALLBACK_BASES.map((base) => `${base}${normalizedPath}`);
-}
 
 type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
 type ActivityType = 'backcountry';
@@ -146,103 +111,6 @@ function normalizeActivity(rawActivity: string | null): ActivityType {
     return 'backcountry';
   }
   return 'backcountry';
-}
-
-interface Suggestion {
-  name: string;
-  lat: string | number;
-  lon: string | number;
-  class?: string;
-}
-
-const LOCAL_POPULAR_SUGGESTIONS: Suggestion[] = [
-  { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular' },
-  { name: 'Mount Shasta, California', lat: 41.4091, lon: -122.1946, class: 'popular' },
-  { name: 'Mount Whitney, California', lat: 36.5786, lon: -118.2923, class: 'popular' },
-  { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular' },
-  { name: 'Longs Peak, Colorado', lat: 40.2549, lon: -105.615, class: 'popular' },
-  { name: 'Mount Elbert, Colorado', lat: 39.1178, lon: -106.4454, class: 'popular' },
-  { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular' },
-  { name: 'Mount Washington, New Hampshire', lat: 44.2706, lon: -71.3033, class: 'popular' },
-  { name: 'Kings Peak, Utah', lat: 40.7764, lon: -110.3726, class: 'popular' },
-  { name: 'San Jacinto Peak, California', lat: 33.8147, lon: -116.6794, class: 'popular' },
-];
-
-function normalizeSuggestionText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[.,]/g, ' ')
-    .replace(/\bmt\b/g, 'mount')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function suggestionRank(name: string, query: string): number {
-  const normalizedName = normalizeSuggestionText(name);
-  const normalizedQuery = normalizeSuggestionText(query);
-  if (!normalizedQuery) {
-    return 99;
-  }
-  if (normalizedName === normalizedQuery) {
-    return 0;
-  }
-  if (normalizedName.startsWith(normalizedQuery)) {
-    return 1;
-  }
-
-  const primaryName = normalizedName.split(' ').slice(0, 3).join(' ');
-  if (primaryName.startsWith(normalizedQuery)) {
-    return 2;
-  }
-
-  const tokens = normalizedName.split(' ');
-  if (tokens.some((token) => token.startsWith(normalizedQuery))) {
-    return 3;
-  }
-
-  if (normalizedName.includes(normalizedQuery)) {
-    return 4;
-  }
-
-  return 5;
-}
-
-function rankAndDeduplicateSuggestions(items: Suggestion[], query: string): Suggestion[] {
-  const deduped = new Map<string, Suggestion>();
-  items.forEach((item) => {
-    const key = `${normalizeSuggestionText(item.name)}|${Number(item.lat).toFixed(4)}|${Number(item.lon).toFixed(4)}`;
-    if (!deduped.has(key)) {
-      deduped.set(key, item);
-    }
-  });
-
-  return Array.from(deduped.values())
-    .sort((a, b) => {
-      const rankDiff = suggestionRank(a.name, query) - suggestionRank(b.name, query);
-      if (rankDiff !== 0) {
-        return rankDiff;
-      }
-
-      const aPopular = a.class === 'popular' ? 0 : 1;
-      const bPopular = b.class === 'popular' ? 0 : 1;
-      if (aPopular !== bPopular) {
-        return aPopular - bPopular;
-      }
-
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 8);
-}
-
-function getLocalPopularSuggestions(query: string): Suggestion[] {
-  const normalizedQuery = normalizeSuggestionText(query);
-  if (!normalizedQuery) {
-    return LOCAL_POPULAR_SUGGESTIONS.slice(0, 8);
-  }
-  return rankAndDeduplicateSuggestions(
-    LOCAL_POPULAR_SUGGESTIONS.filter((item) => normalizeSuggestionText(item.name).includes(normalizedQuery)),
-    query,
-  ).slice(0, 8);
 }
 
 interface AvalancheElevationBand {
@@ -1620,82 +1488,10 @@ function stringifyRawPayload(payload: unknown): string {
   }
 }
 
-async function parseJsonFromResponse(response: Response): Promise<unknown | null> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-interface ApiFetchResult {
-  response: Response;
-  payload: unknown | null;
-  requestId: string | null;
-}
-
 interface HealthCheckResult {
   label: string;
   status: 'ok' | 'warn' | 'down';
   detail: string;
-}
-
-async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const attemptUrls = [buildApiUrl(normalizedPath), ...buildDevFallbackApiUrls(normalizedPath)];
-  let lastError: unknown = null;
-  let sawEmptyProxy500 = false;
-
-  for (let index = 0; index < attemptUrls.length; index += 1) {
-    const requestUrl = attemptUrls[index];
-    try {
-      const response = await fetch(requestUrl, init);
-      const payload = await parseJsonFromResponse(response);
-      const shouldRetryEmpty500 = index < attemptUrls.length - 1;
-      if (shouldRetryEmpty500 && response.status === 500 && payload === null) {
-        sawEmptyProxy500 = true;
-        continue;
-      }
-
-      return {
-        response,
-        payload,
-        requestId: response.headers.get('x-request-id'),
-      };
-    } catch (error) {
-      lastError = error;
-      if (index < attemptUrls.length - 1) {
-        continue;
-      }
-    }
-  }
-
-  if (import.meta.env.DEV && (sawEmptyProxy500 || lastError)) {
-    throw new Error('Unable to reach backend API. Start it with: cd backend && npm run dev');
-  }
-
-  if (lastError instanceof Error) {
-    throw lastError;
-  }
-  throw new Error('API request failed');
-}
-
-function readApiErrorMessage(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object') {
-    const record = payload as Record<string, unknown>;
-    if (typeof record.details === 'string' && record.details.trim()) {
-      return record.details;
-    }
-    if (typeof record.error === 'string' && record.error.trim()) {
-      return record.error;
-    }
-  }
-  return fallback;
 }
 
 function collapseWhitespace(input: string): string {
@@ -2862,6 +2658,21 @@ function App() {
     [setSearchInputValue, updateObjectivePosition],
   );
 
+  const handleUseTypedCoordinates = useCallback(
+    (value: string) => {
+      const parsed = parseCoordinates(value);
+      if (!parsed) {
+        return;
+      }
+      setSearchInputValue(value);
+      setCommittedSearchQuery(value);
+      updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+    },
+    [setSearchInputValue, updateObjectivePosition],
+  );
+
   const searchAndSelectFirst = useCallback(
     async (rawQuery: string) => {
       const query = rawQuery.trim();
@@ -3673,6 +3484,7 @@ function App() {
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
   const liveSearchQuery = getLiveSearchValue();
   const trimmedSearchQuery = liveSearchQuery.trim();
+  const parsedTypedCoordinates = parseCoordinates(trimmedSearchQuery);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) {
@@ -5161,92 +4973,25 @@ function App() {
         </div>
 
         <div className="header-controls">
-          <div className="search-wrapper" ref={searchWrapperRef}>
-            <div className="search-bar">
-              <Search size={16} />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search by peak, trailhead, zone, town, or coordinates"
-                defaultValue={searchQuery}
-                onChange={handleInputChange}
-                onFocus={handleFocus}
-                onKeyDown={handleSearchKeyDown}
-                aria-label="Search location"
-                aria-autocomplete="list"
-                aria-expanded={showSuggestions}
-                aria-controls="planner-suggestion-list"
-                aria-activedescendant={activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
-              />
-              <button
-                type="button"
-                className="search-go-btn"
-                onClick={handleSearchSubmit}
-                aria-label={searchLoading ? 'Searching' : 'Search location'}
-                disabled={searchLoading}
-              >
-                {searchLoading ? <LoaderCircle size={14} className="spin" /> : 'Go'}
-              </button>
-              {trimmedSearchQuery.length > 0 && (
-                <button type="button" className="search-clear-btn" onClick={handleSearchClear} aria-label="Clear search">
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {showSuggestions && (searchLoading || suggestions.length > 0 || trimmedSearchQuery.length > 0) && (
-              <ul className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
-                {searchLoading && <li className="suggestion-status">Searching...</li>}
-                {!searchLoading && parseCoordinates(trimmedSearchQuery) && (
-                  <li>
-                    <button
-                      type="button"
-                      className="suggestion-item coordinate-suggestion"
-                      onClick={() => {
-                        const parsed = parseCoordinates(trimmedSearchQuery);
-                        if (!parsed) {
-                          return;
-                        }
-                        setSearchInputValue(trimmedSearchQuery);
-                        setCommittedSearchQuery(trimmedSearchQuery);
-                        updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
-                        setShowSuggestions(false);
-                        setActiveSuggestionIndex(-1);
-                      }}
-                    >
-                      <strong className="suggestion-title">Use typed coordinates</strong>
-                      <span className="suggestion-subtitle">{trimmedSearchQuery}</span>
-                    </button>
-                  </li>
-                )}
-                {!searchLoading && suggestions.length === 0 && trimmedSearchQuery.length > 0 && (
-                  <li className="suggestion-status">No matches found. Try “Mount Elbert”, “Mt Hood”, or “39.1178 -106.4452”.</li>
-                )}
-                {!searchLoading &&
-                  suggestions.map((s, i) => (
-                    <li key={`${s.name}-${i}`}>
-                      <button
-                        id={`suggestion-${i}`}
-                        type="button"
-                        role="option"
-                        aria-selected={activeSuggestionIndex === i}
-                        className={`suggestion-item ${s.class === 'popular' ? 'popular-suggestion' : ''} ${activeSuggestionIndex === i ? 'active' : ''}`}
-                        onClick={() => selectSuggestion(s)}
-                        onMouseEnter={() => setActiveSuggestionIndex(i)}
-                      >
-                        <strong className="suggestion-title">
-                          {s.class === 'popular' && '⭐ '} {s.name.split(',')[0]}
-                        </strong>
-                        <span className="suggestion-subtitle">{s.name.split(',').slice(1, 3).join(',')}</span>
-                      </button>
-                    </li>
-                  ))}
-                {!searchLoading && (
-                  <li className="suggestion-status search-shortcuts">Tip: Press `/` to focus, `↑/↓` to navigate, `Enter` to select.</li>
-                )}
-              </ul>
-            )}
-          </div>
+          <SearchBox
+            searchWrapperRef={searchWrapperRef}
+            searchInputRef={searchInputRef}
+            searchQuery={searchQuery}
+            trimmedSearchQuery={trimmedSearchQuery}
+            showSuggestions={showSuggestions}
+            searchLoading={searchLoading}
+            suggestions={suggestions}
+            activeSuggestionIndex={activeSuggestionIndex}
+            canUseCoordinates={Boolean(parsedTypedCoordinates)}
+            onInputChange={handleInputChange}
+            onFocus={handleFocus}
+            onKeyDown={handleSearchKeyDown}
+            onSubmit={handleSearchSubmit}
+            onClear={handleSearchClear}
+            onUseCoordinates={handleUseTypedCoordinates}
+            onSelectSuggestion={selectSuggestion}
+            onHoverSuggestion={setActiveSuggestionIndex}
+          />
 
           <button className="secondary-btn" onClick={() => navigateToView('home')}>
             <House size={14} /> Homepage
@@ -5378,35 +5123,7 @@ function App() {
         </div>
       )}
 
-      {loading && (
-        <div className="loading-state forecast-loading" role="status" aria-live="polite">
-          <div className="forecast-loading-sky" aria-hidden="true">
-            <span className="forecast-loading-orb" />
-            <span className="forecast-loading-ridge forecast-loading-ridge-back" />
-            <span className="forecast-loading-ridge forecast-loading-ridge-front" />
-            <span className="forecast-loading-wind forecast-loading-wind-a" />
-            <span className="forecast-loading-wind forecast-loading-wind-b" />
-            <span className="forecast-loading-wind forecast-loading-wind-c" />
-          </div>
-          <div className="forecast-loading-copy">
-            <strong>Building forecast brief...</strong>
-            <span>Syncing weather, avalanche, alerts, and air-quality feeds.</span>
-          </div>
-          {showBackendWakeNotice && (
-            <div className="forecast-loading-wakeup">
-              <strong>Backend API is waking up</strong>
-              <span>Free-tier hosting can sleep when idle. First response can take up to ~60 seconds.</span>
-            </div>
-          )}
-          <div className="forecast-loading-steps" aria-hidden="true">
-            {['Weather', 'Avalanche', 'Alerts', 'Air Quality'].map((label, idx) => (
-              <span key={label} className="forecast-loading-step" style={{ animationDelay: `${idx * 0.18}s` }}>
-                {label}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {loading && <ForecastLoading showBackendWakeNotice={showBackendWakeNotice} />}
 
       {error && (
         <div className="error-banner">

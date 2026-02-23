@@ -1,13 +1,19 @@
-const express = require('express');
-const cors = require('cors');
-const compression = require('compression');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const dotenv = require('dotenv');
-const crypto = require('node:crypto');
-const nodeFetch = require('node-fetch');
 const { point } = require('@turf/helpers');
 const booleanPointInPolygon = require('@turf/boolean-point-in-polygon').default;
+const { createApp } = require('./src/server/create-app');
+const { startServer: startBackendServer } = require('./src/server/start-server');
+const {
+  PORT,
+  IS_PRODUCTION,
+  DEBUG_AVY,
+  REQUEST_TIMEOUT_MS,
+  AVALANCHE_MAP_LAYER_TTL_MS,
+  SNOTEL_STATION_CACHE_TTL_MS,
+  RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_MAX_REQUESTS,
+  CORS_ALLOWLIST,
+} = require('./src/server/runtime');
+const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout } = require('./src/utils/http-client');
 const {
   parseWindMph,
   estimateWindGustFromWindSpeed,
@@ -29,85 +35,26 @@ const {
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
 } = require('./src/utils/avalanche-detail');
+const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terrain-condition');
+const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions');
+const { createSatOneLinerBuilder } = require('./src/utils/sat-oneliner');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
+const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
+const { registerSatOneLinerRoute } = require('./src/routes/sat-oneliner');
 const POPULAR_PEAKS = require('./peaks.json');
-
-dotenv.config();
-
-const app = express();
-const PORT = process.env.PORT || 3001;
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const DEBUG_AVY = process.env.DEBUG_AVY === 'true';
-
-const parsePositiveInt = (rawValue, fallback) => {
-  const parsed = Number(rawValue);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
-};
-
-const REQUEST_TIMEOUT_MS = parsePositiveInt(process.env.REQUEST_TIMEOUT_MS, 9000);
-const AVALANCHE_MAP_LAYER_TTL_MS = parsePositiveInt(process.env.AVALANCHE_MAP_LAYER_TTL_MS, 10 * 60 * 1000);
-const SNOTEL_STATION_CACHE_TTL_MS = parsePositiveInt(process.env.SNOTEL_STATION_CACHE_TTL_MS, 12 * 60 * 60 * 1000);
-const RATE_LIMIT_WINDOW_MS = parsePositiveInt(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
-const RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(process.env.RATE_LIMIT_MAX_REQUESTS, 300);
-
-const CORS_ALLOWLIST = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
 
 const avyLog = (...args) => {
   if (DEBUG_AVY) {
     console.log(...args);
   }
 };
-
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-    if (CORS_ALLOWLIST.length === 0) {
-      callback(null, !IS_PRODUCTION);
-      return;
-    }
-    callback(null, CORS_ALLOWLIST.includes(origin));
-  },
-};
-
-app.disable('x-powered-by');
-app.set('trust proxy', 1);
-app.use(cors(corsOptions));
-app.use(compression());
-app.use(helmet());
-app.use(express.json({ limit: '1mb' }));
-
-app.use((req, res, next) => {
-  const requestId = crypto.randomUUID();
-  const startedAt = Date.now();
-  req.requestId = requestId;
-  res.setHeader('X-Request-Id', requestId);
-  res.on('finish', () => {
-    if (!IS_PRODUCTION || res.statusCode >= 500) {
-      const elapsed = Date.now() - startedAt;
-      console.log(`[${requestId}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${elapsed}ms)`);
-    }
-  });
-  next();
+const app = createApp({
+  isProduction: IS_PRODUCTION,
+  corsAllowlist: CORS_ALLOWLIST,
+  rateLimitWindowMs: RATE_LIMIT_WINDOW_MS,
+  rateLimitMaxRequests: RATE_LIMIT_MAX_REQUESTS,
 });
-
-app.use(
-  '/api',
-  rateLimit({
-    windowMs: RATE_LIMIT_WINDOW_MS,
-    max: RATE_LIMIT_MAX_REQUESTS,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.method === 'OPTIONS',
-    message: { error: 'Too many requests. Please retry later.' },
-  }),
-);
 
 const AVALANCHE_UNKNOWN_MESSAGE =
   "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.";
@@ -163,6 +110,8 @@ const computeFeelsLikeF = (tempF, windMph) => {
   }
   return Math.round(tempF);
 };
+
+const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
 const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, windGustMph }) => {
   if (!Number.isFinite(baseElevationFt) || !Number.isFinite(tempF)) {
@@ -261,355 +210,6 @@ const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
     fieldSources: {},
   },
 });
-
-const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData = null) => {
-  const toFinite = (value) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : null;
-  };
-
-  const description = String(weatherData?.description || '').toLowerCase();
-  const precipChance = toFinite(weatherData?.precipChance);
-  const humidity = toFinite(weatherData?.humidity);
-  const tempF = toFinite(weatherData?.temp);
-  const windMph = toFinite(weatherData?.windSpeed);
-  const gustMph = toFinite(weatherData?.windGust);
-
-  const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
-  const nearTermTrend = trend.slice(0, 6);
-  const wetTrendHours = nearTermTrend.filter((point) => {
-    const pointPrecip = toFinite(point?.precipChance);
-    const pointCondition = String(point?.condition || '').toLowerCase();
-    return (pointPrecip !== null && pointPrecip >= 55) || /rain|drizzle|shower|thunder|storm|wet/.test(pointCondition);
-  }).length;
-  const snowTrendHours = nearTermTrend.filter((point) => {
-    const pointPrecip = toFinite(point?.precipChance);
-    const pointCondition = String(point?.condition || '').toLowerCase();
-    return (pointPrecip !== null && pointPrecip >= 35 && tempF !== null && tempF <= 34) || /snow|sleet|freezing|flurr|wintry|ice/.test(pointCondition);
-  }).length;
-  const trendTemps = nearTermTrend.map((point) => toFinite(point?.temp)).filter((value) => value !== null);
-  const trendMinTemp = trendTemps.length > 0 ? Math.min(...trendTemps) : null;
-  const trendMaxTemp = trendTemps.length > 0 ? Math.max(...trendTemps) : null;
-
-  const snotel = snowpackData?.snotel || null;
-  const nohrsc = snowpackData?.nohrsc || null;
-  const snotelDistanceKm = toFinite(snotel?.distanceKm);
-  const snotelNearby = snotelDistanceKm === null || snotelDistanceKm <= 80;
-
-  const depthSamples = [];
-  const sweSamples = [];
-  const snotelDepth = toFinite(snotel?.snowDepthIn);
-  const snotelSwe = toFinite(snotel?.sweIn);
-  const nohrscDepth = toFinite(nohrsc?.snowDepthIn);
-  const nohrscSwe = toFinite(nohrsc?.sweIn);
-
-  if (snotelNearby && snotelDepth !== null) depthSamples.push(snotelDepth);
-  if (snotelNearby && snotelSwe !== null) sweSamples.push(snotelSwe);
-  if (nohrscDepth !== null) depthSamples.push(nohrscDepth);
-  if (nohrscSwe !== null) sweSamples.push(nohrscSwe);
-
-  const maxDepthIn = depthSamples.length ? Math.max(...depthSamples) : null;
-  const maxSweIn = sweSamples.length ? Math.max(...sweSamples) : null;
-  const hasSnowCoverage =
-    (maxDepthIn !== null && maxDepthIn >= 2) ||
-    (maxSweIn !== null && maxSweIn >= 0.5);
-
-  const hasSnowWeatherSignal =
-    /snow|sleet|ice|freezing|blizzard|flurr|graupel|rime|wintry/.test(description) ||
-    (tempF !== null && tempF <= 34 && precipChance !== null && precipChance >= 35);
-  const hasRainWeatherSignal =
-    /rain|drizzle|shower|thunder|storm|wet/.test(description) ||
-    (precipChance !== null && precipChance >= 60 && tempF !== null && tempF > 34);
-  const rain12hIn = toFinite(rainfallData?.totals?.rainPast12hIn ?? rainfallData?.totals?.past12hIn);
-  const rain24hIn = toFinite(rainfallData?.totals?.rainPast24hIn ?? rainfallData?.totals?.past24hIn);
-  const rain48hIn = toFinite(rainfallData?.totals?.rainPast48hIn ?? rainfallData?.totals?.past48hIn);
-  const snow12hIn = toFinite(rainfallData?.totals?.snowPast12hIn);
-  const snow24hIn = toFinite(rainfallData?.totals?.snowPast24hIn);
-  const snow48hIn = toFinite(rainfallData?.totals?.snowPast48hIn);
-  const hasRainAccumulationSignal =
-    (rain12hIn !== null && rain12hIn >= 0.1) ||
-    (rain24hIn !== null && rain24hIn >= 0.2) ||
-    (rain48hIn !== null && rain48hIn >= 0.35);
-  const hasFreshSnowSignal =
-    (snow12hIn !== null && snow12hIn >= 0.5) ||
-    (snow24hIn !== null && snow24hIn >= 1.5) ||
-    (snow48hIn !== null && snow48hIn >= 2.5);
-  const hasFreezeThawSignal =
-    (trendMinTemp !== null && trendMaxTemp !== null && trendMinTemp <= 31 && trendMaxTemp >= 35) ||
-    (tempF !== null && tempF >= 30 && tempF <= 36 && precipChance !== null && precipChance >= 35);
-  const hasDryWindySignal =
-    (humidity !== null && humidity <= 30) &&
-    (precipChance === null || precipChance < 20) &&
-    ((gustMph !== null && gustMph >= 25) || (windMph !== null && windMph >= 16));
-  const weatherUnavailableSignal = !description || /weather data unavailable|weather unavailable|unavailable/.test(description);
-
-  let code = 'variable_surface';
-  let label = '🌲 Variable Surface';
-  const reasons = [];
-  let evidenceWeight = 0;
-  const addReason = (reason, weight = 1) => {
-    if (typeof reason !== 'string' || !reason.trim()) {
-      return;
-    }
-    reasons.push(reason.trim());
-    evidenceWeight += weight;
-  };
-
-  if (weatherUnavailableSignal && trend.length === 0 && maxDepthIn === null && maxSweIn === null && !hasRainAccumulationSignal && !hasFreshSnowSignal) {
-    code = 'weather_unavailable';
-    label = '⚠️ Weather Unavailable';
-    addReason('Weather feed is unavailable, so terrain classification confidence is limited.', 1);
-  } else if (hasSnowCoverage || hasSnowWeatherSignal || hasFreshSnowSignal || snowTrendHours >= 2) {
-    code = 'snow_ice';
-    label = '❄️ Snow-Covered / Icy';
-    if (maxDepthIn !== null || maxSweIn !== null) {
-      addReason(
-        `Snowpack signal near objective: depth ${maxDepthIn !== null ? `${maxDepthIn.toFixed(1)} in` : 'N/A'}, SWE ${
-          maxSweIn !== null ? `${maxSweIn.toFixed(1)} in` : 'N/A'
-        }.`,
-        2,
-      );
-    }
-    if (hasFreshSnowSignal) {
-      addReason(
-        `Recent snowfall: ${snow12hIn !== null ? `${snow12hIn.toFixed(1)} in` : 'N/A'} (12h), ${
-          snow24hIn !== null ? `${snow24hIn.toFixed(1)} in` : 'N/A'
-        } (24h), ${snow48hIn !== null ? `${snow48hIn.toFixed(1)} in` : 'N/A'} (48h).`,
-        2,
-      );
-    }
-    if (hasSnowWeatherSignal || snowTrendHours > 0) {
-      addReason(
-        snowTrendHours > 0
-          ? `Near-term forecast shows ${snowTrendHours} hour(s) with snow/icy cues in the next 6 hours.`
-          : `Forecast description indicates winter surface cues ("${weatherData?.description || 'snow signal'}").`,
-        1,
-      );
-    }
-    if (tempF !== null && tempF <= 34) {
-      addReason(`Temperature near ${Math.round(tempF)}F supports icy persistence.`, 1);
-    }
-  } else if (hasRainWeatherSignal || wetTrendHours >= 1 || hasRainAccumulationSignal) {
-    code = 'wet_muddy';
-    label = '🌧️ Wet / Muddy';
-    if (hasRainAccumulationSignal) {
-      addReason(
-        `Recent rainfall: ${rain12hIn !== null ? `${rain12hIn.toFixed(2)} in` : 'N/A'} (12h), ${
-          rain24hIn !== null ? `${rain24hIn.toFixed(2)} in` : 'N/A'
-        } (24h), ${rain48hIn !== null ? `${rain48hIn.toFixed(2)} in` : 'N/A'} (48h).`,
-        2,
-      );
-    }
-    if (wetTrendHours > 0) {
-      addReason(`Near-term forecast shows ${wetTrendHours} wet hour(s) in the next 6 hours.`, 1);
-    }
-    if (hasRainWeatherSignal) {
-      addReason(`Forecast condition carries wet surface cues ("${weatherData?.description || 'rain signal'}").`, 1);
-    }
-  } else if (hasFreezeThawSignal || (tempF !== null && tempF <= 38 && precipChance !== null && precipChance >= 35)) {
-    code = 'cold_slick';
-    label = '🧊 Cold / Slick';
-    if (hasFreezeThawSignal && trendMinTemp !== null && trendMaxTemp !== null) {
-      addReason(`Freeze-thaw signal in next 6 hours (${Math.round(trendMinTemp)}F to ${Math.round(trendMaxTemp)}F).`, 2);
-    }
-    if (tempF !== null) {
-      addReason(`Current temperature near freezing (${Math.round(tempF)}F).`, 1);
-    }
-    if (precipChance !== null && precipChance >= 35) {
-      addReason(`Moisture risk remains elevated (${Math.round(precipChance)}% precip chance).`, 1);
-    }
-  } else if (hasDryWindySignal || (humidity !== null && humidity < 30 && (precipChance === null || precipChance < 20))) {
-    code = 'dry_loose';
-    label = '🌵 Dry / Loose';
-    if (humidity !== null) {
-      addReason(`Low humidity (${Math.round(humidity)}%) supports loose/dry surface texture.`, 1);
-    }
-    if (gustMph !== null || windMph !== null) {
-      addReason(`Wind exposure ${Math.round(gustMph ?? windMph ?? 0)} mph can dry and loosen top surface layers.`, 1);
-    }
-    if (precipChance !== null) {
-      addReason(`Low moisture signal (${Math.round(precipChance)}% precip chance).`, 1);
-    }
-  } else {
-    code = 'mixed_variable';
-    label = '🌲 Variable Surface';
-    addReason('No single dominant wet, snow/ice, or freeze-thaw signal in current upstream data.', 1);
-    if (tempF !== null) {
-      addReason(`Temperature ${Math.round(tempF)}F with ${precipChance !== null ? `${Math.round(precipChance)}%` : 'unknown'} precip chance supports mixed surface outcomes.`, 1);
-    }
-  }
-
-  if (snotelDistanceKm !== null && snotelDistanceKm > 80) {
-    addReason(`Nearest SNOTEL station is ${snotelDistanceKm.toFixed(1)} km away, so local representativeness is lower.`, 0);
-  }
-
-  const confidence = code === 'weather_unavailable' ? 'low' : evidenceWeight >= 5 ? 'high' : evidenceWeight >= 3 ? 'medium' : 'low';
-  const summary = reasons.length > 0
-    ? reasons.slice(0, 2).join(' ')
-    : 'Surface classification is based on weather description, precipitation probability, rolling rain/snow totals, temperature trend, and snowpack observations.';
-
-  return {
-    code,
-    label,
-    confidence,
-    summary,
-    reasons: reasons.slice(0, 6),
-    signals: {
-      tempF,
-      precipChance,
-      humidity,
-      windMph,
-      gustMph,
-      wetTrendHours,
-      snowTrendHours,
-      rain12hIn,
-      rain24hIn,
-      rain48hIn,
-      snow12hIn,
-      snow24hIn,
-      snow48hIn,
-      maxSnowDepthIn: maxDepthIn,
-      maxSweIn,
-      snotelDistanceKm,
-    },
-  };
-};
-
-const deriveTrailStatus = (weatherData, snowpackData = null, rainfallData = null) => {
-  const terrainCondition = deriveTerrainCondition(weatherData, snowpackData, rainfallData);
-  return terrainCondition?.label || '🌲 Variable Surface';
-};
-
-const buildLayeringGearSuggestions = ({
-  weatherData,
-  trailStatus,
-  avalancheData,
-  airQualityData,
-  alertsData,
-  rainfallData,
-  snowpackData,
-  fireRiskData,
-}) => {
-  const suggestionMap = new Map();
-  const addSuggestion = (key, text, priority = 50) => {
-    if (typeof key !== 'string' || !key.trim() || typeof text !== 'string' || !text.trim()) {
-      return;
-    }
-    const existing = suggestionMap.get(key);
-    if (!existing || priority < existing.priority) {
-      suggestionMap.set(key, { text, priority });
-    }
-  };
-  const formatWhole = (value, suffix) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? `${Math.round(numeric)}${suffix}` : null;
-  };
-  const formatOneDecimal = (value, suffix) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? `${numeric.toFixed(1)}${suffix}` : null;
-  };
-
-  const description = String(weatherData?.description || '').toLowerCase();
-  const tempF = Number(weatherData?.temp);
-  const feelsLikeF = Number.isFinite(Number(weatherData?.feelsLike)) ? Number(weatherData?.feelsLike) : tempF;
-  const windMph = Number(weatherData?.windSpeed);
-  const gustMph = Number(weatherData?.windGust);
-  const precipChance = Number(weatherData?.precipChance);
-  const humidity = Number(weatherData?.humidity);
-  const rain24hIn = Number(rainfallData?.totals?.rainPast24hIn ?? rainfallData?.totals?.past24hIn);
-  const snow24hIn = Number(rainfallData?.totals?.snowPast24hIn);
-  const snotelDepthIn = Number(snowpackData?.snotel?.snowDepthIn);
-  const nohrscDepthIn = Number(snowpackData?.nohrsc?.snowDepthIn);
-  const maxObservedSnowDepthIn = [snotelDepthIn, nohrscDepthIn].filter(Number.isFinite).reduce((max, current) => Math.max(max, current), 0);
-
-  const hasWetSignal =
-    /rain|shower|drizzle|wet|thunder|storm/.test(description) ||
-    (Number.isFinite(precipChance) && precipChance >= 45 && Number.isFinite(tempF) && tempF > 30);
-  const hasSnowSignal =
-    /snow|sleet|freezing|ice|blizzard|wintry|graupel|flurr/.test(description) ||
-    (Number.isFinite(tempF) && tempF <= 34 && Number.isFinite(precipChance) && precipChance >= 40) ||
-    maxObservedSnowDepthIn >= 2;
-  const windy = (Number.isFinite(gustMph) && gustMph >= 25) || (Number.isFinite(windMph) && windMph >= 18);
-  const cold = Number.isFinite(feelsLikeF) && feelsLikeF <= 20;
-  const veryCold = Number.isFinite(feelsLikeF) && feelsLikeF <= 5;
-  const muddy = String(trailStatus || '').toLowerCase().includes('mud');
-  const icy = String(trailStatus || '').toLowerCase().includes('icy') || String(trailStatus || '').toLowerCase().includes('snow');
-  const hasRainAccumulation = Number.isFinite(rain24hIn) && rain24hIn >= 0.2;
-  const hasFreshSnow = Number.isFinite(snow24hIn) && snow24hIn >= 2;
-
-  // Layering baseline from the skin-side-out system.
-  addSuggestion(
-    'layering-core',
-    'Layering core: moisture-wicking base + breathable midlayer (avoid cotton) so sweat does not chill you during breaks.',
-    10,
-  );
-
-  if (hasWetSignal || hasRainAccumulation) {
-    addSuggestion(
-      'shell-wet',
-      `Weather shell: waterproof-breathable jacket and pants${formatWhole(precipChance, '%') ? ` (${formatWhole(precipChance, '%')} precip chance)` : ''}${formatOneDecimal(rain24hIn, ' in rain/24h') ? ` with ${formatOneDecimal(rain24hIn, ' in rain/24h')}` : ''}.`,
-      20,
-    );
-    addSuggestion('gaiters-wet', 'Water-management: gaiters and waterproof footwear to limit soak-through around ankles/boot tops.', 32);
-  } else if (hasSnowSignal || windy) {
-    addSuggestion(
-      'shell-wind-snow',
-      `Protective shell: wind/snow-capable outer layer${formatWhole(gustMph, ' mph') ? ` (${formatWhole(gustMph, ' mph')} gusts)` : ''} for exposed terrain.`,
-      22,
-    );
-  } else {
-    addSuggestion('shell-light', 'Carry a light wind shell for ridge exposure and fast weather changes.', 60);
-  }
-
-  if (cold || hasSnowSignal || windy) {
-    addSuggestion(
-      'insulation-stop',
-      `Static insulation: puffy sized to fit over active layers${formatWhole(feelsLikeF, 'F') ? ` (feels like ${formatWhole(feelsLikeF, 'F')})` : ''} for stops and contingencies.`,
-      24,
-    );
-  }
-  if (veryCold) {
-    addSuggestion('extremities-cold', 'Cold extremities kit: warm hat, neck gaiter, insulated gloves/mitts, and spare glove liners.', 16);
-  }
-
-  if (muddy || hasRainAccumulation) {
-    addSuggestion('traction-mud', 'Traction strategy: aggressive-lug footwear and poles for slick, muddy approaches.', 34);
-  }
-  if (icy || hasFreshSnow || maxObservedSnowDepthIn >= 4) {
-    addSuggestion(
-      'traction-snow',
-      `Snow/ice travel aids: traction devices and poles${formatOneDecimal(maxObservedSnowDepthIn, ' in observed snow depth') ? ` (${formatOneDecimal(maxObservedSnowDepthIn, ' in observed snow depth')})` : ''}.`,
-      26,
-    );
-  }
-
-  if (Number.isFinite(humidity) && humidity > 80) {
-    addSuggestion('humidity-management', `Moisture control: pack one dry backup base layer for high humidity conditions (${Math.round(humidity)}% RH).`, 48);
-  }
-  if (Number(airQualityData?.usAqi) >= 101) {
-    addSuggestion('aq-health', `Air quality protection: mask/buff and lower-intensity pacing (AQI ${Math.round(Number(airQualityData.usAqi))}).`, 30);
-  }
-  if (Number(alertsData?.activeCount) > 0) {
-    addSuggestion('alerts-comms', 'Comms and contingency: verify active alert details and carry a backup comms/power plan.', 28);
-  }
-  if (Number(fireRiskData?.level) >= 3) {
-    addSuggestion('fire-risk', `Heat/fire prep: extra water + sun protection and verify current land-management restrictions (${fireRiskData.label || 'elevated fire risk'}).`, 36);
-  }
-
-  if (avalancheData?.relevant !== false && Number(avalancheData?.dangerLevel) >= 2) {
-    addSuggestion('avalanche-kit', 'Avalanche rescue kit: beacon, shovel, probe, and a partner check before leaving trailhead.', 14);
-  }
-  if (avalancheData?.relevant !== false && avalancheData?.dangerUnknown) {
-    addSuggestion('avalanche-unknown', 'No official avalanche rating available: choose non-avalanche terrain and conservative slope angles.', 12);
-  }
-
-  addSuggestion('final-system-check', 'Final fit check: confirm shell and insulation layers work together without compressing loft or limiting movement.', 70);
-
-  return Array.from(suggestionMap.values())
-    .sort((a, b) => a.priority - b.priority)
-    .map((entry) => entry.text)
-    .slice(0, 9);
-};
 
 const OPEN_METEO_CODE_LABELS = {
   0: 'Clear',
@@ -2119,21 +1719,10 @@ const applyDerivedOverallAvalancheDanger = (avalancheData) => {
   };
 };
 
-const DEFAULT_FETCH_HEADERS = { 'User-Agent': 'BackcountryConditions/1.0 (+https://summitsafe.app; support@summitsafe.app)' };
-const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : nodeFetch;
+const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 let avalancheMapLayerCache = {
   fetchedAt: 0,
   data: null,
-};
-
-const fetchWithTimeout = async (url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetchImpl(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
 };
 
 const formatIsoDateUtc = (date) => {
@@ -2337,149 +1926,6 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
   }
 
   return { feature: null, mode: 'none', fallbackDistanceKm: nearestDistance };
-};
-
-const satDecisionLevelFromScore = (scoreValue) => {
-  const score = Number(scoreValue);
-  if (!Number.isFinite(score)) {
-    return 'CAUTION';
-  }
-  if (score >= 80) return 'GO';
-  if (score >= 50) return 'CAUTION';
-  return 'NO-GO';
-};
-
-const satAvalancheSnippet = (avalancheData) => {
-  if (!avalancheData || avalancheData.relevant === false) {
-    return 'Avy N/A';
-  }
-  if (avalancheData.coverageStatus === 'expired_for_selected_start') {
-    return 'Avy expired';
-  }
-  if (avalancheData.dangerUnknown || avalancheData.coverageStatus !== 'reported') {
-    return 'Avy unk';
-  }
-  const level = Number(avalancheData.dangerLevel);
-  if (!Number.isFinite(level) || level <= 0) {
-    return 'Avy unk';
-  }
-  return `Avy L${Math.round(level)}`;
-};
-
-const satCompactCondition = (text) => {
-  const normalized = String(text || '').toLowerCase().trim();
-  if (!normalized) return 'unknown';
-  if (/thunder|storm|hail|lightning/.test(normalized)) return 'storm';
-  if (/blizzard|snow|sleet|freezing|wintry|ice/.test(normalized)) return 'snow';
-  if (/rain|drizzle|shower/.test(normalized)) return 'rain';
-  if (/fog|mist|haze|smoke/.test(normalized)) return 'visibility';
-  if (/clear|sunny/.test(normalized)) return 'clear';
-  return normalized.replace(/\s+/g, ' ').slice(0, 18);
-};
-
-const satWorst12hSnippet = (weatherData) => {
-  const trend = Array.isArray(weatherData?.trend) ? weatherData.trend.slice(0, 12) : [];
-  if (!trend.length) {
-    return 'Worst12h n/a';
-  }
-
-  let best = null;
-  for (const point of trend) {
-    const gust = Number(point?.gust);
-    const wind = Number(point?.wind);
-    const precip = Number(point?.precipChance);
-    const temp = Number(point?.temp);
-    const feelsLike = computeFeelsLikeF(Number.isFinite(temp) ? temp : 0, Number.isFinite(wind) ? wind : 0);
-    const condition = satCompactCondition(point?.condition);
-    const gustRisk = Number.isFinite(gust) ? Math.max(0, gust - 20) * 1.4 : 0;
-    const precipRisk = Number.isFinite(precip) ? Math.max(0, precip - 25) * 0.85 : 0;
-    const coldRisk = Number.isFinite(feelsLike) ? Math.max(0, 20 - feelsLike) * 0.7 : 0;
-    const weatherRisk = /storm/.test(condition) ? 22 : /snow/.test(condition) ? 12 : /rain|visibility/.test(condition) ? 7 : 0;
-    const severity = gustRisk + precipRisk + coldRisk + weatherRisk;
-
-    if (!best || severity > best.severity) {
-      best = {
-        time: String(point?.time || ''),
-        gust,
-        precip,
-        feelsLike,
-        condition,
-        severity,
-      };
-    }
-  }
-
-  if (!best) {
-    return 'Worst12h n/a';
-  }
-
-  const parts = [];
-  if (best.time) parts.push(best.time);
-  if (best.condition && best.condition !== 'clear') parts.push(best.condition);
-  if (Number.isFinite(best.gust)) parts.push(`g${Math.round(best.gust)}mph`);
-  if (Number.isFinite(best.precip)) parts.push(`p${Math.round(best.precip)}%`);
-  if (Number.isFinite(best.feelsLike)) parts.push(`f${Math.round(best.feelsLike)}F`);
-  return `Worst12h ${parts.join(' ')}`.trim();
-};
-
-const satStartLabel = (startClock) => {
-  const normalized = parseStartClock(startClock);
-  if (!normalized) return '';
-  const [hourRaw, minuteRaw] = normalized.split(':').map((part) => Number(part));
-  if (!Number.isFinite(hourRaw) || !Number.isFinite(minuteRaw)) return normalized;
-  const meridiem = hourRaw >= 12 ? 'PM' : 'AM';
-  const hour12 = hourRaw % 12 === 0 ? 12 : hourRaw % 12;
-  return `${hour12}:${String(minuteRaw).padStart(2, '0')}${meridiem}`;
-};
-
-const buildSatOneLiner = ({ safetyPayload, objectiveName = '', startClock = '', maxLength = 170 }) => {
-  const payload = safetyPayload && typeof safetyPayload === 'object' ? safetyPayload : {};
-  const weather = payload.weather && typeof payload.weather === 'object' ? payload.weather : {};
-  const avalanche = payload.avalanche && typeof payload.avalanche === 'object' ? payload.avalanche : {};
-  const safety = payload.safety && typeof payload.safety === 'object' ? payload.safety : {};
-  const forecastDate = payload.forecast && typeof payload.forecast === 'object' ? payload.forecast.selectedDate : null;
-
-  const label = String(objectiveName || 'Objective')
-    .split(',')[0]
-    .trim()
-    .slice(0, 24);
-  const temp = Number(weather.temp);
-  const feelsLike = Number.isFinite(Number(weather.feelsLike)) ? Number(weather.feelsLike) : computeFeelsLikeF(temp, Number(weather.windSpeed) || 0);
-  const wind = Number(weather.windSpeed);
-  const gust = Number(weather.windGust);
-  const precip = Number(weather.precipChance);
-  const score = Number(safety.score);
-  const decision = satDecisionLevelFromScore(score);
-  const worst12h = satWorst12hSnippet(weather);
-  const startLabel = satStartLabel(startClock);
-
-  const line = [
-    label || 'Objective',
-    forecastDate || new Date().toISOString().slice(0, 10),
-    startLabel ? `start ${startLabel}` : '',
-    '|',
-    Number.isFinite(temp) ? `${Math.round(temp)}F` : 'temp n/a',
-    Number.isFinite(feelsLike) ? `feels ${Math.round(feelsLike)}F` : '',
-    Number.isFinite(wind) ? `w${Math.round(wind)}mph` : '',
-    Number.isFinite(gust) ? `g${Math.round(gust)}mph` : '',
-    Number.isFinite(precip) ? `p${Math.round(precip)}%` : '',
-    '|',
-    satAvalancheSnippet(avalanche),
-    '|',
-    worst12h,
-    '|',
-    decision,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const cap = Number.isFinite(Number(maxLength)) ? Math.max(80, Math.min(320, Math.round(Number(maxLength)))) : 170;
-  if (line.length <= cap) {
-    return line;
-  }
-  return `${line.slice(0, cap - 1).trimEnd()}…`;
 };
 
 const safetyHandler = async (req, res) => {
@@ -3417,104 +2863,14 @@ const safetyHandler = async (req, res) => {
   }
 };
 
-app.get('/api/safety', safetyHandler);
+registerSafetyRoute({ app, safetyHandler });
+const invokeSafetyHandler = createSafetyInvoker({ safetyHandler });
 
-const invokeSafetyHandler = async (query) =>
-  new Promise((resolve, reject) => {
-    const mockReq = { query };
-    const mockRes = {
-      statusCode: 200,
-      headersSent: false,
-      status(code) {
-        this.statusCode = code;
-        return this;
-      },
-      json(payload) {
-        this.headersSent = true;
-        resolve({ statusCode: this.statusCode, payload });
-        return this;
-      },
-    };
-
-    Promise.resolve(safetyHandler(mockReq, mockRes))
-      .then(() => {
-        if (!mockRes.headersSent) {
-          resolve({ statusCode: mockRes.statusCode, payload: null });
-        }
-      })
-      .catch(reject);
-  });
-
-app.get('/api/sat-oneliner', async (req, res) => {
-  const { lat, lon, date, start, objective, name, maxLength } = req.query;
-
-  if (!lat || !lon) {
-    return res.status(400).json({ error: 'Latitude and longitude are required' });
-  }
-
-  const parsedLat = Number(lat);
-  const parsedLon = Number(lon);
-  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
-    return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
-  }
-
-  const requestedDate = typeof date === 'string' ? date.trim() : '';
-  if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
-    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
-  }
-
-  const normalizedStart = parseStartClock(typeof start === 'string' ? start : '') || '';
-  const requestedMaxLength = Number(maxLength);
-  if (maxLength !== undefined && (!Number.isFinite(requestedMaxLength) || requestedMaxLength < 80 || requestedMaxLength > 320)) {
-    return res.status(400).json({ error: 'maxLength must be a number between 80 and 320.' });
-  }
-
-  try {
-    const safetyResult = await invokeSafetyHandler({
-      lat: String(parsedLat),
-      lon: String(parsedLon),
-      date: requestedDate || undefined,
-      start: normalizedStart || undefined,
-    });
-
-    if (safetyResult.statusCode !== 200 || !safetyResult.payload || typeof safetyResult.payload !== 'object') {
-      return res.status(safetyResult.statusCode || 502).json(
-        safetyResult.payload && typeof safetyResult.payload === 'object'
-          ? safetyResult.payload
-          : { error: 'Unable to build SAT one-liner from safety report.' },
-      );
-    }
-
-    const objectiveName = String(objective || name || '').trim();
-    const satLine = buildSatOneLiner({
-      safetyPayload: safetyResult.payload,
-      objectiveName,
-      startClock: normalizedStart,
-      maxLength: Number.isFinite(requestedMaxLength) ? requestedMaxLength : 170,
-    });
-
-    return res.status(200).json({
-      line: satLine,
-      length: satLine.length,
-      maxLength: Number.isFinite(requestedMaxLength) ? requestedMaxLength : 170,
-      generatedAt: new Date().toISOString(),
-      sourceGeneratedAt: safetyResult.payload.generatedAt || null,
-      partialData: Boolean(safetyResult.payload.partialData),
-      source: '/api/safety',
-      params: {
-        lat: parsedLat,
-        lon: parsedLon,
-        date: requestedDate || safetyResult.payload?.forecast?.selectedDate || null,
-        start: normalizedStart || null,
-        objective: objectiveName || null,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({
-      error: 'Failed to generate SAT one-liner.',
-      details: error?.message || 'Unknown backend error.',
-    });
-  }
+registerSatOneLinerRoute({
+  app,
+  invokeSafetyHandler,
+  buildSatOneLiner,
+  parseStartClock,
 });
 
 registerSearchRoutes({
@@ -3525,37 +2881,7 @@ registerSearchRoutes({
 });
 registerHealthRoutes(app);
 
-const startServer = () => {
-  const server = app.listen(PORT, () => console.log(`Backend Active on ${PORT}`));
-
-  const shutdown = (signal) => {
-    console.log(`Received ${signal}. Shutting down...`);
-    server.close((err) => {
-      if (err) {
-        console.error('Graceful shutdown failed:', err);
-        process.exit(1);
-      }
-      process.exit(0);
-    });
-
-    setTimeout(() => {
-      console.error('Shutdown timeout reached, forcing exit.');
-      process.exit(1);
-    }, 10000).unref();
-  };
-
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled rejection:', reason);
-  });
-  process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception:', error);
-    shutdown('uncaughtException');
-  });
-
-  return server;
-};
+const startServer = () => startBackendServer({ app, port: PORT });
 
 if (require.main === module) {
   startServer();
