@@ -1651,6 +1651,50 @@ input {
   letter-spacing: 0.03em;
 }
 
+.travel-threshold-editor {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.travel-threshold-row {
+  display: grid;
+  gap: 5px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid #d8d1bf;
+  background: #faf6ea;
+}
+
+.travel-threshold-row span {
+  color: #4f5d54;
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.travel-threshold-row input {
+  border: 1px solid #d8d3c5;
+  border-radius: 8px;
+  padding: 5px 7px;
+  background: #fdfaf2;
+  color: #2f3f36;
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.travel-threshold-row input:focus-visible {
+  border-color: #97b7a2;
+  box-shadow: 0 0 0 3px rgba(151, 183, 162, 0.2);
+  outline: none;
+}
+
+.travel-threshold-note {
+  font-size: 0.73rem;
+}
+
 .travel-overview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4659,6 +4703,7 @@ input {
 }
 
 :root[data-theme='dark'] .travel-thresholds span,
+:root[data-theme='dark'] .travel-threshold-row,
 :root[data-theme='dark'] .weather-source-item,
 :root[data-theme='dark'] .score-change-block {
   background: #1b2a35;
@@ -4667,6 +4712,25 @@ input {
 
 :root[data-theme='dark'] .travel-thresholds span {
   color: #d2e0ec;
+}
+
+:root[data-theme='dark'] .travel-threshold-row span {
+  color: #9eb2c2;
+}
+
+:root[data-theme='dark'] .travel-threshold-row input {
+  background: #152330;
+  border-color: #365063;
+  color: #dce8f2;
+}
+
+:root[data-theme='dark'] .travel-threshold-row input:focus-visible {
+  border-color: #5b8198;
+  box-shadow: 0 0 0 3px rgba(91, 129, 152, 0.2);
+}
+
+:root[data-theme='dark'] .travel-threshold-note {
+  color: #a6b9c7;
 }
 
 :root[data-theme='dark'] .travel-overview-item {
@@ -5355,6 +5419,10 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .travel-threshold-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .travel-timeline {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -5535,6 +5603,10 @@ input {
 
   .report-action-btn {
     flex: 1 1 100%;
+  }
+
+  .travel-threshold-editor {
+    grid-template-columns: 1fr;
   }
 
   .card-title {

@@ -64,6 +64,8 @@ const LEGACY_DEFAULT_START_TIME = '04:30';
 const TEMP_LAPSE_F_PER_1000FT = 3.3;
 const WIND_INCREASE_MPH_PER_1000FT = 2;
 const GUST_INCREASE_MPH_PER_1000FT = 2.5;
+const MIN_TRAVEL_WINDOW_HOURS = 4;
+const MAX_TRAVEL_WINDOW_HOURS = 12;
 const SEARCH_DEBOUNCE_MS = 180;
 const BACKEND_WAKE_NOTICE_DELAY_MS = 1400;
 const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
@@ -452,6 +454,7 @@ interface UserPreferences {
   maxWindGustMph: number;
   maxPrecipChance: number;
   minFeelsLikeF: number;
+  travelWindowHours: number;
 }
 
 function formatDateInput(date: Date): string {
@@ -1461,6 +1464,7 @@ function getDefaultUserPreferences(): UserPreferences {
     maxWindGustMph: 32,
     maxPrecipChance: 60,
     minFeelsLikeF: 5,
+    travelWindowHours: 12,
   };
 }
 
@@ -1495,6 +1499,12 @@ function loadUserPreferences(): UserPreferences {
       maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
       maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
       minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
+      travelWindowHours: normalizeNumberPreference(
+        parsed.travelWindowHours,
+        defaults.travelWindowHours,
+        MIN_TRAVEL_WINDOW_HOURS,
+        MAX_TRAVEL_WINDOW_HOURS,
+      ),
     };
   } catch {
     return defaults;
@@ -1827,7 +1837,7 @@ function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPref
   const maxPrecip = preferences.maxPrecipChance;
   const minFeelsLike = preferences.minFeelsLikeF;
 
-  return trend.slice(0, 12).map((point) => {
+  return trend.map((point) => {
     const gust = Number.isFinite(Number(point.gust)) ? Number(point.gust) : 0;
     const wind = Number.isFinite(Number(point.wind)) ? Number(point.wind) : 0;
     const temp = Number.isFinite(Number(point.temp)) ? Number(point.temp) : 0;
@@ -1942,7 +1952,7 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       bestWindow,
       nextCleanWindow,
       topFailureLabels,
-      summary: 'No clean travel window in the next 12 hours under current thresholds.',
+      summary: `No clean travel window in the next ${rows.length} hours under current thresholds.`,
     };
   }
 
@@ -3847,7 +3857,7 @@ function App() {
   };
 
   const handleThresholdChange =
-    (field: 'maxPrecipChance', min: number, max: number) =>
+    (field: 'maxPrecipChance' | 'travelWindowHours', min: number, max: number) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const nextValue = Number(e.target.value);
       if (!Number.isFinite(nextValue)) {
@@ -3999,6 +4009,10 @@ function App() {
   const cutoffMinutes = parseTimeInputMinutes(alpineStartTime);
   const displayStartTime = formatClockForStyle(alpineStartTime, preferences.timeStyle);
   const displayDefaultStartTime = formatClockForStyle(preferences.defaultStartTime, preferences.timeStyle);
+  const travelWindowHours = Math.max(
+    MIN_TRAVEL_WINDOW_HOURS,
+    Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+  );
   const decision = safetyData ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences) : null;
   const failedCriticalChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
   const passedCriticalChecks = decision ? decision.checks.filter((check) => check.ok) : [];
@@ -4029,7 +4043,7 @@ function App() {
       ]
     : [];
   const elevationForecastBands = safetyData?.weather.elevationForecast || [];
-  const trendWindow = safetyData ? buildTrendWindowFromStart(safetyData.weather.trend || [], alpineStartTime, 12) : [];
+  const trendWindow = safetyData ? buildTrendWindowFromStart(safetyData.weather.trend || [], alpineStartTime, travelWindowHours) : [];
   const criticalWindow = safetyData
     ? trendWindow.map((point) => {
         const assessment = assessCriticalWindowPoint(point);
@@ -4077,6 +4091,7 @@ function App() {
   const hasTargetElevation = Number.isFinite(targetElevationFt) && targetElevationFt >= 0;
   const windThresholdDisplay = formatWindDisplay(preferences.maxWindGustMph);
   const feelsLikeThresholdDisplay = formatTempDisplay(preferences.minFeelsLikeF);
+  const travelWindowHoursLabel = `${travelWindowHours}h`;
   const windUnitLabel = preferences.windSpeedUnit;
   const tempUnitLabel = preferences.temperatureUnit.toUpperCase();
   const elevationUnitLabel = preferences.elevationUnit;
@@ -5391,8 +5406,19 @@ function App() {
 
             <article className="settings-card">
               <h3>Travel window thresholds</h3>
-              <p>Used by the 12-hour pass/fail timeline in planner view.</p>
+              <p>Used by the pass/fail timeline in planner view.</p>
               <div className="settings-time-row">
+                <label className="settings-number-row">
+                  <span>Window length (hours)</span>
+                  <input
+                    type="number"
+                    min={MIN_TRAVEL_WINDOW_HOURS}
+                    max={MAX_TRAVEL_WINDOW_HOURS}
+                    step={1}
+                    value={travelWindowHours}
+                    onChange={handleThresholdChange('travelWindowHours', MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS)}
+                  />
+                </label>
                 <label className="settings-number-row">
                   <span>Max gust ({windUnitLabel})</span>
                   <input
@@ -5434,7 +5460,7 @@ function App() {
                 </button>
               </div>
               <div className="settings-note">
-                Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay}
+                Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Window {travelWindowHoursLabel} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay}
               </div>
             </article>
           </div>
@@ -5509,7 +5535,7 @@ function App() {
             <CalendarDays size={14} /> Date-aware planning
           </div>
           <div className="home-chip">
-            <Clock size={14} /> 12h travel window analysis
+            <Clock size={14} /> {travelWindowHoursLabel} travel window analysis
           </div>
           <div className="home-chip">
             <MapIcon size={14} /> Shareable objective link
@@ -5841,8 +5867,8 @@ function App() {
               <div className="card projection-card" style={{ order: reportCardOrder.travelWindowPlanner }}>
                 <div className="card-header">
                   <span className="card-title">
-                    Travel Window Planner (12h)
-                    <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your wind, precip, and feels-like thresholds." />
+                    Travel Window Planner ({travelWindowHoursLabel})
+                    <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your selected window length, plus wind, precip, and feels-like thresholds." />
                   </span>
                 </div>
                 {peakCriticalWindow ? (
@@ -5864,7 +5890,7 @@ function App() {
                       >
                         <span className="travel-overview-label">Passing Hours</span>
                         <strong className="travel-overview-value">
-                          {travelWindowInsights.passHours}/{travelWindowRows.length || 12}
+                          {travelWindowInsights.passHours}/{travelWindowRows.length || travelWindowHours}
                         </strong>
                       </article>
                       <article className="travel-overview-item" role="listitem">
@@ -5885,9 +5911,56 @@ function App() {
                       <span>Precip &lt;= {preferences.maxPrecipChance}%</span>
                       <span>Feels-like &gt;= {feelsLikeThresholdDisplay}</span>
                     </div>
+                    <div className="travel-threshold-editor" aria-label="Travel window threshold controls">
+                      <label className="travel-threshold-row">
+                        <span>Window (h)</span>
+                        <input
+                          type="number"
+                          min={MIN_TRAVEL_WINDOW_HOURS}
+                          max={MAX_TRAVEL_WINDOW_HOURS}
+                          step={1}
+                          value={travelWindowHours}
+                          onChange={handleThresholdChange('travelWindowHours', MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS)}
+                        />
+                      </label>
+                      <label className="travel-threshold-row">
+                        <span>Max gust ({windUnitLabel})</span>
+                        <input
+                          type="number"
+                          min={windThresholdMin}
+                          max={windThresholdMax}
+                          step={windThresholdStep}
+                          value={windThresholdInputValue}
+                          onChange={handleWindThresholdDisplayChange}
+                        />
+                      </label>
+                      <label className="travel-threshold-row">
+                        <span>Max precip (%)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={preferences.maxPrecipChance}
+                          onChange={handleThresholdChange('maxPrecipChance', 0, 100)}
+                        />
+                      </label>
+                      <label className="travel-threshold-row">
+                        <span>Min feels-like ({tempUnitLabel})</span>
+                        <input
+                          type="number"
+                          min={feelsLikeThresholdMin}
+                          max={feelsLikeThresholdMax}
+                          step={feelsLikeThresholdStep}
+                          value={feelsLikeThresholdInputValue}
+                          onChange={handleFeelsLikeThresholdDisplayChange}
+                        />
+                      </label>
+                    </div>
+                    <p className="muted-note travel-threshold-note">Edits apply immediately and are saved to Settings.</p>
                     <p className="muted-note">{travelWindowSummary}</p>
                     {travelWindowRows.length > 0 && (
-                      <div className="travel-timeline" role="list" aria-label="12-hour travel window timeline">
+                      <div className="travel-timeline" role="list" aria-label={`${travelWindowHours}-hour travel window timeline`}>
                         {travelWindowRows.map((row, idx) => {
                           const riskLevel = criticalWindow[idx]?.level || 'stable';
                           return (
