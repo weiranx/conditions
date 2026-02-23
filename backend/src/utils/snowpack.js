@@ -136,6 +136,10 @@ const createSnowpackService = ({
     if (!nohrscRes.ok) {
       throw new Error(`NOHRSC snow analysis request failed with status ${nohrscRes.status}`);
     }
+    const sampledHeader = nohrscRes.headers?.get?.('date') || null;
+    const sampledDate = sampledHeader ? new Date(sampledHeader) : null;
+    const sampledTime =
+      sampledDate && Number.isFinite(sampledDate.getTime()) ? sampledDate.toISOString() : null;
     const nohrscJson = await nohrscRes.json();
     const results = Array.isArray(nohrscJson?.results) ? nohrscJson.results : [];
     const snowDepthResult = results.find((entry) => Number(entry?.layerId) === 3) || null;
@@ -170,7 +174,7 @@ const createSnowpackService = ({
     return {
       source: 'NOAA NOHRSC Snow Analysis',
       status: 'ok',
-      sampledTime: null,
+      sampledTime,
       snowDepthIn: depthInches,
       sweIn: sweInches,
       depthMeters: Number.isFinite(depthMeters) ? Number(depthMeters.toFixed(2)) : null,

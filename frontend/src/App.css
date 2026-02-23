@@ -931,6 +931,46 @@ input {
   font-family: var(--font-data);
 }
 
+.map-weather-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 31px;
+  max-width: min(100%, 460px);
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #ece7da;
+  border: 1px solid #d7d1c1;
+  color: #2e3b34;
+}
+
+.map-weather-chip.is-pending {
+  opacity: 0.8;
+}
+
+.map-weather-chip-emoji {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.map-weather-chip-temp {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+  font-family: var(--font-data);
+  white-space: nowrap;
+}
+
+.map-weather-chip-condition {
+  min-width: 0;
+  color: #5a645d;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .map-link-group {
   display: inline-flex;
   flex-wrap: wrap;
@@ -1463,6 +1503,43 @@ input {
   font-size: 0.74rem;
   letter-spacing: 0.02em;
   font-family: var(--font-data);
+}
+
+.target-elev-inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid #d3cebc;
+  background: #f6f1e6;
+}
+
+.target-elev-inline-control span {
+  color: #5b6760;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.target-elev-inline-control input {
+  width: 100px;
+  border: 1px solid #cdc7b6;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #fbf8f0;
+  color: #2f3d35;
+  font-family: var(--font-data);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.target-elev-inline-control input:focus-visible {
+  border-color: #97b7a2;
+  box-shadow: 0 0 0 3px rgba(151, 183, 162, 0.22);
+  outline: none;
 }
 
 .elevation-rows {
@@ -2000,7 +2077,7 @@ input {
 .snowpack-insight-grid {
   margin-bottom: 10px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
 }
 
@@ -2036,6 +2113,24 @@ input {
 .snowpack-insight-warn {
   border-color: #dfbcbc;
   background: #f9eded;
+}
+
+.snowpack-takeaways {
+  margin-bottom: 10px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  border: 1px solid #c8d3d8;
+  background: #eef3f6;
+}
+
+.snowpack-takeaway-title {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: #2e414e;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
 }
 
 .plan-summary-grid {
@@ -3769,6 +3864,7 @@ input {
 :root[data-theme='dark'] .muted-note,
 :root[data-theme='dark'] .suggestion-subtitle,
 :root[data-theme='dark'] .map-coords,
+:root[data-theme='dark'] .map-weather-chip-condition,
 :root[data-theme='dark'] .app-disclaimer p,
 :root[data-theme='dark'] .footer {
   color: var(--text-muted);
@@ -3789,6 +3885,7 @@ input {
 }
 
 :root[data-theme='dark'] .map-coords,
+:root[data-theme='dark'] .map-weather-chip,
 :root[data-theme='dark'] .search-clear-btn,
 :root[data-theme='dark'] .theme-chip {
   background: #1b2a35;
@@ -4002,6 +4099,21 @@ input {
 
 :root[data-theme='dark'] .elevation-forecast-head span {
   color: #a9bdcc;
+}
+
+:root[data-theme='dark'] .target-elev-inline-control {
+  border-color: #3d5568;
+  background: #1b2f3d;
+}
+
+:root[data-theme='dark'] .target-elev-inline-control span {
+  color: #b5c9d8;
+}
+
+:root[data-theme='dark'] .target-elev-inline-control input {
+  border-color: #4a6378;
+  background: #223a4c;
+  color: #e2edf6;
 }
 
 :root[data-theme='dark'] .elevation-row-main strong {
@@ -4584,6 +4696,15 @@ input {
   background: #331f24;
 }
 
+:root[data-theme='dark'] .snowpack-takeaways {
+  border-color: #365063;
+  background: #172a38;
+}
+
+:root[data-theme='dark'] .snowpack-takeaway-title {
+  color: #c7d9e7;
+}
+
 :root[data-theme='dark'] .unknown-mode-panel strong {
   color: #f2b4b4;
 }
@@ -4797,6 +4918,12 @@ input {
     text-align: center;
   }
 
+  .map-weather-chip {
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
+  }
+
   .map-link-group,
   .map-actions-bottom .map-link-group:last-child {
     width: 100%;
@@ -4996,6 +5123,11 @@ input {
     text-align: center;
   }
 
+  .map-weather-chip {
+    width: 100%;
+    max-width: none;
+  }
+
   .map-link-group {
     width: 100%;
     display: flex;
@@ -5043,6 +5175,15 @@ input {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+  }
+
+  .target-elev-inline-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .target-elev-inline-control input {
+    width: 120px;
   }
 
   .danger-row {

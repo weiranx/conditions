@@ -424,6 +424,7 @@ interface SnowpackSnapshotInsights {
   signal: SnowpackInsightBadge;
   freshness: SnowpackInsightBadge;
   representativeness: SnowpackInsightBadge;
+  agreement: SnowpackInsightBadge;
 }
 
 interface LinkState {
@@ -451,7 +452,6 @@ interface UserPreferences {
   maxWindGustMph: number;
   maxPrecipChance: number;
   minFeelsLikeF: number;
-  requireAvalancheCheck: boolean;
 }
 
 function formatDateInput(date: Date): string {
@@ -472,7 +472,12 @@ function parseIsoToMs(value: string | null | undefined): number | null {
   if (!value) {
     return null;
   }
-  const ms = Date.parse(value);
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00Z` : trimmed;
+  const ms = Date.parse(normalized);
   return Number.isFinite(ms) ? ms : null;
 }
 
@@ -1162,6 +1167,60 @@ function buildSnowpackInsights(
     };
   }
 
+  const depthPairAvailable = Number.isFinite(snotelDepth) && Number.isFinite(nohrscDepth);
+  const swePairAvailable = Number.isFinite(snotelSwe) && Number.isFinite(nohrscSwe);
+  const depthDeltaIn = depthPairAvailable ? Math.abs((snotelDepth as number) - (nohrscDepth as number)) : null;
+  const sweDeltaIn = swePairAvailable ? Math.abs((snotelSwe as number) - (nohrscSwe as number)) : null;
+  const depthDeltaPct =
+    depthPairAvailable && Math.max(Math.abs(snotelDepth), Math.abs(nohrscDepth), 1) > 0
+      ? (Math.abs((snotelDepth as number) - (nohrscDepth as number)) / Math.max(Math.abs(snotelDepth), Math.abs(nohrscDepth), 1)) * 100
+      : null;
+  const sweDeltaPct =
+    swePairAvailable && Math.max(Math.abs(snotelSwe), Math.abs(nohrscSwe), 0.1) > 0
+      ? (Math.abs((snotelSwe as number) - (nohrscSwe as number)) / Math.max(Math.abs(snotelSwe), Math.abs(nohrscSwe), 0.1)) * 100
+      : null;
+  const maxDeltaPct = Math.max(depthDeltaPct ?? 0, sweDeltaPct ?? 0);
+
+  let agreement: SnowpackInsightBadge;
+  if (!depthPairAvailable && !swePairAvailable) {
+    agreement = {
+      label: 'Single-source view',
+      detail: 'Only one source has usable snow metrics. Treat this as directional context.',
+      tone: lowBroadSnowSignal ? 'good' : 'watch',
+    };
+  } else {
+    const agreementParts = [
+      depthDeltaIn !== null
+        ? `Depth Δ ${formatSnowDepthForElevationUnit(depthDeltaIn, elevationUnit)}${depthDeltaPct !== null ? ` (${Math.round(depthDeltaPct)}%)` : ''}`
+        : null,
+      sweDeltaIn !== null
+        ? `SWE Δ ${formatSweForElevationUnit(sweDeltaIn, elevationUnit)}${sweDeltaPct !== null ? ` (${Math.round(sweDeltaPct)}%)` : ''}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' • ');
+
+    if (maxDeltaPct <= 35) {
+      agreement = {
+        label: 'Sources aligned',
+        detail: agreementParts || 'SNOTEL and NOHRSC broadly agree.',
+        tone: 'good',
+      };
+    } else if (maxDeltaPct <= 70 || lowBroadSnowSignal) {
+      agreement = {
+        label: 'Partial agreement',
+        detail: `${agreementParts || 'Sources diverge somewhat.'} Expect patchy distribution.`,
+        tone: 'watch',
+      };
+    } else {
+      agreement = {
+        label: 'Sources diverge',
+        detail: `${agreementParts || 'Large disagreement between sources.'} Verify snow coverage on route before committing.`,
+        tone: 'warn',
+      };
+    }
+  }
+
   const snotelObsAgeLabel = formatCompactAge(snotel?.observedDate || null);
   const nohrscAgeLabel = formatCompactAge(nohrsc?.sampledTime || null);
   const snotelObsMs = parseIsoToMs(snotel?.observedDate || null);
@@ -1213,7 +1272,7 @@ function buildSnowpackInsights(
     };
   }
 
-  return { signal, freshness, representativeness };
+  return { signal, freshness, representativeness, agreement };
 }
 
 function normalizeWindHintDirection(value: string | null | undefined): string | null {
@@ -1391,7 +1450,6 @@ function getDefaultUserPreferences(): UserPreferences {
     maxWindGustMph: 32,
     maxPrecipChance: 60,
     minFeelsLikeF: 5,
-    requireAvalancheCheck: true,
   };
 }
 
@@ -1426,8 +1484,6 @@ function loadUserPreferences(): UserPreferences {
       maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
       maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
       minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
-      requireAvalancheCheck:
-        typeof parsed.requireAvalancheCheck === 'boolean' ? parsed.requireAvalancheCheck : defaults.requireAvalancheCheck,
     };
   } catch {
     return defaults;
@@ -2078,6 +2134,16 @@ function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime
 function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, preferences: UserPreferences): SummitDecision {
   const blockers: string[] = [];
   const cautions: string[] = [];
+  const addBlocker = (message: string) => {
+    if (!blockers.includes(message)) {
+      blockers.push(message);
+    }
+  };
+  const addCaution = (message: string) => {
+    if (!cautions.includes(message)) {
+      cautions.push(message);
+    }
+  };
 
   const danger = data.avalanche.dangerLevel || 0;
   const gust = data.weather.windGust || 0;
@@ -2088,15 +2154,11 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const hasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
   const avalancheRelevant = data.avalanche.relevant !== false;
   const avalancheUnknown = avalancheRelevant && Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
-  const avalancheCheckEnabled = preferences.requireAvalancheCheck;
-  const avalancheGateRequired = avalancheCheckEnabled && avalancheRelevant;
+  const avalancheGateRequired = avalancheRelevant;
   const unknownSnowpackMode = avalancheGateRequired && avalancheUnknown;
   const avalancheCheckLabel = (safeDangerLabel: string): string => {
     if (!avalancheRelevant) {
       return 'Avalanche check not required for this location profile';
-    }
-    if (!avalancheCheckEnabled) {
-      return 'Avalanche condition check is disabled in Settings';
     }
     if (avalancheUnknown) {
       return 'Avalanche forecast coverage is unavailable for this location';
@@ -2112,41 +2174,163 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const formatTemp = (valueF: number) => formatTemperatureForUnit(valueF, tempUnit);
   const displayMaxGustThreshold = formatWind(maxGustThreshold);
   const displayMinFeelsLikeThreshold = formatTemp(minFeelsLikeThreshold);
+  const alertSeverityRank = (severity: string | undefined | null): number => {
+    const normalized = String(severity || '').trim().toLowerCase();
+    if (!normalized) return 1;
+    if (['extreme', 'severe'].includes(normalized)) return 5;
+    if (normalized === 'warning') return 4;
+    if (['advisory', 'watch'].includes(normalized)) return 3;
+    if (normalized === 'moderate') return 2;
+    return 1;
+  };
+
+  const alertsStatus = String(data.alerts?.status || '').toLowerCase();
+  const alertsRelevantForSelectedStart = alertsStatus !== 'future_time_not_supported';
+  const alertsNoActiveForSelectedStart = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
+  const activeAlertCount = Number(data.alerts?.activeCount);
+  const hasActiveAlertCount = Number.isFinite(activeAlertCount);
+  const highestAlertSeverity = String(data.alerts?.highestSeverity || 'Unknown');
+  const highestAlertSeverityRank = alertSeverityRank(highestAlertSeverity);
+
+  const airQualityStatus = String(data.airQuality?.status || '').toLowerCase();
+  const aqi = Number(data.airQuality?.usAqi);
+  const hasAqi = Number.isFinite(aqi) && airQualityStatus !== 'unavailable';
+
+  const fireRiskStatus = String(data.fireRisk?.status || '').toLowerCase();
+  const fireRiskLevel = Number(data.fireRisk?.level);
+  const hasFireRisk = Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
+
+  const heatRiskStatus = String(data.heatRisk?.status || '').toLowerCase();
+  const heatRiskLevel = Number(data.heatRisk?.level);
+  const hasHeatRisk = Number.isFinite(heatRiskLevel) && heatRiskStatus !== 'unavailable';
+
+  const terrainCode = String(data.terrainCondition?.code || '').toLowerCase();
+  const terrainLabel = data.terrainCondition?.label || data.trail || 'Unknown';
+  const terrainConfidence = String(data.terrainCondition?.confidence || '').toLowerCase();
+  const terrainNeedsAttention = ['snow_ice', 'wet_muddy', 'cold_slick', 'weather_unavailable'].includes(terrainCode);
+
+  const weatherFreshnessState = freshnessClass(
+    pickOldestIsoTimestamp([
+      data.weather.issuedTime || null,
+      data.weather.forecastStartTime || null,
+    ]),
+    12,
+  );
+  const avalancheFreshnessState = avalancheRelevant
+    ? freshnessClass(pickOldestIsoTimestamp([data.avalanche.publishedTime || null]), 24)
+    : null;
+  const alertsFreshnessState = alertsRelevantForSelectedStart
+    ? alertsNoActiveForSelectedStart
+      ? 'fresh'
+      : freshnessClass(
+          pickNewestIsoTimestamp(
+            (data.alerts?.alerts || []).flatMap((alert) => [alert.sent || null, alert.effective || null, alert.onset || null]),
+          ),
+          6,
+        )
+    : null;
+  const airQualityFreshnessState = hasAqi ? freshnessClass(pickOldestIsoTimestamp([data.airQuality?.measuredTime || null]), 8) : null;
+  const precipitationFreshnessState = freshnessClass(
+    pickOldestIsoTimestamp([data.rainfall?.anchorTime || null, data.rainfall?.issuedTime || null]),
+    8,
+  );
+  const snowpackStatus = String(data.snowpack?.status || '').toLowerCase();
+  const snowpackAvailable = snowpackStatus === 'ok' || snowpackStatus === 'partial';
+  const snowpackFreshnessState = snowpackAvailable
+    ? freshnessClass(
+        pickOldestIsoTimestamp([data.snowpack?.snotel?.observedDate || null, data.snowpack?.nohrsc?.sampledTime || null]),
+        30,
+      )
+    : null;
+  const freshnessIssues = [
+    weatherFreshnessState === 'stale' || weatherFreshnessState === 'missing' ? 'weather' : null,
+    avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing' ? 'avalanche' : null,
+    alertsFreshnessState === 'stale' || alertsFreshnessState === 'missing' ? 'alerts' : null,
+    airQualityFreshnessState === 'stale' || airQualityFreshnessState === 'missing' ? 'air quality' : null,
+    precipitationFreshnessState === 'stale' || precipitationFreshnessState === 'missing' ? 'precipitation' : null,
+    snowpackFreshnessState === 'stale' || snowpackFreshnessState === 'missing' ? 'snowpack' : null,
+  ].filter(Boolean) as string[];
 
   if (unknownSnowpackMode) {
-    cautions.push(
+    addCaution(
       'Avalanche forecast coverage is unavailable for this location. Do not treat this as low risk; keep terrain conservative and avoid avalanche features.',
     );
-    cautions.push('Limited avalanche coverage: use low-angle terrain, avoid terrain traps, and increase spacing/communication.');
+    addCaution('Limited avalanche coverage: use low-angle terrain, avoid terrain traps, and increase spacing/communication.');
   }
 
   if (avalancheGateRequired && !avalancheUnknown && danger >= 4) {
-    blockers.push('Avalanche danger is High/Extreme. Avoid avalanche terrain.');
+    addBlocker('Avalanche danger is High/Extreme. Avoid avalanche terrain.');
   } else if (avalancheGateRequired && !avalancheUnknown && danger === 3) {
-    cautions.push('Avalanche danger is Considerable. Conservative terrain choices are required.');
+    addCaution('Avalanche danger is Considerable. Conservative terrain choices are required.');
   }
   if (hasStormSignal) {
-    cautions.push('Storm or thunder signal in forecast. Avoid exposed terrain and keep fallback options ready.');
+    addCaution('Storm or thunder signal in forecast. Avoid exposed terrain and keep fallback options ready.');
   }
   if (precip >= Math.max(85, maxPrecipThreshold + 25)) {
-    blockers.push(`Precipitation chance at ${precip}% is too high for stable travel conditions.`);
+    addBlocker(`Precipitation chance at ${precip}% is too high for stable travel conditions.`);
   } else if (precip >= Math.max(55, maxPrecipThreshold)) {
-    cautions.push(`Precipitation chance at ${precip}% can create slick surfaces and slower travel.`);
+    addCaution(`Precipitation chance at ${precip}% can create slick surfaces and slower travel.`);
   }
   if (gust >= Math.max(42, maxGustThreshold + 10)) {
-    blockers.push(`Wind gusts around ${formatWind(gust)} exceed conservative backcountry thresholds.`);
+    addBlocker(`Wind gusts around ${formatWind(gust)} exceed conservative backcountry thresholds.`);
   } else if (gust >= maxGustThreshold) {
-    cautions.push(`Wind gusts near ${formatWind(gust)} can affect exposed movement and stability.`);
+    addCaution(`Wind gusts near ${formatWind(gust)} can affect exposed movement and stability.`);
   }
   if (score < 42) {
-    blockers.push(`Overall safety score is low at ${score}%.`);
+    addBlocker(`Overall safety score is low at ${score}%.`);
   } else if (score < 68) {
-    cautions.push(`Safety score at ${score}% suggests tightening route controls.`);
+    addCaution(`Safety score at ${score}% suggests tightening route controls.`);
   }
   if (feelsLike >= 95) {
-    blockers.push(`Apparent temperature near ${formatTemp(feelsLike)} has high heat-stress risk.`);
+    addBlocker(`Apparent temperature near ${formatTemp(feelsLike)} has high heat-stress risk.`);
   } else if (feelsLike <= minFeelsLikeThreshold) {
-    cautions.push(`Apparent temperature near ${formatTemp(feelsLike)} increases cold-exposure risk.`);
+    addCaution(`Apparent temperature near ${formatTemp(feelsLike)} increases cold-exposure risk.`);
+  }
+
+  if (alertsRelevantForSelectedStart && hasActiveAlertCount && activeAlertCount > 0) {
+    if (highestAlertSeverityRank >= 4) {
+      addBlocker(`${activeAlertCount} active NWS alert(s) include high-severity products (${highestAlertSeverity}).`);
+    } else {
+      addCaution(`${activeAlertCount} active NWS alert(s) are in effect at selected start time.`);
+    }
+  }
+
+  if (hasAqi) {
+    if (aqi >= 151) {
+      addBlocker(`Air quality is unhealthy/hazardous (AQI ${Math.round(aqi)}).`);
+    } else if (aqi >= 101) {
+      addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}).`);
+    } else if (aqi >= 51) {
+      addCaution(`Air quality is moderate (AQI ${Math.round(aqi)}).`);
+    }
+  }
+
+  if (hasFireRisk) {
+    if (fireRiskLevel >= 4) {
+      addBlocker(`Fire danger is extreme (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
+    } else if (fireRiskLevel >= 3) {
+      addCaution(`Fire danger is high (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
+    } else if (fireRiskLevel >= 2) {
+      addCaution(`Fire danger is elevated (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
+    }
+  }
+
+  if (hasHeatRisk) {
+    if (heatRiskLevel >= 4) {
+      addBlocker(`Heat risk is extreme (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
+    } else if (heatRiskLevel >= 3) {
+      addCaution(`Heat risk is high (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
+    } else if (heatRiskLevel >= 2) {
+      addCaution(`Heat risk is elevated (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
+    }
+  }
+
+  if (terrainNeedsAttention) {
+    addCaution(`Terrain/trail condition needs attention (${terrainLabel}).`);
+  }
+
+  if (freshnessIssues.length > 0) {
+    addCaution(`Some feeds are stale or missing timestamps (${freshnessIssues.join(', ')}). Re-verify before committing.`);
   }
 
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
@@ -2156,22 +2340,20 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const daylightOkay = hasDaylightInputs ? cutoffMinutes <= sunsetMinutes - daylightBuffer : false;
   const daylightMarginMinutes = hasDaylightInputs ? sunsetMinutes - cutoffMinutes : null;
   if (!hasDaylightInputs) {
-    cautions.push('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
+    addCaution('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
   } else if (!daylightOkay) {
-    cautions.push(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
+    addCaution(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
   }
 
-  const checks = [
+  const checks: SummitDecision['checks'] = [
     {
       label: avalancheCheckLabel('Moderate or lower'),
       ok: avalancheGateRequired ? (!avalancheUnknown && danger <= 2) : true,
       detail: !avalancheRelevant
         ? 'Not required by current seasonal and snowpack profile.'
-        : !avalancheCheckEnabled
-          ? 'Disabled in Settings.'
-          : avalancheUnknown
-            ? 'Coverage unavailable.'
-            : `Current danger level ${danger}.`,
+        : avalancheUnknown
+          ? 'Coverage unavailable.'
+          : `Current danger level ${danger}.`,
     },
     { label: 'No thunder/storm signal in forecast', ok: !hasStormSignal, detail: description || 'No forecast condition text available.' },
     { label: `Precipitation chance is under ${maxPrecipThreshold}%`, ok: precip < maxPrecipThreshold, detail: `Now ${precip}%` },
@@ -2183,6 +2365,55 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
     },
     { label: `Apparent temperature is above ${displayMinFeelsLikeThreshold}`, ok: feelsLike > minFeelsLikeThreshold, detail: `Now ${formatTemp(feelsLike)}` },
   ];
+
+  if (alertsRelevantForSelectedStart && hasActiveAlertCount) {
+    checks.push({
+      label: 'No active NWS alerts at selected start time',
+      ok: activeAlertCount === 0,
+      detail:
+        activeAlertCount === 0
+          ? 'No active alerts.'
+          : `${activeAlertCount} active • highest severity ${highestAlertSeverity}.`,
+    });
+  }
+
+  if (hasAqi) {
+    checks.push({
+      label: 'Air quality is <= 100 AQI',
+      ok: aqi <= 100,
+      detail: `Current AQI ${Math.round(aqi)} (${data.airQuality?.category || 'Unknown'}).`,
+    });
+  }
+
+  if (hasFireRisk) {
+    checks.push({
+      label: 'Fire risk is below High (L3+)',
+      ok: fireRiskLevel < 3,
+      detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})`,
+    });
+  }
+
+  if (hasHeatRisk) {
+    checks.push({
+      label: 'Heat risk is below High (L3+)',
+      ok: heatRiskLevel < 3,
+      detail: `${data.heatRisk?.label || 'Unknown'} (${Number.isFinite(heatRiskLevel) ? `L${Math.round(heatRiskLevel)}` : 'L?'})`,
+    });
+  }
+
+  if (terrainCode) {
+    checks.push({
+      label: 'Terrain / trail condition is within team capability',
+      ok: !terrainNeedsAttention,
+      detail: terrainConfidence ? `${terrainLabel} • confidence ${terrainConfidence}` : terrainLabel,
+    });
+  }
+
+  checks.push({
+    label: 'Core source freshness has no stale/missing feeds',
+    ok: freshnessIssues.length === 0,
+    detail: freshnessIssues.length === 0 ? 'Timestamps are current enough for active feeds.' : `Issue: ${freshnessIssues.join(', ')}.`,
+  });
 
   let level: DecisionLevel = 'GO';
   let headline = 'Proceed with conservative backcountry travel controls.';
@@ -3965,9 +4196,23 @@ function App() {
       : safetyData?.rainfall?.mode === 'observed_recent'
         ? 'Observed recent accumulation'
         : 'Mode unavailable';
+  const rainfallStatus = String(safetyData?.rainfall?.status || '').toLowerCase();
+  const rainfallDataAvailable = rainfallStatus === 'ok' || rainfallStatus === 'partial';
+  const rainfallNoteLine =
+    (typeof safetyData?.rainfall?.note === 'string' && safetyData.rainfall.note.trim()) ||
+    (rainfallDataAvailable
+      ? safetyData?.rainfall?.mode === 'projected_for_selected_start'
+        ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
+        : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.'
+      : 'Rolling rain/snow totals unavailable for this objective/time.');
   const precipInsightLine = (() => {
     const rain24 = Number.isFinite(rainfall24hIn) ? rainfall24hIn : null;
     const snow24 = Number.isFinite(snowfall24hIn) ? snowfall24hIn : null;
+    const hasAny24hSignal = rain24 !== null || snow24 !== null;
+    const no24hPrecipSignal =
+      hasAny24hSignal &&
+      (rain24 === null || rain24 <= 0.01) &&
+      (snow24 === null || snow24 <= 0.01);
     if (rain24 !== null && rain24 >= 0.6 && snow24 !== null && snow24 >= 2) {
       return `Mixed precip signal: 24h rain ${rainfall24hDisplay} plus 24h snow ${snowfall24hDisplay}.`;
     }
@@ -3982,6 +4227,9 @@ function App() {
     }
     if (snow24 !== null && snow24 >= 1.5) {
       return `Moderate snow signal: 24h snow ${snowfall24hDisplay}. Patchy fresh snow likely.`;
+    }
+    if (no24hPrecipSignal) {
+      return `No recent precip signal: 24h rain ${rainfall24hDisplay} • 24h snow ${snowfall24hDisplay}.`;
     }
     if (rain24 !== null || snow24 !== null) {
       return `Light recent precip: 24h rain ${rainfall24hDisplay} • 24h snow ${snowfall24hDisplay}.`;
@@ -4019,6 +4267,40 @@ function App() {
   const snowpackInsights = safetyData
     ? buildSnowpackInsights(safetyData.snowpack, Number(safetyData.weather?.elevation), preferences.elevationUnit)
     : null;
+  const snowpackTakeaways = (() => {
+    if (!safetyData) {
+      return [] as string[];
+    }
+    const notes: string[] = [];
+    if (!snowpackMetricAvailable) {
+      notes.push('No reliable snowpack metrics returned. Keep uncertainty high and verify terrain conditions directly.');
+      return notes;
+    }
+
+    if (lowBroadSnowSignal) {
+      notes.push('Broad snow signal is minimal. Non-snow travel is more likely, but shaded gullies and icy pockets can persist.');
+    } else if (maxSnowDepthSignalIn >= 24 || maxSnowSweSignalIn >= 8) {
+      notes.push('Substantial snowpack signal exists. Assume avalanche terrain remains consequential at and above treeline.');
+    } else {
+      notes.push('Measurable snowpack is present. Expect mixed coverage and elevation-dependent conditions.');
+    }
+
+    if (Number.isFinite(snowfall24hIn) && snowfall24hIn >= 4) {
+      notes.push(`Recent snowfall is meaningful (${snowfall24hDisplay} in 24h). Treat prior tracks and old assumptions as stale.`);
+    } else if (Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.5 && maxSnowDepthSignalIn >= 4) {
+      notes.push(`Rain-on-snow signal (${rainfall24hDisplay} rain in 24h) can rapidly weaken surface conditions.`);
+    }
+
+    if (snowpackInsights?.agreement.tone === 'warn') {
+      notes.push('SNOTEL and NOHRSC disagree strongly. Plan for localized variability and confirm conditions as you move.');
+    } else if (snowpackInsights?.representativeness.tone === 'warn') {
+      notes.push('Nearest SNOTEL may not represent your objective well due to distance/elevation mismatch.');
+    } else if (snowpackInsights?.freshness.tone === 'warn') {
+      notes.push('Snowpack timestamps are stale. Re-check center products before departure.');
+    }
+
+    return notes.slice(0, 3);
+  })();
   const snowpackObservationContext = safetyData
     ? (() => {
         const parts = [
@@ -4080,6 +4362,19 @@ function App() {
   const heatRiskMetrics = safetyData?.heatRisk?.metrics || {};
   const weatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '';
   const weatherWithEmoji = safetyData ? `${weatherEmoji} ${safetyData.weather.description}` : '';
+  const mapWeatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '🌤️';
+  const mapWeatherTempLabel = safetyData ? formatTempDisplay(safetyData.weather.temp) : loading ? 'Loading…' : 'N/A';
+  const mapWeatherConditionLabel = safetyData
+    ? truncateText(safetyData.weather.description || 'Conditions unavailable', 34)
+    : loading
+      ? 'Fetching forecast'
+      : 'Conditions unavailable';
+  const mapWeatherChipTitle = safetyData
+    ? [
+        `${formatTempDisplay(safetyData.weather.temp)} (feels ${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)})`,
+        safetyData.weather.description || 'Conditions unavailable',
+      ].join(' • ')
+    : 'Forecast not loaded';
   const forecastPeriodLabel = safetyData
     ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
     : 'Not available';
@@ -5035,21 +5330,6 @@ function App() {
               </div>
             </article>
 
-            <article className="settings-card">
-              <h3>Avalanche checks</h3>
-              <p>Control whether avalanche conditions are enforced as a required decision gate.</p>
-              <div className="settings-time-row">
-                <label className="settings-toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={preferences.requireAvalancheCheck}
-                    onChange={(e) => updatePreferences({ requireAvalancheCheck: e.target.checked })}
-                  />
-                  <span>Require avalanche condition check in decision gate</span>
-                </label>
-              </div>
-            </article>
-
             <article className="settings-card settings-card-full">
               <h3>Actions</h3>
               <p>Preferences are saved in your browser and stay on this device.</p>
@@ -5062,7 +5342,7 @@ function App() {
                 </button>
               </div>
               <div className="settings-note">
-                Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay} • Avalanche check {preferences.requireAvalancheCheck ? 'On' : 'Off'}
+                Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay}
               </div>
             </article>
           </div>
@@ -5291,20 +5571,6 @@ function App() {
             </button>
 
             <label className="date-control compact">
-              <span>Target elev ({elevationUnitLabel})</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                aria-label={`Target elevation in ${elevationUnitLabel}`}
-                title={`Optional elevation to estimate weather at that altitude (${elevationUnitLabel}).`}
-                placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
-                value={targetElevationInput}
-                onChange={handleTargetElevationChange}
-              />
-            </label>
-
-            <label className="date-control compact">
               <span>
                 <Layers size={13} /> Map
               </span>
@@ -5329,6 +5595,15 @@ function App() {
             <span className="map-coords">
               {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
             </span>
+            {hasObjective && (
+              <span className={`map-weather-chip ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
+                <span className="map-weather-chip-emoji" aria-hidden="true">
+                  {mapWeatherEmoji}
+                </span>
+                <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
+                <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
+              </span>
+            )}
 
             <div className="map-link-group">
               <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
@@ -5732,17 +6007,29 @@ function App() {
                   </div>
                 </div>
 
-                {hasTargetElevation && (
-                  <section className="elevation-forecast" aria-label="Target elevation forecast">
-                    <div className="elevation-forecast-head">
-                      <h4>Target Elevation Forecast</h4>
-                      <span>{formatElevationDisplay(targetElevationFt)}</span>
-                    </div>
-                    {targetElevationForecast ? (
+                <section className="elevation-forecast" aria-label="Target elevation forecast">
+                  <div className="elevation-forecast-head">
+                    <h4>Target Elevation Forecast</h4>
+                    <label className="target-elev-inline-control">
+                      <span>Target ({elevationUnitLabel})</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        aria-label={`Target elevation in ${elevationUnitLabel}`}
+                        title={`Optional elevation to estimate weather at that altitude (${elevationUnitLabel}).`}
+                        placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
+                        value={targetElevationInput}
+                        onChange={handleTargetElevationChange}
+                      />
+                    </label>
+                  </div>
+                  {hasTargetElevation ? (
+                    targetElevationForecast ? (
                       <article className="elevation-row">
                         <div className="elevation-row-main">
                           <strong>Estimated at target elevation</strong>
-                          <span>{formatElevationDeltaDisplay(targetElevationForecast.deltaFt)} vs objective</span>
+                          <span>{formatElevationDisplay(targetElevationFt)} • {formatElevationDeltaDisplay(targetElevationForecast.deltaFt)} vs objective</span>
                         </div>
                         <div className="elevation-row-metrics">
                           <span>{formatTempDisplay(targetElevationForecast.temp)}</span>
@@ -5753,9 +6040,11 @@ function App() {
                       </article>
                     ) : (
                       <p className="muted-note">Objective elevation is unavailable, so target elevation estimate cannot be generated.</p>
-                    )}
-                  </section>
-                )}
+                    )
+                  ) : (
+                    <p className="muted-note">Set a target elevation to estimate temperature, wind, and feels-like conditions at that altitude.</p>
+                  )}
+                </section>
 
                 {safetyData.weather.sourceDetails?.blended && (
                   <p className="muted-note">
@@ -5946,7 +6235,7 @@ function App() {
                   </div>
                 </div>
                 <p className="muted-note">
-                  {safetyData.rainfall?.note || 'Rolling rain/snow totals unavailable for this objective/time.'}
+                  {rainfallNoteLine}
                 </p>
                 <p className="muted-note">
                   Source:{' '}
@@ -6228,7 +6517,7 @@ function App() {
                 <div className="card-header">
                   <span className="card-title">
                     <Mountain size={14} /> Snowpack Snapshot
-                    <HelpHint text="Observed snowpack context from nearest SNOTEL station and NOAA NOHRSC snow analysis grid at the objective point." />
+                    <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC at your objective." />
                   </span>
                   <span className={`decision-pill ${snowpackPillClass}`}>
                     {snowpackStatusLabel}
@@ -6274,6 +6563,22 @@ function App() {
                       <strong>{snowpackInsights.representativeness.label}</strong>
                       <small>{snowpackInsights.representativeness.detail}</small>
                     </div>
+                    <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.agreement.tone}`}>
+                      <span className="stat-label">Agreement</span>
+                      <strong>{snowpackInsights.agreement.label}</strong>
+                      <small>{snowpackInsights.agreement.detail}</small>
+                    </div>
+                  </div>
+                )}
+
+                {snowpackTakeaways.length > 0 && (
+                  <div className="snowpack-takeaways">
+                    <span className="snowpack-takeaway-title">How To Use This Snapshot</span>
+                    <ul className="signal-list compact">
+                      {snowpackTakeaways.map((item, idx) => (
+                        <li key={`snowpack-takeaway-${idx}`}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 
