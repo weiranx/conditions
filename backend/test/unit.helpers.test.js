@@ -949,3 +949,39 @@ test('calculateSafetyScore applies lower score for future start due forecast unc
   expect(futureResult.score).toBeLessThan(nearResult.score);
   expect(futureResult.explanations.some((line) => /fewer real-time feeds can be projected/i.test(String(line)))).toBe(true);
 });
+
+test('calculateSafetyScore does not apply darkness penalty for pre-sunrise alpine starts', () => {
+  const sharedInputs = {
+    weatherData: {
+      description: 'Mostly Clear',
+      windSpeed: 5,
+      windGust: 8,
+      precipChance: 5,
+      humidity: 40,
+      temp: 34,
+      feelsLike: 28,
+      isDaytime: false,
+      forecastStartTime: '2026-02-20T04:30:00-08:00',
+      trend: [],
+    },
+    avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
+    alertsData: { status: 'none', activeCount: 0, alerts: [] },
+    airQualityData: { status: 'ok', usAqi: 25, category: 'Good' },
+    fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
+    selectedDate: '2026-02-20',
+    solarData: { sunrise: '6:48:21 AM', sunset: '5:44:50 PM' },
+  };
+
+  const preSunriseResult = calculateSafetyScore({
+    ...sharedInputs,
+    selectedStartClock: '04:30',
+  });
+  const afterDarkResult = calculateSafetyScore({
+    ...sharedInputs,
+    selectedStartClock: '19:30',
+  });
+
+  expect(preSunriseResult.factors.some((factor) => String(factor.hazard).toLowerCase() === 'darkness')).toBe(false);
+  expect(afterDarkResult.factors.some((factor) => String(factor.hazard).toLowerCase() === 'darkness')).toBe(true);
+  expect(preSunriseResult.score).toBeGreaterThan(afterDarkResult.score);
+});

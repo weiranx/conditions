@@ -288,6 +288,48 @@ const hourLabelFromIso = (input, timeZone = null) => {
   }
 };
 
+const parseClockToMinutes = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const twentyFourHourMatch = trimmed.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (twentyFourHourMatch) {
+    return Number(twentyFourHourMatch[1]) * 60 + Number(twentyFourHourMatch[2]);
+  }
+
+  const twelveHourMatch = trimmed.match(/^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?\s*([AP]M)$/i);
+  if (!twelveHourMatch) {
+    return null;
+  }
+
+  const hourRaw = Number(twelveHourMatch[1]);
+  const minute = Number(twelveHourMatch[2]);
+  if (!Number.isFinite(hourRaw) || hourRaw < 1 || hourRaw > 12) {
+    return null;
+  }
+
+  const meridiem = String(twelveHourMatch[4] || '').toUpperCase();
+  const hour = (hourRaw % 12) + (meridiem === 'PM' ? 12 : 0);
+  return hour * 60 + minute;
+};
+
+const parseIsoClockMinutes = (isoValue) => {
+  if (typeof isoValue !== 'string') {
+    return null;
+  }
+  const match = isoValue.trim().match(/T(\d{2}):(\d{2})/);
+  if (!match) {
+    return null;
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
 const OPEN_METEO_WEATHER_HOURLY_FIELDS = [
   'temperature_2m',
   'dew_point_2m',
@@ -1254,7 +1296,8 @@ const buildOpenMeteoRainfallApiUrl = (host, lat, lon) => {
     longitude: String(lon),
     timezone: 'UTC',
     past_days: '3',
-    forecast_days: '3',
+    // Keep this at/above the planner horizon so selected future start times still get precip totals.
+    forecast_days: '8',
     hourly: 'precipitation,rain,snowfall',
   });
   return `https://${host}/v1/forecast?${params.toString()}`;
@@ -1332,7 +1375,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const snowWindowCm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, snowfallArray, expectedStartMs, expectedWindowHours);
   const expectedEndMs = expectedStartMs === null ? null : expectedStartMs + expectedWindowHours * 60 * 60 * 1000;
   const expectedEndTime = expectedEndMs === null ? null : new Date(expectedEndMs).toISOString();
-  const expectedHasAnyTotals = [rainWindowMm, snowWindowCm].some((value) => Number.isFinite(Number(value)));
+  const expectedHasAnyTotals = [rainWindowMm, snowWindowCm].some((value) => Number.isFinite(value));
   const mode = targetTimeMs > Date.now() + 60 * 60 * 1000 ? 'projected_for_selected_start' : 'observed_recent';
   const hasAnyTotals = [
     rainPast12hMm,
@@ -1341,7 +1384,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
     snowPast12hCm,
     snowPast24hCm,
     snowPast48hCm,
-  ].some((value) => Number.isFinite(Number(value)));
+  ].some((value) => Number.isFinite(value));
 
   return {
     source: 'Open-Meteo Precipitation History (Rain + Snowfall)',
@@ -1394,7 +1437,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   };
 };
 
-const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQualityData, fireRiskData, selectedDate }) => {
+const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQualityData, fireRiskData, selectedDate, solarData, selectedStartClock }) => {
   const explanations = [];
   const factors = [];
   const groupCaps = {
@@ -1455,6 +1498,13 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
   const trendGusts = trend.map((item) => Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind)).filter(Number.isFinite);
   const tempRange = trendTemps.length ? Math.max(...trendTemps) - Math.min(...trendTemps) : 0;
   const trendPeakGust = trendGusts.length ? Math.max(...trendGusts) : Number.isFinite(gust) ? gust : 0;
+  const sunriseMinutes = parseClockToMinutes(solarData?.sunrise);
+  const selectedStartMinutes = parseClockToMinutes(selectedStartClock) ?? parseIsoClockMinutes(weatherData?.forecastStartTime);
+  const isNightBeforeSunrise =
+    isDaytime === false
+    && Number.isFinite(selectedStartMinutes)
+    && Number.isFinite(sunriseMinutes)
+    && selectedStartMinutes < sunriseMinutes;
   const forecastStartMs = parseIsoTimeToMs(weatherData?.forecastStartTime);
   const selectedDateMs =
     typeof selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)
@@ -1527,7 +1577,7 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
     applyFactor('Heat', 6, `Warm and humid conditions (${tempF}F, ${humidity}% RH) can degrade pace and recovery.`, 'NOAA temperature + humidity');
   }
 
-  if (isDaytime === false) {
+  if (isDaytime === false && !isNightBeforeSunrise) {
     applyFactor('Darkness', 5, 'Selected forecast period is nighttime, reducing navigation margin and terrain visibility.', 'NOAA isDaytime flag');
   }
 
@@ -2820,7 +2870,16 @@ const safetyHandler = async (req, res) => {
       fireRiskData,
     });
 
-    const analysis = calculateSafetyScore({ weatherData, avalancheData, alertsData, airQualityData, fireRiskData, selectedDate: selectedForecastDate });
+    const analysis = calculateSafetyScore({
+      weatherData,
+      avalancheData,
+      alertsData,
+      airQualityData,
+      fireRiskData,
+      selectedDate: selectedForecastDate,
+      solarData,
+      selectedStartClock: requestedStartClock,
+    });
     const todayDate = new Date().toISOString().slice(0, 10);
     const avalancheSummaryForAi = avalancheData.relevant === false
       ? `Avalanche hazard is de-emphasized for this objective (${avalancheData.relevanceReason || 'low snow relevance'}).`
@@ -2931,6 +2990,8 @@ const safetyHandler = async (req, res) => {
       airQualityData: safeAirQualityData,
       fireRiskData: safeFireRiskData,
       selectedDate: fallbackSelectedDate,
+      solarData,
+      selectedStartClock: requestedStartClock,
     });
 
     const avalancheSummaryForAi = safeAvalancheData.relevant === false

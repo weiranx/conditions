@@ -422,7 +422,7 @@ interface SummitDecision {
   headline: string;
   blockers: string[];
   cautions: string[];
-  checks: { label: string; ok: boolean; detail?: string }[];
+  checks: { key?: string; label: string; ok: boolean; detail?: string; action?: string }[];
 }
 
 interface SnowpackInterpretation {
@@ -2397,82 +2397,134 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
 
   const checks: SummitDecision['checks'] = [
     {
-      label: avalancheCheckLabel('Moderate or lower'),
+      key: 'avalanche',
+      label: avalancheGateRequired ? 'Avalanche danger is Moderate or lower' : avalancheCheckLabel('Moderate or lower'),
       ok: avalancheGateRequired ? (!avalancheUnknown && danger <= 2) : true,
       detail: !avalancheRelevant
         ? 'Not required by current seasonal and snowpack profile.'
         : avalancheUnknown
-          ? 'Coverage unavailable.'
-          : `Current danger level ${danger}.`,
+          ? 'Coverage unavailable for this objective/time.'
+          : `Current danger level ${normalizeDangerLevel(danger)}.`,
+      action:
+        avalancheGateRequired && avalancheUnknown
+          ? 'Use conservative, low-consequence terrain until a current bulletin is available.'
+          : avalancheGateRequired && danger > 2
+            ? 'Choose lower-angle terrain or delay until hazard rating drops.'
+            : undefined,
     },
     {
-      label: 'No thunderstorm or lightning signal in forecast',
+      key: 'convective-signal',
+      label: 'No convective storm signal (thunder/lightning/hail)',
       ok: !hasStormSignal,
       detail: hasStormSignal
         ? `Convective risk keywords detected in forecast text: ${normalizedConditionText}.`
-        : `Current condition: ${normalizedConditionText} (non-convective).`,
+        : `Forecast text: ${normalizedConditionText}. No convective keywords detected.`,
+      action: hasStormSignal ? 'Avoid exposed ridgelines and move to lower-consequence terrain windows.' : undefined,
     },
-    { label: `Precipitation chance is under ${maxPrecipThreshold}%`, ok: precip < maxPrecipThreshold, detail: `Now ${precip}%` },
-    { label: `Wind gusts are under ${displayMaxGustThreshold}`, ok: gust < maxGustThreshold, detail: `Now ${formatWind(gust)}` },
     {
+      key: 'precipitation',
+      label: `Precipitation chance is under ${maxPrecipThreshold}%`,
+      ok: precip < maxPrecipThreshold,
+      detail: `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
+      action: precip >= maxPrecipThreshold ? 'Expect slower travel and reduced traction; tighten route and timing.' : undefined,
+    },
+    {
+      key: 'wind-gust',
+      label: `Wind gusts are under ${displayMaxGustThreshold}`,
+      ok: gust < maxGustThreshold,
+      detail: `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
+      action: gust >= maxGustThreshold ? 'Reduce ridge exposure and shorten high-wind segments.' : undefined,
+    },
+    {
+      key: 'daylight',
       label: 'Start time is at least 30 min before sunset',
       ok: daylightOkay,
-      detail: hasDaylightInputs ? `${cutoffTime} start • ${data.solar.sunset} sunset • ${daylightMarginMinutes} min margin` : 'Start or sunset time unavailable.',
+      detail: hasDaylightInputs
+        ? `${cutoffTime} start • ${data.solar.sunset} sunset • ${
+            daylightMarginMinutes === null
+              ? 'margin unavailable'
+              : daylightMarginMinutes < 0
+                ? `${Math.abs(daylightMarginMinutes)} min after sunset`
+                : `${daylightMarginMinutes} min margin`
+          }`
+        : 'Start or sunset time unavailable.',
+      action:
+        hasDaylightInputs && !daylightOkay
+          ? 'Move start earlier or shorten the plan to preserve at least 30 minutes of daylight margin.'
+          : undefined,
     },
-    { label: `Apparent temperature is above ${displayMinFeelsLikeThreshold}`, ok: feelsLike > minFeelsLikeThreshold, detail: `Now ${formatTemp(feelsLike)}` },
+    {
+      key: 'feels-like',
+      label: `Apparent temperature is above ${displayMinFeelsLikeThreshold}`,
+      ok: feelsLike > minFeelsLikeThreshold,
+      detail: `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
+      action: feelsLike <= minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
+    },
   ];
 
   if (alertsRelevantForSelectedStart && hasActiveAlertCount) {
     checks.push({
+      key: 'nws-alerts',
       label: 'No active NWS alerts at selected start time',
       ok: activeAlertCount === 0,
       detail:
         activeAlertCount === 0
           ? 'No active alerts.'
           : `${activeAlertCount} active • highest severity ${highestAlertSeverity}.`,
+      action: activeAlertCount > 0 ? 'Open alert details and verify your route is outside affected zones/time windows.' : undefined,
     });
   }
 
   if (hasAqi) {
     checks.push({
+      key: 'air-quality',
       label: 'Air quality is <= 100 AQI',
       ok: aqi <= 100,
       detail: `Current AQI ${Math.round(aqi)} (${data.airQuality?.category || 'Unknown'}).`,
+      action: aqi > 100 ? 'Reduce exertion, carry respiratory protection, or pick a cleaner-air objective.' : undefined,
     });
   }
 
   if (hasFireRisk) {
     checks.push({
+      key: 'fire-risk',
       label: 'Fire risk is below High (L3+)',
       ok: fireRiskLevel < 3,
       detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})`,
+      action: fireRiskLevel >= 3 ? 'Avoid fire-restricted areas and plan low-spark/no-flame operations.' : undefined,
     });
   }
 
   if (hasHeatRisk) {
     checks.push({
+      key: 'heat-risk',
       label: 'Heat risk is below High (L3+)',
       ok: heatRiskLevel < 3,
       detail: `${data.heatRisk?.label || 'Unknown'} (${Number.isFinite(heatRiskLevel) ? `L${Math.round(heatRiskLevel)}` : 'L?'})`,
+      action: heatRiskLevel >= 3 ? 'Shift to cooler hours/elevations and increase hydration/cooling controls.' : undefined,
     });
   }
 
   if (terrainCode) {
     checks.push({
-      label: 'Terrain / trail signal is available (surface is advisory)',
+      key: 'terrain-signal',
+      label: 'Terrain / trail surface signal is available',
       ok: !terrainCriticalGateFail,
       detail: terrainCriticalGateFail
         ? 'Surface/trail classification unavailable from current weather inputs.'
         : terrainConfidence
           ? `${terrainLabel} • confidence ${terrainConfidence} • use as advisory context, not a hard gate.`
           : `${terrainLabel} • use as advisory context, not a hard gate.`,
+      action: terrainCriticalGateFail ? 'Use field observations for traction/surface risk since model signal is unavailable.' : undefined,
     });
   }
 
   checks.push({
+    key: 'source-freshness',
     label: 'Core source freshness has no stale/missing feeds',
     ok: freshnessIssues.length === 0,
     detail: freshnessIssues.length === 0 ? 'Timestamps are current enough for active feeds.' : `Issue: ${freshnessIssues.join(', ')}.`,
+    action: freshnessIssues.length > 0 ? 'Refresh and verify upstream official products before committing.' : undefined,
   });
 
   let level: DecisionLevel = 'GO';
@@ -4050,6 +4102,7 @@ function App() {
   const failedCriticalChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
   const passedCriticalChecks = decision ? decision.checks.filter((check) => check.ok) : [];
   const orderedCriticalChecks = [...failedCriticalChecks, ...passedCriticalChecks];
+  const topCriticalAttentionChecks = failedCriticalChecks.slice(0, 3);
   const criticalCheckTotal = orderedCriticalChecks.length;
   const criticalCheckPassCount = passedCriticalChecks.length;
   const criticalCheckFailCount = failedCriticalChecks.length;
@@ -5998,7 +6051,7 @@ function App() {
                       <CheckCircle2 size={14} /> Check outcomes
                     </h4>
                     <ul className="signal-list compact">
-                      {decision.checks.map((check, idx) => (
+                      {orderedCriticalChecks.map((check, idx) => (
                         <li key={`${check.label}-${idx}`}>
                           <strong>{check.ok ? 'PASS' : 'ATTN'}:</strong> {localizeUnitText(check.label)}
                           {check.detail ? ` - ${localizeUnitText(check.detail)}` : ''}
@@ -6194,6 +6247,19 @@ function App() {
                     {criticalCheckPassCount}/{criticalCheckTotal} passing
                   </span>
                 </div>
+                {topCriticalAttentionChecks.length > 0 && (
+                  <div className="checks-attention" role="status" aria-live="polite">
+                    <strong className="checks-attention-title">Needs attention now</strong>
+                    <ul className="checks-attention-list">
+                      {topCriticalAttentionChecks.map((check, idx) => (
+                        <li key={`${check.key || check.label}-${idx}`}>
+                          <span className="checks-attention-label">{localizeUnitText(check.label)}</span>
+                          <small>{localizeUnitText(check.action || check.detail || 'Review this signal before departure.')}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="checks-summary">
                   <span className={`checks-summary-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>
                     {criticalCheckFailCount === 0 ? 'Ready' : `${criticalCheckFailCount} attention`}
@@ -6211,6 +6277,7 @@ function App() {
                           <span>{check.label}</span>
                         </div>
                         {check.detail && <small className="check-item-detail">{localizeUnitText(check.detail)}</small>}
+                        {!check.ok && check.action && <small className="check-item-action">{localizeUnitText(check.action)}</small>}
                       </div>
                       <span className={`check-item-status ${check.ok ? 'ok' : 'warn'}`}>{check.ok ? 'PASS' : 'ATTN'}</span>
                     </div>
