@@ -657,6 +657,17 @@ const createUnavailableRainfallData = (status = 'unavailable') => ({
   issuedTime: null,
   anchorTime: null,
   timezone: null,
+  expected: {
+    status: 'unavailable',
+    travelWindowHours: null,
+    startTime: null,
+    endTime: null,
+    rainWindowMm: null,
+    rainWindowIn: null,
+    snowWindowCm: null,
+    snowWindowIn: null,
+    note: null,
+  },
   totals: {
     rainPast12hMm: null,
     rainPast24hMm: null,
@@ -1000,14 +1011,6 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
 
 const fetchWeatherAlertsData = async (lat, lon, fetchOptions, targetTimeIso = null) => {
   const targetTimeMs = parseIsoTimeToMs(targetTimeIso) ?? Date.now();
-  const nowMs = Date.now();
-  if (targetTimeMs > nowMs + 60 * 60 * 1000) {
-    return {
-      ...createUnavailableAlertsData('future_time_not_supported'),
-      targetTime: targetTimeIso || null,
-      note: 'NWS active alerts are current-state products and cannot forecast future alert issuance.',
-    };
-  }
 
   const alertsRes = await fetchWithTimeout(
     `https://api.weather.gov/alerts/active?point=${lat},${lon}`,
@@ -1020,7 +1023,10 @@ const fetchWeatherAlertsData = async (lat, lon, fetchOptions, targetTimeIso = nu
   const alertsJson = await alertsRes.json();
   const features = Array.isArray(alertsJson?.features) ? alertsJson.features : [];
   if (features.length === 0) {
-    return createUnavailableAlertsData('none');
+    return {
+      ...createUnavailableAlertsData('none'),
+      targetTime: targetTimeIso || null,
+    };
   }
 
   const alertsActiveAtTarget = features.filter((feature) => {
@@ -1041,6 +1047,7 @@ const fetchWeatherAlertsData = async (lat, lon, fetchOptions, targetTimeIso = nu
       ...createUnavailableAlertsData('none_for_selected_start'),
       totalActiveCount: features.length,
       targetTime: targetTimeIso || null,
+      note: 'No currently issued alert is active at the selected start time.',
     };
   }
 
@@ -1153,6 +1160,60 @@ const sumRollingAccumulation = (timeArray, valuesArray, anchorMs, lookbackHours)
   return sampleCount > 0 ? Number(total.toFixed(1)) : null;
 };
 
+const seriesHasFiniteValues = (series) => Array.isArray(series) && series.some((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
+
+const sumForwardAccumulation = (timeArray, valuesArray, startMs, windowHours) => {
+  if (!Array.isArray(timeArray) || !Array.isArray(valuesArray) || !Number.isFinite(startMs) || !Number.isFinite(windowHours) || windowHours <= 0) {
+    return null;
+  }
+
+  const upperBoundMs = startMs + windowHours * 60 * 60 * 1000;
+  let total = 0;
+  let sampleCount = 0;
+
+  for (let idx = 0; idx < timeArray.length; idx += 1) {
+    const sampleMs = parseIsoTimeToMs(timeArray[idx]);
+    if (sampleMs === null || sampleMs < startMs || sampleMs >= upperBoundMs) {
+      continue;
+    }
+    const value = Number(valuesArray[idx]);
+    if (!Number.isFinite(value) || value < 0) {
+      continue;
+    }
+    total += value;
+    sampleCount += 1;
+  }
+
+  return sampleCount > 0 ? Number(total.toFixed(1)) : null;
+};
+
+const findFirstTimeIndexAtOrAfter = (timeArray, targetTimeMs) => {
+  if (!Array.isArray(timeArray) || !timeArray.length || !Number.isFinite(targetTimeMs)) {
+    return -1;
+  }
+  let bestIdx = -1;
+  let bestMs = Number.POSITIVE_INFINITY;
+  for (let idx = 0; idx < timeArray.length; idx += 1) {
+    const sampleMs = parseIsoTimeToMs(timeArray[idx]);
+    if (sampleMs === null || sampleMs < targetTimeMs) {
+      continue;
+    }
+    if (sampleMs < bestMs) {
+      bestMs = sampleMs;
+      bestIdx = idx;
+    }
+  }
+  return bestIdx;
+};
+
+const clampTravelWindowHours = (rawValue, fallback = 12) => {
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.max(1, Math.min(48, Math.round(numeric)));
+};
+
 const mmToInches = (valueMm) => {
   const numeric = Number(valueMm);
   if (!Number.isFinite(numeric)) {
@@ -1201,7 +1262,7 @@ const buildOpenMeteoRainfallApiUrl = (host, lat, lon) => {
 
 const buildOpenMeteoRainfallSourceLink = (lat, lon) => buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon);
 
-const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, fetchOptions) => {
+const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWindowHours, fetchOptions) => {
   const apiUrls = [
     buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon),
     buildOpenMeteoRainfallApiUrl('customer-api.open-meteo.com', lat, lon),
@@ -1250,22 +1311,58 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, fetchOpt
 
   const anchorTime = timeArray[anchorIdx] || null;
   const anchorMs = parseIsoTimeToMs(anchorTime) ?? targetTimeMs;
-  const rainSeries = rainArray.length ? rainArray : precipArray;
+  const rainSeries = seriesHasFiniteValues(rainArray)
+    ? rainArray
+    : seriesHasFiniteValues(precipArray)
+      ? precipArray
+      : rainArray.length
+        ? rainArray
+        : precipArray;
   const rainPast12hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 12);
   const rainPast24hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 24);
   const rainPast48hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 48);
   const snowPast12hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 12);
   const snowPast24hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 24);
   const snowPast48hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 48);
+  const expectedWindowHours = clampTravelWindowHours(travelWindowHours, 12);
+  const expectedStartIdx = findFirstTimeIndexAtOrAfter(timeArray, targetTimeMs);
+  const expectedStartTime = expectedStartIdx >= 0 ? timeArray[expectedStartIdx] : null;
+  const expectedStartMs = parseIsoTimeToMs(expectedStartTime);
+  const rainWindowMm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, rainSeries, expectedStartMs, expectedWindowHours);
+  const snowWindowCm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, snowfallArray, expectedStartMs, expectedWindowHours);
+  const expectedEndMs = expectedStartMs === null ? null : expectedStartMs + expectedWindowHours * 60 * 60 * 1000;
+  const expectedEndTime = expectedEndMs === null ? null : new Date(expectedEndMs).toISOString();
+  const expectedHasAnyTotals = [rainWindowMm, snowWindowCm].some((value) => Number.isFinite(Number(value)));
   const mode = targetTimeMs > Date.now() + 60 * 60 * 1000 ? 'projected_for_selected_start' : 'observed_recent';
+  const hasAnyTotals = [
+    rainPast12hMm,
+    rainPast24hMm,
+    rainPast48hMm,
+    snowPast12hCm,
+    snowPast24hCm,
+    snowPast48hCm,
+  ].some((value) => Number.isFinite(Number(value)));
 
   return {
     source: 'Open-Meteo Precipitation History (Rain + Snowfall)',
-    status: 'ok',
+    status: hasAnyTotals ? 'ok' : 'no_data',
     mode,
     issuedTime: anchorTime,
     anchorTime,
     timezone: rainfallJson?.timezone || 'UTC',
+    expected: {
+      status: expectedHasAnyTotals ? 'ok' : 'no_data',
+      travelWindowHours: expectedWindowHours,
+      startTime: expectedStartTime,
+      endTime: expectedEndTime,
+      rainWindowMm,
+      rainWindowIn: mmToInches(rainWindowMm),
+      snowWindowCm,
+      snowWindowIn: cmToInches(snowWindowCm),
+      note: expectedHasAnyTotals
+        ? `Expected precipitation totals for the next ${expectedWindowHours}h from selected start time.`
+        : `Expected precipitation totals unavailable for the next ${expectedWindowHours}h from selected start time.`,
+    },
     totals: {
       rainPast12hMm,
       rainPast24hMm,
@@ -1288,9 +1385,11 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, fetchOpt
       past48hIn: mmToInches(rainPast48hMm),
     },
     note:
-      mode === 'projected_for_selected_start'
-        ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
-        : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.',
+      hasAnyTotals
+        ? mode === 'projected_for_selected_start'
+          ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
+          : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.'
+        : 'Precipitation timeseries exists but rolling totals were not computable for this anchor window.',
     link: buildOpenMeteoRainfallSourceLink(lat, lon),
   };
 };
@@ -1340,7 +1439,7 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
   const avalancheProblemCount = Array.isArray(avalancheData?.problems) ? avalancheData.problems.length : 0;
 
   const alertsStatus = String(alertsData?.status || '');
-  const alertsRelevantForSelectedTime = alertsStatus !== 'future_time_not_supported';
+  const alertsRelevantForSelectedTime = true;
   const alertsCount = Number(alertsData?.activeCount);
   const highestAlertSeverity = normalizeAlertSeverity(alertsData?.highestSeverity);
   const alertEvents =
@@ -1969,7 +2068,7 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
 };
 
 const safetyHandler = async (req, res) => {
-  const { lat, lon, date, start } = req.query;
+  const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours } = req.query;
 
   if (!lat || !lon) {
     return res.status(400).json({ error: 'Latitude and longitude are required' });
@@ -1986,6 +2085,10 @@ const safetyHandler = async (req, res) => {
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
   }
   const requestedStartClock = parseStartClock(typeof start === 'string' ? start : '');
+  const requestedTravelWindowHours = clampTravelWindowHours(
+    typeof travelWindowHoursRaw === 'string' ? travelWindowHoursRaw : typeof travelWindowHours === 'string' ? travelWindowHours : null,
+    12,
+  );
 
   // Pre-initialize everything to avoid "access before initialization" errors
   let avalancheData = createUnknownAvalancheData("no_center_coverage");
@@ -2651,7 +2754,7 @@ const safetyHandler = async (req, res) => {
     const [alertsResult, airQualityResult, rainfallResult, snowpackResult] = await Promise.allSettled([
       fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso),
       fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions),
-      fetchRecentRainfallData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions),
+      fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions),
       fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
     ]);
 

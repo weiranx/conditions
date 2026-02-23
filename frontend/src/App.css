@@ -2076,6 +2076,12 @@ input {
   line-height: 1.45;
 }
 
+.precip-insight-line.expected {
+  margin-top: -2px;
+  border-color: #d2d8cc;
+  background: #f2f7ee;
+}
+
 .precip-split-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2165,6 +2171,45 @@ input {
   margin-top: 4px;
   font-size: 0.92rem;
   font-family: var(--font-data);
+}
+
+.precip-expected-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #d8d4c7;
+  display: grid;
+  gap: 10px;
+}
+
+.precip-expected-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.precip-expected-title span {
+  color: #44564c;
+  font-size: 0.77rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.precip-expected-title strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #cfddcf;
+  background: #e8f3e8;
+  color: #2e6f44;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-family: var(--font-ui);
 }
 
 .snowpack-read {
@@ -4432,6 +4477,12 @@ input {
   color: #ccdae6;
 }
 
+:root[data-theme='dark'] .precip-insight-line.expected {
+  border-color: #3b5660;
+  background: #1a2f34;
+  color: #c9dfe3;
+}
+
 :root[data-theme='dark'] .precip-column {
   border-color: #355063;
   background: #1a2a36;
@@ -4456,6 +4507,20 @@ input {
 :root[data-theme='dark'] .precip-metric-highlight {
   border-color: #3d5467;
   background: rgba(16, 26, 35, 0.62);
+}
+
+:root[data-theme='dark'] .precip-expected-block {
+  border-top-color: #355063;
+}
+
+:root[data-theme='dark'] .precip-expected-title span {
+  color: #bfd2df;
+}
+
+:root[data-theme='dark'] .precip-expected-title strong {
+  border-color: #3f6e58;
+  background: #244738;
+  color: #d9efe3;
 }
 
 :root[data-theme='dark'] .published-chip {
@@ -5572,6 +5637,11 @@ input {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+  }
+
+  .precip-expected-title {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .target-elev-inline-control {

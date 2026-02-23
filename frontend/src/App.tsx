@@ -268,6 +268,17 @@ interface SafetyData {
     issuedTime?: string | null;
     anchorTime?: string | null;
     timezone?: string | null;
+    expected?: {
+      status?: string;
+      travelWindowHours?: number | null;
+      startTime?: string | null;
+      endTime?: string | null;
+      rainWindowMm?: number | null;
+      rainWindowIn?: number | null;
+      snowWindowCm?: number | null;
+      snowWindowIn?: number | null;
+      note?: string | null;
+    };
     totals?: {
       rainPast12hMm?: number | null;
       rainPast24hMm?: number | null;
@@ -2164,8 +2175,8 @@ function buildShareQuery(state: {
   return params.toString();
 }
 
-function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime: string): string {
-  return `${lat.toFixed(5)},${lon.toFixed(5)}@${date}@${startTime}`;
+function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime: string, travelWindowHours: number): string {
+  return `${lat.toFixed(5)},${lon.toFixed(5)}@${date}@${startTime}@w${travelWindowHours}`;
 }
 
 function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, preferences: UserPreferences): SummitDecision {
@@ -2695,7 +2706,11 @@ function App() {
     async (lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => {
       const safeDate = DATE_FMT.test(date) ? date : todayDate;
       const safeStartTime = parseTimeInputMinutes(startTime) === null ? preferences.defaultStartTime : startTime;
-      const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime);
+      const safeTravelWindowHours = Math.max(
+        MIN_TRAVEL_WINDOW_HOURS,
+        Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+      );
+      const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime, safeTravelWindowHours);
       const forceReload = options?.force === true;
 
       if (wakeRetryStateRef.current?.key && wakeRetryStateRef.current.key !== requestKey) {
@@ -2725,7 +2740,9 @@ function App() {
 
       try {
         const { response, payload, requestId } = await fetchApi(
-          `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(safeStartTime)}`,
+          `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(
+            safeStartTime,
+          )}&travel_window_hours=${safeTravelWindowHours}`,
         );
 
         if (!response.ok) {
@@ -2762,7 +2779,7 @@ function App() {
         }
       }
     },
-    [todayDate, preferences.defaultStartTime, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry],
+    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry],
   );
 
   useEffect(() => {
@@ -4242,6 +4259,23 @@ function App() {
   const snowfall12hDisplay = formatSnowfallAmountForElevationUnit(snowfall12hIn, snowfall12hCm, preferences.elevationUnit);
   const snowfall24hDisplay = formatSnowfallAmountForElevationUnit(snowfall24hIn, snowfall24hCm, preferences.elevationUnit);
   const snowfall48hDisplay = formatSnowfallAmountForElevationUnit(snowfall48hIn, snowfall48hCm, preferences.elevationUnit);
+  const rainfallExpected = safetyData?.rainfall?.expected || null;
+  const expectedTravelWindowHoursRaw = Number(rainfallExpected?.travelWindowHours);
+  const expectedTravelWindowHours = Number.isFinite(expectedTravelWindowHoursRaw) ? Math.max(1, Math.round(expectedTravelWindowHoursRaw)) : travelWindowHours;
+  const expectedRainWindowIn = parseOptionalFiniteNumber(rainfallExpected?.rainWindowIn);
+  const expectedRainWindowMm = parseOptionalFiniteNumber(rainfallExpected?.rainWindowMm);
+  const expectedSnowWindowIn = parseOptionalFiniteNumber(rainfallExpected?.snowWindowIn);
+  const expectedSnowWindowCm = parseOptionalFiniteNumber(rainfallExpected?.snowWindowCm);
+  const expectedRainWindowDisplay = formatRainAmountForElevationUnit(expectedRainWindowIn, expectedRainWindowMm, preferences.elevationUnit);
+  const expectedSnowWindowDisplay = formatSnowfallAmountForElevationUnit(expectedSnowWindowIn, expectedSnowWindowCm, preferences.elevationUnit);
+  const expectedPrecipDataAvailable =
+    Number.isFinite(expectedRainWindowIn) ||
+    Number.isFinite(expectedRainWindowMm) ||
+    Number.isFinite(expectedSnowWindowIn) ||
+    Number.isFinite(expectedSnowWindowCm);
+  const expectedPrecipSummaryLine = expectedPrecipDataAvailable
+    ? `Expected in next ${expectedTravelWindowHours}h: rain ${expectedRainWindowDisplay} • snow ${expectedSnowWindowDisplay}.`
+    : `Expected precipitation totals are unavailable for the next ${expectedTravelWindowHours}h window.`;
   const rainfallModeLabel =
     safetyData?.rainfall?.mode === 'projected_for_selected_start'
       ? 'Projected around selected start'
@@ -4257,6 +4291,9 @@ function App() {
         ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
         : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.'
       : 'Rolling rain/snow totals unavailable for this objective/time.');
+  const expectedPrecipNoteLine =
+    (typeof rainfallExpected?.note === 'string' && rainfallExpected.note.trim()) ||
+    `Expected precipitation totals for the next ${expectedTravelWindowHours}h from selected start time.`;
   const precipInsightLine = (() => {
     const rain24 = Number.isFinite(rainfall24hIn) ? rainfall24hIn : null;
     const snow24 = Number.isFinite(snowfall24hIn) ? snowfall24hIn : null;
@@ -6448,7 +6485,7 @@ function App() {
                 <div className="card-header">
                   <span className="card-title">
                     <CloudRain size={14} /> Recent Precipitation Totals
-                    <HelpHint text="Rolling precipitation split into rain and snowfall totals used to inform terrain/trail condition." />
+                    <HelpHint text="Observed rolling totals (past 12h/24h/48h) plus expected precipitation for your selected travel-window duration." />
                   </span>
                   <span className={`decision-pill ${rainfall24hSeverityClass}`}>
                     24h rain {rainfall24hDisplay}
@@ -6456,6 +6493,7 @@ function App() {
                   </span>
                 </div>
                 <p className="precip-insight-line">{precipInsightLine}</p>
+                <p className="precip-insight-line expected">{expectedPrecipSummaryLine}</p>
                 <div className="precip-split-grid">
                   <section className="precip-column rain">
                     <div className="precip-column-head">
@@ -6497,6 +6535,57 @@ function App() {
                       </li>
                     </ul>
                   </section>
+                </div>
+                <div className="precip-expected-block">
+                  <div className="precip-expected-title">
+                    <span>Expected Precipitation (Travel Window)</span>
+                    <strong>{expectedTravelWindowHours}h</strong>
+                  </div>
+                  <div className="precip-split-grid">
+                    <section className="precip-column rain">
+                      <div className="precip-column-head">
+                        <CloudRain size={14} />
+                        <span>Rain</span>
+                      </div>
+                      <ul className="precip-metric-list">
+                        <li className="precip-metric-highlight">
+                          <span className="precip-metric-label">Next {expectedTravelWindowHours}h</span>
+                          <strong>{expectedRainWindowDisplay}</strong>
+                        </li>
+                      </ul>
+                    </section>
+                    <section className="precip-column snow">
+                      <div className="precip-column-head">
+                        <Mountain size={14} />
+                        <span>Snow</span>
+                      </div>
+                      <ul className="precip-metric-list">
+                        <li className="precip-metric-highlight">
+                          <span className="precip-metric-label">Next {expectedTravelWindowHours}h</span>
+                          <strong>{expectedSnowWindowDisplay}</strong>
+                        </li>
+                      </ul>
+                    </section>
+                  </div>
+                  <div className="precip-meta-grid">
+                    <div>
+                      <span className="stat-label">Forecast start</span>
+                      <strong>
+                        {rainfallExpected?.startTime
+                          ? formatForecastPeriodLabel(rainfallExpected.startTime, safetyData.rainfall?.timezone || null)
+                          : 'N/A'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="stat-label">Forecast end</span>
+                      <strong>
+                        {rainfallExpected?.endTime
+                          ? formatForecastPeriodLabel(rainfallExpected.endTime, safetyData.rainfall?.timezone || null)
+                          : 'N/A'}
+                      </strong>
+                    </div>
+                  </div>
+                  <p className="muted-note">{expectedPrecipNoteLine}</p>
                 </div>
                 <div className="precip-meta-grid">
                   <div>
