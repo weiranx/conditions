@@ -66,6 +66,8 @@ const WIND_INCREASE_MPH_PER_1000FT = 2;
 const GUST_INCREASE_MPH_PER_1000FT = 2.5;
 const SEARCH_DEBOUNCE_MS = 180;
 const BACKEND_WAKE_NOTICE_DELAY_MS = 1400;
+const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
+const BACKEND_WAKE_RETRY_MAX_ATTEMPTS = 24;
 const APP_DISCLAIMER_TEXT =
   'Backcountry Conditions is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or wrong. Verify official weather, avalanche, fire, and land-management products, then make final decisions from field observations and team judgment.';
 const APP_CREDIT_TEXT = 'Built by Weiran Xiong with AI support.';
@@ -2285,6 +2287,25 @@ function App() {
   const [locatingUser, setLocatingUser] = useState(false);
   const lastLoadedSafetyKeyRef = useRef<string | null>(null);
   const inFlightSafetyKeyRef = useRef<string | null>(null);
+  const pendingSafetyRequestRef = useRef<{
+    lat: number;
+    lon: number;
+    date: string;
+    startTime: string;
+    force: boolean;
+  } | null>(null);
+  const fetchSafetyDataRef = useRef<
+    ((lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => Promise<void>) | null
+  >(null);
+  const wakeRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wakeRetryStateRef = useRef<{
+    key: string;
+    lat: number;
+    lon: number;
+    date: string;
+    startTime: string;
+    attempts: number;
+  } | null>(null);
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -2303,6 +2324,74 @@ function App() {
   const teamBriefCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backendWakeNoticeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
+
+  const clearWakeRetry = useCallback(() => {
+    if (wakeRetryTimeoutRef.current) {
+      clearTimeout(wakeRetryTimeoutRef.current);
+      wakeRetryTimeoutRef.current = null;
+    }
+    wakeRetryStateRef.current = null;
+  }, []);
+
+  const isRetriableWakeupError = useCallback((message: string) => {
+    const normalized = String(message || '').toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    return (
+      normalized.includes('failed to fetch') ||
+      normalized.includes('networkerror') ||
+      normalized.includes('network request failed') ||
+      normalized.includes('timeout') ||
+      /\(\s*5\d\d\s*\)/.test(normalized) ||
+      normalized.includes('unable to reach backend api')
+    );
+  }, []);
+
+  const scheduleWakeRetry = useCallback((payload: { key: string; lat: number; lon: number; date: string; startTime: string }) => {
+    if (!isProductionBuild) {
+      return;
+    }
+
+    const existing = wakeRetryStateRef.current;
+    const attempts = existing && existing.key === payload.key ? existing.attempts + 1 : 1;
+    if (attempts > BACKEND_WAKE_RETRY_MAX_ATTEMPTS) {
+      clearWakeRetry();
+      return;
+    }
+
+    wakeRetryStateRef.current = { ...payload, attempts };
+    if (wakeRetryTimeoutRef.current) {
+      clearTimeout(wakeRetryTimeoutRef.current);
+      wakeRetryTimeoutRef.current = null;
+    }
+
+    wakeRetryTimeoutRef.current = setTimeout(async () => {
+      const state = wakeRetryStateRef.current;
+      if (!state || state.key !== payload.key) {
+        return;
+      }
+
+      let backendHealthy = false;
+      try {
+        const { response, payload: healthPayload } = await fetchApi('/api/healthz');
+        backendHealthy = response.ok && Boolean((healthPayload as { ok?: boolean } | null)?.ok);
+      } catch {
+        backendHealthy = false;
+      }
+
+      if (backendHealthy) {
+        clearWakeRetry();
+        const fetchFn = fetchSafetyDataRef.current;
+        if (fetchFn) {
+          void fetchFn(state.lat, state.lon, state.date, state.startTime, { force: true });
+        }
+        return;
+      }
+
+      scheduleWakeRetry(payload);
+    }, BACKEND_WAKE_RETRY_DELAY_MS);
+  }, [clearWakeRetry, isProductionBuild]);
 
   const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
     setPosition(nextPosition);
@@ -2331,6 +2420,16 @@ function App() {
       if (!forceReload && lastLoadedSafetyKeyRef.current === requestKey) {
         return;
       }
+      if (inFlightSafetyKeyRef.current) {
+        pendingSafetyRequestRef.current = {
+          lat,
+          lon,
+          date: safeDate,
+          startTime: safeStartTime,
+          force: forceReload,
+        };
+        return;
+      }
       if (!forceReload && inFlightSafetyKeyRef.current === requestKey) {
         return;
       }
@@ -2356,16 +2455,34 @@ function App() {
 
         setSafetyData(payload as SafetyData);
         lastLoadedSafetyKeyRef.current = requestKey;
+        if (wakeRetryStateRef.current?.key === requestKey) {
+          clearWakeRetry();
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'System error';
         setError(message);
+        if (isRetriableWakeupError(message)) {
+          scheduleWakeRetry({ key: requestKey, lat, lon, date: safeDate, startTime: safeStartTime });
+        }
       } finally {
         inFlightSafetyKeyRef.current = null;
         setLoading(false);
+        const pending = pendingSafetyRequestRef.current;
+        pendingSafetyRequestRef.current = null;
+        if (pending) {
+          const nextFetch = fetchSafetyDataRef.current;
+          if (nextFetch) {
+            void nextFetch(pending.lat, pending.lon, pending.date, pending.startTime, { force: pending.force });
+          }
+        }
       }
     },
-    [todayDate, preferences.defaultStartTime],
+    [todayDate, preferences.defaultStartTime, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry],
   );
+
+  useEffect(() => {
+    fetchSafetyDataRef.current = fetchSafetyData;
+  }, [fetchSafetyData]);
 
   const runHealthChecks = useCallback(async () => {
     setHealthLoading(true);
@@ -2423,6 +2540,12 @@ function App() {
       setHealthLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    return () => {
+      clearWakeRetry();
+    };
+  }, [clearWakeRetry]);
 
   useEffect(() => {
     if (backendWakeNoticeTimeout.current) {
@@ -5231,7 +5354,14 @@ function App() {
         </div>
       )}
 
-      {loading && <ForecastLoading showBackendWakeNotice={showBackendWakeNotice} />}
+      {loading && !safetyData && <ForecastLoading showBackendWakeNotice={showBackendWakeNotice} />}
+
+      {loading && safetyData && (
+        <div className="loading-state inline-loading-state" role="status" aria-live="polite">
+          <strong>Refreshing conditions…</strong>
+          <span>{showBackendWakeNotice ? 'Backend API is waking up. Existing report remains visible until fresh data arrives.' : 'Existing report remains visible until fresh data arrives.'}</span>
+        </div>
+      )}
 
       {error && (
         <div className="error-banner">
@@ -5247,7 +5377,7 @@ function App() {
         </div>
       )}
 
-      {hasObjective && safetyData && !loading && !error && decision && (
+      {hasObjective && safetyData && decision && (
         <div className="data-grid">
           <div className="score-card" style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
             <div className="score-value" style={{ color: getScoreColor(safetyData.safety.score) }}>
@@ -5268,6 +5398,13 @@ function App() {
               </div>
               {Array.isArray(safetyData.safety.sourcesUsed) && safetyData.safety.sourcesUsed.length > 0 && (
                 <div className="source-line">Score sources: {safetyData.safety.sourcesUsed.join(' • ')}</div>
+              )}
+              {(loading || error) && (
+                <div className="source-line">
+                  {loading
+                    ? 'Showing last successful report while new data loads.'
+                    : 'Showing last successful report. Latest refresh failed.'}
+                </div>
               )}
               <div className="source-line">Report cards below are sorted dynamically by current risk level and data relevance.</div>
               <div className="report-action-row">
