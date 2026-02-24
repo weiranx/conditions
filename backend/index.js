@@ -69,6 +69,8 @@ const GUST_INCREASE_MPH_PER_1000FT = 2.5;
 const MAX_REASONABLE_ELEVATION_FT = 20000;
 const INCHES_PER_MM = 0.0393701;
 const INCHES_PER_CM = 0.393701;
+const RAINFALL_CACHE_TTL_MS = 30 * 60 * 1000;
+const rainfallPayloadCache = new Map();
 
 const createUnknownAvalancheData = (coverageStatus = "no_center_coverage") => {
   const isTemporarilyUnavailable = coverageStatus === "temporarily_unavailable";
@@ -1803,22 +1805,28 @@ const buildOpenMeteoRainfallApiUrl = (host, lat, lon) => {
 const buildOpenMeteoRainfallSourceLink = (lat, lon) => buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon);
 
 const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWindowHours, fetchOptions) => {
+  const rainfallCacheKey = `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
   const apiUrls = [
     buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon),
     buildOpenMeteoRainfallApiUrl('customer-api.open-meteo.com', lat, lon),
   ];
 
   let rainfallJson = null;
+  let usingCachedPayload = false;
   let lastError = null;
 
   for (const apiUrl of apiUrls) {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        const response = await fetchWithTimeout(apiUrl, fetchOptions, Math.max(REQUEST_TIMEOUT_MS, 10000));
+        const response = await fetchWithTimeout(apiUrl, fetchOptions, Math.max(REQUEST_TIMEOUT_MS, 12000));
         if (!response.ok) {
           throw new Error(`Open-Meteo rainfall request failed with status ${response.status}`);
         }
         rainfallJson = await response.json();
+        rainfallPayloadCache.set(rainfallCacheKey, {
+          fetchedAt: Date.now(),
+          payload: rainfallJson,
+        });
         lastError = null;
         break;
       } catch (error) {
@@ -1831,7 +1839,17 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   }
 
   if (!rainfallJson) {
-    throw lastError || new Error('Open-Meteo rainfall request failed');
+    const cachedEntry = rainfallPayloadCache.get(rainfallCacheKey);
+    const cachedFresh =
+      cachedEntry &&
+      cachedEntry.payload &&
+      Date.now() - Number(cachedEntry.fetchedAt || 0) <= RAINFALL_CACHE_TTL_MS;
+    if (cachedFresh) {
+      rainfallJson = cachedEntry.payload;
+      usingCachedPayload = true;
+    } else {
+      throw lastError || new Error('Open-Meteo rainfall request failed');
+    }
   }
 
   const hourly = rainfallJson?.hourly || {};
@@ -1885,7 +1903,9 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const hasAnyPrecipSignal = hasAnyTotals || expectedHasAnyTotals;
 
   return {
-    source: 'Open-Meteo Precipitation History (Rain + Snowfall)',
+    source: usingCachedPayload
+      ? 'Open-Meteo Precipitation History (Rain + Snowfall, cached fallback)'
+      : 'Open-Meteo Precipitation History (Rain + Snowfall)',
     status: hasAnyPrecipSignal ? 'ok' : 'no_data',
     mode,
     issuedTime: anchorTime,
