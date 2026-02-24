@@ -1,6 +1,6 @@
 import React from 'react';
-import { LoaderCircle, Search, X } from 'lucide-react';
-import type { Suggestion } from '../../lib/search';
+import { LoaderCircle, Mountain, Search, X } from 'lucide-react';
+import { isMountainSuggestion, type Suggestion } from '../../lib/search';
 
 interface SearchBoxProps {
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
@@ -114,7 +114,13 @@ export function SearchBox({
                   onMouseEnter={() => onHoverSuggestion(index)}
                 >
                   <strong className="suggestion-title">
-                    {suggestion.class === 'popular' && '⭐ '} {suggestion.name.split(',')[0]}
+                    {suggestion.class === 'popular' && (
+                      <span className="suggestion-popular-star" aria-hidden="true">
+                        ⭐
+                      </span>
+                    )}
+                    {isMountainSuggestion(suggestion) && <Mountain size={14} className="suggestion-title-icon" aria-hidden="true" />}
+                    <span>{suggestion.name.split(',')[0]}</span>
                   </strong>
                   <span className="suggestion-subtitle">{suggestion.name.split(',').slice(1, 3).join(',')}</span>
                 </button>

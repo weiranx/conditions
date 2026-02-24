@@ -3,20 +3,39 @@ export interface Suggestion {
   lat: string | number;
   lon: string | number;
   class?: string;
+  type?: string;
 }
 
 const LOCAL_POPULAR_SUGGESTIONS: Suggestion[] = [
-  { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular' },
-  { name: 'Mount Shasta, California', lat: 41.4091, lon: -122.1946, class: 'popular' },
-  { name: 'Mount Whitney, California', lat: 36.5786, lon: -118.2923, class: 'popular' },
-  { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular' },
-  { name: 'Longs Peak, Colorado', lat: 40.2549, lon: -105.615, class: 'popular' },
-  { name: 'Mount Elbert, Colorado', lat: 39.1178, lon: -106.4454, class: 'popular' },
-  { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular' },
-  { name: 'Mount Washington, New Hampshire', lat: 44.2706, lon: -71.3033, class: 'popular' },
-  { name: 'Kings Peak, Utah', lat: 40.7764, lon: -110.3726, class: 'popular' },
-  { name: 'San Jacinto Peak, California', lat: 33.8147, lon: -116.6794, class: 'popular' },
+  { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular', type: 'peak' },
+  { name: 'Mount Shasta, California', lat: 41.4091, lon: -122.1946, class: 'popular', type: 'peak' },
+  { name: 'Mount Whitney, California', lat: 36.5786, lon: -118.2923, class: 'popular', type: 'peak' },
+  { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular', type: 'peak' },
+  { name: 'Longs Peak, Colorado', lat: 40.2549, lon: -105.615, class: 'popular', type: 'peak' },
+  { name: 'Mount Elbert, Colorado', lat: 39.1178, lon: -106.4454, class: 'popular', type: 'peak' },
+  { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular', type: 'peak' },
+  { name: 'Mount Washington, New Hampshire', lat: 44.2706, lon: -71.3033, class: 'popular', type: 'peak' },
+  { name: 'Kings Peak, Utah', lat: 40.7764, lon: -110.3726, class: 'popular', type: 'peak' },
+  { name: 'San Jacinto Peak, California', lat: 33.8147, lon: -116.6794, class: 'popular', type: 'peak' },
 ];
+
+const MOUNTAIN_TYPE_HINTS = new Set(['mountain', 'peak', 'summit', 'volcano']);
+const MOUNTAIN_CLASS_HINTS = new Set(['mountain', 'peak']);
+const MOUNTAIN_NAME_HINT = /\b(mt|mount|mountain|peak|summit|volcano)\b/i;
+
+export function isMountainSuggestion(suggestion: Suggestion): boolean {
+  const typeValue = normalizeSuggestionText(suggestion.type ?? '');
+  const classValue = normalizeSuggestionText(suggestion.class ?? '');
+  const primaryName = suggestion.name.split(',')[0] ?? '';
+
+  if (typeValue && MOUNTAIN_TYPE_HINTS.has(typeValue)) {
+    return true;
+  }
+  if (classValue && MOUNTAIN_CLASS_HINTS.has(classValue)) {
+    return true;
+  }
+  return MOUNTAIN_NAME_HINT.test(primaryName);
+}
 
 export function normalizeSuggestionText(value: string): string {
   return value

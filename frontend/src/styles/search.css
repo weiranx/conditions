@@ -168,9 +168,20 @@
 }
 
 .suggestion-title {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.suggestion-popular-star {
+  line-height: 1;
+}
+
+.suggestion-title-icon {
+  color: #4d6258;
+  flex-shrink: 0;
 }
 
 .suggestion-subtitle {
@@ -217,6 +228,10 @@
 
 :root[data-theme='dark'] .suggestion-item {
   color: #dce8f2;
+}
+
+:root[data-theme='dark'] .suggestion-title-icon {
+  color: #9fbfd1;
 }
 
 :root[data-theme='dark'] .suggestion-item:hover,
