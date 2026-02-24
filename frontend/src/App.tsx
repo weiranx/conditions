@@ -1024,7 +1024,11 @@ function estimateVisibilityRiskFromPoint(input: {
 
   if (/whiteout|blizzard|snow squall/.test(description)) {
     addRisk(55, 'blizzard/whiteout signal');
-  } else if (/heavy snow|blowing snow|snow showers|fog|mist|haze|smoke/.test(description)) {
+  } else if (/heavy snow|blowing snow|snow showers/.test(description)) {
+    addRisk(30, 'reduced-visibility weather signal');
+  } else if (/\bsnow\b/.test(description)) {
+    addRisk(10, 'snow signal');
+  } else if (/fog|mist|haze|smoke/.test(description)) {
     addRisk(30, 'reduced-visibility weather signal');
   } else if (/rain|drizzle|showers/.test(description)) {
     addRisk(10, 'precipitation signal');
@@ -4506,9 +4510,6 @@ function App() {
   const mapElevationChipTitle = hasMapObjectiveElevation
     ? [formatElevationDisplay(mapObjectiveElevationFt), safetyData?.weather.elevationSource || null].filter(Boolean).join(' • ')
     : 'Objective elevation unavailable';
-  const forecastPeriodLabel = safetyData
-    ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
-    : 'Not available';
   const weatherHourQuickOptions: Array<{ value: string; label: string; tempLabel: string | null; point: WeatherTrendPoint }> = [];
   if (safetyData && Array.isArray(safetyData.weather.trend)) {
     const seenStartTimes = new Set<string>();
@@ -4571,6 +4572,43 @@ function App() {
   const selectedWeatherHour = selectedWeatherHourIndex >= 0 ? weatherHourQuickOptions[selectedWeatherHourIndex] : null;
   const weatherPreviewActive = Boolean(selectedWeatherHour && selectedWeatherHour.value !== alpineStartTime);
   const weatherPreviewPoint = selectedWeatherHour?.point || null;
+  const weatherForecastPeriodLabel = safetyData
+    ? formatForecastPeriodLabel(
+        (typeof weatherPreviewPoint?.timeIso === 'string' && weatherPreviewPoint.timeIso.trim()
+          ? weatherPreviewPoint.timeIso
+          : safetyData.weather.forecastStartTime) || null,
+        safetyData.weather.timezone || null,
+      )
+    : 'Not available';
+  const activeWeatherHourInputValue = selectedWeatherHour?.value || activeWeatherHourValue;
+  const selectNearestWeatherHourFromInput = (rawValue: string) => {
+    if (!weatherHourQuickOptions.length) {
+      return;
+    }
+    const typedMinutes = parseTimeInputMinutes(rawValue);
+    if (typedMinutes === null) {
+      return;
+    }
+    let bestOption = weatherHourQuickOptions[0];
+    let bestDiff = Number.POSITIVE_INFINITY;
+    for (const option of weatherHourQuickOptions) {
+      const optionMinutes = parseTimeInputMinutes(option.value);
+      if (optionMinutes === null) {
+        continue;
+      }
+      let diff = Math.abs(optionMinutes - typedMinutes);
+      if (diff > 720) {
+        diff = 1440 - diff;
+      }
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestOption = option;
+      }
+    }
+    if (bestOption?.value) {
+      handleWeatherHourSelect(bestOption.value);
+    }
+  };
   const weatherCardTemp = Number.isFinite(Number(weatherPreviewPoint?.temp)) ? Number(weatherPreviewPoint?.temp) : Number(safetyData?.weather.temp);
   const weatherCardWind = Number.isFinite(Number(weatherPreviewPoint?.wind)) ? Number(weatherPreviewPoint?.wind) : Number(safetyData?.weather.windSpeed);
   const weatherCardGust = Number.isFinite(Number(weatherPreviewPoint?.gust))
@@ -4598,6 +4636,22 @@ function App() {
   const weatherCardPressureLabel = Number.isFinite(Number(weatherCardPressure))
     ? `${Number(weatherCardPressure).toFixed(1)} hPa`
     : 'N/A';
+  const pressureObjectiveElevationFt = Number(safetyData?.weather.elevation);
+  const estimatedSeaLevelPressureHpa =
+    Number.isFinite(Number(weatherCardPressure)) && Number.isFinite(pressureObjectiveElevationFt) && pressureObjectiveElevationFt >= 0
+      ? Number(weatherCardPressure) * Math.exp((pressureObjectiveElevationFt * 0.3048) / 8434.5)
+      : Number.NaN;
+  const estimatedSeaLevelPressureLabel = Number.isFinite(estimatedSeaLevelPressureHpa)
+    ? `${estimatedSeaLevelPressureHpa.toFixed(1)} hPa`
+    : null;
+  const weatherPressureContextLine = Number.isFinite(Number(weatherCardPressure))
+    ? [
+        Number.isFinite(pressureObjectiveElevationFt) ? `Station at ${formatElevationDisplay(pressureObjectiveElevationFt)}` : 'Station pressure',
+        estimatedSeaLevelPressureLabel ? `Sea-level est ${estimatedSeaLevelPressureLabel}` : null,
+      ]
+        .filter(Boolean)
+        .join(' • ')
+    : 'Pressure unavailable from selected forecast hour.';
   const weatherCardWindDirection = normalizeWindHintDirection(weatherPreviewPoint?.windDirection ?? safetyData?.weather.windDirection ?? null) || 'N/A';
   const weatherCloudCover = parseOptionalFiniteNumber(safetyData?.weather.cloudCover);
   const weatherCardCloudCover = Number.isFinite(Number(weatherPreviewPoint?.cloudCover))
@@ -4642,9 +4696,19 @@ function App() {
   const weatherVisibilityScoreLabel = Number.isFinite(Number(weatherVisibilityRisk.score))
     ? `${Math.round(Number(weatherVisibilityRisk.score))}/100`
     : 'N/A';
+  const weatherVisibilityScoreMeaning = Number.isFinite(Number(weatherVisibilityRisk.score))
+    ? 'Higher score = worse visibility risk.'
+    : 'Visibility score unavailable.';
   const weatherVisibilityDetail = weatherVisibilityRisk.factors.length > 0
     ? weatherVisibilityRisk.factors.join(' • ')
     : weatherVisibilityRisk.summary;
+  const weatherVisibilityContextLine = (() => {
+    const precip = Number.isFinite(Number(weatherCardPrecip)) ? Number(weatherCardPrecip) : null;
+    if ((weatherVisibilityRisk.level === 'Minimal' || weatherVisibilityRisk.level === 'Low') && precip !== null && precip >= 40) {
+      return 'Precip signal is present, but no strong fog/blowing-snow/wind combination is detected at this hour.';
+    }
+    return null;
+  })();
   const weatherVisibilityActiveWindowText =
     Number.isFinite(weatherVisibilityRisk.activeHours) &&
     Number.isFinite(weatherVisibilityRisk.windowHours) &&
@@ -4668,6 +4732,9 @@ function App() {
     if (nextOption) {
       handleWeatherHourSelect(nextOption.value);
     }
+  };
+  const handleWeatherHourInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    selectNearestWeatherHourFromInput(event.target.value);
   };
   const satObjectiveLabel = truncateText((objectiveName || 'Objective').split(',')[0].trim(), 22);
   const satAvalancheSnippet =
@@ -6951,7 +7018,7 @@ function App() {
                     <div className="stat-label">Conditions at {weatherCardDisplayTime}</div>
                   </div>
                 </div>
-                <p className="weather-period-line">Using forecast period: {forecastPeriodLabel}</p>
+                <p className="weather-period-line">Using forecast period: {weatherForecastPeriodLabel}</p>
                 {weatherPressureTrendSummary && <p className="weather-pressure-line">{weatherPressureTrendSummary}</p>}
                 {weatherPreviewActive && <p className="weather-preview-note">Hour preview only updates this Weather card.</p>}
                 {weatherHourQuickOptions.length > 0 && (
@@ -6967,9 +7034,17 @@ function App() {
                       >
                         <Minus size={14} />
                       </button>
-                      <div className="weather-hour-display" aria-live="polite">
-                        <strong>{selectedWeatherHour?.label || formatClockForStyle(alpineStartTime, preferences.timeStyle)}</strong>
-                        <small>{selectedWeatherHour?.tempLabel || '—'}</small>
+                      <div className="weather-hour-input-wrap">
+                        <input
+                          type="time"
+                          step={3600}
+                          className="weather-hour-input"
+                          aria-label="Type hour for weather preview"
+                          value={activeWeatherHourInputValue}
+                          onChange={handleWeatherHourInputChange}
+                          list="weather-hour-options"
+                        />
+                        <small>{selectedWeatherHour?.label || formatClockForStyle(alpineStartTime, preferences.timeStyle)}</small>
                       </div>
                       <button
                         type="button"
@@ -6980,7 +7055,15 @@ function App() {
                       >
                         <Plus size={14} />
                       </button>
+                      <span className="weather-hour-temp-pill" aria-live="polite">
+                        {selectedWeatherHour?.tempLabel || '—'}
+                      </span>
                     </div>
+                    <datalist id="weather-hour-options">
+                      {weatherHourQuickOptions.map((option) => (
+                        <option key={`weather-hour-option-${option.value}`} value={option.value} />
+                      ))}
+                    </datalist>
                   </div>
                 )}
                 <div className="weather-trend-panel" aria-label={`${travelWindowHoursLabel} weather trend`}>
@@ -7061,8 +7144,9 @@ function App() {
                     <strong>{formatTempDisplay(weatherCardDewPoint)}</strong>
                   </div>
                   <div className="metric-chip">
-                    <span className="stat-label">Pressure</span>
+                    <span className="stat-label">Pressure (station)</span>
                     <strong>{weatherCardPressureLabel}</strong>
+                    <p className="metric-chip-detail pressure-detail">{weatherPressureContextLine}</p>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Wind Dir</span>
@@ -7073,13 +7157,15 @@ function App() {
                     <strong>{weatherCardCloudCoverLabel}</strong>
                   </div>
                   <div className="metric-chip metric-chip-wide">
-                    <span className="stat-label">Visibility / Whiteout</span>
+                    <span className="stat-label">Whiteout Risk</span>
                     <strong>{weatherVisibilityScoreLabel}</strong>
                     <div className="metric-chip-pill-row">
                       <span className={`decision-pill ${weatherVisibilityPill}`}>{weatherVisibilityRisk.level}</span>
                       {weatherVisibilityActiveWindowText && <span className="metric-chip-window">{weatherVisibilityActiveWindowText}</span>}
                     </div>
+                    <p className="metric-chip-detail metric-chip-helper">{weatherVisibilityScoreMeaning}</p>
                     <p className="metric-chip-detail">{localizeUnitText(weatherVisibilityDetail)}</p>
+                    {weatherVisibilityContextLine && <p className="metric-chip-detail">{weatherVisibilityContextLine}</p>}
                   </div>
                 </div>
 

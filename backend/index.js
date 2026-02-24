@@ -274,6 +274,8 @@ const buildVisibilityRisk = (weatherData) => {
     addRisk(55, 'whiteout/blizzard wording in forecast');
   } else if (/snow squall|heavy snow|blowing snow|snow showers/.test(description)) {
     addRisk(38, 'snowfall or blowing-snow signal');
+  } else if (/\bsnow\b/.test(description)) {
+    addRisk(12, 'light snow signal');
   } else if (/dense fog|freezing fog|fog|mist|haze|smoke/.test(description)) {
     addRisk(30, 'fog/smoke/haze signal');
   } else if (/drizzle|rain|showers/.test(description)) {
