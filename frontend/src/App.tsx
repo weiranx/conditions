@@ -4983,9 +4983,6 @@ function App() {
               <button className="primary-btn" onClick={openPlannerView}>
                 <Route size={14} /> Planner
               </button>
-              <button className="settings-btn" onClick={openStatusView}>
-                <ShieldCheck size={14} /> Status
-              </button>
             </div>
           </div>
 
@@ -5316,9 +5313,6 @@ function App() {
           <nav className="header-nav" aria-label="Planner controls">
             <button className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
               <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
-            </button>
-            <button className="secondary-btn header-nav-btn" onClick={openStatusView}>
-              <ShieldCheck size={14} /> <span className="nav-btn-label">Health</span>
             </button>
             <button className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
               <Link2 size={14} /> <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
