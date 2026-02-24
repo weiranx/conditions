@@ -1416,7 +1416,18 @@ const clampTravelWindowHours = (rawValue, fallback = 12) => {
   if (!Number.isFinite(numeric)) {
     return fallback;
   }
-  return Math.max(1, Math.min(48, Math.round(numeric)));
+  return Math.max(1, Math.min(24, Math.round(numeric)));
+};
+
+const normalizeUtcIsoTimestamp = (value) => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+  const parsedMs = parseIsoTimeToMs(value);
+  if (parsedMs === null) {
+    return value;
+  }
+  return new Date(parsedMs).toISOString();
 };
 
 const mmToInches = (valueMm) => {
@@ -1515,7 +1526,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
     return createUnavailableRainfallData('no_data');
   }
 
-  const anchorTime = timeArray[anchorIdx] || null;
+  const anchorTime = normalizeUtcIsoTimestamp(timeArray[anchorIdx] || null);
   const anchorMs = parseIsoTimeToMs(anchorTime) ?? targetTimeMs;
   const rainSeries = seriesHasFiniteValues(rainArray)
     ? rainArray
@@ -1532,7 +1543,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const snowPast48hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 48);
   const expectedWindowHours = clampTravelWindowHours(travelWindowHours, 12);
   const expectedStartIdx = findFirstTimeIndexAtOrAfter(timeArray, targetTimeMs);
-  const expectedStartTime = expectedStartIdx >= 0 ? timeArray[expectedStartIdx] : null;
+  const expectedStartTime = expectedStartIdx >= 0 ? normalizeUtcIsoTimestamp(timeArray[expectedStartIdx]) : null;
   const expectedStartMs = parseIsoTimeToMs(expectedStartTime);
   const rainWindowMm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, rainSeries, expectedStartMs, expectedWindowHours);
   const snowWindowCm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, snowfallArray, expectedStartMs, expectedWindowHours);

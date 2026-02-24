@@ -56,7 +56,13 @@ export function parseIsoToMs(value: string | null | undefined): number | null {
   if (!trimmed) {
     return null;
   }
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00Z` : trimmed;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? `${trimmed}T00:00:00Z`
+    : /([zZ]|[+-]\d{2}:\d{2})$/.test(trimmed)
+      ? trimmed
+      : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)
+        ? `${trimmed}Z`
+        : trimmed;
   const ms = Date.parse(normalized);
   return Number.isFinite(ms) ? ms : null;
 }

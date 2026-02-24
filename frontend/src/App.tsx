@@ -1365,10 +1365,7 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
         )
     : null;
   const airQualityFreshnessState = hasAqi ? freshnessClass(pickOldestIsoTimestamp([data.airQuality?.measuredTime || null]), 8) : null;
-  const precipitationFreshnessState = freshnessClass(
-    pickOldestIsoTimestamp([data.rainfall?.anchorTime || null, data.rainfall?.issuedTime || null]),
-    8,
-  );
+  const precipitationFreshnessState = freshnessClass(pickOldestIsoTimestamp([data.rainfall?.anchorTime || null]), 8);
   const snowpackStatus = String(data.snowpack?.status || '').toLowerCase();
   const snowpackAvailable = snowpackStatus === 'ok' || snowpackStatus === 'partial';
   const snowpackFreshness = classifySnowpackFreshness(data.snowpack?.snotel?.observedDate || null, data.snowpack?.nohrsc?.sampledTime || null);
@@ -3183,10 +3180,11 @@ function App() {
       return 'Not available';
     }
 
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) {
+    const parsedMs = parseIsoToMs(isoString);
+    if (parsedMs === null) {
       return isoString;
     }
+    const date = new Date(parsedMs);
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric', hour12: useHour12Clock });
   };
 
@@ -3194,10 +3192,11 @@ function App() {
     if (!isoString) {
       return 'Not available';
     }
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) {
+    const parsedMs = parseIsoToMs(isoString);
+    if (parsedMs === null) {
       return isoString;
     }
+    const date = new Date(parsedMs);
     const baseOptions: Intl.DateTimeFormatOptions = {
       month: 'short',
       day: 'numeric',
@@ -3977,7 +3976,6 @@ function App() {
   const precipitationFreshnessTimestamp = safetyData
     ? pickOldestIsoTimestamp([
         safetyData.rainfall?.anchorTime || null,
-        safetyData.rainfall?.issuedTime || null,
       ])
     : null;
   const snowpackFreshness = classifySnowpackFreshness(
