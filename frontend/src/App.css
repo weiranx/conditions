@@ -1426,6 +1426,62 @@ input {
   letter-spacing: 0.06em;
 }
 
+.decision-better-days {
+  padding: 10px 11px;
+  border-radius: 12px;
+  border: 1px solid #ddd7c7;
+  background: #f8f4ea;
+}
+
+.decision-better-days-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.decision-better-day-item {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd7c7;
+  background: #fbf8ef;
+}
+
+.decision-better-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.decision-better-day-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.decision-better-day-score {
+  color: #54645a;
+  font-size: 0.78rem;
+  font-family: var(--font-data);
+  font-weight: 700;
+}
+
+.decision-better-day-btn {
+  min-height: 30px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.decision-better-day-meta {
+  margin: 7px 0 0;
+  color: #59665d;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .decision-driver-chips {
   display: flex;
   flex-wrap: wrap;
@@ -5121,6 +5177,24 @@ input {
 
 :root[data-theme='dark'] .decision-details summary {
   color: #9cb5c8;
+}
+
+:root[data-theme='dark'] .decision-better-days {
+  border-color: #355064;
+  background: #1a2b37;
+}
+
+:root[data-theme='dark'] .decision-better-day-item {
+  border-color: #355064;
+  background: #132737;
+}
+
+:root[data-theme='dark'] .decision-better-day-score {
+  color: #abc0d1;
+}
+
+:root[data-theme='dark'] .decision-better-day-meta {
+  color: #b6c9d8;
 }
 
 :root[data-theme='dark'] .checks-summary-text {

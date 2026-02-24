@@ -1055,6 +1055,24 @@ function formatTravelWindowSpan(span: TravelWindowSpan, timeStyle: TimeStyle): s
   return `${start} to ${end}`;
 }
 
+function decisionLevelRank(level: DecisionLevel | null | undefined): number {
+  if (level === 'GO') return 3;
+  if (level === 'CAUTION') return 2;
+  if (level === 'NO-GO') return 1;
+  return 0;
+}
+
+function formatIsoDateLabel(isoDate: string): string {
+  if (!DATE_FMT.test(isoDate)) {
+    return isoDate;
+  }
+  const parsedMs = parseIsoToMs(`${isoDate}T00:00:00Z`);
+  if (parsedMs === null) {
+    return isoDate;
+  }
+  return new Date(parsedMs).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle = 'ampm'): TravelWindowInsights {
   if (rows.length === 0) {
     return {
@@ -1659,6 +1677,16 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   return { level, headline, blockers, cautions, checks };
 }
 
+type BetterDaySuggestion = {
+  date: string;
+  level: DecisionLevel;
+  score: number | null;
+  weather: string;
+  gustMph: number | null;
+  precipChance: number | null;
+  summary: string;
+};
+
 function App() {
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
@@ -1690,6 +1718,9 @@ function App() {
   const [copiedSatLine, setCopiedSatLine] = useState(false);
   const [copiedTeamBrief, setCopiedTeamBrief] = useState(false);
   const [dayOverDay, setDayOverDay] = useState<DayOverDayComparison | null>(null);
+  const [betterDaySuggestions, setBetterDaySuggestions] = useState<BetterDaySuggestion[]>([]);
+  const [betterDaySuggestionsLoading, setBetterDaySuggestionsLoading] = useState(false);
+  const [betterDaySuggestionsNote, setBetterDaySuggestionsNote] = useState<string | null>(null);
   const [healthChecks, setHealthChecks] = useState<HealthCheckResult[]>([]);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
@@ -4079,14 +4110,25 @@ function App() {
   const fieldBriefAbortTriggers = decision
     ? (decision.blockers.length > 0 ? decision.blockers.slice(0, 3) : defaultAbortTriggers)
     : [];
-  const fieldBriefActions = decision
-    ? [
-        `Re-check latest weather and avalanche products before departure at ${displayStartTime}.`,
-        'Push SAT one-liner to your support contact.',
-        decision.level === 'GO'
-          ? 'Proceed only if observed conditions match forecast; reassess at first exposed checkpoint.'
-          : 'Use a shorter/lower-angle backup objective and enforce conservative turn-around timing.',
-      ]
+  const uniqueNonEmptyLines = (items: string[]): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    items.forEach((raw) => {
+      const normalized = String(raw || '').trim();
+      if (!normalized) return;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(normalized);
+    });
+    return out;
+  };
+  const failingCheckActions = decision
+    ? uniqueNonEmptyLines(
+        decision.checks
+          .filter((check) => !check.ok)
+          .map((check) => check.action || `${check.label}${check.detail ? `: ${check.detail}` : ''}`),
+      )
     : [];
   const fieldBriefHeadline = decision
     ? decision.level === 'NO-GO'
@@ -4105,7 +4147,53 @@ function App() {
   const fieldBriefTopRisks = decision
     ? (decision.blockers.length > 0 ? decision.blockers : decision.cautions).slice(0, 3)
     : [];
-  const fieldBriefImmediateActions = fieldBriefActions.slice(0, 2);
+  const bestTravelWindowLine = travelWindowInsights.bestWindow
+    ? (() => {
+        const windowLabel = formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle);
+        const startsAfterSelectedHour = travelWindowRows.length > 0 && travelWindowInsights.bestWindow.start !== travelWindowRows[0].time;
+        return startsAfterSelectedHour
+          ? `Primary movement window opens at ${formatClockForStyle(travelWindowInsights.bestWindow.start, preferences.timeStyle)} (${windowLabel}, ${travelWindowInsights.bestWindow.length}h).`
+          : `Primary movement window starts at departure (${windowLabel}, ${travelWindowInsights.bestWindow.length}h).`;
+      })()
+    : `No fully passing window in the next ${travelWindowHours}h under current thresholds. Stay in low-consequence terrain.`;
+  const peakRiskTimeLine = worstTravelWindowRow
+    ? (() => {
+        const peakLabel = formatClockForStyle(worstTravelWindowRow.time, preferences.timeStyle);
+        const dominantFailures = worstTravelWindowRow.failedRuleLabels.slice(0, 2);
+        if (dominantFailures.length > 0) {
+          return `Peak risk near ${peakLabel}: ${dominantFailures.join(' + ')}.`;
+        }
+        return `Peak risk near ${peakLabel}: monitor trend shift and preserve retreat options.`;
+      })()
+    : '';
+  const routeDisciplineLine =
+    decision?.level === 'GO'
+      ? 'Maintain checkpoint cadence every 60-90 min and continue only while field observations match forecast assumptions.'
+      : decision?.level === 'NO-GO'
+        ? 'Use backup objective criteria: lower angle, shorter commitment, and simple retreat lines.'
+        : 'Bias to lower-angle / lower-consequence terrain and shorten commitments between safe regroup points.';
+  const fieldBriefImmediateActions = decision
+    ? uniqueNonEmptyLines([
+        `Refresh official products at ${displayStartTime} and confirm forecast period + publish/expiry times before departure.`,
+        ...failingCheckActions.slice(0, 2),
+        travelWindowInsights.nextCleanWindow && travelWindowRows.length > 0 && travelWindowInsights.nextCleanWindow.start !== travelWindowRows[0].time
+          ? `Delay exposed/committing terrain until ${formatClockForStyle(travelWindowInsights.nextCleanWindow.start, preferences.timeStyle)} when the first clean hour begins.`
+          : '',
+        peakRiskTimeLine
+          ? `${peakRiskTimeLine.replace(/\.$/, '')}; plan to be in lower-consequence terrain before this hour.`
+          : '',
+        'Send SAT one-liner and team brief to your support contact before departure.',
+      ]).slice(0, 4)
+    : [];
+  const fieldBriefActions = decision
+    ? uniqueNonEmptyLines([
+        ...fieldBriefImmediateActions,
+        ...failingCheckActions,
+        decision.level === 'GO'
+          ? 'Proceed only if observed conditions remain aligned with forecast and field checks.'
+          : 'Use a shorter/lower-angle backup objective and enforce conservative turn-around timing.',
+      ])
+    : [];
   const fieldBriefAtAGlance = safetyData
     ? [
         { label: 'Start', value: displayStartTime },
@@ -4135,15 +4223,15 @@ function App() {
             .map((check) => check.label)
     : [];
   const fieldBriefExecutionSteps = decision
-    ? [
-        `Pre-departure (${displayStartTime}): confirm latest weather, avalanche, alerts, and route assumptions before leaving.`,
-        decision.level === 'GO'
-          ? 'On-route: continue only while observed wind, snowpack, and trail surface match forecast expectations.'
-          : 'On-route: bias to lower-angle / lower-consequence terrain and shorten commitments between safe decision points.',
+    ? uniqueNonEmptyLines([
+        `Step 1 - Departure gate (${displayStartTime}): verify weather, avalanche, alerts, and travel-window thresholds are still valid.`,
+        `Step 2 - Movement timing: ${bestTravelWindowLine}`,
+        peakRiskTimeLine ? `Step 3 - Hazard timing: ${peakRiskTimeLine}` : '',
+        `Step 4 - Route discipline: ${routeDisciplineLine}`,
         `Abort immediately if ${String(fieldBriefAbortTriggers[0] || 'daylight margin begins collapsing')
           .replace(/^Abort if\s+/i, '')
           .replace(/\.$/, '')}.`,
-      ]
+      ]).slice(0, 5)
     : [];
   const objectiveTimezone = safetyData?.weather.timezone || null;
   const precipitationDisplayTimezone = objectiveTimezone || safetyData?.rainfall?.timezone || null;
@@ -4904,6 +4992,150 @@ function App() {
     };
   }, [hasObjective, safetyData, forecastDate, position.lat, position.lng, preferences]);
 
+  useEffect(() => {
+    if (!hasObjective || view !== 'planner' || !safetyData || decision?.level !== 'NO-GO') {
+      setBetterDaySuggestions([]);
+      setBetterDaySuggestionsLoading(false);
+      setBetterDaySuggestionsNote(null);
+      return;
+    }
+
+    const selectedDate = safetyData.forecast?.selectedDate || forecastDate;
+    if (!DATE_FMT.test(selectedDate)) {
+      setBetterDaySuggestions([]);
+      setBetterDaySuggestionsLoading(false);
+      setBetterDaySuggestionsNote('Upcoming-day scan unavailable because the selected forecast date is invalid.');
+      return;
+    }
+
+    const safeTravelWindowHours = Math.max(
+      MIN_TRAVEL_WINDOW_HOURS,
+      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+    );
+
+    const candidateDates: string[] = [];
+    let cursor = selectedDate;
+    for (let i = 0; i < 7; i += 1) {
+      cursor = addDaysToIsoDate(cursor, 1);
+      if (!DATE_FMT.test(cursor) || cursor > maxForecastDate) {
+        break;
+      }
+      candidateDates.push(cursor);
+    }
+
+    if (candidateDates.length === 0) {
+      setBetterDaySuggestions([]);
+      setBetterDaySuggestionsLoading(false);
+      setBetterDaySuggestionsNote('No upcoming dates are available inside the current forecast range.');
+      return;
+    }
+
+    let cancelled = false;
+    setBetterDaySuggestionsLoading(true);
+    setBetterDaySuggestionsNote(null);
+
+    (async () => {
+      try {
+        const nextDayPayloads = await Promise.all(
+          candidateDates.map(async (date) => {
+            try {
+              const { response, payload } = await fetchApi(
+                `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(
+                  alpineStartTime,
+                )}&travel_window_hours=${safeTravelWindowHours}`,
+              );
+              if (!response.ok || !payload || typeof payload !== 'object') {
+                return null;
+              }
+              const candidateData = payload as SafetyData;
+              const candidateDecision = evaluateBackcountryDecision(candidateData, alpineStartTime, preferences);
+              const scoreRaw = Number(candidateData?.safety?.score);
+              const gustRaw = Number(candidateData?.weather?.windGust);
+              const precipRaw = Number(candidateData?.weather?.precipChance);
+              const riskSummary =
+                candidateDecision.blockers[0] ||
+                candidateDecision.cautions[0] ||
+                candidateDecision.headline ||
+                'No dominant risk trigger.';
+              return {
+                date: candidateData?.forecast?.selectedDate && DATE_FMT.test(candidateData.forecast.selectedDate) ? candidateData.forecast.selectedDate : date,
+                level: candidateDecision.level,
+                score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
+                weather: String(candidateData?.weather?.description || 'Unknown'),
+                gustMph: Number.isFinite(gustRaw) ? gustRaw : null,
+                precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
+                summary: riskSummary,
+              } as BetterDaySuggestion;
+            } catch {
+              return null;
+            }
+          }),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const validSuggestions = nextDayPayloads.filter((entry): entry is BetterDaySuggestion => Boolean(entry));
+        if (validSuggestions.length === 0) {
+          setBetterDaySuggestions([]);
+          setBetterDaySuggestionsNote('Could not evaluate upcoming days right now. Try Refresh.');
+          return;
+        }
+
+        const currentLevelRank = decisionLevelRank('NO-GO');
+        const currentScoreRaw = Number(safetyData.safety.score);
+        const currentScore = Number.isFinite(currentScoreRaw) ? currentScoreRaw : -Infinity;
+        const clearlyBetter = validSuggestions.filter((entry) => {
+          const rank = decisionLevelRank(entry.level);
+          const candidateScore = Number.isFinite(Number(entry.score)) ? Number(entry.score) : -Infinity;
+          return rank > currentLevelRank || (rank === currentLevelRank && candidateScore >= currentScore + 3);
+        });
+        const pool = clearlyBetter.length > 0 ? clearlyBetter : validSuggestions;
+        pool.sort((a, b) => {
+          const rankDelta = decisionLevelRank(b.level) - decisionLevelRank(a.level);
+          if (rankDelta !== 0) return rankDelta;
+          const scoreA = Number.isFinite(Number(a.score)) ? Number(a.score) : -Infinity;
+          const scoreB = Number.isFinite(Number(b.score)) ? Number(b.score) : -Infinity;
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          const precipA = Number.isFinite(Number(a.precipChance)) ? Number(a.precipChance) : 1000;
+          const precipB = Number.isFinite(Number(b.precipChance)) ? Number(b.precipChance) : 1000;
+          if (precipA !== precipB) return precipA - precipB;
+          const gustA = Number.isFinite(Number(a.gustMph)) ? Number(a.gustMph) : 1000;
+          const gustB = Number.isFinite(Number(b.gustMph)) ? Number(b.gustMph) : 1000;
+          if (gustA !== gustB) return gustA - gustB;
+          return a.date.localeCompare(b.date);
+        });
+
+        setBetterDaySuggestions(pool.slice(0, 3));
+        setBetterDaySuggestionsNote(
+          clearlyBetter.length > 0
+            ? null
+            : 'No clearly better day found in the next 7 days. Showing least-risk alternatives from available forecasts.',
+        );
+      } finally {
+        if (!cancelled) {
+          setBetterDaySuggestionsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasObjective,
+    view,
+    safetyData,
+    decision?.level,
+    forecastDate,
+    position.lat,
+    position.lng,
+    alpineStartTime,
+    preferences,
+    maxForecastDate,
+  ]);
+
   if (view === 'status') {
     return (
       <div key="view-status" className={appShellClassName} aria-busy={isViewPending}>
@@ -5553,6 +5785,53 @@ function App() {
                     <p className="muted-note">No dominant risk trigger detected from current model signals.</p>
                   )}
                 </div>
+                {decision.level === 'NO-GO' && (
+                  <div className="decision-group decision-better-days">
+                    <h4>
+                      <CalendarDays size={14} /> Potential better days (next 7 days)
+                    </h4>
+                    {betterDaySuggestionsLoading ? (
+                      <p className="muted-note">Scanning upcoming forecast days for lower-risk alternatives...</p>
+                    ) : betterDaySuggestions.length > 0 ? (
+                      <>
+                        {betterDaySuggestionsNote && <p className="muted-note">{betterDaySuggestionsNote}</p>}
+                        <ul className="decision-better-days-list">
+                          {betterDaySuggestions.map((suggestion) => {
+                            const levelClass = suggestion.level.toLowerCase().replace('-', '');
+                            return (
+                              <li key={suggestion.date} className="decision-better-day-item">
+                                <div className="decision-better-day-head">
+                                  <div className="decision-better-day-title">
+                                    <strong>{formatIsoDateLabel(suggestion.date)}</strong>
+                                    <span className={`decision-pill ${levelClass}`}>{suggestion.level}</span>
+                                    {Number.isFinite(Number(suggestion.score)) && <span className="decision-better-day-score">{suggestion.score}%</span>}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="settings-btn decision-better-day-btn"
+                                    onClick={() => {
+                                      setForecastDate(suggestion.date);
+                                      setError(null);
+                                    }}
+                                  >
+                                    Use day
+                                  </button>
+                                </div>
+                                <p className="decision-better-day-meta">
+                                  {localizeUnitText(suggestion.summary)}
+                                  {suggestion.precipChance !== null ? ` • precip ${suggestion.precipChance}%` : ''}
+                                  {suggestion.gustMph !== null ? ` • gust ${formatWindDisplay(suggestion.gustMph)}` : ''}
+                                </p>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
+                    ) : (
+                      <p className="muted-note">{betterDaySuggestionsNote || 'No upcoming alternatives are available in the current forecast range.'}</p>
+                    )}
+                  </div>
+                )}
                 <details className="decision-details">
                   <summary>Show detailed blockers, cautions, and check outcomes</summary>
                   {decision.blockers.length > 0 && (

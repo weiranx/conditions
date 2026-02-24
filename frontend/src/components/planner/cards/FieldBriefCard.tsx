@@ -67,7 +67,7 @@ export function FieldBriefCard({
 
       <div className="field-brief-split">
         <div className="field-brief-group">
-          <h4>Execution Plan (Next 2-4h)</h4>
+          <h4>Execution Plan (Time + Route)</h4>
           <ol className="field-brief-steps">
             {(fieldBriefExecutionSteps.length > 0
               ? fieldBriefExecutionSteps
@@ -89,7 +89,7 @@ export function FieldBriefCard({
       </div>
 
       <div className="field-brief-group">
-        <h4>Immediate Actions</h4>
+        <h4>Immediate Actions (Before Commit)</h4>
         <ul className="signal-list compact">
           {(fieldBriefImmediateActions.length > 0 ? fieldBriefImmediateActions : fieldBriefActions).map((item, idx) => (
             <li key={idx}>{localizeUnitText(item)}</li>
