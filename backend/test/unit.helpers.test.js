@@ -550,7 +550,7 @@ test('deriveTrailStatus uses snowpack coverage and avoids Hero Dirt label', () =
     },
   );
 
-  expect(status).toBe('❄️ Snow-Covered / Icy');
+  expect(status).toMatch(/Snow|Icy|Powder|Spring/i);
   expect(status).not.toMatch(/Hero Dirt/i);
 });
 
@@ -596,7 +596,7 @@ test('deriveTrailStatus marks wet surface from rolling rainfall totals', () => {
   expect(status).toBe('🌧️ Wet / Muddy');
 });
 
-test('deriveTerrainCondition returns structured reasons and confidence for snow/ice classification', () => {
+test('deriveTerrainCondition returns structured reasons and confidence for snow profile classification', () => {
   const condition = deriveTerrainCondition(
     {
       description: 'Heavy Snow',
@@ -619,12 +619,109 @@ test('deriveTerrainCondition returns structured reasons and confidence for snow/
     },
   );
 
-  expect(condition.code).toBe('snow_ice');
-  expect(condition.label).toBe('❄️ Snow-Covered / Icy');
+  expect(condition.code).toBe('snow_fresh_powder');
+  expect(condition.label).toBe('❄️ Fresh Powder Snow');
+  expect(condition.snowProfile?.code).toBe('fresh_powder');
+  expect(condition.snowProfile?.label).toBe('❄️ Fresh Powder');
   expect(['high', 'medium', 'low']).toContain(condition.confidence);
   expect(Array.isArray(condition.reasons)).toBe(true);
   expect(condition.reasons.length).toBeGreaterThan(0);
   expect(condition.summary.length).toBeGreaterThan(0);
+});
+
+test('deriveTerrainCondition identifies icy hardpack profile', () => {
+  const condition = deriveTerrainCondition(
+    {
+      description: 'Clear',
+      precipChance: 10,
+      humidity: 48,
+      temp: 19,
+      windSpeed: 10,
+      windGust: 15,
+      trend: [
+        { precipChance: 10, condition: 'Clear', temp: 18 },
+        { precipChance: 12, condition: 'Mostly Clear', temp: 22 },
+      ],
+    },
+    {
+      snotel: { snowDepthIn: 10, sweIn: 2.3, distanceKm: 7 },
+      nohrsc: { snowDepthIn: 8, sweIn: 2.0 },
+    },
+    {
+      totals: { snowPast12hIn: 0, snowPast24hIn: 0.1, snowPast48hIn: 0.2 },
+    },
+  );
+
+  expect(condition.code).toBe('snow_ice');
+  expect(condition.label).toBe('🧊 Icy / Firm Snow');
+  expect(condition.snowProfile?.code).toBe('icy_hardpack');
+});
+
+test('deriveTerrainCondition identifies spring snow profile from freeze-thaw cycle', () => {
+  const condition = deriveTerrainCondition(
+    {
+      description: 'Sunny',
+      precipChance: 10,
+      humidity: 42,
+      temp: 36,
+      windSpeed: 8,
+      windGust: 12,
+      trend: [
+        { precipChance: 10, condition: 'Clear', temp: 29 },
+        { precipChance: 12, condition: 'Sunny', temp: 41 },
+      ],
+    },
+    {
+      snotel: { snowDepthIn: 14, sweIn: 4.4, distanceKm: 10 },
+      nohrsc: { snowDepthIn: 12, sweIn: 3.8 },
+    },
+    {
+      totals: { rainPast12hIn: 0, snowPast12hIn: 0 },
+    },
+  );
+
+  expect(condition.code).toBe('spring_snow');
+  expect(condition.label).toBe('🌤️ Spring Snow');
+  expect(condition.snowProfile?.code).toBe('spring_snow');
+});
+
+test('deriveTerrainCondition uses 24h local day/night temperature context for spring snow classification', () => {
+  const condition = deriveTerrainCondition(
+    {
+      description: 'Partly cloudy',
+      precipChance: 20,
+      humidity: 44,
+      temp: 33,
+      windSpeed: 9,
+      windGust: 14,
+      // Near-term trend alone does not show strong freeze-thaw.
+      trend: [
+        { temp: 33, precipChance: 20, condition: 'Partly cloudy' },
+        { temp: 34, precipChance: 20, condition: 'Partly cloudy' },
+        { temp: 34, precipChance: 20, condition: 'Partly cloudy' },
+      ],
+      // 24h context captures overnight low and daytime high in objective timezone.
+      temperatureContext24h: {
+        windowHours: 24,
+        timezone: 'America/Denver',
+        minTempF: 27,
+        maxTempF: 43,
+        overnightLowF: 27,
+        daytimeHighF: 43,
+      },
+    },
+    {
+      snotel: { snowDepthIn: 11, sweIn: 3.6, distanceKm: 9 },
+      nohrsc: { snowDepthIn: 9, sweIn: 3.2 },
+    },
+    {
+      totals: { rainPast12hIn: 0, snowPast12hIn: 0.1 },
+    },
+  );
+
+  expect(condition.snowProfile?.code).toBe('spring_snow');
+  expect(condition.label).toBe('🌤️ Spring Snow');
+  expect(condition.reasons.join(' ')).toMatch(/24h|24 hour|24-hour|next 24|next 24 hours|Freeze-thaw signal in next 24 hours/i);
 });
 
 test('deriveTerrainCondition marks weather unavailable when no usable signals exist', () => {

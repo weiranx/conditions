@@ -74,6 +74,14 @@ export interface SafetyData {
     forecastStartTime?: string;
     forecastEndTime?: string;
     forecastDate?: string;
+    temperatureContext24h?: {
+      windowHours?: number | null;
+      timezone?: string | null;
+      minTempF?: number | null;
+      maxTempF?: number | null;
+      overnightLowF?: number | null;
+      daytimeHighF?: number | null;
+    } | null;
     trend?: WeatherTrendPoint[];
     elevation?: number | null;
     elevationUnit?: string;
@@ -272,6 +280,13 @@ export interface SafetyData {
   terrainCondition?: {
     code?: string;
     label?: string;
+    snowProfile?: {
+      code?: string;
+      label?: string;
+      summary?: string;
+      confidence?: 'high' | 'medium' | 'low';
+      reasons?: string[];
+    };
     confidence?: 'high' | 'medium' | 'low';
     summary?: string;
     reasons?: string[];

@@ -4177,6 +4177,14 @@ function App() {
   const terrainConditionDetails = safetyData
     ? (() => {
         const upstreamTerrain = safetyData.terrainCondition;
+        const snowProfile = upstreamTerrain?.snowProfile
+          ? {
+              label: upstreamTerrain.snowProfile.label || 'Snow profile unavailable',
+              summary: upstreamTerrain.snowProfile.summary || '',
+              reasons: Array.isArray(upstreamTerrain.snowProfile.reasons) ? upstreamTerrain.snowProfile.reasons.slice(0, 4) : [],
+              confidence: upstreamTerrain.snowProfile.confidence || null,
+            }
+          : null;
         if (upstreamTerrain && (upstreamTerrain.summary || (Array.isArray(upstreamTerrain.reasons) && upstreamTerrain.reasons.length > 0))) {
           return {
             summary:
@@ -4184,6 +4192,7 @@ function App() {
               'Surface classification is based on weather, precipitation totals, trend, and snowpack observations.',
             reasons: Array.isArray(upstreamTerrain.reasons) ? upstreamTerrain.reasons.slice(0, 6) : [],
             confidence: upstreamTerrain.confidence || null,
+            snowProfile,
           };
         }
         return {
@@ -4191,12 +4200,14 @@ function App() {
             'Surface classification is based on weather description, precip probability, rolling rain/snow totals, temperature trend, and available snowpack observations.',
           reasons: [] as string[],
           confidence: null as 'high' | 'medium' | 'low' | null,
+          snowProfile,
         };
       })()
     : {
         summary: 'Surface classification unavailable until a forecast is loaded.',
         reasons: [] as string[],
         confidence: null as 'high' | 'medium' | 'low' | null,
+        snowProfile: null as { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null,
       };
   const terrainConditionPillClass = (() => {
     const terrainCode = String(safetyData?.terrainCondition?.code || '').toLowerCase();
@@ -4206,7 +4217,7 @@ function App() {
     if (terrainCode === 'weather_unavailable') {
       return 'watch';
     }
-    if (['snow_ice', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode)) {
+    if (['snow_ice', 'snow_fresh_powder', 'spring_snow', 'wet_snow', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode)) {
       return 'caution';
     }
     if (terrainCode) {
@@ -5604,6 +5615,16 @@ function App() {
                   <span className={`decision-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
                 </div>
                 <p className="muted-note">{terrainConditionDetails.summary}</p>
+                {terrainConditionDetails.snowProfile && (
+                  <>
+                    <p className="terrain-context-line">
+                      Snow profile: <strong>{terrainConditionDetails.snowProfile.label}</strong>
+                    </p>
+                    {terrainConditionDetails.snowProfile.summary ? (
+                      <p className="muted-note">{terrainConditionDetails.snowProfile.summary}</p>
+                    ) : null}
+                  </>
+                )}
                 <p className="terrain-context-line">{terrainPrecipContextLine}</p>
                 {terrainConditionDetails.confidence && (
                   <p className="muted-note">
@@ -5624,6 +5645,13 @@ function App() {
                 ) : (
                   <p className="muted-note">No strong surface signal was detected from current upstream data.</p>
                 )}
+                {terrainConditionDetails.snowProfile && terrainConditionDetails.snowProfile.reasons.length > 0 ? (
+                  <ul className="signal-list compact">
+                    {terrainConditionDetails.snowProfile.reasons.map((reason, index) => (
+                      <li key={`snow-profile-reason-${index}`}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 <p className="muted-note">Classification updates when you change location, date, or start time.</p>
               </div>
 

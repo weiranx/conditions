@@ -224,6 +224,7 @@ const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
   forecastEndTime: null,
   forecastDate: forecastDate || null,
   trend: [],
+  temperatureContext24h: null,
   elevationForecast: [],
   elevationForecastNote: 'Weather forecast data unavailable; elevation-based estimate could not be generated.',
   forecastLink: `https://forecast.weather.gov/MapClick.php?lat=${lat}&lon=${lon}`,
@@ -286,6 +287,67 @@ const hourLabelFromIso = (input, timeZone = null) => {
     const fallback = date.toLocaleTimeString('en-US', baseOptions);
     return fallback.replace(':00 ', ' ');
   }
+};
+
+const localHourFromIso = (input, timeZone = null) => {
+  if (typeof input !== 'string' || !input.trim()) {
+    return null;
+  }
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      hourCycle: 'h23',
+      ...(timeZone ? { timeZone } : {}),
+    });
+    const parts = formatter.formatToParts(date);
+    const hourPart = parts.find((part) => part.type === 'hour');
+    const hour = Number(hourPart?.value);
+    return Number.isFinite(hour) ? hour : null;
+  } catch {
+    const hour = date.getHours();
+    return Number.isFinite(hour) ? hour : null;
+  }
+};
+
+const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 }) => {
+  const normalizedWindow = Math.max(1, Math.round(Number(windowHours) || 24));
+  const sourcePoints = Array.isArray(points) ? points.slice(0, normalizedWindow) : [];
+  const validPoints = sourcePoints.filter((point) => Number.isFinite(Number(point?.tempF)));
+  if (!validPoints.length) {
+    return null;
+  }
+
+  const temps = validPoints.map((point) => Number(point.tempF));
+  const dayTemps = [];
+  const nightTemps = [];
+
+  validPoints.forEach((point) => {
+    let isDaytime = typeof point?.isDaytime === 'boolean' ? point.isDaytime : null;
+    if (isDaytime === null) {
+      const localHour = localHourFromIso(point?.timeIso, timeZone);
+      if (Number.isFinite(localHour)) {
+        isDaytime = localHour >= 6 && localHour < 18;
+      }
+    }
+    if (isDaytime === true) {
+      dayTemps.push(Number(point.tempF));
+    } else if (isDaytime === false) {
+      nightTemps.push(Number(point.tempF));
+    }
+  });
+
+  return {
+    windowHours: normalizedWindow,
+    timezone: timeZone || null,
+    minTempF: Math.min(...temps),
+    maxTempF: Math.max(...temps),
+    overnightLowF: nightTemps.length ? Math.min(...nightTemps) : null,
+    daytimeHighF: dayTemps.length ? Math.max(...dayTemps) : null,
+  };
 };
 
 const withExplicitTimezone = (value, timezoneHint = 'UTC') => {
@@ -483,6 +545,25 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
   const feelsLike = computeFeelsLikeF(currentTemp, currentWind);
 
   const trend = [];
+  const temperatureContextPoints = [];
+  for (let offset = 0; offset < 24; offset += 1) {
+    const rowIndex = selectedHourIndex + offset;
+    const rowIso = hourlyTimes[rowIndex];
+    if (!rowIso) {
+      break;
+    }
+    temperatureContextPoints.push({
+      timeIso: rowIso,
+      tempF: Math.round(readHourlyValue('temperature_2m', rowIndex, currentTemp)),
+      isDaytime: readHourlyValue('is_day', rowIndex, 1) >= 1,
+    });
+  }
+  const temperatureContext24h = buildTemperatureContext24h({
+    points: temperatureContextPoints,
+    timeZone: payload?.timezone || null,
+    windowHours: 24,
+  });
+
   for (let offset = 0; offset < 12; offset += 1) {
     const rowIndex = selectedHourIndex + offset;
     const rowIso = hourlyTimes[rowIndex];
@@ -493,6 +574,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
     const rowWind = Math.round(readHourlyValue('wind_speed_10m', rowIndex, currentWind));
     trend.push({
       time: hourLabelFromIso(rowIso, payload?.timezone || null),
+      timeIso: rowIso,
       temp: Math.round(readHourlyValue('temperature_2m', rowIndex, currentTemp)),
       wind: rowWind,
       gust: Number.isFinite(rawRowGust)
@@ -501,6 +583,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
       windDirection: findNearestCardinalFromDegreeSeries(windDirectionSeries, rowIndex),
       precipChance: Math.round(readHourlyValue('precipitation_probability', rowIndex, currentPrecipProb)),
       condition: openMeteoCodeToText(readHourlyValue('weather_code', rowIndex, currentWeatherCode)),
+      isDaytime: readHourlyValue('is_day', rowIndex, 1) >= 1,
     });
   }
 
@@ -532,6 +615,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
     forecastEndTime: selectedHourIso,
     forecastDate: resolvedDate,
     trend,
+    temperatureContext24h,
     sourceDetails: {
       primary: 'Open-Meteo',
       blended: false,
@@ -552,6 +636,7 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
         forecastStartTime: 'Open-Meteo',
         forecastEndTime: 'Open-Meteo',
         trend: 'Open-Meteo',
+        temperatureContext24h: 'Open-Meteo',
       },
     },
     elevationForecast: elevationForecastBands,
@@ -608,7 +693,7 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
     }
   };
 
-  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint'].forEach(tryFillField);
+  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h'].forEach(tryFillField);
 
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
@@ -2248,6 +2333,20 @@ const safetyHandler = async (req, res) => {
 
       selectedForecastPeriod = periods[forecastStartIndex];
 
+      // Build 24-hour temperature context from selected period for freeze/thaw and day/night analysis.
+      const temperatureContextPoints = periods
+        .slice(forecastStartIndex, forecastStartIndex + 24)
+        .map((p) => ({
+          timeIso: p?.startTime || null,
+          tempF: Number.isFinite(Number(p?.temperature)) ? Number(p.temperature) : null,
+          isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
+        }));
+      const temperatureContext24h = buildTemperatureContext24h({
+        points: temperatureContextPoints,
+        timeZone: pointsData?.properties?.timeZone || null,
+        windowHours: 24,
+      });
+
       // Get 12-hour trend from selected forecast date
       const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + 12).map((p, offset) => {
         const rowIndex = forecastStartIndex + offset;
@@ -2258,12 +2357,14 @@ const safetyHandler = async (req, res) => {
 
         return {
           time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
+          timeIso: p.startTime || null,
           temp: trendTemp,
           wind: windSpeedValue,
           gust: windGustValue,
           windDirection: findNearestWindDirection(periods, rowIndex),
           precipChance: trendPrecip,
-          condition: p.shortForecast || 'Unknown'
+          condition: p.shortForecast || 'Unknown',
+          isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
         };
       });
 
@@ -2307,6 +2408,7 @@ const safetyHandler = async (req, res) => {
         forecastEndTime: selectedForecastPeriod?.endTime || null,
         forecastDate: selectedForecastDate,
         trend: hourlyTrend,
+        temperatureContext24h,
         sourceDetails: {
           primary: 'NOAA',
           blended: false,
@@ -2327,6 +2429,7 @@ const safetyHandler = async (req, res) => {
             forecastStartTime: 'NOAA',
             forecastEndTime: 'NOAA',
             trend: 'NOAA',
+            temperatureContext24h: 'NOAA',
           },
         },
         elevationForecast: elevationForecastBands,
