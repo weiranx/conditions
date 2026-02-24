@@ -2085,6 +2085,8 @@ function App() {
   const fetchSafetyDataRef = useRef<
     ((lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => Promise<void>) | null
   >(null);
+  const hasInitializedHistoryRef = useRef(false);
+  const isApplyingPopStateRef = useRef(false);
   const wakeRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeRetryStateRef = useRef<{
     key: string;
@@ -2438,6 +2440,10 @@ function App() {
   }, [view, runHealthChecks]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     const hasSharableState = view === 'planner' || view === 'trip' || hasObjective || committedSearchQuery.trim();
     const query = hasSharableState
       ? buildShareQuery({
@@ -2455,9 +2461,45 @@ function App() {
     const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
     const currentUrl = `${window.location.pathname}${window.location.search}`;
     if (nextUrl !== currentUrl) {
-      window.history.replaceState(null, '', nextUrl);
+      if (isApplyingPopStateRef.current || !hasInitializedHistoryRef.current) {
+        window.history.replaceState(null, '', nextUrl);
+      } else {
+        window.history.pushState(null, '', nextUrl);
+      }
     }
+
+    isApplyingPopStateRef.current = false;
+    hasInitializedHistoryRef.current = true;
   }, [view, hasObjective, position, objectiveName, committedSearchQuery, forecastDate, alpineStartTime, targetElevationInput]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handlePopState = () => {
+      isApplyingPopStateRef.current = true;
+      const linkState = parseLinkState(todayDate, maxForecastDate, preferences);
+      clearWakeRetry();
+      setView(linkState.view);
+      setPosition(linkState.position);
+      setHasObjective(linkState.hasObjective);
+      setObjectiveName(linkState.objectiveName);
+      setSearchQuery(linkState.searchQuery);
+      setCommittedSearchQuery(linkState.searchQuery);
+      setForecastDate(linkState.forecastDate);
+      setAlpineStartTime(linkState.alpineStartTime);
+      setTurnaroundTime(linkState.turnaroundTime);
+      setTargetElevationInput(linkState.targetElevationInput);
+      setTargetElevationManual(Boolean(linkState.targetElevationInput));
+      setError(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [todayDate, maxForecastDate, preferences, clearWakeRetry]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
