@@ -647,12 +647,31 @@ input {
 .brand-mark {
   width: 42px;
   height: 42px;
+  padding: 0;
   border-radius: 12px;
   border: 1px solid rgba(208, 231, 218, 0.46);
   background: rgba(197, 229, 210, 0.15);
   display: grid;
   place-items: center;
   color: var(--text-light);
+}
+
+.brand-home-btn {
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.brand-home-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(230, 246, 238, 0.72);
+  background: rgba(210, 236, 222, 0.24);
+  box-shadow: 0 8px 20px rgba(10, 24, 18, 0.3);
+}
+
+.brand-home-btn:focus-visible {
+  outline: none;
+  border-color: rgba(230, 246, 238, 0.86);
+  box-shadow: 0 0 0 3px rgba(188, 222, 202, 0.25);
 }
 
 .brand-mark-icon {
@@ -686,11 +705,36 @@ input {
 .header-controls {
   display: flex;
   align-items: center;
-  gap: 9px;
-  flex: 1;
+  gap: 10px;
+  flex: 1 1 560px;
   justify-content: flex-end;
   position: relative;
   z-index: 45;
+  min-width: 0;
+}
+
+.header-controls .search-wrapper {
+  flex: 1 1 380px;
+  max-width: 620px;
+  min-width: min(300px, 100%);
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.header-nav-btn {
+  min-height: 36px;
+  padding: 8px 11px;
+  font-size: 0.79rem;
+}
+
+.nav-btn-label {
+  line-height: 1;
 }
 
 .activity-switch {
@@ -5414,10 +5458,15 @@ input {
     gap: 8px;
   }
 
-  .search-wrapper {
+  .header-controls .search-wrapper {
     flex: 1 1 100%;
     max-width: 100%;
     min-width: 0;
+  }
+
+  .header-nav {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .search-bar {
@@ -5431,8 +5480,8 @@ input {
     font-size: 0.92rem;
   }
 
-  .header-controls > .secondary-btn {
-    flex: 1 1 calc(50% - 4px);
+  .header-nav > .secondary-btn {
+    flex: 1 1 calc(33.333% - 6px);
     min-width: 0;
     justify-content: center;
     padding: 8px 10px;
@@ -5614,7 +5663,7 @@ input {
     flex-wrap: wrap;
   }
 
-  .search-wrapper {
+  .header-controls .search-wrapper {
     max-width: 100%;
   }
 
@@ -5631,6 +5680,11 @@ input {
   .secondary-btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .header-nav .secondary-btn {
+    width: auto;
+    flex: 1 1 calc(33.333% - 6px);
   }
 
   .settings-shell {
@@ -5927,7 +5981,7 @@ input {
     letter-spacing: 0.05em;
   }
 
-  .header-controls > .secondary-btn {
+  .header-nav > .secondary-btn {
     flex: 1 1 100%;
   }
 

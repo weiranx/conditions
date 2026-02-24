@@ -133,6 +133,61 @@ const normalizeNoaaDewPointF = (dewpointField) => {
   return Math.round(value);
 };
 
+const clampPercent = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+};
+
+const inferNoaaCloudCoverFromIcon = (iconUrl) => {
+  const icon = String(iconUrl || '').toLowerCase();
+  if (!icon) {
+    return null;
+  }
+  const tokens = icon
+    .split(/[\/,?]/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (tokens.some((token) => token.startsWith('ovc'))) return 95;
+  if (tokens.some((token) => token.startsWith('bkn'))) return 75;
+  if (tokens.some((token) => token.startsWith('sct'))) return 50;
+  if (tokens.some((token) => token.startsWith('few'))) return 20;
+  if (tokens.some((token) => token === 'skc' || token === 'clr')) return 5;
+  return null;
+};
+
+const inferNoaaCloudCoverFromForecastText = (shortForecast) => {
+  const text = String(shortForecast || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!text) {
+    return null;
+  }
+  if (text.includes('overcast')) return 95;
+  if (text.includes('mostly cloudy')) return 80;
+  if (text.includes('partly cloudy') || text.includes('partly sunny')) return 50;
+  if (text.includes('mostly sunny')) return 25;
+  if (text.includes('sunny') || text.includes('clear')) return 10;
+  if (text.includes('cloudy')) return 70;
+  return null;
+};
+
+const resolveNoaaCloudCover = (forecastPeriod) => {
+  const skyCoverValue = clampPercent(forecastPeriod?.skyCover?.value);
+  if (Number.isFinite(skyCoverValue)) {
+    return { value: skyCoverValue, source: 'NOAA skyCover' };
+  }
+  const fromIcon = inferNoaaCloudCoverFromIcon(forecastPeriod?.icon);
+  if (Number.isFinite(fromIcon)) {
+    return { value: fromIcon, source: 'NOAA icon-derived cloud cover' };
+  }
+  const fromText = inferNoaaCloudCoverFromForecastText(forecastPeriod?.shortForecast);
+  if (Number.isFinite(fromText)) {
+    return { value: fromText, source: 'NOAA shortForecast-derived cloud cover' };
+  }
+  return { value: null, source: 'Unavailable' };
+};
+
 const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
 const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, windGustMph }) => {
@@ -693,7 +748,7 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
     }
   };
 
-  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h'].forEach(tryFillField);
+  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h', 'cloudCover'].forEach(tryFillField);
 
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
@@ -2371,6 +2426,7 @@ const safetyHandler = async (req, res) => {
       const currentWindSpeed = parseWindMph(selectedForecastPeriod?.windSpeed, 0);
       const inferredCurrentGust = inferWindGustFromPeriods(periods, forecastStartIndex, currentWindSpeed);
       const currentWindGust = inferredCurrentGust.gustMph;
+      const currentCloudCover = resolveNoaaCloudCover(selectedForecastPeriod);
       const windGustSource =
         inferredCurrentGust.source === 'reported'
           ? 'NOAA'
@@ -2399,7 +2455,7 @@ const safetyHandler = async (req, res) => {
         windGust: currentWindGust,
         windDirection: findNearestWindDirection(periods, forecastStartIndex),
         humidity: Number.isFinite(selectedForecastPeriod?.relativeHumidity?.value) ? selectedForecastPeriod.relativeHumidity.value : 0,
-        cloudCover: Number.isFinite(selectedForecastPeriod?.skyCover?.value) ? selectedForecastPeriod.skyCover.value : 0,
+        cloudCover: currentCloudCover.value,
         precipChance: Number.isFinite(selectedForecastPeriod?.probabilityOfPrecipitation?.value) ? selectedForecastPeriod.probabilityOfPrecipitation.value : 0,
         isDaytime: selectedForecastPeriod?.isDaytime ?? null,
         issuedTime: hourlyData?.properties?.updateTime || hourlyData?.properties?.generatedAt || null,
@@ -2421,7 +2477,7 @@ const safetyHandler = async (req, res) => {
             windGust: windGustSource,
             windDirection: 'NOAA',
             humidity: 'NOAA',
-            cloudCover: 'NOAA',
+            cloudCover: currentCloudCover.source,
             precipChance: 'NOAA',
             isDaytime: 'NOAA',
             issuedTime: 'NOAA',
@@ -2448,7 +2504,13 @@ const safetyHandler = async (req, res) => {
       trailStatus = terrainConditionData.label;
 
       // NOAA remains primary; supplement missing/noisy fields with Open-Meteo when needed.
-      if (!weatherData.windDirection || !weatherData.issuedTime || (Array.isArray(weatherData.trend) && weatherData.trend.length < 6)) {
+      if (
+        !weatherData.windDirection ||
+        !weatherData.issuedTime ||
+        weatherData.cloudCover === null ||
+        weatherData.cloudCover === undefined ||
+        (Array.isArray(weatherData.trend) && weatherData.trend.length < 6)
+      ) {
         try {
           const supplement = await fetchOpenMeteoWeatherFallback({
             lat: parsedLat,

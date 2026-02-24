@@ -1506,17 +1506,17 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
     },
     {
       key: 'precipitation',
-      label: `Precipitation chance is under ${maxPrecipThreshold}%`,
-      ok: precip < maxPrecipThreshold,
+      label: `Precipitation chance is at or below ${maxPrecipThreshold}%`,
+      ok: precip <= maxPrecipThreshold,
       detail: `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
-      action: precip >= maxPrecipThreshold ? 'Expect slower travel and reduced traction; tighten route and timing.' : undefined,
+      action: precip > maxPrecipThreshold ? 'Expect slower travel and reduced traction; tighten route and timing.' : undefined,
     },
     {
       key: 'wind-gust',
-      label: `Wind gusts are under ${displayMaxGustThreshold}`,
-      ok: gust < maxGustThreshold,
+      label: `Wind gusts are at or below ${displayMaxGustThreshold}`,
+      ok: gust <= maxGustThreshold,
       detail: `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
-      action: gust >= maxGustThreshold ? 'Reduce ridge exposure and shorten high-wind segments.' : undefined,
+      action: gust > maxGustThreshold ? 'Reduce ridge exposure and shorten high-wind segments.' : undefined,
     },
     {
       key: 'daylight',
@@ -1538,10 +1538,10 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
     },
     {
       key: 'feels-like',
-      label: `Apparent temperature is above ${displayMinFeelsLikeThreshold}`,
-      ok: feelsLike > minFeelsLikeThreshold,
+      label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,
+      ok: feelsLike >= minFeelsLikeThreshold,
       detail: `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
-      action: feelsLike <= minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
+      action: feelsLike < minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
     },
   ];
 
@@ -3257,6 +3257,38 @@ function App() {
   const criticalCheckTotal = orderedCriticalChecks.length;
   const criticalCheckPassCount = passedCriticalChecks.length;
   const criticalCheckFailCount = failedCriticalChecks.length;
+  const describeFailedCriticalCheck = (check: SummitDecision['checks'][number]): string => {
+    switch (check.key) {
+      case 'avalanche':
+        return /coverage unavailable/i.test(String(check.detail || ''))
+          ? 'Avalanche bulletin is unavailable for selected objective/time'
+          : 'Avalanche danger exceeds Moderate';
+      case 'convective-signal':
+        return 'Convective storm signal appears in forecast';
+      case 'precipitation':
+        return 'Precipitation chance exceeds threshold';
+      case 'wind-gust':
+        return 'Wind gust exceeds threshold';
+      case 'daylight':
+        return 'Start time misses the 30-minute daylight buffer';
+      case 'feels-like':
+        return 'Apparent temperature is below threshold';
+      case 'nws-alerts':
+        return 'Active NWS alert overlaps selected travel window';
+      case 'air-quality':
+        return 'Air quality exceeds 100 AQI';
+      case 'fire-risk':
+        return 'Fire risk is High or above';
+      case 'heat-risk':
+        return 'Heat risk is High or above';
+      case 'terrain-signal':
+        return 'Terrain/trail condition signal is unavailable';
+      case 'source-freshness':
+        return 'Core source freshness has stale or missing feeds';
+      default:
+        return check.label;
+    }
+  };
   const startLabel = 'Start time';
   const avalancheRelevant = safetyData ? safetyData.avalanche.relevant !== false : true;
   const avalancheExpiredForSelectedStart = safetyData ? safetyData.avalanche.coverageStatus === 'expired_for_selected_start' : false;
@@ -3701,8 +3733,9 @@ function App() {
     ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
     : 'Not available';
   const weatherWindDirectionLabel = normalizeWindHintDirection(safetyData?.weather.windDirection || null) || 'N/A';
-  const weatherCloudCoverLabel = Number.isFinite(Number(safetyData?.weather.cloudCover))
-    ? `${Math.round(Number(safetyData?.weather.cloudCover))}%`
+  const weatherCloudCover = parseOptionalFiniteNumber(safetyData?.weather.cloudCover);
+  const weatherCloudCoverLabel = Number.isFinite(weatherCloudCover)
+    ? `${Math.round(weatherCloudCover)}%`
     : 'N/A';
   const satObjectiveLabel = truncateText((objectiveName || 'Objective').split(',')[0].trim(), 22);
   const satAvalancheSnippet =
@@ -3897,6 +3930,7 @@ function App() {
       ]
     : [];
   const objectiveTimezone = safetyData?.weather.timezone || null;
+  const precipitationDisplayTimezone = objectiveTimezone || safetyData?.rainfall?.timezone || null;
   const deviceTimezone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || null : null;
   const timezoneMismatch = Boolean(objectiveTimezone && deviceTimezone && objectiveTimezone !== deviceTimezone);
   const handleUseNowConditions = () => {
@@ -4034,6 +4068,43 @@ function App() {
     const trendGust = Number(point?.gust);
     return (Number.isFinite(trendWind) && trendWind >= 18) || (Number.isFinite(trendGust) && trendGust >= 28);
   }).length;
+  const activeTransportSpans = (() => {
+    if (windTrendRows.length === 0) {
+      return [] as Array<{ startIdx: number; endIdx: number; length: number }>;
+    }
+    const spans: Array<{ startIdx: number; endIdx: number; length: number }> = [];
+    let startIdx: number | null = null;
+    windTrendRows.forEach((point, idx) => {
+      const trendWind = Number(point?.wind);
+      const trendGust = Number(point?.gust);
+      const isActive =
+        (Number.isFinite(trendWind) && trendWind >= 18) ||
+        (Number.isFinite(trendGust) && trendGust >= 28);
+      if (isActive && startIdx === null) {
+        startIdx = idx;
+      }
+      const isEnd = idx === windTrendRows.length - 1;
+      if (startIdx !== null && (!isActive || isEnd)) {
+        const endIdx = isActive && isEnd ? idx : idx - 1;
+        if (endIdx >= startIdx) {
+          spans.push({ startIdx, endIdx, length: endIdx - startIdx + 1 });
+        }
+        startIdx = null;
+      }
+    });
+    return spans;
+  })();
+  const activeTransportHourLabels = activeTransportSpans.map((span) => {
+    const startLabel = formatClockForStyle(windTrendRows[span.startIdx]?.time || '', preferences.timeStyle);
+    const endLabel = formatClockForStyle(windTrendRows[span.endIdx]?.time || '', preferences.timeStyle);
+    return span.length <= 1 || span.startIdx === span.endIdx ? startLabel : `${startLabel}–${endLabel}`;
+  });
+  const windLoadingActiveHoursDetail =
+    windTrendRows.length === 0
+      ? 'No trend hours available'
+      : activeTransportHourLabels.length > 0
+        ? activeTransportHourLabels.join(' • ')
+        : 'No active hours in selected window';
   const severeTransportHours = windTrendRows.filter((point) => {
     const trendWind = Number(point?.wind);
     const trendGust = Number(point?.gust);
@@ -4156,7 +4227,7 @@ function App() {
           ? `Trend agreement: ${Math.round(trendAgreementRatio * 100)}% of ${directionalTrendWindDirections.length} nearby hour(s) align within 45 degrees.`
           : 'Trend agreement: not enough directional trend data.',
         windTrendRows.length > 0
-          ? `Active loading window: ${activeTransportHours}/${windTrendRows.length} hour(s) show active wind-transport signal.`
+          ? `Active loading window: ${activeTransportHours}/${windTrendRows.length} hour(s) show active wind-transport signal (${windLoadingActiveHoursDetail}).`
           : null,
         secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20
           ? `Secondary cross-loading possible on ${secondaryWindAspects.join(', ')} aspects.`
@@ -4953,9 +5024,15 @@ function App() {
     <div key="view-planner" className={appShellClassName} aria-busy={isViewPending}>
       <header className="header-section">
         <div className="brand">
-          <div className="brand-mark">
+          <button
+            type="button"
+            className="brand-mark brand-home-btn"
+            onClick={() => navigateToView('home')}
+            aria-label="Go to homepage"
+            title="Homepage"
+          >
             <img src="/summitsafe-icon.svg" alt="Backcountry Conditions" className="brand-mark-icon" />
-          </div>
+          </button>
           <div className="brand-copy">
             <h1>
               Backcountry Conditions
@@ -4985,18 +5062,17 @@ function App() {
             onHoverSuggestion={setActiveSuggestionIndex}
           />
 
-          <button className="secondary-btn" onClick={() => navigateToView('home')}>
-            <House size={14} /> Homepage
-          </button>
-          <button className="secondary-btn" onClick={() => navigateToView('settings')}>
-            <SlidersHorizontal size={14} /> Settings
-          </button>
-          <button className="secondary-btn" onClick={openStatusView}>
-            <ShieldCheck size={14} /> Status
-          </button>
-          <button className="secondary-btn" onClick={handleCopyLink}>
-            <Link2 size={14} /> {copiedLink ? 'Copied' : 'Copy Link'}
-          </button>
+          <nav className="header-nav" aria-label="Planner controls">
+            <button className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
+              <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
+            </button>
+            <button className="secondary-btn header-nav-btn" onClick={openStatusView}>
+              <ShieldCheck size={14} /> <span className="nav-btn-label">Health</span>
+            </button>
+            <button className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
+              <Link2 size={14} /> <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
+            </button>
+          </nav>
         </div>
       </header>
 
@@ -5335,8 +5411,12 @@ function App() {
                     <ul className="checks-attention-list">
                       {topCriticalAttentionChecks.map((check, idx) => (
                         <li key={`${check.key || check.label}-${idx}`}>
-                          <span className="checks-attention-label">{localizeUnitText(check.label)}</span>
-                          <small>{localizeUnitText(check.action || check.detail || 'Review this signal before departure.')}</small>
+                          <span className="checks-attention-label">{localizeUnitText(describeFailedCriticalCheck(check))}</span>
+                          <small>
+                            {localizeUnitText(
+                              [check.detail, check.action].filter(Boolean).join(' • ') || 'Review this signal before departure.',
+                            )}
+                          </small>
                         </li>
                       ))}
                     </ul>
@@ -5746,7 +5826,7 @@ function App() {
                       <span className="stat-label">Forecast start</span>
                       <strong>
                         {rainfallExpected?.startTime
-                          ? formatForecastPeriodLabel(rainfallExpected.startTime, safetyData.rainfall?.timezone || null)
+                          ? formatForecastPeriodLabel(rainfallExpected.startTime, precipitationDisplayTimezone)
                           : 'N/A'}
                       </strong>
                     </div>
@@ -5754,11 +5834,12 @@ function App() {
                       <span className="stat-label">Forecast end</span>
                       <strong>
                         {rainfallExpected?.endTime
-                          ? formatForecastPeriodLabel(rainfallExpected.endTime, safetyData.rainfall?.timezone || null)
+                          ? formatForecastPeriodLabel(rainfallExpected.endTime, precipitationDisplayTimezone)
                           : 'N/A'}
                       </strong>
                     </div>
                   </div>
+                  {precipitationDisplayTimezone && <p className="muted-note">Times shown in objective timezone: {precipitationDisplayTimezone}</p>}
                   <p className="muted-note">{expectedPrecipNoteLine}</p>
                 </div>
                 <div className="precip-meta-grid">
@@ -5770,7 +5851,7 @@ function App() {
                     <span className="stat-label">Anchor time</span>
                     <strong>
                       {safetyData.rainfall?.anchorTime
-                        ? formatForecastPeriodLabel(safetyData.rainfall.anchorTime, safetyData.rainfall?.timezone || null)
+                        ? formatForecastPeriodLabel(safetyData.rainfall.anchorTime, precipitationDisplayTimezone)
                         : 'N/A'}
                     </strong>
                   </div>
@@ -5809,6 +5890,10 @@ function App() {
                     <div className="wind-hint-meta-item">
                       <span className="stat-label">Active Window</span>
                       <strong>{windLoadingActiveWindowLabel}</strong>
+                    </div>
+                    <div className="wind-hint-meta-item wind-hint-meta-wide">
+                      <span className="stat-label">Active Hours</span>
+                      <strong>{windLoadingActiveHoursDetail}</strong>
                     </div>
                     <div className="wind-hint-meta-item">
                       <span className="stat-label">Direction Source</span>
@@ -6411,7 +6496,7 @@ function App() {
                     </li>
                     <li>
                       <span className="raw-key">Cloud Cover</span>
-                      <span className="raw-value">{safetyData.weather.cloudCover}%</span>
+                      <span className="raw-value">{Number.isFinite(weatherCloudCover) ? `${Math.round(weatherCloudCover)}%` : 'N/A'}</span>
                     </li>
                     <li>
                       <span className="raw-key">Rainfall 12h/24h/48h</span>

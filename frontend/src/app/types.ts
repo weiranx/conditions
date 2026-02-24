@@ -64,7 +64,7 @@ export interface SafetyData {
     windGust: number;
     windDirection?: string | null;
     humidity: number;
-    cloudCover: number;
+    cloudCover: number | null;
     precipChance: number;
     isDaytime?: boolean | null;
     forecastLink?: string;
