@@ -1254,9 +1254,18 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
   const viewParam = params.get('view');
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitStatusView = viewParam === 'status';
+  const hasExplicitTripView = viewParam === 'trip';
 
   return {
-    view: hasExplicitSettingsView ? 'settings' : hasExplicitStatusView ? 'status' : viewParam === 'planner' || hasCoords ? 'planner' : 'home',
+    view: hasExplicitSettingsView
+      ? 'settings'
+      : hasExplicitStatusView
+        ? 'status'
+        : hasExplicitTripView
+          ? 'trip'
+          : viewParam === 'planner' || hasCoords
+            ? 'planner'
+            : 'home',
     activity: 'backcountry',
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
     hasObjective: hasCoords,
@@ -1270,7 +1279,7 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
 }
 
 function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'status';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;
@@ -1287,6 +1296,8 @@ function buildShareQuery(state: {
     params.set('view', 'settings');
   } else if (state.view === 'status') {
     params.set('view', 'status');
+  } else if (state.view === 'trip') {
+    params.set('view', 'trip');
   }
 
   if (state.hasObjective) {
@@ -1687,6 +1698,21 @@ type BetterDaySuggestion = {
   summary: string;
 };
 
+type MultiDayTripForecastDay = {
+  date: string;
+  decisionLevel: DecisionLevel;
+  decisionHeadline: string;
+  score: number | null;
+  weatherDescription: string;
+  tempF: number | null;
+  feelsLikeF: number | null;
+  windGustMph: number | null;
+  precipChance: number | null;
+  avalancheSummary: string;
+  travelSummary: string;
+  sourceIssuedTime: string | null;
+};
+
 function App() {
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
@@ -1694,7 +1720,7 @@ function App() {
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
   const initialLinkState = React.useMemo(() => parseLinkState(todayDate, maxForecastDate, initialPreferences), [todayDate, maxForecastDate, initialPreferences]);
 
-  const [view, setView] = useState<'home' | 'planner' | 'settings' | 'status'>(initialLinkState.view);
+  const [view, setView] = useState<'home' | 'planner' | 'settings' | 'status' | 'trip'>(initialLinkState.view);
   const [preferences, setPreferences] = useState<UserPreferences>(initialPreferences);
   const activity: ActivityType = 'backcountry';
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
@@ -1718,6 +1744,13 @@ function App() {
   const [copiedSatLine, setCopiedSatLine] = useState(false);
   const [copiedTeamBrief, setCopiedTeamBrief] = useState(false);
   const [dayOverDay, setDayOverDay] = useState<DayOverDayComparison | null>(null);
+  const [tripStartDate, setTripStartDate] = useState(initialLinkState.forecastDate);
+  const [tripStartTime, setTripStartTime] = useState(initialLinkState.alpineStartTime);
+  const [tripDurationDays, setTripDurationDays] = useState(3);
+  const [tripForecastRows, setTripForecastRows] = useState<MultiDayTripForecastDay[]>([]);
+  const [tripForecastLoading, setTripForecastLoading] = useState(false);
+  const [tripForecastError, setTripForecastError] = useState<string | null>(null);
+  const [tripForecastNote, setTripForecastNote] = useState<string | null>(null);
   const [betterDaySuggestions, setBetterDaySuggestions] = useState<BetterDaySuggestion[]>([]);
   const [betterDaySuggestionsLoading, setBetterDaySuggestionsLoading] = useState(false);
   const [betterDaySuggestionsNote, setBetterDaySuggestionsNote] = useState<string | null>(null);
@@ -1862,6 +1895,9 @@ function App() {
     setError(null);
     setTargetElevationInput('');
     setTargetElevationManual(false);
+    setTripForecastRows([]);
+    setTripForecastError(null);
+    setTripForecastNote(null);
     if (label) {
       setObjectiveName(label);
     } else {
@@ -2083,6 +2119,11 @@ function App() {
       return;
     }
 
+    if (view === 'trip') {
+      document.title = 'Multi-Day Trip Tool - Backcountry Conditions';
+      return;
+    }
+
     if (objectiveName) {
       document.title = `${objectiveName} plan - Backcountry Conditions`;
     } else if (committedSearchQuery) {
@@ -2100,7 +2141,7 @@ function App() {
   }, [view, runHealthChecks]);
 
   useEffect(() => {
-    const hasSharableState = view === 'planner' || hasObjective || committedSearchQuery.trim();
+    const hasSharableState = view === 'planner' || view === 'trip' || hasObjective || committedSearchQuery.trim();
     const query = hasSharableState
       ? buildShareQuery({
           view,
@@ -3214,8 +3255,146 @@ function App() {
   const openStatusView = () => {
     startViewChange(() => setView('status'));
   };
+  const openTripToolView = () => {
+    setTripStartDate(forecastDate);
+    setTripStartTime(alpineStartTime);
+    setTripForecastRows([]);
+    setTripForecastError(null);
+    setTripForecastNote(null);
+    startViewChange(() => setView('trip'));
+  };
+  const runTripForecast = useCallback(async () => {
+    if (!hasObjective) {
+      setTripForecastRows([]);
+      setTripForecastError('Select an objective first in Planner to run multi-day trip forecasts.');
+      setTripForecastNote(null);
+      return;
+    }
+    const safeStartDate = normalizeForecastDate(tripStartDate, todayDate, maxForecastDate);
+    const safeStartTime = parseTimeInputMinutes(tripStartTime) === null ? preferences.defaultStartTime : tripStartTime;
+    const safeDurationDays = Math.max(2, Math.min(7, Math.round(Number(tripDurationDays) || 3)));
+    if (safeStartDate !== tripStartDate) {
+      setTripStartDate(safeStartDate);
+    }
+    if (safeStartTime !== tripStartTime) {
+      setTripStartTime(safeStartTime);
+    }
+    if (safeDurationDays !== tripDurationDays) {
+      setTripDurationDays(safeDurationDays);
+    }
+
+    const safeTravelWindowHours = Math.max(
+      MIN_TRAVEL_WINDOW_HOURS,
+      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+    );
+
+    const dates: string[] = [];
+    let cursor = safeStartDate;
+    for (let i = 0; i < safeDurationDays; i += 1) {
+      if (!DATE_FMT.test(cursor) || cursor > maxForecastDate) {
+        break;
+      }
+      dates.push(cursor);
+      cursor = addDaysToIsoDate(cursor, 1);
+    }
+
+    if (dates.length === 0) {
+      setTripForecastRows([]);
+      setTripForecastError('No forecast dates available in this range. Adjust start date/duration.');
+      setTripForecastNote(null);
+      return;
+    }
+
+    setTripForecastLoading(true);
+    setTripForecastError(null);
+    setTripForecastNote(null);
+
+    try {
+      const dailyResults = await Promise.all(
+        dates.map(async (date) => {
+          try {
+            const { response, payload } = await fetchApi(
+              `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(
+                safeStartTime,
+              )}&travel_window_hours=${safeTravelWindowHours}`,
+            );
+            if (!response.ok || !payload || typeof payload !== 'object') {
+              return null;
+            }
+            const dayData = payload as SafetyData;
+            const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences);
+            const trendWindow = buildTrendWindowFromStart(dayData.weather.trend || [], safeStartTime, safeTravelWindowHours);
+            const travelRows = buildTravelWindowRows(trendWindow, preferences);
+            const travelInsights = buildTravelWindowInsights(travelRows, preferences.timeStyle);
+
+            const avalancheRelevant = dayData.avalanche.relevant !== false;
+            const avalancheUnknown = avalancheRelevant && Boolean(dayData.avalanche.dangerUnknown || dayData.avalanche.coverageStatus !== 'reported');
+            const dangerLabel = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(dayData.avalanche.dangerLevel)] || 'N/A';
+            const avalancheSummary = !avalancheRelevant
+              ? 'Not primary'
+              : avalancheUnknown
+                ? 'Coverage limited'
+                : `L${normalizeDangerLevel(dayData.avalanche.dangerLevel)} ${dangerLabel}`;
+
+            const scoreRaw = Number(dayData?.safety?.score);
+            const tempRaw = Number(dayData?.weather?.temp);
+            const feelsRaw = Number(dayData?.weather?.feelsLike ?? dayData?.weather?.temp);
+            const gustRaw = Number(dayData?.weather?.windGust);
+            const precipRaw = Number(dayData?.weather?.precipChance);
+
+            return {
+              date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : date,
+              decisionLevel: dayDecision.level,
+              decisionHeadline: dayDecision.headline,
+              score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
+              weatherDescription: String(dayData?.weather?.description || 'Unknown'),
+              tempF: Number.isFinite(tempRaw) ? tempRaw : null,
+              feelsLikeF: Number.isFinite(feelsRaw) ? feelsRaw : null,
+              windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
+              precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
+              avalancheSummary,
+              travelSummary: `${travelInsights.passHours}/${Math.max(travelRows.length, safeTravelWindowHours)}h passing`,
+              sourceIssuedTime: dayData?.weather?.issuedTime || null,
+            } as MultiDayTripForecastDay;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      const rows = dailyResults.filter((entry): entry is MultiDayTripForecastDay => Boolean(entry)).sort((a, b) => a.date.localeCompare(b.date));
+      const failedCount = dates.length - rows.length;
+      if (rows.length === 0) {
+        setTripForecastRows([]);
+        setTripForecastError('Could not load multi-day forecasts right now. Try again in a moment.');
+        setTripForecastNote(null);
+        return;
+      }
+
+      setTripForecastRows(rows);
+      if (failedCount > 0) {
+        setTripForecastNote(`${failedCount} day(s) could not be loaded and were skipped.`);
+      } else if (rows.length < safeDurationDays) {
+        setTripForecastNote(`Only ${rows.length} day(s) are available inside the current forecast range.`);
+      } else {
+        setTripForecastNote(null);
+      }
+    } finally {
+      setTripForecastLoading(false);
+    }
+  }, [
+    hasObjective,
+    tripStartDate,
+    tripStartTime,
+    tripDurationDays,
+    todayDate,
+    maxForecastDate,
+    preferences,
+    position.lat,
+    position.lng,
+  ]);
   const navigateToView = useCallback(
-    (nextView: 'home' | 'planner' | 'settings' | 'status') => {
+    (nextView: 'home' | 'planner' | 'settings' | 'status' | 'trip') => {
       startViewChange(() => setView(nextView));
     },
     [startViewChange],
@@ -5136,6 +5315,13 @@ function App() {
     maxForecastDate,
   ]);
 
+  useEffect(() => {
+    if (view !== 'trip' || !hasObjective || tripForecastLoading || tripForecastRows.length > 0 || Boolean(tripForecastError)) {
+      return;
+    }
+    void runTripForecast();
+  }, [view, hasObjective, tripForecastLoading, tripForecastRows.length, tripForecastError, runTripForecast]);
+
   if (view === 'status') {
     return (
       <div key="view-status" className={appShellClassName} aria-busy={isViewPending}>
@@ -5374,6 +5560,189 @@ function App() {
     );
   }
 
+  if (view === 'trip') {
+    const objectiveSummary = hasObjective ? objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}` : 'No objective selected';
+    const tripStartDisplay = formatClockForStyle(tripStartTime, preferences.timeStyle);
+    const goCount = tripForecastRows.filter((row) => row.decisionLevel === 'GO').length;
+    const cautionCount = tripForecastRows.filter((row) => row.decisionLevel === 'CAUTION').length;
+    const noGoCount = tripForecastRows.filter((row) => row.decisionLevel === 'NO-GO').length;
+    const tripWorstLevel = noGoCount > 0 ? 'NO-GO' : cautionCount > 0 ? 'CAUTION' : tripForecastRows.length > 0 ? 'GO' : 'N/A';
+    const tripWorstLevelClass = tripWorstLevel === 'NO-GO' ? 'nogo' : tripWorstLevel === 'CAUTION' ? 'caution' : tripWorstLevel === 'GO' ? 'go' : 'watch';
+
+    return (
+      <div key="view-trip" className={appShellClassName} aria-busy={isViewPending || tripForecastLoading}>
+        <section className="settings-shell trip-shell">
+          <div className="settings-head">
+            <div>
+              <div className="home-kicker">Backcountry Conditions Expedition Tool</div>
+              <h2>Multi-Day Trip Forecast</h2>
+              <p>Evaluate daily decision gates for backpacking or expedition plans across consecutive days.</p>
+            </div>
+            <div className="settings-nav">
+              <button className="settings-btn" onClick={() => navigateToView('home')}>
+                <House size={14} /> Homepage
+              </button>
+              <button className="settings-btn" onClick={openPlannerView}>
+                <Route size={14} /> Planner
+              </button>
+              <button className="settings-btn" onClick={() => navigateToView('settings')}>
+                <SlidersHorizontal size={14} /> Settings
+              </button>
+              <button className="primary-btn" onClick={() => void runTripForecast()} disabled={tripForecastLoading || !hasObjective}>
+                <RefreshCw size={14} /> {tripForecastLoading ? 'Loading…' : 'Run Multi-Day Forecast'}
+              </button>
+            </div>
+          </div>
+
+          {!hasObjective && (
+            <article className="settings-card error-banner">
+              <h3>Objective required</h3>
+              <p>Select an objective in Planner first, then use this tool for multi-day forecasting.</p>
+            </article>
+          )}
+
+          <div className="settings-grid trip-settings-grid">
+            <article className="settings-card">
+              <h3>Trip setup</h3>
+              <p>Start date/time and duration apply to every day in this sequence.</p>
+              <div className="settings-time-row">
+                <label className="date-control">
+                  <span>Trip start date</span>
+                  <input
+                    type="date"
+                    value={tripStartDate}
+                    min={todayDate}
+                    max={maxForecastDate}
+                    onChange={(e) => {
+                      setTripStartDate(e.target.value);
+                      setTripForecastRows([]);
+                      setTripForecastError(null);
+                      setTripForecastNote(null);
+                    }}
+                  />
+                </label>
+                <label className="date-control">
+                  <span>Daily start time</span>
+                  <input
+                    type="time"
+                    value={tripStartTime}
+                    onChange={(e) => {
+                      setTripStartTime(e.target.value);
+                      setTripForecastRows([]);
+                      setTripForecastError(null);
+                      setTripForecastNote(null);
+                    }}
+                  />
+                </label>
+                <label className="date-control">
+                  <span>Trip duration</span>
+                  <select
+                    value={tripDurationDays}
+                    onChange={(e) => {
+                      setTripDurationDays(Math.max(2, Math.min(7, Math.round(Number(e.target.value) || 3))));
+                      setTripForecastRows([]);
+                      setTripForecastError(null);
+                      setTripForecastNote(null);
+                    }}
+                  >
+                    <option value={2}>2 days</option>
+                    <option value={3}>3 days</option>
+                    <option value={4}>4 days</option>
+                    <option value={5}>5 days</option>
+                    <option value={6}>6 days</option>
+                    <option value={7}>7 days</option>
+                  </select>
+                </label>
+              </div>
+            </article>
+
+            <article className="settings-card">
+              <h3>Current context</h3>
+              <p>Objective: {objectiveSummary}</p>
+              <p>Daily start time: {tripStartDisplay}</p>
+              <p>Travel window: {travelWindowHoursLabel}</p>
+              <p>Forecast range limit: through {maxForecastDate}</p>
+            </article>
+          </div>
+
+          {tripForecastError && (
+            <article className="settings-card error-banner">
+              <h3>Multi-day forecast unavailable</h3>
+              <p>{tripForecastError}</p>
+            </article>
+          )}
+
+          {tripForecastRows.length > 0 && (
+            <>
+              <article className="settings-card trip-overview-card">
+                <div className="trip-overview-head">
+                  <h3>Trip risk overview</h3>
+                  <span className={`decision-pill ${tripWorstLevelClass}`}>Worst day {tripWorstLevel}</span>
+                </div>
+                <div className="trip-overview-grid">
+                  <div className="trip-overview-item">
+                    <span>GO</span>
+                    <strong>{goCount}</strong>
+                  </div>
+                  <div className="trip-overview-item">
+                    <span>CAUTION</span>
+                    <strong>{cautionCount}</strong>
+                  </div>
+                  <div className="trip-overview-item">
+                    <span>NO-GO</span>
+                    <strong>{noGoCount}</strong>
+                  </div>
+                </div>
+                {tripForecastNote && <p className="muted-note">{tripForecastNote}</p>}
+              </article>
+
+              <div className="trip-day-grid">
+                {tripForecastRows.map((row) => {
+                  const rowClass = row.decisionLevel.toLowerCase().replace('-', '');
+                  const weatherEmoji = weatherConditionEmoji(row.weatherDescription, null);
+                  return (
+                    <article key={row.date} className="settings-card trip-day-card">
+                      <div className="trip-day-head">
+                        <div className="trip-day-title">
+                          <h3>{formatIsoDateLabel(row.date)}</h3>
+                          <span className={`decision-pill ${rowClass}`}>{row.decisionLevel}</span>
+                          {row.score !== null && <span className="trip-day-score">{row.score}%</span>}
+                        </div>
+                        <button
+                          type="button"
+                          className="settings-btn"
+                          onClick={() => {
+                            setForecastDate(row.date);
+                            setAlpineStartTime(tripStartTime);
+                            setError(null);
+                            startViewChange(() => setView('planner'));
+                          }}
+                        >
+                          Use in Planner
+                        </button>
+                      </div>
+                      <p className="trip-day-weather">
+                        {weatherEmoji} {localizeUnitText(row.weatherDescription)}
+                      </p>
+                      <p className="trip-day-metrics">
+                        Temp {formatTempDisplay(row.tempF)} (feels {formatTempDisplay(row.feelsLikeF)}) • Gust {formatWindDisplay(row.windGustMph)} • Precip{' '}
+                        {row.precipChance !== null ? `${row.precipChance}%` : 'N/A'}
+                      </p>
+                      <p className="trip-day-metrics">Avalanche: {row.avalancheSummary} • Travel: {row.travelSummary}</p>
+                      <p className="muted-note">{localizeUnitText(row.decisionHeadline)}</p>
+                      {row.sourceIssuedTime && <p className="muted-note">Issued {formatPubTime(row.sourceIssuedTime)}</p>}
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          <AppDisclaimer compact />
+        </section>
+      </div>
+    );
+  }
+
   if (view === 'home') {
     const objectiveSummary = hasObjective ? objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}` : 'Not selected yet';
     const forecastModeSummary = forecastDate > todayDate ? `Future • ${forecastDate}` : `Today • ${forecastDate}`;
@@ -5394,6 +5763,9 @@ function App() {
             <div className="home-actions">
               <button className="primary-btn" onClick={openPlannerView}>
                 {resumeLabel}
+              </button>
+              <button className="settings-btn" onClick={openTripToolView}>
+                <CalendarDays size={14} /> Multi-Day Trip Tool
               </button>
               <button className="settings-btn" onClick={() => navigateToView('settings')}>
                 <SlidersHorizontal size={14} /> Settings

@@ -362,7 +362,7 @@ export interface SnowpackSnapshotInsights {
 }
 
 export interface LinkState {
-  view: 'home' | 'planner' | 'settings' | 'status';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip';
   activity: ActivityType;
   position: L.LatLng;
   hasObjective: boolean;

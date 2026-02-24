@@ -375,6 +375,102 @@ input {
   line-height: 1.5;
 }
 
+.trip-settings-grid {
+  align-items: stretch;
+}
+
+.trip-overview-card {
+  margin-top: 12px;
+}
+
+.trip-overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trip-overview-head h3 {
+  margin: 0;
+}
+
+.trip-overview-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trip-overview-item {
+  border: 1px solid #ded7c7;
+  border-radius: 10px;
+  background: #f8f4ea;
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+}
+
+.trip-overview-item span {
+  color: #59685f;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.trip-overview-item strong {
+  color: #2e4137;
+  font-size: 1rem;
+}
+
+.trip-day-grid {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.trip-day-card h3 {
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 1rem;
+}
+
+.trip-day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.trip-day-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.trip-day-score {
+  color: #53645a;
+  font-size: 0.78rem;
+  font-family: var(--font-data);
+  font-weight: 700;
+}
+
+.trip-day-weather {
+  margin-top: 9px !important;
+  color: #2f4a3c !important;
+  font-weight: 700;
+}
+
+.trip-day-metrics {
+  margin-top: 6px !important;
+  color: #4f5f56 !important;
+  font-size: 0.8rem !important;
+}
+
 .settings-activity-switch {
   margin-top: 12px;
   width: 100%;
@@ -4573,6 +4669,28 @@ input {
 
 :root[data-theme='dark'] .home-card-points {
   color: #9eb2c2;
+}
+
+:root[data-theme='dark'] .trip-overview-item {
+  background: #1a2a35;
+  border-color: #344a5b;
+}
+
+:root[data-theme='dark'] .trip-overview-item span {
+  color: #9eb3c4;
+}
+
+:root[data-theme='dark'] .trip-overview-item strong,
+:root[data-theme='dark'] .trip-day-weather {
+  color: #e5f1fa !important;
+}
+
+:root[data-theme='dark'] .trip-day-metrics {
+  color: #adc1d1 !important;
+}
+
+:root[data-theme='dark'] .trip-day-score {
+  color: #9eb3c3;
 }
 
 :root[data-theme='dark'] .app-disclaimer-title {
