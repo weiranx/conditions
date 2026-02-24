@@ -31,6 +31,7 @@ export interface WeatherTrendPoint {
   wind: number;
   gust: number;
   windDirection?: string | null;
+  pressure?: number | null;
   precipChance?: number;
   humidity?: number | null;
   dewPoint?: number | null;
@@ -68,6 +69,7 @@ export interface SafetyData {
     windSpeed: number;
     windGust: number;
     windDirection?: string | null;
+    pressure?: number | null;
     humidity: number;
     cloudCover: number | null;
     precipChance: number;
@@ -86,6 +88,15 @@ export interface SafetyData {
       maxTempF?: number | null;
       overnightLowF?: number | null;
       daytimeHighF?: number | null;
+    } | null;
+    visibilityRisk?: {
+      score?: number | null;
+      level?: string | null;
+      summary?: string | null;
+      factors?: string[];
+      activeHours?: number | null;
+      windowHours?: number | null;
+      source?: string | null;
     } | null;
     trend?: WeatherTrendPoint[];
     elevation?: number | null;
@@ -241,6 +252,36 @@ export interface SafetyData {
       sweDataset?: string | null;
       link?: string | null;
       note?: string | null;
+    } | null;
+    historical?: {
+      targetDate?: string | null;
+      monthDay?: string | null;
+      lookbackYears?: number | null;
+      source?: string | null;
+      stationTriplet?: string | null;
+      stationName?: string | null;
+      swe?: {
+        currentIn?: number | null;
+        averageIn?: number | null;
+        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown' | string;
+        percentOfAverage?: number | null;
+        sampleCount?: number | null;
+        maxOffsetDays?: number | null;
+      } | null;
+      depth?: {
+        currentIn?: number | null;
+        averageIn?: number | null;
+        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown' | string;
+        percentOfAverage?: number | null;
+        sampleCount?: number | null;
+        maxOffsetDays?: number | null;
+      } | null;
+      overall?: {
+        metric?: string | null;
+        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown' | string;
+        percentOfAverage?: number | null;
+      } | null;
+      summary?: string | null;
     } | null;
     generatedTime?: string | null;
   };

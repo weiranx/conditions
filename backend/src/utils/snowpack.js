@@ -4,6 +4,7 @@ const createUnavailableSnowpackData = (status = 'unavailable') => ({
   summary: 'Snowpack observations unavailable.',
   snotel: null,
   nohrsc: null,
+  historical: null,
 });
 
 const createSnowpackService = ({
@@ -20,6 +21,8 @@ const createSnowpackService = ({
 
   const MAX_REASONABLE_NOHRSC_DEPTH_METERS = 20;
   const MAX_REASONABLE_NOHRSC_SWE_MM = 5000;
+  const HISTORICAL_BASELINE_LOOKBACK_YEARS = 10;
+  const HISTORICAL_MATCH_WINDOW_DAYS = 7;
 
   const isValidIsoDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -54,6 +57,125 @@ const createSnowpackService = ({
       value: Number(picked.value),
       flag: picked.flag || null,
     };
+  };
+
+  const parseIsoDateParts = (isoValue) => {
+    if (!isValidIsoDate(isoValue)) {
+      return null;
+    }
+    const [yearText, monthText, dayText] = String(isoValue).split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return null;
+    }
+    return { year, month, day };
+  };
+
+  const isLeapYear = (year) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+
+  const pad2 = (value) => String(value).padStart(2, '0');
+
+  const buildIsoDate = (year, month, day) => `${year}-${pad2(month)}-${pad2(day)}`;
+
+  const toUtcDayStamp = (isoValue) => {
+    const parsed = parseIsoDateParts(isoValue);
+    if (!parsed) {
+      return null;
+    }
+    return Date.UTC(parsed.year, parsed.month - 1, parsed.day);
+  };
+
+  const daysBetweenIsoDates = (a, b) => {
+    const aStamp = toUtcDayStamp(a);
+    const bStamp = toUtcDayStamp(b);
+    if (!Number.isFinite(aStamp) || !Number.isFinite(bStamp)) {
+      return null;
+    }
+    return Math.round((aStamp - bStamp) / (24 * 60 * 60 * 1000));
+  };
+
+  const buildHistoricalTargetIsoForYear = (year, month, day) => {
+    if (month === 2 && day === 29 && !isLeapYear(year)) {
+      return buildIsoDate(year, 2, 28);
+    }
+    return buildIsoDate(year, month, day);
+  };
+
+  const pickClosestHistoricalSample = (values, targetIso, maxWindowDays) => {
+    if (!Array.isArray(values) || !values.length || !isValidIsoDate(targetIso)) {
+      return null;
+    }
+    const valid = values
+      .filter((entry) => entry && Number.isFinite(Number(entry.value)) && isValidIsoDate(String(entry.date || '')))
+      .map((entry) => ({ date: String(entry.date), value: Number(entry.value) }))
+      .filter((entry) => entry.date <= targetIso);
+    if (!valid.length) {
+      return null;
+    }
+    let best = null;
+    for (const entry of valid) {
+      const dayOffset = daysBetweenIsoDates(targetIso, entry.date);
+      if (!Number.isFinite(dayOffset) || dayOffset < 0 || dayOffset > maxWindowDays) {
+        continue;
+      }
+      if (!best || dayOffset < best.dayOffset || (dayOffset === best.dayOffset && entry.date > best.date)) {
+        best = { ...entry, dayOffset };
+      }
+    }
+    return best;
+  };
+
+  const extractHistoricalAverageAwdbValue = (values, targetDateIso, lookbackYears = HISTORICAL_BASELINE_LOOKBACK_YEARS) => {
+    const targetParts = parseIsoDateParts(targetDateIso);
+    if (!targetParts || !Array.isArray(values) || values.length === 0) {
+      return null;
+    }
+    const pickedSamples = [];
+    for (let year = targetParts.year - 1; year >= targetParts.year - lookbackYears; year -= 1) {
+      const historicalTargetIso = buildHistoricalTargetIsoForYear(year, targetParts.month, targetParts.day);
+      const sample = pickClosestHistoricalSample(values, historicalTargetIso, HISTORICAL_MATCH_WINDOW_DAYS);
+      if (sample) {
+        pickedSamples.push({
+          date: sample.date,
+          value: sample.value,
+          dayOffset: sample.dayOffset,
+        });
+      }
+    }
+    if (!pickedSamples.length) {
+      return null;
+    }
+    const mean = pickedSamples.reduce((sum, item) => sum + item.value, 0) / pickedSamples.length;
+    const maxOffsetDays = pickedSamples.reduce((max, item) => Math.max(max, item.dayOffset), 0);
+    return {
+      average: Number(mean.toFixed(2)),
+      sampleCount: pickedSamples.length,
+      lookbackYears,
+      maxOffsetDays,
+      sampleDates: pickedSamples.map((entry) => entry.date).slice(0, 5),
+    };
+  };
+
+  const compareCurrentToHistoricalAverage = (currentValue, averageValue) => {
+    const currentNumeric = Number(currentValue);
+    const averageNumeric = Number(averageValue);
+    if (!Number.isFinite(currentNumeric) || !Number.isFinite(averageNumeric) || averageNumeric <= 0) {
+      return {
+        status: 'unknown',
+        percentOfAverage: null,
+      };
+    }
+    const ratio = currentNumeric / averageNumeric;
+    const percentOfAverage = Math.round(ratio * 100);
+    if (ratio >= 1.2) {
+      return { status: 'above_average', percentOfAverage };
+    }
+    if (ratio <= 0.8) {
+      return { status: 'below_average', percentOfAverage };
+    }
+    return { status: 'at_average', percentOfAverage };
   };
 
   const getSnotelStations = async (fetchOptions) => {
@@ -233,6 +355,59 @@ const createSnowpackService = ({
       const precipIn = Number.isFinite(Number(mapByElement.PREC?.value)) ? Number(mapByElement.PREC.value) : null;
       const obsTempF = Number.isFinite(Number(mapByElement.TOBS?.value)) ? Number(mapByElement.TOBS.value) : null;
       const observedDate = mapByElement.SNWD?.date || mapByElement.WTEQ?.date || mapByElement.PREC?.date || mapByElement.TOBS?.date || null;
+      const snwdEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'SNWD');
+      const wteqEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'WTEQ');
+      const snowDepthHistorical = extractHistoricalAverageAwdbValue(snwdEntry?.values || [], targetDate || todayIso);
+      const sweHistorical = extractHistoricalAverageAwdbValue(wteqEntry?.values || [], targetDate || todayIso);
+      const depthComparison = compareCurrentToHistoricalAverage(snowDepthIn, snowDepthHistorical?.average);
+      const sweComparison = compareCurrentToHistoricalAverage(sweIn, sweHistorical?.average);
+      const overallComparison =
+        sweComparison.status !== 'unknown'
+          ? { metric: 'SWE', status: sweComparison.status, percentOfAverage: sweComparison.percentOfAverage }
+          : depthComparison.status !== 'unknown'
+            ? { metric: 'Snow Depth', status: depthComparison.status, percentOfAverage: depthComparison.percentOfAverage }
+            : { metric: null, status: 'unknown', percentOfAverage: null };
+      const targetMonthDay = (() => {
+        const targetParts = parseIsoDateParts(targetDate || todayIso);
+        return targetParts ? `${pad2(targetParts.month)}-${pad2(targetParts.day)}` : null;
+      })();
+      const statusLabelByCode = {
+        below_average: 'below average',
+        at_average: 'at average',
+        above_average: 'above average',
+        unknown: 'unknown',
+      };
+      const overallSummary = overallComparison.metric
+        ? `Current ${overallComparison.metric} is ${statusLabelByCode[overallComparison.status]} for this date${
+            Number.isFinite(overallComparison.percentOfAverage) ? ` (${overallComparison.percentOfAverage}% of historical average)` : ''
+          }.`
+        : 'Historical average comparison unavailable for this date.';
+      const historical = {
+        targetDate: targetDate || todayIso,
+        monthDay: targetMonthDay,
+        lookbackYears: HISTORICAL_BASELINE_LOOKBACK_YEARS,
+        source: 'NRCS AWDB / SNOTEL daily history',
+        stationTriplet,
+        stationName: nearest.station.name || stationTriplet,
+        swe: {
+          currentIn: sweIn,
+          averageIn: Number.isFinite(Number(sweHistorical?.average)) ? Number(sweHistorical.average) : null,
+          status: sweComparison.status,
+          percentOfAverage: sweComparison.percentOfAverage,
+          sampleCount: Number.isFinite(Number(sweHistorical?.sampleCount)) ? Number(sweHistorical.sampleCount) : 0,
+          maxOffsetDays: Number.isFinite(Number(sweHistorical?.maxOffsetDays)) ? Number(sweHistorical.maxOffsetDays) : null,
+        },
+        depth: {
+          currentIn: snowDepthIn,
+          averageIn: Number.isFinite(Number(snowDepthHistorical?.average)) ? Number(snowDepthHistorical.average) : null,
+          status: depthComparison.status,
+          percentOfAverage: depthComparison.percentOfAverage,
+          sampleCount: Number.isFinite(Number(snowDepthHistorical?.sampleCount)) ? Number(snowDepthHistorical.sampleCount) : 0,
+          maxOffsetDays: Number.isFinite(Number(snowDepthHistorical?.maxOffsetDays)) ? Number(snowDepthHistorical.maxOffsetDays) : null,
+        },
+        overall: overallComparison,
+        summary: overallSummary,
+      };
 
       return {
         source: 'NRCS AWDB / SNOTEL',
@@ -256,6 +431,7 @@ const createSnowpackService = ({
           targetDate && selectedDate && selectedDate > targetDate
             ? `Selected date is in the future; showing latest available daily SNOTEL observations through ${targetDate}.`
             : 'Nearest daily SNOTEL observation.',
+        historical,
       };
     })();
 
@@ -276,6 +452,9 @@ const createSnowpackService = ({
           Number.isFinite(snotelData.sweIn) ? `${snotelData.sweIn} in` : 'N/A'
         } (${snotelData.distanceKm} km).`,
       );
+      if (snotelData?.historical?.summary) {
+        summaryParts.push(snotelData.historical.summary);
+      }
     }
     if (nohrscData) {
       summaryParts.push(
@@ -291,6 +470,7 @@ const createSnowpackService = ({
       summary: summaryParts.join(' '),
       snotel: snotelData,
       nohrsc: nohrscData,
+      historical: snotelData?.historical || null,
     };
   };
 

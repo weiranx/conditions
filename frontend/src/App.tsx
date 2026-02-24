@@ -28,6 +28,8 @@ import {
   Flame,
   Sun,
   RefreshCw,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -893,6 +895,7 @@ type WeatherTrendMetricKey =
   | 'feelsLike'
   | 'wind'
   | 'gust'
+  | 'pressure'
   | 'precipChance'
   | 'humidity'
   | 'dewPoint'
@@ -904,6 +907,7 @@ const WEATHER_TREND_METRIC_LABELS: Record<WeatherTrendMetricKey, string> = {
   feelsLike: 'Feels-like',
   wind: 'Wind',
   gust: 'Gust',
+  pressure: 'Pressure',
   precipChance: 'Precip',
   humidity: 'Humidity',
   dewPoint: 'Dew Point',
@@ -938,6 +942,121 @@ function weatherConditionEmoji(description: string | undefined, isDaytime?: bool
   if (/overcast|cloud/.test(text)) return '☁️';
   if (/clear|sunny/.test(text)) return isDaytime ? '☀️' : '🌙';
   return '🌤️';
+}
+
+type VisibilityRiskLevel = 'Unknown' | 'Minimal' | 'Low' | 'Moderate' | 'High' | 'Extreme';
+
+type VisibilityRiskEstimate = {
+  score: number | null;
+  level: VisibilityRiskLevel;
+  summary: string;
+  factors: string[];
+  activeHours: number | null;
+  windowHours: number | null;
+  source: string;
+};
+
+function visibilityRiskPillClass(level: VisibilityRiskLevel): 'go' | 'watch' | 'caution' | 'nogo' {
+  if (level === 'Extreme') return 'nogo';
+  if (level === 'High' || level === 'Moderate') return 'caution';
+  if (level === 'Low') return 'watch';
+  if (level === 'Unknown') return 'watch';
+  return 'go';
+}
+
+function normalizeVisibilityRiskLevel(levelValue: string | null | undefined, scoreValue: number | null): VisibilityRiskLevel {
+  const normalized = String(levelValue || '').trim().toLowerCase();
+  if (normalized === 'extreme') return 'Extreme';
+  if (normalized === 'high') return 'High';
+  if (normalized === 'moderate') return 'Moderate';
+  if (normalized === 'low') return 'Low';
+  if (normalized === 'minimal') return 'Minimal';
+  if (normalized === 'unknown') return 'Unknown';
+  if (!Number.isFinite(Number(scoreValue))) return 'Unknown';
+  const score = Number(scoreValue);
+  if (score >= 80) return 'Extreme';
+  if (score >= 60) return 'High';
+  if (score >= 40) return 'Moderate';
+  if (score >= 20) return 'Low';
+  return 'Minimal';
+}
+
+function estimateVisibilityRiskFromPoint(input: {
+  description: string;
+  precipChance: number | null;
+  wind: number | null;
+  gust: number | null;
+  humidity: number | null;
+  cloudCover: number | null;
+  isDaytime: boolean | null | undefined;
+}): VisibilityRiskEstimate {
+  const description = String(input.description || '').toLowerCase();
+  const precipChance = parseOptionalFiniteNumber(input.precipChance);
+  const wind = parseOptionalFiniteNumber(input.wind);
+  const gust = parseOptionalFiniteNumber(input.gust);
+  const humidity = parseOptionalFiniteNumber(input.humidity);
+  const cloudCover = parseOptionalFiniteNumber(input.cloudCover);
+  const isDaytime = typeof input.isDaytime === 'boolean' ? input.isDaytime : null;
+
+  const factors: string[] = [];
+  let score = 0;
+  const addRisk = (points: number, reason: string) => {
+    if (points <= 0 || !reason) return;
+    score += points;
+    factors.push(reason);
+  };
+
+  if (/whiteout|blizzard|snow squall/.test(description)) {
+    addRisk(55, 'blizzard/whiteout signal');
+  } else if (/heavy snow|blowing snow|snow showers|fog|mist|haze|smoke/.test(description)) {
+    addRisk(30, 'reduced-visibility weather signal');
+  } else if (/rain|drizzle|showers/.test(description)) {
+    addRisk(10, 'precipitation signal');
+  }
+
+  if (precipChance !== null && precipChance >= 80) addRisk(20, `precip ${Math.round(precipChance)}%`);
+  else if (precipChance !== null && precipChance >= 60) addRisk(14, `precip ${Math.round(precipChance)}%`);
+  else if (precipChance !== null && precipChance >= 40) addRisk(8, `precip ${Math.round(precipChance)}%`);
+
+  const effectiveWind = Math.max(wind ?? 0, gust ?? 0);
+  if (effectiveWind >= 45) addRisk(18, `wind/gust ${Math.round(effectiveWind)} mph`);
+  else if (effectiveWind >= 35) addRisk(12, `wind/gust ${Math.round(effectiveWind)} mph`);
+  else if (effectiveWind >= 25) addRisk(7, `wind/gust ${Math.round(effectiveWind)} mph`);
+
+  if (humidity !== null && cloudCover !== null && humidity >= 92 && cloudCover >= 92) {
+    addRisk(16, 'high humidity + overcast');
+  } else if (cloudCover !== null && cloudCover >= 85) {
+    addRisk(5, `cloud cover ${Math.round(cloudCover)}%`);
+  }
+
+  if (isDaytime === false) {
+    addRisk(6, 'nighttime contrast reduction');
+  }
+
+  const bounded = Math.max(0, Math.min(100, Math.round(score)));
+  const level = normalizeVisibilityRiskLevel(null, bounded);
+  const summary =
+    level === 'Extreme'
+      ? 'Whiteout is plausible. Terrain reading can collapse quickly.'
+      : level === 'High'
+        ? 'Poor visibility likely; route-finding will be harder.'
+        : level === 'Moderate'
+          ? 'Intermittent low-contrast conditions are possible.'
+          : level === 'Low'
+            ? 'Mostly workable visibility with occasional reductions.'
+            : level === 'Minimal'
+              ? 'No strong whiteout signal at this hour.'
+              : 'Visibility signal unavailable.';
+
+  return {
+    score: bounded,
+    level,
+    summary,
+    factors: factors.slice(0, 3),
+    activeHours: null,
+    windowHours: null,
+    source: 'Derived from selected weather hour',
+  };
 }
 
 function inferWeatherSourceLabel(weather: SafetyData['weather'] | null | undefined): string {
@@ -1773,6 +1892,7 @@ function App() {
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
   const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
   const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
+  const [weatherHourPreviewTime, setWeatherHourPreviewTime] = useState<string | null>(null);
   const [travelWindowHoursDraft, setTravelWindowHoursDraft] = useState(() => String(initialPreferences.travelWindowHours));
   const [maxPrecipChanceDraft, setMaxPrecipChanceDraft] = useState(() => String(initialPreferences.maxPrecipChance));
   const [maxWindGustDraft, setMaxWindGustDraft] = useState(() =>
@@ -2642,10 +2762,10 @@ function App() {
   };
 
   const handleWeatherHourSelect = (nextStartTime: string) => {
-    if (nextStartTime === alpineStartTime) {
+    if (nextStartTime === weatherHourPreviewTime) {
       return;
     }
-    setAlpineStartTime(nextStartTime);
+    setWeatherHourPreviewTime(nextStartTime);
   };
 
   const handleTargetElevationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3655,6 +3775,7 @@ function App() {
     { key: 'feelsLike', label: `Feels (${tempUnitLabel})` },
     { key: 'wind', label: `Wind (${windUnitLabel})` },
     { key: 'gust', label: `Gust (${windUnitLabel})` },
+    { key: 'pressure', label: 'Pressure (hPa)' },
     { key: 'precipChance', label: 'Precip (%)' },
     { key: 'humidity', label: 'Humidity (%)' },
     { key: 'dewPoint', label: `Dew (${tempUnitLabel})` },
@@ -3667,6 +3788,7 @@ function App() {
     feelsLike: number | null;
     wind: number | null;
     gust: number | null;
+    pressure: number | null;
     precipChance: number | null;
     humidity: number | null;
     dewPoint: number | null;
@@ -3678,6 +3800,7 @@ function App() {
     const temp = parseOptionalFiniteNumber(point?.temp);
     const wind = parseOptionalFiniteNumber(point?.wind);
     const gust = parseOptionalFiniteNumber(point?.gust);
+    const pressure = parseOptionalFiniteNumber(point?.pressure);
     const humidity = parseOptionalFiniteNumber(point?.humidity);
     const dewPoint = parseOptionalFiniteNumber(point?.dewPoint);
     const cloudCover = parseOptionalFiniteNumber(point?.cloudCover);
@@ -3692,6 +3815,7 @@ function App() {
       feelsLike: temp !== null && wind !== null ? computeFeelsLikeF(temp, wind) : null,
       wind,
       gust: gust ?? wind,
+      pressure,
       precipChance: parseOptionalFiniteNumber(point?.precipChance),
       humidity,
       dewPoint,
@@ -3710,6 +3834,8 @@ function App() {
         return row.wind;
       case 'gust':
         return row.gust;
+      case 'pressure':
+        return row.pressure;
       case 'precipChance':
         return row.precipChance;
       case 'humidity':
@@ -3743,6 +3869,9 @@ function App() {
     if (weatherTrendMetric === 'wind' || weatherTrendMetric === 'gust') {
       return formatWindDisplay(value, { includeUnit: false });
     }
+    if (weatherTrendMetric === 'pressure') {
+      return `${Number(value).toFixed(0)}`;
+    }
     if (weatherTrendMetric === 'precipChance' || weatherTrendMetric === 'humidity' || weatherTrendMetric === 'cloudCover') {
       return `${Math.round(value)}%`;
     }
@@ -3761,6 +3890,9 @@ function App() {
     }
     if (weatherTrendMetric === 'wind' || weatherTrendMetric === 'gust') {
       return formatWindDisplay(numeric);
+    }
+    if (weatherTrendMetric === 'pressure') {
+      return `${numeric.toFixed(1)} hPa`;
     }
     if (weatherTrendMetric === 'precipChance' || weatherTrendMetric === 'humidity' || weatherTrendMetric === 'cloudCover') {
       return `${Math.round(numeric)}%`;
@@ -3786,6 +3918,8 @@ function App() {
           ? '#3f82b8'
           : weatherTrendMetric === 'gust'
             ? '#d2993a'
+            : weatherTrendMetric === 'pressure'
+              ? '#5f7f92'
             : weatherTrendMetric === 'precipChance'
               ? '#1f7d65'
               : weatherTrendMetric === 'humidity'
@@ -3795,6 +3929,20 @@ function App() {
                   : weatherTrendMetric === 'cloudCover'
                     ? '#7f8e99'
                     : '#6d7a88';
+  const weatherPressureTrendSummary = (() => {
+    const pressureValues = weatherTrendRows
+      .map((row) => row.pressure)
+      .filter((value): value is number => Number.isFinite(Number(value)));
+    if (pressureValues.length < 2) {
+      return null;
+    }
+    const start = pressureValues[0];
+    const end = pressureValues[pressureValues.length - 1];
+    const delta = end - start;
+    const direction = delta >= 1 ? 'Rising' : delta <= -1 ? 'Falling' : 'Steady';
+    const deltaLabel = `${delta > 0 ? '+' : ''}${delta.toFixed(1)} hPa`;
+    return `${direction} pressure over ${travelWindowHoursLabel}: ${deltaLabel} (${start.toFixed(1)} → ${end.toFixed(1)} hPa)`;
+  })();
   const windThresholdPrecision = preferences.windSpeedUnit === 'kph' ? 1 : 0;
   const windThresholdStep = preferences.windSpeedUnit === 'kph' ? 0.5 : 1;
   const windThresholdMin = Number(convertWindMphToDisplayValue(10, preferences.windSpeedUnit).toFixed(windThresholdPrecision));
@@ -3812,6 +3960,9 @@ function App() {
   useEffect(() => {
     setTravelWindowHoursDraft(String(travelWindowHours));
   }, [travelWindowHours]);
+  useEffect(() => {
+    setWeatherHourPreviewTime(null);
+  }, [alpineStartTime, forecastDate, objectiveName]);
   useEffect(() => {
     setMaxPrecipChanceDraft(String(preferences.maxPrecipChance));
   }, [preferences.maxPrecipChance]);
@@ -4034,6 +4185,45 @@ function App() {
   const snowpackInsights = safetyData
     ? buildSnowpackInsights(safetyData.snowpack, Number(safetyData.weather?.elevation), preferences.elevationUnit)
     : null;
+  const snowpackHistorical = safetyData?.snowpack?.historical || null;
+  const snowpackHistoricalStatus = String(snowpackHistorical?.overall?.status || 'unknown').toLowerCase();
+  const snowpackHistoricalPillClass =
+    snowpackHistoricalStatus === 'above_average'
+      ? 'caution'
+      : snowpackHistoricalStatus === 'below_average'
+        ? 'watch'
+        : snowpackHistoricalStatus === 'at_average'
+          ? 'go'
+          : 'watch';
+  const snowpackHistoricalStatusLabel =
+    snowpackHistoricalStatus === 'above_average'
+      ? 'Above average'
+      : snowpackHistoricalStatus === 'below_average'
+        ? 'Below average'
+        : snowpackHistoricalStatus === 'at_average'
+          ? 'At average'
+          : 'Comparison unavailable';
+  const snowpackHistoricalTargetDateLabel = snowpackHistorical?.targetDate ? formatIsoDateLabel(snowpackHistorical.targetDate) : null;
+  const snowpackHistoricalMetricLabel = String(snowpackHistorical?.overall?.metric || '').trim();
+  const snowpackHistoricalPercent = Number(snowpackHistorical?.overall?.percentOfAverage);
+  const snowpackHistoricalSweCurrentDisplay = formatSweForElevationUnit(Number(snowpackHistorical?.swe?.currentIn), preferences.elevationUnit);
+  const snowpackHistoricalSweAverageDisplay = formatSweForElevationUnit(Number(snowpackHistorical?.swe?.averageIn), preferences.elevationUnit);
+  const snowpackHistoricalDepthCurrentDisplay = formatSnowDepthForElevationUnit(Number(snowpackHistorical?.depth?.currentIn), preferences.elevationUnit);
+  const snowpackHistoricalDepthAverageDisplay = formatSnowDepthForElevationUnit(Number(snowpackHistorical?.depth?.averageIn), preferences.elevationUnit);
+  const snowpackHistoricalComparisonLine = (() => {
+    if (!snowpackHistorical) {
+      return 'Historical average unavailable for this selected date.';
+    }
+    const metricLine =
+      snowpackHistoricalMetricLabel.toUpperCase() === 'SWE'
+        ? `SWE ${snowpackHistoricalSweCurrentDisplay} vs avg ${snowpackHistoricalSweAverageDisplay}`
+        : snowpackHistoricalMetricLabel.toLowerCase() === 'snow depth'
+          ? `Depth ${snowpackHistoricalDepthCurrentDisplay} vs avg ${snowpackHistoricalDepthAverageDisplay}`
+          : null;
+    const percentLine = Number.isFinite(snowpackHistoricalPercent) ? `${snowpackHistoricalPercent}% of average` : null;
+    const parts = [metricLine, percentLine, snowpackHistoricalTargetDateLabel ? `for ${snowpackHistoricalTargetDateLabel}` : null].filter(Boolean);
+    return parts.length > 0 ? parts.join(' • ') : 'Historical average unavailable for this selected date.';
+  })();
   const snowpackTakeaways = (() => {
     if (!safetyData) {
       return [] as string[];
@@ -4162,7 +4352,7 @@ function App() {
   const forecastPeriodLabel = safetyData
     ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
     : 'Not available';
-  const weatherHourQuickOptions: Array<{ value: string; label: string; rawTime: string; tempLabel: string | null }> = [];
+  const weatherHourQuickOptions: Array<{ value: string; label: string; tempLabel: string | null; point: WeatherTrendPoint }> = [];
   if (safetyData && Array.isArray(safetyData.weather.trend)) {
     const seenStartTimes = new Set<string>();
     for (const point of safetyData.weather.trend) {
@@ -4182,19 +4372,146 @@ function App() {
       weatherHourQuickOptions.push({
         value,
         label: formatClockForStyle(value, preferences.timeStyle),
-        rawTime,
         tempLabel: Number.isFinite(Number(point?.temp)) ? formatTempDisplay(Number(point?.temp)) : null,
+        point,
       });
       if (weatherHourQuickOptions.length >= 12) {
         break;
       }
     }
   }
-  const weatherWindDirectionLabel = normalizeWindHintDirection(safetyData?.weather.windDirection || null) || 'N/A';
-  const weatherCloudCover = parseOptionalFiniteNumber(safetyData?.weather.cloudCover);
-  const weatherCloudCoverLabel = Number.isFinite(weatherCloudCover)
-    ? `${Math.round(weatherCloudCover)}%`
+  const activeWeatherHourValue = weatherHourPreviewTime || alpineStartTime;
+  const selectedWeatherHourIndex = (() => {
+    if (!weatherHourQuickOptions.length) {
+      return -1;
+    }
+    const exactIndex = weatherHourQuickOptions.findIndex((option) => option.value === activeWeatherHourValue);
+    if (exactIndex >= 0) {
+      return exactIndex;
+    }
+    const selectedMinutes = parseTimeInputMinutes(activeWeatherHourValue);
+    if (selectedMinutes === null) {
+      return 0;
+    }
+    let bestIndex = 0;
+    let bestDiff = Number.POSITIVE_INFINITY;
+    weatherHourQuickOptions.forEach((option, index) => {
+      const optionMinutes = parseTimeInputMinutes(option.value);
+      if (optionMinutes === null) {
+        return;
+      }
+      let diff = Math.abs(optionMinutes - selectedMinutes);
+      if (diff > 720) {
+        diff = 1440 - diff;
+      }
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIndex = index;
+      }
+    });
+    return bestIndex;
+  })();
+  const selectedWeatherHour = selectedWeatherHourIndex >= 0 ? weatherHourQuickOptions[selectedWeatherHourIndex] : null;
+  const weatherPreviewActive = Boolean(selectedWeatherHour && selectedWeatherHour.value !== alpineStartTime);
+  const weatherPreviewPoint = selectedWeatherHour?.point || null;
+  const weatherCardTemp = Number.isFinite(Number(weatherPreviewPoint?.temp)) ? Number(weatherPreviewPoint?.temp) : Number(safetyData?.weather.temp);
+  const weatherCardWind = Number.isFinite(Number(weatherPreviewPoint?.wind)) ? Number(weatherPreviewPoint?.wind) : Number(safetyData?.weather.windSpeed);
+  const weatherCardGust = Number.isFinite(Number(weatherPreviewPoint?.gust))
+    ? Number(weatherPreviewPoint?.gust)
+    : Number(safetyData?.weather.windGust);
+  const weatherCardFeelsLike = Number.isFinite(weatherCardTemp)
+    ? computeFeelsLikeF(weatherCardTemp, Number.isFinite(weatherCardWind) ? weatherCardWind : 0)
+    : Number(safetyData?.weather.feelsLike ?? safetyData?.weather.temp);
+  const weatherCardDescription = String(weatherPreviewPoint?.condition || safetyData?.weather.description || 'Unknown');
+  const weatherCardIsDaytime = typeof weatherPreviewPoint?.isDaytime === 'boolean' ? weatherPreviewPoint.isDaytime : safetyData?.weather.isDaytime;
+  const weatherCardEmoji = weatherConditionEmoji(weatherCardDescription, weatherCardIsDaytime ?? null);
+  const weatherCardWithEmoji = `${weatherCardEmoji} ${weatherCardDescription}`;
+  const weatherCardPrecip = Number.isFinite(Number(weatherPreviewPoint?.precipChance))
+    ? Math.round(Number(weatherPreviewPoint?.precipChance))
+    : Number(safetyData?.weather.precipChance);
+  const weatherCardHumidity = Number.isFinite(Number(weatherPreviewPoint?.humidity))
+    ? Number(weatherPreviewPoint?.humidity)
+    : Number(safetyData?.weather.humidity);
+  const weatherCardDewPoint = Number.isFinite(Number(weatherPreviewPoint?.dewPoint))
+    ? Number(weatherPreviewPoint?.dewPoint)
+    : Number(safetyData?.weather.dewPoint);
+  const weatherCardPressure = Number.isFinite(Number(weatherPreviewPoint?.pressure))
+    ? Number(weatherPreviewPoint?.pressure)
+    : parseOptionalFiniteNumber(safetyData?.weather.pressure);
+  const weatherCardPressureLabel = Number.isFinite(Number(weatherCardPressure))
+    ? `${Number(weatherCardPressure).toFixed(1)} hPa`
     : 'N/A';
+  const weatherCardWindDirection = normalizeWindHintDirection(weatherPreviewPoint?.windDirection ?? safetyData?.weather.windDirection ?? null) || 'N/A';
+  const weatherCloudCover = parseOptionalFiniteNumber(safetyData?.weather.cloudCover);
+  const weatherCardCloudCover = Number.isFinite(Number(weatherPreviewPoint?.cloudCover))
+    ? Number(weatherPreviewPoint?.cloudCover)
+    : weatherCloudCover;
+  const weatherCardCloudCoverLabel = Number.isFinite(weatherCardCloudCover) ? `${Math.round(weatherCardCloudCover)}%` : 'N/A';
+  const weatherVisibilityFallback = estimateVisibilityRiskFromPoint({
+    description: weatherCardDescription,
+    precipChance: weatherCardPrecip,
+    wind: weatherCardWind,
+    gust: weatherCardGust,
+    humidity: weatherCardHumidity,
+    cloudCover: weatherCardCloudCover,
+    isDaytime: weatherCardIsDaytime ?? null,
+  });
+  const backendVisibilityRiskScore = parseOptionalFiniteNumber(safetyData?.weather.visibilityRisk?.score ?? null);
+  const backendVisibilityRiskLevel = normalizeVisibilityRiskLevel(
+    safetyData?.weather.visibilityRisk?.level ?? null,
+    backendVisibilityRiskScore,
+  );
+  const backendVisibilityFactors =
+    Array.isArray(safetyData?.weather.visibilityRisk?.factors) && safetyData.weather.visibilityRisk.factors.length > 0
+      ? safetyData.weather.visibilityRisk.factors.slice(0, 3)
+      : [];
+  const backendVisibilitySummary = String(safetyData?.weather.visibilityRisk?.summary || '').trim();
+  const backendVisibilityActiveHours = parseOptionalFiniteNumber(safetyData?.weather.visibilityRisk?.activeHours ?? null);
+  const backendVisibilityWindowHours = parseOptionalFiniteNumber(safetyData?.weather.visibilityRisk?.windowHours ?? null);
+  const weatherVisibilityRisk: VisibilityRiskEstimate = weatherPreviewActive
+    ? weatherVisibilityFallback
+    : {
+        score: backendVisibilityRiskScore ?? weatherVisibilityFallback.score,
+        level: backendVisibilityRiskScore !== null || backendVisibilityRiskLevel !== 'Unknown'
+          ? backendVisibilityRiskLevel
+          : weatherVisibilityFallback.level,
+        summary: backendVisibilitySummary || weatherVisibilityFallback.summary,
+        factors: backendVisibilityFactors.length > 0 ? backendVisibilityFactors : weatherVisibilityFallback.factors,
+        activeHours: backendVisibilityActiveHours,
+        windowHours: backendVisibilityWindowHours,
+        source: String(safetyData?.weather.visibilityRisk?.source || weatherVisibilityFallback.source),
+      };
+  const weatherVisibilityPill = visibilityRiskPillClass(weatherVisibilityRisk.level);
+  const weatherVisibilityScoreLabel = Number.isFinite(Number(weatherVisibilityRisk.score))
+    ? `${Math.round(Number(weatherVisibilityRisk.score))}/100`
+    : 'N/A';
+  const weatherVisibilityDetail = weatherVisibilityRisk.factors.length > 0
+    ? weatherVisibilityRisk.factors.join(' • ')
+    : weatherVisibilityRisk.summary;
+  const weatherVisibilityActiveWindowText =
+    Number.isFinite(weatherVisibilityRisk.activeHours) &&
+    Number.isFinite(weatherVisibilityRisk.windowHours) &&
+    Number(weatherVisibilityRisk.windowHours) > 0
+      ? `${Math.round(Number(weatherVisibilityRisk.activeHours))}/${Math.round(Number(weatherVisibilityRisk.windowHours))}h low-vis signal`
+      : null;
+  const weatherCardDisplayTime = selectedWeatherHour?.label || formatClockForStyle(alpineStartTime, preferences.timeStyle);
+  const weatherHourStepDisabled = weatherHourQuickOptions.length <= 1;
+  const weatherHourCanDecrease = !weatherHourStepDisabled && selectedWeatherHourIndex > 0;
+  const weatherHourCanIncrease = !weatherHourStepDisabled && selectedWeatherHourIndex >= 0 && selectedWeatherHourIndex < weatherHourQuickOptions.length - 1;
+  const handleWeatherHourStep = (direction: 'decrease' | 'increase') => {
+    if (!weatherHourQuickOptions.length) {
+      return;
+    }
+    const currentIndex = selectedWeatherHourIndex >= 0 ? selectedWeatherHourIndex : 0;
+    const nextIndex =
+      direction === 'decrease'
+        ? Math.max(0, currentIndex - 1)
+        : Math.min(weatherHourQuickOptions.length - 1, currentIndex + 1);
+    const nextOption = weatherHourQuickOptions[nextIndex];
+    if (nextOption) {
+      handleWeatherHourSelect(nextOption.value);
+    }
+  };
   const satObjectiveLabel = truncateText((objectiveName || 'Objective').split(',')[0].trim(), 22);
   const satAvalancheSnippet =
     !safetyData
@@ -6444,7 +6761,7 @@ function App() {
                 <div className="card-header">
                   <span className="card-title">
                     <Thermometer size={14} /> Weather
-                    <HelpHint text="Weather at your selected start time, including temperature, wind, precip, humidity, cloud cover, and source attribution." />
+                    <HelpHint text="Weather for your selected start time with optional hour preview, including temperature, wind, pressure, precip, humidity, cloud cover, and source attribution." />
                   </span>
                   <div className="weather-header-meta">
                     <span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>
@@ -6457,37 +6774,45 @@ function App() {
 
                 <div className="weather-row">
                   <div>
-                    <div className="big-stat">{formatTempDisplay(safetyData.weather.temp)}</div>
-                    <div className="stat-label">Feels like {formatTempDisplay(safetyData.weather.feelsLike)}</div>
+                    <div className="big-stat">{formatTempDisplay(weatherCardTemp)}</div>
+                    <div className="stat-label">Feels like {formatTempDisplay(weatherCardFeelsLike)}</div>
                   </div>
                   <div className="weather-condition">
-                    <div className={`big-stat condition-text ${safetyData.weather.description.toLowerCase().includes('snow') ? 'is-cold' : ''}`}>
-                      {weatherWithEmoji}
+                    <div className={`big-stat condition-text ${weatherCardDescription.toLowerCase().includes('snow') ? 'is-cold' : ''}`}>
+                      {weatherCardWithEmoji}
                     </div>
-                    <div className="stat-label">Conditions at {displayStartTime}</div>
+                    <div className="stat-label">Conditions at {weatherCardDisplayTime}</div>
                   </div>
                 </div>
                 <p className="weather-period-line">Using forecast period: {forecastPeriodLabel}</p>
+                {weatherPressureTrendSummary && <p className="weather-pressure-line">{weatherPressureTrendSummary}</p>}
+                {weatherPreviewActive && <p className="weather-preview-note">Hour preview only updates this Weather card.</p>}
                 {weatherHourQuickOptions.length > 0 && (
-                  <div className="weather-hour-picker" role="group" aria-label="Quick forecast hour selector">
+                  <div className="weather-hour-picker" role="group" aria-label="Weather hour preview selector">
                     <span className="weather-hour-picker-label">Jump to hour</span>
-                    <div className="weather-hour-chip-row">
-                      {weatherHourQuickOptions.map((option) => {
-                        const isActive = option.value === alpineStartTime;
-                        return (
-                          <button
-                            key={`weather-hour-${option.value}`}
-                            type="button"
-                            className={`weather-hour-chip ${isActive ? 'active' : ''}`}
-                            onClick={() => handleWeatherHourSelect(option.value)}
-                            aria-pressed={isActive}
-                            title={option.rawTime ? `Use ${option.rawTime} forecast hour` : `Use ${option.label} forecast hour`}
-                          >
-                            <span>{option.label}</span>
-                            {option.tempLabel && <small>{option.tempLabel}</small>}
-                          </button>
-                        );
-                      })}
+                    <div className="weather-hour-stepper">
+                      <button
+                        type="button"
+                        className="weather-hour-step-btn"
+                        onClick={() => handleWeatherHourStep('decrease')}
+                        disabled={!weatherHourCanDecrease}
+                        aria-label="Previous forecast hour"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <div className="weather-hour-display" aria-live="polite">
+                        <strong>{selectedWeatherHour?.label || formatClockForStyle(alpineStartTime, preferences.timeStyle)}</strong>
+                        <small>{selectedWeatherHour?.tempLabel || '—'}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="weather-hour-step-btn"
+                        onClick={() => handleWeatherHourStep('increase')}
+                        disabled={!weatherHourCanIncrease}
+                        aria-label="Next forecast hour"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
                 )}
@@ -6550,31 +6875,44 @@ function App() {
                 <div className="weather-metrics">
                   <div className="metric-chip">
                     <span className="stat-label">Wind</span>
-                    <strong>{formatWindDisplay(safetyData.weather.windSpeed)}</strong>
+                    <strong>{formatWindDisplay(weatherCardWind)}</strong>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Gusts</span>
-                    <strong className="gust-value">{formatWindDisplay(safetyData.weather.windGust)}</strong>
+                    <strong className="gust-value">{formatWindDisplay(weatherCardGust)}</strong>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Precip</span>
-                    <strong>{safetyData.weather.precipChance}%</strong>
+                    <strong>{Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}</strong>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Humidity</span>
-                    <strong>{Number.isFinite(Number(safetyData.weather.humidity)) ? `${Math.round(Number(safetyData.weather.humidity))}%` : 'N/A'}</strong>
+                    <strong>{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</strong>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Dew Point</span>
-                    <strong>{formatTempDisplay(safetyData.weather.dewPoint)}</strong>
+                    <strong>{formatTempDisplay(weatherCardDewPoint)}</strong>
+                  </div>
+                  <div className="metric-chip">
+                    <span className="stat-label">Pressure</span>
+                    <strong>{weatherCardPressureLabel}</strong>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Wind Dir</span>
-                    <strong>{weatherWindDirectionLabel}</strong>
+                    <strong>{weatherCardWindDirection}</strong>
                   </div>
                   <div className="metric-chip">
                     <span className="stat-label">Cloud Cover</span>
-                    <strong>{weatherCloudCoverLabel}</strong>
+                    <strong>{weatherCardCloudCoverLabel}</strong>
+                  </div>
+                  <div className="metric-chip metric-chip-wide">
+                    <span className="stat-label">Visibility / Whiteout</span>
+                    <strong>{weatherVisibilityScoreLabel}</strong>
+                    <div className="metric-chip-pill-row">
+                      <span className={`decision-pill ${weatherVisibilityPill}`}>{weatherVisibilityRisk.level}</span>
+                      {weatherVisibilityActiveWindowText && <span className="metric-chip-window">{weatherVisibilityActiveWindowText}</span>}
+                    </div>
+                    <p className="metric-chip-detail">{localizeUnitText(weatherVisibilityDetail)}</p>
                   </div>
                 </div>
 
@@ -7199,7 +7537,7 @@ function App() {
                 <div className="card-header">
                   <span className="card-title">
                     <Mountain size={14} /> Snowpack Snapshot
-                    <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC at your objective." />
+                    <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC, plus historical average comparison for your selected date." />
                   </span>
                   <span className={`decision-pill ${snowpackPillClass}`}>
                     {snowpackStatusLabel}
@@ -7248,6 +7586,11 @@ function App() {
                     <span className="stat-label">Recent 24h</span>
                     <strong>Rain {rainfall24hDisplay} • Snow {snowfall24hDisplay}</strong>
                     <small>Use this for fresh loading context.</small>
+                  </div>
+                  <div className="snowpack-core-item">
+                    <span className="stat-label">Historical Baseline</span>
+                    <strong className={`snowpack-historical-status ${snowpackHistoricalPillClass}`}>{snowpackHistoricalStatusLabel}</strong>
+                    <small>{snowpackHistoricalComparisonLine}</small>
                   </div>
                 </div>
 

@@ -133,6 +133,36 @@ const normalizeNoaaDewPointF = (dewpointField) => {
   return Math.round(value);
 };
 
+const normalizePressureHpa = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.round(numeric * 10) / 10;
+};
+
+const normalizeNoaaPressureHpa = (barometricPressureField) => {
+  if (barometricPressureField === null || barometricPressureField === undefined) {
+    return null;
+  }
+  if (typeof barometricPressureField === 'number') {
+    return normalizePressureHpa(barometricPressureField > 2000 ? barometricPressureField / 100 : barometricPressureField);
+  }
+
+  const rawValue = Number(barometricPressureField?.value);
+  if (!Number.isFinite(rawValue)) {
+    return null;
+  }
+  const unitCode = String(barometricPressureField?.unitCode || '').toLowerCase();
+  if (unitCode.includes('hpa') || unitCode.includes('hectopascal') || unitCode.includes('millibar') || unitCode.includes('mb')) {
+    return normalizePressureHpa(rawValue);
+  }
+  if (unitCode.includes('pa') || rawValue > 2000) {
+    return normalizePressureHpa(rawValue / 100);
+  }
+  return normalizePressureHpa(rawValue);
+};
+
 const clampPercent = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -186,6 +216,172 @@ const resolveNoaaCloudCover = (forecastPeriod) => {
     return { value: fromText, source: 'NOAA shortForecast-derived cloud cover' };
   }
   return { value: null, source: 'Unavailable' };
+};
+
+const toFiniteNumberOrNull = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const VISIBILITY_RISK_SOURCE = 'Derived from weather description, precipitation, wind, humidity, and cloud cover signals';
+
+const buildVisibilityRisk = (weatherData) => {
+  const description = String(weatherData?.description || '').toLowerCase().trim();
+  const precipChance = toFiniteNumberOrNull(weatherData?.precipChance);
+  const humidity = toFiniteNumberOrNull(weatherData?.humidity);
+  const cloudCover = toFiniteNumberOrNull(weatherData?.cloudCover);
+  const windSpeed = toFiniteNumberOrNull(weatherData?.windSpeed);
+  const windGust = toFiniteNumberOrNull(weatherData?.windGust);
+  const isDaytime = typeof weatherData?.isDaytime === 'boolean' ? weatherData.isDaytime : null;
+  const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
+
+  const signalsMissing =
+    !description ||
+    description.includes('weather data unavailable') ||
+    description.includes('unavailable');
+
+  if (
+    signalsMissing &&
+    precipChance === null &&
+    humidity === null &&
+    cloudCover === null &&
+    windSpeed === null &&
+    windGust === null &&
+    trend.length === 0
+  ) {
+    return {
+      score: null,
+      level: 'Unknown',
+      summary: 'Visibility/whiteout signal unavailable for this selected period.',
+      factors: [],
+      activeHours: null,
+      windowHours: null,
+      source: VISIBILITY_RISK_SOURCE,
+    };
+  }
+
+  let score = 0;
+  const factors = [];
+  const addRisk = (points, message) => {
+    if (!Number.isFinite(points) || points <= 0 || !message) {
+      return;
+    }
+    score += points;
+    factors.push(message);
+  };
+
+  if (/whiteout|ground blizzard|blizzard/.test(description)) {
+    addRisk(55, 'whiteout/blizzard wording in forecast');
+  } else if (/snow squall|heavy snow|blowing snow|snow showers/.test(description)) {
+    addRisk(38, 'snowfall or blowing-snow signal');
+  } else if (/dense fog|freezing fog|fog|mist|haze|smoke/.test(description)) {
+    addRisk(30, 'fog/smoke/haze signal');
+  } else if (/drizzle|rain|showers/.test(description)) {
+    addRisk(12, 'rain/drizzle signal');
+  }
+
+  if (precipChance !== null && precipChance >= 80) {
+    addRisk(22, `high precip chance (${Math.round(precipChance)}%)`);
+  } else if (precipChance !== null && precipChance >= 60) {
+    addRisk(16, `elevated precip chance (${Math.round(precipChance)}%)`);
+  } else if (precipChance !== null && precipChance >= 40) {
+    addRisk(10, `moderate precip chance (${Math.round(precipChance)}%)`);
+  } else if (precipChance !== null && precipChance >= 25) {
+    addRisk(4, `minor precip chance (${Math.round(precipChance)}%)`);
+  }
+
+  const effectiveWind = Math.max(
+    windSpeed !== null ? windSpeed : 0,
+    windGust !== null ? windGust : 0,
+  );
+  if (effectiveWind >= 45) {
+    addRisk(20, `strong transport winds (${Math.round(effectiveWind)} mph)`);
+  } else if (effectiveWind >= 35) {
+    addRisk(14, `wind-driven visibility reduction possible (${Math.round(effectiveWind)} mph)`);
+  } else if (effectiveWind >= 25) {
+    addRisk(8, `moderate wind signal (${Math.round(effectiveWind)} mph)`);
+  }
+
+  if (humidity !== null && cloudCover !== null && humidity >= 92 && cloudCover >= 92) {
+    addRisk(18, `saturated low-contrast air mass (${Math.round(humidity)}% RH / ${Math.round(cloudCover)}% cloud)`);
+  } else if (humidity !== null && humidity >= 90) {
+    addRisk(8, `very high humidity (${Math.round(humidity)}%)`);
+  }
+
+  if (cloudCover !== null && cloudCover >= 95) {
+    addRisk(8, `overcast signal (${Math.round(cloudCover)}% cloud)`);
+  } else if (cloudCover !== null && cloudCover >= 80) {
+    addRisk(4, `mostly overcast signal (${Math.round(cloudCover)}% cloud)`);
+  }
+
+  let activeHours = 0;
+  if (trend.length > 0) {
+    activeHours = trend.filter((point) => {
+      const pointCondition = String(point?.condition || '').toLowerCase();
+      const pointPrecip = toFiniteNumberOrNull(point?.precipChance);
+      const pointHumidity = toFiniteNumberOrNull(point?.humidity);
+      const pointCloud = toFiniteNumberOrNull(point?.cloudCover);
+      const pointWind = toFiniteNumberOrNull(point?.wind);
+      const pointGust = toFiniteNumberOrNull(point?.gust);
+      const pointEffectiveWind = Math.max(pointWind !== null ? pointWind : 0, pointGust !== null ? pointGust : 0);
+
+      let pointRiskSignals = 0;
+      if (/whiteout|blizzard|snow squall|blowing snow|fog|mist|haze|smoke/.test(pointCondition)) pointRiskSignals += 2;
+      if (pointPrecip !== null && pointPrecip >= 60) pointRiskSignals += 2;
+      else if (pointPrecip !== null && pointPrecip >= 40) pointRiskSignals += 1;
+      if (pointHumidity !== null && pointCloud !== null && pointHumidity >= 92 && pointCloud >= 92) pointRiskSignals += 2;
+      else if (pointCloud !== null && pointCloud >= 90) pointRiskSignals += 1;
+      if (pointEffectiveWind >= 35) pointRiskSignals += 2;
+      else if (pointEffectiveWind >= 25) pointRiskSignals += 1;
+
+      return pointRiskSignals >= 3;
+    }).length;
+
+    if (activeHours >= 6) {
+      addRisk(12, `${activeHours}/${trend.length} trend hours show persistent reduced visibility`);
+    } else if (activeHours >= 3) {
+      addRisk(7, `${activeHours}/${trend.length} trend hours show reduced visibility`);
+    } else if (activeHours >= 1) {
+      addRisk(3, `${activeHours}/${trend.length} trend hours show brief reduced visibility`);
+    }
+  }
+
+  if (isDaytime === false) {
+    addRisk(6, 'nighttime period reduces terrain contrast');
+  }
+
+  const boundedScore = Math.max(0, Math.min(100, Math.round(score)));
+  const level =
+    boundedScore >= 80
+      ? 'Extreme'
+      : boundedScore >= 60
+        ? 'High'
+        : boundedScore >= 40
+          ? 'Moderate'
+          : boundedScore >= 20
+            ? 'Low'
+            : 'Minimal';
+
+  const summary =
+    level === 'Extreme'
+      ? 'Whiteout conditions are plausible; terrain contrast and navigation margin may collapse quickly.'
+      : level === 'High'
+        ? 'Poor visibility is likely during this window. Expect route-finding and terrain-reading difficulty.'
+        : level === 'Moderate'
+          ? 'Intermittent visibility reductions are possible. Keep close navigation checks.'
+          : level === 'Low'
+            ? 'Mostly workable visibility with occasional reduced-contrast periods.'
+            : 'No strong whiteout signal in the selected period.';
+
+  return {
+    score: boundedScore,
+    level,
+    summary,
+    factors: factors.slice(0, 4),
+    activeHours,
+    windowHours: trend.length,
+    source: VISIBILITY_RISK_SOURCE,
+  };
 };
 
 const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
@@ -269,6 +465,7 @@ const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
   windSpeed: 0,
   windGust: 0,
   windDirection: null,
+  pressure: null,
   humidity: 0,
   cloudCover: 0,
   precipChance: 0,
@@ -280,6 +477,10 @@ const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
   forecastDate: forecastDate || null,
   trend: [],
   temperatureContext24h: null,
+  visibilityRisk: buildVisibilityRisk({
+    description: 'Weather data unavailable',
+    trend: [],
+  }),
   elevationForecast: [],
   elevationForecastNote: 'Weather forecast data unavailable; elevation-based estimate could not be generated.',
   forecastLink: `https://forecast.weather.gov/MapClick.php?lat=${lat}&lon=${lon}`,
@@ -475,6 +676,7 @@ const OPEN_METEO_WEATHER_HOURLY_FIELDS = [
   'relative_humidity_2m',
   'precipitation_probability',
   'cloud_cover',
+  'surface_pressure',
   'weather_code',
   'wind_speed_10m',
   'wind_gusts_10m',
@@ -603,6 +805,9 @@ const fetchOpenMeteoWeatherFallback = async ({
   const currentDewPoint = Number.isFinite(rawCurrentDewPoint) ? Math.round(rawCurrentDewPoint) : null;
   const currentHumidity = Math.round(readHourlyValue('relative_humidity_2m', selectedHourIndex, 0));
   const currentCloud = Math.round(readHourlyValue('cloud_cover', selectedHourIndex, 0));
+  const pressureSeries = hourly && Array.isArray(hourly.surface_pressure) ? hourly.surface_pressure : [];
+  const rawCurrentPressure = Number(pressureSeries[selectedHourIndex]);
+  const currentPressure = normalizePressureHpa(rawCurrentPressure);
   const currentPrecipProb = Math.round(readHourlyValue('precipitation_probability', selectedHourIndex, 0));
   const currentWeatherCode = Math.round(readHourlyValue('weather_code', selectedHourIndex, -1));
   const currentIsDay = readHourlyValue('is_day', selectedHourIndex, 1) >= 1;
@@ -653,6 +858,7 @@ const fetchOpenMeteoWeatherFallback = async ({
         return Number.isFinite(rawDewPoint) ? Math.round(rawDewPoint) : null;
       })(),
       cloudCover: Math.round(readHourlyValue('cloud_cover', rowIndex, currentCloud)),
+      pressure: normalizePressureHpa(Number(pressureSeries[rowIndex])),
       condition: openMeteoCodeToText(readHourlyValue('weather_code', rowIndex, currentWeatherCode)),
       isDaytime: readHourlyValue('is_day', rowIndex, 1) >= 1,
     });
@@ -676,6 +882,7 @@ const fetchOpenMeteoWeatherFallback = async ({
     windSpeed: currentWind,
     windGust: currentGust,
     windDirection: currentWindDirection,
+    pressure: currentPressure,
     humidity: currentHumidity,
     cloudCover: currentCloud,
     precipChance: currentPrecipProb,
@@ -687,6 +894,7 @@ const fetchOpenMeteoWeatherFallback = async ({
     forecastDate: resolvedDate,
     trend,
     temperatureContext24h,
+    visibilityRisk: null,
     sourceDetails: {
       primary: 'Open-Meteo',
       blended: false,
@@ -698,6 +906,7 @@ const fetchOpenMeteoWeatherFallback = async ({
             windSpeed: 'Open-Meteo',
             windGust: hasOpenMeteoGust ? 'Open-Meteo' : 'Estimated from Open-Meteo sustained wind',
             windDirection: 'Open-Meteo',
+            pressure: currentPressure !== null ? 'Open-Meteo' : 'Unavailable',
             humidity: 'Open-Meteo',
             cloudCover: 'Open-Meteo',
         precipChance: 'Open-Meteo',
@@ -705,9 +914,10 @@ const fetchOpenMeteoWeatherFallback = async ({
             issuedTime: 'Open-Meteo response timestamp',
         timezone: 'Open-Meteo',
         forecastStartTime: 'Open-Meteo',
-        forecastEndTime: 'Open-Meteo',
+            forecastEndTime: 'Open-Meteo',
         trend: 'Open-Meteo',
         temperatureContext24h: 'Open-Meteo',
+        visibilityRisk: 'Derived from Open-Meteo weather fields',
       },
     },
     elevationForecast: elevationForecastBands,
@@ -717,6 +927,7 @@ const fetchOpenMeteoWeatherFallback = async ({
         : 'Objective elevation unavailable from NOAA and fallback elevation services; elevation-based estimate could not be generated.',
     forecastLink: buildOpenMeteoWeatherSourceLink(lat, lon),
   };
+  weatherData.visibilityRisk = buildVisibilityRisk(weatherData);
 
   return {
     weatherData,
@@ -764,7 +975,7 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
     }
   };
 
-  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h', 'cloudCover'].forEach(tryFillField);
+  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h', 'cloudCover', 'pressure'].forEach(tryFillField);
 
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
@@ -776,12 +987,43 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
     fieldSources.trend = 'NOAA';
   }
 
+  if (noaaTrend.length > 0 && fallbackTrend.length > 0) {
+    let pressureSupplemented = false;
+    const mergedTrend = noaaTrend.map((row, index) => {
+      const noaaPressure = row?.pressure;
+      const fallbackPressure = fallbackTrend[index]?.pressure;
+      if (isWeatherFieldMissing(noaaPressure) && !isWeatherFieldMissing(fallbackPressure)) {
+        pressureSupplemented = true;
+        return { ...row, pressure: fallbackPressure };
+      }
+      return row;
+    });
+    if (pressureSupplemented) {
+      merged.trend = mergedTrend;
+      if (!supplementedFields.includes('trendPressure')) {
+        supplementedFields.push('trendPressure');
+      }
+      fieldSources.pressure = 'Derived from NOAA + Open-Meteo trend pressure';
+    } else if (!fieldSources.pressure) {
+      fieldSources.pressure = 'NOAA';
+    }
+  }
+
+  if (!fieldSources.pressure) {
+    fieldSources.pressure = isWeatherFieldMissing(merged.pressure) ? 'Unavailable' : 'NOAA';
+  }
+
   merged.sourceDetails = {
     primary: 'NOAA',
     blended: supplementedFields.length > 0,
     supplementalSources: supplementedFields.length > 0 ? ['Open-Meteo'] : [],
     fieldSources,
   };
+  merged.visibilityRisk = buildVisibilityRisk(merged);
+  merged.sourceDetails.fieldSources.visibilityRisk =
+    supplementedFields.length > 0
+      ? 'Derived from merged NOAA/Open-Meteo weather fields'
+      : 'Derived from NOAA weather fields';
 
   return {
     weatherData: merged,
@@ -1706,6 +1948,11 @@ const calculateSafetyScore = ({
   const tempF = Number(weatherData?.temp);
   const feelsLikeF = Number.isFinite(Number(weatherData?.feelsLike)) ? Number(weatherData?.feelsLike) : tempF;
   const isDaytime = weatherData?.isDaytime;
+  const visibilityRiskScoreRaw = Number(weatherData?.visibilityRisk?.score);
+  const visibilityRiskScore = Number.isFinite(visibilityRiskScoreRaw) ? visibilityRiskScoreRaw : null;
+  const visibilityRiskLevel = String(weatherData?.visibilityRisk?.level || '').trim();
+  const visibilityActiveHoursRaw = Number(weatherData?.visibilityRisk?.activeHours);
+  const visibilityActiveHours = Number.isFinite(visibilityActiveHoursRaw) ? visibilityActiveHoursRaw : null;
 
   const normalizedRisk = String(avalancheData?.risk || '').toLowerCase();
   const avalancheRelevant = avalancheData?.relevant !== false;
@@ -1864,6 +2111,31 @@ const calculateSafetyScore = ({
     applyFactor('Storm', 18, `Convective or severe weather signal in forecast: "${weatherData.description}".`, 'NOAA short forecast');
   } else if (/snow|sleet|freezing rain|ice/.test(weatherDescription)) {
     applyFactor('Winter Weather', 10, `Frozen precipitation in forecast ("${weatherData.description}") increases travel hazard.`, 'NOAA short forecast');
+  }
+
+  if (visibilityRiskScore !== null) {
+    let visibilityImpact = 0;
+    if (visibilityRiskScore >= 80) {
+      visibilityImpact = 12;
+    } else if (visibilityRiskScore >= 60) {
+      visibilityImpact = 9;
+    } else if (visibilityRiskScore >= 40) {
+      visibilityImpact = 6;
+    } else if (visibilityRiskScore >= 20) {
+      visibilityImpact = 3;
+    }
+    if (visibilityImpact > 0) {
+      const activeHoursNote =
+        visibilityActiveHours !== null && trend.length > 0
+          ? ` ${Math.round(visibilityActiveHours)}/${trend.length} trend hours show reduced-visibility signal.`
+          : '';
+      applyFactor(
+        'Visibility',
+        visibilityImpact,
+        `Whiteout/visibility risk is ${visibilityRiskLevel || 'elevated'} (${Math.round(visibilityRiskScore)}/100).${activeHoursNote}`,
+        weatherData?.visibilityRisk?.source || 'Derived weather visibility model',
+      );
+    }
   } else if (/fog|smoke|haze/.test(weatherDescription)) {
     applyFactor('Visibility', 6, `Reduced-visibility weather in forecast ("${weatherData.description}").`, 'NOAA short forecast');
   }
@@ -2629,6 +2901,7 @@ const safetyHandler = async (req, res) => {
         const trendHumidity = Number.isFinite(p?.relativeHumidity?.value) ? p.relativeHumidity.value : null;
         const trendDewPoint = normalizeNoaaDewPointF(p?.dewpoint);
         const trendCloudCover = resolveNoaaCloudCover(p).value;
+        const trendPressure = normalizeNoaaPressureHpa(p?.barometricPressure);
 
         return {
           time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
@@ -2641,6 +2914,7 @@ const safetyHandler = async (req, res) => {
           humidity: trendHumidity,
           dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
           cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
+          pressure: trendPressure,
           condition: p.shortForecast || 'Unknown',
           isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
         };
@@ -2659,6 +2933,7 @@ const safetyHandler = async (req, res) => {
       const currentTemp = Number.isFinite(selectedForecastPeriod?.temperature) ? selectedForecastPeriod.temperature : 0;
       const feelsLike = computeFeelsLikeF(currentTemp, currentWindSpeed);
       const currentDewPoint = normalizeNoaaDewPointF(selectedForecastPeriod?.dewpoint);
+      const currentPressure = normalizeNoaaPressureHpa(selectedForecastPeriod?.barometricPressure);
       const elevationForecastBands = buildElevationForecastBands({
         baseElevationFt: objectiveElevationFt,
         tempF: currentTemp,
@@ -2677,6 +2952,7 @@ const safetyHandler = async (req, res) => {
         windSpeed: currentWindSpeed,
         windGust: currentWindGust,
         windDirection: findNearestWindDirection(periods, forecastStartIndex),
+        pressure: currentPressure,
         humidity: Number.isFinite(selectedForecastPeriod?.relativeHumidity?.value) ? selectedForecastPeriod.relativeHumidity.value : 0,
         cloudCover: currentCloudCover.value,
         precipChance: Number.isFinite(selectedForecastPeriod?.probabilityOfPrecipitation?.value) ? selectedForecastPeriod.probabilityOfPrecipitation.value : 0,
@@ -2688,6 +2964,7 @@ const safetyHandler = async (req, res) => {
         forecastDate: selectedForecastDate,
         trend: hourlyTrend,
         temperatureContext24h,
+        visibilityRisk: null,
         sourceDetails: {
           primary: 'NOAA',
           blended: false,
@@ -2699,6 +2976,7 @@ const safetyHandler = async (req, res) => {
             windSpeed: 'NOAA',
             windGust: windGustSource,
             windDirection: 'NOAA',
+            pressure: currentPressure !== null ? 'NOAA' : 'Unavailable',
             humidity: 'NOAA',
             cloudCover: currentCloudCover.source,
             precipChance: 'NOAA',
@@ -2709,6 +2987,7 @@ const safetyHandler = async (req, res) => {
             forecastEndTime: 'NOAA',
             trend: 'NOAA',
             temperatureContext24h: 'NOAA',
+            visibilityRisk: 'Derived from NOAA weather fields',
           },
         },
         elevationForecast: elevationForecastBands,
@@ -2718,6 +2997,8 @@ const safetyHandler = async (req, res) => {
             : 'Objective elevation unavailable from NOAA and fallback elevation services; elevation-based estimate could not be generated.',
         forecastLink: `https://forecast.weather.gov/MapClick.php?lat=${parsedLat}&lon=${parsedLon}`
       };
+
+      weatherData.visibilityRisk = buildVisibilityRisk(weatherData);
 
       if (!weatherData.windDirection && currentWindSpeed <= 2) {
         weatherData.windDirection = 'CALM';
@@ -2730,6 +3011,8 @@ const safetyHandler = async (req, res) => {
       if (
         !weatherData.windDirection ||
         !weatherData.issuedTime ||
+        weatherData.pressure === null ||
+        weatherData.pressure === undefined ||
         weatherData.cloudCover === null ||
         weatherData.cloudCover === undefined ||
         (Array.isArray(weatherData.trend) && weatherData.trend.length < 6)
