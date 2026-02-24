@@ -497,7 +497,16 @@ const buildOpenMeteoWeatherApiUrl = (host, lat, lon) => {
 
 const buildOpenMeteoWeatherSourceLink = (lat, lon) => buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon);
 
-const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startClock, fetchOptions, objectiveElevationFt, objectiveElevationSource }) => {
+const fetchOpenMeteoWeatherFallback = async ({
+  lat,
+  lon,
+  selectedDate,
+  startClock,
+  fetchOptions,
+  objectiveElevationFt,
+  objectiveElevationSource,
+  trendHours,
+}) => {
   const apiUrls = [
     buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon),
     buildOpenMeteoWeatherApiUrl('customer-api.open-meteo.com', lat, lon),
@@ -619,7 +628,8 @@ const fetchOpenMeteoWeatherFallback = async ({ lat, lon, selectedDate, startCloc
     windowHours: 24,
   });
 
-  for (let offset = 0; offset < 12; offset += 1) {
+  const forecastTrendHours = clampTravelWindowHours(trendHours, 12);
+  for (let offset = 0; offset < forecastTrendHours; offset += 1) {
     const rowIndex = selectedHourIndex + offset;
     const rowIso = hourlyTimes[rowIndex];
     if (!rowIso) {
@@ -1653,6 +1663,7 @@ const calculateSafetyScore = ({
   selectedDate,
   solarData,
   selectedStartClock,
+  selectedTravelWindowHours = null,
 }) => {
   const explanations = [];
   const factors = [];
@@ -1710,6 +1721,8 @@ const calculateSafetyScore = ({
   const aqiCategory = String(airQualityData?.category || 'Unknown');
 
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
+  const requestedWindowHours = clampTravelWindowHours(selectedTravelWindowHours, 12);
+  const effectiveTrendWindowHours = Math.max(1, trend.length || requestedWindowHours);
   const trendTemps = trend.map((item) => Number(item?.temp)).filter(Number.isFinite);
   const trendGusts = trend.map((item) => Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind)).filter(Number.isFinite);
   const trendPrecips = trend.map((item) => Number(item?.precipChance)).filter(Number.isFinite);
@@ -1909,10 +1922,15 @@ const calculateSafetyScore = ({
   }
 
   if (Number.isFinite(tempRange) && tempRange >= 18) {
-    applyFactor('Weather Volatility', 6, `Large 12-hour temperature swing (${Math.round(tempRange)}F) suggests unstable conditions.`, 'NOAA hourly trend');
+    applyFactor(
+      'Weather Volatility',
+      6,
+      `Large ${effectiveTrendWindowHours}-hour temperature swing (${Math.round(tempRange)}F) suggests unstable conditions.`,
+      'NOAA hourly trend',
+    );
   }
   if (Number.isFinite(trendPeakGust) && trendPeakGust >= 45 && (!Number.isFinite(gust) || gust < 45)) {
-    applyFactor('Wind', 6, `Peak gusts in the next 12 hours reach ${Math.round(trendPeakGust)} mph.`, 'NOAA hourly trend');
+    applyFactor('Wind', 6, `Peak gusts in the next ${effectiveTrendWindowHours} hours reach ${Math.round(trendPeakGust)} mph.`, 'NOAA hourly trend');
   }
 
   if (forecastLeadHours !== null && forecastLeadHours > 6) {
@@ -2594,8 +2612,9 @@ const safetyHandler = async (req, res) => {
         windowHours: 24,
       });
 
-      // Get 12-hour trend from selected forecast date
-      const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + 12).map((p, offset) => {
+      const forecastTrendHours = clampTravelWindowHours(requestedTravelWindowHours, 12);
+      // Build trend window from selected hour using user-selected travel window length (up to 24h).
+      const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + forecastTrendHours).map((p, offset) => {
         const rowIndex = forecastStartIndex + offset;
         const windSpeedValue = parseWindMph(p.windSpeed, 0);
         const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
@@ -2712,6 +2731,7 @@ const safetyHandler = async (req, res) => {
             fetchOptions,
             objectiveElevationFt,
             objectiveElevationSource,
+            trendHours: requestedTravelWindowHours,
           });
           const blended = blendNoaaWeatherWithFallback(weatherData, supplement.weatherData);
           weatherData = blended.weatherData;
@@ -2765,6 +2785,7 @@ const safetyHandler = async (req, res) => {
           fetchOptions,
           objectiveElevationFt: Number.isFinite(fallbackElevationFt) ? fallbackElevationFt : null,
           objectiveElevationSource: fallbackElevationSource,
+          trendHours: requestedTravelWindowHours,
         });
 
         weatherData = fallback.weatherData;
@@ -3261,6 +3282,7 @@ const safetyHandler = async (req, res) => {
       selectedDate: selectedForecastDate,
       solarData,
       selectedStartClock: requestedStartClock,
+      selectedTravelWindowHours: requestedTravelWindowHours,
     });
     const todayDate = new Date().toISOString().slice(0, 10);
     const avalancheSummaryForAi = avalancheData.relevant === false
@@ -3376,6 +3398,7 @@ const safetyHandler = async (req, res) => {
       selectedDate: fallbackSelectedDate,
       solarData,
       selectedStartClock: requestedStartClock,
+      selectedTravelWindowHours: requestedTravelWindowHours,
     });
 
     const avalancheSummaryForAi = safeAvalancheData.relevant === false

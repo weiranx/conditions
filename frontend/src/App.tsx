@@ -3781,9 +3781,10 @@ function App() {
         : avalancheUnknown
           ? 'avy unk'
           : `avy L${normalizeDangerLevel(safetyData.avalanche.dangerLevel)}`;
-  const satWorst12hSnippet = (() => {
+  const satWorstWindowSnippet = (() => {
+    const satWindowLabel = `worst${travelWindowHours}h`;
     if (!worstTravelWindowRow) {
-      return 'worst12h n/a';
+      return `${satWindowLabel} n/a`;
     }
     const peakHour = formatClockForStyle(worstTravelWindowRow.time, preferences.timeStyle).replace(/\s+/g, '');
     const peakFeelsLike = Number.isFinite(Number(worstTravelWindowRow.feelsLike))
@@ -3810,7 +3811,7 @@ function App() {
           ? localizeUnitText(worstTravelWindowCritical.reasons[0])
           : criticalRiskLevelText(worstTravelWindowCritical?.level || 'stable').toLowerCase();
     return collapseWhitespace(
-      `worst12h ${peakHour} ${peakHazard} f${formatTempDisplay(peakFeelsLike)} g${formatWindDisplay(worstTravelWindowRow.gust)} p${peakPrecip}%`,
+      `${satWindowLabel} ${peakHour} ${peakHazard} f${formatTempDisplay(peakFeelsLike)} g${formatWindDisplay(worstTravelWindowRow.gust)} p${peakPrecip}%`,
     );
   })();
   const satelliteConditionLine =
@@ -3821,7 +3822,7 @@ function App() {
               safetyData.weather.temp,
             )} f${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)} | w${formatWindDisplay(
               safetyData.weather.windSpeed,
-            )} g${formatWindDisplay(safetyData.weather.windGust)} p${safetyData.weather.precipChance}% | ${satWorst12hSnippet} | ${satAvalancheSnippet} | ${decision.level}`,
+            )} g${formatWindDisplay(safetyData.weather.windGust)} p${safetyData.weather.precipChance}% | ${satWorstWindowSnippet} | ${satAvalancheSnippet} | ${decision.level}`,
           ),
           170,
         )
@@ -4064,14 +4065,14 @@ function App() {
       ? 'NOAA / Weather.gov + Open-Meteo'
       : weatherSourceLabel;
   const primaryWindDirection = normalizeWindHintDirection(safetyData?.weather.windDirection || null);
-  const windTrendRows = Array.isArray(safetyData?.weather.trend) ? safetyData.weather.trend.slice(0, 12) : [];
-  const trendWindDirections = Array.isArray(safetyData?.weather.trend)
-    ? safetyData.weather.trend
+  const windTrendRows = Array.isArray(trendWindow) ? trendWindow : [];
+  const trendWindDirections = Array.isArray(windTrendRows)
+    ? windTrendRows
         .map((point) => normalizeWindHintDirection(point?.windDirection || null))
         .filter((entry): entry is string => Boolean(entry))
     : [];
   const directionalTrendWindDirections = trendWindDirections.filter((entry) => entry !== 'CALM' && entry !== 'VRB');
-  const dominantTrendDirection = resolveDominantTrendWindDirection(safetyData?.weather.trend || []);
+  const dominantTrendDirection = resolveDominantTrendWindDirection(windTrendRows || []);
   const resolvedWindDirection =
     primaryWindDirection && primaryWindDirection !== 'CALM' && primaryWindDirection !== 'VRB'
       ? primaryWindDirection
@@ -5758,7 +5759,7 @@ function App() {
                     <strong>{Number.isFinite(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity)) ? `${Math.round(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity))}%` : 'N/A'}</strong>
                   </div>
                   <div>
-                    <span className="stat-label">12h Peak Temp</span>
+                    <span className="stat-label">{travelWindowHours}h Peak Temp</span>
                     <strong>{formatTempDisplay(heatRiskMetrics.peakTemp12hF ?? null)}</strong>
                   </div>
                   <div>
