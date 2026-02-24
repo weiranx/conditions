@@ -5112,7 +5112,7 @@ function App() {
       return { ...card, riskLevel: normalizedRisk, score };
     });
 
-    scored.sort((a, b) => b.riskLevel - a.riskLevel || b.score - a.score || b.base - a.base);
+    scored.sort((a, b) => b.score - a.score || b.riskLevel - a.riskLevel || b.base - a.base);
     const sortedKeys = scored.map((entry) => entry.key);
     const innerOrder = new Map<SortableCardKey, number>();
     sortedKeys.forEach((key, idx) => innerOrder.set(key, idx + 10));
