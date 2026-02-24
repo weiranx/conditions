@@ -1205,6 +1205,70 @@ function formatIsoDateLabel(isoDate: string): string {
 }
 
 function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle = 'ampm'): TravelWindowInsights {
+  const computeTravelTrend = () => {
+    if (rows.length < 2) {
+      return {
+        trendDirection: 'steady' as const,
+        trendStrength: 'slight' as const,
+        trendDelta: 0,
+        trendLabel: 'Steady',
+        trendSummary: 'Not enough hourly rows to classify improving vs worsening trend.',
+      };
+    }
+
+    const riskScores = rows.map((row) => {
+      if (row.pass) {
+        return 0;
+      }
+      let score = Math.max(1, row.failedRuleLabels.length);
+      row.failedRuleLabels.forEach((label) => {
+        const normalized = String(label || '').toLowerCase();
+        if (normalized.includes('gust') || normalized.includes('wind')) score += 1.1;
+        if (normalized.includes('precip')) score += 1.0;
+        if (normalized.includes('feels-like') || normalized.includes('cold')) score += 0.8;
+      });
+      return score;
+    });
+
+    const segmentHours = Math.max(2, Math.min(6, Math.floor(rows.length / 3) || 2));
+    const startSlice = riskScores.slice(0, segmentHours);
+    const endSlice = riskScores.slice(-segmentHours);
+    const avg = (values: number[]) => (values.length ? values.reduce((acc, value) => acc + value, 0) / values.length : 0);
+    const startAvg = avg(startSlice);
+    const endAvg = avg(endSlice);
+    const delta = endAvg - startAvg;
+    const absDelta = Math.abs(delta);
+    const strength: TravelWindowInsights['trendStrength'] = absDelta >= 2 ? 'strong' : absDelta >= 1.1 ? 'moderate' : 'slight';
+
+    if (delta >= 0.6) {
+      return {
+        trendDirection: 'worsening' as const,
+        trendStrength: strength,
+        trendDelta: delta,
+        trendLabel: `Worsening (${strength})`,
+        trendSummary: `Risk trend worsens from first ${segmentHours}h to last ${segmentHours}h.`,
+      };
+    }
+    if (delta <= -0.6) {
+      return {
+        trendDirection: 'improving' as const,
+        trendStrength: strength,
+        trendDelta: delta,
+        trendLabel: `Improving (${strength})`,
+        trendSummary: `Risk trend improves from first ${segmentHours}h to last ${segmentHours}h.`,
+      };
+    }
+    return {
+      trendDirection: 'steady' as const,
+      trendStrength: strength,
+      trendDelta: delta,
+      trendLabel: 'Steady',
+      trendSummary: `Risk trend is mostly steady across first/last ${segmentHours}h segments.`,
+    };
+  };
+
+  const trend = computeTravelTrend();
+
   if (rows.length === 0) {
     return {
       passHours: 0,
@@ -1212,6 +1276,11 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       bestWindow: null,
       nextCleanWindow: null,
       topFailureLabels: [],
+      trendDirection: trend.trendDirection,
+      trendStrength: trend.trendStrength,
+      trendDelta: trend.trendDelta,
+      trendLabel: trend.trendLabel,
+      trendSummary: trend.trendSummary,
       summary: 'No hourly trend data available for travel-window analysis.',
     };
   }
@@ -1246,7 +1315,12 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       bestWindow,
       nextCleanWindow,
       topFailureLabels,
-      summary: `No clean travel window in the next ${rows.length} hours under current thresholds.`,
+      trendDirection: trend.trendDirection,
+      trendStrength: trend.trendStrength,
+      trendDelta: trend.trendDelta,
+      trendLabel: trend.trendLabel,
+      trendSummary: trend.trendSummary,
+      summary: `No clean travel window in the next ${rows.length} hours under current thresholds. ${trend.trendSummary}`,
     };
   }
 
@@ -1257,7 +1331,12 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       bestWindow,
       nextCleanWindow,
       topFailureLabels,
-      summary: `Passing ${passHours}/${rows.length} hours.`,
+      trendDirection: trend.trendDirection,
+      trendStrength: trend.trendStrength,
+      trendDelta: trend.trendDelta,
+      trendLabel: trend.trendLabel,
+      trendSummary: trend.trendSummary,
+      summary: `Passing ${passHours}/${rows.length} hours. ${trend.trendSummary}`,
     };
   }
 
@@ -1270,7 +1349,12 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       bestWindow,
       nextCleanWindow,
       topFailureLabels,
-      summary: `${baseSummary} First clean hour starts at ${formatClockForStyle(nextCleanWindow.start, timeStyle)}.`,
+      trendDirection: trend.trendDirection,
+      trendStrength: trend.trendStrength,
+      trendDelta: trend.trendDelta,
+      trendLabel: trend.trendLabel,
+      trendSummary: trend.trendSummary,
+      summary: `${baseSummary} First clean hour starts at ${formatClockForStyle(nextCleanWindow.start, timeStyle)}. ${trend.trendSummary}`,
     };
   }
 
@@ -1280,7 +1364,12 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
     bestWindow,
     nextCleanWindow,
     topFailureLabels,
-    summary: baseSummary,
+    trendDirection: trend.trendDirection,
+    trendStrength: trend.trendStrength,
+    trendDelta: trend.trendDelta,
+    trendLabel: trend.trendLabel,
+    trendSummary: trend.trendSummary,
+    summary: `${baseSummary} ${trend.trendSummary}`,
   };
 }
 
@@ -1457,7 +1546,35 @@ function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime
   return `${lat.toFixed(5)},${lon.toFixed(5)}@${date}@${startTime}@w${travelWindowHours}`;
 }
 
-function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, preferences: UserPreferences): SummitDecision {
+type DecisionEvaluationOptions = {
+  ignoreAvalancheForDecision?: boolean;
+};
+
+function normalizedDecisionScore(data: SafetyData, options: DecisionEvaluationOptions = {}): number {
+  const rawScore = Number(data?.safety?.score);
+  const safeRawScore = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 0;
+  if (!options.ignoreAvalancheForDecision) {
+    return safeRawScore;
+  }
+
+  const avalanchePenalty = (Array.isArray(data?.safety?.factors) ? data.safety.factors : []).reduce((sum, factor) => {
+    const hazard = String(factor?.hazard || '').toLowerCase();
+    const impact = Number(factor?.impact);
+    if (!hazard.includes('avalanche') || !Number.isFinite(impact) || impact <= 0) {
+      return sum;
+    }
+    return sum + impact;
+  }, 0);
+
+  return Math.max(0, Math.min(100, safeRawScore + avalanchePenalty));
+}
+
+function evaluateBackcountryDecision(
+  data: SafetyData,
+  cutoffTime: string,
+  preferences: UserPreferences,
+  options: DecisionEvaluationOptions = {},
+): SummitDecision {
   const blockers: string[] = [];
   const cautions: string[] = [];
   const addBlocker = (message: string) => {
@@ -1474,12 +1591,13 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const danger = data.avalanche.dangerLevel || 0;
   const gust = data.weather.windGust || 0;
   const precip = data.weather.precipChance || 0;
-  const score = data.safety.score || 0;
+  const score = normalizedDecisionScore(data, options);
   const feelsLike = data.weather.feelsLike ?? data.weather.temp;
   const description = data.weather.description || '';
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const hasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
-  const avalancheRelevant = data.avalanche.relevant !== false;
+  const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
+  const avalancheRelevant = !ignoreAvalancheForDecision && data.avalanche.relevant !== false;
   const avalancheUnknown = avalancheRelevant && Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
   const avalancheGateRequired = avalancheRelevant;
   const unknownSnowpackMode = avalancheGateRequired && avalancheUnknown;
@@ -1569,7 +1687,7 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
     : null;
   const freshnessIssues = [
     weatherFreshnessState === 'stale' || weatherFreshnessState === 'missing' ? 'weather' : null,
-    avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing' ? 'avalanche' : null,
+    !ignoreAvalancheForDecision && (avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing') ? 'avalanche' : null,
     alertsFreshnessState === 'stale' || alertsFreshnessState === 'missing' ? 'alerts' : null,
     airQualityFreshnessState === 'stale' || airQualityFreshnessState === 'missing' ? 'air quality' : null,
     precipitationFreshnessState === 'stale' || precipitationFreshnessState === 'missing' ? 'precipitation' : null,
@@ -1808,7 +1926,7 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   if (blockers.length > 0) {
     level = 'NO-GO';
     headline = 'High-likelihood failure modes detected. Delay or change objective.';
-  } else if (unknownSnowpackMode) {
+  } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
     headline = 'Limited avalanche coverage. Favor conservative terrain and explicit abort triggers.';
   } else if (cautions.length > 0 || score < 80) {
@@ -5526,7 +5644,7 @@ function App() {
   }, [hasObjective, safetyData, forecastDate, position.lat, position.lng, preferences]);
 
   useEffect(() => {
-    if (!hasObjective || view !== 'planner' || !safetyData || decision?.level !== 'NO-GO') {
+    if (!hasObjective || view !== 'planner' || !safetyData || !decision || decision.level === 'GO') {
       setBetterDaySuggestions([]);
       setBetterDaySuggestionsLoading(false);
       setBetterDaySuggestionsNote(null);
@@ -5581,8 +5699,13 @@ function App() {
                 return null;
               }
               const candidateData = payload as SafetyData;
-              const candidateDecision = evaluateBackcountryDecision(candidateData, alpineStartTime, preferences);
-              const scoreRaw = Number(candidateData?.safety?.score);
+              const candidateDecision = evaluateBackcountryDecision(
+                candidateData,
+                alpineStartTime,
+                preferences,
+                { ignoreAvalancheForDecision: true },
+              );
+              const scoreRaw = normalizedDecisionScore(candidateData, { ignoreAvalancheForDecision: true });
               const gustRaw = Number(candidateData?.weather?.windGust);
               const precipRaw = Number(candidateData?.weather?.precipChance);
               const riskSummary =
@@ -5616,9 +5739,14 @@ function App() {
           return;
         }
 
-        const currentLevelRank = decisionLevelRank('NO-GO');
-        const currentScoreRaw = Number(safetyData.safety.score);
-        const currentScore = Number.isFinite(currentScoreRaw) ? currentScoreRaw : -Infinity;
+        const currentComparisonDecision = evaluateBackcountryDecision(
+          safetyData,
+          alpineStartTime,
+          preferences,
+          { ignoreAvalancheForDecision: true },
+        );
+        const currentLevelRank = decisionLevelRank(currentComparisonDecision.level);
+        const currentScore = normalizedDecisionScore(safetyData, { ignoreAvalancheForDecision: true });
         const clearlyBetter = validSuggestions.filter((entry) => {
           const rank = decisionLevelRank(entry.level);
           const candidateScore = Number.isFinite(Number(entry.score)) ? Number(entry.score) : -Infinity;
@@ -6527,7 +6655,7 @@ function App() {
                     <p className="muted-note">No dominant risk trigger detected from current model signals.</p>
                   )}
                 </div>
-                {decision.level === 'NO-GO' && (
+                {(decision.level === 'NO-GO' || decision.level === 'CAUTION') && (
                   <div className="decision-group decision-better-days">
                     <h4>
                       <CalendarDays size={14} /> Potential better days (next 7 days)

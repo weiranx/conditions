@@ -472,5 +472,10 @@ export interface TravelWindowInsights {
   bestWindow: TravelWindowSpan | null;
   nextCleanWindow: TravelWindowSpan | null;
   topFailureLabels: string[];
+  trendDirection: 'improving' | 'worsening' | 'steady';
+  trendStrength: 'slight' | 'moderate' | 'strong';
+  trendDelta: number;
+  trendLabel: string;
+  trendSummary: string;
   summary: string;
 }

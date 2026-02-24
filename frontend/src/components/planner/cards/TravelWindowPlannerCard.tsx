@@ -97,6 +97,13 @@ export function TravelWindowPlannerCard({
   formatTempDisplay,
   formatWindDisplay,
 }: TravelWindowPlannerCardProps) {
+  const trendToneClass =
+    travelWindowInsights.trendDirection === 'improving'
+      ? 'is-good'
+      : travelWindowInsights.trendDirection === 'worsening'
+        ? 'is-bad'
+        : 'is-watch';
+
   return (
     <div className="card projection-card" style={{ order }}>
       <div className="card-header">
@@ -138,6 +145,11 @@ export function TravelWindowPlannerCard({
             <article className="travel-overview-item" role="listitem">
               <span className="travel-overview-label">Most Common Blocker</span>
               <strong className="travel-overview-value">{travelWindowInsights.topFailureLabels[0] || 'None dominant'}</strong>
+            </article>
+            <article className={`travel-overview-item ${trendToneClass}`} role="listitem">
+              <span className="travel-overview-label">Trend</span>
+              <strong className="travel-overview-value">{travelWindowInsights.trendLabel}</strong>
+              <small className="travel-overview-subvalue">{travelWindowInsights.trendSummary}</small>
             </article>
           </div>
           <div className="travel-thresholds">
