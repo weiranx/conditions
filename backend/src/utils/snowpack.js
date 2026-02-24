@@ -23,6 +23,7 @@ const createSnowpackService = ({
   const MAX_REASONABLE_NOHRSC_SWE_MM = 5000;
   const HISTORICAL_BASELINE_LOOKBACK_YEARS = 10;
   const HISTORICAL_MATCH_WINDOW_DAYS = 7;
+  const HISTORICAL_FETCH_LOOKBACK_DAYS = HISTORICAL_BASELINE_LOOKBACK_YEARS * 366 + HISTORICAL_MATCH_WINDOW_DAYS;
 
   const isValidIsoDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -313,7 +314,7 @@ const createSnowpackService = ({
 
   const fetchSnowpackData = async (lat, lon, selectedDate, fetchOptions) => {
     const targetDate = getSnotelTargetDate(selectedDate);
-    const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -45);
+    const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -HISTORICAL_FETCH_LOOKBACK_DAYS);
     const todayIso = formatIsoDateUtc(new Date());
 
     const snotelTask = (async () => {

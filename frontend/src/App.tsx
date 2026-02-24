@@ -571,6 +571,22 @@ function parseOptionalElevationInput(rawValue: string): number | null {
   return numeric;
 }
 
+function parsePrecipNumericValue(value: unknown): number {
+  const parsed = parseOptionalFiniteNumber(value);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+  if (typeof value !== 'string') {
+    return Number.NaN;
+  }
+  const match = value.match(/-?\d+(?:\.\d+)?/);
+  if (!match) {
+    return Number.NaN;
+  }
+  const numeric = Number(match[0]);
+  return Number.isFinite(numeric) ? numeric : Number.NaN;
+}
+
 function currentLocalTimeInput(): string {
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, '0');
@@ -4102,6 +4118,16 @@ function App() {
           return { temp, feelsLike, windSpeed, windGust, deltaFt: Math.round(targetElevationFt - baseElevationFt) };
         })()
       : null;
+  const rainfallPayload = React.useMemo(() => {
+    if (!safetyData) {
+      return null;
+    }
+    if (safetyData.rainfall && typeof safetyData.rainfall === 'object') {
+      return safetyData.rainfall;
+    }
+    const legacy = (safetyData as SafetyData & { rainfallData?: SafetyData['rainfall'] }).rainfallData;
+    return legacy && typeof legacy === 'object' ? legacy : null;
+  }, [safetyData]);
   const rawReportPayload = React.useMemo(
     () =>
       safetyData
@@ -4121,7 +4147,7 @@ function App() {
             avalanche: safetyData.avalanche,
             alerts: safetyData.alerts || null,
             airQuality: safetyData.airQuality || null,
-            rainfall: safetyData.rainfall || null,
+            rainfall: rainfallPayload || null,
             snowpack: safetyData.snowpack || null,
             fireRisk: safetyData.fireRisk || null,
             heatRisk: safetyData.heatRisk || null,
@@ -4141,6 +4167,7 @@ function App() {
       hasTargetElevation,
       targetElevationFt,
       decision,
+      rainfallPayload,
     ],
   );
   const deepDiveShareLink = typeof window !== 'undefined' ? window.location.href : '';
@@ -4165,22 +4192,22 @@ function App() {
   })();
   const weatherLinkCta = weatherLinkHostLabel ? `View full weather forecast at ${weatherLinkHostLabel} →` : 'View full weather forecast source →';
   const safeAvalancheLink = sanitizeExternalUrl(safetyData?.avalanche.link);
-  const safeRainfallLink = sanitizeExternalUrl(safetyData?.rainfall?.link || undefined);
+  const safeRainfallLink = sanitizeExternalUrl(rainfallPayload?.link || undefined);
   const safeSnotelLink = sanitizeExternalUrl(safetyData?.snowpack?.snotel?.link || undefined);
   const safeNohrscLink = sanitizeExternalUrl(safetyData?.snowpack?.nohrsc?.link || undefined);
-  const rainfallTotals = safetyData?.rainfall?.totals || null;
-  const rainfall12hIn = parseOptionalFiniteNumber(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
-  const rainfall24hIn = parseOptionalFiniteNumber(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
-  const rainfall48hIn = parseOptionalFiniteNumber(rainfallTotals?.rainPast48hIn ?? rainfallTotals?.past48hIn);
-  const rainfall12hMm = parseOptionalFiniteNumber(rainfallTotals?.rainPast12hMm ?? rainfallTotals?.past12hMm);
-  const rainfall24hMm = parseOptionalFiniteNumber(rainfallTotals?.rainPast24hMm ?? rainfallTotals?.past24hMm);
-  const rainfall48hMm = parseOptionalFiniteNumber(rainfallTotals?.rainPast48hMm ?? rainfallTotals?.past48hMm);
-  const snowfall12hIn = parseOptionalFiniteNumber(rainfallTotals?.snowPast12hIn);
-  const snowfall24hIn = parseOptionalFiniteNumber(rainfallTotals?.snowPast24hIn);
-  const snowfall48hIn = parseOptionalFiniteNumber(rainfallTotals?.snowPast48hIn);
-  const snowfall12hCm = parseOptionalFiniteNumber(rainfallTotals?.snowPast12hCm);
-  const snowfall24hCm = parseOptionalFiniteNumber(rainfallTotals?.snowPast24hCm);
-  const snowfall48hCm = parseOptionalFiniteNumber(rainfallTotals?.snowPast48hCm);
+  const rainfallTotals = rainfallPayload?.totals || null;
+  const rainfall12hIn = parsePrecipNumericValue(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
+  const rainfall24hIn = parsePrecipNumericValue(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
+  const rainfall48hIn = parsePrecipNumericValue(rainfallTotals?.rainPast48hIn ?? rainfallTotals?.past48hIn);
+  const rainfall12hMm = parsePrecipNumericValue(rainfallTotals?.rainPast12hMm ?? rainfallTotals?.past12hMm);
+  const rainfall24hMm = parsePrecipNumericValue(rainfallTotals?.rainPast24hMm ?? rainfallTotals?.past24hMm);
+  const rainfall48hMm = parsePrecipNumericValue(rainfallTotals?.rainPast48hMm ?? rainfallTotals?.past48hMm);
+  const snowfall12hIn = parsePrecipNumericValue(rainfallTotals?.snowPast12hIn);
+  const snowfall24hIn = parsePrecipNumericValue(rainfallTotals?.snowPast24hIn);
+  const snowfall48hIn = parsePrecipNumericValue(rainfallTotals?.snowPast48hIn);
+  const snowfall12hCm = parsePrecipNumericValue(rainfallTotals?.snowPast12hCm);
+  const snowfall24hCm = parsePrecipNumericValue(rainfallTotals?.snowPast24hCm);
+  const snowfall48hCm = parsePrecipNumericValue(rainfallTotals?.snowPast48hCm);
   const rainfall24hSeverityClass =
     Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.6
       ? 'nogo'
@@ -4206,13 +4233,13 @@ function App() {
   const snowfall12hDisplay = formatSnowfallAmountForElevationUnit(snowfall12hIn, snowfall12hCm, preferences.elevationUnit);
   const snowfall24hDisplay = formatSnowfallAmountForElevationUnit(snowfall24hIn, snowfall24hCm, preferences.elevationUnit);
   const snowfall48hDisplay = formatSnowfallAmountForElevationUnit(snowfall48hIn, snowfall48hCm, preferences.elevationUnit);
-  const rainfallExpected = safetyData?.rainfall?.expected || null;
+  const rainfallExpected = rainfallPayload?.expected || null;
   const expectedTravelWindowHoursRaw = Number(rainfallExpected?.travelWindowHours);
   const expectedTravelWindowHours = Number.isFinite(expectedTravelWindowHoursRaw) ? Math.max(1, Math.round(expectedTravelWindowHoursRaw)) : travelWindowHours;
-  const expectedRainWindowIn = parseOptionalFiniteNumber(rainfallExpected?.rainWindowIn);
-  const expectedRainWindowMm = parseOptionalFiniteNumber(rainfallExpected?.rainWindowMm);
-  const expectedSnowWindowIn = parseOptionalFiniteNumber(rainfallExpected?.snowWindowIn);
-  const expectedSnowWindowCm = parseOptionalFiniteNumber(rainfallExpected?.snowWindowCm);
+  const expectedRainWindowIn = parsePrecipNumericValue(rainfallExpected?.rainWindowIn);
+  const expectedRainWindowMm = parsePrecipNumericValue(rainfallExpected?.rainWindowMm);
+  const expectedSnowWindowIn = parsePrecipNumericValue(rainfallExpected?.snowWindowIn);
+  const expectedSnowWindowCm = parsePrecipNumericValue(rainfallExpected?.snowWindowCm);
   const expectedRainWindowDisplay = formatRainAmountForElevationUnit(expectedRainWindowIn, expectedRainWindowMm, preferences.elevationUnit);
   const expectedSnowWindowDisplay = formatSnowfallAmountForElevationUnit(expectedSnowWindowIn, expectedSnowWindowCm, preferences.elevationUnit);
   const expectedPrecipDataAvailable =
@@ -4224,17 +4251,17 @@ function App() {
     ? `Expected in next ${expectedTravelWindowHours}h: rain ${expectedRainWindowDisplay} • snow ${expectedSnowWindowDisplay}.`
     : `Expected precipitation totals are unavailable for the next ${expectedTravelWindowHours}h window.`;
   const rainfallModeLabel =
-    safetyData?.rainfall?.mode === 'projected_for_selected_start'
+    rainfallPayload?.mode === 'projected_for_selected_start'
       ? 'Projected around selected start'
-      : safetyData?.rainfall?.mode === 'observed_recent'
+      : rainfallPayload?.mode === 'observed_recent'
         ? 'Observed recent accumulation'
         : 'Mode unavailable';
-  const rainfallStatus = String(safetyData?.rainfall?.status || '').toLowerCase();
+  const rainfallStatus = String(rainfallPayload?.status || '').toLowerCase();
   const rainfallDataAvailable = rainfallStatus === 'ok' || rainfallStatus === 'partial';
   const rainfallNoteLine =
-    (typeof safetyData?.rainfall?.note === 'string' && safetyData.rainfall.note.trim()) ||
+    (typeof rainfallPayload?.note === 'string' && rainfallPayload.note.trim()) ||
     (rainfallDataAvailable
-      ? safetyData?.rainfall?.mode === 'projected_for_selected_start'
+      ? rainfallPayload?.mode === 'projected_for_selected_start'
         ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
         : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.'
       : 'Rolling rain/snow totals unavailable for this objective/time.');
@@ -4323,11 +4350,23 @@ function App() {
           : 'Comparison unavailable';
   const snowpackHistoricalTargetDateLabel = snowpackHistorical?.targetDate ? formatIsoDateLabel(snowpackHistorical.targetDate) : null;
   const snowpackHistoricalMetricLabel = String(snowpackHistorical?.overall?.metric || '').trim();
-  const snowpackHistoricalPercent = Number(snowpackHistorical?.overall?.percentOfAverage);
-  const snowpackHistoricalSweCurrentDisplay = formatSweForElevationUnit(Number(snowpackHistorical?.swe?.currentIn), preferences.elevationUnit);
-  const snowpackHistoricalSweAverageDisplay = formatSweForElevationUnit(Number(snowpackHistorical?.swe?.averageIn), preferences.elevationUnit);
-  const snowpackHistoricalDepthCurrentDisplay = formatSnowDepthForElevationUnit(Number(snowpackHistorical?.depth?.currentIn), preferences.elevationUnit);
-  const snowpackHistoricalDepthAverageDisplay = formatSnowDepthForElevationUnit(Number(snowpackHistorical?.depth?.averageIn), preferences.elevationUnit);
+  const snowpackHistoricalPercent = parseOptionalFiniteNumber(snowpackHistorical?.overall?.percentOfAverage);
+  const snowpackHistoricalSweCurrentDisplay = formatSweForElevationUnit(
+    parseOptionalFiniteNumber(snowpackHistorical?.swe?.currentIn),
+    preferences.elevationUnit,
+  );
+  const snowpackHistoricalSweAverageDisplay = formatSweForElevationUnit(
+    parseOptionalFiniteNumber(snowpackHistorical?.swe?.averageIn),
+    preferences.elevationUnit,
+  );
+  const snowpackHistoricalDepthCurrentDisplay = formatSnowDepthForElevationUnit(
+    parseOptionalFiniteNumber(snowpackHistorical?.depth?.currentIn),
+    preferences.elevationUnit,
+  );
+  const snowpackHistoricalDepthAverageDisplay = formatSnowDepthForElevationUnit(
+    parseOptionalFiniteNumber(snowpackHistorical?.depth?.averageIn),
+    preferences.elevationUnit,
+  );
   const snowpackHistoricalComparisonLine = (() => {
     if (!snowpackHistorical) {
       return 'Historical average unavailable for this selected date.';
@@ -4931,7 +4970,7 @@ function App() {
     : null;
   const precipitationFreshnessTimestamp = safetyData
     ? pickOldestIsoTimestamp([
-        safetyData.rainfall?.anchorTime || null,
+        rainfallPayload?.anchorTime || null,
       ])
     : null;
   const snowpackFreshness = classifySnowpackFreshness(
@@ -7373,8 +7412,8 @@ function App() {
                   <div>
                     <span className="stat-label">Anchor time</span>
                     <strong>
-                      {safetyData.rainfall?.anchorTime
-                        ? formatForecastPeriodLabel(safetyData.rainfall.anchorTime, precipitationDisplayTimezone)
+                      {rainfallPayload?.anchorTime
+                        ? formatForecastPeriodLabel(rainfallPayload.anchorTime, precipitationDisplayTimezone)
                         : 'N/A'}
                     </strong>
                   </div>
@@ -7386,10 +7425,10 @@ function App() {
                   Source:{' '}
                   {safeRainfallLink ? (
                     <a href={safeRainfallLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                      {safetyData.rainfall?.source || 'Open-Meteo precipitation history (rain + snowfall)'}
+                      {rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'}
                     </a>
                   ) : (
-                    safetyData.rainfall?.source || 'Open-Meteo precipitation history (rain + snowfall)'
+                    rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'
                   )}
                 </p>
               </div>
