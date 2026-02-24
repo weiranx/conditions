@@ -1010,6 +1010,10 @@ const resolveNwsAlertSourceLink = ({ feature, props, lat, lon }) => {
 
 const AVALANCHE_WINTER_MONTHS = new Set([10, 11, 0, 1, 2, 3]); // Nov-Apr
 const AVALANCHE_SHOULDER_MONTHS = new Set([4, 9]); // May, Oct
+const AVALANCHE_MATERIAL_SNOW_DEPTH_IN = 6;
+const AVALANCHE_MATERIAL_SWE_IN = 1.5;
+const AVALANCHE_MEASURABLE_SNOW_DEPTH_IN = 2;
+const AVALANCHE_MEASURABLE_SWE_IN = 0.5;
 
 const parseForecastMonth = (dateValue) => {
   if (typeof dateValue !== 'string' || !dateValue.trim()) {
@@ -1062,11 +1066,11 @@ const evaluateSnowpackSignal = (snowpackData) => {
   const maxSweIn = sweSamples.length ? Math.max(...sweSamples) : null;
 
   const hasMaterialSnowpackSignal =
-    (maxDepthIn !== null && maxDepthIn >= 6) ||
-    (maxSweIn !== null && maxSweIn >= 1.5);
+    (maxDepthIn !== null && maxDepthIn >= AVALANCHE_MATERIAL_SNOW_DEPTH_IN) ||
+    (maxSweIn !== null && maxSweIn >= AVALANCHE_MATERIAL_SWE_IN);
   const hasModerateSnowpackPresence =
-    (maxDepthIn !== null && maxDepthIn >= 2) ||
-    (maxSweIn !== null && maxSweIn >= 0.5);
+    (maxDepthIn !== null && maxDepthIn >= AVALANCHE_MEASURABLE_SNOW_DEPTH_IN) ||
+    (maxSweIn !== null && maxSweIn >= AVALANCHE_MEASURABLE_SWE_IN);
 
   const hasLowSnowpackSignal =
     (maxDepthIn !== null && maxDepthIn <= 1) &&
@@ -1078,6 +1082,8 @@ const evaluateSnowpackSignal = (snowpackData) => {
     if (maxSweIn !== null) parts.push(`SWE ~${maxSweIn.toFixed(1)} in`);
     return {
       hasSignal: true,
+      hasMaterialSignal: true,
+      hasMeasurablePresence: true,
       hasNoSignal: false,
       hasObservedPresence: true,
       reason: `Snowpack Snapshot shows material snowpack (${parts.join(', ')}).`,
@@ -1089,10 +1095,12 @@ const evaluateSnowpackSignal = (snowpackData) => {
     if (maxDepthIn !== null) parts.push(`depth ~${maxDepthIn.toFixed(1)} in`);
     if (maxSweIn !== null) parts.push(`SWE ~${maxSweIn.toFixed(1)} in`);
     return {
-      hasSignal: true,
+      hasSignal: false,
+      hasMaterialSignal: false,
+      hasMeasurablePresence: true,
       hasNoSignal: false,
       hasObservedPresence: true,
-      reason: `Snowpack Snapshot shows measurable snowpack (${parts.join(', ')}).`,
+      reason: `Snowpack Snapshot shows measurable snowpack (${parts.join(', ')}), below material avalanche relevance threshold.`,
     };
   }
 
@@ -1102,6 +1110,8 @@ const evaluateSnowpackSignal = (snowpackData) => {
     if (maxSweIn !== null) parts.push(`SWE ~${maxSweIn.toFixed(2)} in`);
     return {
       hasSignal: false,
+      hasMaterialSignal: false,
+      hasMeasurablePresence: false,
       hasNoSignal: true,
       hasObservedPresence: false,
       reason: `Snowpack Snapshot shows very low snow signal (${parts.join(', ')}).`,
@@ -1110,9 +1120,11 @@ const evaluateSnowpackSignal = (snowpackData) => {
 
   return {
     hasSignal: false,
+    hasMaterialSignal: false,
+    hasMeasurablePresence: false,
     hasNoSignal: false,
-    hasObservedPresence: false,
-    reason: 'Snowpack Snapshot is mixed/patchy; use weather and season context.',
+    hasObservedPresence: true,
+    reason: 'Snowpack Snapshot is mixed/patchy and below material avalanche threshold; use weather and season context.',
   };
 };
 
@@ -1159,10 +1171,29 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
     };
   }
 
-  if (snowpackSignal.hasSignal) {
+  if (snowpackSignal.hasMaterialSignal || snowpackSignal.hasSignal) {
     return {
       relevant: true,
       reason: snowpackSignal.reason || 'Snowpack Snapshot indicates meaningful snowpack.',
+    };
+  }
+
+  if (snowpackSignal.hasMeasurablePresence) {
+    if (highElevation && (isWinterWindow || isShoulderWindow || seasonUnknown)) {
+      return {
+        relevant: true,
+        reason: `${snowpackSignal.reason || 'Snowpack Snapshot shows measurable snowpack.'} Elevation/season context keeps avalanche relevance on.`,
+      };
+    }
+    if (midElevation && highLatitude && (isWinterWindow || seasonUnknown)) {
+      return {
+        relevant: true,
+        reason: `${snowpackSignal.reason || 'Snowpack Snapshot shows measurable snowpack.'} Winter latitude/elevation context keeps avalanche relevance on.`,
+      };
+    }
+    return {
+      relevant: false,
+      reason: `${snowpackSignal.reason || 'Snowpack Snapshot shows measurable snowpack.'} Keep monitoring, but avalanche forecasting is de-emphasized until snowpack reaches material levels or wintry signals increase.`,
     };
   }
 

@@ -947,7 +947,7 @@ test('evaluateAvalancheRelevance marks avalanche relevant when Snowpack Snapshot
   expect(String(result.reason)).toMatch(/Snowpack Snapshot/i);
 });
 
-test('evaluateAvalancheRelevance marks avalanche relevant when Snowpack Snapshot shows measurable snowpack', () => {
+test('evaluateAvalancheRelevance de-emphasizes avalanche when snowpack is measurable but below material threshold', () => {
   const result = evaluateAvalancheRelevance({
     lat: 39.1,
     selectedDate: '2026-06-20',
@@ -970,8 +970,37 @@ test('evaluateAvalancheRelevance marks avalanche relevant when Snowpack Snapshot
     },
   });
 
+  expect(result.relevant).toBe(false);
+  expect(String(result.reason)).toMatch(/measurable snowpack|below material avalanche relevance threshold|de-emphasized/i);
+});
+
+test('evaluateAvalancheRelevance keeps avalanche relevant for measurable snow in winter high-elevation context', () => {
+  const result = evaluateAvalancheRelevance({
+    lat: 46.2,
+    selectedDate: '2026-02-20',
+    weatherData: {
+      elevation: 9800,
+      temp: 36,
+      feelsLike: 30,
+      precipChance: 20,
+      description: 'Partly Cloudy',
+      forecastDate: '2026-02-20',
+    },
+    avalancheData: {
+      coverageStatus: 'no_active_forecast',
+      dangerUnknown: true,
+    },
+    snowpackData: {
+      status: 'ok',
+      snotel: { snowDepthIn: 2.8, sweIn: 0.9, distanceKm: 10 },
+      nohrsc: { snowDepthIn: 2.3, sweIn: 0.7 },
+    },
+  });
+
   expect(result.relevant).toBe(true);
-  expect(String(result.reason)).toMatch(/measurable snowpack|Snowpack Snapshot/i);
+  expect(String(result.reason)).toMatch(
+    /Forecast includes wintry signals|Elevation\/season context keeps avalanche relevance on|Winter latitude\/elevation context keeps avalanche relevance on/i,
+  );
 });
 
 test('evaluateAvalancheRelevance de-emphasizes avalanche when snowpack is near-zero and center is out of season', () => {
