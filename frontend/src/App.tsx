@@ -7,7 +7,6 @@ import {
   Wind,
   CloudRain,
   Thermometer,
-  Zap,
   AlertTriangle,
   Mountain,
   Compass,
@@ -26,7 +25,6 @@ import {
   SlidersHorizontal,
   Printer,
   MessageSquare,
-  Info,
   Flame,
   Sun,
   RefreshCw,
@@ -41,6 +39,10 @@ import {
 } from './lib/search';
 import { SearchBox } from './components/planner/SearchBox';
 import { ForecastLoading } from './components/planner/ForecastLoading';
+import { HelpHint } from './components/planner/CardHelpHint';
+import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
+import { FieldBriefCard } from './components/planner/cards/FieldBriefCard';
+import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
 import {
   APP_CREDIT_TEXT,
   BACKEND_WAKE_NOTICE_DELAY_MS,
@@ -132,10 +134,6 @@ import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
   windDirectionToDegrees,
-  parseLikelihoodRange,
-  parseProblemSizeRange,
-  getLocationEntries,
-  parseTerrainFromLocation,
 } from './utils/avalanche';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -905,15 +903,6 @@ function inferWeatherSourceLabel(weather: SafetyData['weather'] | null | undefin
   if (link.includes('weather.gov')) return 'NOAA / Weather.gov';
   if (link.includes('open-meteo.com')) return 'Open-Meteo';
   return 'Source not provided';
-}
-
-function HelpHint({ text }: { text: string }) {
-  return (
-    <span className="help-hint" tabIndex={0} role="note" aria-label="More information">
-      <Info size={13} />
-      <span className="help-tooltip">{text}</span>
-    </span>
-  );
 }
 
 function formatSignedDelta(value: number): string {
@@ -5274,199 +5263,50 @@ function App() {
                 </details>
               </div>
 
-              <div className="card projection-card" style={{ order: reportCardOrder.travelWindowPlanner }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    Travel Window Planner ({travelWindowHoursLabel})
-                    <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your selected window length, plus wind, precip, and feels-like thresholds." />
-                  </span>
-                </div>
-                {peakCriticalWindow ? (
-                  <div className="critical-window">
-                    <p className="critical-summary">
-                      Peak risk near <strong>{formatClockForStyle(peakCriticalWindow.time, preferences.timeStyle)}</strong>: {criticalRiskLevelText(peakCriticalWindow.level)}
-                      {peakCriticalWindow.reasons.length > 0 ? ` (${localizeUnitText(peakCriticalWindow.reasons.join(', '))})` : ''}.
-                    </p>
-                    <div className="travel-overview-grid" role="list" aria-label="Travel window summary">
-                      <article
-                        className={`travel-overview-item ${
-                          travelWindowInsights.passHours >= Math.ceil(Math.max(1, travelWindowRows.length * 0.6))
-                            ? 'is-good'
-                            : travelWindowInsights.passHours === 0
-                              ? 'is-bad'
-                              : 'is-watch'
-                        }`}
-                        role="listitem"
-                      >
-                        <span className="travel-overview-label">Passing Hours</span>
-                        <strong className="travel-overview-value">
-                          {travelWindowInsights.passHours}/{travelWindowRows.length || travelWindowHours}
-                        </strong>
-                      </article>
-                      <article className="travel-overview-item" role="listitem">
-                        <span className="travel-overview-label">Best Window</span>
-                        <strong className="travel-overview-value">
-                          {travelWindowInsights.bestWindow
-                            ? `${formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)} (${travelWindowInsights.bestWindow.length}h)`
-                            : 'None'}
-                        </strong>
-                      </article>
-                      <article className="travel-overview-item" role="listitem">
-                        <span className="travel-overview-label">Most Common Blocker</span>
-                        <strong className="travel-overview-value">{travelWindowInsights.topFailureLabels[0] || 'None dominant'}</strong>
-                      </article>
-                    </div>
-                    <div className="travel-thresholds">
-                      <span>Gust &lt;= {windThresholdDisplay}</span>
-                      <span>Precip &lt;= {preferences.maxPrecipChance}%</span>
-                      <span>Feels-like &gt;= {feelsLikeThresholdDisplay}</span>
-                    </div>
-                    <div className="travel-threshold-actions">
-                      <button
-                        type="button"
-                        className="settings-btn travel-window-toggle"
-                        onClick={() => setTravelThresholdEditorOpen((prev) => !prev)}
-                        aria-expanded={travelThresholdEditorOpen}
-                        aria-controls="travel-threshold-editor"
-                      >
-                        {travelThresholdEditorOpen ? 'Hide threshold controls' : 'Edit thresholds'}
-                      </button>
-                    </div>
-                    {travelThresholdEditorOpen && (
-                      <>
-                        <div className="travel-threshold-editor" id="travel-threshold-editor" aria-label="Travel window threshold controls">
-                          <label className="travel-threshold-row">
-                            <span>Window (h)</span>
-                            <input
-                              type="number"
-                              min={MIN_TRAVEL_WINDOW_HOURS}
-                              max={MAX_TRAVEL_WINDOW_HOURS}
-                              step={1}
-                              value={travelWindowHoursDraft}
-                              onChange={handleTravelWindowHoursDraftChange}
-                              onBlur={handleTravelWindowHoursDraftBlur}
-                            />
-                          </label>
-                          <label className="travel-threshold-row">
-                            <span>Max gust ({windUnitLabel})</span>
-                            <input
-                              type="number"
-                              min={windThresholdMin}
-                              max={windThresholdMax}
-                              step={windThresholdStep}
-                              value={maxWindGustDraft}
-                              onChange={handleWindThresholdDisplayChange}
-                              onBlur={handleWindThresholdDisplayBlur}
-                            />
-                          </label>
-                          <label className="travel-threshold-row">
-                            <span>Max precip (%)</span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={1}
-                              value={maxPrecipChanceDraft}
-                              onChange={handleMaxPrecipChanceDraftChange}
-                              onBlur={handleMaxPrecipChanceDraftBlur}
-                            />
-                          </label>
-                          <label className="travel-threshold-row">
-                            <span>Min feels-like ({tempUnitLabel})</span>
-                            <input
-                              type="number"
-                              min={feelsLikeThresholdMin}
-                              max={feelsLikeThresholdMax}
-                              step={feelsLikeThresholdStep}
-                              value={minFeelsLikeDraft}
-                              onChange={handleFeelsLikeThresholdDisplayChange}
-                              onBlur={handleFeelsLikeThresholdDisplayBlur}
-                            />
-                          </label>
-                        </div>
-                        <p className="muted-note travel-threshold-note">Edits apply immediately and are saved to Settings.</p>
-                      </>
-                    )}
-                    <p className="muted-note">{travelWindowSummary}</p>
-                    {travelWindowRows.length > 0 && (
-                      <div className="travel-timeline" role="list" aria-label={`${travelWindowHours}-hour travel window timeline`}>
-                        {travelWindowRows.map((row, idx) => {
-                          const riskLevel = criticalWindow[idx]?.level || 'stable';
-                          return (
-                            <article
-                              key={`timeline-${row.time}-${idx}`}
-                              className={`travel-timeline-cell ${row.pass ? 'pass' : 'fail'} ${riskLevel}`}
-                              role="listitem"
-                              title={`${formatClockForStyle(row.time, preferences.timeStyle)} • ${
-                                row.pass ? 'within limits' : localizeUnitText(row.reasonSummary)
-                              }`}
-                            >
-                              <span className="travel-timeline-time">{formatClockForStyle(row.time, preferences.timeStyle)}</span>
-                              <span className="travel-timeline-status">{row.pass ? 'OK' : 'ATTN'}</span>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="travel-window-actions">
-                      <button
-                        type="button"
-                        className="settings-btn travel-window-toggle"
-                        onClick={() => setTravelWindowExpanded((prev) => !prev)}
-                      >
-                        {travelWindowExpanded ? 'Hide hourly details' : `Show hourly details (${travelWindowRows.length})`}
-                      </button>
-                    </div>
-                    {travelWindowExpanded && (
-                    <div className="critical-list" role="list" aria-label="Hourly critical window assessment">
-                      {visibleCriticalWindowRows.map((row, idx) => {
-                        const travelRow = travelWindowRows[idx];
-                        return (
-                        <article
-                          key={`${row.time}-${idx}`}
-                          className={`critical-row ${row.level} ${travelRow?.pass ? 'pass' : 'fail'}`}
-                          role="listitem"
-                        >
-                          <div className="critical-row-time">{formatClockForStyle(row.time, preferences.timeStyle)}</div>
-                          <div className="critical-row-main">
-                            <div className="critical-row-head">
-                              <span className={`critical-level ${row.level}`}>{criticalRiskLevelText(row.level)}</span>
-                              <span className={`travel-pass-pill ${travelRow?.pass ? 'pass' : 'fail'}`}>
-                                {travelRow?.pass ? 'Within limits' : 'Outside limits'}
-                              </span>
-                              <span className="critical-metrics">
-                                {formatTempDisplay(row.temp)} • feels {formatTempDisplay(travelRow?.feelsLike ?? row.temp)} • wind {formatWindDisplay(
-                                  row.wind,
-                                )} • gust {formatWindDisplay(row.gust)} • precip {travelRow?.precipChance ?? row.precipChance ?? 0}%
-                              </span>
-                            </div>
-                            <p className="critical-row-reason">
-                              {travelRow?.pass
-                                ? 'Within configured thresholds for this hour.'
-                                : localizeUnitText(
-                                    travelRow?.reasonSummary || (row.reasons.length > 0 ? row.reasons.join(', ') : 'No major hazard signal for this hour.'),
-                                  )}
-                            </p>
-                            {!travelRow?.pass && travelRow?.failedRuleLabels?.length ? (
-                              <div className="travel-failure-chips" aria-label="Failed thresholds">
-                                {travelRow.failedRuleLabels.map((label, failIdx) => (
-                                  <span key={`${row.time}-fail-${failIdx}`} className="travel-failure-chip">
-                                    {label}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        </article>
-                        );
-                      })}
-                    </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="muted-note">Hourly trend data is unavailable for this objective/date.</p>
-                )}
-              </div>
+              <TravelWindowPlannerCard
+                order={reportCardOrder.travelWindowPlanner}
+                travelWindowHoursLabel={travelWindowHoursLabel}
+                peakCriticalWindow={peakCriticalWindow}
+                timeStyle={preferences.timeStyle}
+                criticalRiskLevelText={criticalRiskLevelText}
+                localizeUnitText={localizeUnitText}
+                travelWindowInsights={travelWindowInsights}
+                travelWindowRows={travelWindowRows}
+                travelWindowHours={travelWindowHours}
+                formatTravelWindowSpan={formatTravelWindowSpan}
+                windThresholdDisplay={windThresholdDisplay}
+                maxPrecipChance={preferences.maxPrecipChance}
+                feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+                travelThresholdEditorOpen={travelThresholdEditorOpen}
+                setTravelThresholdEditorOpen={setTravelThresholdEditorOpen}
+                travelWindowHoursDraft={travelWindowHoursDraft}
+                handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
+                handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
+                windUnitLabel={windUnitLabel}
+                windThresholdMin={windThresholdMin}
+                windThresholdMax={windThresholdMax}
+                windThresholdStep={windThresholdStep}
+                maxWindGustDraft={maxWindGustDraft}
+                handleWindThresholdDisplayChange={handleWindThresholdDisplayChange}
+                handleWindThresholdDisplayBlur={handleWindThresholdDisplayBlur}
+                maxPrecipChanceDraft={maxPrecipChanceDraft}
+                handleMaxPrecipChanceDraftChange={handleMaxPrecipChanceDraftChange}
+                handleMaxPrecipChanceDraftBlur={handleMaxPrecipChanceDraftBlur}
+                tempUnitLabel={tempUnitLabel}
+                feelsLikeThresholdMin={feelsLikeThresholdMin}
+                feelsLikeThresholdMax={feelsLikeThresholdMax}
+                feelsLikeThresholdStep={feelsLikeThresholdStep}
+                minFeelsLikeDraft={minFeelsLikeDraft}
+                handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
+                handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+                travelWindowSummary={travelWindowSummary}
+                criticalWindow={criticalWindow}
+                travelWindowExpanded={travelWindowExpanded}
+                setTravelWindowExpanded={setTravelWindowExpanded}
+                visibleCriticalWindowRows={visibleCriticalWindowRows}
+                formatTempDisplay={formatTempDisplay}
+                formatWindDisplay={formatWindDisplay}
+              />
 
               <div className="card checks-card" style={{ order: reportCardOrder.criticalChecks }}>
                 <div className="card-header">
@@ -6418,356 +6258,41 @@ function App() {
             </div>
           </div>
 
-          <div className="card avy-card" style={{ order: reportCardOrder.avalancheForecast }}>
-            <div className="card-header">
-              <span className="card-title">
-                <Zap size={14} /> Avalanche Forecast
-                <HelpHint text="Center-issued avalanche danger by elevation, bottom line, and published avalanche problems for this zone/date." />
-              </span>
-              <div className="source-meta">
-                <span>Avalanche center: {safetyData.avalanche.center || 'N/A'}</span>
-                {safetyData.avalanche.zone && <span className="source-zone">{safetyData.avalanche.zone}</span>}
-                {safetyData.avalanche.publishedTime && (
-                  <span className="published-chip">
-                    <Clock size={10} /> Issued: {formatPubTime(safetyData.avalanche.publishedTime)}
-                  </span>
-                )}
-                {safetyData.avalanche.expiresTime && (
-                  <span className={`published-chip ${avalancheExpiredForSelectedStart ? 'published-chip-expired' : ''}`}>
-                    <Clock size={10} /> {avalancheExpiredForSelectedStart ? 'Expired:' : 'Expires:'} {formatPubTime(safetyData.avalanche.expiresTime)}
-                  </span>
-                )}
-              </div>
-            </div>
-            {avalancheExpiredForSelectedStart && (
-              <p className="muted-note">
-                This bulletin is expired for the selected start time and is shown for context only.
-              </p>
-            )}
+          <AvalancheForecastCard
+            order={reportCardOrder.avalancheForecast}
+            avalanche={safetyData.avalanche}
+            avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
+            avalancheRelevant={avalancheRelevant}
+            avalancheNotApplicableReason={avalancheNotApplicableReason}
+            avalancheUnknown={avalancheUnknown}
+            overallAvalancheLevel={overallAvalancheLevel}
+            avalancheElevationRows={avalancheElevationRows}
+            safeAvalancheLink={safeAvalancheLink}
+            formatPubTime={formatPubTime}
+            getDangerLevelClass={getDangerLevelClass}
+            getDangerText={getDangerText}
+            normalizeDangerLevel={normalizeDangerLevel}
+            getDangerGlyph={getDangerGlyph}
+            summarizeText={summarizeText}
+            toPlainText={toPlainText}
+          />
 
-            {!avalancheRelevant ? (
-              <div className="avy-forecast-body">
-                <div className="avy-coverage-note unknown-mode-panel">
-                  <strong>Avalanche Forecast Not Applicable</strong>
-                  <p>{avalancheNotApplicableReason}</p>
-                  <p className="muted-note">
-                    Result is hidden for this objective/time because avalanche forecasting is currently de-emphasized. Re-check if weather or snowpack changes.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="avy-forecast-body">
-                <div className="danger-summary-box">
-                  <div className="danger-summary-header">
-                    <span className="section-label">{avalancheUnknown ? 'Avalanche Coverage Status' : 'Danger Rating By Elevation'}</span>
-                    <span className={`overall-danger-chip ${avalancheUnknown ? 'danger-level-unknown' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
-                      {avalancheUnknown ? 'Overall: Unknown' : `Overall: L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
-                    </span>
-                  </div>
-
-                  {avalancheUnknown ? (
-                    <div className="avy-coverage-note unknown-mode-panel">
-                      <strong>Limited Avalanche Coverage</strong>
-                      <p>
-                        No official avalanche forecast is available for this objective. This does not imply low risk.
-                      </p>
-                      <ul className="signal-list compact">
-                        <li>Avoid avalanche terrain and terrain traps unless you can independently assess snowpack.</li>
-                        <li>Favor low-angle routes and wind-sheltered aspects.</li>
-                        <li>Use explicit abort triggers and tighter partner spacing.</li>
-                      </ul>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="avy-danger-layout">
-                        <div
-                          className={`avy-danger-pyramid ${getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}
-                          aria-hidden="true"
-                        />
-                        <div className="danger-rows">
-                          {avalancheElevationRows.map((row) => {
-                            const rowLevel = normalizeDangerLevel(row.rating?.level);
-                            const rowText = row.rating?.label || getDangerText(rowLevel);
-                            return (
-                              <div key={row.key} className={`danger-row ${getDangerLevelClass(rowLevel)}`}>
-                                <span className="danger-row-band">{row.label}</span>
-                                <strong className="danger-row-text">
-                                  {rowLevel} - {rowText}
-                                </strong>
-                                <span className={`danger-level-diamond ${getDangerLevelClass(rowLevel)}`}>
-                                  <span>{getDangerGlyph(rowLevel)}</span>
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="avy-scale-wrap">
-                        <span className="section-label">Danger Scale</span>
-                        <div className="avy-scale-track">
-                          {[1, 2, 3, 4, 5].map((level) => (
-                            <div key={level} className={`avy-scale-segment ${getDangerLevelClass(level)}`}>
-                              {level} - {getDangerText(level)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {(safetyData.avalanche.bottomLine || safetyData.avalanche.advice) && (
-                  <div className="avy-bottom-line">
-                    <div className="bl-header">The Bottom Line</div>
-                    <div className="bl-content">{toPlainText(safetyData.avalanche.bottomLine || safetyData.avalanche.advice)}</div>
-                  </div>
-                )}
-
-                {safetyData.avalanche.problems && safetyData.avalanche.problems.length > 0 && (
-                  <div className="avy-problems">
-                    <span className="section-label">Avalanche Problems</span>
-                    <div className="problems-grid">
-                      {safetyData.avalanche.problems.map((problem, i) => {
-                      const terrain = parseTerrainFromLocation(problem.location);
-                      const locationEntries = getLocationEntries(problem.location);
-                      const summary = summarizeText(problem.discussion || problem.problem_description);
-                      const iconUrl = problem.icon ? problem.icon.replace(/^http:\/\//i, 'https://') : '';
-                      const likelihoodRange = parseLikelihoodRange(problem.likelihood);
-                      const sizeRange = parseProblemSizeRange(problem.size);
-                      const likelihoodScaleStyle =
-                        likelihoodRange !== null
-                          ? ({
-                              ['--scale-indicator-top-index' as string]: String(5 - likelihoodRange.max),
-                              ['--scale-indicator-span' as string]: String(likelihoodRange.max - likelihoodRange.min + 1),
-                            } as React.CSSProperties)
-                          : undefined;
-                      const sizeScaleStyle =
-                        sizeRange.min !== null && sizeRange.max !== null
-                          ? ({
-                              ['--scale-indicator-top-index' as string]: String(5 - sizeRange.max),
-                              ['--scale-indicator-span' as string]: String(sizeRange.max - sizeRange.min + 1),
-                            } as React.CSSProperties)
-                          : undefined;
-
-                      return (
-                        <article key={problem.id || i} className="avy-problem-card avy-problem-card-structured">
-                          <h4 className="problem-structured-title">Problem #{i + 1}: {(problem.name || `Problem ${i + 1}`).toUpperCase()}</h4>
-                          <div className="problem-structured-grid">
-                            <section className="problem-structured-col">
-                              <div className="problem-structured-label">Problem Type</div>
-                              <div className="problem-type-box">
-                                <div className="problem-icon problem-icon-lg">
-                                  {iconUrl ? <img src={iconUrl} alt={`${problem.name || 'Avalanche problem'} icon`} /> : <AlertTriangle size={18} />}
-                                </div>
-                                <div className="problem-type-name">{problem.name || `Problem ${i + 1}`}</div>
-                              </div>
-                            </section>
-
-                            <section className="problem-structured-col">
-                              <div className="problem-structured-label">Aspect/Elevation</div>
-                              <div className="aspect-elevation-box">
-                                <div className="aspect-elevation-simple">
-                                  <div className="aspect-simple-group">
-                                    <span className="aspect-simple-heading">Aspects</span>
-                                    <div className="aspect-chip-grid" role="list" aria-label="Avalanche problem aspects">
-                                      {ASPECT_ROSE_ORDER.map((aspect) => {
-                                        const isActive = terrain.aspects.size === 0 || terrain.aspects.has(aspect);
-                                        return (
-                                          <span key={`${problem.id || i}-${aspect}`} className={`aspect-chip ${isActive ? 'active' : ''}`} role="listitem">
-                                            {aspect}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                    <p className="aspect-simple-note">
-                                      {terrain.aspects.size === 0
-                                        ? 'No specific aspects listed; treat all aspects as potentially involved.'
-                                        : 'Highlighted aspects are identified in the bulletin.'}
-                                    </p>
-                                  </div>
-
-                                  <div className="aspect-simple-group">
-                                    <span className="aspect-simple-heading">Elevation Bands</span>
-                                    <div className="elevation-band-list" role="list" aria-label="Avalanche problem elevation bands">
-                                      {[
-                                        { band: 'upper', label: 'Above Treeline' },
-                                        { band: 'middle', label: 'Near Treeline' },
-                                        { band: 'lower', label: 'Below Treeline' },
-                                      ].map((entry) => {
-                                        const isActive = terrain.elevations.size === 0 || terrain.elevations.has(entry.band as 'upper' | 'middle' | 'lower');
-                                        return (
-                                          <div key={`${problem.id || i}-${entry.band}`} className={`elevation-band-row ${isActive ? 'active' : ''}`} role="listitem">
-                                            <span className="elevation-band-label">{entry.label}</span>
-                                            <span className="elevation-band-state">{isActive ? 'Included' : 'Not highlighted'}</span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </section>
-
-                            <section className="problem-structured-col">
-                              <div className="problem-structured-label">Likelihood</div>
-                              <div className="vertical-scale" style={likelihoodScaleStyle}>
-                                <div className="scale-rail" />
-                                {likelihoodRange !== null && <div className="scale-indicator" aria-hidden="true" />}
-                                {[5, 4, 3, 2, 1].map((step) => (
-                                  <div
-                                    key={step}
-                                    className={`scale-step ${
-                                      likelihoodRange !== null && step >= likelihoodRange.min && step <= likelihoodRange.max ? 'active' : ''
-                                    }`}
-                                  >
-                                    <span className="scale-tick" />
-                                    <span className="scale-text">
-                                      {step === 5 ? 'Certain' : step === 4 ? 'Very Likely' : step === 3 ? 'Likely' : step === 2 ? 'Possible' : 'Unlikely'}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </section>
-
-                            <section className="problem-structured-col">
-                              <div className="problem-structured-label">Size</div>
-                              <div className="vertical-scale size-scale" style={sizeScaleStyle}>
-                                <div className="scale-rail" />
-                                {sizeRange.min !== null && sizeRange.max !== null && <div className="scale-indicator" aria-hidden="true" />}
-                                {[5, 4, 3, 2, 1].map((step) => {
-                                  const activeRange =
-                                    sizeRange.min !== null &&
-                                    sizeRange.max !== null &&
-                                    step >= sizeRange.min &&
-                                    step <= sizeRange.max;
-                                  return (
-                                    <div key={step} className={`scale-step ${activeRange ? 'active' : ''}`}>
-                                      <span className="scale-tick" />
-                                      <span className="scale-text">
-                                        {step === 5 ? 'Historic (D4-5)' : step === 4 ? 'Very Large (D3)' : step === 3 ? 'Large (D2)' : step === 2 ? 'Small-Large (D1-2)' : 'Small (D1)'}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </section>
-                          </div>
-
-                          {locationEntries.length > 0 && terrain.elevations.size === 0 && terrain.aspects.size === 0 && (
-                            <p className="problem-location-line">Terrain: {locationEntries.join(', ')}</p>
-                          )}
-
-                          {summary && <p className="problem-summary">{summary}</p>}
-                        </article>
-                      );
-                    })}
-                    </div>
-                  </div>
-                )}
-
-                {(!safetyData.avalanche.problems || safetyData.avalanche.problems.length === 0) && (
-                  <p className="muted-note avy-problems-empty">
-                    {avalancheUnknown
-                      ? 'No avalanche center problem list is available for this objective.'
-                      : 'Center did not publish a detailed avalanche problem breakdown for this zone/date.'}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {safeAvalancheLink && (
-              <a href={safeAvalancheLink} target="_blank" rel="noreferrer" className="avy-external-link">
-                View full forecast at {safetyData.avalanche.center?.toUpperCase() || 'OFFICIAL CENTER'} →
-              </a>
-            )}
-          </div>
-
-          <div className="ai-box field-brief-card" style={{ order: reportCardOrder.fieldBrief }}>
-            <div className="card-header">
-              <span className="card-title">
-                <ShieldCheck size={14} /> Field Brief
-                <HelpHint text="Action-first field brief with primary call, top risks, immediate actions, and optional details." />
-              </span>
-              <span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>
-            </div>
-            <p className="field-brief-headline">{fieldBriefHeadline}</p>
-
-            <div className="field-brief-primary">
-              <span className="field-brief-primary-label">Command intent</span>
-              <p className="field-brief-primary-text">{fieldBriefPrimaryReason}</p>
-              <p className="field-brief-primary-action">{decisionActionLine}</p>
-            </div>
-
-            <div className="field-brief-glance-grid" role="list" aria-label="Field brief at a glance">
-              {fieldBriefAtAGlance.map((item) => (
-                <article key={item.label} className="field-brief-glance-item" role="listitem">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </article>
-              ))}
-            </div>
-
-            <div className="field-brief-split">
-              <div className="field-brief-group">
-                <h4>Execution Plan (Next 2-4h)</h4>
-                <ol className="field-brief-steps">
-                  {(fieldBriefExecutionSteps.length > 0
-                    ? fieldBriefExecutionSteps
-                    : ['Re-check conditions at departure and continue only if field observations match forecast assumptions.']
-                  ).map((item, idx) => (
-                    <li key={idx}>{localizeUnitText(item)}</li>
-                  ))}
-                </ol>
-              </div>
-
-              <div className="field-brief-group">
-                <h4>Top Watchouts</h4>
-                <ul className="signal-list compact">
-                  {(fieldBriefTopRisks.length > 0 ? fieldBriefTopRisks : ['No dominant risk trigger detected from current model signals.']).map((item, idx) => (
-                    <li key={idx}>{localizeUnitText(item)}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="field-brief-group">
-              <h4>Immediate Actions</h4>
-              <ul className="signal-list compact">
-                {(fieldBriefImmediateActions.length > 0 ? fieldBriefImmediateActions : fieldBriefActions).map((item, idx) => (
-                  <li key={idx}>{localizeUnitText(item)}</li>
-                ))}
-              </ul>
-            </div>
-
-            <details className="field-brief-details">
-              <summary>Show full snapshot, abort triggers, and all actions</summary>
-              <div className="field-brief-group">
-                <h4>Situation Snapshot</h4>
-                <ul className="signal-list compact">
-                  {fieldBriefSnapshot.map((item, idx) => (
-                    <li key={idx}>{localizeUnitText(item)}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="field-brief-group">
-                <h4>Abort Triggers</h4>
-                <ul className="signal-list compact">
-                  {fieldBriefAbortTriggers.map((item, idx) => (
-                    <li key={idx}>{localizeUnitText(item)}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="field-brief-group">
-                <h4>Full Action List</h4>
-                <ul className="signal-list compact">
-                  {fieldBriefActions.map((item, idx) => (
-                    <li key={idx}>{localizeUnitText(item)}</li>
-                  ))}
-                </ul>
-              </div>
-            </details>
-          </div>
+          <FieldBriefCard
+            order={reportCardOrder.fieldBrief}
+            decisionLevelClass={decision.level.toLowerCase().replace('-', '')}
+            decisionLevelLabel={decision.level}
+            fieldBriefHeadline={fieldBriefHeadline}
+            fieldBriefPrimaryReason={fieldBriefPrimaryReason}
+            decisionActionLine={decisionActionLine}
+            fieldBriefAtAGlance={fieldBriefAtAGlance}
+            fieldBriefExecutionSteps={fieldBriefExecutionSteps}
+            fieldBriefTopRisks={fieldBriefTopRisks}
+            fieldBriefImmediateActions={fieldBriefImmediateActions}
+            fieldBriefSnapshot={fieldBriefSnapshot}
+            fieldBriefAbortTriggers={fieldBriefAbortTriggers}
+            fieldBriefActions={fieldBriefActions}
+            localizeUnitText={localizeUnitText}
+          />
 
           <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
             <div className="card-header">
