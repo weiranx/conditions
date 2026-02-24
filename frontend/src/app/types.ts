@@ -32,6 +32,11 @@ export interface WeatherTrendPoint {
   gust: number;
   windDirection?: string | null;
   precipChance?: number;
+  humidity?: number | null;
+  dewPoint?: number | null;
+  cloudCover?: number | null;
+  timeIso?: string | null;
+  isDaytime?: boolean | null;
   condition: string;
 }
 

@@ -29,6 +29,7 @@ import {
   Sun,
   RefreshCw,
 } from 'lucide-react';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
 import { fetchApi, readApiErrorMessage } from './lib/api-client';
 import {
@@ -485,6 +486,16 @@ function windDirectionDeltaDegrees(a: string | null | undefined, b: string | nul
   return diff > 180 ? 360 - diff : diff;
 }
 
+function windDirectionFromDegrees(value: number | null | undefined): string {
+  const degrees = Number(value);
+  if (!Number.isFinite(degrees)) {
+    return 'N/A';
+  }
+  const normalized = ((degrees % 360) + 360) % 360;
+  const index = Math.round(normalized / 45) % ASPECT_ROSE_ORDER.length;
+  return ASPECT_ROSE_ORDER[index];
+}
+
 function resolveDominantTrendWindDirection(trend: WeatherTrendPoint[] | null | undefined): {
   direction: string | null;
   count: number;
@@ -864,6 +875,29 @@ function criticalRiskLevelText(level: CriticalRiskLevel): string {
   if (level === 'watch') return 'Watch';
   return 'Stable';
 }
+
+type WeatherTrendMetricKey =
+  | 'temp'
+  | 'feelsLike'
+  | 'wind'
+  | 'gust'
+  | 'precipChance'
+  | 'humidity'
+  | 'dewPoint'
+  | 'cloudCover'
+  | 'windDirection';
+
+const WEATHER_TREND_METRIC_LABELS: Record<WeatherTrendMetricKey, string> = {
+  temp: 'Temp',
+  feelsLike: 'Feels-like',
+  wind: 'Wind',
+  gust: 'Gust',
+  precipChance: 'Precip',
+  humidity: 'Humidity',
+  dewPoint: 'Dew Point',
+  cloudCover: 'Cloud Cover',
+  windDirection: 'Wind Direction',
+};
 
 function airQualityPillClass(aqi: number | null | undefined): 'go' | 'caution' | 'nogo' {
   const value = Number(aqi);
@@ -1662,6 +1696,7 @@ function App() {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
   const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
+  const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
   const [travelWindowHoursDraft, setTravelWindowHoursDraft] = useState(() => String(initialPreferences.travelWindowHours));
   const [maxPrecipChanceDraft, setMaxPrecipChanceDraft] = useState(() => String(initialPreferences.maxPrecipChance));
   const [maxWindGustDraft, setMaxWindGustDraft] = useState(() =>
@@ -3372,6 +3407,151 @@ function App() {
   const windUnitLabel = preferences.windSpeedUnit;
   const tempUnitLabel = preferences.temperatureUnit.toUpperCase();
   const elevationUnitLabel = preferences.elevationUnit;
+  const weatherTrendMetricOptions: Array<{ key: WeatherTrendMetricKey; label: string }> = [
+    { key: 'temp', label: `Temp (${tempUnitLabel})` },
+    { key: 'feelsLike', label: `Feels (${tempUnitLabel})` },
+    { key: 'wind', label: `Wind (${windUnitLabel})` },
+    { key: 'gust', label: `Gust (${windUnitLabel})` },
+    { key: 'precipChance', label: 'Precip (%)' },
+    { key: 'humidity', label: 'Humidity (%)' },
+    { key: 'dewPoint', label: `Dew (${tempUnitLabel})` },
+    { key: 'cloudCover', label: 'Cloud (%)' },
+    { key: 'windDirection', label: 'Wind Dir (deg)' },
+  ];
+  type WeatherTrendChartRow = {
+    label: string;
+    temp: number | null;
+    feelsLike: number | null;
+    wind: number | null;
+    gust: number | null;
+    precipChance: number | null;
+    humidity: number | null;
+    dewPoint: number | null;
+    cloudCover: number | null;
+    windDirection: number | null;
+    windDirectionLabel: string | null;
+  };
+  const weatherTrendRows: WeatherTrendChartRow[] = trendWindow.map((point) => {
+    const temp = parseOptionalFiniteNumber(point?.temp);
+    const wind = parseOptionalFiniteNumber(point?.wind);
+    const gust = parseOptionalFiniteNumber(point?.gust);
+    const humidity = parseOptionalFiniteNumber(point?.humidity);
+    const dewPoint = parseOptionalFiniteNumber(point?.dewPoint);
+    const cloudCover = parseOptionalFiniteNumber(point?.cloudCover);
+    const windDirectionLabel = normalizeWindHintDirection(point?.windDirection || null);
+    const windDirectionDegrees =
+      windDirectionLabel && windDirectionLabel !== 'CALM' && windDirectionLabel !== 'VRB'
+        ? windDirectionToDegrees(windDirectionLabel)
+        : null;
+    return {
+      label: formatClockForStyle(point?.time || '', preferences.timeStyle),
+      temp,
+      feelsLike: temp !== null && wind !== null ? computeFeelsLikeF(temp, wind) : null,
+      wind,
+      gust: gust ?? wind,
+      precipChance: parseOptionalFiniteNumber(point?.precipChance),
+      humidity,
+      dewPoint,
+      cloudCover,
+      windDirection: windDirectionDegrees,
+      windDirectionLabel: windDirectionLabel || null,
+    };
+  });
+  const weatherTrendValueForMetric = (row: WeatherTrendChartRow, metric: WeatherTrendMetricKey): number | null => {
+    switch (metric) {
+      case 'temp':
+        return row.temp;
+      case 'feelsLike':
+        return row.feelsLike;
+      case 'wind':
+        return row.wind;
+      case 'gust':
+        return row.gust;
+      case 'precipChance':
+        return row.precipChance;
+      case 'humidity':
+        return row.humidity;
+      case 'dewPoint':
+        return row.dewPoint;
+      case 'cloudCover':
+        return row.cloudCover;
+      case 'windDirection':
+        return row.windDirection;
+      default:
+        return null;
+    }
+  };
+  const weatherTrendChartData = weatherTrendRows.map((row) => ({
+    label: row.label,
+    value: weatherTrendValueForMetric(row, weatherTrendMetric),
+    windDirectionLabel: row.windDirectionLabel,
+  }));
+  const weatherTrendHasData = weatherTrendChartData.some(
+    (row) => row.value !== null && Number.isFinite(row.value),
+  );
+  const weatherTrendMetricLabel = WEATHER_TREND_METRIC_LABELS[weatherTrendMetric];
+  const weatherTrendTickFormatter = (value: number) => {
+    if (!Number.isFinite(value)) {
+      return '';
+    }
+    if (weatherTrendMetric === 'temp' || weatherTrendMetric === 'feelsLike' || weatherTrendMetric === 'dewPoint') {
+      return formatTempDisplay(value, { includeUnit: false });
+    }
+    if (weatherTrendMetric === 'wind' || weatherTrendMetric === 'gust') {
+      return formatWindDisplay(value, { includeUnit: false });
+    }
+    if (weatherTrendMetric === 'precipChance' || weatherTrendMetric === 'humidity' || weatherTrendMetric === 'cloudCover') {
+      return `${Math.round(value)}%`;
+    }
+    if (weatherTrendMetric === 'windDirection') {
+      return `${Math.round(value)}°`;
+    }
+    return String(Math.round(value));
+  };
+  const formatWeatherTrendValue = (value: number | null | undefined, directionLabel?: string | null): string => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 'N/A';
+    }
+    if (weatherTrendMetric === 'temp' || weatherTrendMetric === 'feelsLike' || weatherTrendMetric === 'dewPoint') {
+      return formatTempDisplay(numeric);
+    }
+    if (weatherTrendMetric === 'wind' || weatherTrendMetric === 'gust') {
+      return formatWindDisplay(numeric);
+    }
+    if (weatherTrendMetric === 'precipChance' || weatherTrendMetric === 'humidity' || weatherTrendMetric === 'cloudCover') {
+      return `${Math.round(numeric)}%`;
+    }
+    if (weatherTrendMetric === 'windDirection') {
+      const cardinal = directionLabel || windDirectionFromDegrees(numeric);
+      return `${cardinal} (${Math.round(numeric)}°)`;
+    }
+    return String(Math.round(numeric));
+  };
+  const weatherTrendYAxisDomain: [number, number] | ['auto', 'auto'] =
+    weatherTrendMetric === 'windDirection'
+      ? [0, 360]
+      : weatherTrendMetric === 'precipChance' || weatherTrendMetric === 'humidity' || weatherTrendMetric === 'cloudCover'
+        ? [0, 100]
+        : ['auto', 'auto'];
+  const weatherTrendLineColor =
+    weatherTrendMetric === 'temp'
+      ? '#d56d45'
+      : weatherTrendMetric === 'feelsLike'
+        ? '#c8576f'
+        : weatherTrendMetric === 'wind'
+          ? '#3f82b8'
+          : weatherTrendMetric === 'gust'
+            ? '#d2993a'
+            : weatherTrendMetric === 'precipChance'
+              ? '#1f7d65'
+              : weatherTrendMetric === 'humidity'
+                ? '#3b9bb8'
+                : weatherTrendMetric === 'dewPoint'
+                  ? '#5b7ca0'
+                  : weatherTrendMetric === 'cloudCover'
+                    ? '#7f8e99'
+                    : '#6d7a88';
   const windThresholdPrecision = preferences.windSpeedUnit === 'kph' ? 1 : 0;
   const windThresholdStep = preferences.windSpeedUnit === 'kph' ? 0.5 : 1;
   const windThresholdMin = Number(convertWindMphToDisplayValue(10, preferences.windSpeedUnit).toFixed(windThresholdPrecision));
@@ -5616,6 +5796,61 @@ function App() {
                     </div>
                   </div>
                 )}
+                <div className="weather-trend-panel" aria-label={`${travelWindowHoursLabel} weather trend`}>
+                  <div className="weather-trend-head">
+                    <span className="weather-trend-title">Trend ({travelWindowHoursLabel})</span>
+                    <span className="weather-trend-meta">{weatherTrendMetricLabel}</span>
+                  </div>
+                  <div className="weather-trend-selector" role="group" aria-label="Weather trend metric selector">
+                    {weatherTrendMetricOptions.map((option) => (
+                      <button
+                        key={`weather-trend-metric-${option.key}`}
+                        type="button"
+                        className={`weather-trend-btn ${weatherTrendMetric === option.key ? 'active' : ''}`}
+                        onClick={() => setWeatherTrendMetric(option.key)}
+                        aria-pressed={weatherTrendMetric === option.key}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {weatherTrendHasData ? (
+                    <div className="chart-wrap weather-trend-chart-wrap">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={weatherTrendChartData} margin={{ top: 10, right: 12, left: 4, bottom: 2 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.35} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={14} />
+                          <YAxis
+                            domain={weatherTrendYAxisDomain}
+                            tickLine={false}
+                            axisLine={false}
+                            width={48}
+                            tickFormatter={weatherTrendTickFormatter}
+                          />
+                          <Tooltip
+                            formatter={(value, _name, item) => {
+                              const payload = (item?.payload || {}) as { windDirectionLabel?: string | null };
+                              const numeric = Number.isFinite(Number(value)) ? Number(value) : Number.NaN;
+                              return [formatWeatherTrendValue(numeric, payload.windDirectionLabel), weatherTrendMetricLabel];
+                            }}
+                            labelFormatter={(label) => `${label}`}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            stroke={weatherTrendLineColor}
+                            strokeWidth={2.4}
+                            dot={{ r: 1.9 }}
+                            activeDot={{ r: 3.8 }}
+                            connectNulls={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="muted-note">No {weatherTrendMetricLabel.toLowerCase()} trend data is available for this selected window.</p>
+                  )}
+                </div>
 
                 <div className="weather-metrics">
                   <div className="metric-chip">

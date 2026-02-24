@@ -647,6 +647,12 @@ const fetchOpenMeteoWeatherFallback = async ({
         : Math.max(rowWind, estimateWindGustFromWindSpeed(rowWind)),
       windDirection: findNearestCardinalFromDegreeSeries(windDirectionSeries, rowIndex),
       precipChance: Math.round(readHourlyValue('precipitation_probability', rowIndex, currentPrecipProb)),
+      humidity: Math.round(readHourlyValue('relative_humidity_2m', rowIndex, currentHumidity)),
+      dewPoint: (() => {
+        const rawDewPoint = Number(dewPointSeries[rowIndex]);
+        return Number.isFinite(rawDewPoint) ? Math.round(rawDewPoint) : null;
+      })(),
+      cloudCover: Math.round(readHourlyValue('cloud_cover', rowIndex, currentCloud)),
       condition: openMeteoCodeToText(readHourlyValue('weather_code', rowIndex, currentWeatherCode)),
       isDaytime: readHourlyValue('is_day', rowIndex, 1) >= 1,
     });
@@ -2620,6 +2626,9 @@ const safetyHandler = async (req, res) => {
         const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
         const trendTemp = Number.isFinite(p.temperature) ? p.temperature : 0;
         const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value) ? p.probabilityOfPrecipitation.value : 0;
+        const trendHumidity = Number.isFinite(p?.relativeHumidity?.value) ? p.relativeHumidity.value : null;
+        const trendDewPoint = normalizeNoaaDewPointF(p?.dewpoint);
+        const trendCloudCover = resolveNoaaCloudCover(p).value;
 
         return {
           time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
@@ -2629,6 +2638,9 @@ const safetyHandler = async (req, res) => {
           gust: windGustValue,
           windDirection: findNearestWindDirection(periods, rowIndex),
           precipChance: trendPrecip,
+          humidity: trendHumidity,
+          dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
+          cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
           condition: p.shortForecast || 'Unknown',
           isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
         };
