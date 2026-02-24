@@ -931,6 +931,36 @@ input {
   font-family: var(--font-data);
 }
 
+.map-elevation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 31px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #ece7da;
+  border: 1px solid #d7d1c1;
+  color: #2f3d35;
+}
+
+.map-elevation-chip.is-pending {
+  opacity: 0.8;
+}
+
+.map-elevation-label {
+  color: #59645c;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.map-elevation-value {
+  font-size: 0.79rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-family: var(--font-data);
+}
+
 .map-weather-chip {
   display: inline-flex;
   align-items: center;
@@ -4244,6 +4274,7 @@ input {
 :root[data-theme='dark'] .muted-note,
 :root[data-theme='dark'] .suggestion-subtitle,
 :root[data-theme='dark'] .map-coords,
+:root[data-theme='dark'] .map-elevation-label,
 :root[data-theme='dark'] .map-weather-chip-condition,
 :root[data-theme='dark'] .app-disclaimer p,
 :root[data-theme='dark'] .footer {
@@ -4265,6 +4296,7 @@ input {
 }
 
 :root[data-theme='dark'] .map-coords,
+:root[data-theme='dark'] .map-elevation-chip,
 :root[data-theme='dark'] .map-weather-chip,
 :root[data-theme='dark'] .search-clear-btn,
 :root[data-theme='dark'] .theme-chip {
@@ -5456,6 +5488,11 @@ input {
     text-align: center;
   }
 
+  .map-elevation-chip {
+    width: 100%;
+    justify-content: center;
+  }
+
   .map-weather-chip {
     width: 100%;
     max-width: none;
@@ -5659,6 +5696,11 @@ input {
     width: 100%;
     margin-right: 0;
     text-align: center;
+  }
+
+  .map-elevation-chip {
+    width: 100%;
+    justify-content: center;
   }
 
   .map-weather-chip {
@@ -6032,6 +6074,10 @@ input {
     font-size: 0.72rem;
     white-space: normal;
     word-break: break-word;
+  }
+
+  .map-elevation-chip {
+    font-size: 0.72rem;
   }
 
   .action-btn {

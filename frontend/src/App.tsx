@@ -4690,6 +4690,12 @@ function App() {
         safetyData.weather.description || 'Conditions unavailable',
       ].join(' • ')
     : 'Forecast not loaded';
+  const mapObjectiveElevationFt = safetyData ? Number(safetyData.weather.elevation) : Number.NaN;
+  const hasMapObjectiveElevation = Number.isFinite(mapObjectiveElevationFt) && mapObjectiveElevationFt > 0;
+  const mapElevationLabel = hasMapObjectiveElevation ? formatElevationDisplay(mapObjectiveElevationFt) : loading ? 'Loading…' : 'N/A';
+  const mapElevationChipTitle = hasMapObjectiveElevation
+    ? [formatElevationDisplay(mapObjectiveElevationFt), safetyData?.weather.elevationSource || null].filter(Boolean).join(' • ')
+    : 'Objective elevation unavailable';
   const forecastPeriodLabel = safetyData
     ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
     : 'Not available';
@@ -5161,6 +5167,7 @@ function App() {
               : null,
       ].filter((entry): entry is string => Boolean(entry))
     : [];
+  const windLoadingHintsRelevant = avalancheRelevant && !avalancheUnknown;
   const terrainConditionDetails = safetyData
     ? (() => {
         const upstreamTerrain = safetyData.terrainCondition;
@@ -5238,8 +5245,7 @@ function App() {
           '',
           'Immediate actions:',
           ...fieldBriefActions.map((item) => `- ${item}`),
-          '',
-          `Wind loading hint: ${windLoadingSummary}`,
+          ...(windLoadingHintsRelevant ? ['', `Wind loading hint: ${windLoadingSummary}`] : []),
         ].join('\n')
       : '';
   const reportCardOrder = (() => {
@@ -5294,7 +5300,9 @@ function App() {
       Number.isFinite(snowfall24hIn) ||
       Number.isFinite(snowfall48hIn);
     const snowpackAvailable = ['ok', 'partial'].includes(String(safetyData?.snowpack?.status || '').toLowerCase());
-    const windHintsAvailable = Boolean(resolvedWindDirection) || calmOrVariableSignal || lightWindSignal || trendWindDirections.length > 0;
+    const windHintsAvailable =
+      windLoadingHintsRelevant &&
+      (Boolean(resolvedWindDirection) || calmOrVariableSignal || lightWindSignal || trendWindDirections.length > 0);
     const fireRiskAvailable = String(safetyData?.fireRisk?.status || '').toLowerCase() !== 'unavailable';
     const heatRiskAvailable =
       String(safetyData?.heatRisk?.status || '').toLowerCase() !== 'unavailable' ||
@@ -5384,7 +5392,6 @@ function App() {
     })();
     const windLoadingRiskLevel = (() => {
       if (!windHintsAvailable) return 0;
-      if (!avalancheRelevant) return 1;
       if (windLoadingConfidence === 'High') return 4;
       if (windLoadingConfidence === 'Moderate') return 3;
       return 2;
@@ -5438,7 +5445,13 @@ function App() {
       { key: 'travelWindowPlanner', base: 90, available: travelAvailable, relevant: true, riskLevel: travelRiskLevel },
       { key: 'terrainTrailCondition', base: 84, available: terrainAvailable, relevant: true, riskLevel: terrainRiskLevel },
       { key: 'snowpackSnapshot', base: 82, available: snowpackAvailable, relevant: true, riskLevel: snowpackRiskLevel },
-      { key: 'windLoadingHints', base: 80, available: windHintsAvailable, relevant: true, riskLevel: windLoadingRiskLevel },
+      {
+        key: 'windLoadingHints',
+        base: 80,
+        available: windHintsAvailable,
+        relevant: windLoadingHintsRelevant,
+        riskLevel: windLoadingRiskLevel,
+      },
       { key: 'recentRainfall', base: 78, available: rainfallAvailable, relevant: true, riskLevel: rainfallRiskLevel },
       { key: 'sourceFreshness', base: 76, available: sourceFreshnessAvailable, relevant: true, riskLevel: sourceFreshnessRiskLevel },
       { key: 'fireRisk', base: 74, available: fireRiskAvailable, relevant: true, riskLevel: fireRiskCardLevel },
@@ -6036,6 +6049,13 @@ function App() {
             <span className="map-coords">
               {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
             </span>
+            {hasObjective && (
+              <span className={`map-elevation-chip ${safetyData ? '' : 'is-pending'}`} title={mapElevationChipTitle}>
+                <Mountain size={13} aria-hidden="true" />
+                <span className="map-elevation-label">Elev</span>
+                <span className="map-elevation-value">{mapElevationLabel}</span>
+              </span>
+            )}
             {hasObjective && (
               <span className={`map-weather-chip ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
                 <span className="map-weather-chip-emoji" aria-hidden="true">
@@ -6877,79 +6897,76 @@ function App() {
                 </p>
               </div>
 
-              <div className="card wind-hints-card" style={{ order: reportCardOrder.windLoadingHints }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Wind size={14} /> Wind Loading Hints
-                    <HelpHint text="Uses start-time wind plus nearby trend hours to infer likely loaded aspects and where wind transport is most relevant." />
-                  </span>
-                  <span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} • {windLoadingConfidence}</span>
-                </div>
-                <p className="wind-hint-line">{windLoadingSummary}</p>
-                {windLoadingActionLine && <p className="wind-action-line">{windLoadingActionLine}</p>}
-                <div className="wind-hint-meta">
-                  <div className="wind-hint-meta-item">
-                    <span className="stat-label">Transport Level</span>
-                    <strong>{windLoadingLevel}</strong>
+              {windLoadingHintsRelevant && (
+                <div className="card wind-hints-card" style={{ order: reportCardOrder.windLoadingHints }}>
+                  <div className="card-header">
+                    <span className="card-title">
+                      <Wind size={14} /> Wind Loading Hints
+                      <HelpHint text="Uses start-time wind plus nearby trend hours to infer likely loaded aspects and where wind transport is most relevant." />
+                    </span>
+                    <span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} • {windLoadingConfidence}</span>
                   </div>
-                  <div className="wind-hint-meta-item">
-                    <span className="stat-label">Active Window</span>
-                    <strong>{windLoadingActiveWindowLabel}</strong>
-                  </div>
-                  <div className="wind-hint-meta-item">
-                    <span className="stat-label">Direction Source</span>
-                    <strong>{resolvedWindDirectionSource}</strong>
-                  </div>
-                  <div className="wind-hint-meta-item">
-                    <span className="stat-label">Trend Agreement</span>
-                    <strong>
-                      {trendAgreementRatio !== null
-                        ? `${Math.round(trendAgreementRatio * 100)}%`
-                        : 'N/A'}
-                    </strong>
-                  </div>
-                  <div className="wind-hint-meta-item wind-hint-meta-wide">
-                    <span className="stat-label">Elevation Focus</span>
-                    <strong>{windLoadingElevationFocus}</strong>
-                  </div>
-                </div>
-                {leewardAspectHints.length > 0 && (
-                  <div className="wind-aspect-block">
-                    <span className="stat-label">Likely Lee Aspects</span>
-                    <div className="wind-aspect-chips">
-                      {leewardAspectHints.map((aspect) => (
-                        <span key={aspect} className="wind-aspect-chip">
-                          {aspect}
-                        </span>
-                      ))}
+                  <p className="wind-hint-line">{windLoadingSummary}</p>
+                  {windLoadingActionLine && <p className="wind-action-line">{windLoadingActionLine}</p>}
+                  <div className="wind-hint-meta">
+                    <div className="wind-hint-meta-item">
+                      <span className="stat-label">Transport Level</span>
+                      <strong>{windLoadingLevel}</strong>
+                    </div>
+                    <div className="wind-hint-meta-item">
+                      <span className="stat-label">Active Window</span>
+                      <strong>{windLoadingActiveWindowLabel}</strong>
+                    </div>
+                    <div className="wind-hint-meta-item">
+                      <span className="stat-label">Direction Source</span>
+                      <strong>{resolvedWindDirectionSource}</strong>
+                    </div>
+                    <div className="wind-hint-meta-item">
+                      <span className="stat-label">Trend Agreement</span>
+                      <strong>
+                        {trendAgreementRatio !== null
+                          ? `${Math.round(trendAgreementRatio * 100)}%`
+                          : 'N/A'}
+                      </strong>
+                    </div>
+                    <div className="wind-hint-meta-item wind-hint-meta-wide">
+                      <span className="stat-label">Elevation Focus</span>
+                      <strong>{windLoadingElevationFocus}</strong>
                     </div>
                   </div>
-                )}
-                {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
-                  <div className="wind-aspect-block">
-                    <span className="stat-label">Secondary Cross-Loading</span>
-                    <div className="wind-aspect-chips">
-                      {secondaryWindAspects.map((aspect) => (
-                        <span key={`secondary-${aspect}`} className="wind-aspect-chip secondary">
-                          {aspect}
-                        </span>
-                      ))}
+                  {leewardAspectHints.length > 0 && (
+                    <div className="wind-aspect-block">
+                      <span className="stat-label">Likely Lee Aspects</span>
+                      <div className="wind-aspect-chips">
+                        {leewardAspectHints.map((aspect) => (
+                          <span key={aspect} className="wind-aspect-chip">
+                            {aspect}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {windLoadingNotes.length > 0 && (
-                  <ul className="signal-list compact">
-                    {windLoadingNotes.map((note, idx) => (
-                      <li key={`wind-loading-note-${idx}`}>{note}</li>
-                    ))}
-                  </ul>
-                )}
-                {avalancheRelevant && avalancheUnknown && (
-                  <p className="muted-note">
-                    Limited avalanche coverage is active. Treat wind-loading terrain as suspect even without a published avalanche bulletin.
-                  </p>
-                )}
-              </div>
+                  )}
+                  {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
+                    <div className="wind-aspect-block">
+                      <span className="stat-label">Secondary Cross-Loading</span>
+                      <div className="wind-aspect-chips">
+                        {secondaryWindAspects.map((aspect) => (
+                          <span key={`secondary-${aspect}`} className="wind-aspect-chip secondary">
+                            {aspect}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {windLoadingNotes.length > 0 && (
+                    <ul className="signal-list compact">
+                      {windLoadingNotes.map((note, idx) => (
+                        <li key={`wind-loading-note-${idx}`}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="card source-freshness-card" style={{ order: reportCardOrder.sourceFreshness }}>
                 <div className="card-header">
