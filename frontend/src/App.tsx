@@ -4744,6 +4744,10 @@ function App() {
   const forecastPeriodLabel = safetyData
     ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
     : 'Not available';
+  const weatherWindDirectionLabel = normalizeWindHintDirection(safetyData?.weather.windDirection || null) || 'N/A';
+  const weatherCloudCoverLabel = Number.isFinite(Number(safetyData?.weather.cloudCover))
+    ? `${Math.round(Number(safetyData?.weather.cloudCover))}%`
+    : 'N/A';
   const satObjectiveLabel = truncateText((objectiveName || 'Objective').split(',')[0].trim(), 22);
   const satAvalancheSnippet =
     !safetyData
@@ -6595,8 +6599,8 @@ function App() {
               <div className="card weather-card" style={{ order: reportCardOrder.atmosphericData }}>
                 <div className="card-header">
                   <span className="card-title">
-                    <Thermometer size={14} /> Atmospheric Data
-                    <HelpHint text="Weather snapshot at your selected start time, including wind, precip, and source attribution." />
+                    <Thermometer size={14} /> Weather
+                    <HelpHint text="Weather at your selected start time, including temperature, wind, precip, humidity, cloud cover, and source attribution." />
                   </span>
                   <div className="weather-header-meta">
                     <span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>
@@ -6641,6 +6645,14 @@ function App() {
                   <div className="metric-chip">
                     <span className="stat-label">Dew Point</span>
                     <strong>{formatTempDisplay(safetyData.weather.dewPoint)}</strong>
+                  </div>
+                  <div className="metric-chip">
+                    <span className="stat-label">Wind Dir</span>
+                    <strong>{weatherWindDirectionLabel}</strong>
+                  </div>
+                  <div className="metric-chip">
+                    <span className="stat-label">Cloud Cover</span>
+                    <strong>{weatherCloudCoverLabel}</strong>
                   </div>
                 </div>
 
