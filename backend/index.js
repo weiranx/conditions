@@ -571,6 +571,37 @@ const localHourFromIso = (input, timeZone = null) => {
   }
 };
 
+const dateKeyInTimeZone = (value = new Date(), timeZone = null) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const formatWithZone = (zone) => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        ...(zone ? { timeZone: zone } : {}),
+      });
+      const parts = formatter.formatToParts(date);
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const day = parts.find((part) => part.type === 'day')?.value;
+      if (!year || !month || !day) {
+        return null;
+      }
+      return `${year}-${month}-${day}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const normalizedTimeZone = typeof timeZone === 'string' ? timeZone.trim() : '';
+  return formatWithZone(normalizedTimeZone || null) || formatWithZone('UTC') || date.toISOString().slice(0, 10);
+};
+
 const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 }) => {
   const normalizedWindow = Math.max(1, Math.round(Number(windowHours) || 24));
   const sourcePoints = Array.isArray(points) ? points.slice(0, normalizedWindow) : [];
@@ -1112,6 +1143,7 @@ const createUnavailableAirQualityData = (status = 'unavailable') => ({
   pm10: null,
   ozone: null,
   measuredTime: null,
+  note: null,
 });
 
 const createUnavailableRainfallData = (status = 'unavailable') => ({
@@ -1973,6 +2005,8 @@ const calculateSafetyScore = ({
       : [];
 
   const usAqi = Number(airQualityData?.usAqi);
+  const airQualityStatus = String(airQualityData?.status || '').toLowerCase();
+  const airQualityRelevantForScoring = airQualityStatus !== 'not_applicable_future_date';
   const aqiCategory = String(airQualityData?.category || 'Unknown');
 
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
@@ -2248,7 +2282,7 @@ const calculateSafetyScore = ({
     }
   }
 
-  if (Number.isFinite(usAqi)) {
+  if (airQualityRelevantForScoring && Number.isFinite(usAqi)) {
     if (usAqi >= 201) {
       applyFactor('Air Quality', 20, `Air quality is hazardous (US AQI ${Math.round(usAqi)}).`, 'Open-Meteo Air Quality');
     } else if (usAqi >= 151) {
@@ -2345,9 +2379,9 @@ const calculateSafetyScore = ({
   } else if (!alertsRelevantForSelectedTime) {
     applyConfidencePenalty(4, 'NWS alerts are current-state only and not forecast-valid for the selected start time.');
   }
-  if (airQualityData?.status === 'unavailable') {
+  if (airQualityRelevantForScoring && airQualityData?.status === 'unavailable') {
     applyConfidencePenalty(6, 'Air quality feed unavailable.');
-  } else if (airQualityData?.status === 'no_data') {
+  } else if (airQualityRelevantForScoring && airQualityData?.status === 'no_data') {
     applyConfidencePenalty(3, 'Air quality point data unavailable.');
   }
   const rainfallAnchorMs = parseIsoTimeToMs(rainfallData?.anchorTime);
@@ -2388,7 +2422,9 @@ const calculateSafetyScore = ({
     alertsRelevantForSelectedTime && (alertsData?.status === 'ok' || alertsData?.status === 'none' || alertsData?.status === 'none_for_selected_start')
       ? 'NOAA/NWS active alerts'
       : null,
-    airQualityData?.status === 'ok' || airQualityData?.status === 'no_data' ? 'Open-Meteo air quality' : null,
+    airQualityRelevantForScoring && (airQualityData?.status === 'ok' || airQualityData?.status === 'no_data')
+      ? 'Open-Meteo air quality'
+      : null,
     rainfallData?.status === 'ok' || rainfallData?.status === 'partial' || rainfallData?.status === 'no_data'
       ? 'Open-Meteo precipitation history/forecast'
       : null,
@@ -3475,6 +3511,14 @@ const safetyHandler = async (req, res) => {
       selectedForecastPeriod?.startTime ||
       (selectedForecastDate ? `${selectedForecastDate}T12:00:00Z` : new Date().toISOString());
 
+    const objectiveTimeZone = typeof weatherData?.timezone === 'string' ? weatherData.timezone.trim() : '';
+    const objectiveTodayDate = dateKeyInTimeZone(new Date(), objectiveTimeZone || null);
+    const selectedDateForAirQuality = selectedForecastDate || requestedDate || objectiveTodayDate;
+    const useCurrentDayAirQuality =
+      Boolean(selectedDateForAirQuality)
+      && Boolean(objectiveTodayDate)
+      && selectedDateForAirQuality === objectiveTodayDate;
+
     const alertTargetTimeIso = buildPlannedStartIso({
       selectedDate: selectedForecastDate || requestedDate || '',
       startClock: requestedStartClock,
@@ -3501,7 +3545,12 @@ const safetyHandler = async (req, res) => {
 
     const [alertsResult, airQualityResult, rainfallResult, snowpackResult] = await Promise.allSettled([
       fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso),
-      fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions),
+      useCurrentDayAirQuality
+        ? fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)
+        : Promise.resolve({
+            ...createUnavailableAirQualityData('not_applicable_future_date'),
+            note: 'Air quality is current-day only and is not applied to future-date forecasts.',
+          }),
       fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions),
       fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
     ]);
@@ -3593,7 +3642,9 @@ const safetyHandler = async (req, res) => {
         : "No active NWS alerts for this point.";
     const airQualitySummaryForAi = Number.isFinite(Number(airQualityData.usAqi))
       ? `US AQI ${airQualityData.usAqi} (${airQualityData.category}).`
-      : "Air quality data unavailable.";
+      : airQualityData?.status === 'not_applicable_future_date'
+        ? 'Air quality is current-day only and is not applied to this future-date forecast.'
+        : "Air quality data unavailable.";
     const rainfallSummaryForAi = buildPrecipitationSummaryForAi(rainfallData);
     const snowpackSummaryForAi = snowpackData?.summary
       ? `Snowpack: ${snowpackData.summary}`
@@ -3709,7 +3760,9 @@ const safetyHandler = async (req, res) => {
         : "No active NWS alerts for this point.";
     const airQualitySummaryForAi = Number.isFinite(Number(safeAirQualityData.usAqi))
       ? `US AQI ${safeAirQualityData.usAqi} (${safeAirQualityData.category}).`
-      : "Air quality data unavailable.";
+      : safeAirQualityData?.status === 'not_applicable_future_date'
+        ? 'Air quality is current-day only and is not applied to this future-date forecast.'
+        : "Air quality data unavailable.";
     const rainfallSummaryForAi = buildPrecipitationSummaryForAi(safeRainfallData);
     const snowpackSummaryForAi = safeSnowpackData?.summary
       ? `Snowpack: ${safeSnowpackData.summary}`

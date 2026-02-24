@@ -1130,6 +1130,50 @@ test('calculateSafetyScore applies lower score for future start due forecast unc
   expect(futureResult.explanations.some((line) => /fewer real-time feeds can be projected/i.test(String(line)))).toBe(true);
 });
 
+test('calculateSafetyScore ignores AQI when air quality is not applicable for future dates', () => {
+  const now = Date.now();
+  const futureStartIso = new Date(now + 48 * 60 * 60 * 1000).toISOString();
+  const inTwoDaysIso = new Date(now + 48 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const sharedInput = {
+    weatherData: {
+      description: 'Mostly Clear',
+      windSpeed: 5,
+      windGust: 8,
+      precipChance: 5,
+      humidity: 40,
+      temp: 45,
+      feelsLike: 45,
+      isDaytime: true,
+      issuedTime: new Date(now - 30 * 60 * 1000).toISOString(),
+      forecastStartTime: futureStartIso,
+      trend: Array.from({ length: 8 }, () => ({
+        temp: 45,
+        wind: 5,
+        gust: 8,
+      })),
+    },
+    avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
+    alertsData: { status: 'none_for_selected_start', activeCount: 0, alerts: [] },
+    fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
+    selectedDate: inTwoDaysIso,
+  };
+
+  const withApplicableAqi = calculateSafetyScore({
+    ...sharedInput,
+    airQualityData: { status: 'ok', usAqi: 180, category: 'Unhealthy' },
+  });
+
+  const withNonApplicableAqi = calculateSafetyScore({
+    ...sharedInput,
+    airQualityData: { status: 'not_applicable_future_date', usAqi: 180, category: 'Unhealthy' },
+  });
+
+  expect(withNonApplicableAqi.score).toBeGreaterThan(withApplicableAqi.score);
+  expect(withNonApplicableAqi.factors.some((factor) => String(factor.hazard).toLowerCase() === 'air quality')).toBe(false);
+  expect(withNonApplicableAqi.sourcesUsed.some((source) => /air quality/i.test(String(source)))).toBe(false);
+});
+
 test('calculateSafetyScore does not apply darkness penalty for pre-sunrise alpine starts', () => {
   const sharedInputs = {
     weatherData: {

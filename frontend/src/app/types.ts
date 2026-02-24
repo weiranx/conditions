@@ -174,6 +174,7 @@ export interface SafetyData {
     pm10?: number | null;
     ozone?: number | null;
     measuredTime?: string | null;
+    note?: string | null;
     generatedTime?: string | null;
   };
   rainfall?: {

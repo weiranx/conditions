@@ -1660,8 +1660,9 @@ function evaluateBackcountryDecision(
   const highestAlertSeverityRank = alertSeverityRank(highestAlertSeverity);
 
   const airQualityStatus = String(data.airQuality?.status || '').toLowerCase();
+  const airQualityFutureNotApplicable = airQualityStatus === 'not_applicable_future_date';
   const aqi = Number(data.airQuality?.usAqi);
-  const hasAqi = Number.isFinite(aqi) && airQualityStatus !== 'unavailable';
+  const hasAqi = Number.isFinite(aqi) && airQualityStatus !== 'unavailable' && !airQualityFutureNotApplicable;
 
   const fireRiskStatus = String(data.fireRisk?.status || '').toLowerCase();
   const fireRiskLevel = Number(data.fireRisk?.level);
@@ -1697,7 +1698,11 @@ function evaluateBackcountryDecision(
           6,
         )
     : null;
-  const airQualityFreshnessState = hasAqi ? freshnessClass(pickOldestIsoTimestamp([data.airQuality?.measuredTime || null]), 8) : null;
+  const airQualityFreshnessState = airQualityFutureNotApplicable
+    ? 'fresh'
+    : hasAqi
+      ? freshnessClass(pickOldestIsoTimestamp([data.airQuality?.measuredTime || null]), 8)
+      : null;
   const precipitationFreshnessState = freshnessClass(pickOldestIsoTimestamp([data.rainfall?.anchorTime || null]), 8);
   const snowpackStatus = String(data.snowpack?.status || '').toLowerCase();
   const snowpackAvailable = snowpackStatus === 'ok' || snowpackStatus === 'partial';
@@ -1955,6 +1960,28 @@ function evaluateBackcountryDecision(
   }
 
   return { level, headline, blockers, cautions, checks };
+}
+
+function isAvalancheSummaryText(text: string): boolean {
+  return /\bavalanche\b|\bbulletin\b/i.test(String(text || ''));
+}
+
+function summarizeBetterDayWithoutAvalancheText(decision: SummitDecision): string {
+  const nonAvalancheBlockers = decision.blockers.filter((line) => !isAvalancheSummaryText(line));
+  if (nonAvalancheBlockers.length > 0) {
+    return nonAvalancheBlockers[0];
+  }
+
+  const nonAvalancheCautions = decision.cautions.filter((line) => !isAvalancheSummaryText(line));
+  if (nonAvalancheCautions.length > 0) {
+    return nonAvalancheCautions[0];
+  }
+
+  if (!isAvalancheSummaryText(decision.headline || '')) {
+    return decision.headline;
+  }
+
+  return 'Conditions remain mixed; review weather, wind, and timing details for this day.';
 }
 
 type BetterDaySuggestion = {
@@ -5035,6 +5062,8 @@ function App() {
         safetyData.airQuality?.measuredTime || null,
       ])
     : null;
+  const airQualityStatus = String(safetyData?.airQuality?.status || '').toLowerCase();
+  const airQualityFutureNotApplicable = airQualityStatus === 'not_applicable_future_date';
   const precipitationFreshnessTimestamp = safetyData
     ? pickOldestIsoTimestamp([
         rainfallPayload?.anchorTime || null,
@@ -5064,7 +5093,13 @@ function App() {
           displayValue: alertsNoActiveForSelectedTime ? 'No active' : alertsWindowCovered ? 'Window covered' : undefined,
           stateOverride: alertsNoActiveForSelectedTime || alertsWindowCovered ? ('fresh' as const) : undefined,
         },
-        { label: 'Air Quality', issued: airQualityFreshnessTimestamp, staleHours: 8 },
+        {
+          label: 'Air Quality',
+          issued: airQualityFreshnessTimestamp,
+          staleHours: 8,
+          displayValue: airQualityFutureNotApplicable ? 'Current-day only' : undefined,
+          stateOverride: airQualityFutureNotApplicable ? ('fresh' as const) : undefined,
+        },
         {
           label: 'Precipitation',
           issued: precipitationFreshnessTimestamp,
@@ -5809,16 +5844,11 @@ function App() {
                 candidateData,
                 alpineStartTime,
                 preferences,
-                { ignoreAvalancheForDecision: true },
               );
-              const scoreRaw = normalizedDecisionScore(candidateData, { ignoreAvalancheForDecision: true });
+              const scoreRaw = normalizedDecisionScore(candidateData);
               const gustRaw = Number(candidateData?.weather?.windGust);
               const precipRaw = Number(candidateData?.weather?.precipChance);
-              const riskSummary =
-                candidateDecision.blockers[0] ||
-                candidateDecision.cautions[0] ||
-                candidateDecision.headline ||
-                'No dominant risk trigger.';
+              const riskSummary = summarizeBetterDayWithoutAvalancheText(candidateDecision);
               return {
                 date: candidateData?.forecast?.selectedDate && DATE_FMT.test(candidateData.forecast.selectedDate) ? candidateData.forecast.selectedDate : date,
                 level: candidateDecision.level,
@@ -5849,10 +5879,9 @@ function App() {
           safetyData,
           alpineStartTime,
           preferences,
-          { ignoreAvalancheForDecision: true },
         );
         const currentLevelRank = decisionLevelRank(currentComparisonDecision.level);
-        const currentScore = normalizedDecisionScore(safetyData, { ignoreAvalancheForDecision: true });
+        const currentScore = normalizedDecisionScore(safetyData);
         const clearlyBetter = validSuggestions.filter((entry) => {
           const rank = decisionLevelRank(entry.level);
           const candidateScore = Number.isFinite(Number(entry.score)) ? Number(entry.score) : -Infinity;
@@ -7758,8 +7787,10 @@ function App() {
                     <Wind size={14} /> Air Quality
                     <HelpHint text="AQI and pollutant values near your objective. Elevated values can reduce performance and increase risk." />
                   </span>
-                  <span className={`decision-pill ${airQualityPillClass(safetyData.airQuality?.usAqi)}`}>
-                    AQI {Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}
+                  <span className={`decision-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClass(safetyData.airQuality?.usAqi)}`}>
+                    {airQualityFutureNotApplicable
+                      ? 'Current-day only'
+                      : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}
                   </span>
                 </div>
                 <div className="plan-grid">
@@ -7781,8 +7812,11 @@ function App() {
                   </div>
                 </div>
                 <p className="muted-note">
-                  Source: {safetyData.airQuality?.source || 'Open-Meteo Air Quality API'}
-                  {safetyData.airQuality?.measuredTime ? ` • Measured ${formatPubTime(safetyData.airQuality.measuredTime)}` : ''}
+                  {airQualityFutureNotApplicable
+                    ? (safetyData.airQuality?.note || 'Air quality is only used for the objective-local current day. It is not applied to future-date forecasts.')
+                    : `Source: ${safetyData.airQuality?.source || 'Open-Meteo Air Quality API'}${
+                        safetyData.airQuality?.measuredTime ? ` • Measured ${formatPubTime(safetyData.airQuality.measuredTime)}` : ''
+                      }`}
                 </p>
               </div>
 
