@@ -547,7 +547,9 @@ function formatAgeFromNow(value: string | null | undefined): string {
   return minutes === 0 ? `${hours}h ago` : `${hours}h ${minutes}m ago`;
 }
 
-function freshnessClass(value: string | null | undefined, staleHours: number): 'fresh' | 'aging' | 'stale' | 'missing' {
+type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';
+
+function freshnessClass(value: string | null | undefined, staleHours: number): FreshnessState {
   const ms = parseIsoToMs(value);
   if (ms === null) {
     return 'missing';
@@ -560,6 +562,51 @@ function freshnessClass(value: string | null | undefined, staleHours: number): '
     return 'aging';
   }
   return 'stale';
+}
+
+function classifySnowpackFreshness(
+  snotelObservedDate: string | null | undefined,
+  nohrscSampledTime: string | null | undefined,
+): {
+  state: FreshnessState;
+  referenceTimestamp: string | null;
+  displayValue: string;
+} {
+  const snotelMs = parseIsoToMs(snotelObservedDate);
+  const nohrscMs = parseIsoToMs(nohrscSampledTime);
+  const snotelAgeHours = snotelMs === null ? null : (Date.now() - snotelMs) / 3600000;
+  const nohrscAgeHours = nohrscMs === null ? null : (Date.now() - nohrscMs) / 3600000;
+
+  const classifyByAge = (ageHours: number | null, freshHours: number, agingHours: number): FreshnessState => {
+    if (ageHours === null) return 'missing';
+    if (ageHours <= freshHours) return 'fresh';
+    if (ageHours <= agingHours) return 'aging';
+    return 'stale';
+  };
+
+  const snotelState = classifyByAge(snotelAgeHours, 60, 120);
+  const nohrscState = classifyByAge(nohrscAgeHours, 8, 24);
+  const states = [snotelState, nohrscState].filter((state) => state !== 'missing');
+
+  const state: FreshnessState = (() => {
+    if (states.length === 0) return 'missing';
+    if (!states.includes('stale')) {
+      if (states.includes('aging')) return 'aging';
+      return 'fresh';
+    }
+    if (states.includes('fresh') || states.includes('aging')) {
+      return 'aging';
+    }
+    return 'stale';
+  })();
+
+  const snotelAgeLabel = formatCompactAge(snotelObservedDate);
+  const nohrscAgeLabel = formatCompactAge(nohrscSampledTime);
+  const detailParts = [nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null, snotelAgeLabel ? `SNOTEL ${snotelAgeLabel}` : null].filter(Boolean);
+  const displayValue = detailParts.length > 0 ? detailParts.join(' • ') : 'Unavailable';
+  const referenceTimestamp = pickNewestIsoTimestamp([nohrscSampledTime || null, snotelObservedDate || null]);
+
+  return { state, referenceTimestamp, displayValue };
 }
 
 function resolveSelectedTravelWindowMs(data: SafetyData | null | undefined, fallbackTravelWindowHours: number): { startMs: number; endMs: number } | null {
@@ -2323,11 +2370,9 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   );
   const snowpackStatus = String(data.snowpack?.status || '').toLowerCase();
   const snowpackAvailable = snowpackStatus === 'ok' || snowpackStatus === 'partial';
+  const snowpackFreshness = classifySnowpackFreshness(data.snowpack?.snotel?.observedDate || null, data.snowpack?.nohrsc?.sampledTime || null);
   const snowpackFreshnessState = snowpackAvailable
-    ? freshnessClass(
-        pickOldestIsoTimestamp([data.snowpack?.snotel?.observedDate || null, data.snowpack?.nohrsc?.sampledTime || null]),
-        30,
-      )
+    ? snowpackFreshness.state
     : null;
   const freshnessIssues = [
     weatherFreshnessState === 'stale' || weatherFreshnessState === 'missing' ? 'weather' : null,
@@ -4941,12 +4986,11 @@ function App() {
         safetyData.rainfall?.issuedTime || null,
       ])
     : null;
-  const snowpackFreshnessTimestamp = safetyData
-    ? pickOldestIsoTimestamp([
-        safetyData.snowpack?.snotel?.observedDate || null,
-        safetyData.snowpack?.nohrsc?.sampledTime || null,
-      ])
-    : null;
+  const snowpackFreshness = classifySnowpackFreshness(
+    safetyData?.snowpack?.snotel?.observedDate || null,
+    safetyData?.snowpack?.nohrsc?.sampledTime || null,
+  );
+  const snowpackFreshnessTimestamp = snowpackFreshness.referenceTimestamp;
   const sourceFreshnessRows = safetyData
     ? [
         { label: 'Weather', issued: weatherFreshnessTimestamp, staleHours: 12 },
@@ -4976,6 +5020,8 @@ function App() {
           label: 'Snowpack',
           issued: snowpackFreshnessTimestamp,
           staleHours: 30,
+          displayValue: snowpackFreshness.displayValue,
+          stateOverride: snowpackFreshness.state,
         },
       ]
     : [];
