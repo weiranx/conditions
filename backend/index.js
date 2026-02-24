@@ -288,6 +288,28 @@ const hourLabelFromIso = (input, timeZone = null) => {
   }
 };
 
+const withExplicitTimezone = (value, timezoneHint = 'UTC') => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/([zZ]|[+\-]\d{2}:\d{2})$/.test(trimmed)) {
+    return trimmed;
+  }
+  const isIsoWithoutZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(trimmed);
+  if (!isIsoWithoutZone) {
+    return trimmed;
+  }
+  const normalizedTz = String(timezoneHint || '').trim().toUpperCase();
+  if (normalizedTz === 'UTC' || normalizedTz === 'GMT') {
+    return `${trimmed}Z`;
+  }
+  return trimmed;
+};
+
 const parseClockToMinutes = (value) => {
   if (typeof value !== 'string') {
     return null;
@@ -1164,6 +1186,7 @@ const fetchAirQualityData = async (lat, lon, targetForecastTimeIso, fetchOptions
   const pm25 = Number(hourly?.pm2_5?.[timeIdx]);
   const pm10 = Number(hourly?.pm10?.[timeIdx]);
   const ozone = Number(hourly?.ozone?.[timeIdx]);
+  const measuredTime = withExplicitTimezone(timeArray[timeIdx] || null, aqiJson?.timezone || 'UTC');
 
   return {
     source: 'Open-Meteo Air Quality API',
@@ -1173,7 +1196,7 @@ const fetchAirQualityData = async (lat, lon, targetForecastTimeIso, fetchOptions
     pm25: Number.isFinite(pm25) ? Number(pm25.toFixed(1)) : null,
     pm10: Number.isFinite(pm10) ? Number(pm10.toFixed(1)) : null,
     ozone: Number.isFinite(ozone) ? Number(ozone.toFixed(1)) : null,
-    measuredTime: timeArray[timeIdx] || null,
+    measuredTime,
   };
 };
 

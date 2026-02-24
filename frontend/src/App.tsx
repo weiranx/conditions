@@ -425,6 +425,8 @@ interface SummitDecision {
   checks: { key?: string; label: string; ok: boolean; detail?: string; action?: string }[];
 }
 
+type NwsAlertItem = NonNullable<NonNullable<SafetyData['alerts']>['alerts']>[number];
+
 interface SnowpackInterpretation {
   headline: string;
   confidence: 'solid' | 'watch' | 'low';
@@ -558,6 +560,39 @@ function freshnessClass(value: string | null | undefined, staleHours: number): '
     return 'aging';
   }
   return 'stale';
+}
+
+function resolveSelectedTravelWindowMs(data: SafetyData | null | undefined, fallbackTravelWindowHours: number): { startMs: number; endMs: number } | null {
+  if (!data) {
+    return null;
+  }
+  const startMs = parseIsoToMs(data.weather?.forecastStartTime || data.forecast?.selectedStartTime || null);
+  if (startMs === null) {
+    return null;
+  }
+  const fallbackDurationMs = Math.max(1, Math.round(Number(fallbackTravelWindowHours) || 12)) * 3600000;
+  const explicitEndMs = parseIsoToMs(data.forecast?.selectedEndTime || data.weather?.forecastEndTime || null);
+  const endMs = explicitEndMs !== null && explicitEndMs > startMs ? explicitEndMs : startMs + fallbackDurationMs;
+  return { startMs, endMs };
+}
+
+function isTravelWindowCoveredByAlertWindow(window: { startMs: number; endMs: number } | null, alerts: NwsAlertItem[] | null | undefined): boolean {
+  if (!window || !Array.isArray(alerts) || alerts.length === 0) {
+    return false;
+  }
+  return alerts.some((alert) => {
+    const alertStartMs = parseIsoToMs(alert.onset || alert.effective || alert.sent || null);
+    const alertEndMs = parseIsoToMs(alert.ends || alert.expires || null);
+    if (alertStartMs === null && alertEndMs === null) {
+      return false;
+    }
+    const normalizedStartMs = alertStartMs ?? Number.NEGATIVE_INFINITY;
+    const normalizedEndMs = alertEndMs ?? Number.POSITIVE_INFINITY;
+    if (normalizedEndMs <= normalizedStartMs) {
+      return false;
+    }
+    return window.startMs >= normalizedStartMs && window.endMs <= normalizedEndMs;
+  });
 }
 
 function parseCoordinates(input: string): { lat: number; lon: number } | null {
@@ -2236,6 +2271,8 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   const alertsStatus = String(data.alerts?.status || '').toLowerCase();
   const alertsRelevantForSelectedStart = true;
   const alertsNoActiveForSelectedStart = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
+  const selectedTravelWindowMs = resolveSelectedTravelWindowMs(data, preferences.travelWindowHours);
+  const alertsWindowCovered = isTravelWindowCoveredByAlertWindow(selectedTravelWindowMs, data.alerts?.alerts || []);
   const activeAlertCount = Number(data.alerts?.activeCount);
   const hasActiveAlertCount = Number.isFinite(activeAlertCount);
   const highestAlertSeverity = String(data.alerts?.highestSeverity || 'Unknown');
@@ -2270,7 +2307,7 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
     ? freshnessClass(pickOldestIsoTimestamp([data.avalanche.publishedTime || null]), 24)
     : null;
   const alertsFreshnessState = alertsRelevantForSelectedStart
-    ? alertsNoActiveForSelectedStart
+    ? alertsNoActiveForSelectedStart || alertsWindowCovered
       ? 'fresh'
       : freshnessClass(
           pickNewestIsoTimestamp(
@@ -2625,6 +2662,19 @@ function App() {
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
+  const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
+  const [travelWindowHoursDraft, setTravelWindowHoursDraft] = useState(() => String(initialPreferences.travelWindowHours));
+  const [maxPrecipChanceDraft, setMaxPrecipChanceDraft] = useState(() => String(initialPreferences.maxPrecipChance));
+  const [maxWindGustDraft, setMaxWindGustDraft] = useState(() =>
+    convertWindMphToDisplayValue(initialPreferences.maxWindGustMph, initialPreferences.windSpeedUnit).toFixed(
+      initialPreferences.windSpeedUnit === 'kph' ? 1 : 0,
+    ),
+  );
+  const [minFeelsLikeDraft, setMinFeelsLikeDraft] = useState(() =>
+    convertTempFToDisplayValue(initialPreferences.minFeelsLikeF, initialPreferences.temperatureUnit).toFixed(
+      initialPreferences.temperatureUnit === 'c' ? 1 : 0,
+    ),
+  );
   const [mapStyle, setMapStyle] = useState<MapStyle>('topo');
   const [mapFocusNonce, setMapFocusNonce] = useState(0);
   const [locatingUser, setLocatingUser] = useState(false);
@@ -3941,18 +3991,67 @@ function App() {
     updatePreferences({ timeStyle });
   };
 
-  const handleThresholdChange =
-    (field: 'maxPrecipChance' | 'travelWindowHours', min: number, max: number) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const nextValue = Number(e.target.value);
-      if (!Number.isFinite(nextValue)) {
-        return;
-      }
-      updatePreferences({ [field]: Math.max(min, Math.min(max, Math.round(nextValue))) } as Partial<UserPreferences>);
-    };
+  const commitRoundedThresholdValue = (
+    rawValue: string,
+    field: 'maxPrecipChance' | 'travelWindowHours',
+    min: number,
+    max: number,
+    fallback: number,
+  ): number => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) {
+      return fallback;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    const committed = Math.max(min, Math.min(max, Math.round(parsed)));
+    updatePreferences({ [field]: committed } as Partial<UserPreferences>);
+    return committed;
+  };
+
+  const handleTravelWindowHoursDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setTravelWindowHoursDraft(raw);
+    if (!raw.trim()) {
+      return;
+    }
+    commitRoundedThresholdValue(raw, 'travelWindowHours', MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS, travelWindowHours);
+  };
+
+  const handleTravelWindowHoursDraftBlur = () => {
+    const committed = commitRoundedThresholdValue(
+      travelWindowHoursDraft,
+      'travelWindowHours',
+      MIN_TRAVEL_WINDOW_HOURS,
+      MAX_TRAVEL_WINDOW_HOURS,
+      travelWindowHours,
+    );
+    setTravelWindowHoursDraft(String(committed));
+  };
+
+  const handleMaxPrecipChanceDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setMaxPrecipChanceDraft(raw);
+    if (!raw.trim()) {
+      return;
+    }
+    commitRoundedThresholdValue(raw, 'maxPrecipChance', 0, 100, preferences.maxPrecipChance);
+  };
+
+  const handleMaxPrecipChanceDraftBlur = () => {
+    const committed = commitRoundedThresholdValue(maxPrecipChanceDraft, 'maxPrecipChance', 0, 100, preferences.maxPrecipChance);
+    setMaxPrecipChanceDraft(String(committed));
+  };
 
   const handleWindThresholdDisplayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const displayValue = Number(e.target.value);
+    const raw = e.target.value;
+    setMaxWindGustDraft(raw);
+    if (!raw.trim()) {
+      return;
+    }
+    const displayValue = Number(raw);
     if (!Number.isFinite(displayValue)) {
       return;
     }
@@ -3960,13 +4059,64 @@ function App() {
     updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(80, mphValue)).toFixed(2)) });
   };
 
+  const handleWindThresholdDisplayBlur = () => {
+    const raw = maxWindGustDraft.trim();
+    if (!raw) {
+      setMaxWindGustDraft(
+        convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
+      );
+      return;
+    }
+    const displayValue = Number(raw);
+    if (!Number.isFinite(displayValue)) {
+      setMaxWindGustDraft(
+        convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
+      );
+      return;
+    }
+    const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
+    const committedMph = Number(Math.max(10, Math.min(80, mphValue)).toFixed(2));
+    updatePreferences({ maxWindGustMph: committedMph });
+    setMaxWindGustDraft(
+      convertWindMphToDisplayValue(committedMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
+    );
+  };
+
   const handleFeelsLikeThresholdDisplayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const displayValue = Number(e.target.value);
+    const raw = e.target.value;
+    setMinFeelsLikeDraft(raw);
+    if (!raw.trim()) {
+      return;
+    }
+    const displayValue = Number(raw);
     if (!Number.isFinite(displayValue)) {
       return;
     }
     const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
     updatePreferences({ minFeelsLikeF: Number(Math.max(-40, Math.min(60, valueF)).toFixed(2)) });
+  };
+
+  const handleFeelsLikeThresholdDisplayBlur = () => {
+    const raw = minFeelsLikeDraft.trim();
+    if (!raw) {
+      setMinFeelsLikeDraft(
+        convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
+      );
+      return;
+    }
+    const displayValue = Number(raw);
+    if (!Number.isFinite(displayValue)) {
+      setMinFeelsLikeDraft(
+        convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
+      );
+      return;
+    }
+    const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
+    const committedF = Number(Math.max(-40, Math.min(60, valueF)).toFixed(2));
+    updatePreferences({ minFeelsLikeF: committedF });
+    setMinFeelsLikeDraft(
+      convertTempFToDisplayValue(committedF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
+    );
   };
 
   const applyPreferencesToPlanner = () => {
@@ -4196,6 +4346,18 @@ function App() {
   const feelsLikeThresholdInputValue = Number(
     convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision),
   );
+  useEffect(() => {
+    setTravelWindowHoursDraft(String(travelWindowHours));
+  }, [travelWindowHours]);
+  useEffect(() => {
+    setMaxPrecipChanceDraft(String(preferences.maxPrecipChance));
+  }, [preferences.maxPrecipChance]);
+  useEffect(() => {
+    setMaxWindGustDraft(String(windThresholdInputValue));
+  }, [windThresholdInputValue]);
+  useEffect(() => {
+    setMinFeelsLikeDraft(String(feelsLikeThresholdInputValue));
+  }, [feelsLikeThresholdInputValue]);
   const targetElevationForecast =
     safetyData && hasTargetElevation && Number.isFinite(Number(safetyData.weather.elevation))
       ? (() => {
@@ -4739,6 +4901,8 @@ function App() {
   };
   const alertsStatus = safetyData?.alerts?.status || null;
   const alertsNoActiveForSelectedTime = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
+  const selectedTravelWindowMs = resolveSelectedTravelWindowMs(safetyData, travelWindowHours);
+  const alertsWindowCovered = isTravelWindowCoveredByAlertWindow(selectedTravelWindowMs, safetyData?.alerts?.alerts || []);
   const reportGeneratedAt = safetyData?.generatedAt || null;
   const weatherFreshnessTimestamp = safetyData
     ? pickOldestIsoTimestamp([
@@ -4793,8 +4957,8 @@ function App() {
           label: 'Alerts',
           issued: alertsFreshnessTimestamp,
           staleHours: 6,
-          displayValue: alertsNoActiveForSelectedTime ? 'No active' : undefined,
-          stateOverride: alertsNoActiveForSelectedTime ? ('fresh' as const) : undefined,
+          displayValue: alertsNoActiveForSelectedTime ? 'No active' : alertsWindowCovered ? 'Window covered' : undefined,
+          stateOverride: alertsNoActiveForSelectedTime || alertsWindowCovered ? ('fresh' as const) : undefined,
         },
         { label: 'Air Quality', issued: airQualityFreshnessTimestamp, staleHours: 8 },
         {
@@ -5563,8 +5727,9 @@ function App() {
                     min={MIN_TRAVEL_WINDOW_HOURS}
                     max={MAX_TRAVEL_WINDOW_HOURS}
                     step={1}
-                    value={travelWindowHours}
-                    onChange={handleThresholdChange('travelWindowHours', MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS)}
+                    value={travelWindowHoursDraft}
+                    onChange={handleTravelWindowHoursDraftChange}
+                    onBlur={handleTravelWindowHoursDraftBlur}
                   />
                 </label>
                 <label className="settings-number-row">
@@ -5574,13 +5739,22 @@ function App() {
                     min={windThresholdMin}
                     max={windThresholdMax}
                     step={windThresholdStep}
-                    value={windThresholdInputValue}
+                    value={maxWindGustDraft}
                     onChange={handleWindThresholdDisplayChange}
+                    onBlur={handleWindThresholdDisplayBlur}
                   />
                 </label>
                 <label className="settings-number-row">
                   <span>Max precip chance (%)</span>
-                  <input type="number" min={0} max={100} step={1} value={preferences.maxPrecipChance} onChange={handleThresholdChange('maxPrecipChance', 0, 100)} />
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={maxPrecipChanceDraft}
+                    onChange={handleMaxPrecipChanceDraftChange}
+                    onBlur={handleMaxPrecipChanceDraftBlur}
+                  />
                 </label>
                 <label className="settings-number-row">
                   <span>Min feels-like ({tempUnitLabel})</span>
@@ -5589,8 +5763,9 @@ function App() {
                     min={feelsLikeThresholdMin}
                     max={feelsLikeThresholdMax}
                     step={feelsLikeThresholdStep}
-                    value={feelsLikeThresholdInputValue}
+                    value={minFeelsLikeDraft}
                     onChange={handleFeelsLikeThresholdDisplayChange}
+                    onBlur={handleFeelsLikeThresholdDisplayBlur}
                   />
                 </label>
               </div>
@@ -6109,53 +6284,72 @@ function App() {
                       <span>Precip &lt;= {preferences.maxPrecipChance}%</span>
                       <span>Feels-like &gt;= {feelsLikeThresholdDisplay}</span>
                     </div>
-                    <div className="travel-threshold-editor" aria-label="Travel window threshold controls">
-                      <label className="travel-threshold-row">
-                        <span>Window (h)</span>
-                        <input
-                          type="number"
-                          min={MIN_TRAVEL_WINDOW_HOURS}
-                          max={MAX_TRAVEL_WINDOW_HOURS}
-                          step={1}
-                          value={travelWindowHours}
-                          onChange={handleThresholdChange('travelWindowHours', MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS)}
-                        />
-                      </label>
-                      <label className="travel-threshold-row">
-                        <span>Max gust ({windUnitLabel})</span>
-                        <input
-                          type="number"
-                          min={windThresholdMin}
-                          max={windThresholdMax}
-                          step={windThresholdStep}
-                          value={windThresholdInputValue}
-                          onChange={handleWindThresholdDisplayChange}
-                        />
-                      </label>
-                      <label className="travel-threshold-row">
-                        <span>Max precip (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={preferences.maxPrecipChance}
-                          onChange={handleThresholdChange('maxPrecipChance', 0, 100)}
-                        />
-                      </label>
-                      <label className="travel-threshold-row">
-                        <span>Min feels-like ({tempUnitLabel})</span>
-                        <input
-                          type="number"
-                          min={feelsLikeThresholdMin}
-                          max={feelsLikeThresholdMax}
-                          step={feelsLikeThresholdStep}
-                          value={feelsLikeThresholdInputValue}
-                          onChange={handleFeelsLikeThresholdDisplayChange}
-                        />
-                      </label>
+                    <div className="travel-threshold-actions">
+                      <button
+                        type="button"
+                        className="settings-btn travel-window-toggle"
+                        onClick={() => setTravelThresholdEditorOpen((prev) => !prev)}
+                        aria-expanded={travelThresholdEditorOpen}
+                        aria-controls="travel-threshold-editor"
+                      >
+                        {travelThresholdEditorOpen ? 'Hide threshold controls' : 'Edit thresholds'}
+                      </button>
                     </div>
-                    <p className="muted-note travel-threshold-note">Edits apply immediately and are saved to Settings.</p>
+                    {travelThresholdEditorOpen && (
+                      <>
+                        <div className="travel-threshold-editor" id="travel-threshold-editor" aria-label="Travel window threshold controls">
+                          <label className="travel-threshold-row">
+                            <span>Window (h)</span>
+                            <input
+                              type="number"
+                              min={MIN_TRAVEL_WINDOW_HOURS}
+                              max={MAX_TRAVEL_WINDOW_HOURS}
+                              step={1}
+                              value={travelWindowHoursDraft}
+                              onChange={handleTravelWindowHoursDraftChange}
+                              onBlur={handleTravelWindowHoursDraftBlur}
+                            />
+                          </label>
+                          <label className="travel-threshold-row">
+                            <span>Max gust ({windUnitLabel})</span>
+                            <input
+                              type="number"
+                              min={windThresholdMin}
+                              max={windThresholdMax}
+                              step={windThresholdStep}
+                              value={maxWindGustDraft}
+                              onChange={handleWindThresholdDisplayChange}
+                              onBlur={handleWindThresholdDisplayBlur}
+                            />
+                          </label>
+                          <label className="travel-threshold-row">
+                            <span>Max precip (%)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={maxPrecipChanceDraft}
+                              onChange={handleMaxPrecipChanceDraftChange}
+                              onBlur={handleMaxPrecipChanceDraftBlur}
+                            />
+                          </label>
+                          <label className="travel-threshold-row">
+                            <span>Min feels-like ({tempUnitLabel})</span>
+                            <input
+                              type="number"
+                              min={feelsLikeThresholdMin}
+                              max={feelsLikeThresholdMax}
+                              step={feelsLikeThresholdStep}
+                              value={minFeelsLikeDraft}
+                              onChange={handleFeelsLikeThresholdDisplayChange}
+                              onBlur={handleFeelsLikeThresholdDisplayBlur}
+                            />
+                          </label>
+                        </div>
+                        <p className="muted-note travel-threshold-note">Edits apply immediately and are saved to Settings.</p>
+                      </>
+                    )}
                     <p className="muted-note">{travelWindowSummary}</p>
                     {travelWindowRows.length > 0 && (
                       <div className="travel-timeline" role="list" aria-label={`${travelWindowHours}-hour travel window timeline`}>

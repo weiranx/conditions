@@ -1734,6 +1734,11 @@ input {
   font-size: 0.74rem;
 }
 
+.travel-threshold-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .travel-thresholds {
   display: flex;
   flex-wrap: wrap;
