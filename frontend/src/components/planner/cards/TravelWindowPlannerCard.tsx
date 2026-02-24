@@ -1,5 +1,4 @@
 import type { ChangeEventHandler, Dispatch, FocusEventHandler, SetStateAction } from 'react';
-import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../../../app/constants';
 import { formatClockForStyle } from '../../../app/core';
 import type { CriticalRiskLevel, TimeStyle, TravelWindowInsights, TravelWindowRow, TravelWindowSpan } from '../../../app/types';
 import { HelpHint } from '../CardHelpHint';
@@ -31,9 +30,6 @@ interface TravelWindowPlannerCardProps {
   feelsLikeThresholdDisplay: string;
   travelThresholdEditorOpen: boolean;
   setTravelThresholdEditorOpen: Dispatch<SetStateAction<boolean>>;
-  travelWindowHoursDraft: string;
-  handleTravelWindowHoursDraftChange: ChangeEventHandler<HTMLInputElement>;
-  handleTravelWindowHoursDraftBlur: FocusEventHandler<HTMLInputElement>;
   windUnitLabel: string;
   windThresholdMin: number;
   windThresholdMax: number;
@@ -76,9 +72,6 @@ export function TravelWindowPlannerCard({
   feelsLikeThresholdDisplay,
   travelThresholdEditorOpen,
   setTravelThresholdEditorOpen,
-  travelWindowHoursDraft,
-  handleTravelWindowHoursDraftChange,
-  handleTravelWindowHoursDraftBlur,
   windUnitLabel,
   windThresholdMin,
   windThresholdMax,
@@ -166,18 +159,6 @@ export function TravelWindowPlannerCard({
           {travelThresholdEditorOpen && (
             <>
               <div className="travel-threshold-editor" id="travel-threshold-editor" aria-label="Travel window threshold controls">
-                <label className="travel-threshold-row">
-                  <span>Window (h)</span>
-                  <input
-                    type="number"
-                    min={MIN_TRAVEL_WINDOW_HOURS}
-                    max={MAX_TRAVEL_WINDOW_HOURS}
-                    step={1}
-                    value={travelWindowHoursDraft}
-                    onChange={handleTravelWindowHoursDraftChange}
-                    onBlur={handleTravelWindowHoursDraftBlur}
-                  />
-                </label>
                 <label className="travel-threshold-row">
                   <span>Max gust ({windUnitLabel})</span>
                   <input

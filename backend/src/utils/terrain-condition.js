@@ -85,16 +85,16 @@ const deriveSnowProfile = ({
     !hasRainAccumulationSignal &&
     wetTrendHours === 0
   ) {
-    addReason('Freeze-thaw pattern supports spring-style corn cycles on solar aspects.');
+    addReason('Freeze-thaw pattern supports corn-snow cycles on solar aspects.');
     addReason(
       `${tempContextWindowHours || 24}h temperature swing (${Math.round(freezeThawMinTempF)}F to ${Math.round(
         freezeThawMaxTempF,
-      )}F) aligns with spring transition snow.`,
+      )}F) aligns with a spring corn-cycle pattern.`,
     );
     return {
       code: 'spring_snow',
-      label: '🌤️ Spring Snow',
-      summary: 'Freeze-thaw cycle indicates spring snow (corn window potential with rapid warming effects).',
+      label: '🌤️ Corn-Snow Cycle',
+      summary: 'Freeze-thaw cycle indicates a corn-snow window with rapid daytime softening potential.',
       confidence: 'medium',
       reasons: reasons.slice(0, 4),
     };
@@ -137,7 +137,7 @@ const deriveSnowProfile = ({
     };
   }
 
-  addReason('Snowpack signal exists, but no single fresh/icy/spring pattern dominates.');
+  addReason('Snowpack signal exists, but no single fresh/icy/corn-cycle pattern dominates.');
   return {
     code: 'mixed_snow',
     label: '❄️ Mixed Snow Surface',
@@ -323,9 +323,9 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       recommendedTravel = 'Expect slower travel and hidden obstacles under fresh snow; prioritize conservative terrain and spacing.';
     } else if (snowProfile.code === 'spring_snow') {
       code = 'spring_snow';
-      label = '🌤️ Spring Snow';
+      label = '🌤️ Corn-Snow Cycle';
       impact = 'moderate';
-      recommendedTravel = 'Time travel for supportive surface windows and expect rapid softening with daytime warming.';
+      recommendedTravel = 'Time travel for supportive corn windows and expect rapid softening with daytime warming.';
     } else if (snowProfile.code === 'wet_slushy_snow') {
       code = 'wet_snow';
       label = '💧 Wet / Slushy Snow';
@@ -374,7 +374,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       );
     }
     if (tempF !== null && tempF <= 34) {
-      addReason(`Temperature near ${Math.round(tempF)}F supports icy persistence.`, 1);
+      addReason(`Temperature near ${Math.round(tempF)}F supports firm/refrozen surface conditions.`, 1);
     }
   } else if (hasRainWeatherSignal || wetTrendHours >= 1 || hasRainAccumulationSignal || hasExpectedRainSignal) {
     code = 'wet_muddy';

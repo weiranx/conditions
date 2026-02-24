@@ -5994,6 +5994,22 @@ function App() {
               />
             </label>
 
+            <label className="date-control compact travel-window-control">
+              <span>Window (h)</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                aria-label="Travel window hours"
+                title="How many hours to evaluate from the selected start time."
+                min={MIN_TRAVEL_WINDOW_HOURS}
+                max={MAX_TRAVEL_WINDOW_HOURS}
+                step={1}
+                value={travelWindowHoursDraft}
+                onChange={handleTravelWindowHoursDraftChange}
+                onBlur={handleTravelWindowHoursDraftBlur}
+              />
+            </label>
+
             <button
               type="button"
               className="now-control-btn"
@@ -6299,9 +6315,6 @@ function App() {
                 feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
                 travelThresholdEditorOpen={travelThresholdEditorOpen}
                 setTravelThresholdEditorOpen={setTravelThresholdEditorOpen}
-                travelWindowHoursDraft={travelWindowHoursDraft}
-                handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
-                handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
                 windUnitLabel={windUnitLabel}
                 windThresholdMin={windThresholdMin}
                 windThresholdMax={windThresholdMax}

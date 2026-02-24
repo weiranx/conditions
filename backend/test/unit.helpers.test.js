@@ -734,7 +734,7 @@ test('deriveTerrainCondition identifies spring snow profile from freeze-thaw cyc
   );
 
   expect(condition.code).toBe('spring_snow');
-  expect(condition.label).toBe('🌤️ Spring Snow');
+  expect(condition.label).toBe('🌤️ Corn-Snow Cycle');
   expect(condition.snowProfile?.code).toBe('spring_snow');
 });
 
@@ -773,7 +773,7 @@ test('deriveTerrainCondition uses 24h local day/night temperature context for sp
   );
 
   expect(condition.snowProfile?.code).toBe('spring_snow');
-  expect(condition.label).toBe('🌤️ Spring Snow');
+  expect(condition.label).toBe('🌤️ Corn-Snow Cycle');
   expect(`${condition.reasons.join(' ')} ${condition.snowProfile?.reasons?.join(' ') || ''}`)
     .toMatch(/24h|24 hour|24-hour|next 24|next 24 hours|Freeze-thaw signal in next 24 hours/i);
 });

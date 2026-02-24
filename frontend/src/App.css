@@ -960,6 +960,12 @@ input {
   font-variant-numeric: tabular-nums;
 }
 
+.date-control input[type='number'] {
+  min-width: 76px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .date-control input[type='text'] {
   min-width: 108px;
 }
