@@ -50,6 +50,12 @@ export function SearchBox({
           type="text"
           placeholder="Search by peak, trailhead, zone, town, or coordinates"
           defaultValue={searchQuery}
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
           onChange={onInputChange}
           onFocus={onFocus}
           onKeyDown={onKeyDown}

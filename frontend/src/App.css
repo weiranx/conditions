@@ -725,6 +725,7 @@ input {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .header-nav-btn {
@@ -1068,6 +1069,7 @@ input {
   font-size: 0.84rem;
   font-weight: 600;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  touch-action: manipulation;
 }
 
 .action-btn:hover {
@@ -5413,7 +5415,7 @@ input {
 
 @media (max-width: 980px) {
   .app-container {
-    padding: 12px 10px 28px;
+    padding: 12px 10px calc(28px + env(safe-area-inset-bottom));
   }
 
   .home-hero {
@@ -5518,12 +5520,15 @@ input {
     min-width: 0;
     padding: 7px 9px;
     gap: 6px;
+    display: grid;
+    align-items: center;
   }
 
   .date-control input,
   .date-control select {
     width: 100%;
     min-width: 0;
+    min-height: 36px;
   }
 
   .map-actions-bottom {
@@ -5661,6 +5666,7 @@ input {
   .header-controls {
     width: 100%;
     flex-wrap: wrap;
+    gap: 10px;
   }
 
   .header-controls .search-wrapper {
@@ -5684,7 +5690,24 @@ input {
 
   .header-nav .secondary-btn {
     width: auto;
-    flex: 1 1 calc(33.333% - 6px);
+    flex: 0 0 auto;
+    min-width: 118px;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .header-nav {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .header-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .settings-shell {
@@ -5729,7 +5752,7 @@ input {
 
   .date-control {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .date-control.compact {
@@ -5765,10 +5788,21 @@ input {
   .map-link-group {
     width: 100%;
     display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .map-link-group::-webkit-scrollbar {
+    display: none;
   }
 
   .map-link-group .action-btn {
-    flex: 1;
+    flex: 0 0 auto;
+    min-width: 126px;
     justify-content: center;
   }
 
@@ -5946,7 +5980,7 @@ input {
 
 @media (max-width: 560px) {
   .app-container {
-    padding: 10px 8px 24px;
+    padding: 10px 8px calc(24px + env(safe-area-inset-bottom));
   }
 
   .home-actions .primary-btn,
@@ -5982,11 +6016,17 @@ input {
   }
 
   .header-nav > .secondary-btn {
-    flex: 1 1 100%;
+    flex: 0 0 auto;
   }
 
   .search-bar {
     padding: 8px 10px;
+    min-height: 46px;
+    gap: 7px;
+  }
+
+  .search-bar input {
+    font-size: 16px;
   }
 
   .search-go-btn {
@@ -6008,12 +6048,13 @@ input {
   }
 
   .map-link-group {
-    grid-template-columns: 1fr;
+    display: flex;
   }
 
   .date-control {
-    align-items: flex-start;
+    align-items: stretch;
     border-radius: 14px;
+    gap: 5px;
   }
 
   .date-control span {
@@ -6083,7 +6124,7 @@ input {
 
   .search-go-btn,
   .search-clear-btn {
-    min-height: 26px;
+    min-height: 30px;
   }
 
   .suggestions-list {
