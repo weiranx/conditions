@@ -280,6 +280,8 @@ export interface SafetyData {
   terrainCondition?: {
     code?: string;
     label?: string;
+    impact?: 'low' | 'moderate' | 'high' | string;
+    recommendedTravel?: string;
     snowProfile?: {
       code?: string;
       label?: string;
@@ -304,6 +306,8 @@ export interface SafetyData {
       snow12hIn?: number | null;
       snow24hIn?: number | null;
       snow48hIn?: number | null;
+      expectedRainWindowIn?: number | null;
+      expectedSnowWindowIn?: number | null;
       maxSnowDepthIn?: number | null;
       maxSweIn?: number | null;
       snotelDistanceKm?: number | null;

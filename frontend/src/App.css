@@ -1475,6 +1475,41 @@ input {
   margin-top: -4px;
 }
 
+.gear-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.gear-item {
+  padding: 10px 11px;
+  border-radius: 12px;
+  border: 1px solid #ddd8c8;
+  background: #f8f4e9;
+}
+
+.gear-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gear-item-title {
+  color: #2e4036;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.gear-item-detail {
+  margin: 6px 0 0;
+  color: #58645d;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .trail-badge {
   display: inline-flex;
   align-items: center;
@@ -4819,6 +4854,19 @@ input {
   color: #e2edf7;
 }
 
+:root[data-theme='dark'] .gear-item {
+  border-color: #355063;
+  background: #1a2a36;
+}
+
+:root[data-theme='dark'] .gear-item-title {
+  color: #e2edf7;
+}
+
+:root[data-theme='dark'] .gear-item-detail {
+  color: #b8cad8;
+}
+
 :root[data-theme='dark'] .decision-summary-item {
   border-color: #335066;
   background: #1a2b37;
@@ -6079,6 +6127,11 @@ input {
 
   .report-action-btn {
     flex: 1 1 100%;
+  }
+
+  .gear-item-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
 
   .travel-threshold-editor {

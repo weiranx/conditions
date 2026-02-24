@@ -410,8 +410,8 @@ test('buildLayeringGearSuggestions includes core layering framework and weather 
   });
 
   expect(suggestions.some((item) => item.includes('Layering core'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Weather shell'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Traction strategy'))).toBe(true);
+  expect(suggestions.some((item) => item.includes('Storm shell'))).toBe(true);
+  expect(suggestions.some((item) => /traction/i.test(item))).toBe(true);
 });
 
 test('buildLayeringGearSuggestions adds hazard-specific items when risk signals are present', () => {
@@ -434,7 +434,7 @@ test('buildLayeringGearSuggestions adds hazard-specific items when risk signals 
   expect(suggestions.some((item) => item.includes('Static insulation'))).toBe(true);
   expect(suggestions.some((item) => item.includes('Avalanche rescue kit'))).toBe(true);
   expect(suggestions.some((item) => item.includes('Air quality protection'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Comms and contingency'))).toBe(true);
+  expect(suggestions.some((item) => item.includes('Alerts contingency'))).toBe(true);
 });
 
 test('buildFireRiskData marks high risk for red flag warning', () => {
@@ -596,6 +596,59 @@ test('deriveTrailStatus marks wet surface from rolling rainfall totals', () => {
   expect(status).toBe('🌧️ Wet / Muddy');
 });
 
+test('deriveTerrainCondition identifies dry firm trail when no snow or wet signals are present', () => {
+  const condition = deriveTerrainCondition(
+    {
+      description: 'Sunny',
+      precipChance: 8,
+      humidity: 38,
+      temp: 61,
+      windSpeed: 6,
+      windGust: 10,
+      trend: [{ precipChance: 10, condition: 'Sunny', temp: 60 }],
+    },
+    {
+      snotel: { snowDepthIn: 0, sweIn: 0, distanceKm: 7 },
+      nohrsc: { snowDepthIn: 0, sweIn: 0 },
+    },
+    {
+      totals: { rainPast12hIn: 0, rainPast24hIn: 0, rainPast48hIn: 0, snowPast24hIn: 0 },
+      expected: { rainWindowIn: 0, snowWindowIn: 0, travelWindowHours: 12 },
+    },
+  );
+
+  expect(condition.code).toBe('dry_firm');
+  expect(condition.label).toBe('✅ Dry / Firm Trail');
+  expect(condition.impact).toBe('low');
+  expect(String(condition.recommendedTravel || '')).toMatch(/traction|favorable|pace/i);
+});
+
+test('deriveTerrainCondition uses expected travel-window precipitation for wet signal classification', () => {
+  const condition = deriveTerrainCondition(
+    {
+      description: 'Mostly Cloudy',
+      precipChance: 20,
+      humidity: 52,
+      temp: 47,
+      windSpeed: 7,
+      windGust: 12,
+      trend: [{ precipChance: 18, condition: 'Cloudy', temp: 46 }],
+    },
+    {
+      snotel: { snowDepthIn: 0, sweIn: 0, distanceKm: 9 },
+      nohrsc: { snowDepthIn: 0, sweIn: 0 },
+    },
+    {
+      totals: { rainPast12hIn: 0, rainPast24hIn: 0, rainPast48hIn: 0 },
+      expected: { rainWindowIn: 0.35, snowWindowIn: 0, travelWindowHours: 12 },
+    },
+  );
+
+  expect(condition.code).toBe('wet_muddy');
+  expect(condition.label).toBe('🌧️ Wet / Muddy');
+  expect(condition.reasons.join(' ')).toMatch(/Expected rain in next 12h is 0.35 in/i);
+});
+
 test('deriveTerrainCondition returns structured reasons and confidence for snow profile classification', () => {
   const condition = deriveTerrainCondition(
     {
@@ -721,7 +774,8 @@ test('deriveTerrainCondition uses 24h local day/night temperature context for sp
 
   expect(condition.snowProfile?.code).toBe('spring_snow');
   expect(condition.label).toBe('🌤️ Spring Snow');
-  expect(condition.reasons.join(' ')).toMatch(/24h|24 hour|24-hour|next 24|next 24 hours|Freeze-thaw signal in next 24 hours/i);
+  expect(`${condition.reasons.join(' ')} ${condition.snowProfile?.reasons?.join(' ') || ''}`)
+    .toMatch(/24h|24 hour|24-hour|next 24|next 24 hours|Freeze-thaw signal in next 24 hours/i);
 });
 
 test('deriveTerrainCondition marks weather unavailable when no usable signals exist', () => {

@@ -4261,6 +4261,8 @@ function App() {
               'Surface classification is based on weather, precipitation totals, trend, and snowpack observations.',
             reasons: Array.isArray(upstreamTerrain.reasons) ? upstreamTerrain.reasons.slice(0, 6) : [],
             confidence: upstreamTerrain.confidence || null,
+            impact: upstreamTerrain.impact || null,
+            recommendedTravel: upstreamTerrain.recommendedTravel || null,
             snowProfile,
           };
         }
@@ -4269,6 +4271,8 @@ function App() {
             'Surface classification is based on weather description, precip probability, rolling rain/snow totals, temperature trend, and available snowpack observations.',
           reasons: [] as string[],
           confidence: null as 'high' | 'medium' | 'low' | null,
+          impact: null as string | null,
+          recommendedTravel: null as string | null,
           snowProfile,
         };
       })()
@@ -4276,6 +4280,8 @@ function App() {
         summary: 'Surface classification unavailable until a forecast is loaded.',
         reasons: [] as string[],
         confidence: null as 'high' | 'medium' | 'low' | null,
+        impact: null as string | null,
+        recommendedTravel: null as string | null,
         snowProfile: null as { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null,
       };
   const terrainConditionPillClass = (() => {
@@ -4334,6 +4340,36 @@ function App() {
           ...(windLoadingHintsRelevant ? ['', `Wind loading hint: ${windLoadingSummary}`] : []),
         ].join('\n')
       : '';
+  const gearRecommendations = Array.isArray(safetyData?.gear)
+    ? safetyData.gear
+        .map((rawItem) => {
+          const text = String(rawItem || '').replace(/\s+/g, ' ').trim();
+          if (!text) {
+            return null;
+          }
+          const splitIdx = text.indexOf(':');
+          const hasReadablePrefix = splitIdx >= 2 && splitIdx <= 44;
+          const title = hasReadablePrefix ? text.slice(0, splitIdx).trim() : 'Gear note';
+          const detail = hasReadablePrefix ? text.slice(splitIdx + 1).trim() : text;
+          const combined = `${title} ${detail}`.toLowerCase();
+          const category = /avalanche|beacon|probe|shovel|alerts contingency|coverage gap|comms|communication/.test(combined)
+            ? 'Safety'
+            : /shell|rain|wet|snow|ice|mud|traction|gaiter|insulation|extremities|layer|wind/.test(combined)
+              ? 'Conditions'
+              : /aqi|air quality|heat|fire|sun/.test(combined)
+                ? 'Exposure'
+                : 'General';
+          const tone = /coverage gap|avalanche rescue|alerts contingency/.test(combined)
+            ? 'nogo'
+            : /storm shell|snow\/ice traction|cold extremities|static insulation/.test(combined)
+              ? 'caution'
+              : category === 'General'
+                ? 'watch'
+                : 'go';
+          return { title, detail, category, tone };
+        })
+        .filter((item): item is { title: string; detail: string; category: string; tone: string } => item !== null)
+    : [];
   const reportCardOrder = (() => {
     type SortableCardKey =
       | 'decisionGate'
@@ -4400,7 +4436,7 @@ function App() {
       Number.isFinite(Number(safetyData?.airQuality?.pm10));
     const sourceFreshnessAvailable = sourceFreshnessRows.length > 0;
     const scoreTraceAvailable = scoreFactors.length > 0 || Boolean(dayOverDay);
-    const gearAvailable = Array.isArray(safetyData?.gear) && safetyData.gear.length > 0;
+    const gearAvailable = gearRecommendations.length > 0;
     const planAvailable = Boolean(safetyData?.solar?.sunrise || safetyData?.solar?.sunset || safetyData?.forecast?.selectedDate);
     const alertsCardRelevant = true;
     const alertsList = safetyData?.alerts?.alerts || [];
@@ -5693,6 +5729,18 @@ function App() {
                   <span className={`decision-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
                 </div>
                 <p className="muted-note">{terrainConditionDetails.summary}</p>
+                {terrainConditionDetails.impact && (
+                  <p className="terrain-context-line">
+                    Operational impact:{' '}
+                    <strong>{terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'}</strong>
+                  </p>
+                )}
+                {terrainConditionDetails.recommendedTravel && (
+                  <div className="decision-action">
+                    <span className="decision-action-label">Recommended travel mode</span>
+                    <p>{terrainConditionDetails.recommendedTravel}</p>
+                  </div>
+                )}
                 {terrainConditionDetails.snowProfile && (
                   <>
                     <p className="terrain-context-line">
@@ -6356,12 +6404,23 @@ function App() {
                     <HelpHint text="Prioritized gear suggestions with plain-language reasons based on weather, precipitation, snowpack, avalanche relevance, alerts, air quality, and fire signals." />
                   </span>
                 </div>
-                {safetyData.gear && safetyData.gear.length > 0 ? (
-                  <ul className="signal-list compact">
-                    {safetyData.gear.map((item, idx) => (
-                      <li key={idx}>{item}</li>
-                    ))}
-                  </ul>
+                {gearRecommendations.length > 0 ? (
+                  <>
+                    <p className="muted-note">
+                      Prioritized for this objective/time. Handle safety-critical items first, then comfort and efficiency items.
+                    </p>
+                    <ul className="gear-list">
+                      {gearRecommendations.map((item, idx) => (
+                        <li key={`${item.title}-${idx}`} className="gear-item">
+                          <div className="gear-item-head">
+                            <strong className="gear-item-title">{item.title}</strong>
+                            <span className={`decision-pill ${item.tone}`}>{item.category}</span>
+                          </div>
+                          <p className="gear-item-detail">{item.detail}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 ) : (
                   <p className="muted-note">No special gear flags detected. Use your standard backcountry safety kit and expected seasonal layers.</p>
                 )}

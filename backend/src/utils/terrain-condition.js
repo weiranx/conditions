@@ -219,14 +219,21 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   const snow12hIn = toFinite(rainfallData?.totals?.snowPast12hIn);
   const snow24hIn = toFinite(rainfallData?.totals?.snowPast24hIn);
   const snow48hIn = toFinite(rainfallData?.totals?.snowPast48hIn);
+  const expectedRainWindowIn = toFinite(rainfallData?.expected?.rainWindowIn);
+  const expectedSnowWindowIn = toFinite(rainfallData?.expected?.snowWindowIn);
+  const expectedWindowHours = toFinite(rainfallData?.expected?.travelWindowHours);
   const hasRainAccumulationSignal =
     (rain12hIn !== null && rain12hIn >= 0.1) ||
     (rain24hIn !== null && rain24hIn >= 0.2) ||
     (rain48hIn !== null && rain48hIn >= 0.35);
+  const hasExpectedRainSignal =
+    (expectedRainWindowIn !== null && expectedRainWindowIn >= 0.2);
   const hasFreshSnowSignal =
     (snow12hIn !== null && snow12hIn >= 0.5) ||
     (snow24hIn !== null && snow24hIn >= 1.5) ||
     (snow48hIn !== null && snow48hIn >= 2.5);
+  const hasExpectedSnowSignal =
+    (expectedSnowWindowIn !== null && expectedSnowWindowIn >= 1.0);
   const hasFreezeThawSignal =
     (freezeThawMinTempF !== null && freezeThawMaxTempF !== null && freezeThawMinTempF <= 31 && freezeThawMaxTempF >= 35) ||
     (tempF !== null && tempF >= 30 && tempF <= 36 && precipChance !== null && precipChance >= 35);
@@ -235,6 +242,21 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     (precipChance === null || precipChance < 20) &&
     ((gustMph !== null && gustMph >= 25) || (windMph !== null && windMph >= 16));
   const weatherUnavailableSignal = !description || /weather data unavailable|weather unavailable|unavailable/.test(description);
+  const noBroadSnowSignal =
+    maxDepthIn !== null &&
+    maxSweIn !== null &&
+    maxDepthIn <= 1 &&
+    maxSweIn <= 0.25;
+  const noSnowOrWetSignal =
+    !hasSnowCoverage &&
+    !hasSnowWeatherSignal &&
+    !hasFreshSnowSignal &&
+    !hasExpectedSnowSignal &&
+    snowTrendHours === 0 &&
+    !hasRainWeatherSignal &&
+    !hasRainAccumulationSignal &&
+    !hasExpectedRainSignal &&
+    wetTrendHours === 0;
 
   const snowProfile = deriveSnowProfile({
     hasSnowCoverage,
@@ -255,6 +277,8 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
 
   let code = 'variable_surface';
   let label = '🌲 Variable Surface';
+  let impact = 'moderate';
+  let recommendedTravel = 'Use adaptable pacing and verify traction/footing at key transitions.';
   const reasons = [];
   let evidenceWeight = 0;
   const addReason = (reason, weight = 1) => {
@@ -268,28 +292,57 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   if (weatherUnavailableSignal && trend.length === 0 && maxDepthIn === null && maxSweIn === null && !hasRainAccumulationSignal && !hasFreshSnowSignal) {
     code = 'weather_unavailable';
     label = '⚠️ Weather Unavailable';
+    impact = 'moderate';
+    recommendedTravel = 'Treat this as unknown conditions; verify with official products and in-field checks before committing.';
     addReason('Weather feed is unavailable, so terrain classification confidence is limited.', 1);
+  } else if (
+    noSnowOrWetSignal &&
+    (precipChance === null || precipChance <= 25) &&
+    (humidity === null || humidity <= 75) &&
+    (tempF === null || tempF >= 35)
+  ) {
+    code = 'dry_firm';
+    label = '✅ Dry / Firm Trail';
+    impact = 'low';
+    recommendedTravel = 'Traction is generally favorable; maintain normal pacing and watch for isolated loose or rocky sections.';
+    addReason('No strong snow, rain, or freeze-thaw signal is present in recent/expected conditions.', 2);
+    if (precipChance !== null) {
+      addReason(`Low precipitation chance (${Math.round(precipChance)}%) supports drier surfaces.`, 1);
+    }
+    if (humidity !== null) {
+      addReason(`Humidity near ${Math.round(humidity)}% indicates limited moisture loading at the surface.`, 1);
+    }
+    if (noBroadSnowSignal) {
+      addReason('Snowpack observations remain near-zero, reducing broad snow-on-trail concerns.', 1);
+    }
   } else if (hasSnowCoverage || hasSnowWeatherSignal || hasFreshSnowSignal || snowTrendHours >= 2) {
     if (snowProfile.code === 'fresh_powder') {
       code = 'snow_fresh_powder';
       label = '❄️ Fresh Powder Snow';
+      impact = 'high';
+      recommendedTravel = 'Expect slower travel and hidden obstacles under fresh snow; prioritize conservative terrain and spacing.';
     } else if (snowProfile.code === 'spring_snow') {
       code = 'spring_snow';
       label = '🌤️ Spring Snow';
+      impact = 'moderate';
+      recommendedTravel = 'Time travel for supportive surface windows and expect rapid softening with daytime warming.';
     } else if (snowProfile.code === 'wet_slushy_snow') {
       code = 'wet_snow';
       label = '💧 Wet / Slushy Snow';
+      impact = 'high';
+      recommendedTravel = 'Expect deep/wet surface drag and unstable footing; shorten exposure and use lower-consequence terrain.';
     } else if (snowProfile.code === 'icy_hardpack') {
       code = 'snow_ice';
       label = '🧊 Icy / Firm Snow';
+      impact = 'high';
+      recommendedTravel = 'Use deliberate footwork on firm/icy surfaces and carry traction-compatible travel options.';
     } else {
       code = 'snow_ice';
       label = '❄️ Mixed Snow Surface';
+      impact = 'moderate';
+      recommendedTravel = 'Expect mixed firmness and moisture by aspect/elevation; reassess traction frequently.';
     }
     addReason(snowProfile.summary, 2);
-    if (Array.isArray(snowProfile.reasons) && snowProfile.reasons.length > 0) {
-      snowProfile.reasons.forEach((reason) => addReason(reason, 1));
-    }
     if (maxDepthIn !== null || maxSweIn !== null) {
       addReason(
         `Snowpack signal near objective: depth ${maxDepthIn !== null ? `${maxDepthIn.toFixed(1)} in` : 'N/A'}, SWE ${
@@ -306,6 +359,12 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
         2,
       );
     }
+    if (hasExpectedSnowSignal) {
+      addReason(
+        `Expected snowfall in the next ${Math.round(expectedWindowHours || 12)}h is ${expectedSnowWindowIn !== null ? `${expectedSnowWindowIn.toFixed(1)} in` : 'N/A'}.`,
+        1,
+      );
+    }
     if (hasSnowWeatherSignal || snowTrendHours > 0) {
       addReason(
         snowTrendHours > 0
@@ -317,15 +376,23 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     if (tempF !== null && tempF <= 34) {
       addReason(`Temperature near ${Math.round(tempF)}F supports icy persistence.`, 1);
     }
-  } else if (hasRainWeatherSignal || wetTrendHours >= 1 || hasRainAccumulationSignal) {
+  } else if (hasRainWeatherSignal || wetTrendHours >= 1 || hasRainAccumulationSignal || hasExpectedRainSignal) {
     code = 'wet_muddy';
     label = '🌧️ Wet / Muddy';
+    impact = 'moderate';
+    recommendedTravel = 'Expect slick or muddy footing; slow pace on steep/eroded trail sections and preserve traction margins.';
     if (hasRainAccumulationSignal) {
       addReason(
         `Recent rainfall: ${rain12hIn !== null ? `${rain12hIn.toFixed(2)} in` : 'N/A'} (12h), ${
           rain24hIn !== null ? `${rain24hIn.toFixed(2)} in` : 'N/A'
         } (24h), ${rain48hIn !== null ? `${rain48hIn.toFixed(2)} in` : 'N/A'} (48h).`,
         2,
+      );
+    }
+    if (hasExpectedRainSignal) {
+      addReason(
+        `Expected rain in next ${Math.round(expectedWindowHours || 12)}h is ${expectedRainWindowIn !== null ? `${expectedRainWindowIn.toFixed(2)} in` : 'N/A'}.`,
+        1,
       );
     }
     if (wetTrendHours > 0) {
@@ -337,6 +404,8 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   } else if (hasFreezeThawSignal || (tempF !== null && tempF <= 38 && precipChance !== null && precipChance >= 35)) {
     code = 'cold_slick';
     label = '🧊 Cold / Slick';
+    impact = 'moderate';
+    recommendedTravel = 'Expect patchy slick surfaces in shade and early hours; prioritize stable footing and conservative pace.';
     if (hasFreezeThawSignal && freezeThawMinTempF !== null && freezeThawMaxTempF !== null) {
       addReason(
         `Freeze-thaw signal in next ${Math.round(tempContextWindowHours)} hours (${Math.round(freezeThawMinTempF)}F to ${Math.round(
@@ -354,6 +423,8 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   } else if (hasDryWindySignal || (humidity !== null && humidity < 30 && (precipChance === null || precipChance < 20))) {
     code = 'dry_loose';
     label = '🌵 Dry / Loose';
+    impact = 'moderate';
+    recommendedTravel = 'Expect loose dust/gravel on hardpack; reduce speed on corners/descents and watch for slips.';
     if (humidity !== null) {
       addReason(`Low humidity (${Math.round(humidity)}%) supports loose/dry surface texture.`, 1);
     }
@@ -366,6 +437,8 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   } else {
     code = 'mixed_variable';
     label = '🌲 Variable Surface';
+    impact = 'moderate';
+    recommendedTravel = 'Surface may change quickly across aspect/elevation; check footing often and keep route options flexible.';
     addReason('No single dominant wet, snow/ice, or freeze-thaw signal in current upstream data.', 1);
     if (tempF !== null) {
       addReason(`Temperature ${Math.round(tempF)}F with ${precipChance !== null ? `${Math.round(precipChance)}%` : 'unknown'} precip chance supports mixed surface outcomes.`, 1);
@@ -384,6 +457,8 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   return {
     code,
     label,
+    impact,
+    recommendedTravel,
     snowProfile,
     confidence,
     summary,
@@ -402,6 +477,8 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       snow12hIn,
       snow24hIn,
       snow48hIn,
+      expectedRainWindowIn,
+      expectedSnowWindowIn,
       maxSnowDepthIn: maxDepthIn,
       maxSweIn,
       snotelDistanceKm,
