@@ -2041,6 +2041,12 @@ input {
   font-weight: 700;
 }
 
+.target-elev-input-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .target-elev-inline-control input {
   width: 100px;
   border: 1px solid #cdc7b6;
@@ -2052,6 +2058,33 @@ input {
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.03em;
+}
+
+.target-elev-step-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #cfc7b4;
+  border-radius: 999px;
+  background: #fbf8ef;
+  color: #2f3d35;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.target-elev-step-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.target-elev-step-btn:focus-visible {
+  border-color: #97b7a2;
+  box-shadow: 0 0 0 3px rgba(151, 183, 162, 0.22);
+  outline: none;
 }
 
 .target-elev-inline-control input:focus-visible {
@@ -4939,6 +4972,12 @@ input {
   color: #e2edf6;
 }
 
+:root[data-theme='dark'] .target-elev-step-btn {
+  border-color: #4a6378;
+  background: #223a4c;
+  color: #e2edf6;
+}
+
 :root[data-theme='dark'] .elevation-row-main strong {
   color: #dce8f2;
 }
@@ -6337,8 +6376,12 @@ input {
     justify-content: space-between;
   }
 
+  .target-elev-input-row {
+    margin-left: auto;
+  }
+
   .target-elev-inline-control input {
-    width: 120px;
+    width: 108px;
   }
 
   .danger-row {

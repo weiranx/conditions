@@ -143,6 +143,7 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
+const TARGET_ELEVATION_STEP_FEET = 1000;
 
 function buildSnowpackInterpretation(
   snowpack: SafetyData['snowpack'] | null | undefined,
@@ -2652,6 +2653,19 @@ function App() {
     setTargetElevationInput(digitsOnly);
     setTargetElevationManual(true);
   };
+  const handleTargetElevationStep = (deltaFeet: number) => {
+    const parsedDisplayValue = parseOptionalElevationInput(targetElevationInput);
+    const objectiveElevationFeet = Number(safetyData?.weather.elevation);
+    const baseFeet = parsedDisplayValue !== null
+      ? convertDisplayElevationToFeet(parsedDisplayValue, preferences.elevationUnit)
+      : Number.isFinite(objectiveElevationFeet)
+        ? objectiveElevationFeet
+        : 0;
+    const nextFeet = Math.max(0, Math.min(20000, Math.round(baseFeet + deltaFeet)));
+    const nextDisplayValue = Math.max(0, Math.round(convertElevationFeetToDisplayValue(nextFeet, preferences.elevationUnit)));
+    setTargetElevationInput(String(nextDisplayValue));
+    setTargetElevationManual(true);
+  };
 
   const handleCopyLink = async () => {
     if (typeof navigator === 'undefined' || !navigator.clipboard) {
@@ -3622,6 +3636,14 @@ function App() {
   const targetElevationFt =
     parsedTargetElevation === null ? Number.NaN : convertDisplayElevationToFeet(parsedTargetElevation, preferences.elevationUnit);
   const hasTargetElevation = Number.isFinite(targetElevationFt) && targetElevationFt >= 0;
+  const objectiveElevationFt = Number(safetyData?.weather.elevation);
+  const baseTargetElevationFeet =
+    hasTargetElevation
+      ? targetElevationFt
+      : Number.isFinite(objectiveElevationFt) && objectiveElevationFt >= 0
+        ? objectiveElevationFt
+        : 0;
+  const canDecreaseTargetElevation = baseTargetElevationFeet > 0;
   const windThresholdDisplay = formatWindDisplay(preferences.maxWindGustMph);
   const feelsLikeThresholdDisplay = formatTempDisplay(preferences.minFeelsLikeF);
   const travelWindowHoursLabel = `${travelWindowHours}h`;
@@ -6548,16 +6570,37 @@ function App() {
                     <h4>Target Elevation Forecast</h4>
                     <label className="target-elev-inline-control">
                       <span>Target ({elevationUnitLabel})</span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        aria-label={`Target elevation in ${elevationUnitLabel}`}
-                        title={`Optional elevation to estimate weather at that altitude (${elevationUnitLabel}).`}
-                        placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
-                        value={targetElevationInput}
-                        onChange={handleTargetElevationChange}
-                      />
+                      <div className="target-elev-input-row">
+                        <button
+                          type="button"
+                          className="target-elev-step-btn"
+                          onClick={() => handleTargetElevationStep(-TARGET_ELEVATION_STEP_FEET)}
+                          aria-label="Decrease target elevation by 1000 feet"
+                          title="Decrease by 1000 ft"
+                          disabled={!canDecreaseTargetElevation}
+                        >
+                          -
+                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          aria-label={`Target elevation in ${elevationUnitLabel}`}
+                          title={`Optional elevation to estimate weather at that altitude (${elevationUnitLabel}).`}
+                          placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
+                          value={targetElevationInput}
+                          onChange={handleTargetElevationChange}
+                        />
+                        <button
+                          type="button"
+                          className="target-elev-step-btn"
+                          onClick={() => handleTargetElevationStep(TARGET_ELEVATION_STEP_FEET)}
+                          aria-label="Increase target elevation by 1000 feet"
+                          title="Increase by 1000 ft"
+                        >
+                          +
+                        </button>
+                      </div>
                     </label>
                   </div>
                   {hasTargetElevation ? (
