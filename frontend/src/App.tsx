@@ -124,6 +124,7 @@ import {
   parseIsoDateToUtcMs,
   parseIsoToMs,
   parseOptionalFiniteNumber,
+  parseHourLabelToMinutes,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
   pickNewestIsoTimestamp,
@@ -2521,6 +2522,13 @@ function App() {
     setter(value);
   };
 
+  const handleWeatherHourSelect = (nextStartTime: string) => {
+    if (nextStartTime === alpineStartTime) {
+      return;
+    }
+    setAlpineStartTime(nextStartTime);
+  };
+
   const handleTargetElevationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/[^\d]/g, '').slice(0, 5);
     setTargetElevationInput(digitsOnly);
@@ -3731,6 +3739,34 @@ function App() {
   const forecastPeriodLabel = safetyData
     ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime || null, safetyData.weather.timezone || null)
     : 'Not available';
+  const weatherHourQuickOptions: Array<{ value: string; label: string; rawTime: string; tempLabel: string | null }> = [];
+  if (safetyData && Array.isArray(safetyData.weather.trend)) {
+    const seenStartTimes = new Set<string>();
+    for (const point of safetyData.weather.trend) {
+      const rawTime = String(point?.time || '').trim();
+      const parsedMinutes =
+        parseTimeInputMinutes(rawTime) ??
+        parseHourLabelToMinutes(rawTime) ??
+        parseSolarClockMinutes(rawTime || undefined);
+      if (parsedMinutes === null) {
+        continue;
+      }
+      const value = minutesToTwentyFourHourClock(parsedMinutes);
+      if (seenStartTimes.has(value)) {
+        continue;
+      }
+      seenStartTimes.add(value);
+      weatherHourQuickOptions.push({
+        value,
+        label: formatClockForStyle(value, preferences.timeStyle),
+        rawTime,
+        tempLabel: Number.isFinite(Number(point?.temp)) ? formatTempDisplay(Number(point?.temp)) : null,
+      });
+      if (weatherHourQuickOptions.length >= 12) {
+        break;
+      }
+    }
+  }
   const weatherWindDirectionLabel = normalizeWindHintDirection(safetyData?.weather.windDirection || null) || 'N/A';
   const weatherCloudCover = parseOptionalFiniteNumber(safetyData?.weather.cloudCover);
   const weatherCloudCoverLabel = Number.isFinite(weatherCloudCover)
@@ -5556,6 +5592,29 @@ function App() {
                   </div>
                 </div>
                 <p className="weather-period-line">Using forecast period: {forecastPeriodLabel}</p>
+                {weatherHourQuickOptions.length > 0 && (
+                  <div className="weather-hour-picker" role="group" aria-label="Quick forecast hour selector">
+                    <span className="weather-hour-picker-label">Jump to hour</span>
+                    <div className="weather-hour-chip-row">
+                      {weatherHourQuickOptions.map((option) => {
+                        const isActive = option.value === alpineStartTime;
+                        return (
+                          <button
+                            key={`weather-hour-${option.value}`}
+                            type="button"
+                            className={`weather-hour-chip ${isActive ? 'active' : ''}`}
+                            onClick={() => handleWeatherHourSelect(option.value)}
+                            aria-pressed={isActive}
+                            title={option.rawTime ? `Use ${option.rawTime} forecast hour` : `Use ${option.label} forecast hour`}
+                          >
+                            <span>{option.label}</span>
+                            {option.tempLabel && <small>{option.tempLabel}</small>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="weather-metrics">
                   <div className="metric-chip">
