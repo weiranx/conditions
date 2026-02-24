@@ -575,11 +575,10 @@ function currentLocalTimeInput(): string {
   return `${hh}:${mm}`;
 }
 
-function currentDateTimeInputs(timeZone?: string | null): { date: string; time: string } {
-  const now = new Date();
+function dateTimeInputsFor(instant: Date, timeZone?: string | null): { date: string; time: string } {
   const fallback = {
-    date: formatDateInput(now),
-    time: currentLocalTimeInput(),
+    date: formatDateInput(instant),
+    time: `${String(instant.getHours()).padStart(2, '0')}:${String(instant.getMinutes()).padStart(2, '0')}`,
   };
 
   if (!timeZone || typeof Intl === 'undefined') {
@@ -595,7 +594,8 @@ function currentDateTimeInputs(timeZone?: string | null): { date: string; time: 
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).formatToParts(now);
+      hourCycle: 'h23',
+    }).formatToParts(instant);
     const partMap = parts.reduce<Record<string, string>>((acc, part) => {
       if (part.type !== 'literal') {
         acc[part.type] = part.value;
@@ -603,9 +603,16 @@ function currentDateTimeInputs(timeZone?: string | null): { date: string; time: 
       return acc;
     }, {});
     if (partMap.year && partMap.month && partMap.day && partMap.hour && partMap.minute) {
+      const rawHour = Number(partMap.hour);
+      const rawMinute = Number(partMap.minute);
+      if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) {
+        return fallback;
+      }
+      const hour = ((Math.round(rawHour) % 24) + 24) % 24;
+      const minute = Math.max(0, Math.min(59, Math.round(rawMinute)));
       return {
         date: `${partMap.year}-${partMap.month}-${partMap.day}`,
-        time: `${partMap.hour}:${partMap.minute}`,
+        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
       };
     }
   } catch {
@@ -613,6 +620,10 @@ function currentDateTimeInputs(timeZone?: string | null): { date: string; time: 
   }
 
   return fallback;
+}
+
+function currentDateTimeInputs(timeZone?: string | null): { date: string; time: string } {
+  return dateTimeInputsFor(new Date(), timeZone);
 }
 
 function computeFeelsLikeF(tempF: number, windMph: number): number {
@@ -4418,13 +4429,17 @@ function App() {
   const timezoneMismatch = Boolean(objectiveTimezone && deviceTimezone && objectiveTimezone !== deviceTimezone);
   const handleUseNowConditions = () => {
     const nowInputs = currentDateTimeInputs(objectiveTimezone);
-    const nextDate = normalizeForecastDate(nowInputs.date, todayDate, maxForecastDate);
+    const objectiveToday = nowInputs.date;
+    const objectiveMaxDate = dateTimeInputsFor(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), objectiveTimezone).date;
+    const nextDate = normalizeForecastDate(nowInputs.date, objectiveToday, objectiveMaxDate);
+    const nextTime = parseTimeInputMinutes(nowInputs.time) === null ? preferences.defaultStartTime : nowInputs.time;
+
     setForecastDate(nextDate);
-    setAlpineStartTime(nowInputs.time);
+    setAlpineStartTime(nextTime);
     setError(null);
 
     if (hasObjective && view === 'planner') {
-      void fetchSafetyData(position.lat, position.lng, nextDate, nowInputs.time, { force: true });
+      void fetchSafetyData(position.lat, position.lng, nextDate, nextTime, { force: true });
     }
   };
   const alertsStatus = safetyData?.alerts?.status || null;
