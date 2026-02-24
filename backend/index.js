@@ -1670,22 +1670,22 @@ const sumRollingAccumulation = (timeArray, valuesArray, anchorMs, lookbackHours)
 
   const lowerBoundMs = anchorMs - lookbackHours * 60 * 60 * 1000;
   let total = 0;
-  let sampleCount = 0;
+  let windowSampleCount = 0;
 
   for (let idx = 0; idx < timeArray.length; idx += 1) {
     const sampleMs = parseIsoTimeToMs(timeArray[idx]);
     if (sampleMs === null || sampleMs > anchorMs || sampleMs <= lowerBoundMs) {
       continue;
     }
+    windowSampleCount += 1;
     const value = Number(valuesArray[idx]);
     if (!Number.isFinite(value) || value < 0) {
       continue;
     }
     total += value;
-    sampleCount += 1;
   }
 
-  return sampleCount > 0 ? Number(total.toFixed(1)) : null;
+  return windowSampleCount > 0 ? Number(total.toFixed(1)) : null;
 };
 
 const seriesHasFiniteValues = (series) => Array.isArray(series) && series.some((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
@@ -1697,22 +1697,22 @@ const sumForwardAccumulation = (timeArray, valuesArray, startMs, windowHours) =>
 
   const upperBoundMs = startMs + windowHours * 60 * 60 * 1000;
   let total = 0;
-  let sampleCount = 0;
+  let windowSampleCount = 0;
 
   for (let idx = 0; idx < timeArray.length; idx += 1) {
     const sampleMs = parseIsoTimeToMs(timeArray[idx]);
     if (sampleMs === null || sampleMs < startMs || sampleMs >= upperBoundMs) {
       continue;
     }
+    windowSampleCount += 1;
     const value = Number(valuesArray[idx]);
     if (!Number.isFinite(value) || value < 0) {
       continue;
     }
     total += value;
-    sampleCount += 1;
   }
 
-  return sampleCount > 0 ? Number(total.toFixed(1)) : null;
+  return windowSampleCount > 0 ? Number(total.toFixed(1)) : null;
 };
 
 const findFirstTimeIndexAtOrAfter = (timeArray, targetTimeMs) => {
@@ -1882,10 +1882,11 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
     snowPast24hCm,
     snowPast48hCm,
   ].some((value) => Number.isFinite(value));
+  const hasAnyPrecipSignal = hasAnyTotals || expectedHasAnyTotals;
 
   return {
     source: 'Open-Meteo Precipitation History (Rain + Snowfall)',
-    status: hasAnyTotals ? 'ok' : 'no_data',
+    status: hasAnyPrecipSignal ? 'ok' : 'no_data',
     mode,
     issuedTime: anchorTime,
     anchorTime,
@@ -1925,7 +1926,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
       past48hIn: mmToInches(rainPast48hMm),
     },
     note:
-      hasAnyTotals
+      hasAnyPrecipSignal
         ? mode === 'projected_for_selected_start'
           ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
           : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.'
