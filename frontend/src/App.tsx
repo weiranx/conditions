@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useTransition } from 'react';
-import { MapContainer, TileLayer, Marker, ScaleControl, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import {
@@ -42,6 +42,93 @@ import {
 import { SearchBox } from './components/planner/SearchBox';
 import { ForecastLoading } from './components/planner/ForecastLoading';
 import {
+  APP_CREDIT_TEXT,
+  BACKEND_WAKE_NOTICE_DELAY_MS,
+  BACKEND_WAKE_RETRY_DELAY_MS,
+  BACKEND_WAKE_RETRY_MAX_ATTEMPTS,
+  DATE_FMT,
+  DEFAULT_CENTER,
+  GUST_INCREASE_MPH_PER_1000FT,
+  LEGACY_DEFAULT_START_TIME,
+  MAP_STYLE_OPTIONS,
+  MAX_TRAVEL_WINDOW_HOURS,
+  MIN_TRAVEL_WINDOW_HOURS,
+  SEARCH_DEBOUNCE_MS,
+  TEMP_LAPSE_F_PER_1000FT,
+  USER_PREFERENCES_KEY,
+  WIND_INCREASE_MPH_PER_1000FT,
+} from './app/constants';
+import {
+  type ActivityType,
+  type CriticalRiskLevel,
+  type DayOverDayComparison,
+  type DecisionLevel,
+  type ElevationUnit,
+  type HealthCheckResult,
+  type LinkState,
+  type MapStyle,
+  type SafetyData,
+  type SnowpackInsightBadge,
+  type SnowpackInterpretation,
+  type SnowpackSnapshotInsights,
+  type SummitDecision,
+  type TemperatureUnit,
+  type ThemeMode,
+  type TimeStyle,
+  type TravelWindowInsights,
+  type TravelWindowRow,
+  type TravelWindowSpan,
+  type UserPreferences,
+  type WeatherTrendPoint,
+  type WindSpeedUnit,
+} from './app/types';
+import { AppDisclaimer, LocationMarker, MapUpdater } from './app/map-components';
+import {
+  addDaysToIsoDate,
+  classifySnowpackFreshness,
+  convertDisplayElevationToFeet,
+  convertDisplayTempToF,
+  convertDisplayWindToMph,
+  convertElevationFeetToDisplayValue,
+  convertTempFToDisplayValue,
+  convertWindMphToDisplayValue,
+  formatAgeFromNow,
+  formatClockForStyle,
+  formatCompactAge,
+  formatDateInput,
+  formatDistanceForElevationUnit,
+  formatElevationDeltaForUnit,
+  formatElevationForUnit,
+  formatMinutesRelativeToSunset,
+  formatRainAmountForElevationUnit,
+  formatSnowDepthForElevationUnit,
+  formatSnowfallAmountForElevationUnit,
+  formatSweForElevationUnit,
+  formatTemperatureForUnit,
+  formatWindForUnit,
+  freshnessClass,
+  isTravelWindowCoveredByAlertWindow,
+  isValidLatLon,
+  minutesToTwentyFourHourClock,
+  normalizeActivity,
+  normalizeElevationUnit,
+  normalizeForecastDate,
+  normalizeTemperatureUnit,
+  normalizeThemeMode,
+  normalizeTimeOrFallback,
+  normalizeTimeStyle,
+  normalizeWindSpeedUnit,
+  parseCoordinates,
+  parseIsoDateToUtcMs,
+  parseIsoToMs,
+  parseOptionalFiniteNumber,
+  parseSolarClockMinutes,
+  parseTimeInputMinutes,
+  pickNewestIsoTimestamp,
+  pickOldestIsoTimestamp,
+  resolveSelectedTravelWindowMs,
+} from './app/core';
+import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
   windDirectionToDegrees,
@@ -56,1003 +143,6 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
-
-const DATE_FMT = /^\d{4}-\d{2}-\d{2}$/;
-const DEFAULT_CENTER = new L.LatLng(39.8283, -98.5795);
-const USER_PREFERENCES_KEY = 'summitsafe:user-preferences:v1';
-const LEGACY_DEFAULT_START_TIME = '04:30';
-const TEMP_LAPSE_F_PER_1000FT = 3.3;
-const WIND_INCREASE_MPH_PER_1000FT = 2;
-const GUST_INCREASE_MPH_PER_1000FT = 2.5;
-const MIN_TRAVEL_WINDOW_HOURS = 4;
-const MAX_TRAVEL_WINDOW_HOURS = 12;
-const SEARCH_DEBOUNCE_MS = 180;
-const BACKEND_WAKE_NOTICE_DELAY_MS = 1400;
-const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
-const BACKEND_WAKE_RETRY_MAX_ATTEMPTS = 24;
-const APP_DISCLAIMER_TEXT =
-  'Backcountry Conditions is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or wrong. Verify official weather, avalanche, fire, and land-management products, then make final decisions from field observations and team judgment.';
-const APP_CREDIT_TEXT = 'Built by Weiran Xiong with AI support.';
-
-type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
-type ActivityType = 'backcountry';
-type ThemeMode = 'system' | 'light' | 'dark';
-type MapStyle = 'topo' | 'street';
-type TemperatureUnit = 'f' | 'c';
-type ElevationUnit = 'ft' | 'm';
-type WindSpeedUnit = 'mph' | 'kph';
-type TimeStyle = 'ampm' | '24h';
-
-const FT_PER_METER = 3.28084;
-const METER_PER_FOOT = 1 / FT_PER_METER;
-const KPH_PER_MPH = 1.60934;
-const MM_PER_INCH = 25.4;
-const CM_PER_INCH = 2.54;
-const KM_PER_MILE = 1.60934;
-
-const MAP_STYLE_OPTIONS: Record<MapStyle, { label: string; url: string; attribution: string }> = {
-  topo: {
-    label: 'Terrain',
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors, SRTM | style: OpenTopoMap (CC-BY-SA)',
-  },
-  street: {
-    label: 'Street',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors',
-  },
-};
-
-function normalizeActivity(rawActivity: string | null): ActivityType {
-  if (!rawActivity) {
-    return 'backcountry';
-  }
-
-  const cleaned = rawActivity.trim().toLowerCase();
-  if (cleaned === 'backcountry' || cleaned === 'general') {
-    return 'backcountry';
-  }
-  if (cleaned === 'mountaineer' || cleaned === 'hiker' || cleaned === 'hiking' || cleaned === 'trail_runner' || cleaned === 'trail-runner' || cleaned === 'runner') {
-    return 'backcountry';
-  }
-  return 'backcountry';
-}
-
-interface AvalancheElevationBand {
-  level?: number;
-  label?: string;
-}
-
-interface AvalancheProblem {
-  id?: number;
-  name?: string;
-  likelihood?: string;
-  size?: Array<string | number> | string | number;
-  location?: string[] | string | Record<string, unknown>;
-  discussion?: string;
-  problem_description?: string;
-  icon?: string;
-}
-
-interface WeatherTrendPoint {
-  time: string;
-  temp: number;
-  wind: number;
-  gust: number;
-  windDirection?: string | null;
-  precipChance?: number;
-  condition: string;
-}
-
-interface ElevationForecastBand {
-  label: string;
-  elevationFt: number;
-  deltaFromObjectiveFt: number;
-  temp: number;
-  feelsLike: number;
-  windSpeed: number;
-  windGust: number;
-}
-
-interface SafetyData {
-  generatedAt?: string;
-  location: { lat: number; lon: number };
-  forecast?: {
-    selectedDate?: string;
-    selectedStartTime?: string;
-    selectedEndTime?: string;
-    isFuture?: boolean;
-    availableRange?: { start?: string; end?: string };
-  };
-  weather: {
-    temp: number;
-    feelsLike?: number;
-    dewPoint?: number | null;
-    description: string;
-    windSpeed: number;
-    windGust: number;
-    windDirection?: string | null;
-    humidity: number;
-    cloudCover: number;
-    precipChance: number;
-    isDaytime?: boolean | null;
-    forecastLink?: string;
-    issuedTime?: string;
-    generatedTime?: string | null;
-    timezone?: string | null;
-    forecastStartTime?: string;
-    forecastEndTime?: string;
-    forecastDate?: string;
-    trend?: WeatherTrendPoint[];
-    elevation?: number | null;
-    elevationUnit?: string;
-    elevationSource?: string;
-    elevationForecast?: ElevationForecastBand[];
-    elevationForecastNote?: string;
-    sourceDetails?: {
-      primary?: string;
-      blended?: boolean;
-      supplementalSources?: string[];
-      fieldSources?: Record<string, string>;
-    };
-  };
-  solar: { sunrise: string; sunset: string; dayLength: string };
-  avalanche: {
-    risk: string;
-    dangerLevel: number;
-    dangerUnknown?: boolean;
-    relevant?: boolean;
-    relevanceReason?: string;
-    coverageStatus?: 'reported' | 'no_center_coverage' | 'temporarily_unavailable' | 'no_active_forecast' | 'expired_for_selected_start';
-    center?: string;
-    zone?: string;
-    problems?: AvalancheProblem[];
-    bottomLine?: string;
-    advice?: string;
-    link?: string;
-    elevations?: {
-      below?: AvalancheElevationBand;
-      at?: AvalancheElevationBand;
-      above?: AvalancheElevationBand;
-    };
-    publishedTime?: string;
-    expiresTime?: string;
-    generatedTime?: string | null;
-  };
-  alerts?: {
-    source?: string;
-    status?: string;
-    activeCount?: number;
-    totalActiveCount?: number;
-    targetTime?: string | null;
-    highestSeverity?: string;
-    alerts?: Array<{
-      event?: string;
-      severity?: string;
-      urgency?: string;
-      certainty?: string;
-      headline?: string;
-      description?: string | null;
-      instruction?: string | null;
-      areaDesc?: string | null;
-      affectedAreas?: string[];
-      senderName?: string | null;
-      response?: string | null;
-      messageType?: string | null;
-      category?: string | null;
-      sent?: string | null;
-      onset?: string | null;
-      ends?: string | null;
-      effective?: string | null;
-      expires?: string | null;
-      link?: string | null;
-    }>;
-    note?: string | null;
-    generatedTime?: string | null;
-  };
-  airQuality?: {
-    source?: string;
-    status?: string;
-    usAqi?: number | null;
-    category?: string;
-    pm25?: number | null;
-    pm10?: number | null;
-    ozone?: number | null;
-    measuredTime?: string | null;
-    generatedTime?: string | null;
-  };
-  rainfall?: {
-    source?: string;
-    status?: string;
-    mode?: 'observed_recent' | 'projected_for_selected_start';
-    issuedTime?: string | null;
-    anchorTime?: string | null;
-    timezone?: string | null;
-    expected?: {
-      status?: string;
-      travelWindowHours?: number | null;
-      startTime?: string | null;
-      endTime?: string | null;
-      rainWindowMm?: number | null;
-      rainWindowIn?: number | null;
-      snowWindowCm?: number | null;
-      snowWindowIn?: number | null;
-      note?: string | null;
-    };
-    totals?: {
-      rainPast12hMm?: number | null;
-      rainPast24hMm?: number | null;
-      rainPast48hMm?: number | null;
-      rainPast12hIn?: number | null;
-      rainPast24hIn?: number | null;
-      rainPast48hIn?: number | null;
-      snowPast12hCm?: number | null;
-      snowPast24hCm?: number | null;
-      snowPast48hCm?: number | null;
-      snowPast12hIn?: number | null;
-      snowPast24hIn?: number | null;
-      snowPast48hIn?: number | null;
-      past12hMm?: number | null;
-      past24hMm?: number | null;
-      past48hMm?: number | null;
-      past12hIn?: number | null;
-      past24hIn?: number | null;
-      past48hIn?: number | null;
-    };
-    note?: string | null;
-    link?: string | null;
-    generatedTime?: string | null;
-  };
-  snowpack?: {
-    source?: string;
-    status?: string;
-    summary?: string;
-    snotel?: {
-      source?: string;
-      status?: string;
-      stationTriplet?: string;
-      stationId?: string | null;
-      stationName?: string;
-      networkCode?: string | null;
-      stateCode?: string | null;
-      distanceKm?: number | null;
-      elevationFt?: number | null;
-      observedDate?: string | null;
-      snowDepthIn?: number | null;
-      sweIn?: number | null;
-      precipIn?: number | null;
-      obsTempF?: number | null;
-      link?: string | null;
-      note?: string | null;
-    } | null;
-    nohrsc?: {
-      source?: string;
-      status?: string;
-      sampledTime?: string | null;
-      snowDepthIn?: number | null;
-      sweIn?: number | null;
-      depthMeters?: number | null;
-      sweMillimeters?: number | null;
-      depthDataset?: string | null;
-      sweDataset?: string | null;
-      link?: string | null;
-      note?: string | null;
-    } | null;
-    generatedTime?: string | null;
-  };
-  fireRisk?: {
-    source?: string;
-    status?: string;
-    level?: number;
-    label?: string;
-    guidance?: string;
-    reasons?: string[];
-    alertsUsed?: number;
-    alertsConsidered?: Array<{
-      event?: string;
-      severity?: string;
-      expires?: string | null;
-      link?: string | null;
-    }>;
-  };
-  heatRisk?: {
-    source?: string;
-    status?: string;
-    level?: number;
-    label?: string;
-    guidance?: string;
-    reasons?: string[];
-    metrics?: {
-      tempF?: number | null;
-      feelsLikeF?: number | null;
-      humidity?: number | null;
-      peakTemp12hF?: number | null;
-      peakFeelsLike12hF?: number | null;
-      lowerTerrainTempF?: number | null;
-      lowerTerrainFeelsLikeF?: number | null;
-      lowerTerrainLabel?: string | null;
-      lowerTerrainElevationFt?: number | null;
-      isDaytime?: boolean | null;
-    };
-    generatedTime?: string | null;
-  };
-  gear?: string[];
-  trail?: string;
-  terrainCondition?: {
-    code?: string;
-    label?: string;
-    confidence?: 'high' | 'medium' | 'low';
-    summary?: string;
-    reasons?: string[];
-    signals?: {
-      tempF?: number | null;
-      precipChance?: number | null;
-      humidity?: number | null;
-      windMph?: number | null;
-      gustMph?: number | null;
-      wetTrendHours?: number | null;
-      snowTrendHours?: number | null;
-      rain12hIn?: number | null;
-      rain24hIn?: number | null;
-      rain48hIn?: number | null;
-      snow12hIn?: number | null;
-      snow24hIn?: number | null;
-      snow48hIn?: number | null;
-      maxSnowDepthIn?: number | null;
-      maxSweIn?: number | null;
-      snotelDistanceKm?: number | null;
-    };
-  };
-  safety: {
-    score: number;
-    confidence?: number;
-    primaryHazard: string;
-    explanations: string[];
-    sourcesUsed?: string[];
-    factors?: Array<{ hazard?: string; impact?: number; source?: string; message?: string }>;
-    groupImpacts?: Record<string, { raw?: number; capped?: number; cap?: number }>;
-    confidenceReasons?: string[];
-    airQualityCategory?: string;
-  };
-  aiAnalysis: string;
-}
-
-interface SummitDecision {
-  level: DecisionLevel;
-  headline: string;
-  blockers: string[];
-  cautions: string[];
-  checks: { key?: string; label: string; ok: boolean; detail?: string; action?: string }[];
-}
-
-type NwsAlertItem = NonNullable<NonNullable<SafetyData['alerts']>['alerts']>[number];
-
-interface SnowpackInterpretation {
-  headline: string;
-  confidence: 'solid' | 'watch' | 'low';
-  bullets: string[];
-}
-
-interface SnowpackInsightBadge {
-  label: string;
-  detail: string;
-  tone: 'good' | 'watch' | 'warn';
-}
-
-interface SnowpackSnapshotInsights {
-  signal: SnowpackInsightBadge;
-  freshness: SnowpackInsightBadge;
-  representativeness: SnowpackInsightBadge;
-  agreement: SnowpackInsightBadge;
-}
-
-interface LinkState {
-  view: 'home' | 'planner' | 'settings' | 'status';
-  activity: ActivityType;
-  position: L.LatLng;
-  hasObjective: boolean;
-  objectiveName: string;
-  searchQuery: string;
-  forecastDate: string;
-  alpineStartTime: string;
-  turnaroundTime: string;
-  targetElevationInput: string;
-}
-
-interface UserPreferences {
-  defaultActivity: ActivityType;
-  defaultStartTime: string;
-  defaultBackByTime: string;
-  themeMode: ThemeMode;
-  temperatureUnit: TemperatureUnit;
-  elevationUnit: ElevationUnit;
-  windSpeedUnit: WindSpeedUnit;
-  timeStyle: TimeStyle;
-  maxWindGustMph: number;
-  maxPrecipChance: number;
-  minFeelsLikeF: number;
-  travelWindowHours: number;
-}
-
-function formatDateInput(date: Date): string {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function addDaysToIsoDate(dateStr: string, days: number): string {
-  const parsed = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) {
-    return dateStr;
-  }
-  parsed.setDate(parsed.getDate() + days);
-  return formatDateInput(parsed);
-}
-
-function parseIsoToMs(value: string | null | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00Z` : trimmed;
-  const ms = Date.parse(normalized);
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function pickOldestIsoTimestamp(values: Array<string | null | undefined>): string | null {
-  let pickedValue: string | null = null;
-  let pickedMs = Number.POSITIVE_INFINITY;
-  values.forEach((value) => {
-    const ms = parseIsoToMs(value);
-    if (ms === null) {
-      return;
-    }
-    if (ms < pickedMs) {
-      pickedMs = ms;
-      pickedValue = value || null;
-    }
-  });
-  return pickedValue;
-}
-
-function pickNewestIsoTimestamp(values: Array<string | null | undefined>): string | null {
-  let pickedValue: string | null = null;
-  let pickedMs = Number.NEGATIVE_INFINITY;
-  values.forEach((value) => {
-    const ms = parseIsoToMs(value);
-    if (ms === null) {
-      return;
-    }
-    if (ms > pickedMs) {
-      pickedMs = ms;
-      pickedValue = value || null;
-    }
-  });
-  return pickedValue;
-}
-
-function formatAgeFromNow(value: string | null | undefined): string {
-  const ms = parseIsoToMs(value);
-  if (ms === null) {
-    return 'Unavailable';
-  }
-  const ageMinutes = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (ageMinutes < 60) {
-    return `${ageMinutes}m ago`;
-  }
-  const hours = Math.floor(ageMinutes / 60);
-  const minutes = ageMinutes % 60;
-  return minutes === 0 ? `${hours}h ago` : `${hours}h ${minutes}m ago`;
-}
-
-type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';
-
-function freshnessClass(value: string | null | undefined, staleHours: number): FreshnessState {
-  const ms = parseIsoToMs(value);
-  if (ms === null) {
-    return 'missing';
-  }
-  const ageHours = (Date.now() - ms) / 3600000;
-  if (ageHours <= staleHours * 0.5) {
-    return 'fresh';
-  }
-  if (ageHours <= staleHours) {
-    return 'aging';
-  }
-  return 'stale';
-}
-
-function classifySnowpackFreshness(
-  snotelObservedDate: string | null | undefined,
-  nohrscSampledTime: string | null | undefined,
-): {
-  state: FreshnessState;
-  referenceTimestamp: string | null;
-  displayValue: string;
-} {
-  const snotelMs = parseIsoToMs(snotelObservedDate);
-  const nohrscMs = parseIsoToMs(nohrscSampledTime);
-  const snotelAgeHours = snotelMs === null ? null : (Date.now() - snotelMs) / 3600000;
-  const nohrscAgeHours = nohrscMs === null ? null : (Date.now() - nohrscMs) / 3600000;
-
-  const classifyByAge = (ageHours: number | null, freshHours: number, agingHours: number): FreshnessState => {
-    if (ageHours === null) return 'missing';
-    if (ageHours <= freshHours) return 'fresh';
-    if (ageHours <= agingHours) return 'aging';
-    return 'stale';
-  };
-
-  const snotelState = classifyByAge(snotelAgeHours, 60, 120);
-  const nohrscState = classifyByAge(nohrscAgeHours, 8, 24);
-  const states = [snotelState, nohrscState].filter((state) => state !== 'missing');
-
-  const state: FreshnessState = (() => {
-    if (states.length === 0) return 'missing';
-    if (!states.includes('stale')) {
-      if (states.includes('aging')) return 'aging';
-      return 'fresh';
-    }
-    if (states.includes('fresh') || states.includes('aging')) {
-      return 'aging';
-    }
-    return 'stale';
-  })();
-
-  const snotelAgeLabel = formatCompactAge(snotelObservedDate);
-  const nohrscAgeLabel = formatCompactAge(nohrscSampledTime);
-  const detailParts = [nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null, snotelAgeLabel ? `SNOTEL ${snotelAgeLabel}` : null].filter(Boolean);
-  const displayValue = detailParts.length > 0 ? detailParts.join(' • ') : 'Unavailable';
-  const referenceTimestamp = pickNewestIsoTimestamp([nohrscSampledTime || null, snotelObservedDate || null]);
-
-  return { state, referenceTimestamp, displayValue };
-}
-
-function resolveSelectedTravelWindowMs(data: SafetyData | null | undefined, fallbackTravelWindowHours: number): { startMs: number; endMs: number } | null {
-  if (!data) {
-    return null;
-  }
-  const startMs = parseIsoToMs(data.weather?.forecastStartTime || data.forecast?.selectedStartTime || null);
-  if (startMs === null) {
-    return null;
-  }
-  const fallbackDurationMs = Math.max(1, Math.round(Number(fallbackTravelWindowHours) || 12)) * 3600000;
-  const explicitEndMs = parseIsoToMs(data.forecast?.selectedEndTime || data.weather?.forecastEndTime || null);
-  const endMs = explicitEndMs !== null && explicitEndMs > startMs ? explicitEndMs : startMs + fallbackDurationMs;
-  return { startMs, endMs };
-}
-
-function isTravelWindowCoveredByAlertWindow(window: { startMs: number; endMs: number } | null, alerts: NwsAlertItem[] | null | undefined): boolean {
-  if (!window || !Array.isArray(alerts) || alerts.length === 0) {
-    return false;
-  }
-  return alerts.some((alert) => {
-    const alertStartMs = parseIsoToMs(alert.onset || alert.effective || alert.sent || null);
-    const alertEndMs = parseIsoToMs(alert.ends || alert.expires || null);
-    if (alertStartMs === null && alertEndMs === null) {
-      return false;
-    }
-    const normalizedStartMs = alertStartMs ?? Number.NEGATIVE_INFINITY;
-    const normalizedEndMs = alertEndMs ?? Number.POSITIVE_INFINITY;
-    if (normalizedEndMs <= normalizedStartMs) {
-      return false;
-    }
-    return window.startMs >= normalizedStartMs && window.endMs <= normalizedEndMs;
-  });
-}
-
-function parseCoordinates(input: string): { lat: number; lon: number } | null {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const coordinateMatch =
-    trimmed.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/) ||
-    trimmed.match(/^(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)$/);
-  if (!coordinateMatch) return null;
-
-  const lat = parseFloat(coordinateMatch[1]);
-  const lon = parseFloat(coordinateMatch[2]);
-
-  if (Number.isNaN(lat) || Number.isNaN(lon)) {
-    return null;
-  }
-
-  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-    return null;
-  }
-
-  return { lat, lon };
-}
-
-function parseTimeInputMinutes(value: string): number | null {
-  const trimmed = value.trim();
-  const twentyFourHourMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/);
-  if (twentyFourHourMatch) {
-    const hour = parseInt(twentyFourHourMatch[1], 10);
-    const minute = parseInt(twentyFourHourMatch[2], 10);
-
-    if (Number.isNaN(hour) || Number.isNaN(minute) || hour > 23 || minute > 59) {
-      return null;
-    }
-
-    return hour * 60 + minute;
-  }
-
-  const amPmMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!amPmMatch) {
-    return null;
-  }
-
-  const hour12 = parseInt(amPmMatch[1], 10);
-  const minute = parseInt(amPmMatch[2], 10);
-  const meridiem = amPmMatch[3].toUpperCase();
-
-  if (Number.isNaN(hour12) || Number.isNaN(minute) || hour12 < 1 || hour12 > 12 || minute > 59) {
-    return null;
-  }
-
-  const hour24 = meridiem === 'PM' ? (hour12 % 12) + 12 : hour12 % 12;
-  return hour24 * 60 + minute;
-}
-
-function minutesToTwentyFourHourClock(minutes: number): string {
-  const clamped = Math.max(0, Math.min(1439, Math.round(minutes)));
-  const hour24 = Math.floor(clamped / 60);
-  const minute = clamped % 60;
-  return `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-}
-
-function formatClockAmPm(value: string | null | undefined): string {
-  if (!value) {
-    return 'N/A';
-  }
-  const minutes = parseTimeInputMinutes(value);
-  if (minutes === null) {
-    return value;
-  }
-  const hour24 = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const ampm = hour24 >= 12 ? 'PM' : 'AM';
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`;
-}
-
-function formatClockForStyle(value: string | null | undefined, style: TimeStyle): string {
-  let minutes = parseTimeInputMinutes(value || '');
-  if (minutes === null) {
-    minutes = parseHourLabelToMinutes(value || '');
-  }
-  if (minutes === null) {
-    minutes = parseSolarClockMinutes(value || undefined);
-  }
-  if (minutes === null) {
-    return value || 'N/A';
-  }
-  if (style === '24h') {
-    return minutesToTwentyFourHourClock(minutes);
-  }
-  return formatClockAmPm(minutesToTwentyFourHourClock(minutes));
-}
-
-function convertTempFToDisplayValue(tempF: number, unit: TemperatureUnit): number {
-  if (!Number.isFinite(tempF)) {
-    return tempF;
-  }
-  if (unit === 'c') {
-    return (tempF - 32) * (5 / 9);
-  }
-  return tempF;
-}
-
-function convertDisplayTempToF(value: number, unit: TemperatureUnit): number {
-  if (!Number.isFinite(value)) {
-    return value;
-  }
-  if (unit === 'c') {
-    return value * (9 / 5) + 32;
-  }
-  return value;
-}
-
-function convertWindMphToDisplayValue(mph: number, unit: WindSpeedUnit): number {
-  if (!Number.isFinite(mph)) {
-    return mph;
-  }
-  if (unit === 'kph') {
-    return mph * KPH_PER_MPH;
-  }
-  return mph;
-}
-
-function convertDisplayWindToMph(value: number, unit: WindSpeedUnit): number {
-  if (!Number.isFinite(value)) {
-    return value;
-  }
-  if (unit === 'kph') {
-    return value / KPH_PER_MPH;
-  }
-  return value;
-}
-
-function convertElevationFeetToDisplayValue(feet: number, unit: ElevationUnit): number {
-  if (!Number.isFinite(feet)) {
-    return feet;
-  }
-  if (unit === 'm') {
-    return feet * METER_PER_FOOT;
-  }
-  return feet;
-}
-
-function convertDisplayElevationToFeet(value: number, unit: ElevationUnit): number {
-  if (!Number.isFinite(value)) {
-    return value;
-  }
-  if (unit === 'm') {
-    return value * FT_PER_METER;
-  }
-  return value;
-}
-
-function formatTemperatureForUnit(
-  tempF: number | null | undefined,
-  unit: TemperatureUnit,
-  options?: { includeUnit?: boolean; precision?: number },
-): string {
-  const numericValue = typeof tempF === 'number' ? tempF : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return 'N/A';
-  }
-  const precision = options?.precision ?? 0;
-  const value = convertTempFToDisplayValue(numericValue, unit);
-  const rounded = precision > 0 ? value.toFixed(precision) : String(Math.round(value));
-  if (options?.includeUnit === false) {
-    return `${rounded}°`;
-  }
-  return `${rounded}°${unit.toUpperCase()}`;
-}
-
-function formatWindForUnit(
-  windMph: number | null | undefined,
-  unit: WindSpeedUnit,
-  options?: { includeUnit?: boolean; precision?: number },
-): string {
-  const numericValue = typeof windMph === 'number' ? windMph : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return 'N/A';
-  }
-  const precision = options?.precision ?? 0;
-  const value = convertWindMphToDisplayValue(numericValue, unit);
-  const rounded = precision > 0 ? value.toFixed(precision) : String(Math.round(value));
-  if (options?.includeUnit === false) {
-    return rounded;
-  }
-  return `${rounded} ${unit}`;
-}
-
-function formatElevationForUnit(
-  elevationFt: number | null | undefined,
-  unit: ElevationUnit,
-  options?: { includeUnit?: boolean; precision?: number },
-): string {
-  const numericValue = typeof elevationFt === 'number' ? elevationFt : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return 'N/A';
-  }
-  const precision = options?.precision ?? 0;
-  const value = convertElevationFeetToDisplayValue(numericValue, unit);
-  const rounded =
-    precision > 0
-      ? Number(value.toFixed(precision)).toLocaleString(undefined, { minimumFractionDigits: precision, maximumFractionDigits: precision })
-      : Math.round(value).toLocaleString();
-  if (options?.includeUnit === false) {
-    return rounded;
-  }
-  return `${rounded} ${unit}`;
-}
-
-function formatElevationDeltaForUnit(deltaFt: number | null | undefined, unit: ElevationUnit): string {
-  const numericValue = typeof deltaFt === 'number' ? deltaFt : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return 'N/A';
-  }
-  const value = convertElevationFeetToDisplayValue(numericValue, unit);
-  const rounded = Math.round(value);
-  if (rounded === 0) {
-    return 'objective';
-  }
-  return `${rounded > 0 ? '+' : '-'}${Math.abs(rounded).toLocaleString()} ${unit}`;
-}
-
-function formatDistanceForElevationUnit(distanceKm: number | null | undefined, elevationUnit: ElevationUnit): string {
-  const numericValue = typeof distanceKm === 'number' ? distanceKm : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return 'N/A';
-  }
-  if (elevationUnit === 'm') {
-    return `${numericValue.toFixed(1)} km`;
-  }
-  return `${(numericValue / KM_PER_MILE).toFixed(1)} mi`;
-}
-
-function formatRainAmountForElevationUnit(
-  inches: number | null | undefined,
-  millimeters: number | null | undefined,
-  elevationUnit: ElevationUnit,
-): string {
-  const inValue = typeof inches === 'number' ? inches : Number.NaN;
-  const mmValue = typeof millimeters === 'number' ? millimeters : Number.NaN;
-  if (elevationUnit === 'm') {
-    if (Number.isFinite(mmValue)) {
-      return `${Math.round(mmValue)} mm`;
-    }
-    if (Number.isFinite(inValue)) {
-      return `${Math.round(inValue * MM_PER_INCH)} mm`;
-    }
-    return 'N/A';
-  }
-  if (Number.isFinite(inValue)) {
-    return `${inValue.toFixed(2)} in`;
-  }
-  if (Number.isFinite(mmValue)) {
-    return `${(mmValue / MM_PER_INCH).toFixed(2)} in`;
-  }
-  return 'N/A';
-}
-
-function formatSnowfallAmountForElevationUnit(
-  inches: number | null | undefined,
-  centimeters: number | null | undefined,
-  elevationUnit: ElevationUnit,
-): string {
-  const inValue = typeof inches === 'number' ? inches : Number.NaN;
-  const cmValue = typeof centimeters === 'number' ? centimeters : Number.NaN;
-  if (elevationUnit === 'm') {
-    if (Number.isFinite(cmValue)) {
-      return `${cmValue.toFixed(1)} cm`;
-    }
-    if (Number.isFinite(inValue)) {
-      return `${(inValue * CM_PER_INCH).toFixed(1)} cm`;
-    }
-    return 'N/A';
-  }
-  if (Number.isFinite(inValue)) {
-    return `${inValue.toFixed(2)} in`;
-  }
-  if (Number.isFinite(cmValue)) {
-    return `${(cmValue / CM_PER_INCH).toFixed(2)} in`;
-  }
-  return 'N/A';
-}
-
-function parseOptionalFiniteNumber(value: unknown): number {
-  if (value === null || value === undefined) {
-    return Number.NaN;
-  }
-  if (typeof value === 'string' && value.trim() === '') {
-    return Number.NaN;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : Number.NaN;
-}
-
-function formatSnowDepthForElevationUnit(
-  inches: number | null | undefined,
-  elevationUnit: ElevationUnit,
-): string {
-  const inValue = typeof inches === 'number' ? inches : Number.NaN;
-  if (!Number.isFinite(inValue)) {
-    return 'N/A';
-  }
-  if (elevationUnit === 'm') {
-    return `${Math.round(inValue * CM_PER_INCH)} cm`;
-  }
-  return `${Math.round(inValue)} in`;
-}
-
-function formatSweForElevationUnit(
-  inches: number | null | undefined,
-  elevationUnit: ElevationUnit,
-): string {
-  const inValue = typeof inches === 'number' ? inches : Number.NaN;
-  if (!Number.isFinite(inValue)) {
-    return 'N/A';
-  }
-  if (elevationUnit === 'm') {
-    return `${Math.round(inValue * MM_PER_INCH)} mm SWE`;
-  }
-  return `${inValue.toFixed(1)} in SWE`;
-}
-
-function parseSolarClockMinutes(value: string | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const match = value.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
-  if (!match) {
-    return null;
-  }
-
-  let hour = parseInt(match[1], 10);
-  const minute = parseInt(match[2], 10);
-  const meridiem = match[3].toUpperCase();
-
-  if (meridiem === 'PM' && hour < 12) {
-    hour += 12;
-  }
-  if (meridiem === 'AM' && hour === 12) {
-    hour = 0;
-  }
-
-  return hour * 60 + minute;
-}
-
-function formatMinutesRelativeToSunset(deltaMinutes: number, requiredBuffer: number): string {
-  const abs = Math.abs(deltaMinutes);
-  const relation = deltaMinutes >= 0 ? 'before sunset' : 'after sunset';
-  const bufferStatus = deltaMinutes >= requiredBuffer ? 'meets daylight buffer' : 'below daylight buffer';
-  return `${abs} min ${relation} (${bufferStatus})`;
-}
-
-function normalizeForecastDate(rawDate: string | null, todayDate: string, maxForecastDate: string): string {
-  if (!rawDate || !DATE_FMT.test(rawDate)) {
-    return todayDate;
-  }
-  if (rawDate < todayDate) {
-    return todayDate;
-  }
-  if (rawDate > maxForecastDate) {
-    return maxForecastDate;
-  }
-  return rawDate;
-}
-
-function isValidLatLon(lat: number, lon: number): boolean {
-  return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-}
-
-function normalizeTimeOrFallback(rawTime: string | null, fallback: string): string {
-  if (!rawTime) {
-    return fallback;
-  }
-  const parsedMinutes = parseTimeInputMinutes(rawTime);
-  return parsedMinutes !== null ? minutesToTwentyFourHourClock(parsedMinutes) : fallback;
-}
-
-function normalizeThemeMode(rawTheme: string | null | undefined): ThemeMode {
-  if (rawTheme === 'light' || rawTheme === 'dark' || rawTheme === 'system') {
-    return rawTheme;
-  }
-  return 'system';
-}
-
-function normalizeTemperatureUnit(rawUnit: string | null | undefined): TemperatureUnit {
-  return rawUnit === 'c' ? 'c' : 'f';
-}
-
-function normalizeElevationUnit(rawUnit: string | null | undefined): ElevationUnit {
-  return rawUnit === 'm' ? 'm' : 'ft';
-}
-
-function normalizeWindSpeedUnit(rawUnit: string | null | undefined): WindSpeedUnit {
-  return rawUnit === 'kph' ? 'kph' : 'mph';
-}
-
-function normalizeTimeStyle(rawStyle: string | null | undefined): TimeStyle {
-  return rawStyle === '24h' ? '24h' : 'ampm';
-}
-
-function parseIsoDateToUtcMs(value: string | null | undefined): number | null {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    return null;
-  }
-  const parsed = Date.parse(`${value.trim()}T00:00:00Z`);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 function buildSnowpackInterpretation(
   snowpack: SafetyData['snowpack'] | null | undefined,
@@ -1164,23 +254,6 @@ function buildSnowpackInterpretation(
     confidence: confidence === 'low' ? 'watch' : confidence,
     bullets: bullets.slice(0, 4),
   };
-}
-
-function formatCompactAge(value: string | null | undefined): string | null {
-  const ms = parseIsoToMs(value);
-  if (ms === null) {
-    return null;
-  }
-  const ageMinutes = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (ageMinutes < 60) {
-    return `${ageMinutes}m old`;
-  }
-  const ageHours = Math.floor(ageMinutes / 60);
-  if (ageHours < 24) {
-    return `${ageHours}h old`;
-  }
-  const ageDays = Math.floor(ageHours / 24);
-  return `${ageDays}d old`;
 }
 
 function buildSnowpackInsights(
@@ -1714,12 +787,6 @@ function stringifyRawPayload(payload: unknown): string {
   }
 }
 
-interface HealthCheckResult {
-  label: string;
-  status: 'ok' | 'warn' | 'down';
-  detail: string;
-}
-
 function collapseWhitespace(input: string): string {
   return input.replace(/\s+/g, ' ').trim();
 }
@@ -1739,8 +806,6 @@ function escapeHtml(input: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
-type CriticalRiskLevel = 'stable' | 'watch' | 'high';
 
 function assessCriticalWindowPoint(point: WeatherTrendPoint): { level: CriticalRiskLevel; reasons: string[]; score: number } {
   const reasons: string[] = [];
@@ -1807,24 +872,6 @@ function airQualityPillClass(aqi: number | null | undefined): 'go' | 'caution' |
   if (value <= 50) return 'go';
   if (value <= 100) return 'caution';
   return 'nogo';
-}
-
-function parseHourLabelToMinutes(label: string | undefined): number | null {
-  if (!label) {
-    return null;
-  }
-  const match = label.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
-  if (!match) {
-    return null;
-  }
-  const rawHour = Number(match[1]);
-  const rawMinute = Number(match[2] || 0);
-  if (!Number.isFinite(rawHour) || rawHour < 1 || rawHour > 12 || !Number.isFinite(rawMinute) || rawMinute < 0 || rawMinute > 59) {
-    return null;
-  }
-  const meridiem = match[3].toUpperCase();
-  const hour24 = rawHour % 12 + (meridiem === 'PM' ? 12 : 0);
-  return hour24 * 60 + rawMinute;
 }
 
 function buildTrendWindowFromStart(trend: WeatherTrendPoint[], _startTime: string, windowSize = 12): WeatherTrendPoint[] {
@@ -1904,41 +951,6 @@ function formatDurationMinutes(value: number | null | undefined): string {
     return `${minutes}m`;
   }
   return `${hours}h ${minutes}m`;
-}
-
-interface DayOverDayComparison {
-  previousDate: string;
-  previousScore: number;
-  delta: number;
-  changes: string[];
-}
-
-interface TravelWindowRow {
-  time: string;
-  pass: boolean;
-  reasonSummary: string;
-  failedRules: string[];
-  failedRuleLabels: string[];
-  temp: number;
-  feelsLike: number;
-  wind: number;
-  gust: number;
-  precipChance: number;
-}
-
-interface TravelWindowSpan {
-  start: string;
-  end: string;
-  length: number;
-}
-
-interface TravelWindowInsights {
-  passHours: number;
-  failHours: number;
-  bestWindow: TravelWindowSpan | null;
-  nextCleanWindow: TravelWindowSpan | null;
-  topFailureLabels: string[];
-  summary: string;
 }
 
 function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPreferences): TravelWindowRow[] {
@@ -2624,51 +1636,6 @@ function evaluateBackcountryDecision(data: SafetyData, cutoffTime: string, prefe
   }
 
   return { level, headline, blockers, cautions, checks };
-}
-
-function LocationMarker({ position, setPosition }: { position: L.LatLng; setPosition: (p: L.LatLng) => void }) {
-  const markerRef = useRef<L.Marker>(null);
-
-  const eventHandlers = React.useMemo(
-    () => ({
-      dragend() {
-        if (markerRef.current) {
-          setPosition(markerRef.current.getLatLng());
-        }
-      },
-    }),
-    [setPosition],
-  );
-
-  useMapEvents({
-    click(e) {
-      setPosition(e.latlng);
-    },
-  });
-
-  return <Marker draggable={true} eventHandlers={eventHandlers} position={position} ref={markerRef} />;
-}
-
-function MapUpdater({ position, zoom, focusKey }: { position: L.LatLng; zoom: number; focusKey: number }) {
-  const map = useMap();
-
-  useEffect(() => {
-    map.flyTo(position, zoom, { animate: true, duration: 1.05 });
-    setTimeout(() => map.invalidateSize(), 400);
-  }, [position, zoom, focusKey, map]);
-
-  return null;
-}
-
-function AppDisclaimer({ compact = false }: { compact?: boolean }) {
-  return (
-    <aside className={`app-disclaimer ${compact ? 'compact' : ''}`} role="note" aria-label="Safety disclaimer">
-      <div className="app-disclaimer-title">
-        <AlertTriangle size={14} /> Disclaimer
-      </div>
-      <p>{APP_DISCLAIMER_TEXT}</p>
-    </aside>
-  );
 }
 
 function App() {
