@@ -1611,12 +1611,23 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   };
 };
 
-const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQualityData, fireRiskData, selectedDate, solarData, selectedStartClock }) => {
+const calculateSafetyScore = ({
+  weatherData,
+  avalancheData,
+  alertsData,
+  airQualityData,
+  fireRiskData,
+  heatRiskData,
+  rainfallData,
+  selectedDate,
+  solarData,
+  selectedStartClock,
+}) => {
   const explanations = [];
   const factors = [];
   const groupCaps = {
     avalanche: 55,
-    weather: 38,
+    weather: 42,
     alerts: 24,
     airQuality: 20,
     fire: 18,
@@ -1670,8 +1681,41 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
   const trendTemps = trend.map((item) => Number(item?.temp)).filter(Number.isFinite);
   const trendGusts = trend.map((item) => Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind)).filter(Number.isFinite);
+  const trendPrecips = trend.map((item) => Number(item?.precipChance)).filter(Number.isFinite);
+  const trendFeelsLike = trend
+    .map((item) => {
+      const rowTemp = Number(item?.temp);
+      const rowWind = Number.isFinite(Number(item?.wind)) ? Number(item.wind) : Number.isFinite(Number(item?.gust)) ? Number(item.gust) : 0;
+      if (!Number.isFinite(rowTemp)) return Number.NaN;
+      return computeFeelsLikeF(rowTemp, Number.isFinite(rowWind) ? rowWind : 0);
+    })
+    .filter(Number.isFinite);
   const tempRange = trendTemps.length ? Math.max(...trendTemps) - Math.min(...trendTemps) : 0;
+  const trendMinFeelsLike = trendFeelsLike.length ? Math.min(...trendFeelsLike) : feelsLikeF;
+  const trendMaxFeelsLike = trendFeelsLike.length ? Math.max(...trendFeelsLike) : feelsLikeF;
+  const trendPeakPrecip = trendPrecips.length ? Math.max(...trendPrecips) : precipChance;
   const trendPeakGust = trendGusts.length ? Math.max(...trendGusts) : Number.isFinite(gust) ? gust : 0;
+  const severeWindHours = trend.filter((item) => {
+    const rowWind = Number(item?.wind);
+    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
+    return (Number.isFinite(rowWind) && rowWind >= 30) || (Number.isFinite(rowGust) && rowGust >= 45);
+  }).length;
+  const strongWindHours = trend.filter((item) => {
+    const rowWind = Number(item?.wind);
+    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
+    return (Number.isFinite(rowWind) && rowWind >= 20) || (Number.isFinite(rowGust) && rowGust >= 30);
+  }).length;
+  const highPrecipHours = trendPrecips.filter((value) => value >= 60).length;
+  const moderatePrecipHours = trendPrecips.filter((value) => value >= 40).length;
+  const coldExposureHours = trendFeelsLike.filter((value) => value <= 15).length;
+  const extremeColdHours = trendFeelsLike.filter((value) => value <= 0).length;
+  const heatExposureHours = trendFeelsLike.filter((value) => value >= 85).length;
+  const rainfallTotals = rainfallData?.totals || {};
+  const rainfallExpected = rainfallData?.expected || {};
+  const rainPast24hIn = Number(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
+  const snowPast24hIn = Number(rainfallTotals?.snowPast24hIn);
+  const expectedRainWindowIn = Number(rainfallExpected?.rainWindowIn);
+  const expectedSnowWindowIn = Number(rainfallExpected?.snowWindowIn);
   const sunriseMinutes = parseClockToMinutes(solarData?.sunrise);
   const selectedStartMinutes = parseClockToMinutes(selectedStartClock) ?? parseIsoClockMinutes(weatherData?.forecastStartTime);
   const isNightBeforeSunrise =
@@ -1717,18 +1761,53 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
     }
   }
 
-  if (Number.isFinite(gust) && (gust >= 50 || wind >= 35)) {
-    applyFactor('Wind', 20, `Severe wind exposure expected (wind ${wind || 0} mph, gust ${gust} mph).`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(gust) && (gust >= 40 || wind >= 25)) {
-    applyFactor('Wind', 12, `Strong winds expected (wind ${wind || 0} mph, gust ${gust} mph).`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(wind) && wind >= 18) {
-    applyFactor('Wind', 6, `Moderate sustained winds (${wind} mph) may affect balance on exposed terrain.`, 'NOAA hourly forecast');
+  const effectiveWind = Math.max(
+    Number.isFinite(wind) ? wind : 0,
+    Number.isFinite(gust) ? gust : 0,
+    Number.isFinite(trendPeakGust) ? trendPeakGust : 0,
+  );
+  if (effectiveWind >= 50 || (Number.isFinite(wind) && wind >= 35)) {
+    applyFactor(
+      'Wind',
+      20,
+      `Severe wind exposure expected (start wind ${Math.round(Number.isFinite(wind) ? wind : 0)} mph, gust ${Math.round(Number.isFinite(gust) ? gust : effectiveWind)} mph, trend peak ${Math.round(effectiveWind)} mph).`,
+      'NOAA hourly forecast',
+    );
+  } else if (effectiveWind >= 40 || (Number.isFinite(wind) && wind >= 25)) {
+    applyFactor(
+      'Wind',
+      12,
+      `Strong winds expected (start wind ${Math.round(Number.isFinite(wind) ? wind : 0)} mph, gust ${Math.round(Number.isFinite(gust) ? gust : effectiveWind)} mph, trend peak ${Math.round(effectiveWind)} mph).`,
+      'NOAA hourly forecast',
+    );
+  } else if (effectiveWind >= 30 || (Number.isFinite(wind) && wind >= 18)) {
+    applyFactor('Wind', 6, `Moderate wind signal (trend peak ${Math.round(effectiveWind)} mph) may affect exposed movement.`, 'NOAA hourly forecast');
   }
 
-  if (Number.isFinite(precipChance) && precipChance >= 70) {
-    applyFactor('Storm', 12, `High precipitation probability (${precipChance}%) raises footing and visibility hazards.`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(precipChance) && precipChance >= 40) {
-    applyFactor('Storm', 6, `Precipitation chance (${precipChance}%) may produce wet/slick travel conditions.`, 'NOAA hourly forecast');
+  if (severeWindHours >= 4) {
+    applyFactor('Wind', 8, `${severeWindHours}/${trend.length} trend hours are severe wind windows (>=30 mph sustained or >=45 mph gust).`, 'NOAA hourly trend');
+  } else if (severeWindHours >= 2) {
+    applyFactor('Wind', 5, `${severeWindHours}/${trend.length} trend hours show severe wind windows.`, 'NOAA hourly trend');
+  } else if (strongWindHours >= 6) {
+    applyFactor('Wind', 4, `${strongWindHours}/${trend.length} trend hours are windy (>=20 mph sustained or >=30 mph gust).`, 'NOAA hourly trend');
+  } else if (strongWindHours >= 3) {
+    applyFactor('Wind', 2, `${strongWindHours}/${trend.length} trend hours are windy and may reduce margin on exposed terrain.`, 'NOAA hourly trend');
+  }
+
+  if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= 80) {
+    applyFactor('Storm', 12, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
+  } else if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= 60) {
+    applyFactor('Storm', 8, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
+  } else if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= 40) {
+    applyFactor('Storm', 4, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
+  }
+
+  if (highPrecipHours >= 4) {
+    applyFactor('Storm', 7, `${highPrecipHours}/${trend.length} trend hours are high precip windows (>=60%).`, 'NOAA hourly trend');
+  } else if (highPrecipHours >= 2) {
+    applyFactor('Storm', 4, `${highPrecipHours}/${trend.length} trend hours are high precip windows.`, 'NOAA hourly trend');
+  } else if (moderatePrecipHours >= 6) {
+    applyFactor('Storm', 3, `${moderatePrecipHours}/${trend.length} trend hours are moderate precip windows (>=40%).`, 'NOAA hourly trend');
   }
 
   if (/thunderstorm|lightning|blizzard/.test(weatherDescription)) {
@@ -1739,16 +1818,59 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
     applyFactor('Visibility', 6, `Reduced-visibility weather in forecast ("${weatherData.description}").`, 'NOAA short forecast');
   }
 
-  if (Number.isFinite(feelsLikeF) && feelsLikeF <= 0) {
-    applyFactor('Cold', 12, `Very cold apparent temperature (${feelsLikeF}F) increases cold-injury and dexterity risk.`, 'NOAA temp + windchill');
-  } else if (Number.isFinite(feelsLikeF) && feelsLikeF <= 15) {
-    applyFactor('Cold', 7, `Cold apparent temperature (${feelsLikeF}F) requires stronger insulation and exposure control.`, 'NOAA temp + windchill');
+  if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= -10) {
+    applyFactor('Cold', 15, `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`, 'NOAA temp + windchill');
+  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= 0) {
+    applyFactor('Cold', 10, `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
+  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= 15) {
+    applyFactor('Cold', 6, `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
+  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= 25) {
+    applyFactor('Cold', 3, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
   }
 
-  if (Number.isFinite(tempF) && tempF >= 90) {
-    applyFactor('Heat', 10, `Hot forecast temperature (${tempF}F) increases dehydration and heat illness risk.`, 'NOAA hourly temperature');
-  } else if (Number.isFinite(tempF) && tempF >= 80 && Number.isFinite(humidity) && humidity >= 70) {
-    applyFactor('Heat', 6, `Warm and humid conditions (${tempF}F, ${humidity}% RH) can degrade pace and recovery.`, 'NOAA temperature + humidity');
+  if (extremeColdHours >= 3) {
+    applyFactor('Cold', 6, `${extremeColdHours}/${trend.length} trend hours are at or below 0F apparent temperature.`, 'NOAA hourly trend');
+  } else if (coldExposureHours >= 5) {
+    applyFactor('Cold', 4, `${coldExposureHours}/${trend.length} trend hours are at or below 15F apparent temperature.`, 'NOAA hourly trend');
+  }
+
+  const heatRiskLevel = Number(heatRiskData?.level);
+  if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 4) {
+    applyFactor('Heat', 14, `Heat risk is ${heatRiskData?.label || 'Extreme'} with significant heat-stress potential in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
+  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 3) {
+    applyFactor('Heat', 10, `Heat risk is ${heatRiskData?.label || 'High'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
+  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 2) {
+    applyFactor('Heat', 6, `Heat risk is ${heatRiskData?.label || 'Elevated'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
+  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 1) {
+    applyFactor('Heat', 2, `Heat risk is ${heatRiskData?.label || 'Guarded'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
+  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 90) {
+    applyFactor('Heat', 6, `Peak apparent temperature in the window reaches ${Math.round(trendMaxFeelsLike)}F.`, 'NOAA temp + humidity');
+  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 82 && heatExposureHours >= 4) {
+    applyFactor('Heat', 3, `${heatExposureHours}/${trend.length} trend hours are warm (>=85F apparent).`, 'NOAA hourly trend');
+  }
+
+  if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.75) {
+    applyFactor('Surface Conditions', 7, `Recent rainfall is heavy (${rainPast24hIn.toFixed(2)} in in 24h), increasing slick/trail-softening risk.`, rainfallData?.source || 'Open-Meteo precipitation history');
+  } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.3) {
+    applyFactor('Surface Conditions', 4, `Recent rainfall (${rainPast24hIn.toFixed(2)} in in 24h) can create slippery or muddy travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
+  }
+
+  if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= 6) {
+    applyFactor('Surface Conditions', 8, `Recent snowfall is substantial (${snowPast24hIn.toFixed(1)} in in 24h), increasing trail and route uncertainty.`, rainfallData?.source || 'Open-Meteo precipitation history');
+  } else if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= 2) {
+    applyFactor('Surface Conditions', 4, `Recent snowfall (${snowPast24hIn.toFixed(1)} in in 24h) can hide surface hazards and slow travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
+  }
+
+  if (Number.isFinite(expectedRainWindowIn) && expectedRainWindowIn >= 0.5) {
+    applyFactor('Storm', 6, `Expected rain in selected travel window is ${expectedRainWindowIn.toFixed(2)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+  } else if (Number.isFinite(expectedRainWindowIn) && expectedRainWindowIn >= 0.2) {
+    applyFactor('Storm', 3, `Expected rain in selected travel window is ${expectedRainWindowIn.toFixed(2)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+  }
+
+  if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= 4) {
+    applyFactor('Winter Weather', 7, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
+  } else if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= 1.5) {
+    applyFactor('Winter Weather', 3, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   }
 
   if (isDaytime === false && !isNightBeforeSunrise) {
@@ -1762,7 +1884,7 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
     applyFactor('Wind', 6, `Peak gusts in the next 12 hours reach ${Math.round(trendPeakGust)} mph.`, 'NOAA hourly trend');
   }
 
-  if (forecastLeadHours !== null && forecastLeadHours > 1) {
+  if (forecastLeadHours !== null && forecastLeadHours > 6) {
     let uncertaintyImpact = 2;
     if (forecastLeadHours >= 96) {
       uncertaintyImpact = 10;
@@ -1774,7 +1896,7 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
       uncertaintyImpact = 4;
     }
     if (!alertsRelevantForSelectedTime) {
-      uncertaintyImpact += 3;
+      uncertaintyImpact += 2;
     }
     applyFactor(
       'Forecast Uncertainty',
@@ -1899,6 +2021,30 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
   } else if (airQualityData?.status === 'no_data') {
     applyConfidencePenalty(3, 'Air quality point data unavailable.');
   }
+  const rainfallAnchorMs = parseIsoTimeToMs(rainfallData?.anchorTime);
+  if (rainfallData?.status === 'unavailable') {
+    applyConfidencePenalty(5, 'Precipitation history feed unavailable.');
+  } else if (rainfallData?.status === 'no_data') {
+    applyConfidencePenalty(3, 'Precipitation history has no usable anchor/sample data.');
+  } else if (rainfallAnchorMs === null) {
+    applyConfidencePenalty(3, 'Precipitation anchor time unavailable.');
+  } else {
+    const rainfallAgeHours = (nowMs - rainfallAnchorMs) / (1000 * 60 * 60);
+    if (rainfallAgeHours > 36) {
+      applyConfidencePenalty(7, `Precipitation anchor is ${Math.round(rainfallAgeHours)}h old.`);
+    } else if (rainfallAgeHours > 18) {
+      applyConfidencePenalty(4, `Precipitation anchor is ${Math.round(rainfallAgeHours)}h old.`);
+    } else if (rainfallAgeHours > 10) {
+      applyConfidencePenalty(2, `Precipitation anchor is ${Math.round(rainfallAgeHours)}h old.`);
+    }
+  }
+  if (forecastLeadHours !== null && forecastLeadHours >= 72) {
+    applyConfidencePenalty(8, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
+  } else if (forecastLeadHours !== null && forecastLeadHours >= 48) {
+    applyConfidencePenalty(6, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
+  } else if (forecastLeadHours !== null && forecastLeadHours >= 24) {
+    applyConfidencePenalty(4, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
+  }
   if (!fireRiskData || fireRiskData.status === 'unavailable') {
     applyConfidencePenalty(3, 'Fire risk synthesis unavailable.');
   }
@@ -1914,6 +2060,10 @@ const calculateSafetyScore = ({ weatherData, avalancheData, alertsData, airQuali
       ? 'NOAA/NWS active alerts'
       : null,
     airQualityData?.status === 'ok' || airQualityData?.status === 'no_data' ? 'Open-Meteo air quality' : null,
+    rainfallData?.status === 'ok' || rainfallData?.status === 'partial' || rainfallData?.status === 'no_data'
+      ? 'Open-Meteo precipitation history/forecast'
+      : null,
+    heatRiskData?.status === 'ok' ? 'Heat risk synthesis (forecast + lower-terrain adjustment)' : null,
     fireRiskData?.status === 'ok' ? 'Fire risk synthesis (NOAA + NWS + AQI)' : null,
   ].filter(Boolean);
 
@@ -3075,6 +3225,8 @@ const safetyHandler = async (req, res) => {
       alertsData,
       airQualityData,
       fireRiskData,
+      heatRiskData,
+      rainfallData,
       selectedDate: selectedForecastDate,
       solarData,
       selectedStartClock: requestedStartClock,
@@ -3188,6 +3340,8 @@ const safetyHandler = async (req, res) => {
       alertsData: safeAlertsData,
       airQualityData: safeAirQualityData,
       fireRiskData: safeFireRiskData,
+      heatRiskData: safeHeatRiskData,
+      rainfallData: safeRainfallData,
       selectedDate: fallbackSelectedDate,
       solarData,
       selectedStartClock: requestedStartClock,

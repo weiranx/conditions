@@ -1082,3 +1082,131 @@ test('calculateSafetyScore does not apply darkness penalty for pre-sunrise alpin
   expect(afterDarkResult.factors.some((factor) => String(factor.hazard).toLowerCase() === 'darkness')).toBe(true);
   expect(preSunriseResult.score).toBeGreaterThan(afterDarkResult.score);
 });
+
+test('calculateSafetyScore penalizes persistent wind and precip hazards across trend hours', () => {
+  const baseInput = {
+    avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
+    alertsData: { status: 'none', activeCount: 0, alerts: [] },
+    airQualityData: { status: 'ok', usAqi: 30, category: 'Good' },
+    fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
+    heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
+    rainfallData: { status: 'ok', anchorTime: new Date().toISOString(), totals: {}, expected: {} },
+    selectedDate: new Date().toISOString().slice(0, 10),
+    selectedStartClock: '06:00',
+    solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
+  };
+
+  const transientResult = calculateSafetyScore({
+    ...baseInput,
+    weatherData: {
+      description: 'Mostly Cloudy',
+      windSpeed: 14,
+      windGust: 24,
+      precipChance: 25,
+      humidity: 55,
+      temp: 34,
+      feelsLike: 30,
+      isDaytime: true,
+      issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 12 }, (_, idx) => ({
+        temp: 34 + (idx % 2),
+        wind: 14,
+        gust: 24,
+        precipChance: 25,
+      })),
+    },
+  });
+
+  const persistentResult = calculateSafetyScore({
+    ...baseInput,
+    weatherData: {
+      description: 'Snow Showers',
+      windSpeed: 20,
+      windGust: 33,
+      precipChance: 55,
+      humidity: 70,
+      temp: 28,
+      feelsLike: 20,
+      isDaytime: true,
+      issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 12 }, (_, idx) => ({
+        temp: 28 - (idx % 3),
+        wind: idx < 8 ? 28 : 18,
+        gust: idx < 8 ? 46 : 32,
+        precipChance: idx < 7 ? 70 : 45,
+      })),
+    },
+  });
+
+  expect(persistentResult.score).toBeLessThan(transientResult.score);
+  expect(persistentResult.explanations.join(' ')).toMatch(/trend hours are severe wind windows/i);
+  expect(persistentResult.explanations.join(' ')).toMatch(/high precip windows|precipitation chance/i);
+});
+
+test('calculateSafetyScore incorporates rainfall totals, expected precipitation, and heat risk synthesis', () => {
+  const nowIso = new Date().toISOString();
+  const dryResult = calculateSafetyScore({
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 6,
+      windGust: 10,
+      precipChance: 10,
+      humidity: 35,
+      temp: 58,
+      feelsLike: 58,
+      isDaytime: true,
+      issuedTime: nowIso,
+      trend: [],
+    },
+    avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
+    alertsData: { status: 'none', activeCount: 0, alerts: [] },
+    airQualityData: { status: 'ok', usAqi: 25, category: 'Good' },
+    fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
+    heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
+    rainfallData: {
+      status: 'ok',
+      source: 'Open-Meteo precipitation',
+      anchorTime: nowIso,
+      totals: { rainPast24hIn: 0.0, snowPast24hIn: 0.0 },
+      expected: { rainWindowIn: 0.0, snowWindowIn: 0.0 },
+    },
+    selectedDate: nowIso.slice(0, 10),
+    selectedStartClock: '09:00',
+    solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
+  });
+
+  const wetHotResult = calculateSafetyScore({
+    weatherData: {
+      description: 'Rain',
+      windSpeed: 9,
+      windGust: 14,
+      precipChance: 65,
+      humidity: 72,
+      temp: 78,
+      feelsLike: 84,
+      isDaytime: true,
+      issuedTime: nowIso,
+      trend: [],
+    },
+    avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
+    alertsData: { status: 'none', activeCount: 0, alerts: [] },
+    airQualityData: { status: 'ok', usAqi: 25, category: 'Good' },
+    fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
+    heatRiskData: { status: 'ok', level: 3, label: 'High', source: 'Heat risk synthesis' },
+    rainfallData: {
+      status: 'ok',
+      source: 'Open-Meteo precipitation',
+      anchorTime: nowIso,
+      totals: { rainPast24hIn: 0.82, snowPast24hIn: 2.1 },
+      expected: { rainWindowIn: 0.55, snowWindowIn: 1.8 },
+    },
+    selectedDate: nowIso.slice(0, 10),
+    selectedStartClock: '09:00',
+    solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
+  });
+
+  expect(wetHotResult.score).toBeLessThan(dryResult.score);
+  expect(wetHotResult.explanations.join(' ')).toMatch(/recent rainfall is heavy/i);
+  expect(wetHotResult.explanations.join(' ')).toMatch(/expected rain in selected travel window/i);
+  expect(wetHotResult.explanations.join(' ')).toMatch(/heat risk is high/i);
+});
