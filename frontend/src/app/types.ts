@@ -452,6 +452,7 @@ export interface DayOverDayComparison {
 export interface TravelWindowRow {
   time: string;
   pass: boolean;
+  condition: string;
   reasonSummary: string;
   failedRules: string[];
   failedRuleLabels: string[];
@@ -479,5 +480,7 @@ export interface TravelWindowInsights {
   trendDelta: number;
   trendLabel: string;
   trendSummary: string;
+  conditionTrendLabel: string;
+  conditionTrendSummary: string;
   summary: string;
 }
