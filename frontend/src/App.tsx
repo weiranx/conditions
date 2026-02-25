@@ -30,6 +30,8 @@ import {
   RefreshCw,
   Minus,
   Plus,
+  BookmarkPlus,
+  BookmarkCheck,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -159,6 +161,104 @@ const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25
 L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
 const PLANNER_VIEW_MODE_STORAGE_KEY = 'summitsafe-planner-view-mode';
+const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
+const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
+const MAX_RECENT_SEARCHES = 8;
+const MAX_SAVED_OBJECTIVES = 12;
+
+function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'name'>): string {
+  return `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}:${normalizeSuggestionText(item.name || '')}`;
+}
+
+function suggestionCoordinateKey(lat: number | string, lon: number | string): string {
+  return `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`;
+}
+
+function normalizeStoredSuggestion(item: unknown, fallbackClass?: string): Suggestion | null {
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+  const raw = item as Partial<Suggestion>;
+  const name = String(raw.name || '').trim();
+  const lat = Number(raw.lat);
+  const lon = Number(raw.lon);
+  if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+  return {
+    name,
+    lat: Number(lat.toFixed(6)),
+    lon: Number(lon.toFixed(6)),
+    class: String(raw.class || fallbackClass || '').trim() || undefined,
+    type: raw.type,
+  };
+}
+
+function readStoredSuggestions(storageKey: string, fallbackClass?: string): Suggestion[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((item) => normalizeStoredSuggestion(item, fallbackClass))
+      .filter((item): item is Suggestion => Boolean(item));
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredSuggestions(storageKey: string, items: Suggestion[], maxItems: number): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const deduped: Suggestion[] = [];
+  const seen = new Set<string>();
+  items.forEach((item) => {
+    const normalized = normalizeStoredSuggestion(item, item.class);
+    if (!normalized) {
+      return;
+    }
+    const key = suggestionIdentityKey(normalized);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    deduped.push(normalized);
+  });
+  window.localStorage.setItem(storageKey, JSON.stringify(deduped.slice(0, maxItems)));
+}
+
+function mergeSuggestionBuckets(buckets: Suggestion[][], limit: number): Suggestion[] {
+  const output: Suggestion[] = [];
+  const seen = new Set<string>();
+  buckets.forEach((bucket) => {
+    bucket.forEach((item) => {
+      const key = suggestionIdentityKey(item);
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      output.push(item);
+    });
+  });
+  return output.slice(0, limit);
+}
+
+function filterSuggestionBucket(items: Suggestion[], query: string): Suggestion[] {
+  const normalizedQuery = normalizeSuggestionText(query);
+  if (!normalizedQuery) {
+    return items;
+  }
+  return items.filter((item) => normalizeSuggestionText(item.name).includes(normalizedQuery));
+}
 
 function buildSnowpackInterpretation(
   snowpack: SafetyData['snowpack'] | null | undefined,
@@ -1819,6 +1919,12 @@ function App() {
   } | null>(null);
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [savedObjectives, setSavedObjectives] = useState<Suggestion[]>(() =>
+    readStoredSuggestions(SAVED_OBJECTIVES_STORAGE_KEY, 'saved'),
+  );
+  const [recentSearches, setRecentSearches] = useState<Suggestion[]>(() =>
+    readStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, 'recent'),
+  );
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showBackendWakeNotice, setShowBackendWakeNotice] = useState(false);
@@ -2226,9 +2332,6 @@ function App() {
       setObjectiveName(linkState.objectiveName);
       setSearchQuery(linkState.searchQuery);
       setCommittedSearchQuery(linkState.searchQuery);
-      if (searchInputRef.current && searchInputRef.current.value !== linkState.searchQuery) {
-        searchInputRef.current.value = linkState.searchQuery;
-      }
       setForecastDate(linkState.forecastDate);
       setAlpineStartTime(linkState.alpineStartTime);
       setTurnaroundTime(linkState.turnaroundTime);
@@ -2269,6 +2372,10 @@ function App() {
   }, [plannerViewMode]);
 
   useEffect(() => {
+    suggestionCacheRef.current.clear();
+  }, [savedObjectives, recentSearches]);
+
+  useEffect(() => {
     return () => {
       latestSuggestionRequestId.current += 1;
       if (suggestionAbortControllerRef.current) {
@@ -2293,24 +2400,75 @@ function App() {
     };
   }, []);
 
-  const getLiveSearchValue = useCallback(() => {
-    const currentValue = searchInputRef.current?.value;
-    return typeof currentValue === 'string' ? currentValue : searchQuery;
-  }, [searchQuery]);
-
   const setSearchInputValue = useCallback((value: string) => {
-    if (searchInputRef.current && searchInputRef.current.value !== value) {
-      searchInputRef.current.value = value;
-    }
     setSearchQuery(value);
   }, []);
+
+  const persistSavedObjectiveList = useCallback((next: Suggestion[]) => {
+    setSavedObjectives(next);
+    writeStoredSuggestions(SAVED_OBJECTIVES_STORAGE_KEY, next, MAX_SAVED_OBJECTIVES);
+  }, []);
+
+  const persistRecentSearchList = useCallback((next: Suggestion[]) => {
+    setRecentSearches(next);
+    writeStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, next, MAX_RECENT_SEARCHES);
+  }, []);
+
+  const getStoredSuggestionsForQuery = useCallback(
+    (query: string, options?: { includePopular?: boolean }) => {
+      const savedMatches = filterSuggestionBucket(savedObjectives, query).map((item) => ({ ...item, class: 'saved' }));
+      const recentMatches = filterSuggestionBucket(recentSearches, query).map((item) => ({ ...item, class: 'recent' }));
+      const popularMatches = options?.includePopular ? getLocalPopularSuggestions(query) : [];
+      return mergeSuggestionBuckets([savedMatches, recentMatches, popularMatches], 10);
+    },
+    [recentSearches, savedObjectives],
+  );
+
+  const recordRecentSuggestion = useCallback(
+    (item: Suggestion) => {
+      const normalized = normalizeStoredSuggestion({ ...item, class: 'recent' }, 'recent');
+      if (!normalized) {
+        return;
+      }
+      persistRecentSearchList(
+        mergeSuggestionBuckets([[normalized], recentSearches.map((entry) => ({ ...entry, class: 'recent' }))], MAX_RECENT_SEARCHES),
+      );
+    },
+    [persistRecentSearchList, recentSearches],
+  );
+
+  const handleToggleSaveObjective = useCallback(() => {
+    if (!hasObjective) {
+      return;
+    }
+    const fallbackName = (objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`).trim();
+    const normalized = normalizeStoredSuggestion(
+      { name: fallbackName, lat: position.lat, lon: position.lng, class: 'saved', type: 'objective' },
+      'saved',
+    );
+    if (!normalized) {
+      return;
+    }
+    const nextCoordinateKey = suggestionCoordinateKey(normalized.lat, normalized.lon);
+    const exists = savedObjectives.some(
+      (saved) => suggestionCoordinateKey(saved.lat, saved.lon) === nextCoordinateKey,
+    );
+    const nextSaved = exists
+      ? savedObjectives.filter((saved) => suggestionCoordinateKey(saved.lat, saved.lon) !== nextCoordinateKey)
+      : mergeSuggestionBuckets(
+          [[{ ...normalized, class: 'saved' }], savedObjectives.map((item) => ({ ...item, class: 'saved' }))],
+          MAX_SAVED_OBJECTIVES,
+        );
+    persistSavedObjectiveList(nextSaved);
+  }, [hasObjective, objectiveName, persistSavedObjectiveList, position.lat, position.lng, savedObjectives]);
 
   const fetchSuggestions = useCallback(async (q: string) => {
     const requestId = ++latestSuggestionRequestId.current;
     const query = q.trim();
+    const storedMatches = getStoredSuggestionsForQuery(query);
     if (!query || query.length < 2) {
-      const localSuggestions = getLocalPopularSuggestions(query);
-      setSuggestions(localSuggestions);
+      const discoverySuggestions = getStoredSuggestionsForQuery(query, { includePopular: true });
+      setSuggestions(discoverySuggestions);
       setShowSuggestions(true);
       setActiveSuggestionIndex(-1);
       setSearchLoading(false);
@@ -2349,7 +2507,10 @@ function App() {
         return;
       }
       const nextSuggestions = Array.isArray(payload) ? payload : [];
-      const resolvedSuggestions = rankAndDeduplicateSuggestions(nextSuggestions, query);
+      const resolvedSuggestions = mergeSuggestionBuckets(
+        [storedMatches, rankAndDeduplicateSuggestions(nextSuggestions, query)],
+        8,
+      );
       suggestionCacheRef.current.set(cacheKey, resolvedSuggestions);
       if (suggestionCacheRef.current.size > 50) {
         const oldestKey = suggestionCacheRef.current.keys().next().value;
@@ -2367,7 +2528,7 @@ function App() {
       if (requestId !== latestSuggestionRequestId.current) {
         return;
       }
-      const fallback = getLocalPopularSuggestions(query);
+      const fallback = mergeSuggestionBuckets([storedMatches, getLocalPopularSuggestions(query)], 8);
       suggestionCacheRef.current.set(cacheKey, fallback);
       setSuggestions(fallback);
       setShowSuggestions(true);
@@ -2381,10 +2542,11 @@ function App() {
         setSearchLoading(false);
       }
     }
-  }, []);
+  }, [getStoredSuggestionsForQuery]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    setSearchQuery(value);
     if (activeSuggestionIndex !== -1) {
       setActiveSuggestionIndex(-1);
     }
@@ -2396,11 +2558,9 @@ function App() {
     if (value.length > 0) {
       setShowSuggestions(true);
       searchTimeout.current = setTimeout(() => {
-        setSearchQuery(value);
         void fetchSuggestions(value);
       }, SEARCH_DEBOUNCE_MS);
     } else {
-      setSearchQuery('');
       void fetchSuggestions('');
     }
   };
@@ -2408,13 +2568,19 @@ function App() {
   const selectSuggestion = useCallback(
     (s: Suggestion) => {
       const label = s.name.split(',')[0];
+      const lat = Number(s.lat);
+      const lon = Number(s.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return;
+      }
       setSearchInputValue(label);
       setCommittedSearchQuery(label);
       setShowSuggestions(false);
       setActiveSuggestionIndex(-1);
-      updateObjectivePosition(new L.LatLng(parseFloat(String(s.lat)), parseFloat(String(s.lon))), label);
+      updateObjectivePosition(new L.LatLng(lat, lon), label);
+      recordRecentSuggestion({ ...s, name: s.name, lat, lon, class: 'recent' });
     },
-    [setSearchInputValue, updateObjectivePosition],
+    [recordRecentSuggestion, setSearchInputValue, updateObjectivePosition],
   );
 
   const handleUseTypedCoordinates = useCallback(
@@ -2428,8 +2594,15 @@ function App() {
       updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
       setShowSuggestions(false);
       setActiveSuggestionIndex(-1);
+      recordRecentSuggestion({
+        name: `${parsed.lat.toFixed(4)}, ${parsed.lon.toFixed(4)}`,
+        lat: parsed.lat,
+        lon: parsed.lon,
+        class: 'recent',
+        type: 'coordinate',
+      });
     },
-    [setSearchInputValue, updateObjectivePosition],
+    [recordRecentSuggestion, setSearchInputValue, updateObjectivePosition],
   );
 
   const searchAndSelectFirst = useCallback(
@@ -2446,6 +2619,13 @@ function App() {
         updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
         setShowSuggestions(false);
         setActiveSuggestionIndex(-1);
+        recordRecentSuggestion({
+          name: `${parsed.lat.toFixed(4)}, ${parsed.lon.toFixed(4)}`,
+          lat: parsed.lat,
+          lon: parsed.lon,
+          class: 'recent',
+          type: 'coordinate',
+        });
         return true;
       }
 
@@ -2457,7 +2637,7 @@ function App() {
       }
 
       if (query.length < 2) {
-        const localSuggestions = getLocalPopularSuggestions(query);
+        const localSuggestions = getStoredSuggestionsForQuery(query, { includePopular: true });
         setSuggestions(localSuggestions);
         if (localSuggestions[0]) {
           selectSuggestion(localSuggestions[0]);
@@ -2479,7 +2659,10 @@ function App() {
           throw new Error(apiRequestId ? `${baseMessage} (request ${apiRequestId})` : baseMessage);
         }
         const nextSuggestions = Array.isArray(payload) ? payload : [];
-        const resolvedSuggestions = rankAndDeduplicateSuggestions(nextSuggestions, query);
+        const resolvedSuggestions = mergeSuggestionBuckets(
+          [getStoredSuggestionsForQuery(query), rankAndDeduplicateSuggestions(nextSuggestions, query)],
+          8,
+        );
         setSuggestions(resolvedSuggestions);
         if (resolvedSuggestions[0]) {
           selectSuggestion(resolvedSuggestions[0]);
@@ -2490,7 +2673,7 @@ function App() {
         return false;
       } catch (err) {
         console.error('Search submit error:', err);
-        const fallbackSuggestions = getLocalPopularSuggestions(query);
+        const fallbackSuggestions = mergeSuggestionBuckets([getStoredSuggestionsForQuery(query), getLocalPopularSuggestions(query)], 8);
         setSuggestions(fallbackSuggestions);
         if (fallbackSuggestions[0]) {
           selectSuggestion(fallbackSuggestions[0]);
@@ -2503,7 +2686,7 @@ function App() {
         setSearchLoading(false);
       }
     },
-    [selectSuggestion, setSearchInputValue, updateObjectivePosition],
+    [getStoredSuggestionsForQuery, recordRecentSuggestion, selectSuggestion, setSearchInputValue, updateObjectivePosition],
   );
 
   useEffect(() => {
@@ -2544,7 +2727,7 @@ function App() {
       event.preventDefault();
       searchInputRef.current?.focus();
       setShowSuggestions(true);
-      if (!getLiveSearchValue().trim()) {
+      if (!searchQuery.trim()) {
         void fetchSuggestions('');
       }
     };
@@ -2553,7 +2736,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeydown);
     };
-  }, [fetchSuggestions, getLiveSearchValue]);
+  }, [fetchSuggestions, searchQuery]);
 
   useEffect(() => {
     setTravelWindowExpanded(false);
@@ -2595,7 +2778,7 @@ function App() {
     }
 
     e.preventDefault();
-    const liveQuery = getLiveSearchValue();
+    const liveQuery = searchQuery;
     const suggestionsMatchLiveQuery =
       normalizeSuggestionText(liveQuery) === normalizeSuggestionText(searchQuery);
 
@@ -2613,7 +2796,7 @@ function App() {
   };
 
   const handleSearchSubmit = () => {
-    const liveQuery = getLiveSearchValue();
+    const liveQuery = searchQuery;
     const suggestionsMatchLiveQuery =
       normalizeSuggestionText(liveQuery) === normalizeSuggestionText(searchQuery);
     if (!liveQuery.trim()) {
@@ -2639,7 +2822,7 @@ function App() {
   const handleFocus = () => {
     setShowSuggestions(true);
     setActiveSuggestionIndex(-1);
-    const liveQuery = getLiveSearchValue();
+    const liveQuery = searchQuery;
     if (!liveQuery) {
       void fetchSuggestions('');
       return;
@@ -2686,6 +2869,13 @@ function App() {
         setCommittedSearchQuery(coordinateLabel);
         setShowSuggestions(false);
         setActiveSuggestionIndex(-1);
+        recordRecentSuggestion({
+          name: coordinateLabel,
+          lat,
+          lon,
+          class: 'recent',
+          type: 'coordinate',
+        });
         setLocatingUser(false);
       },
       (geoError) => {
@@ -3346,7 +3536,7 @@ function App() {
   };
 
   const openPlannerView = () => {
-    if (!hasObjective && !getLiveSearchValue().trim()) {
+    if (!hasObjective && !searchQuery.trim()) {
       setAlpineStartTime(preferences.defaultStartTime);
       setTurnaroundTime(preferences.defaultBackByTime);
     }
@@ -3501,9 +3691,12 @@ function App() {
     [startViewChange],
   );
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
-  const liveSearchQuery = getLiveSearchValue();
+  const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
   const parsedTypedCoordinates = parseCoordinates(trimmedSearchQuery);
+  const currentObjectiveCoordinateKey = suggestionCoordinateKey(position.lat, position.lng);
+  const objectiveIsSaved =
+    hasObjective && savedObjectives.some((item) => suggestionCoordinateKey(item.lat, item.lon) === currentObjectiveCoordinateKey);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) {
@@ -6335,6 +6528,12 @@ function App() {
             <button className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
               <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
             </button>
+            {hasObjective && (
+              <button className="secondary-btn header-nav-btn" onClick={handleToggleSaveObjective}>
+                {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
+                <span className="nav-btn-label">{objectiveIsSaved ? 'Saved' : 'Save'}</span>
+              </button>
+            )}
             <button className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
               <Link2 size={14} /> <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
             </button>

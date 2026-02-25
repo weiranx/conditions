@@ -1,5 +1,5 @@
 import React from 'react';
-import { LoaderCircle, Mountain, Search, X } from 'lucide-react';
+import { Bookmark, History, LoaderCircle, Mountain, Search, X } from 'lucide-react';
 import { isMountainSuggestion, type Suggestion } from '../../lib/search';
 
 interface SearchBoxProps {
@@ -49,7 +49,7 @@ export function SearchBox({
           ref={searchInputRef}
           type="text"
           placeholder="Search by peak, trailhead, zone, town, or coordinates"
-          defaultValue={searchQuery}
+          value={searchQuery}
           inputMode="search"
           enterKeyHint="search"
           autoComplete="off"
@@ -108,6 +108,8 @@ export function SearchBox({
                   role="option"
                   aria-selected={activeSuggestionIndex === index}
                   className={`suggestion-item ${suggestion.class === 'popular' ? 'popular-suggestion' : ''} ${
+                    suggestion.class === 'saved' ? 'saved-suggestion' : ''
+                  } ${suggestion.class === 'recent' ? 'recent-suggestion' : ''} ${
                     activeSuggestionIndex === index ? 'active' : ''
                   }`}
                   onClick={() => onSelectSuggestion(suggestion)}
@@ -119,6 +121,8 @@ export function SearchBox({
                         ⭐
                       </span>
                     )}
+                    {suggestion.class === 'saved' && <Bookmark size={13} className="suggestion-title-icon" aria-hidden="true" />}
+                    {suggestion.class === 'recent' && <History size={13} className="suggestion-title-icon" aria-hidden="true" />}
                     {isMountainSuggestion(suggestion) && <Mountain size={14} className="suggestion-title-icon" aria-hidden="true" />}
                     <span>{suggestion.name.split(',')[0]}</span>
                   </strong>

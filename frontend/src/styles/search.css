@@ -167,6 +167,28 @@
   background: #e5f0e5;
 }
 
+.saved-suggestion {
+  background: #f5f3ea;
+  border-color: #ddd6c2;
+}
+
+.saved-suggestion:hover,
+.saved-suggestion.active {
+  background: #eee7d5;
+  border-color: #d1c7ae;
+}
+
+.recent-suggestion {
+  background: #f1f5f3;
+  border-color: #d6dcd7;
+}
+
+.recent-suggestion:hover,
+.recent-suggestion.active {
+  background: #e8efeb;
+  border-color: #c8d2cc;
+}
+
 .suggestion-title {
   display: inline-flex;
   align-items: center;
@@ -249,6 +271,28 @@
 :root[data-theme='dark'] .popular-suggestion.active {
   background: #233646;
   border-color: #3e5668;
+}
+
+:root[data-theme='dark'] .saved-suggestion {
+  background: #2b2a20;
+  border-color: #4d4938;
+}
+
+:root[data-theme='dark'] .saved-suggestion:hover,
+:root[data-theme='dark'] .saved-suggestion.active {
+  background: #353323;
+  border-color: #625c45;
+}
+
+:root[data-theme='dark'] .recent-suggestion {
+  background: #1e2f35;
+  border-color: #35505a;
+}
+
+:root[data-theme='dark'] .recent-suggestion:hover,
+:root[data-theme='dark'] .recent-suggestion.active {
+  background: #263b45;
+  border-color: #44616d;
 }
 
 :root[data-theme='dark'] .coordinate-suggestion {
