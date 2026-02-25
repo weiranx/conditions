@@ -1187,6 +1187,87 @@ input {
   box-shadow: none;
 }
 
+.mission-brief {
+  position: sticky;
+  top: 10px;
+  z-index: 40;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid #d7d1c1;
+  background: linear-gradient(160deg, rgba(255, 252, 245, 0.97) 0%, rgba(243, 249, 240, 0.97) 100%);
+  box-shadow: 0 12px 24px rgba(22, 34, 27, 0.12);
+  display: grid;
+  gap: 10px;
+}
+
+.mission-brief-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mission-brief-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d5d0bf;
+  background: rgba(255, 255, 255, 0.72);
+  color: #33463c;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mission-brief-window strong {
+  font-family: var(--font-data);
+  font-size: 0.76rem;
+}
+
+.mission-brief-objective {
+  color: #516158;
+  font-size: 0.74rem;
+  font-family: var(--font-data);
+}
+
+.mission-brief-signals {
+  display: grid;
+  gap: 6px;
+}
+
+.mission-brief-label {
+  color: #45564d;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mission-brief-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mission-brief-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid #d6d2c3;
+  background: rgba(255, 255, 255, 0.78);
+  color: #394c42;
+  font-size: 0.77rem;
+  font-weight: 600;
+}
+
+.mission-brief-fallback {
+  color: #586960;
+  font-size: 0.78rem;
+}
 
 .data-grid {
   margin-top: 18px;
@@ -4894,6 +4975,7 @@ input {
 
 :root[data-theme='dark'] .data-grid,
 :root[data-theme='dark'] .score-card,
+:root[data-theme='dark'] .mission-brief,
 :root[data-theme='dark'] .critical-window,
 :root[data-theme='dark'] .critical-summary,
 :root[data-theme='dark'] .critical-row,
@@ -4913,6 +4995,19 @@ input {
   background: var(--surface-muted);
   border-color: #31414e;
   color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .mission-brief-window,
+:root[data-theme='dark'] .mission-brief-chip {
+  background: rgba(24, 38, 48, 0.7);
+  border-color: #3b5060;
+  color: #ddebf5;
+}
+
+:root[data-theme='dark'] .mission-brief-label,
+:root[data-theme='dark'] .mission-brief-objective,
+:root[data-theme='dark'] .mission-brief-fallback {
+  color: #b8c9d6;
 }
 
 
@@ -6240,6 +6335,11 @@ input {
     border-radius: 16px;
   }
 
+  .mission-brief {
+    top: 8px;
+    border-radius: 14px;
+  }
+
   .score-card {
     padding: 14px;
     gap: 12px;
@@ -6517,6 +6617,20 @@ input {
 
   .report-action-row {
     width: 100%;
+  }
+
+  .mission-brief {
+    margin-top: 12px;
+    padding: 10px;
+  }
+
+  .mission-brief-head {
+    align-items: flex-start;
+  }
+
+  .mission-brief-window {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .report-action-btn {
@@ -6883,6 +6997,11 @@ input {
     padding: 10px;
     gap: 10px;
     border-radius: 14px;
+  }
+
+  .mission-brief {
+    top: 6px;
+    border-radius: 12px;
   }
 
   .score-card {
