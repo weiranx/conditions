@@ -166,6 +166,23 @@ const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
 const MAX_RECENT_SEARCHES = 8;
 const MAX_SAVED_OBJECTIVES = 12;
 type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
+type SortableCardKey =
+  | 'decisionGate'
+  | 'criticalChecks'
+  | 'atmosphericData'
+  | 'heatRisk'
+  | 'nwsAlerts'
+  | 'travelWindowPlanner'
+  | 'planSnapshot'
+  | 'terrainTrailCondition'
+  | 'snowpackSnapshot'
+  | 'windLoadingHints'
+  | 'recentRainfall'
+  | 'fireRisk'
+  | 'airQuality'
+  | 'sourceFreshness'
+  | 'scoreTrace'
+  | 'recommendedGear';
 const TRAVEL_THRESHOLD_PRESETS: Record<
   TravelThresholdPresetKey,
   { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number }
@@ -5515,24 +5532,6 @@ function App() {
         .filter((item): item is { title: string; detail: string; category: string; tone: string } => item !== null)
     : [];
   const reportCardOrder = (() => {
-    type SortableCardKey =
-      | 'decisionGate'
-      | 'criticalChecks'
-      | 'atmosphericData'
-      | 'heatRisk'
-      | 'nwsAlerts'
-      | 'travelWindowPlanner'
-      | 'planSnapshot'
-      | 'terrainTrailCondition'
-      | 'snowpackSnapshot'
-      | 'windLoadingHints'
-      | 'recentRainfall'
-      | 'fireRisk'
-      | 'airQuality'
-      | 'sourceFreshness'
-      | 'scoreTrace'
-      | 'recommendedGear';
-
     const clampRiskLevel = (value: number): number => Math.max(0, Math.min(5, Math.round(value)));
     const alertSeverityRank = (severity: string | undefined | null): number => {
       const normalized = String(severity || '').trim().toLowerCase();
@@ -5739,6 +5738,35 @@ function App() {
     const sortedKeys = scored.map((entry) => entry.key);
     const innerOrder = new Map<SortableCardKey, number>();
     sortedKeys.forEach((key, idx) => innerOrder.set(key, idx + 10));
+    const cardMeta = sortedKeys.reduce<Record<SortableCardKey, {
+      available: boolean;
+      relevant: boolean;
+      riskLevel: number;
+      score: number;
+      rank: number;
+      defaultVisible: boolean;
+    }>>((acc, key, idx) => {
+      const entry = scored.find((item) => item.key === key);
+      if (!entry) {
+        return acc;
+      }
+      acc[key] = {
+        available: entry.available,
+        relevant: entry.relevant,
+        riskLevel: entry.riskLevel,
+        score: entry.score,
+        rank: idx + 1,
+        defaultVisible: idx < 10 || entry.riskLevel >= 3,
+      };
+      return acc;
+    }, {} as Record<SortableCardKey, {
+      available: boolean;
+      relevant: boolean;
+      riskLevel: number;
+      score: number;
+      rank: number;
+      defaultVisible: boolean;
+    }>);
 
     return {
       scoreCard: 0,
@@ -5762,8 +5790,32 @@ function App() {
       scoreTrace: innerOrder.get('scoreTrace') ?? 24,
       recommendedGear: innerOrder.get('recommendedGear') ?? 25,
       deepDiveData: 140,
-    } as const;
+      cardMeta,
+    };
   })();
+  const [showAllRankedCards, setShowAllRankedCards] = useState(false);
+  const shouldRenderRankedCard = useCallback(
+    (key: SortableCardKey): boolean => {
+      const meta = reportCardOrder.cardMeta[key];
+      if (!meta) {
+        return true;
+      }
+      if (isEssentialView) {
+        return meta.rank <= 8 || meta.riskLevel >= 3;
+      }
+      return showAllRankedCards || meta.defaultVisible;
+    },
+    [isEssentialView, reportCardOrder.cardMeta, showAllRankedCards],
+  );
+  const collapsedRankedCardCount = (Object.keys(reportCardOrder.cardMeta) as SortableCardKey[]).filter(
+    (key) => !isEssentialView && !reportCardOrder.cardMeta[key]?.defaultVisible,
+  ).length;
+
+  useEffect(() => {
+    if (isEssentialView && showAllRankedCards) {
+      setShowAllRankedCards(false);
+    }
+  }, [isEssentialView, showAllRankedCards]);
 
   useEffect(() => {
     setCopiedSatLine(false);
@@ -6871,6 +6923,29 @@ function App() {
                 </div>
               )}
               <div className="source-line">Report cards below are sorted dynamically by current risk level and data relevance.</div>
+              {!isEssentialView && !showAllRankedCards && collapsedRankedCardCount > 0 && (
+                <div className="source-line">
+                  Showing top-priority cards first ({collapsedRankedCardCount} lower-priority card{collapsedRankedCardCount === 1 ? '' : 's'} hidden).
+                  <button
+                    type="button"
+                    className="settings-btn report-action-btn"
+                    onClick={() => setShowAllRankedCards(true)}
+                  >
+                    Show all cards
+                  </button>
+                </div>
+              )}
+              {!isEssentialView && showAllRankedCards && collapsedRankedCardCount > 0 && (
+                <div className="source-line">
+                  <button
+                    type="button"
+                    className="settings-btn report-action-btn"
+                    onClick={() => setShowAllRankedCards(false)}
+                  >
+                    Show priority cards only
+                  </button>
+                </div>
+              )}
               <div className="report-action-row">
                 <button type="button" className="settings-btn report-action-btn" onClick={handlePrintReport}>
                   <Printer size={14} /> Printable Report
@@ -7071,7 +7146,7 @@ function App() {
                 formatWindDisplay={formatWindDisplay}
               />
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('criticalChecks') && (
                 <div className="card checks-card" style={{ order: reportCardOrder.criticalChecks }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7125,7 +7200,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('scoreTrace') && (
                 <div className="card score-trace-card" style={{ order: reportCardOrder.scoreTrace }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7461,7 +7536,7 @@ function App() {
                 </section>
               </div>
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('heatRisk') && (
                 <div className="card heat-risk-card" style={{ order: reportCardOrder.heatRisk }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7507,7 +7582,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('terrainTrailCondition') && (
                 <div className="card terrain-condition-card" style={{ order: reportCardOrder.terrainTrailCondition }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7570,7 +7645,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('recentRainfall') && (
                 <div className="card rainfall-card" style={{ order: reportCardOrder.recentRainfall }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7708,7 +7783,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && windLoadingHintsRelevant && (
+              {shouldRenderRankedCard('windLoadingHints') && windLoadingHintsRelevant && (
                 <div className="card wind-hints-card" style={{ order: reportCardOrder.windLoadingHints }}>
                   <div className="card-header">
                     <span className="card-title">
@@ -7783,7 +7858,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('sourceFreshness') && (
                 <div className="card source-freshness-card" style={{ order: reportCardOrder.sourceFreshness }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7943,7 +8018,7 @@ function App() {
                   )}
                 </div>
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('airQuality') && (
                 <div className="card air-quality-card" style={{ order: reportCardOrder.airQuality }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -7984,7 +8059,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('snowpackSnapshot') && (
                 <div className="card snowpack-card" style={{ order: reportCardOrder.snowpackSnapshot }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -8133,7 +8208,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('fireRisk') && (
                 <div className="card fire-risk-card" style={{ order: reportCardOrder.fireRisk }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -8175,7 +8250,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('planSnapshot') && (
                 <div className="card plan-card" style={{ order: reportCardOrder.planSnapshot }}>
                 <div className="card-header">
                   <span className="card-title">
@@ -8208,7 +8283,7 @@ function App() {
                 </div>
               )}
 
-              {!isEssentialView && (
+              {shouldRenderRankedCard('recommendedGear') && (
                 <div className="card gear-card" style={{ order: reportCardOrder.recommendedGear }}>
                 <div className="card-header">
                   <span className="card-title">
