@@ -2,12 +2,12 @@ import type { CSSProperties } from 'react';
 import { AlertTriangle, Clock, Zap } from 'lucide-react';
 import type { AvalancheElevationBand, SafetyData } from '../../../app/types';
 import {
-  ASPECT_ROSE_ORDER,
   getLocationEntries,
   parseLikelihoodRange,
   parseProblemSizeRange,
   parseTerrainFromLocation,
 } from '../../../utils/avalanche';
+import { AspectElevationRose } from './AspectElevationRose';
 import { HelpHint } from '../CardHelpHint';
 
 interface AvalancheElevationRow {
@@ -208,45 +208,7 @@ export function AvalancheForecastCard({
                         <section className="problem-structured-col">
                           <div className="problem-structured-label">Aspect/Elevation</div>
                           <div className="aspect-elevation-box">
-                            <div className="aspect-elevation-simple">
-                              <div className="aspect-simple-group">
-                                <span className="aspect-simple-heading">Aspects</span>
-                                <div className="aspect-chip-grid" role="list" aria-label="Avalanche problem aspects">
-                                  {ASPECT_ROSE_ORDER.map((aspect) => {
-                                    const isActive = terrain.aspects.size === 0 || terrain.aspects.has(aspect);
-                                    return (
-                                      <span key={`${problem.id || i}-${aspect}`} className={`aspect-chip ${isActive ? 'active' : ''}`} role="listitem">
-                                        {aspect}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                                <p className="aspect-simple-note">
-                                  {terrain.aspects.size === 0
-                                    ? 'No specific aspects listed; treat all aspects as potentially involved.'
-                                    : 'Highlighted aspects are identified in the bulletin.'}
-                                </p>
-                              </div>
-
-                              <div className="aspect-simple-group">
-                                <span className="aspect-simple-heading">Elevation Bands</span>
-                                <div className="elevation-band-list" role="list" aria-label="Avalanche problem elevation bands">
-                                  {[
-                                    { band: 'upper', label: 'Above Treeline' },
-                                    { band: 'middle', label: 'Near Treeline' },
-                                    { band: 'lower', label: 'Below Treeline' },
-                                  ].map((entry) => {
-                                    const isActive = terrain.elevations.size === 0 || terrain.elevations.has(entry.band as 'upper' | 'middle' | 'lower');
-                                    return (
-                                      <div key={`${problem.id || i}-${entry.band}`} className={`elevation-band-row ${isActive ? 'active' : ''}`} role="listitem">
-                                        <span className="elevation-band-label">{entry.label}</span>
-                                        <span className="elevation-band-state">{isActive ? 'Included' : 'Not highlighted'}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
+                            <AspectElevationRose aspects={terrain.aspects} elevations={terrain.elevations} />
                           </div>
                         </section>
 
