@@ -2454,6 +2454,33 @@ input {
   letter-spacing: 0.03em;
 }
 
+.travel-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.travel-preset-btn {
+  border: 1px solid #d2cdbd;
+  background: #f7f2e6;
+  color: #47564e;
+  border-radius: 999px;
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.travel-preset-btn.active {
+  border-color: #9fb7a8;
+  background: #e6f0e8;
+  color: #265240;
+}
+
 .travel-threshold-editor {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5942,6 +5969,18 @@ input {
 
 :root[data-theme='dark'] .travel-thresholds span {
   color: #d2e0ec;
+}
+
+:root[data-theme='dark'] .travel-preset-btn {
+  background: #1b2a35;
+  border-color: #364a5a;
+  color: #c5d4e1;
+}
+
+:root[data-theme='dark'] .travel-preset-btn.active {
+  background: #243b4b;
+  border-color: #4f758d;
+  color: #e8f3fb;
 }
 
 :root[data-theme='dark'] .travel-threshold-row span {

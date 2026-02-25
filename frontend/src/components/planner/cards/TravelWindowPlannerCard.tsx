@@ -14,6 +14,8 @@ interface CriticalWindowRow {
   precipChance?: number;
 }
 
+type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
+
 interface TravelWindowPlannerCardProps {
   order: number;
   travelWindowHoursLabel: string;
@@ -28,6 +30,12 @@ interface TravelWindowPlannerCardProps {
   windThresholdDisplay: string;
   maxPrecipChance: number;
   feelsLikeThresholdDisplay: string;
+  activeTravelThresholdPreset: TravelThresholdPresetKey | null;
+  travelThresholdPresets: Record<
+    TravelThresholdPresetKey,
+    { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number }
+  >;
+  onApplyTravelThresholdPreset: (preset: TravelThresholdPresetKey) => void;
   travelThresholdEditorOpen: boolean;
   setTravelThresholdEditorOpen: Dispatch<SetStateAction<boolean>>;
   windUnitLabel: string;
@@ -70,6 +78,9 @@ export function TravelWindowPlannerCard({
   windThresholdDisplay,
   maxPrecipChance,
   feelsLikeThresholdDisplay,
+  activeTravelThresholdPreset,
+  travelThresholdPresets,
+  onApplyTravelThresholdPreset,
   travelThresholdEditorOpen,
   setTravelThresholdEditorOpen,
   windUnitLabel,
@@ -156,6 +167,19 @@ export function TravelWindowPlannerCard({
             <span>Gust &lt;= {windThresholdDisplay}</span>
             <span>Precip &lt;= {maxPrecipChance}%</span>
             <span>Feels-like &gt;= {feelsLikeThresholdDisplay}</span>
+          </div>
+          <div className="travel-preset-row" role="group" aria-label="Travel threshold presets">
+            {(['conservative', 'standard', 'aggressive'] as const).map((presetKey) => (
+              <button
+                key={presetKey}
+                type="button"
+                className={`travel-preset-btn ${activeTravelThresholdPreset === presetKey ? 'active' : ''}`}
+                onClick={() => onApplyTravelThresholdPreset(presetKey)}
+                aria-pressed={activeTravelThresholdPreset === presetKey}
+              >
+                {travelThresholdPresets[presetKey].label}
+              </button>
+            ))}
           </div>
           <div className="travel-threshold-actions">
             <button

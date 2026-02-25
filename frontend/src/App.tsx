@@ -165,6 +165,15 @@ const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
 const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
 const MAX_RECENT_SEARCHES = 8;
 const MAX_SAVED_OBJECTIVES = 12;
+type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
+const TRAVEL_THRESHOLD_PRESETS: Record<
+  TravelThresholdPresetKey,
+  { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number }
+> = {
+  conservative: { label: 'Conservative', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 15 },
+  standard: { label: 'Standard', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5 },
+  aggressive: { label: 'Aggressive', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5 },
+};
 
 function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'name'>): string {
   return `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}:${normalizeSuggestionText(item.name || '')}`;
@@ -3523,6 +3532,19 @@ function App() {
     );
   };
 
+  const handleApplyTravelThresholdPreset = (presetKey: TravelThresholdPresetKey) => {
+    const preset = TRAVEL_THRESHOLD_PRESETS[presetKey];
+    if (!preset) {
+      return;
+    }
+    updatePreferences({
+      maxWindGustMph: preset.maxWindGustMph,
+      maxPrecipChance: preset.maxPrecipChance,
+      minFeelsLikeF: preset.minFeelsLikeF,
+    });
+    setTravelThresholdEditorOpen(true);
+  };
+
   const applyPreferencesToPlanner = () => {
     setAlpineStartTime(preferences.defaultStartTime);
     setTurnaroundTime(preferences.defaultBackByTime);
@@ -3915,6 +3937,13 @@ function App() {
   const canDecreaseTargetElevation = baseTargetElevationFeet > 0;
   const windThresholdDisplay = formatWindDisplay(preferences.maxWindGustMph);
   const feelsLikeThresholdDisplay = formatTempDisplay(preferences.minFeelsLikeF);
+  const activeTravelThresholdPreset = (Object.entries(TRAVEL_THRESHOLD_PRESETS).find(([, preset]) => {
+    return (
+      Math.abs(preferences.maxWindGustMph - preset.maxWindGustMph) <= 0.01 &&
+      preferences.maxPrecipChance === preset.maxPrecipChance &&
+      Math.abs(preferences.minFeelsLikeF - preset.minFeelsLikeF) <= 0.01
+    );
+  })?.[0] || null) as TravelThresholdPresetKey | null;
   const travelWindowHoursLabel = `${travelWindowHours}h`;
   const windUnitLabel = preferences.windSpeedUnit;
   const tempUnitLabel = preferences.temperatureUnit.toUpperCase();
@@ -6948,6 +6977,9 @@ function App() {
                 windThresholdDisplay={windThresholdDisplay}
                 maxPrecipChance={preferences.maxPrecipChance}
                 feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+                activeTravelThresholdPreset={activeTravelThresholdPreset}
+                travelThresholdPresets={TRAVEL_THRESHOLD_PRESETS}
+                onApplyTravelThresholdPreset={handleApplyTravelThresholdPreset}
                 travelThresholdEditorOpen={travelThresholdEditorOpen}
                 setTravelThresholdEditorOpen={setTravelThresholdEditorOpen}
                 windUnitLabel={windUnitLabel}
