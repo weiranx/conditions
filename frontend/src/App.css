@@ -5205,11 +5205,6 @@ input {
   color: #d9e7f2;
 }
 
-:root[data-theme='dark'] .planner-jump-nav {
-  border-color: #334b5d;
-  background: rgba(14, 25, 34, 0.94);
-}
-
 
 :root[data-theme='dark'] .card-title,
 :root[data-theme='dark'] .problem-structured-title,
@@ -6704,10 +6699,6 @@ input {
 }
 
 @media (max-width: 740px) {
-  .page-shell.page-shell-planner {
-    padding-bottom: calc(110px + env(safe-area-inset-bottom));
-  }
-
   .home-hero {
     border-radius: 18px;
     padding: 16px;
@@ -6915,20 +6906,6 @@ input {
     min-width: 0;
   }
 
-  .planner-jump-nav {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    z-index: 65;
-    overflow: visible;
-    padding: 6px;
-    border-radius: 14px;
-    border: 1px solid #d4cfbe;
-    background: rgba(249, 245, 236, 0.95);
-    box-shadow: 0 12px 24px rgba(20, 30, 24, 0.2);
-  }
-
   .mission-brief {
     margin-top: 12px;
     padding: 10px;
@@ -7101,10 +7078,6 @@ input {
     padding: 10px 8px calc(24px + env(safe-area-inset-bottom));
   }
 
-  .page-shell.page-shell-planner {
-    padding-bottom: calc(106px + env(safe-area-inset-bottom));
-  }
-
   .home-actions .primary-btn,
   .home-actions .settings-btn {
     flex: 1 1 100%;
@@ -7234,10 +7207,6 @@ input {
 @media (max-width: 420px) {
   .app-container {
     padding: 8px 6px 20px;
-  }
-
-  .page-shell.page-shell-planner {
-    padding-bottom: calc(100px + env(safe-area-inset-bottom));
   }
 
   .header-section {
