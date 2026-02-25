@@ -1330,6 +1330,28 @@ input {
   font-size: 0.78rem;
 }
 
+.top-freshness-alert {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #d7b48f;
+  background: linear-gradient(180deg, #fdf1e5 0%, #f9e8d8 100%);
+  color: #7a3f1d;
+  display: grid;
+  gap: 4px;
+}
+
+.top-freshness-alert strong {
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.top-freshness-alert span {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .data-grid {
   margin-top: 18px;
   display: grid;
@@ -5112,6 +5134,12 @@ input {
 :root[data-theme='dark'] .mission-brief-objective,
 :root[data-theme='dark'] .mission-brief-fallback {
   color: #b8c9d6;
+}
+
+:root[data-theme='dark'] .top-freshness-alert {
+  border-color: #7b5740;
+  background: linear-gradient(180deg, #37291f 0%, #2e221b 100%);
+  color: #f1c9a7;
 }
 
 

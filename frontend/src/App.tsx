@@ -5136,6 +5136,20 @@ function App() {
         },
       ]
     : [];
+  const staleOrMissingFreshnessRows = sourceFreshnessRows
+    .map((row) => ({
+      ...row,
+      state: row.stateOverride || freshnessClass(row.issued, row.staleHours),
+    }))
+    .filter((row) => row.state === 'stale' || row.state === 'missing');
+  const hasFreshnessWarning = staleOrMissingFreshnessRows.length > 0;
+  const freshnessWarningSummary = staleOrMissingFreshnessRows
+    .slice(0, 3)
+    .map((row) => {
+      const ageLabel = row.displayValue || (row.state === 'missing' ? 'missing' : formatAgeFromNow(row.issued));
+      return `${row.label}: ${ageLabel}`;
+    })
+    .join(' • ');
   const nwsAlerts = safetyData?.alerts?.alerts || [];
   const nwsAlertCount = safetyData?.alerts?.activeCount ?? nwsAlerts.length;
   const nwsTotalAlertCount = safetyData?.alerts?.totalActiveCount ?? nwsAlertCount;
@@ -6776,6 +6790,13 @@ function App() {
               <span className="mission-brief-fallback">{localizeUnitText(missionBriefPrimarySignal)}</span>
             )}
           </div>
+        </section>
+      )}
+
+      {hasObjective && safetyData && decision && hasFreshnessWarning && (
+        <section className="top-freshness-alert" role="status" aria-live="polite">
+          <strong>Data freshness warning</strong>
+          <span>{freshnessWarningSummary}</span>
         </section>
       )}
 
