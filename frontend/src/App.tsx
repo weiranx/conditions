@@ -54,13 +54,11 @@ import {
   DATE_FMT,
   DEFAULT_CENTER,
   GUST_INCREASE_MPH_PER_1000FT,
-  LEGACY_DEFAULT_START_TIME,
   MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
   SEARCH_DEBOUNCE_MS,
   TEMP_LAPSE_F_PER_1000FT,
-  USER_PREFERENCES_KEY,
   WIND_INCREASE_MPH_PER_1000FT,
 } from './app/constants';
 import {
@@ -115,14 +113,8 @@ import {
   isTravelWindowCoveredByAlertWindow,
   isValidLatLon,
   minutesToTwentyFourHourClock,
-  normalizeActivity,
-  normalizeElevationUnit,
   normalizeForecastDate,
-  normalizeTemperatureUnit,
-  normalizeThemeMode,
   normalizeTimeOrFallback,
-  normalizeTimeStyle,
-  normalizeWindSpeedUnit,
   parseCoordinates,
   parseIsoDateToUtcMs,
   parseIsoToMs,
@@ -134,11 +126,31 @@ import {
   pickOldestIsoTimestamp,
   resolveSelectedTravelWindowMs,
 } from './app/core';
+import { currentDateTimeInputs, dateTimeInputsFor } from './app/date-time-inputs';
 import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
   windDirectionToDegrees,
 } from './utils/avalanche';
+import {
+  computeFeelsLikeF,
+  getDangerLevelClass,
+  normalizeDangerLevel,
+  normalizeElevationInput,
+  parseOptionalElevationInput,
+  parsePrecipNumericValue,
+} from './app/planner-helpers';
+import { getDefaultUserPreferences, loadUserPreferences, persistUserPreferences } from './app/preferences';
+import {
+  collapseWhitespace,
+  escapeHtml,
+  normalizeAlertNarrative,
+  splitAlertNarrativeParagraphs,
+  stringifyRawPayload,
+  summarizeText,
+  toPlainText,
+  truncateText,
+} from './app/text-utils';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -542,309 +554,6 @@ function secondaryCrossLoadingAspects(direction: string | null | undefined): str
   const left = ASPECT_ROSE_ORDER[(centerIndex + 2) % ASPECT_ROSE_ORDER.length];
   const right = ASPECT_ROSE_ORDER[(centerIndex + ASPECT_ROSE_ORDER.length - 2) % ASPECT_ROSE_ORDER.length];
   return Array.from(new Set([left, right]));
-}
-
-function normalizeElevationInput(rawValue: string | null | undefined): string {
-  if (!rawValue) {
-    return '';
-  }
-  const cleaned = rawValue.trim().replace(/,/g, '');
-  if (!/^\d{3,5}$/.test(cleaned)) {
-    return '';
-  }
-  const numeric = Number(cleaned);
-  if (!Number.isFinite(numeric) || numeric < 0 || numeric > 20000) {
-    return '';
-  }
-  return String(Math.round(numeric));
-}
-
-function parseOptionalElevationInput(rawValue: string): number | null {
-  const cleaned = String(rawValue || '').trim().replace(/,/g, '');
-  if (!cleaned) {
-    return null;
-  }
-  const numeric = Number(cleaned);
-  if (!Number.isFinite(numeric)) {
-    return null;
-  }
-  return numeric;
-}
-
-function parsePrecipNumericValue(value: unknown): number {
-  const parsed = parseOptionalFiniteNumber(value);
-  if (Number.isFinite(parsed)) {
-    return parsed;
-  }
-  if (typeof value !== 'string') {
-    return Number.NaN;
-  }
-  const match = value.match(/-?\d+(?:\.\d+)?/);
-  if (!match) {
-    return Number.NaN;
-  }
-  const numeric = Number(match[0]);
-  return Number.isFinite(numeric) ? numeric : Number.NaN;
-}
-
-function currentLocalTimeInput(): string {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
-function dateTimeInputsFor(instant: Date, timeZone?: string | null): { date: string; time: string } {
-  const fallback = {
-    date: formatDateInput(instant),
-    time: `${String(instant.getHours()).padStart(2, '0')}:${String(instant.getMinutes()).padStart(2, '0')}`,
-  };
-
-  if (!timeZone || typeof Intl === 'undefined') {
-    return fallback;
-  }
-
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      hourCycle: 'h23',
-    }).formatToParts(instant);
-    const partMap = parts.reduce<Record<string, string>>((acc, part) => {
-      if (part.type !== 'literal') {
-        acc[part.type] = part.value;
-      }
-      return acc;
-    }, {});
-    if (partMap.year && partMap.month && partMap.day && partMap.hour && partMap.minute) {
-      const rawHour = Number(partMap.hour);
-      const rawMinute = Number(partMap.minute);
-      if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) {
-        return fallback;
-      }
-      const hour = ((Math.round(rawHour) % 24) + 24) % 24;
-      const minute = Math.max(0, Math.min(59, Math.round(rawMinute)));
-      return {
-        date: `${partMap.year}-${partMap.month}-${partMap.day}`,
-        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-      };
-    }
-  } catch {
-    // Fall back to local device time/date if timezone formatting fails.
-  }
-
-  return fallback;
-}
-
-function currentDateTimeInputs(timeZone?: string | null): { date: string; time: string } {
-  return dateTimeInputsFor(new Date(), timeZone);
-}
-
-function computeFeelsLikeF(tempF: number, windMph: number): number {
-  if (!Number.isFinite(tempF)) {
-    return tempF;
-  }
-  if (tempF <= 50 && windMph >= 3) {
-    const feelsLike = 35.74 + 0.6215 * tempF - 35.75 * Math.pow(windMph, 0.16) + 0.4275 * tempF * Math.pow(windMph, 0.16);
-    return Math.round(feelsLike);
-  }
-  return Math.round(tempF);
-}
-
-function normalizeNumberPreference(rawValue: unknown, fallback: number, min: number, max: number): number {
-  const numericValue = Number(rawValue);
-  if (!Number.isFinite(numericValue)) {
-    return fallback;
-  }
-  return Math.max(min, Math.min(max, Math.round(numericValue)));
-}
-
-function normalizeDecimalPreference(rawValue: unknown, fallback: number, min: number, max: number, precision = 2): number {
-  const numericValue = Number(rawValue);
-  if (!Number.isFinite(numericValue)) {
-    return fallback;
-  }
-  const clamped = Math.max(min, Math.min(max, numericValue));
-  return Number(clamped.toFixed(precision));
-}
-
-function getDefaultUserPreferences(): UserPreferences {
-  return {
-    defaultActivity: 'backcountry',
-    defaultStartTime: currentLocalTimeInput(),
-    defaultBackByTime: '12:00',
-    themeMode: 'system',
-    temperatureUnit: 'f',
-    elevationUnit: 'ft',
-    windSpeedUnit: 'mph',
-    timeStyle: 'ampm',
-    maxWindGustMph: 25,
-    maxPrecipChance: 60,
-    minFeelsLikeF: 5,
-    travelWindowHours: 12,
-  };
-}
-
-function loadUserPreferences(): UserPreferences {
-  const defaults = getDefaultUserPreferences();
-
-  if (typeof window === 'undefined') {
-    return defaults;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(USER_PREFERENCES_KEY);
-    if (!raw) {
-      return defaults;
-    }
-
-    const parsed = JSON.parse(raw) as Partial<UserPreferences>;
-    const storedStartTime = normalizeTimeOrFallback(parsed.defaultStartTime || null, defaults.defaultStartTime);
-    const normalizedStartTime =
-      storedStartTime === LEGACY_DEFAULT_START_TIME
-        ? defaults.defaultStartTime
-        : storedStartTime;
-    return {
-      defaultActivity: parsed.defaultActivity ? normalizeActivity(parsed.defaultActivity) : defaults.defaultActivity,
-      defaultStartTime: normalizedStartTime,
-      defaultBackByTime: normalizeTimeOrFallback(parsed.defaultBackByTime || null, defaults.defaultBackByTime),
-      themeMode: normalizeThemeMode(parsed.themeMode),
-      temperatureUnit: normalizeTemperatureUnit(parsed.temperatureUnit),
-      elevationUnit: normalizeElevationUnit(parsed.elevationUnit),
-      windSpeedUnit: normalizeWindSpeedUnit(parsed.windSpeedUnit),
-      timeStyle: normalizeTimeStyle(parsed.timeStyle),
-      maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
-      maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
-      minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
-      travelWindowHours: normalizeNumberPreference(
-        parsed.travelWindowHours,
-        defaults.travelWindowHours,
-        MIN_TRAVEL_WINDOW_HOURS,
-        MAX_TRAVEL_WINDOW_HOURS,
-      ),
-    };
-  } catch {
-    return defaults;
-  }
-}
-
-function persistUserPreferences(preferences: UserPreferences): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(USER_PREFERENCES_KEY, JSON.stringify(preferences));
-}
-
-function normalizeDangerLevel(level: number | undefined): number {
-  if (!Number.isFinite(level)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(5, Math.round(level || 0)));
-}
-
-function getDangerLevelClass(level: number | undefined): string {
-  return `danger-level-${normalizeDangerLevel(level)}`;
-}
-
-function toPlainText(input: string | undefined): string {
-  if (!input) {
-    return '';
-  }
-
-  if (typeof window !== 'undefined' && typeof DOMParser !== 'undefined') {
-    const doc = new DOMParser().parseFromString(input, 'text/html');
-    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
-  }
-
-  return input
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;|&#160;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&rsquo;|&lsquo;/g, "'")
-    .replace(/&ldquo;|&rdquo;/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function summarizeText(input: string | undefined, maxLength?: number): string {
-  const text = toPlainText(input);
-  if (!text) {
-    return '';
-  }
-
-  if (!Number.isFinite(maxLength) || (maxLength as number) <= 0) {
-    return text;
-  }
-
-  const max = Math.round(maxLength as number);
-  if (text.length <= max) {
-    return text;
-  }
-  return `${text.slice(0, max).trimEnd()}...`;
-}
-
-function normalizeAlertNarrative(input: string | null | undefined, maxLength = 3200): string {
-  if (!input) {
-    return '';
-  }
-  const normalized = String(input)
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  if (!normalized) {
-    return '';
-  }
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-}
-
-function splitAlertNarrativeParagraphs(input: string | null | undefined, maxLength = 3200): string[] {
-  return normalizeAlertNarrative(input, maxLength)
-    .split('\n')
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function stringifyRawPayload(payload: unknown): string {
-  try {
-    return JSON.stringify(payload, null, 2);
-  } catch {
-    return '{"error":"Unable to serialize raw payload"}';
-  }
-}
-
-function collapseWhitespace(input: string): string {
-  return input.replace(/\s+/g, ' ').trim();
-}
-
-function truncateText(input: string, maxLength: number): string {
-  if (input.length <= maxLength) {
-    return input;
-  }
-  return `${input.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-}
-
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function assessCriticalWindowPoint(point: WeatherTrendPoint): { level: CriticalRiskLevel; reasons: string[]; score: number } {
@@ -2491,6 +2200,9 @@ function App() {
       setObjectiveName(linkState.objectiveName);
       setSearchQuery(linkState.searchQuery);
       setCommittedSearchQuery(linkState.searchQuery);
+      if (searchInputRef.current && searchInputRef.current.value !== linkState.searchQuery) {
+        searchInputRef.current.value = linkState.searchQuery;
+      }
       setForecastDate(linkState.forecastDate);
       setAlpineStartTime(linkState.alpineStartTime);
       setTurnaroundTime(linkState.turnaroundTime);
