@@ -31,7 +31,10 @@ export function MapUpdater({ position, zoom, focusKey }: { position: L.LatLng; z
   void focusKey;
   useEffect(() => {
     map.flyTo(position, zoom, { animate: true, duration: 1.05 });
-    setTimeout(() => map.invalidateSize(), 400);
+    const timeoutId = setTimeout(() => map.invalidateSize(), 400);
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [position, zoom, focusKey, map]);
   return null;
 }
