@@ -33,7 +33,7 @@ import {
   BookmarkPlus,
   BookmarkCheck,
 } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
 import { fetchApi, readApiErrorMessage } from './lib/api-client';
 import {
@@ -3990,6 +3990,7 @@ function App() {
   ];
   type WeatherTrendChartRow = {
     label: string;
+    hourValue: string | null;
     temp: number | null;
     feelsLike: number | null;
     wind: number | null;
@@ -4003,6 +4004,10 @@ function App() {
     windDirectionLabel: string | null;
   };
   const weatherTrendRows: WeatherTrendChartRow[] = trendWindow.map((point) => {
+    const parsedPointMinutes =
+      parseTimeInputMinutes(String(point?.time || '').trim()) ??
+      parseHourLabelToMinutes(String(point?.time || '').trim()) ??
+      parseSolarClockMinutes(point?.time || undefined);
     const temp = parseOptionalFiniteNumber(point?.temp);
     const wind = parseOptionalFiniteNumber(point?.wind);
     const gust = parseOptionalFiniteNumber(point?.gust);
@@ -4017,6 +4022,7 @@ function App() {
         : null;
     return {
       label: formatClockForStyle(point?.time || '', preferences.timeStyle),
+      hourValue: parsedPointMinutes === null ? null : minutesToTwentyFourHourClock(parsedPointMinutes),
       temp,
       feelsLike: temp !== null && wind !== null ? computeFeelsLikeF(temp, wind) : null,
       wind,
@@ -4058,6 +4064,7 @@ function App() {
   };
   const weatherTrendChartData = weatherTrendRows.map((row) => ({
     label: row.label,
+    hourValue: row.hourValue,
     value: weatherTrendValueForMetric(row, weatherTrendMetric),
     windDirectionLabel: row.windDirectionLabel,
   }));
@@ -4787,6 +4794,25 @@ function App() {
   const weatherHourStepDisabled = weatherHourQuickOptions.length <= 1;
   const weatherHourCanDecrease = !weatherHourStepDisabled && selectedWeatherHourIndex > 0;
   const weatherHourCanIncrease = !weatherHourStepDisabled && selectedWeatherHourIndex >= 0 && selectedWeatherHourIndex < weatherHourQuickOptions.length - 1;
+  const handleWeatherTrendChartClick = (chartState: unknown) => {
+    const parsedState = chartState as { activePayload?: Array<{ payload?: { hourValue?: string | null } }>; activeLabel?: string | number } | null;
+    if (!parsedState) {
+      return;
+    }
+    const payloadHourValue = parsedState.activePayload?.[0]?.payload?.hourValue;
+    if (payloadHourValue) {
+      handleWeatherHourSelect(payloadHourValue);
+      return;
+    }
+    const activeLabel = String(parsedState.activeLabel || '');
+    if (!activeLabel) {
+      return;
+    }
+    const matchedRow = weatherTrendChartData.find((row) => row.label === activeLabel && row.hourValue);
+    if (matchedRow?.hourValue) {
+      handleWeatherHourSelect(matchedRow.hourValue);
+    }
+  };
   const handleWeatherHourStep = (direction: 'decrease' | 'increase') => {
     if (!weatherHourQuickOptions.length) {
       return;
@@ -7345,7 +7371,11 @@ function App() {
                   {weatherTrendHasData ? (
                     <div className="chart-wrap weather-trend-chart-wrap">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={weatherTrendChartData} margin={{ top: 10, right: 12, left: 4, bottom: 2 }}>
+                        <LineChart
+                          data={weatherTrendChartData}
+                          margin={{ top: 10, right: 12, left: 4, bottom: 2 }}
+                          onClick={handleWeatherTrendChartClick}
+                        >
                           <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.35} />
                           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={14} />
                           <YAxis
@@ -7363,12 +7393,49 @@ function App() {
                             }}
                             labelFormatter={(label) => `${label}`}
                           />
+                          {selectedWeatherHour?.value && weatherTrendChartData.some((row) => row.hourValue === selectedWeatherHour.value) && (
+                            <ReferenceLine
+                              x={weatherTrendChartData.find((row) => row.hourValue === selectedWeatherHour.value)?.label}
+                              stroke="rgba(31, 73, 56, 0.45)"
+                              strokeDasharray="4 4"
+                            />
+                          )}
                           <Line
                             type="monotone"
                             dataKey="value"
                             stroke={weatherTrendLineColor}
                             strokeWidth={2.4}
-                            dot={{ r: 1.9 }}
+                            dot={(props) => {
+                              const { cx, cy, payload } = props as {
+                                cx?: number;
+                                cy?: number;
+                                payload?: { hourValue?: string | null; value?: number | null };
+                              };
+                              if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
+                                return null;
+                              }
+                              const pointValue = Number(payload?.value);
+                              if (!Number.isFinite(pointValue)) {
+                                return null;
+                              }
+                              const isSelectedHour = Boolean(selectedWeatherHour?.value && payload?.hourValue === selectedWeatherHour.value);
+                              return (
+                                <circle
+                                  cx={cx}
+                                  cy={cy}
+                                  r={isSelectedHour ? 4.8 : 1.9}
+                                  fill={isSelectedHour ? '#fefaf0' : weatherTrendLineColor}
+                                  stroke={weatherTrendLineColor}
+                                  strokeWidth={isSelectedHour ? 2.2 : 1.2}
+                                  style={{ cursor: payload?.hourValue ? 'pointer' : 'default' }}
+                                  onClick={() => {
+                                    if (payload?.hourValue) {
+                                      handleWeatherHourSelect(payload.hourValue);
+                                    }
+                                  }}
+                                />
+                              );
+                            }}
                             activeDot={{ r: 3.8 }}
                             connectNulls={false}
                           />
