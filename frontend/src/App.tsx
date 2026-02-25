@@ -1502,17 +1502,39 @@ function evaluateBackcountryDecision(
   };
 
   const danger = data.avalanche.dangerLevel || 0;
-  const gust = data.weather.windGust || 0;
-  const precip = data.weather.precipChance || 0;
+  let gust = data.weather.windGust || 0;
+  let precip = data.weather.precipChance || 0;
   const score = normalizedDecisionScore(data, options);
-  const feelsLike = data.weather.feelsLike ?? data.weather.temp;
+  let feelsLike = data.weather.feelsLike ?? data.weather.temp;
   const description = data.weather.description || '';
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
   if (weatherUnavailable) {
     addBlocker('Weather data is unavailable — wind, precipitation, and temperature are unknown. Do not make go/no-go decisions from this report.');
   }
-  const hasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
+  const startHasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
+  let hasStormSignal = startHasStormSignal;
+
+  // Scan the full travel window for worst-case conditions
+  let peakGustHour = '';
+  let peakPrecipHour = '';
+  let coldestFeelsLikeHour = '';
+  let stormSignalHour = '';
+  const windowTrend = (data.weather.trend || []).slice(0, preferences.travelWindowHours);
+  for (const wpt of windowTrend) {
+    const wg = Number.isFinite(Number(wpt.gust)) ? Number(wpt.gust) : 0;
+    if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }
+    const wp = Number.isFinite(Number(wpt.precipChance)) ? Number(wpt.precipChance) : 0;
+    if (wp > precip) { precip = wp; peakPrecipHour = wpt.time || ''; }
+    const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
+    const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
+    const wfl = computeFeelsLikeF(wt, ww);
+    if (wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; }
+    if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
+      hasStormSignal = true;
+      stormSignalHour = wpt.time || '';
+    }
+  }
   const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
   const avalancheRelevant = !ignoreAvalancheForDecision && data.avalanche.relevant !== false;
   const avalancheUnknown = avalancheRelevant && Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
@@ -1744,7 +1766,9 @@ function evaluateBackcountryDecision(
       label: 'No convective storm signal (thunder/lightning/hail)',
       ok: !hasStormSignal,
       detail: hasStormSignal
-        ? `Convective risk keywords detected in forecast text: ${normalizedConditionText}.`
+        ? (startHasStormSignal
+          ? `Convective risk keywords in start-time forecast: ${normalizedConditionText}.`
+          : `Convective risk keywords detected at ${stormSignalHour} within travel window.`)
         : `Forecast text: ${normalizedConditionText}. No convective keywords detected.`,
       action: hasStormSignal ? 'Avoid exposed ridgelines and move to lower-consequence terrain windows.' : undefined,
     },
@@ -1752,14 +1776,14 @@ function evaluateBackcountryDecision(
       key: 'precipitation',
       label: `Precipitation chance is at or below ${maxPrecipThreshold}%`,
       ok: precip <= maxPrecipThreshold,
-      detail: `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
+      detail: peakPrecipHour ? `Peak ${precip}% at ${peakPrecipHour} in window (limit ${maxPrecipThreshold}%).` : `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
       action: precip > maxPrecipThreshold ? 'Expect slower travel and reduced traction; tighten route and timing.' : undefined,
     },
     {
       key: 'wind-gust',
       label: `Wind gusts are at or below ${displayMaxGustThreshold}`,
       ok: gust <= maxGustThreshold,
-      detail: `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
+      detail: peakGustHour ? `Peak ${formatWind(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).` : `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
       action: gust > maxGustThreshold ? 'Reduce ridge exposure and shorten high-wind segments.' : undefined,
     },
     {
@@ -1784,7 +1808,7 @@ function evaluateBackcountryDecision(
       key: 'feels-like',
       label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,
       ok: feelsLike >= minFeelsLikeThreshold,
-      detail: `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
+      detail: coldestFeelsLikeHour ? `Coldest ${formatTemp(feelsLike)} at ${coldestFeelsLikeHour} in window (limit ${displayMinFeelsLikeThreshold}).` : `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
       action: feelsLike < minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
     },
   ];
