@@ -5831,8 +5831,10 @@ function App() {
     };
   }, [hasObjective, safetyData, forecastDate, position.lat, position.lng, preferences]);
 
+  const decisionLevel = decision?.level;
+
   useEffect(() => {
-    if (!hasObjective || view !== 'planner' || !safetyData || !decision || decision.level === 'GO') {
+    if (!hasObjective || view !== 'planner' || !safetyData || !decisionLevel || decisionLevel === 'GO') {
       setBetterDaySuggestions([]);
       setBetterDaySuggestionsLoading(false);
       setBetterDaySuggestionsNote(null);
@@ -5970,7 +5972,7 @@ function App() {
     hasObjective,
     view,
     safetyData,
-    decision?.level,
+    decisionLevel,
     forecastDate,
     position.lat,
     position.lng,
