@@ -1802,7 +1802,78 @@ const buildOpenMeteoRainfallApiUrl = (host, lat, lon) => {
   return `https://${host}/v1/forecast?${params.toString()}`;
 };
 
+const buildOpenMeteoRainfallArchiveApiUrl = (host, lat, lon, startDate, endDate) => {
+  const params = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    timezone: 'UTC',
+    start_date: startDate,
+    end_date: endDate,
+    hourly: 'precipitation,rain,snowfall',
+  });
+  return `https://${host}/v1/archive?${params.toString()}`;
+};
+
 const buildOpenMeteoRainfallSourceLink = (lat, lon) => buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon);
+
+const buildRainfallZeroFallback = ({ lat, lon, targetForecastTimeIso, travelWindowHours, reason }) => {
+  const expectedWindowHours = clampTravelWindowHours(travelWindowHours, 12);
+  const normalizedTargetTime = normalizeUtcIsoTimestamp(targetForecastTimeIso);
+  const fallbackAnchorTime = normalizedTargetTime || new Date().toISOString();
+  const fallbackAnchorMs = parseIsoTimeToMs(fallbackAnchorTime) ?? Date.now();
+  const fallbackEndTime = new Date(fallbackAnchorMs + expectedWindowHours * 60 * 60 * 1000).toISOString();
+  const fallbackReason = typeof reason === 'string' && reason.trim() ? reason.trim() : 'upstream precipitation feed unavailable';
+  // If targetForecastTimeIso was null/invalid, we can't determine intent (past vs future).
+  const fallbackMode = !normalizedTargetTime
+    ? 'unknown'
+    : fallbackAnchorMs > Date.now() + 60 * 60 * 1000
+    ? 'projected_for_selected_start'
+    : 'observed_recent';
+
+  return {
+    source: 'Open-Meteo Precipitation Fallback (zeroed totals)',
+    status: 'partial',
+    mode: fallbackMode,
+    issuedTime: fallbackAnchorTime,
+    anchorTime: fallbackAnchorTime,
+    timezone: 'UTC',
+    fallbackMode: 'zeroed_totals',
+    expected: {
+      status: 'no_data',
+      travelWindowHours: expectedWindowHours,
+      startTime: fallbackAnchorTime,
+      endTime: fallbackEndTime,
+      rainWindowMm: null,
+      rainWindowIn: null,
+      snowWindowCm: null,
+      snowWindowIn: null,
+      note: `Expected precipitation unavailable for the next ${expectedWindowHours}h because upstream feed data was unavailable.`,
+    },
+    totals: {
+      rainPast12hMm: null,
+      rainPast24hMm: null,
+      rainPast48hMm: null,
+      rainPast12hIn: null,
+      rainPast24hIn: null,
+      rainPast48hIn: null,
+      snowPast12hCm: null,
+      snowPast24hCm: null,
+      snowPast48hCm: null,
+      snowPast12hIn: null,
+      snowPast24hIn: null,
+      snowPast48hIn: null,
+      // Legacy aliases retained for compatibility with older clients.
+      past12hMm: null,
+      past24hMm: null,
+      past48hMm: null,
+      past12hIn: null,
+      past24hIn: null,
+      past48hIn: null,
+    },
+    note: `Precipitation totals are on conservative zero fallback because upstream data could not be fetched (${fallbackReason}). Verify upstream before relying on this window.`,
+    link: buildOpenMeteoRainfallSourceLink(lat, lon),
+  };
+};
 
 const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWindowHours, fetchOptions) => {
   const rainfallCacheKey = `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
@@ -1813,6 +1884,8 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
 
   let rainfallJson = null;
   let usingCachedPayload = false;
+  let usingStaleCachedPayload = false;
+  let usingArchivePayload = false;
   let lastError = null;
 
   for (const apiUrl of apiUrls) {
@@ -1840,15 +1913,47 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
 
   if (!rainfallJson) {
     const cachedEntry = rainfallPayloadCache.get(rainfallCacheKey);
-    const cachedFresh =
-      cachedEntry &&
-      cachedEntry.payload &&
-      Date.now() - Number(cachedEntry.fetchedAt || 0) <= RAINFALL_CACHE_TTL_MS;
+    const hasCachedPayload = Boolean(cachedEntry && cachedEntry.payload);
+    const cachedFresh = hasCachedPayload && Date.now() - Number(cachedEntry.fetchedAt || 0) <= RAINFALL_CACHE_TTL_MS;
     if (cachedFresh) {
       rainfallJson = cachedEntry.payload;
       usingCachedPayload = true;
     } else {
-      throw lastError || new Error('Open-Meteo rainfall request failed');
+      const staleCachedPayload = hasCachedPayload ? cachedEntry.payload : null;
+      const archiveEndDate = new Date().toISOString().slice(0, 10);
+      const archiveStartDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const archiveApiUrl = buildOpenMeteoRainfallArchiveApiUrl('archive-api.open-meteo.com', lat, lon, archiveStartDate, archiveEndDate);
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          const archiveResponse = await fetchWithTimeout(archiveApiUrl, fetchOptions, Math.max(REQUEST_TIMEOUT_MS, 12000));
+          if (!archiveResponse.ok) {
+            throw new Error(`Open-Meteo rainfall archive request failed with status ${archiveResponse.status}`);
+          }
+          rainfallJson = await archiveResponse.json();
+          rainfallPayloadCache.set(rainfallCacheKey, { fetchedAt: Date.now(), payload: rainfallJson });
+          usingArchivePayload = true;
+          lastError = null;
+          break;
+        } catch (archiveError) {
+          lastError = archiveError;
+        }
+      }
+
+      if (!rainfallJson) {
+        if (staleCachedPayload) {
+          rainfallJson = staleCachedPayload;
+          usingCachedPayload = true;
+          usingStaleCachedPayload = true;
+        } else {
+          return buildRainfallZeroFallback({
+            lat,
+            lon,
+            targetForecastTimeIso,
+            travelWindowHours,
+            reason: lastError?.message || 'Open-Meteo rainfall request failed',
+          });
+        }
+      }
     }
   }
 
@@ -1858,13 +1963,25 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const rainArray = Array.isArray(hourly?.rain) ? hourly.rain : [];
   const snowfallArray = Array.isArray(hourly?.snowfall) ? hourly.snowfall : [];
   if (!timeArray.length || (!precipArray.length && !rainArray.length && !snowfallArray.length)) {
-    return createUnavailableRainfallData('no_data');
+    return buildRainfallZeroFallback({
+      lat,
+      lon,
+      targetForecastTimeIso,
+      travelWindowHours,
+      reason: 'timeseries missing from upstream payload',
+    });
   }
 
   const targetTimeMs = parseIsoTimeToMs(targetForecastTimeIso) ?? Date.now();
   const anchorIdx = findClosestTimeIndex(timeArray, targetTimeMs);
   if (anchorIdx < 0) {
-    return createUnavailableRainfallData('no_data');
+    return buildRainfallZeroFallback({
+      lat,
+      lon,
+      targetForecastTimeIso,
+      travelWindowHours,
+      reason: 'timeseries did not include parsable timestamps',
+    });
   }
 
   const anchorTime = normalizeUtcIsoTimestamp(timeArray[anchorIdx] || null);
@@ -1883,7 +2000,10 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const snowPast24hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 24);
   const snowPast48hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 48);
   const expectedWindowHours = clampTravelWindowHours(travelWindowHours, 12);
-  const expectedStartIdx = findFirstTimeIndexAtOrAfter(timeArray, targetTimeMs);
+  // Archive data is historical only — it has no timestamps beyond today, so searching
+  // for a future start time will always return -1. Skip the lookup and mark as unavailable.
+  const archiveFutureTarget = usingArchivePayload && targetTimeMs > Date.now() + 60 * 60 * 1000;
+  const expectedStartIdx = archiveFutureTarget ? -1 : findFirstTimeIndexAtOrAfter(timeArray, targetTimeMs);
   const expectedStartTime = expectedStartIdx >= 0 ? normalizeUtcIsoTimestamp(timeArray[expectedStartIdx]) : null;
   const expectedStartMs = parseIsoTimeToMs(expectedStartTime);
   const rainWindowMm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, rainSeries, expectedStartMs, expectedWindowHours);
@@ -1903,7 +2023,11 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const hasAnyPrecipSignal = hasAnyTotals || expectedHasAnyTotals;
 
   return {
-    source: usingCachedPayload
+    source: usingArchivePayload
+      ? 'Open-Meteo Archive Precipitation (Rain + Snowfall)'
+      : usingStaleCachedPayload
+      ? 'Open-Meteo Precipitation History (Rain + Snowfall, stale cached fallback)'
+      : usingCachedPayload
       ? 'Open-Meteo Precipitation History (Rain + Snowfall, cached fallback)'
       : 'Open-Meteo Precipitation History (Rain + Snowfall)',
     status: hasAnyPrecipSignal ? 'ok' : 'no_data',
@@ -1922,6 +2046,8 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
       snowWindowIn: cmToInches(snowWindowCm),
       note: expectedHasAnyTotals
         ? `Expected precipitation totals for the next ${expectedWindowHours}h from selected start time.`
+        : archiveFutureTarget
+        ? `Archive data is historical only and cannot forecast precipitation for a future start time.`
         : `Expected precipitation totals unavailable for the next ${expectedWindowHours}h from selected start time.`,
     },
     totals: {
@@ -2228,7 +2354,9 @@ const calculateSafetyScore = ({
     applyFactor('Heat', 3, `${heatExposureHours}/${trend.length} trend hours are warm (>=85F apparent).`, 'NOAA hourly trend');
   }
 
-  if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.75) {
+  if (rainfallData?.fallbackMode === 'zeroed_totals') {
+    applyFactor('Surface Conditions', 4, 'Precipitation data unavailable (upstream outage) — surface conditions are unknown; treat as potentially hazardous.', rainfallData?.source || 'Open-Meteo precipitation history');
+  } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.75) {
     applyFactor('Surface Conditions', 7, `Recent rainfall is heavy (${rainPast24hIn.toFixed(2)} in in 24h), increasing slick/trail-softening risk.`, rainfallData?.source || 'Open-Meteo precipitation history');
   } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.3) {
     applyFactor('Surface Conditions', 4, `Recent rainfall (${rainPast24hIn.toFixed(2)} in in 24h) can create slippery or muddy travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
@@ -2410,6 +2538,8 @@ const calculateSafetyScore = ({
     applyConfidencePenalty(5, 'Precipitation history feed unavailable.');
   } else if (rainfallData?.status === 'no_data') {
     applyConfidencePenalty(3, 'Precipitation history has no usable anchor/sample data.');
+  } else if (rainfallData?.fallbackMode === 'zeroed_totals') {
+    applyConfidencePenalty(8, 'Precipitation totals are fallback estimates due upstream feed outage.');
   } else if (rainfallAnchorMs === null) {
     applyConfidencePenalty(3, 'Precipitation anchor time unavailable.');
   } else {
@@ -2446,7 +2576,7 @@ const calculateSafetyScore = ({
     airQualityRelevantForScoring && (airQualityData?.status === 'ok' || airQualityData?.status === 'no_data')
       ? 'Open-Meteo air quality'
       : null,
-    rainfallData?.status === 'ok' || rainfallData?.status === 'partial' || rainfallData?.status === 'no_data'
+    (rainfallData?.status === 'ok' || rainfallData?.status === 'partial' || rainfallData?.status === 'no_data') && rainfallData?.fallbackMode !== 'zeroed_totals'
       ? 'Open-Meteo precipitation history/forecast'
       : null,
     heatRiskData?.status === 'ok' ? 'Heat risk synthesis (forecast + lower-terrain adjustment)' : null,
