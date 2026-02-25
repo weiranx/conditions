@@ -998,6 +998,7 @@ function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPref
     return {
       time: point.time,
       pass: failedRules.length === 0,
+      condition: String(point.condition || '').trim() || 'Unknown',
       reasonSummary: failedRules.length === 0 ? 'Meets thresholds' : failedRules.join(' • '),
       failedRules,
       failedRuleLabels,
@@ -1061,6 +1062,44 @@ function formatIsoDateLabel(isoDate: string): string {
 }
 
 function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle = 'ampm'): TravelWindowInsights {
+  const computeConditionTrend = () => {
+    if (rows.length === 0) {
+      return {
+        conditionTrendLabel: 'Unavailable',
+        conditionTrendSummary: 'No hourly weather condition labels available in this travel window.',
+      };
+    }
+
+    const startCondition = rows[0].condition;
+    const endCondition = rows[rows.length - 1].condition;
+    const normalizedCounts = new Map<string, { label: string; count: number }>();
+    rows.forEach((row) => {
+      const label = String(row.condition || '').trim() || 'Unknown';
+      const key = label.toLowerCase();
+      const existing = normalizedCounts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        normalizedCounts.set(key, { label, count: 1 });
+      }
+    });
+
+    const dominant = Array.from(normalizedCounts.values()).sort((a, b) => (b.count === a.count ? a.label.localeCompare(b.label) : b.count - a.count))[0];
+    const transitioned = startCondition.toLowerCase() !== endCondition.toLowerCase();
+
+    if (!transitioned) {
+      return {
+        conditionTrendLabel: 'Stable conditions',
+        conditionTrendSummary: `${startCondition} remains the primary condition (${dominant.count}/${rows.length}h).`,
+      };
+    }
+
+    return {
+      conditionTrendLabel: `${startCondition} → ${endCondition}`,
+      conditionTrendSummary: `Conditions shift across the window; most frequent: ${dominant.label} (${dominant.count}/${rows.length}h).`,
+    };
+  };
+
   const computeTravelTrend = () => {
     if (rows.length < 2) {
       return {
@@ -1124,6 +1163,7 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
   };
 
   const trend = computeTravelTrend();
+  const conditionTrend = computeConditionTrend();
 
   if (rows.length === 0) {
     return {
@@ -1137,6 +1177,8 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       trendDelta: trend.trendDelta,
       trendLabel: trend.trendLabel,
       trendSummary: trend.trendSummary,
+      conditionTrendLabel: conditionTrend.conditionTrendLabel,
+      conditionTrendSummary: conditionTrend.conditionTrendSummary,
       summary: 'No hourly trend data available for travel-window analysis.',
     };
   }
@@ -1176,6 +1218,8 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       trendDelta: trend.trendDelta,
       trendLabel: trend.trendLabel,
       trendSummary: trend.trendSummary,
+      conditionTrendLabel: conditionTrend.conditionTrendLabel,
+      conditionTrendSummary: conditionTrend.conditionTrendSummary,
       summary: `No clean travel window in the next ${rows.length} hours under current thresholds. ${trend.trendSummary}`,
     };
   }
@@ -1192,6 +1236,8 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       trendDelta: trend.trendDelta,
       trendLabel: trend.trendLabel,
       trendSummary: trend.trendSummary,
+      conditionTrendLabel: conditionTrend.conditionTrendLabel,
+      conditionTrendSummary: conditionTrend.conditionTrendSummary,
       summary: `Passing ${passHours}/${rows.length} hours. ${trend.trendSummary}`,
     };
   }
@@ -1210,6 +1256,8 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
       trendDelta: trend.trendDelta,
       trendLabel: trend.trendLabel,
       trendSummary: trend.trendSummary,
+      conditionTrendLabel: conditionTrend.conditionTrendLabel,
+      conditionTrendSummary: conditionTrend.conditionTrendSummary,
       summary: `${baseSummary} First clean hour starts at ${formatClockForStyle(nextCleanWindow.start, timeStyle)}. ${trend.trendSummary}`,
     };
   }
@@ -1225,6 +1273,8 @@ function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle
     trendDelta: trend.trendDelta,
     trendLabel: trend.trendLabel,
     trendSummary: trend.trendSummary,
+    conditionTrendLabel: conditionTrend.conditionTrendLabel,
+    conditionTrendSummary: conditionTrend.conditionTrendSummary,
     summary: `${baseSummary} ${trend.trendSummary}`,
   };
 }

@@ -164,6 +164,11 @@ export function TravelWindowPlannerCard({
               <strong className="travel-overview-value">{travelWindowInsights.trendLabel}</strong>
               <small className="travel-overview-subvalue">{travelWindowInsights.trendSummary}</small>
             </article>
+            <article className="travel-overview-item" role="listitem">
+              <span className="travel-overview-label">Weather Conditions Trend</span>
+              <strong className="travel-overview-value">{travelWindowInsights.conditionTrendLabel}</strong>
+              <small className="travel-overview-subvalue">{travelWindowInsights.conditionTrendSummary}</small>
+            </article>
           </div>
           <div className="travel-thresholds">
             <span>Gust &lt;= {windThresholdDisplay}</span>
