@@ -2206,7 +2206,7 @@ function App() {
       backendWakeNoticeTimeout.current = null;
     }
 
-    if (!isProductionBuild || !loading) {
+    if (!isProductionBuild || (!loading && !searchLoading)) {
       setShowBackendWakeNotice(false);
       return;
     }
@@ -2223,7 +2223,7 @@ function App() {
         backendWakeNoticeTimeout.current = null;
       }
     };
-  }, [isProductionBuild, loading]);
+  }, [isProductionBuild, loading, searchLoading]);
 
   useEffect(() => {
     if (!hasObjective || view !== 'planner') {
@@ -6567,6 +6567,7 @@ function App() {
             trimmedSearchQuery={trimmedSearchQuery}
             showSuggestions={showSuggestions}
             searchLoading={searchLoading}
+            showBackendWakeNotice={showBackendWakeNotice}
             suggestions={suggestions}
             activeSuggestionIndex={activeSuggestionIndex}
             canUseCoordinates={Boolean(parsedTypedCoordinates)}
