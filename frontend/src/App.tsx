@@ -1970,10 +1970,22 @@ function App() {
           throw new Error(requestId ? `${emptyResponseMsg} (request ${requestId})` : emptyResponseMsg);
         }
 
-        setSafetyData(payload as SafetyData);
-        lastLoadedSafetyKeyRef.current = requestKey;
-        if (wakeRetryStateRef.current?.key === requestKey) {
-          clearWakeRetry();
+        const pending = pendingSafetyRequestRef.current;
+        const pendingRequestKey = pending
+          ? buildSafetyRequestKey(
+              pending.lat,
+              pending.lon,
+              pending.date,
+              pending.startTime,
+              safeTravelWindowHours,
+            )
+          : null;
+        if (!pendingRequestKey || pendingRequestKey === requestKey) {
+          setSafetyData(payload as SafetyData);
+          lastLoadedSafetyKeyRef.current = requestKey;
+          if (wakeRetryStateRef.current?.key === requestKey) {
+            clearWakeRetry();
+          }
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'System error';
@@ -2194,6 +2206,12 @@ function App() {
       isApplyingPopStateRef.current = true;
       const linkState = parseLinkState(todayDate, maxForecastDate, preferences);
       clearWakeRetry();
+      setSafetyData(null);
+      setDayOverDay(null);
+      setBetterDaySuggestions([]);
+      setBetterDaySuggestionsLoading(false);
+      setBetterDaySuggestionsNote(null);
+      lastLoadedSafetyKeyRef.current = null;
       setView(linkState.view);
       setPosition(linkState.position);
       setHasObjective(linkState.hasObjective);
