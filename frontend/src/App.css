@@ -1352,6 +1352,24 @@ input {
   line-height: 1.4;
 }
 
+.planner-jump-nav {
+  display: none;
+}
+
+.planner-jump-btn {
+  border: 1px solid #d0cbbb;
+  background: #f6f1e5;
+  color: #32443a;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 .data-grid {
   margin-top: 18px;
   display: grid;
@@ -5142,6 +5160,12 @@ input {
   color: #f1c9a7;
 }
 
+:root[data-theme='dark'] .planner-jump-btn {
+  border-color: #365063;
+  background: #1b2a35;
+  color: #d9e7f2;
+}
+
 
 :root[data-theme='dark'] .card-title,
 :root[data-theme='dark'] .problem-structured-title,
@@ -6394,6 +6418,25 @@ input {
     border-radius: 16px;
   }
 
+  .planner-jump-nav {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .planner-jump-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .planner-jump-btn {
+    flex: 0 0 auto;
+  }
+
   .map-section {
     height: min(48vh, 430px);
     min-height: 230px;
@@ -6789,6 +6832,11 @@ input {
 
   .report-action-row {
     width: 100%;
+  }
+
+  .planner-jump-btn {
+    min-height: 30px;
+    padding: 5px 10px;
   }
 
   .mission-brief {

@@ -17,6 +17,7 @@ interface CriticalWindowRow {
 type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
 
 interface TravelWindowPlannerCardProps {
+  sectionId?: string;
   order: number;
   travelWindowHoursLabel: string;
   peakCriticalWindow: CriticalWindowRow | null;
@@ -65,6 +66,7 @@ interface TravelWindowPlannerCardProps {
 }
 
 export function TravelWindowPlannerCard({
+  sectionId,
   order,
   travelWindowHoursLabel,
   peakCriticalWindow,
@@ -116,7 +118,7 @@ export function TravelWindowPlannerCard({
         : 'is-watch';
 
   return (
-    <div className="card projection-card" style={{ order }}>
+    <div id={sectionId} className="card projection-card" style={{ order }}>
       <div className="card-header">
         <span className="card-title">
           Travel Window Planner ({travelWindowHoursLabel})

@@ -3712,6 +3712,16 @@ function App() {
     },
     [startViewChange],
   );
+  const jumpToPlannerSection = useCallback((sectionId: string) => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
   const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
@@ -6801,6 +6811,23 @@ function App() {
       )}
 
       {hasObjective && safetyData && decision && (
+        <nav className="planner-jump-nav" aria-label="Quick report navigation">
+          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-decision')}>
+            Decision
+          </button>
+          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-travel')}>
+            Travel
+          </button>
+          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-weather')}>
+            Weather
+          </button>
+          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-alerts')}>
+            Alerts
+          </button>
+        </nav>
+      )}
+
+      {hasObjective && safetyData && decision && (
         <div className="data-grid">
           <div className="score-card" style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
             <div className="score-value" style={{ color: getScoreColor(safetyData.safety.score) }}>
@@ -6850,7 +6877,7 @@ function App() {
 
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
             <div className="report-column">
-              <div className="card decision-card" style={{ order: reportCardOrder.decisionGate }}>
+              <div id="planner-section-decision" className="card decision-card" style={{ order: reportCardOrder.decisionGate }}>
                 <div className="card-header">
                   <span className="card-title">
                     <ShieldCheck size={14} /> Decision Gate
@@ -6985,6 +7012,7 @@ function App() {
               </div>
 
               <TravelWindowPlannerCard
+                sectionId="planner-section-travel"
                 order={reportCardOrder.travelWindowPlanner}
                 travelWindowHoursLabel={travelWindowHoursLabel}
                 peakCriticalWindow={peakCriticalWindow}
@@ -7132,7 +7160,7 @@ function App() {
             </div>
 
             <div className="report-column">
-              <div className="card weather-card" style={{ order: reportCardOrder.atmosphericData }}>
+              <div id="planner-section-weather" className="card weather-card" style={{ order: reportCardOrder.atmosphericData }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Thermometer size={14} /> Weather
@@ -7776,7 +7804,7 @@ function App() {
                 </div>
               )}
 
-              <div className="card nws-alerts-card" style={{ order: reportCardOrder.nwsAlerts }}>
+              <div id="planner-section-alerts" className="card nws-alerts-card" style={{ order: reportCardOrder.nwsAlerts }}>
                   <div className="card-header">
                     <span className="card-title">
                       <AlertTriangle size={14} /> NWS Alerts
