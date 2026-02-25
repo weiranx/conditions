@@ -33,7 +33,7 @@ import {
   BookmarkPlus,
   BookmarkCheck,
 } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
 import { fetchApi, readApiErrorMessage } from './lib/api-client';
 import {
@@ -3990,6 +3990,7 @@ function App() {
   ];
   type WeatherTrendChartRow = {
     label: string;
+    hourValue: string | null;
     temp: number | null;
     feelsLike: number | null;
     wind: number | null;
@@ -4003,6 +4004,10 @@ function App() {
     windDirectionLabel: string | null;
   };
   const weatherTrendRows: WeatherTrendChartRow[] = trendWindow.map((point) => {
+    const parsedPointMinutes =
+      parseTimeInputMinutes(String(point?.time || '').trim()) ??
+      parseHourLabelToMinutes(String(point?.time || '').trim()) ??
+      parseSolarClockMinutes(point?.time || undefined);
     const temp = parseOptionalFiniteNumber(point?.temp);
     const wind = parseOptionalFiniteNumber(point?.wind);
     const gust = parseOptionalFiniteNumber(point?.gust);
@@ -4017,6 +4022,7 @@ function App() {
         : null;
     return {
       label: formatClockForStyle(point?.time || '', preferences.timeStyle),
+      hourValue: parsedPointMinutes === null ? null : minutesToTwentyFourHourClock(parsedPointMinutes),
       temp,
       feelsLike: temp !== null && wind !== null ? computeFeelsLikeF(temp, wind) : null,
       wind,
@@ -4058,6 +4064,7 @@ function App() {
   };
   const weatherTrendChartData = weatherTrendRows.map((row) => ({
     label: row.label,
+    hourValue: row.hourValue,
     value: weatherTrendValueForMetric(row, weatherTrendMetric),
     windDirectionLabel: row.windDirectionLabel,
   }));
@@ -7363,12 +7370,43 @@ function App() {
                             }}
                             labelFormatter={(label) => `${label}`}
                           />
+                          {selectedWeatherHour?.value && weatherTrendChartData.some((row) => row.hourValue === selectedWeatherHour.value) && (
+                            <ReferenceLine
+                              x={weatherTrendChartData.find((row) => row.hourValue === selectedWeatherHour.value)?.label}
+                              stroke="rgba(31, 73, 56, 0.45)"
+                              strokeDasharray="4 4"
+                            />
+                          )}
                           <Line
                             type="monotone"
                             dataKey="value"
                             stroke={weatherTrendLineColor}
                             strokeWidth={2.4}
-                            dot={{ r: 1.9 }}
+                            dot={(props) => {
+                              const { cx, cy, payload } = props as {
+                                cx?: number;
+                                cy?: number;
+                                payload?: { hourValue?: string | null; value?: number | null };
+                              };
+                              if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
+                                return null;
+                              }
+                              const pointValue = Number(payload?.value);
+                              if (!Number.isFinite(pointValue)) {
+                                return null;
+                              }
+                              const isSelectedHour = Boolean(selectedWeatherHour?.value && payload?.hourValue === selectedWeatherHour.value);
+                              return (
+                                <circle
+                                  cx={cx}
+                                  cy={cy}
+                                  r={isSelectedHour ? 4.8 : 1.9}
+                                  fill={isSelectedHour ? '#fefaf0' : weatherTrendLineColor}
+                                  stroke={weatherTrendLineColor}
+                                  strokeWidth={isSelectedHour ? 2.2 : 1.2}
+                                />
+                              );
+                            }}
                             activeDot={{ r: 3.8 }}
                             connectNulls={false}
                           />
