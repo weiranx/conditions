@@ -2,6 +2,14 @@
 
 React + Vite client for Backcountry Conditions planner UI.
 
+Primary views:
+
+- `home`: objective setup + feature overview
+- `planner`: full safety report, travel-window analysis, and report actions
+- `settings`: defaults/thresholds/units/theme
+- `status`: built-in frontend/backend health checks
+- `trip`: multi-day forecast sweep for one objective
+
 ## Run Locally
 
 ```bash

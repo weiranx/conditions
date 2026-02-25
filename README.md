@@ -12,11 +12,13 @@ Built by Weiran Xiong with AI support.
 
 - Interactive objective search + map pin workflow
 - Time-aware condition reports (`date` + `start time`)
+- Configurable travel-window analysis (`travel_window_hours`, 1-24h)
 - Avalanche forecast ingestion with center/zone matching and fallback handling
 - Snowpack snapshot from NRCS SNOTEL + NOAA NOHRSC
 - Rainfall/snowfall rolling totals (12h/24h/48h)
 - NWS alerts, air quality, fire-risk synthesis, and source freshness
 - Shareable planner URLs, printable report, and SAT one-liner output
+- Multi-day trip risk view and built-in app status checks
 - Unit settings for temperature, elevation, wind speed, and time style
 
 ## Repository Layout
@@ -58,9 +60,10 @@ Notes:
 
 ## API Endpoints
 
-- `GET /api/safety?lat={lat}&lon={lon}&date=YYYY-MM-DD&start=HH:mm`
+- `GET /api/safety?lat={lat}&lon={lon}&date=YYYY-MM-DD&start=HH:mm&travel_window_hours=12`
+- `GET /api/sat-oneliner?lat={lat}&lon={lon}&date=YYYY-MM-DD&start=HH:mm`
 - `GET /api/search?q={query}`
-- `GET /healthz` and `GET /api/healthz`
+- `GET /healthz`, `GET /health`, `GET /api/healthz`, `GET /api/health`
 
 See full contract details in `docs/api.md`.
 

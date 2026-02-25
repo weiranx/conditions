@@ -5,11 +5,11 @@ Base URL:
 - Development: `http://localhost:3001`
 - Production: your deployed backend origin
 
-All API routes are JSON.
+All API routes return JSON.
 
 ## `GET /api/safety`
 
-Returns a synthesized planning report for a coordinate, date, and start time.
+Returns a synthesized planning report for a coordinate, date, selected start time, and travel window.
 
 ### Query Parameters
 
@@ -17,6 +17,13 @@ Returns a synthesized planning report for a coordinate, date, and start time.
 - `lon` (required): decimal longitude (`-180..180`)
 - `date` (optional): `YYYY-MM-DD`
 - `start` (optional): `HH:mm` (24-hour format)
+- `travel_window_hours` (optional): integer window (`1..24`, default `12`)
+- `travelWindowHours` (optional): camelCase alias for `travel_window_hours`
+
+Behavior notes:
+
+- If `start` is missing/invalid, backend selects the first available NOAA hourly period for the selected date.
+- `travel_window_hours` values are rounded and clamped to `1..24`; invalid values fall back to `12`.
 
 ### Validation Behavior
 
@@ -28,7 +35,7 @@ Returns a synthesized planning report for a coordinate, date, and start time.
 ### Example
 
 ```bash
-curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21&start=06:30"
+curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21&start=06:30&travel_window_hours=12"
 ```
 
 ### Response Shape (Top Level)
@@ -44,8 +51,10 @@ curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21
 - `rainfall`: rolling precipitation totals and source metadata
 - `snowpack`: SNOTEL + NOHRSC observations and summary
 - `fireRisk`: synthesized fire-risk signal
+- `heatRisk`: synthesized heat-risk signal
+- `terrainCondition`: synthesized terrain-surface condition model
+- `trail`: terrain/trail surface classification string
 - `gear`: list of gear-focus suggestions
-- `trail`: terrain/trail surface classification
 - `safety`: score, confidence, factors, explanations
 - `aiAnalysis`: plain-language summary
 
@@ -67,7 +76,7 @@ Compatibility aliases are also included:
 
 ## `GET /api/sat-oneliner`
 
-Returns a satellite-friendly one-line condition summary generated from the same planning inputs as `/api/safety`.
+Returns a satellite-friendly one-line condition summary generated from `/api/safety`.
 
 ### Query Parameters
 

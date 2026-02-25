@@ -5,7 +5,7 @@ Express API for:
 - `GET /api/safety`
 - `GET /api/sat-oneliner`
 - `GET /api/search`
-- `GET /healthz` and `GET /api/healthz`
+- `GET /healthz`, `GET /health`, `GET /api/healthz`, `GET /api/health`
 
 ## Run Locally
 
