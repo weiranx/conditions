@@ -33,6 +33,7 @@ interface AvalancheForecastCardProps {
   getDangerGlyph: (level: number) => string;
   summarizeText: (text: string | undefined, maxLength?: number) => string;
   toPlainText: (value: string) => string;
+  objectiveElevationFt?: number | null;
 }
 
 export function AvalancheForecastCard({
@@ -52,6 +53,7 @@ export function AvalancheForecastCard({
   getDangerGlyph,
   summarizeText,
   toPlainText,
+  objectiveElevationFt,
 }: AvalancheForecastCardProps) {
   return (
     <div className="card avy-card" style={{ order }}>
@@ -79,6 +81,12 @@ export function AvalancheForecastCard({
       {avalancheExpiredForSelectedStart && (
         <p className="muted-note">This bulletin is expired for the selected start time and is shown for context only.</p>
       )}
+      {avalanche.staleWarning === '72h' && (
+        <p className="muted-note stale-warning-banner">This bulletin is over 72 hours old — treat danger ratings as unknown.</p>
+      )}
+      {avalanche.staleWarning === '48h' && (
+        <p className="muted-note">This bulletin is over 48 hours old. Verify the latest forecast before departure.</p>
+      )}
 
       {!avalancheRelevant ? (
         <div className="avy-forecast-body">
@@ -99,6 +107,9 @@ export function AvalancheForecastCard({
                 {avalancheUnknown ? 'Overall: Unknown' : `Overall: L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
               </span>
             </div>
+            {!avalancheUnknown && Number.isFinite(objectiveElevationFt) && objectiveElevationFt != null && (
+              <span className="objective-elev-note muted-note">Objective: ~{Math.round(objectiveElevationFt).toLocaleString()} ft — check which band applies to your route.</span>
+            )}
 
             {avalancheUnknown ? (
               <div className="avy-coverage-note unknown-mode-panel">

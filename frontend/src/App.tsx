@@ -683,7 +683,7 @@ function getDefaultUserPreferences(): UserPreferences {
     elevationUnit: 'ft',
     windSpeedUnit: 'mph',
     timeStyle: 'ampm',
-    maxWindGustMph: 32,
+    maxWindGustMph: 25,
     maxPrecipChance: 60,
     minFeelsLikeF: 5,
     travelWindowHours: 12,
@@ -1743,7 +1743,7 @@ function evaluateBackcountryDecision(
   } else if (precip >= Math.max(55, maxPrecipThreshold)) {
     addCaution(`Precipitation chance at ${precip}% can create slick surfaces and slower travel.`);
   }
-  if (gust >= Math.max(42, maxGustThreshold + 10)) {
+  if (gust >= Math.max(35, maxGustThreshold + 10)) {
     addBlocker(`Wind gusts around ${formatWind(gust)} exceed conservative backcountry thresholds.`);
   } else if (gust >= maxGustThreshold) {
     addCaution(`Wind gusts near ${formatWind(gust)} can affect exposed movement and stability.`);
@@ -3525,7 +3525,7 @@ function App() {
       return;
     }
     const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(80, mphValue)).toFixed(2)) });
+    updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(40, mphValue)).toFixed(2)) });
   };
 
   const handleWindThresholdDisplayBlur = () => {
@@ -3544,7 +3544,7 @@ function App() {
       return;
     }
     const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    const committedMph = Number(Math.max(10, Math.min(80, mphValue)).toFixed(2));
+    const committedMph = Number(Math.max(10, Math.min(40, mphValue)).toFixed(2));
     updatePreferences({ maxWindGustMph: committedMph });
     setMaxWindGustDraft(
       convertWindMphToDisplayValue(committedMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
@@ -6786,6 +6786,9 @@ function App() {
                 </button>
               </div>
               {satelliteConditionLine && <p className="sat-line-preview">{satelliteConditionLine}</p>}
+              {satelliteConditionLine && (
+                <p className="muted-note sat-limit-note">Formatted for 170-character InReach/SPOT satellite messenger limit ({satelliteConditionLine.length}/170 chars)</p>
+              )}
             </div>
           </div>
 
@@ -8132,6 +8135,7 @@ function App() {
             getDangerGlyph={getDangerGlyph}
             summarizeText={summarizeText}
             toPlainText={toPlainText}
+            objectiveElevationFt={safetyData.weather.elevation ?? null}
           />
 
           <FieldBriefCard

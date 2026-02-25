@@ -133,6 +133,7 @@ export interface SafetyData {
     publishedTime?: string;
     expiresTime?: string;
     generatedTime?: string | null;
+    staleWarning?: '48h' | '72h';
   };
   alerts?: {
     source?: string;

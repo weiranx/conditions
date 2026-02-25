@@ -694,6 +694,12 @@ const parseClockToMinutes = (value) => {
   return hour * 60 + minute;
 };
 
+const formatMinutesToClock = (totalMinutes) => {
+  const h = Math.floor(totalMinutes / 60) % 24;
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
 const parseIsoClockMinutes = (isoValue) => {
   if (typeof isoValue !== 'string') {
     return null;
@@ -1422,7 +1428,7 @@ const evaluateSnowpackSignal = (snowpackData) => {
   };
 };
 
-const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheData, snowpackData }) => {
+const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheData, snowpackData, rainfallData }) => {
   if (avalancheData?.coverageStatus === 'expired_for_selected_start') {
     return {
       relevant: true,
@@ -1438,18 +1444,23 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
     };
   }
 
+  const expectedSnowWindowIn = Number(rainfallData?.expected?.snowWindowIn);
+  if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= 6) {
+    return { relevant: true, reason: 'Significant snow accumulation (≥6 in) expected during the travel window — active loading increases avalanche cycle risk.' };
+  }
+
   const objectiveElevationFt = Number(weatherData?.elevation);
   const tempF = Number(weatherData?.temp);
   const feelsLikeF = Number(weatherData?.feelsLike);
   const precipChance = Number(weatherData?.precipChance);
   const description = String(weatherData?.description || '').toLowerCase();
   const month = parseForecastMonth(selectedDate || weatherData?.forecastDate || '');
-  const isWinterWindow = month !== null && AVALANCHE_WINTER_MONTHS.has(month);
-  const isShoulderWindow = month !== null && AVALANCHE_SHOULDER_MONTHS.has(month);
-  const seasonUnknown = month === null;
   const highLatitude = Math.abs(Number(lat)) >= 42;
   const highElevation = Number.isFinite(objectiveElevationFt) && objectiveElevationFt >= 8500;
   const midElevation = Number.isFinite(objectiveElevationFt) && objectiveElevationFt >= 6500;
+  const isWinterWindow = month !== null && (AVALANCHE_WINTER_MONTHS.has(month) || (highElevation && month === 4));
+  const isShoulderWindow = month !== null && !isWinterWindow && AVALANCHE_SHOULDER_MONTHS.has(month);
+  const seasonUnknown = month === null;
   const snowpackSignal = evaluateSnowpackSignal(snowpackData);
 
   const hasWintrySignal =
@@ -3695,6 +3706,25 @@ const safetyHandler = async (req, res) => {
       };
     }
 
+    if (avalancheData?.coverageStatus === 'reported' && avalancheData?.publishedTime) {
+      const pubMs = parseIsoTimeToMs(avalancheData.publishedTime);
+      if (pubMs !== null) {
+        const ageHours = (Date.now() - pubMs) / (1000 * 60 * 60);
+        if (ageHours > 72) {
+          avalancheData = {
+            ...avalancheData,
+            dangerUnknown: true,
+            staleWarning: '72h',
+            bottomLine: cleanForecastText(
+              `${avalancheData?.bottomLine || ''} NOTE: This bulletin is over 72 hours old and should be treated as expired. Check the avalanche center for a current forecast before departure.`
+            ),
+          };
+        } else if (ageHours > 48) {
+          avalancheData = { ...avalancheData, staleWarning: '48h' };
+        }
+      }
+    }
+
     const [alertsResult, airQualityResult, rainfallResult, snowpackResult] = await Promise.allSettled([
       fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso),
       useCurrentDayAirQuality
@@ -3738,6 +3768,17 @@ const safetyHandler = async (req, res) => {
     terrainConditionData = deriveTerrainCondition(weatherData, snowpackData, rainfallData);
     trailStatus = terrainConditionData.label;
 
+    if (terrainConditionData?.code === 'spring_snow' && solarData?.sunrise) {
+      const sunriseMin = parseClockToMinutes(solarData.sunrise);
+      const startMin = parseClockToMinutes(requestedStartClock);
+      if (Number.isFinite(sunriseMin) && Number.isFinite(startMin) && startMin > sunriseMin + 120) {
+        terrainConditionData = {
+          ...terrainConditionData,
+          summary: terrainConditionData.summary + ` Start time is after the corn-snow window (valid ~sunrise to ${formatMinutesToClock(sunriseMin + 120)}). Surface may already be softening.`,
+        };
+      }
+    }
+
     fireRiskData = buildFireRiskData({
       weatherData,
       alertsData,
@@ -3751,6 +3792,7 @@ const safetyHandler = async (req, res) => {
       weatherData,
       avalancheData,
       snowpackData,
+      rainfallData,
     });
     avalancheData = {
       ...avalancheData,
