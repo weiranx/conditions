@@ -1370,6 +1370,23 @@ input {
   cursor: pointer;
 }
 
+/* Readability floor for secondary metadata text */
+.source-line,
+.objective-line,
+.muted-note,
+.stat-label,
+.plan-label,
+.check-item-detail,
+.check-item-action,
+.travel-overview-label,
+.travel-overview-subvalue,
+.map-time-help,
+.map-coords,
+.map-elevation-label,
+.map-weather-chip-condition {
+  font-size: 0.8rem;
+}
+
 .data-grid {
   margin-top: 18px;
   display: grid;
