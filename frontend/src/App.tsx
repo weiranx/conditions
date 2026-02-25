@@ -132,6 +132,7 @@ import { currentDateTimeInputs, dateTimeInputsFor } from './app/date-time-inputs
 import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
+  parseTerrainFromLocation,
   windDirectionToDegrees,
 } from './utils/avalanche';
 import {
@@ -994,6 +995,11 @@ function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPref
       failedRules.push(`feels ${displayFeelsLike}<${displayMinFeelsLike}`);
       failedRuleLabels.push('Feels-like below limit');
     }
+    const condLower = String(point.condition || '').toLowerCase();
+    if (/thunder|lightning|hail|blizzard/.test(condLower)) {
+      failedRules.push(`condition: ${point.condition}`);
+      failedRuleLabels.push('Severe weather risk');
+    }
 
     return {
       time: point.time,
@@ -1454,6 +1460,7 @@ function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime
 
 type DecisionEvaluationOptions = {
   ignoreAvalancheForDecision?: boolean;
+  turnaroundTime?: string;
 };
 
 function normalizedDecisionScore(data: SafetyData, options: DecisionEvaluationOptions = {}): number {
@@ -1701,6 +1708,18 @@ function evaluateBackcountryDecision(
     addCaution('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
   } else if (!daylightOkay) {
     addCaution(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
+  }
+
+  const turnaroundMinutes = options.turnaroundTime
+    ? parseTimeInputMinutes(options.turnaroundTime)
+    : null;
+  if (turnaroundMinutes !== null && sunsetMinutes !== null) {
+    const margin = sunsetMinutes - turnaroundMinutes;
+    if (margin < 0) {
+      addCaution(`Turnaround time is ${Math.abs(margin)} min after sunset (${data.solar.sunset}). Adjust plan or expect darkness.`);
+    } else if (margin < 30) {
+      addCaution(`Turnaround margin is only ${margin} min before sunset — very thin buffer.`);
+    }
   }
 
   const checks: SummitDecision['checks'] = [
@@ -3895,7 +3914,9 @@ function App() {
     MIN_TRAVEL_WINDOW_HOURS,
     Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
   );
-  const decision = safetyData ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences) : null;
+  const decision = safetyData
+    ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime })
+    : null;
   const failedCriticalChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
   const passedCriticalChecks = decision ? decision.checks.filter((check) => check.ok) : [];
   const orderedCriticalChecks = [...failedCriticalChecks, ...passedCriticalChecks];
@@ -5285,6 +5306,14 @@ function App() {
         : 'Unavailable';
   const leewardAspectHints = resolvedWindDirection ? leewardAspectsFromWind(resolvedWindDirection) : [];
   const secondaryWindAspects = resolvedWindDirection ? secondaryCrossLoadingAspects(resolvedWindDirection) : [];
+  const leewardAspectSet = new Set(leewardAspectHints);
+  const aspectOverlapProblems = (safetyData?.avalanche?.problems ?? [])
+    .filter(p => {
+      if (!p.location) return false;
+      const { aspects } = parseTerrainFromLocation(p.location);
+      return [...aspects].some(a => leewardAspectSet.has(a));
+    })
+    .map(p => p.name ?? 'Unknown Problem');
   const windSpeedMph = Number(safetyData?.weather.windSpeed);
   const windGustMph = Number(safetyData?.weather.windGust);
   const calmOrVariableSignal = primaryWindDirection === 'CALM' || primaryWindDirection === 'VRB';
@@ -5479,7 +5508,7 @@ function App() {
               : null,
       ].filter((entry): entry is string => Boolean(entry))
     : [];
-  const windLoadingHintsRelevant = avalancheRelevant && !avalancheUnknown;
+  const windLoadingHintsRelevant = avalancheRelevant;
   const terrainConditionDetails = safetyData
     ? (() => {
         const upstreamTerrain = safetyData.terrainCondition;
@@ -5845,11 +5874,11 @@ function App() {
     }>);
 
     return {
-      scoreCard: 0,
-      fieldBrief: 1,
-      avalancheForecast: avalancheRelevant ? 2 : 130,
-      reportColumns: 3,
-      decisionGate: innerOrder.get('decisionGate') ?? 10,
+      decisionGate: 0,
+      scoreCard: 1,
+      fieldBrief: 2,
+      avalancheForecast: avalancheRelevant ? 3 : 130,
+      reportColumns: 4,
       criticalChecks: innerOrder.get('criticalChecks') ?? 11,
       atmosphericData: innerOrder.get('atmosphericData') ?? 12,
       heatRisk: innerOrder.get('heatRisk') ?? 13,
@@ -6789,6 +6818,17 @@ function App() {
                   />
                 </label>
 
+                <label className="date-control compact">
+                  <span>Back by</span>
+                  <input
+                    type="time"
+                    aria-label="Turnaround / back-by time"
+                    title="Latest time you must be turning around or back at the trailhead."
+                    value={turnaroundTime}
+                    onChange={handlePlannerTimeChange(setTurnaroundTime)}
+                  />
+                </label>
+
                 <button
                   type="button"
                   className="now-control-btn"
@@ -7055,6 +7095,16 @@ function App() {
                   <span className="decision-action-label">Recommended action</span>
                   <p>{decisionActionLine}</p>
                 </div>
+                {rainfall24hSeverityClass === 'nogo' && (
+                  <div className="decision-group decision-creek-warning nogo">
+                    <p>{`Creek crossing risk: recent rainfall (${rainfall24hDisplay}) may make stream crossings dangerous. Scout before committing.`}</p>
+                  </div>
+                )}
+                {rainfall24hSeverityClass === 'caution' && (
+                  <div className="decision-group decision-creek-warning caution">
+                    <p>Elevated rainfall: creek levels may be running high. Monitor crossing points.</p>
+                  </div>
+                )}
                 <div className="decision-summary-grid" role="list" aria-label="Decision check summary">
                   <article className="decision-summary-item" role="listitem">
                     <span>Passing checks</span>
@@ -7909,6 +7959,9 @@ function App() {
                     </span>
                     <span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} • {windLoadingConfidence}</span>
                   </div>
+                  {avalancheUnknown && (
+                    <p className="wind-coverage-note">No official forecast available — use wind loading as your primary terrain-selection signal.</p>
+                  )}
                   <p className="wind-hint-line">{windLoadingSummary}</p>
                   {windLoadingActionLine && <p className="wind-action-line">{windLoadingActionLine}</p>}
                   <div className="wind-hint-meta">
@@ -7971,6 +8024,11 @@ function App() {
                         <li key={`wind-loading-note-${idx}`}>{note}</li>
                       ))}
                     </ul>
+                  )}
+                  {aspectOverlapProblems.length > 0 && (
+                    <p className="wind-aspect-overlap-alert">
+                      Wind loading aligns with active avalanche problem aspects: {aspectOverlapProblems.join(', ')}.
+                    </p>
                   )}
                 </div>
               )}
@@ -8392,6 +8450,27 @@ function App() {
                     <span className="plan-label">Daylight left from start</span>
                     <strong className="plan-value">{daylightRemainingFromStartLabel}</strong>
                   </article>
+                  {turnaroundTime && (
+                    <article className="plan-summary-item">
+                      <span className="plan-label">Back by</span>
+                      <strong className="plan-value">{formatClockShort(turnaroundTime, preferences.timeStyle)}</strong>
+                    </article>
+                  )}
+                  {turnaroundTime && sunsetMinutesForPlan !== null && (() => {
+                    const ttMin = parseTimeInputMinutes(turnaroundTime);
+                    if (ttMin === null) return null;
+                    const margin = sunsetMinutesForPlan - ttMin;
+                    const cls = margin < 0 ? 'plan-value danger' : margin < 30 ? 'plan-value caution' : 'plan-value';
+                    const label = margin < 0
+                      ? `${Math.abs(margin)} min after sunset`
+                      : `${margin} min before sunset`;
+                    return (
+                      <article className="plan-summary-item">
+                        <span className="plan-label">Back-by margin</span>
+                        <strong className={cls}>{label}</strong>
+                      </article>
+                    );
+                  })()}
                   <article className="plan-summary-item plan-summary-item-wide">
                     <span className="plan-label">Forecast date</span>
                     <strong className="plan-value">{safetyData.forecast?.selectedDate || forecastDate}</strong>
@@ -8432,6 +8511,44 @@ function App() {
               )}
             </div>
           </div>
+
+          {isEssentialView && avalancheRelevant && safetyData?.avalanche && (
+            <div className="card avy-card essential-avy-summary" style={{ order: reportCardOrder.avalancheForecast }}>
+              <div className="card-header">
+                <span className="card-title">Avalanche Summary</span>
+                <span className={`danger-badge ${getDangerLevelClass(overallAvalancheLevel ?? 0)}`}>
+                  {getDangerText(overallAvalancheLevel ?? 0)}
+                </span>
+              </div>
+              <div className="essential-avy-body">
+                {avalancheElevationRows.length > 0 && (
+                  <div className="avy-elevation-compact">
+                    {avalancheElevationRows.map(row => (
+                      <span key={row.key} className={`elev-chip ${getDangerLevelClass(row.rating?.level ?? 0)}`}>
+                        {row.label}: {row.rating?.label ?? 'No Rating'}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {safetyData.avalanche.bottomLine && (
+                  <p className="avy-bottom-line-compact">
+                    {summarizeText(safetyData.avalanche.bottomLine, 200)}
+                  </p>
+                )}
+                {(safetyData.avalanche.problems ?? []).slice(0, 3).map((p, i) => {
+                  const terrain = parseTerrainFromLocation(p.location);
+                  return (
+                    <div key={i} className="avy-problem-compact">
+                      <span className="problem-name">{p.name ?? 'Problem'}</span>
+                      {[...terrain.aspects].map(a => (
+                        <span key={a} className="aspect-chip">{a}</span>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {!isEssentialView && (
             <AvalancheForecastCard

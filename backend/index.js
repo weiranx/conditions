@@ -2154,7 +2154,6 @@ const calculateSafetyScore = ({
   const avalancheProblemCount = Array.isArray(avalancheData?.problems) ? avalancheData.problems.length : 0;
 
   const alertsStatus = String(alertsData?.status || '');
-  const alertsRelevantForSelectedTime = true;
   const alertsCount = Number(alertsData?.activeCount);
   const highestAlertSeverity = normalizeAlertSeverity(alertsData?.highestSeverity);
   const alertEvents =
@@ -2226,6 +2225,7 @@ const calculateSafetyScore = ({
         ? (selectedDateMs - Date.now()) / (1000 * 60 * 60)
         : null;
   const forecastLeadHours = Number.isFinite(forecastLeadHoursRaw) ? Number(forecastLeadHoursRaw) : null;
+  const alertsRelevantForSelectedTime = forecastLeadHours === null || forecastLeadHours <= 48;
 
   if (avalancheRelevant) {
     if (avalancheUnknown) {
@@ -3030,6 +3030,7 @@ const safetyHandler = async (req, res) => {
 
       // 2. Get Forecasts
       const hourlyRes = await fetchWithTimeout(hourlyForecastUrl, fetchOptions);
+      if (!hourlyRes.ok) throw new Error(`NOAA hourly forecast failed: ${hourlyRes.status}`);
       const hourlyData = await hourlyRes.json();
 
       const periods = hourlyData?.properties?.periods || [];
@@ -3487,18 +3488,19 @@ const safetyHandler = async (req, res) => {
 	                }
 
                 // Update elevations if the product has more specific data
+                const safeLevel = (val) => { const n = parseInt(val, 10); return Number.isFinite(n) ? n : 0; };
                 if (det.danger && det.danger.length > 0) {
                    const currentDay = det.danger.find(d => d.valid_day === 'current') || det.danger[0];
                    avalancheData.elevations = {
-                     below: { level: parseInt(currentDay.lower), label: levelMap[parseInt(currentDay.lower)] },
-                     at: { level: parseInt(currentDay.middle), label: levelMap[parseInt(currentDay.middle)] },
-                     above: { level: parseInt(currentDay.upper), label: levelMap[parseInt(currentDay.upper)] }
+                     below: { level: safeLevel(currentDay.lower), label: levelMap[safeLevel(currentDay.lower)] },
+                     at: { level: safeLevel(currentDay.middle), label: levelMap[safeLevel(currentDay.middle)] },
+                     above: { level: safeLevel(currentDay.upper), label: levelMap[safeLevel(currentDay.upper)] }
                    };
                 } else if (det.danger_low) {
                   avalancheData.elevations = {
-                    below: { level: parseInt(det.danger_low), label: levelMap[parseInt(det.danger_low)] },
-                    at: { level: parseInt(det.danger_mid), label: levelMap[parseInt(det.danger_mid)] },
-                    above: { level: parseInt(det.danger_high), label: levelMap[parseInt(det.danger_high)] }
+                    below: { level: safeLevel(det.danger_low), label: levelMap[safeLevel(det.danger_low)] },
+                    at: { level: safeLevel(det.danger_mid), label: levelMap[safeLevel(det.danger_mid)] },
+                    above: { level: safeLevel(det.danger_high), label: levelMap[safeLevel(det.danger_high)] }
 	                  };
 	                }
 	              }
@@ -3562,6 +3564,9 @@ const safetyHandler = async (req, res) => {
 
                 if (!resolvedViaCenterJson) {
 			              const pageRes = await fetchWithTimeout(scrapeLink, { headers: DEFAULT_FETCH_HEADERS });
+                  if (!pageRes.ok) {
+                    avyLog(`[scraper] Non-OK response (${pageRes.status}) from ${scrapeLink}, skipping HTML scrape`);
+                  } else {
                   const pageText = await pageRes.text();
                   const bottomLineCandidates = [];
 
@@ -3632,6 +3637,7 @@ const safetyHandler = async (req, res) => {
                        above: { level: u, label: levelMap[u] }
                      };
                   }
+                  } // end if (pageRes.ok)
                 }
 		            } catch (scrapeErr) {
 		              avyLog("[Avy] Scrape failed:", scrapeErr.message);
