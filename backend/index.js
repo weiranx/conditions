@@ -459,20 +459,20 @@ const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, win
 };
 
 const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
-  temp: 0,
-  feelsLike: 0,
+  temp: null,
+  feelsLike: null,
   dewPoint: null,
   elevation: null,
   elevationSource: null,
   elevationUnit: 'ft',
   description: 'Weather data unavailable',
-  windSpeed: 0,
-  windGust: 0,
+  windSpeed: null,
+  windGust: null,
   windDirection: null,
   pressure: null,
-  humidity: 0,
-  cloudCover: 0,
-  precipChance: 0,
+  humidity: null,
+  cloudCover: null,
+  precipChance: null,
   isDaytime: null,
   issuedTime: null,
   timezone: null,
@@ -2448,12 +2448,12 @@ const calculateSafetyScore = ({
     }
   }
 
-  const fireLevel = Number(fireRiskData?.level);
-  if (Number.isFinite(fireLevel) && fireLevel >= 4) {
+  const fireLevel = fireRiskData?.level != null ? Number(fireRiskData.level) : null;
+  if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
     applyFactor('Fire Danger', 16, 'Extreme fire-weather/alert signal for this objective window.', fireRiskData?.source || 'Fire risk synthesis');
-  } else if (Number.isFinite(fireLevel) && fireLevel >= 3) {
+  } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
     applyFactor('Fire Danger', 10, 'High fire-weather signal: elevated spread potential or fire-weather alerts.', fireRiskData?.source || 'Fire risk synthesis');
-  } else if (Number.isFinite(fireLevel) && fireLevel >= 2) {
+  } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 2) {
     applyFactor('Fire Danger', 5, 'Elevated fire risk signal from weather, smoke, or alert context.', fireRiskData?.source || 'Fire risk synthesis');
   }
 
@@ -2484,11 +2484,17 @@ const calculateSafetyScore = ({
     }
   };
 
+  const weatherDataUnavailable = weatherDescription.includes('weather data unavailable');
+  if (weatherDataUnavailable) {
+    applyFactor('Weather Unavailable', 20, 'All weather data is unavailable — wind, precipitation, and temperature conditions are unknown.', 'System');
+    applyConfidencePenalty(30, 'Complete weather data unavailable — do not rely on this report for go/no-go decisions.');
+  }
+
   const nowMs = Date.now();
   const weatherIssuedMs = parseIsoTimeToMs(weatherData?.issuedTime);
-  if (weatherIssuedMs === null) {
+  if (!weatherDataUnavailable && weatherIssuedMs === null) {
     applyConfidencePenalty(8, 'Weather issue time unavailable.');
-  } else {
+  } else if (!weatherDataUnavailable && weatherIssuedMs !== null) {
     const weatherAgeHours = (nowMs - weatherIssuedMs) / (1000 * 60 * 60);
     if (weatherAgeHours > 18) {
       applyConfidencePenalty(12, `Weather issuance is ${Math.round(weatherAgeHours)}h old.`);
@@ -2723,11 +2729,6 @@ const deriveOverallDangerLevelFromElevations = (elevations, fallbackLevel = 0) =
   const maxLevel = Math.max(...levels);
   const minLevel = Math.min(...levels);
   const maxCount = levels.filter((level) => level === maxLevel).length;
-
-  // "Almost worst-case" overall: if one isolated outlier is much higher, keep overall one step below max.
-  if (maxLevel - minLevel >= 2 && maxCount === 1) {
-    return Math.max(1, maxLevel - 1);
-  }
 
   return maxLevel;
 };
@@ -3687,7 +3688,7 @@ const safetyHandler = async (req, res) => {
       avalancheData = {
         ...avalancheData,
         coverageStatus: 'expired_for_selected_start',
-        dangerUnknown: false,
+        dangerUnknown: true,
         bottomLine: cleanForecastText(
           `${avalancheData?.bottomLine || ''} NOTE: This bulletin expires before the selected start time. Treat this as stale guidance and verify the latest avalanche center update before departure.`,
         ),

@@ -166,8 +166,9 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   }).length;
   const snowTrendHours = nearTermTrend.filter((point) => {
     const pointPrecip = toFinite(point?.precipChance);
+    const pointTemp = toFinite(point?.temp);
     const pointCondition = String(point?.condition || '').toLowerCase();
-    return (pointPrecip !== null && pointPrecip >= 35 && tempF !== null && tempF <= 34) || /snow|sleet|freezing|flurr|wintry|ice/.test(pointCondition);
+    return (pointPrecip !== null && pointPrecip >= 35 && pointTemp !== null && pointTemp <= 34) || /snow|sleet|freezing|flurr|wintry|ice/.test(pointCondition);
   }).length;
   const trendTemps = nearTermTrend.map((point) => toFinite(point?.temp)).filter((value) => value !== null);
   const trendMinTemp = trendTemps.length > 0 ? Math.min(...trendTemps) : null;

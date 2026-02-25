@@ -1,8 +1,8 @@
 const createUnavailableFireRiskData = (status = 'unavailable') => ({
   source: 'Derived from NOAA weather, NWS alerts, and air-quality signals',
   status,
-  level: 0,
-  label: 'Low',
+  level: null,
+  label: 'Unknown',
   guidance: 'Fire risk signal unavailable.',
   reasons: ['Fire risk signal unavailable.'],
   alertsConsidered: [],

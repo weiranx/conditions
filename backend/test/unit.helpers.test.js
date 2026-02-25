@@ -894,13 +894,13 @@ test('deriveOverallDangerLevelFromElevations returns max level when bands are cl
   expect(overall).toBe(3);
 });
 
-test('deriveOverallDangerLevelFromElevations returns almost-worst level for a single high outlier band', () => {
+test('deriveOverallDangerLevelFromElevations returns the maximum level regardless of band distribution', () => {
   const overall = deriveOverallDangerLevelFromElevations({
     above: { level: 4 },
     at: { level: 2 },
     below: { level: 2 },
   });
-  expect(overall).toBe(3);
+  expect(overall).toBe(4);
 });
 
 test('applyDerivedOverallAvalancheDanger updates reported overall risk from elevation bands', () => {
@@ -916,8 +916,8 @@ test('applyDerivedOverallAvalancheDanger updates reported overall risk from elev
     },
   });
 
-  expect(updated.dangerLevel).toBe(3);
-  expect(updated.risk).toBe('Considerable');
+  expect(updated.dangerLevel).toBe(4);
+  expect(updated.risk).toBe('High');
 });
 
 test('evaluateAvalancheRelevance marks avalanche relevant when Snowpack Snapshot shows material snowpack', () => {

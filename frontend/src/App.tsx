@@ -1615,6 +1615,10 @@ function evaluateBackcountryDecision(
   const feelsLike = data.weather.feelsLike ?? data.weather.temp;
   const description = data.weather.description || '';
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
+  const weatherUnavailable = /weather data unavailable/i.test(description);
+  if (weatherUnavailable) {
+    addBlocker('Weather data is unavailable — wind, precipitation, and temperature are unknown. Do not make go/no-go decisions from this report.');
+  }
   const hasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
   const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
   const avalancheRelevant = !ignoreAvalancheForDecision && data.avalanche.relevant !== false;
