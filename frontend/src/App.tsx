@@ -1894,6 +1894,7 @@ function App() {
     ),
   );
   const [mapStyle, setMapStyle] = useState<MapStyle>('topo');
+  const [mobileMapControlsExpanded, setMobileMapControlsExpanded] = useState(true);
   const [plannerViewMode, setPlannerViewMode] = useState<'essential' | 'full'>(() => {
     if (typeof window === 'undefined') {
       return 'full';
@@ -6608,8 +6609,18 @@ function App() {
           </MapContainer>
         </div>
 
-        <div className="map-actions">
-          <div className="map-actions-top">
+        <div className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
+          <button
+            type="button"
+            className="mobile-map-controls-btn"
+            onClick={() => setMobileMapControlsExpanded((prev) => !prev)}
+            aria-expanded={mobileMapControlsExpanded}
+            aria-controls="map-actions-top"
+          >
+            <SlidersHorizontal size={14} />
+            {mobileMapControlsExpanded ? 'Hide plan controls' : 'Show plan controls'}
+          </button>
+          <div id="map-actions-top" className="map-actions-top">
             <section className="map-control-group" aria-label="Plan time controls">
               <p className="map-control-title">
                 <Clock size={13} /> Plan time
