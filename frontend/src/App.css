@@ -1232,6 +1232,35 @@ input {
   font-family: var(--font-data);
 }
 
+.planner-view-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #cfd3c5;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 2px;
+}
+
+.planner-view-btn {
+  border: 0;
+  background: transparent;
+  color: #42554a;
+  border-radius: 999px;
+  min-height: 28px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.planner-view-btn.active {
+  background: #ecf4ef;
+  color: #27513c;
+}
+
 .mission-brief-signals {
   display: grid;
   gap: 6px;
@@ -5004,6 +5033,20 @@ input {
   color: #ddebf5;
 }
 
+:root[data-theme='dark'] .planner-view-toggle {
+  border-color: #3b5060;
+  background: rgba(24, 38, 48, 0.74);
+}
+
+:root[data-theme='dark'] .planner-view-btn {
+  color: #c1d1dd;
+}
+
+:root[data-theme='dark'] .planner-view-btn.active {
+  background: #274055;
+  color: #e6f1f9;
+}
+
 :root[data-theme='dark'] .mission-brief-label,
 :root[data-theme='dark'] .mission-brief-objective,
 :root[data-theme='dark'] .mission-brief-fallback {
@@ -6631,6 +6674,10 @@ input {
   .mission-brief-window {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .planner-view-toggle {
+    margin-left: 0;
   }
 
   .report-action-btn {

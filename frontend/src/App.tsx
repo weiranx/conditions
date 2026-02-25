@@ -158,6 +158,7 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
+const PLANNER_VIEW_MODE_STORAGE_KEY = 'summitsafe-planner-view-mode';
 
 function buildSnowpackInterpretation(
   snowpack: SafetyData['snowpack'] | null | undefined,
@@ -1784,6 +1785,13 @@ function App() {
     ),
   );
   const [mapStyle, setMapStyle] = useState<MapStyle>('topo');
+  const [plannerViewMode, setPlannerViewMode] = useState<'essential' | 'full'>(() => {
+    if (typeof window === 'undefined') {
+      return 'full';
+    }
+    const storedMode = window.localStorage.getItem(PLANNER_VIEW_MODE_STORAGE_KEY);
+    return storedMode === 'essential' ? 'essential' : 'full';
+  });
   const [mapFocusNonce, setMapFocusNonce] = useState(0);
   const [locatingUser, setLocatingUser] = useState(false);
   const lastLoadedSafetyKeyRef = useRef<string | null>(null);
@@ -2253,6 +2261,13 @@ function App() {
       mediaQuery.removeEventListener('change', applyTheme);
     };
   }, [preferences.themeMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(PLANNER_VIEW_MODE_STORAGE_KEY, plannerViewMode);
+  }, [plannerViewMode]);
 
   useEffect(() => {
     return () => {
@@ -4779,6 +4794,7 @@ function App() {
             .slice(0, 3)
             .map((check) => check.label)
     : [];
+  const isEssentialView = plannerViewMode === 'essential';
   const missionDecisionClass = decision ? decision.level.toLowerCase().replace('-', '') : 'caution';
   const missionBriefTopBlockers = decision ? decision.blockers.slice(0, 2) : [];
   const missionBriefBestWindow = travelWindowInsights.bestWindow
@@ -6491,6 +6507,24 @@ function App() {
               Best window <strong>{missionBriefBestWindow}</strong>
             </span>
             <span className="mission-brief-objective">{objectiveName || 'Pinned objective'} • {displayStartTime}</span>
+            <div className="planner-view-toggle" role="group" aria-label="Planner detail mode">
+              <button
+                type="button"
+                className={`planner-view-btn ${isEssentialView ? 'active' : ''}`}
+                onClick={() => setPlannerViewMode('essential')}
+                aria-pressed={isEssentialView}
+              >
+                Essential
+              </button>
+              <button
+                type="button"
+                className={`planner-view-btn ${!isEssentialView ? 'active' : ''}`}
+                onClick={() => setPlannerViewMode('full')}
+                aria-pressed={!isEssentialView}
+              >
+                Full
+              </button>
+            </div>
           </div>
           <div className="mission-brief-signals">
             <span className="mission-brief-label">Top blockers</span>
@@ -6735,7 +6769,8 @@ function App() {
                 formatWindDisplay={formatWindDisplay}
               />
 
-              <div className="card checks-card" style={{ order: reportCardOrder.criticalChecks }}>
+              {!isEssentialView && (
+                <div className="card checks-card" style={{ order: reportCardOrder.criticalChecks }}>
                 <div className="card-header">
                   <span className="card-title">
                     <CheckCircle2 size={14} /> Critical Checks
@@ -6785,9 +6820,11 @@ function App() {
                     </div>
                   ))}
                 </div>
-              </div>
+                </div>
+              )}
 
-              <div className="card score-trace-card" style={{ order: reportCardOrder.scoreTrace }}>
+              {!isEssentialView && (
+                <div className="card score-trace-card" style={{ order: reportCardOrder.scoreTrace }}>
                 <div className="card-header">
                   <span className="card-title">
                     <ShieldCheck size={14} /> Score Trace
@@ -6830,7 +6867,8 @@ function App() {
                     </ul>
                   </div>
                 )}
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="report-column">
@@ -7121,7 +7159,8 @@ function App() {
                 </section>
               </div>
 
-              <div className="card heat-risk-card" style={{ order: reportCardOrder.heatRisk }}>
+              {!isEssentialView && (
+                <div className="card heat-risk-card" style={{ order: reportCardOrder.heatRisk }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Sun size={14} /> Heat Risk
@@ -7163,9 +7202,11 @@ function App() {
                   <p className="muted-note">No strong heat-stress signal was detected for this objective/time.</p>
                 )}
                 <p className="muted-note">Source: {safetyData.heatRisk?.source || 'Derived from forecast temperature and humidity signals'}</p>
-              </div>
+                </div>
+              )}
 
-              <div className="card terrain-condition-card" style={{ order: reportCardOrder.terrainTrailCondition }}>
+              {!isEssentialView && (
+                <div className="card terrain-condition-card" style={{ order: reportCardOrder.terrainTrailCondition }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Route size={14} /> Terrain / Trail Condition
@@ -7224,9 +7265,11 @@ function App() {
                   </ul>
                 ) : null}
                 <p className="muted-note">Classification updates when you change location, date, or start time.</p>
-              </div>
+                </div>
+              )}
 
-              <div className="card rainfall-card" style={{ order: reportCardOrder.recentRainfall }}>
+              {!isEssentialView && (
+                <div className="card rainfall-card" style={{ order: reportCardOrder.recentRainfall }}>
                 <div className="card-header">
                   <span className="card-title">
                     <CloudRain size={14} /> Recent Precipitation Totals
@@ -7360,9 +7403,10 @@ function App() {
                     rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'
                   )}
                 </p>
-              </div>
+                </div>
+              )}
 
-              {windLoadingHintsRelevant && (
+              {!isEssentialView && windLoadingHintsRelevant && (
                 <div className="card wind-hints-card" style={{ order: reportCardOrder.windLoadingHints }}>
                   <div className="card-header">
                     <span className="card-title">
@@ -7437,7 +7481,8 @@ function App() {
                 </div>
               )}
 
-              <div className="card source-freshness-card" style={{ order: reportCardOrder.sourceFreshness }}>
+              {!isEssentialView && (
+                <div className="card source-freshness-card" style={{ order: reportCardOrder.sourceFreshness }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Clock size={14} /> Source Freshness
@@ -7468,7 +7513,8 @@ function App() {
                     {deviceTimezone ? ` • Device: ${deviceTimezone}` : ''}
                   </p>
                 )}
-              </div>
+                </div>
+              )}
 
               <div className="card nws-alerts-card" style={{ order: reportCardOrder.nwsAlerts }}>
                   <div className="card-header">
@@ -7595,7 +7641,8 @@ function App() {
                   )}
                 </div>
 
-              <div className="card air-quality-card" style={{ order: reportCardOrder.airQuality }}>
+              {!isEssentialView && (
+                <div className="card air-quality-card" style={{ order: reportCardOrder.airQuality }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Wind size={14} /> Air Quality
@@ -7632,9 +7679,11 @@ function App() {
                         safetyData.airQuality?.measuredTime ? ` • Measured ${formatPubTime(safetyData.airQuality.measuredTime)}` : ''
                       }`}
                 </p>
-              </div>
+                </div>
+              )}
 
-              <div className="card snowpack-card" style={{ order: reportCardOrder.snowpackSnapshot }}>
+              {!isEssentialView && (
+                <div className="card snowpack-card" style={{ order: reportCardOrder.snowpackSnapshot }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Mountain size={14} /> Snowpack Snapshot
@@ -7779,9 +7828,11 @@ function App() {
                     )}
                   </p>
                 </details>
-              </div>
+                </div>
+              )}
 
-              <div className="card fire-risk-card" style={{ order: reportCardOrder.fireRisk }}>
+              {!isEssentialView && (
+                <div className="card fire-risk-card" style={{ order: reportCardOrder.fireRisk }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Flame size={14} /> Fire Risk
@@ -7819,9 +7870,11 @@ function App() {
                   </ul>
                 )}
                 <p className="muted-note">Source: {safetyData.fireRisk?.source || 'Not provided'}</p>
-              </div>
+                </div>
+              )}
 
-              <div className="card plan-card" style={{ order: reportCardOrder.planSnapshot }}>
+              {!isEssentialView && (
+                <div className="card plan-card" style={{ order: reportCardOrder.planSnapshot }}>
                 <div className="card-header">
                   <span className="card-title">
                     <Route size={14} /> Plan Snapshot
@@ -7850,9 +7903,11 @@ function App() {
                     <strong className="plan-value">{safetyData.forecast?.selectedDate || forecastDate}</strong>
                   </article>
                 </div>
-              </div>
+                </div>
+              )}
 
-              <div className="card gear-card" style={{ order: reportCardOrder.recommendedGear }}>
+              {!isEssentialView && (
+                <div className="card gear-card" style={{ order: reportCardOrder.recommendedGear }}>
                 <div className="card-header">
                   <span className="card-title">
                     Gear Recommendations
@@ -7879,11 +7934,13 @@ function App() {
                 ) : (
                   <p className="muted-note">No special gear flags detected. Use your standard backcountry safety kit and expected seasonal layers.</p>
                 )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <AvalancheForecastCard
+          {!isEssentialView && (
+            <AvalancheForecastCard
             order={reportCardOrder.avalancheForecast}
             avalanche={safetyData.avalanche}
             avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
@@ -7901,9 +7958,11 @@ function App() {
             summarizeText={summarizeText}
             toPlainText={toPlainText}
             objectiveElevationFt={safetyData.weather.elevation ?? null}
-          />
+            />
+          )}
 
-          <FieldBriefCard
+          {!isEssentialView && (
+            <FieldBriefCard
             order={reportCardOrder.fieldBrief}
             decisionLevelClass={decision.level.toLowerCase().replace('-', '')}
             decisionLevelLabel={decision.level}
@@ -7918,9 +7977,11 @@ function App() {
             fieldBriefAbortTriggers={fieldBriefAbortTriggers}
             fieldBriefActions={fieldBriefActions}
             localizeUnitText={localizeUnitText}
-          />
+            />
+          )}
 
-          <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
+          {!isEssentialView && (
+            <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
             <div className="card-header">
               <span className="card-title">
                 <Search size={14} /> Deep Dive Report Data
@@ -8353,7 +8414,8 @@ function App() {
                 <pre className="raw-json-pre">{rawReportPayload}</pre>
               </details>
             </details>
-          </div>
+            </div>
+          )}
 
         </div>
       )}
