@@ -4794,6 +4794,25 @@ function App() {
   const weatherHourStepDisabled = weatherHourQuickOptions.length <= 1;
   const weatherHourCanDecrease = !weatherHourStepDisabled && selectedWeatherHourIndex > 0;
   const weatherHourCanIncrease = !weatherHourStepDisabled && selectedWeatherHourIndex >= 0 && selectedWeatherHourIndex < weatherHourQuickOptions.length - 1;
+  const handleWeatherTrendChartClick = (chartState: unknown) => {
+    const parsedState = chartState as { activePayload?: Array<{ payload?: { hourValue?: string | null } }>; activeLabel?: string | number } | null;
+    if (!parsedState) {
+      return;
+    }
+    const payloadHourValue = parsedState.activePayload?.[0]?.payload?.hourValue;
+    if (payloadHourValue) {
+      handleWeatherHourSelect(payloadHourValue);
+      return;
+    }
+    const activeLabel = String(parsedState.activeLabel || '');
+    if (!activeLabel) {
+      return;
+    }
+    const matchedRow = weatherTrendChartData.find((row) => row.label === activeLabel && row.hourValue);
+    if (matchedRow?.hourValue) {
+      handleWeatherHourSelect(matchedRow.hourValue);
+    }
+  };
   const handleWeatherHourStep = (direction: 'decrease' | 'increase') => {
     if (!weatherHourQuickOptions.length) {
       return;
@@ -7352,7 +7371,11 @@ function App() {
                   {weatherTrendHasData ? (
                     <div className="chart-wrap weather-trend-chart-wrap">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={weatherTrendChartData} margin={{ top: 10, right: 12, left: 4, bottom: 2 }}>
+                        <LineChart
+                          data={weatherTrendChartData}
+                          margin={{ top: 10, right: 12, left: 4, bottom: 2 }}
+                          onClick={handleWeatherTrendChartClick}
+                        >
                           <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.35} />
                           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={14} />
                           <YAxis
@@ -7404,6 +7427,12 @@ function App() {
                                   fill={isSelectedHour ? '#fefaf0' : weatherTrendLineColor}
                                   stroke={weatherTrendLineColor}
                                   strokeWidth={isSelectedHour ? 2.2 : 1.2}
+                                  style={{ cursor: payload?.hourValue ? 'pointer' : 'default' }}
+                                  onClick={() => {
+                                    if (payload?.hourValue) {
+                                      handleWeatherHourSelect(payload.hourValue);
+                                    }
+                                  }}
                                 />
                               );
                             }}
