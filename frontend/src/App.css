@@ -1229,15 +1229,13 @@ input {
 }
 
 .mission-brief {
-  position: sticky;
-  top: 10px;
-  z-index: 40;
+  position: static;
   margin-top: 14px;
   padding: 12px;
   border-radius: 16px;
   border: 1px solid #d7d1c1;
   background: linear-gradient(160deg, rgba(255, 252, 245, 0.97) 0%, rgba(243, 249, 240, 0.97) 100%);
-  box-shadow: 0 12px 24px rgba(22, 34, 27, 0.12);
+  box-shadow: var(--shadow-soft);
   display: grid;
   gap: 10px;
 }
@@ -6600,7 +6598,6 @@ input {
   }
 
   .mission-brief {
-    top: 8px;
     border-radius: 14px;
   }
 
@@ -7291,7 +7288,6 @@ input {
   }
 
   .mission-brief {
-    top: 6px;
     border-radius: 12px;
   }
 
