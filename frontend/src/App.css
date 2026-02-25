@@ -899,18 +899,50 @@ input {
 }
 
 .map-actions-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.map-actions-top .date-control,
-.map-actions-top .now-control-btn {
+.map-control-group {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border-radius: 14px;
+  border: 1px solid #dad4c4;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.map-control-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #4f5f56;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.map-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.map-control-row .date-control,
+.map-control-row .now-control-btn,
+.map-control-row .action-btn {
   width: auto;
 }
 
-.map-actions-top .date-control {
+.map-control-row .date-control {
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.map-control-row-tools .action-btn {
   min-height: 52px;
   padding: 8px 12px;
 }
@@ -4907,6 +4939,7 @@ input {
 :root[data-theme='dark'] .raw-group,
 :root[data-theme='dark'] .app-disclaimer,
 :root[data-theme='dark'] .map-actions,
+:root[data-theme='dark'] .map-control-group,
 :root[data-theme='dark'] .date-control,
 :root[data-theme='dark'] .action-btn,
 :root[data-theme='dark'] .empty-state,
@@ -4924,6 +4957,7 @@ input {
 :root[data-theme='dark'] .source-line,
 :root[data-theme='dark'] .objective-line,
 :root[data-theme='dark'] .stat-label,
+:root[data-theme='dark'] .map-control-title,
 :root[data-theme='dark'] .muted-note,
 :root[data-theme='dark'] .suggestion-subtitle,
 :root[data-theme='dark'] .map-coords,
@@ -6305,12 +6339,27 @@ input {
 
   .map-actions-top {
     display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .map-control-group {
+    padding: 8px;
+  }
+
+  .map-control-row {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
-  .map-actions-top .date-control,
-  .map-actions-top .now-control-btn {
+  .map-control-row-tools {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-control-row .date-control,
+  .map-control-row .now-control-btn,
+  .map-control-row .action-btn {
     width: 100%;
     margin: 0;
   }
@@ -6579,6 +6628,15 @@ input {
     gap: 8px;
   }
 
+  .map-control-group {
+    width: 100%;
+  }
+
+  .map-control-row,
+  .map-control-row-tools {
+    grid-template-columns: 1fr;
+  }
+
   .date-control {
     width: 100%;
     justify-content: flex-start;
@@ -6596,6 +6654,10 @@ input {
   .map-time-help {
     font-size: 0.72rem;
     padding: 8px 10px;
+  }
+
+  .map-control-title {
+    font-size: 0.66rem;
   }
 
   .map-coords {

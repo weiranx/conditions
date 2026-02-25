@@ -1911,7 +1911,6 @@ function App() {
     setHasObjective(true);
     setTravelWindowExpanded(false);
     setSafetyData(null);
-    lastLoadedSafetyKeyRef.current = null;
     setDayOverDay(null);
     setError(null);
     setTargetElevationInput('');
@@ -6359,61 +6358,82 @@ function App() {
 
         <div className="map-actions">
           <div className="map-actions-top">
-            <label className="date-control">
-              <span>Forecast date</span>
-              <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
-            </label>
+            <section className="map-control-group" aria-label="Plan time controls">
+              <p className="map-control-title">
+                <Clock size={13} /> Plan time
+              </p>
+              <div className="map-control-row">
+                <label className="date-control">
+                  <span>Forecast date</span>
+                  <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
+                </label>
 
-            <label className="date-control compact">
-              <span>{startLabel}</span>
-              <input
-                type="time"
-                aria-label={startLabel}
-                title="When you plan to start moving."
-                value={alpineStartTime}
-                onChange={handlePlannerTimeChange(setAlpineStartTime)}
-              />
-            </label>
+                <label className="date-control compact">
+                  <span>{startLabel}</span>
+                  <input
+                    type="time"
+                    aria-label={startLabel}
+                    title="When you plan to start moving."
+                    value={alpineStartTime}
+                    onChange={handlePlannerTimeChange(setAlpineStartTime)}
+                  />
+                </label>
 
-            <label className="date-control compact travel-window-control">
-              <span>Window (h)</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                aria-label="Travel window hours"
-                title="How many hours to evaluate from the selected start time."
-                min={MIN_TRAVEL_WINDOW_HOURS}
-                max={MAX_TRAVEL_WINDOW_HOURS}
-                step={1}
-                value={travelWindowHoursDraft}
-                onChange={handleTravelWindowHoursDraftChange}
-                onBlur={handleTravelWindowHoursDraftBlur}
-              />
-            </label>
+                <label className="date-control compact travel-window-control">
+                  <span>Window (h)</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    aria-label="Travel window hours"
+                    title="How many hours to evaluate from the selected start time."
+                    min={MIN_TRAVEL_WINDOW_HOURS}
+                    max={MAX_TRAVEL_WINDOW_HOURS}
+                    step={1}
+                    value={travelWindowHoursDraft}
+                    onChange={handleTravelWindowHoursDraftChange}
+                    onBlur={handleTravelWindowHoursDraftBlur}
+                  />
+                </label>
 
-            <button
-              type="button"
-              className="now-control-btn"
-              onClick={handleUseNowConditions}
-              title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
-            >
-              <Clock size={14} /> Now
-            </button>
+                <button
+                  type="button"
+                  className="now-control-btn"
+                  onClick={handleUseNowConditions}
+                  title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
+                >
+                  <Clock size={14} /> Now
+                </button>
+              </div>
+            </section>
 
-            <label className="date-control compact">
-              <span>
-                <Layers size={13} /> Map
-              </span>
-              <select
-                aria-label="Basemap style"
-                title="Switch between terrain and street basemaps."
-                value={mapStyle}
-                onChange={(e) => setMapStyle(e.target.value as MapStyle)}
-              >
-                <option value="topo">Terrain</option>
-                <option value="street">Street</option>
-              </select>
-            </label>
+            <section className="map-control-group" aria-label="Map and location tools">
+              <p className="map-control-title">
+                <Layers size={13} /> Map & tools
+              </p>
+              <div className="map-control-row map-control-row-tools">
+                <label className="date-control compact">
+                  <span>Basemap</span>
+                  <select
+                    aria-label="Basemap style"
+                    title="Switch between terrain and street basemaps."
+                    value={mapStyle}
+                    onChange={(e) => setMapStyle(e.target.value as MapStyle)}
+                  >
+                    <option value="topo">Terrain</option>
+                    <option value="street">Street</option>
+                  </select>
+                </label>
+                <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
+                  <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
+                </button>
+                <button type="button" className="action-btn" onClick={handleUseCurrentLocation} disabled={locatingUser}>
+                  <LocateFixed size={14} /> {locatingUser ? 'Locating...' : 'Use My Location'}
+                </button>
+                <button type="button" className="action-btn" onClick={handleRecenterMap}>
+                  <Navigation size={14} /> Recenter
+                </button>
+              </div>
+            </section>
           </div>
           {timezoneMismatch && (
             <p className="map-time-help is-warning">
@@ -6441,18 +6461,6 @@ function App() {
                 <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
               </span>
             )}
-
-            <div className="map-link-group">
-              <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
-                <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
-              </button>
-              <button type="button" className="action-btn" onClick={handleUseCurrentLocation} disabled={locatingUser}>
-                <LocateFixed size={14} /> {locatingUser ? 'Locating...' : 'Use My Location'}
-              </button>
-              <button type="button" className="action-btn" onClick={handleRecenterMap}>
-                <Navigation size={14} /> Recenter
-              </button>
-            </div>
 
             <div className="map-link-group">
               <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="action-btn">
