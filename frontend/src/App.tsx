@@ -32,6 +32,7 @@ import {
   Plus,
   BookmarkPlus,
   BookmarkCheck,
+  ScrollText,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -1387,6 +1388,7 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitStatusView = viewParam === 'status';
   const hasExplicitTripView = viewParam === 'trip';
+  const hasExplicitLogsView = viewParam === 'logs';
 
   return {
     view: hasExplicitSettingsView
@@ -1395,9 +1397,11 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
         ? 'status'
         : hasExplicitTripView
           ? 'trip'
-          : viewParam === 'planner' || hasCoords
-            ? 'planner'
-            : 'home',
+          : hasExplicitLogsView
+            ? 'logs'
+            : viewParam === 'planner' || hasCoords
+              ? 'planner'
+              : 'home',
     activity: 'backcountry',
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
     hasObjective: hasCoords,
@@ -1411,7 +1415,7 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
 }
 
 function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'status' | 'trip';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;
@@ -1430,6 +1434,8 @@ function buildShareQuery(state: {
     params.set('view', 'status');
   } else if (state.view === 'trip') {
     params.set('view', 'trip');
+  } else if (state.view === 'logs') {
+    params.set('view', 'logs');
   }
 
   if (state.hasObjective) {
@@ -1942,6 +1948,100 @@ type MultiDayTripForecastDay = {
   sourceIssuedTime: string | null;
 };
 
+interface ReportLogEntry {
+  timestamp: string;
+  lat: number | null;
+  lon: number | null;
+  date: string | null;
+  startTime: string | null;
+  statusCode: number;
+  safetyScore: number | null;
+  partialData: boolean | null;
+  durationMs: number;
+}
+
+function ReportLogsTable() {
+  const [logs, setLogs] = useState<ReportLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+
+  const fetchLogs = useCallback(async () => {
+    const { response, payload } = await fetchApi('/api/report-logs');
+    if (response.ok && Array.isArray(payload)) {
+      setLogs(payload as ReportLogEntry[]);
+      setError(null);
+    } else {
+      setError('Failed to load report logs.');
+    }
+    setLoading(false);
+    setLastRefreshed(new Date());
+  }, []);
+
+  useEffect(() => {
+    void fetchLogs();
+    const interval = setInterval(() => void fetchLogs(), 30_000);
+    return () => clearInterval(interval);
+  }, [fetchLogs]);
+
+  if (loading) {
+    return <p style={{ padding: '1rem', opacity: 0.6 }}>Loading logs…</p>;
+  }
+  if (error) {
+    return <p style={{ padding: '1rem', color: 'var(--accent-red, #e55)' }}>{error}</p>;
+  }
+  if (logs.length === 0) {
+    return (
+      <div style={{ padding: '1rem', opacity: 0.7 }}>
+        <p>No report requests logged yet. Run a safety report to see entries here.</p>
+        {lastRefreshed && <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Last checked: {lastRefreshed.toLocaleTimeString()}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      {lastRefreshed && (
+        <p style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', opacity: 0.6 }}>
+          {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · Last refreshed: {lastRefreshed.toLocaleTimeString()}
+        </p>
+      )}
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border-color, #ddd)', textAlign: 'left' }}>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Time</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Lat / Lon</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Date</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Start</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Status</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Score</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Partial</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((entry, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #eee)', background: i % 2 === 0 ? 'var(--surface-alt, transparent)' : 'transparent' }}>
+              <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>{new Date(entry.timestamp).toLocaleString()}</td>
+              <td style={{ padding: '0.4rem 0.75rem', fontFamily: 'monospace' }}>
+                {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
+              </td>
+              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.date ?? '—'}</td>
+              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.startTime ?? '—'}</td>
+              <td style={{ padding: '0.4rem 0.75rem', color: entry.statusCode === 200 ? 'var(--accent-green, green)' : 'var(--accent-red, red)' }}>
+                {entry.statusCode}
+              </td>
+              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.safetyScore != null ? entry.safetyScore : '—'}</td>
+              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
+              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.durationMs}ms</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function App() {
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
@@ -1949,7 +2049,7 @@ function App() {
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
   const initialLinkState = React.useMemo(() => parseLinkState(todayDate, maxForecastDate, initialPreferences), [todayDate, maxForecastDate, initialPreferences]);
 
-  const [view, setView] = useState<'home' | 'planner' | 'settings' | 'status' | 'trip'>(initialLinkState.view);
+  const [view, setView] = useState<'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs'>(initialLinkState.view);
   const [preferences, setPreferences] = useState<UserPreferences>(initialPreferences);
   const activity: ActivityType = 'backcountry';
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
@@ -3818,7 +3918,7 @@ function App() {
     position.lng,
   ]);
   const navigateToView = useCallback(
-    (nextView: 'home' | 'planner' | 'settings' | 'status' | 'trip') => {
+    (nextView: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => {
       startViewChange(() => setView(nextView));
     },
     [startViewChange],
@@ -6231,6 +6331,28 @@ function App() {
     );
   }
 
+  if (view === 'logs') {
+    return (
+      <div key="view-logs" className={appShellClassName} aria-busy={isViewPending}>
+        <section className="settings-shell">
+          <div className="settings-head">
+            <div>
+              <div className="home-kicker">Backcountry Conditions</div>
+              <h2>Report Logs</h2>
+              <p>All safety report requests received by the server since last restart. Auto-refreshes every 30 seconds.</p>
+            </div>
+            <div className="settings-nav">
+              <button className="settings-btn" onClick={() => navigateToView('home')}>
+                <House size={14} /> Homepage
+              </button>
+            </div>
+          </div>
+          <ReportLogsTable />
+        </section>
+      </div>
+    );
+  }
+
   if (view === 'settings') {
     return (
       <div key="view-settings" className={appShellClassName} aria-busy={isViewPending}>
@@ -6619,6 +6741,9 @@ function App() {
               </button>
               <button className="settings-btn" onClick={openStatusView}>
                 <ShieldCheck size={14} /> App Health
+              </button>
+              <button className="settings-btn" onClick={() => navigateToView('logs')}>
+                <ScrollText size={14} /> Report Logs
               </button>
             </div>
           </div>
