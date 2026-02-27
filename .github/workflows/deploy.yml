@@ -1,0 +1,63 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # Run backend tests as a deploy gate. The deploy job only runs if these pass.
+  # Tests are run inline (rather than depending on ci.yml) because GitHub Actions
+  # does not natively support cross-workflow job dependencies.
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  deploy:
+    needs: backend-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_SSH_HOST }}
+          username: ${{ secrets.DO_SSH_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            cd /opt/summitsafe
+
+            # Pull latest changes.
+            git pull origin main
+
+            # Rebuild backend image. --pull ensures the base image is up to date.
+            docker compose build --pull backend
+
+            # Restart only the backend container.
+            docker compose up -d --no-deps backend
+
+            # Verify the backend is healthy after deploy.
+            echo "Waiting for health check..."
+            sleep 5
+            curl --fail --silent http://localhost:3001/healthz | grep '"ok":true'
+            echo "Deploy complete."

@@ -1,0 +1,28 @@
+name: summitsafe
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: summitsafe-backend:latest
+    container_name: summitsafe-backend
+    restart: unless-stopped
+    # Bind to localhost only — host nginx proxies to this port; internet can't reach it directly.
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      # Lives at /opt/summitsafe/.env on the VPS — not committed to git.
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+    # 15s gives the existing 10s graceful-shutdown handler room to complete
+    # before Docker sends SIGKILL.
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
