@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const LOG_FILE = path.resolve(__dirname, '../../../data/report-logs.ndjson');
+const LOG_FILE = path.resolve(__dirname, '../../data/report-logs.ndjson');
 
 const reportLogs = [];
 
@@ -16,8 +16,8 @@ const rewriteFile = () => {
       ? reportLogs.map((r) => JSON.stringify(r)).join('\n') + '\n'
       : '';
     fs.writeFileSync(LOG_FILE, content, 'utf8');
-  } catch {
-    // non-fatal
+  } catch (err) {
+    console.error('[report-logs] rewrite failed:', err.message);
   }
 };
 
@@ -31,9 +31,10 @@ const trimOldEntries = () => {
 // Ensure data directory exists
 try {
   fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-} catch {
-  // non-fatal
+} catch (err) {
+  console.error('[report-logs] mkdir failed:', err.message);
 }
+console.log('[report-logs] log file:', LOG_FILE);
 
 // Load existing logs on startup — filter to last week, rewrite file if any were pruned
 try {
@@ -50,8 +51,8 @@ try {
     reportLogs.push(...recent);
     if (recent.length !== parsed.length) rewriteFile();
   }
-} catch {
-  // non-fatal: start with empty log
+} catch (err) {
+  console.error('[report-logs] load failed:', err.message);
 }
 
 // Daily trim to evict entries that aged out during a long-running process
@@ -64,8 +65,8 @@ const logReportRequest = (entry) => {
   reportLogs.push(record);
   try {
     fs.appendFileSync(LOG_FILE, JSON.stringify(record) + '\n', 'utf8');
-  } catch {
-    // non-fatal: entry still available in memory
+  } catch (err) {
+    console.error('[report-logs] append failed:', err.message);
   }
 };
 
