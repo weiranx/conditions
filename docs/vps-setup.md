@@ -125,7 +125,7 @@ RATE_LIMIT_MAX_REQUESTS=300
 # Secret key required to access the /api/report-logs endpoint and the logs UI.
 # Generate a strong random value, e.g.: openssl rand -hex 32
 # Leave blank to disable protection (not recommended in production).
-LOGS_SECRET=change-me-to-a-strong-random-secret
+LOGS_SECRET=changeit
 
 DEBUG_AVY=false
 ```

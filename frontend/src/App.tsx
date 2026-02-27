@@ -1957,6 +1957,9 @@ interface ReportLogEntry {
   safetyScore: number | null;
   partialData: boolean | null;
   durationMs: number;
+  name: string | null;
+  ip: string | null;
+  userAgent: string | null;
 }
 
 const LOGS_SESSION_KEY = 'summitsafe:logs-key';
@@ -2075,6 +2078,7 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
         <thead>
           <tr style={{ borderBottom: '1px solid var(--border-color, #ddd)', textAlign: 'left' }}>
             <th style={{ padding: '0.5rem 0.75rem' }}>Time</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Name</th>
             <th style={{ padding: '0.5rem 0.75rem' }}>Lat / Lon</th>
             <th style={{ padding: '0.5rem 0.75rem' }}>Date</th>
             <th style={{ padding: '0.5rem 0.75rem' }}>Start</th>
@@ -2082,25 +2086,39 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
             <th style={{ padding: '0.5rem 0.75rem' }}>Score</th>
             <th style={{ padding: '0.5rem 0.75rem' }}>Partial</th>
             <th style={{ padding: '0.5rem 0.75rem' }}>Duration</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>IP</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>User-Agent</th>
+            <th style={{ padding: '0.5rem 0.75rem' }}>Link</th>
           </tr>
         </thead>
         <tbody>
-          {logs.map((entry, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #eee)', background: i % 2 === 0 ? 'var(--surface-alt, transparent)' : 'transparent' }}>
-              <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>{new Date(entry.timestamp).toLocaleString()}</td>
-              <td style={{ padding: '0.4rem 0.75rem', fontFamily: 'monospace' }}>
-                {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
-              </td>
-              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.date ?? '—'}</td>
-              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.startTime ?? '—'}</td>
-              <td style={{ padding: '0.4rem 0.75rem', color: entry.statusCode === 200 ? 'var(--accent-green, green)' : 'var(--accent-red, red)' }}>
-                {entry.statusCode}
-              </td>
-              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.safetyScore != null ? entry.safetyScore : '—'}</td>
-              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
-              <td style={{ padding: '0.4rem 0.75rem' }}>{entry.durationMs}ms</td>
-            </tr>
-          ))}
+          {logs.map((entry, i) => {
+            const plannerHref = entry.lat != null && entry.lon != null
+              ? `?view=planner&lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
+              : null;
+            return (
+              <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #eee)', background: i % 2 === 0 ? 'var(--surface-alt, transparent)' : 'transparent' }}>
+                <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>{new Date(entry.timestamp).toLocaleString()}</td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.name ?? '—'}</td>
+                <td style={{ padding: '0.4rem 0.75rem', fontFamily: 'monospace' }}>
+                  {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
+                </td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.date ?? '—'}</td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.startTime ?? '—'}</td>
+                <td style={{ padding: '0.4rem 0.75rem', color: entry.statusCode === 200 ? 'var(--accent-green, green)' : 'var(--accent-red, red)' }}>
+                  {entry.statusCode}
+                </td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.safetyScore != null ? entry.safetyScore : '—'}</td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.durationMs}ms</td>
+                <td style={{ padding: '0.4rem 0.75rem', fontFamily: 'monospace' }}>{entry.ip ?? '—'}</td>
+                <td style={{ padding: '0.4rem 0.75rem', maxWidth: '16rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.userAgent ?? undefined}>{entry.userAgent ?? '—'}</td>
+                <td style={{ padding: '0.4rem 0.75rem' }}>
+                  {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -2120,6 +2138,8 @@ function App() {
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
   const [objectiveName, setObjectiveName] = useState(initialLinkState.objectiveName);
+  const objectiveNameRef = useRef(initialLinkState.objectiveName);
+  useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
   const [safetyData, setSafetyData] = useState<SafetyData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -2356,7 +2376,7 @@ function App() {
         const { response, payload, requestId } = await fetchApi(
           `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(
             safeStartTime,
-          )}&travel_window_hours=${safeTravelWindowHours}`,
+          )}&travel_window_hours=${safeTravelWindowHours}&name=${encodeURIComponent(objectiveNameRef.current)}`,
         );
 
         if (!response.ok) {
