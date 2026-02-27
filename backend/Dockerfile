@@ -21,6 +21,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy application source. .dockerignore excludes node_modules, .env*, test/.
 COPY . .
 
+# Pre-create the data directory so appuser can write logs at runtime.
+RUN mkdir -p /app/data && chown appuser:appgroup /app/data
+
 USER appuser
 
 EXPOSE 3001
