@@ -2,9 +2,31 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const MAX_LOG_ENTRIES = 500;
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const LOG_FILE = path.resolve(__dirname, '../../../data/report-logs.ndjson');
 
 const reportLogs = [];
+
+const isWithinOneWeek = (entry) =>
+  Date.now() - new Date(entry.timestamp).getTime() <= ONE_WEEK_MS;
+
+const rewriteFile = () => {
+  try {
+    const content = reportLogs.length
+      ? reportLogs.map((r) => JSON.stringify(r)).join('\n') + '\n'
+      : '';
+    fs.writeFileSync(LOG_FILE, content, 'utf8');
+  } catch {
+    // non-fatal
+  }
+};
+
+const trimOldEntries = () => {
+  const before = reportLogs.length;
+  const firstRecent = reportLogs.findIndex(isWithinOneWeek);
+  if (firstRecent > 0) reportLogs.splice(0, firstRecent);
+  if (reportLogs.length !== before) rewriteFile();
+};
 
 // Ensure data directory exists
 try {
@@ -13,28 +35,31 @@ try {
   // non-fatal
 }
 
-// Load existing logs from file on startup (last MAX_LOG_ENTRIES lines)
+// Load existing logs on startup — filter to last week, rewrite file if any were pruned
 try {
   if (fs.existsSync(LOG_FILE)) {
     const lines = fs.readFileSync(LOG_FILE, 'utf8').split('\n').filter(Boolean);
-    const recent = lines.slice(-MAX_LOG_ENTRIES);
-    for (const line of recent) {
+    const parsed = lines.flatMap((line) => {
       try {
-        reportLogs.push(JSON.parse(line));
+        return [JSON.parse(line)];
       } catch {
-        // skip malformed lines
+        return [];
       }
-    }
+    });
+    const recent = parsed.filter(isWithinOneWeek).slice(-MAX_LOG_ENTRIES);
+    reportLogs.push(...recent);
+    if (recent.length !== parsed.length) rewriteFile();
   }
 } catch {
   // non-fatal: start with empty log
 }
 
+// Daily trim to evict entries that aged out during a long-running process
+setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
+
 const logReportRequest = (entry) => {
   const record = { ...entry, timestamp: new Date().toISOString() };
-  if (reportLogs.length >= MAX_LOG_ENTRIES) {
-    reportLogs.shift();
-  }
+  if (reportLogs.length >= MAX_LOG_ENTRIES) reportLogs.shift();
   reportLogs.push(record);
   try {
     fs.appendFileSync(LOG_FILE, JSON.stringify(record) + '\n', 'utf8');
