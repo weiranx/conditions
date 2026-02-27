@@ -43,6 +43,7 @@ const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { registerSatOneLinerRoute } = require('./src/routes/sat-oneliner');
+const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const POPULAR_PEAKS = require('./peaks.json');
 
 const avyLog = (...args) => {
@@ -2970,20 +2971,28 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
 };
 
 const safetyHandler = async (req, res) => {
-  const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours } = req.query;
+  const startedAt = Date.now();
+  const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours, name } = req.query;
+  const logName = typeof name === 'string' ? name.trim() || null : null;
+  const logIp = req.ip || null;
+  const logUserAgent = req.headers['user-agent'] || null;
+  const baseLogFields = { ip: logIp, userAgent: logUserAgent, name: logName };
 
   if (!lat || !lon) {
+    logReportRequest({ statusCode: 400, lat: lat || null, lon: lon || null, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude and longitude are required' });
   }
 
   const parsedLat = Number(lat);
   const parsedLon = Number(lon);
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
+    logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
   }
 
   const requestedDate = typeof date === 'string' ? date.trim() : '';
   if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+    logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
   }
   const requestedStartClock = parseStartClock(typeof start === 'string' ? start : '');
@@ -3045,6 +3054,7 @@ const safetyHandler = async (req, res) => {
 
       let forecastStartIndex = periods.findIndex((p) => (p.startTime || '').slice(0, 10) === selectedForecastDate);
       if (forecastStartIndex === -1 && requestedDate) {
+        logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
         return res.status(400).json({
           error: 'Requested forecast date is outside NOAA forecast range',
           details: `Choose a date between ${forecastDateRange.start} and ${forecastDateRange.end}.`,
@@ -3890,6 +3900,7 @@ const safetyHandler = async (req, res) => {
 	      aiAnalysis: `Terrain Report (${selectedForecastDate}): ${trailStatus} conditions. ${weatherData.temp}F with ${weatherData.humidity}% humidity. ${rainfallSummaryForAi} ${avalancheSummaryForAi} ${alertsSummaryForAi} ${airQualitySummaryForAi} ${snowpackSummaryForAi} ${fireSummaryForAi} ${analysis.explanations.join(' ')}`
 	    };
 	    delete responsePayload.activity;
+    logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
 	    res.json(responsePayload);
   } catch (error) {
     console.error('API Error:', error);
@@ -4010,6 +4021,7 @@ const safetyHandler = async (req, res) => {
 	      aiAnalysis: `Terrain Report (${fallbackSelectedDate}): ${safeTrailStatus} conditions. ${safeWeatherData.temp}F with ${safeWeatherData.humidity}% humidity. ${rainfallSummaryForAi} ${avalancheSummaryForAi} ${alertsSummaryForAi} ${airQualitySummaryForAi} ${snowpackSummaryForAi} ${fireSummaryForAi} ${analysis.explanations.join(' ')}`
 	    };
 	    delete fallbackResponsePayload.activity;
+    logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
 	    res.status(200).json(fallbackResponsePayload);
   }
 };
@@ -4031,6 +4043,7 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
 });
 registerHealthRoutes(app);
+registerReportLogsRoute(app);
 
 const startServer = () => startBackendServer({ app, port: PORT });
 

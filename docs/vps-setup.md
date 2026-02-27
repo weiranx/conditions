@@ -121,6 +121,12 @@ AVALANCHE_MAP_LAYER_TTL_MS=600000
 SNOTEL_STATION_CACHE_TTL_MS=43200000
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=300
+
+# Secret key required to access the /api/report-logs endpoint and the logs UI.
+# Generate a strong random value, e.g.: openssl rand -hex 32
+# Leave blank to disable protection (not recommended in production).
+LOGS_SECRET=changeit
+
 DEBUG_AVY=false
 ```
 
