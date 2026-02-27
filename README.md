@@ -168,4 +168,3 @@ See [`docs/operations.md`](docs/operations.md) for full production guidance.
 
 Backcountry Conditions is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or incorrect. Always verify official avalanche forecasts and field observations before committing to terrain. Your safety is your responsibility.
 
-test
