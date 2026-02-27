@@ -1426,6 +1426,7 @@ function buildShareQuery(state: {
   searchQuery: string;
   forecastDate: string;
   alpineStartTime: string;
+  turnaroundTime: string;
   targetElevationInput: string;
 }): string {
   const params = new URLSearchParams();
@@ -1457,6 +1458,9 @@ function buildShareQuery(state: {
 
   params.set('date', state.forecastDate);
   params.set('start', state.alpineStartTime);
+  if (state.turnaroundTime.trim()) {
+    params.set('turn', state.turnaroundTime.trim());
+  }
   if (state.targetElevationInput.trim()) {
     params.set('elev', state.targetElevationInput.trim());
   }
@@ -2682,7 +2686,7 @@ function App() {
       return;
     }
 
-    const hasSharableState = view === 'planner' || view === 'trip' || hasObjective || committedSearchQuery.trim();
+    const hasSharableState = view === 'planner' || view === 'trip' || view === 'settings' || view === 'status' || view === 'logs' || hasObjective || committedSearchQuery.trim();
     const query = hasSharableState
       ? buildShareQuery({
           view,
@@ -2692,6 +2696,7 @@ function App() {
           searchQuery: committedSearchQuery,
           forecastDate,
           alpineStartTime,
+          turnaroundTime,
           targetElevationInput,
         })
       : '';
@@ -2708,7 +2713,7 @@ function App() {
 
     isApplyingPopStateRef.current = false;
     hasInitializedHistoryRef.current = true;
-  }, [view, hasObjective, position, objectiveName, committedSearchQuery, forecastDate, alpineStartTime, targetElevationInput]);
+  }, [view, hasObjective, position, objectiveName, committedSearchQuery, forecastDate, alpineStartTime, turnaroundTime, targetElevationInput]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
