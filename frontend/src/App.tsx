@@ -2047,6 +2047,8 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
   }, [secretKey, onUnauthorized]);
 
   useEffect(() => {
+    // fetchLogs is async; all setState calls inside it happen after await, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchLogs();
     const interval = setInterval(() => void fetchLogs(), 30_000);
     return () => clearInterval(interval);
