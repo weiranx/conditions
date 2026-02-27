@@ -17,6 +17,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3001"
+    volumes:
+      # Persist report logs across container rebuilds.
+      - ./data:/app/data
     # 15s gives the existing 10s graceful-shutdown handler room to complete
     # before Docker sends SIGKILL.
     stop_grace_period: 15s
