@@ -32,7 +32,6 @@ import {
   Plus,
   BookmarkPlus,
   BookmarkCheck,
-  ScrollText,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -1960,14 +1959,80 @@ interface ReportLogEntry {
   durationMs: number;
 }
 
-function ReportLogsTable() {
+const LOGS_SESSION_KEY = 'summitsafe:logs-key';
+
+function LogsView({ onHome }: { onHome: () => void }) {
+  const [secretKey, setSecretKey] = useState<string>(() => sessionStorage.getItem(LOGS_SESSION_KEY) ?? '');
+  const [draft, setDraft] = useState('');
+  const [rejected, setRejected] = useState(false);
+
+  const handleUnauthorized = useCallback(() => {
+    sessionStorage.removeItem(LOGS_SESSION_KEY);
+    setSecretKey('');
+    setRejected(true);
+  }, []);
+
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    sessionStorage.setItem(LOGS_SESSION_KEY, trimmed);
+    setSecretKey(trimmed);
+    setRejected(false);
+    setDraft('');
+  }, [draft]);
+
+  return (
+    <div className="settings-head" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div className="home-kicker">Backcountry Conditions</div>
+          <h2>Report Logs</h2>
+          <p>All safety report requests received by the server since last restart. Auto-refreshes every 30 seconds.</p>
+        </div>
+        <div className="settings-nav">
+          <button className="settings-btn" onClick={onHome}>
+            <House size={14} /> Homepage
+          </button>
+        </div>
+      </div>
+      {secretKey
+        ? <ReportLogsTable secretKey={secretKey} onUnauthorized={handleUnauthorized} />
+        : (
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '24rem' }}>
+            {rejected && <p style={{ color: 'var(--accent-red, #e55)', margin: 0 }}>Incorrect key — try again.</p>}
+            <label htmlFor="logs-key-input" style={{ fontWeight: 600 }}>Access key</label>
+            <input
+              id="logs-key-input"
+              type="password"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Enter access key"
+              autoFocus
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color, #ccc)', fontSize: '1rem' }}
+            />
+            <button type="submit" className="primary-btn" style={{ alignSelf: 'flex-start' }}>Unlock</button>
+          </form>
+        )
+      }
+    </div>
+  );
+}
+
+function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const fetchLogs = useCallback(async () => {
-    const { response, payload } = await fetchApi('/api/report-logs');
+    const { response, payload } = await fetchApi('/api/report-logs', {
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    if (response.status === 401 || response.status === 403) {
+      onUnauthorized();
+      return;
+    }
     if (response.ok && Array.isArray(payload)) {
       setLogs(payload as ReportLogEntry[]);
       setError(null);
@@ -1976,7 +2041,7 @@ function ReportLogsTable() {
     }
     setLoading(false);
     setLastRefreshed(new Date());
-  }, []);
+  }, [secretKey, onUnauthorized]);
 
   useEffect(() => {
     void fetchLogs();
@@ -6335,19 +6400,7 @@ function App() {
     return (
       <div key="view-logs" className={appShellClassName} aria-busy={isViewPending}>
         <section className="settings-shell">
-          <div className="settings-head">
-            <div>
-              <div className="home-kicker">Backcountry Conditions</div>
-              <h2>Report Logs</h2>
-              <p>All safety report requests received by the server since last restart. Auto-refreshes every 30 seconds.</p>
-            </div>
-            <div className="settings-nav">
-              <button className="settings-btn" onClick={() => navigateToView('home')}>
-                <House size={14} /> Homepage
-              </button>
-            </div>
-          </div>
-          <ReportLogsTable />
+          <LogsView onHome={() => navigateToView('home')} />
         </section>
       </div>
     );
@@ -6741,9 +6794,6 @@ function App() {
               </button>
               <button className="settings-btn" onClick={openStatusView}>
                 <ShieldCheck size={14} /> App Health
-              </button>
-              <button className="settings-btn" onClick={() => navigateToView('logs')}>
-                <ScrollText size={14} /> Report Logs
               </button>
             </div>
           </div>
