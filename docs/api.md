@@ -5,34 +5,58 @@ Base URL:
 - Development: `http://localhost:3001`
 - Production: your deployed backend origin
 
-All API routes return JSON.
+All API routes return `application/json`. All timestamps are ISO 8601 UTC strings.
+
+---
 
 ## `GET /api/safety`
 
-Returns a synthesized planning report for a coordinate, date, selected start time, and travel window.
+Returns a synthesized planning report for a coordinate, date, start time, and travel window.
 
 ### Query Parameters
 
-- `lat` (required): decimal latitude (`-90..90`)
-- `lon` (required): decimal longitude (`-180..180`)
-- `date` (optional): `YYYY-MM-DD`
-- `start` (optional): `HH:mm` (24-hour format)
-- `travel_window_hours` (optional): integer window (`1..24`, default `12`)
-- `travelWindowHours` (optional): camelCase alias for `travel_window_hours`
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `lat` | number | Yes | Decimal latitude (`-90` to `90`) |
+| `lon` | number | Yes | Decimal longitude (`-180` to `180`) |
+| `date` | string | No | `YYYY-MM-DD` — defaults to today |
+| `start` | string | No | `HH:mm` 24-hour start time — defaults to first available NOAA period |
+| `travel_window_hours` | integer | No | Travel window length (`1`–`24`, default `12`) |
+| `travelWindowHours` | integer | No | camelCase alias for `travel_window_hours` |
 
-Behavior notes:
+**Behavior notes:**
+- If `start` is missing or invalid, the backend selects the first available NOAA hourly forecast period for the selected date.
+- `travel_window_hours` values are rounded and clamped to `1`–`24`; invalid values fall back to `12`.
 
-- If `start` is missing/invalid, backend selects the first available NOAA hourly period for the selected date.
-- `travel_window_hours` values are rounded and clamped to `1..24`; invalid values fall back to `12`.
+### HTTP Status Codes
 
-### Validation Behavior
+| Status | Condition |
+|---|---|
+| `200` | Success (may include `partialData: true` if some upstream feeds failed) |
+| `400` | Missing required parameters, invalid coordinate range, invalid date format, or date outside provider range |
+| `429` | Rate limit exceeded |
+| `500` | Internal server error |
 
-- Missing `lat`/`lon` -> `400` with error message
-- Invalid coordinate range -> `400`
-- Invalid date format -> `400`
-- Date outside provider forecast range -> `400` with `availableRange`
+### Error Response Format
 
-### Example
+```json
+{
+  "error": "Missing required parameter: lat",
+  "status": 400
+}
+```
+
+For date range errors, an `availableRange` field is included:
+
+```json
+{
+  "error": "Date outside available forecast range",
+  "availableRange": { "start": "2026-02-21", "end": "2026-02-28" },
+  "status": 400
+}
+```
+
+### Example Request
 
 ```bash
 curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21&start=06:30&travel_window_hours=12"
@@ -40,54 +64,75 @@ curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21
 
 ### Response Shape (Top Level)
 
-- `generatedAt`: backend response generation timestamp
-- `location`: `{ lat, lon }`
-- `forecast`: selected date/start/end and available range
-- `weather`: weather snapshot + trend + source details
-- `solar`: sunrise/sunset/dayLength
-- `avalanche`: center/zone/danger/problems/relevance metadata
-- `alerts`: active alerts at selected start-time window
-- `airQuality`: AQI and pollutant fields
-- `rainfall`: rolling precipitation totals and source metadata
-- `snowpack`: SNOTEL + NOHRSC observations and summary
-- `fireRisk`: synthesized fire-risk signal
-- `heatRisk`: synthesized heat-risk signal
-- `terrainCondition`: synthesized terrain-surface condition model
-- `trail`: terrain/trail surface classification string
-- `gear`: list of gear-focus suggestions
-- `safety`: score, confidence, factors, explanations
-- `aiAnalysis`: plain-language summary
+| Field | Description |
+|---|---|
+| `generatedAt` | ISO timestamp of backend response generation |
+| `location` | `{ lat, lon }` — echoed request coordinates |
+| `forecast` | Selected date/start/end times and available forecast range |
+| `weather` | Weather snapshot, hourly trend, and source metadata |
+| `solar` | `{ sunrise, sunset, dayLength }` |
+| `avalanche` | Center, zone, danger ratings, problems, bottom-line text, and relevance metadata |
+| `alerts` | Active NWS alerts filtered to the selected travel window |
+| `airQuality` | AQI index and pollutant fields |
+| `rainfall` | Rolling precipitation totals by time window and source metadata |
+| `snowpack` | SNOTEL station observations and NOHRSC snow analysis summary |
+| `fireRisk` | Synthesized fire-risk signal |
+| `heatRisk` | Synthesized heat-risk signal |
+| `terrainCondition` | Terrain-surface condition model |
+| `trail` | Trail/terrain surface classification string |
+| `gear` | Array of gear-focus suggestion strings |
+| `safety` | Risk score, confidence level, contributing factors, and plain-language explanations |
+| `aiAnalysis` | Plain-language condition summary |
 
-Potential additional fields:
+**Partial data fields** (present when one or more upstream feeds failed):
 
-- `partialData: true` when one or more upstream feeds failed
-- `apiWarning` with degradation context
+| Field | Description |
+|---|---|
+| `partialData` | `true` when the response uses degraded/incomplete upstream data |
+| `apiWarning` | Human-readable description of which feeds failed and why |
 
 ### `rainfall.totals` Fields
 
-Current precipitation model includes separate rain and snowfall totals:
+The precipitation model separates rain and snowfall:
 
-- Rain: `rainPast12h*`, `rainPast24h*`, `rainPast48h*` (in/mm)
-- Snowfall: `snowPast12h*`, `snowPast24h*`, `snowPast48h*` (in/cm)
+| Field | Unit | Description |
+|---|---|---|
+| `rainPast12h` / `rainPast12hMm` | in / mm | Rain total, past 12 hours |
+| `rainPast24h` / `rainPast24hMm` | in / mm | Rain total, past 24 hours |
+| `rainPast48h` / `rainPast48hMm` | in / mm | Rain total, past 48 hours |
+| `snowPast12h` / `snowPast12hCm` | in / cm | Snowfall total, past 12 hours |
+| `snowPast24h` / `snowPast24hCm` | in / cm | Snowfall total, past 24 hours |
+| `snowPast48h` / `snowPast48hCm` | in / cm | Snowfall total, past 48 hours |
 
-Compatibility aliases are also included:
+Legacy rain aliases (`past12h*`, `past24h*`, `past48h*`) are included for compatibility.
 
-- Legacy rain aliases: `past12h*`, `past24h*`, `past48h*`
+### `safety` Field
+
+| Field | Description |
+|---|---|
+| `score` | Numeric risk score (higher = more risk) |
+| `confidence` | Confidence level of the score (`high` / `medium` / `low`) |
+| `factors` | Array of individual risk factor objects with name, value, and weight |
+| `explanations` | Array of plain-language explanation strings for each contributing factor |
+
+---
 
 ## `GET /api/sat-oneliner`
 
-Returns a satellite-friendly one-line condition summary generated from `/api/safety`.
+Returns a satellite-friendly one-line condition summary derived from `/api/safety`. Useful for sending condition reports via satellite communicators with character limits.
 
 ### Query Parameters
 
-- `lat` (required): decimal latitude (`-90..90`)
-- `lon` (required): decimal longitude (`-180..180`)
-- `date` (optional): `YYYY-MM-DD`
-- `start` (optional): `HH:mm` (24-hour format)
-- `objective` (optional): objective label to include in the line (alias: `name`)
-- `maxLength` (optional): output cap (`80..320`, default `170`)
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `lat` | number | Yes | Decimal latitude (`-90` to `90`) |
+| `lon` | number | Yes | Decimal longitude (`-180` to `180`) |
+| `date` | string | No | `YYYY-MM-DD` |
+| `start` | string | No | `HH:mm` 24-hour start time |
+| `objective` | string | No | Objective label to include in the one-liner (alias: `name`) |
+| `maxLength` | integer | No | Output character cap (`80`–`320`, default `170`) |
 
-### Example
+### Example Request
 
 ```bash
 curl "http://localhost:3001/api/sat-oneliner?lat=46.8523&lon=-121.7603&date=2026-02-21&start=06:30&objective=Mount%20Rainier"
@@ -95,43 +140,68 @@ curl "http://localhost:3001/api/sat-oneliner?lat=46.8523&lon=-121.7603&date=2026
 
 ### Response Shape
 
-- `line`: final one-liner text
-- `length`: character length of `line`
-- `maxLength`: applied max length cap
-- `generatedAt`: SAT endpoint generation timestamp
-- `sourceGeneratedAt`: upstream `/api/safety` payload generation time
-- `partialData`: true when upstream report used degraded data
-- `source`: `"/api/safety"`
-- `params`: normalized request params used to build the line
+| Field | Description |
+|---|---|
+| `line` | Final one-liner text |
+| `length` | Character length of `line` |
+| `maxLength` | Applied max length cap |
+| `generatedAt` | ISO timestamp of SAT endpoint generation |
+| `sourceGeneratedAt` | ISO timestamp of the upstream `/api/safety` payload |
+| `partialData` | `true` when the upstream report used degraded data |
+| `source` | Always `"/api/safety"` |
+| `params` | Normalized request params used to build the line |
+
+---
 
 ## `GET /api/search`
 
-Searches objectives using local peak catalog + Nominatim geocoding.
+Searches objectives using a local peak catalog plus Nominatim geocoding.
 
 ### Query Parameters
 
-- `q` (optional): search text
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `q` | string | No | Search text |
 
-Behavior:
-
+**Behavior:**
 - No `q`: returns top 5 popular peaks
-- Short `q` (< 3 chars): local peak matches only
-- Longer `q`: local matches + Nominatim US geocoding (deduped)
+- Short `q` (< 3 chars): local peak catalog matches only
+- Longer `q`: local matches + Nominatim US geocoding (deduplicated)
 
-### Example
+### Example Requests
 
 ```bash
+# Top peaks (no query)
+curl "http://localhost:3001/api/search"
+
+# Search by name
 curl "http://localhost:3001/api/search?q=rainier"
 ```
 
+### Response Shape
+
+Array of result objects, each with:
+
+| Field | Description |
+|---|---|
+| `name` | Peak or place name |
+| `lat` | Decimal latitude |
+| `lon` | Decimal longitude |
+| `elevation` | Elevation in feet (when available) |
+| `source` | `"local"` or `"nominatim"` |
+
+---
+
 ## Health Endpoints
+
+All four aliases return the same response:
 
 - `GET /healthz`
 - `GET /health`
 - `GET /api/healthz`
 - `GET /api/health`
 
-Response:
+### Example Response
 
 ```json
 {
@@ -142,6 +212,12 @@ Response:
 }
 ```
 
+---
+
 ## Headers
 
-- `X-Request-Id`: generated for each backend request; use for tracing logs.
+| Header | Description |
+|---|---|
+| `X-Request-Id` | Unique ID generated for each backend request — use for correlating logs |
+
+Include this ID in bug reports and support requests to aid troubleshooting.
