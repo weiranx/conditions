@@ -47,6 +47,9 @@ jobs:
 
             cd /opt/summitsafe
 
+            # Allow git operations in this directory regardless of ownership.
+            git config --global --add safe.directory /opt/summitsafe
+
             # Pull latest changes.
             git pull origin main
 
