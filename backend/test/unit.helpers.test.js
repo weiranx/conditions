@@ -1337,3 +1337,16 @@ test('calculateSafetyScore incorporates rainfall totals, expected precipitation,
   expect(wetHotResult.explanations.join(' ')).toMatch(/expected rain in selected travel window/i);
   expect(wetHotResult.explanations.join(' ')).toMatch(/heat risk is high/i);
 });
+
+test('deriveTerrainCondition correctly handles null/missing weather data without signaling freezing/icy conditions', () => {
+  const weatherData = {
+    temp: null,
+    humidity: null,
+    windSpeed: null,
+    description: 'Data unavailable',
+    trend: []
+  };
+  const result = deriveTerrainCondition(weatherData);
+  // It should NOT be icy_hardpack (which would happen if temp was incorrectly 0)
+  expect(result.code).toBe('weather_unavailable');
+});

@@ -28,16 +28,16 @@ const buildLayeringGearSuggestions = ({
   };
 
   const description = String(weatherData?.description || '').toLowerCase();
-  const tempF = Number(weatherData?.temp);
-  const feelsLikeF = Number.isFinite(Number(weatherData?.feelsLike)) ? Number(weatherData?.feelsLike) : tempF;
-  const windMph = Number(weatherData?.windSpeed);
-  const gustMph = Number(weatherData?.windGust);
-  const precipChance = Number(weatherData?.precipChance);
-  const humidity = Number(weatherData?.humidity);
-  const rain24hIn = Number(rainfallData?.totals?.rainPast24hIn ?? rainfallData?.totals?.past24hIn);
-  const snow24hIn = Number(rainfallData?.totals?.snowPast24hIn);
-  const snotelDepthIn = Number(snowpackData?.snotel?.snowDepthIn);
-  const nohrscDepthIn = Number(snowpackData?.nohrsc?.snowDepthIn);
+  const tempF = parseFloat(weatherData?.temp);
+  const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
+  const windMph = parseFloat(weatherData?.windSpeed);
+  const gustMph = parseFloat(weatherData?.windGust);
+  const precipChance = parseFloat(weatherData?.precipChance);
+  const humidity = parseFloat(weatherData?.humidity);
+  const rain24hIn = parseFloat(rainfallData?.totals?.rainPast24hIn ?? rainfallData?.totals?.past24hIn);
+  const snow24hIn = parseFloat(rainfallData?.totals?.snowPast24hIn);
+  const snotelDepthIn = parseFloat(snowpackData?.snotel?.snowDepthIn);
+  const nohrscDepthIn = parseFloat(snowpackData?.nohrsc?.snowDepthIn);
   const maxObservedSnowDepthIn = [snotelDepthIn, nohrscDepthIn].filter(Number.isFinite).reduce((max, current) => Math.max(max, current), 0);
 
   const hasWetSignal =

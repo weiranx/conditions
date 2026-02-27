@@ -1,4 +1,7 @@
 const toFinite = (value) => {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+    return null;
+  }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 };
