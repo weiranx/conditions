@@ -129,47 +129,53 @@ DEBUG_AVY=false
 ## 6. Obtain a TLS Certificate (First Deploy Only)
 
 The nginx site config references cert files that must exist before it can load.
-Get the certificate first using a temporary minimal config for the ACME challenge.
+Use certbot's standalone mode — it briefly binds port 80 itself, so nginx must
+be stopped first.
 
 ```bash
 # Install certbot.
 apt-get install -y certbot
 
-# Create a minimal nginx config just for the ACME challenge.
-cat > /etc/nginx/sites-available/summitsafe-bootstrap <<'EOF'
-server {
-    listen 80;
-    server_name api.example.com;
-    location /.well-known/acme-challenge/ { root /var/www/certbot; }
-    location / { return 404; }
-}
-EOF
-
-mkdir -p /var/www/certbot
-ln -s /etc/nginx/sites-available/summitsafe-bootstrap /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
+# Stop nginx so certbot can bind port 80.
+systemctl stop nginx
 
 # Obtain the certificate.
 certbot certonly \
-  --webroot \
-  --webroot-path /var/www/certbot \
+  --standalone \
   -d api.example.com \
   --email you@example.com \
   --agree-tos \
   --non-interactive
 
-# Clean up the bootstrap config.
-rm /etc/nginx/sites-enabled/summitsafe-bootstrap
-rm /etc/nginx/sites-available/summitsafe-bootstrap
+# Restart nginx.
+systemctl start nginx
 ```
 
-Set up automatic renewal — certbot installs a systemd timer by default
-(`systemctl status certbot.timer`). If it's absent, add a cron job:
+Set up renewal hooks so future automatic renewals stop/start nginx around the
+ACME challenge:
+
+```bash
+echo "systemctl stop nginx" \
+  | tee /etc/letsencrypt/renewal-hooks/pre/stop-nginx.sh
+echo "systemctl start nginx" \
+  | tee /etc/letsencrypt/renewal-hooks/post/start-nginx.sh
+chmod +x /etc/letsencrypt/renewal-hooks/pre/stop-nginx.sh \
+         /etc/letsencrypt/renewal-hooks/post/start-nginx.sh
+```
+
+Certbot installs a systemd timer by default (`systemctl status certbot.timer`).
+If it's absent, add a cron job:
 
 ```bash
 crontab -e
 # Add:
-0 3 * * * certbot renew --quiet && systemctl reload nginx
+0 3 * * * certbot renew --quiet
+```
+
+Dry-run to verify the renewal hooks work:
+
+```bash
+certbot renew --dry-run
 ```
 
 ---
