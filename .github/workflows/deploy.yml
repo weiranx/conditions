@@ -45,10 +45,10 @@ jobs:
           script: |
             set -euo pipefail
 
-            cd /opt/summitsafe
+            # Fix ownership so the deploy user can run git operations.
+            sudo chown -R "$(whoami)":"$(whoami)" /opt/summitsafe
 
-            # Allow git operations in this directory regardless of ownership.
-            git config --global --add safe.directory /opt/summitsafe
+            cd /opt/summitsafe
 
             # Pull latest changes.
             git pull origin main
