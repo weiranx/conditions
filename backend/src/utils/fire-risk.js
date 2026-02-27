@@ -11,11 +11,11 @@ const createUnavailableFireRiskData = (status = 'unavailable') => ({
 
 const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
   const weatherDescription = String(weatherData?.description || '').toLowerCase();
-  const tempF = Number(weatherData?.temp);
-  const humidity = Number(weatherData?.humidity);
-  const wind = Number(weatherData?.windSpeed);
-  const gust = Number(weatherData?.windGust);
-  const usAqi = Number(airQualityData?.usAqi);
+  const tempF = parseFloat(weatherData?.temp);
+  const humidity = parseFloat(weatherData?.humidity);
+  const wind = parseFloat(weatherData?.windSpeed);
+  const gust = parseFloat(weatherData?.windGust);
+  const usAqi = parseFloat(airQualityData?.usAqi);
   const alerts = Array.isArray(alertsData?.alerts) ? alertsData.alerts : [];
   const alertsRelevant = String(alertsData?.status || '') !== 'future_time_not_supported';
 

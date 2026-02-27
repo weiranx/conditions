@@ -29,24 +29,24 @@ const HEAT_GUIDANCE = [
 ];
 
 const buildHeatRiskData = ({ weatherData }) => {
-  const tempF = Number(weatherData?.temp);
-  const feelsLikeF = Number.isFinite(Number(weatherData?.feelsLike)) ? Number(weatherData?.feelsLike) : tempF;
-  const humidity = Number(weatherData?.humidity);
+  const tempF = parseFloat(weatherData?.temp);
+  const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
+  const humidity = parseFloat(weatherData?.humidity);
   const isDaytime = weatherData?.isDaytime;
 
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
   const trendTemps = trend
-    .map((point) => Number(point?.temp))
+    .map((point) => parseFloat(point?.temp))
     .filter((value) => Number.isFinite(value));
   const peakTemp12hF = Number.isFinite(tempF) ? Math.max(tempF, ...trendTemps) : trendTemps.length > 0 ? Math.max(...trendTemps) : null;
   const peakFeelsLike12hF = Number.isFinite(feelsLikeF)
     ? Math.max(feelsLikeF, Number.isFinite(peakTemp12hF) ? peakTemp12hF : Number.NEGATIVE_INFINITY)
     : peakTemp12hF;
   const elevationBands = Array.isArray(weatherData?.elevationForecast) ? weatherData.elevationForecast : [];
-  const lowerTerrainBands = elevationBands.filter((band) => Number(band?.deltaFromObjectiveFt) < 0);
+  const lowerTerrainBands = elevationBands.filter((band) => parseFloat(band?.deltaFromObjectiveFt) < 0);
   const lowerTerrainWarmestBand = lowerTerrainBands.reduce((warmest, band) => {
-    const bandTemp = Number(band?.temp);
-    const bandFeels = Number.isFinite(Number(band?.feelsLike)) ? Number(band?.feelsLike) : bandTemp;
+    const bandTemp = parseFloat(band?.temp);
+    const bandFeels = Number.isFinite(parseFloat(band?.feelsLike)) ? parseFloat(band?.feelsLike) : bandTemp;
     if (!Number.isFinite(bandFeels)) {
       return warmest;
     }

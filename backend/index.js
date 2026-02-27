@@ -1450,10 +1450,10 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
     return { relevant: true, reason: 'Significant snow accumulation (≥6 in) expected during the travel window — active loading increases avalanche cycle risk.' };
   }
 
-  const objectiveElevationFt = Number(weatherData?.elevation);
-  const tempF = Number(weatherData?.temp);
-  const feelsLikeF = Number(weatherData?.feelsLike);
-  const precipChance = Number(weatherData?.precipChance);
+  const objectiveElevationFt = parseFloat(weatherData?.elevation);
+  const tempF = parseFloat(weatherData?.temp);
+  const feelsLikeF = parseFloat(weatherData?.feelsLike);
+  const precipChance = parseFloat(weatherData?.precipChance);
   const description = String(weatherData?.description || '').toLowerCase();
   const month = parseForecastMonth(selectedDate || weatherData?.forecastDate || '');
   const highLatitude = Math.abs(Number(lat)) >= 42;
@@ -2134,12 +2134,12 @@ const calculateSafetyScore = ({
   };
 
   const weatherDescription = String(weatherData?.description || '').toLowerCase();
-  const wind = Number(weatherData?.windSpeed);
-  const gust = Number(weatherData?.windGust);
-  const precipChance = Number(weatherData?.precipChance);
-  const humidity = Number(weatherData?.humidity);
-  const tempF = Number(weatherData?.temp);
-  const feelsLikeF = Number.isFinite(Number(weatherData?.feelsLike)) ? Number(weatherData?.feelsLike) : tempF;
+  const wind = parseFloat(weatherData?.windSpeed);
+  const gust = parseFloat(weatherData?.windGust);
+  const precipChance = parseFloat(weatherData?.precipChance);
+  const humidity = parseFloat(weatherData?.humidity);
+  const tempF = parseFloat(weatherData?.temp);
+  const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
   const isDaytime = weatherData?.isDaytime;
   const visibilityRiskScoreRaw = Number(weatherData?.visibilityRisk?.score);
   const visibilityRiskScore = Number.isFinite(visibilityRiskScoreRaw) ? visibilityRiskScoreRaw : null;
@@ -3368,11 +3368,20 @@ const safetyHandler = async (req, res) => {
                   expiresTime: centerNoActiveForecast ? null : firstNonEmptyString(props.end_date, props.expires, props.expire_time),
 	            elevations: (centerNoActiveForecast || noRatingForecast)
                 ? null
-                : {
-                    below: { level: parseInt(props.danger_low) || mainLvl, label: levelMap[parseInt(props.danger_low) || mainLvl] },
-                    at: { level: parseInt(props.danger_mid) || mainLvl, label: levelMap[parseInt(props.danger_mid) || mainLvl] },
-                    above: { level: parseInt(props.danger_high) || mainLvl, label: levelMap[parseInt(props.danger_high) || mainLvl] }
-                  }
+                : (() => {
+                    const parseLevel = (val) => {
+                      const n = parseInt(val);
+                      return Number.isFinite(n) ? n : mainLvl;
+                    };
+                    const l = parseLevel(props.danger_low);
+                    const m = parseLevel(props.danger_mid);
+                    const u = parseLevel(props.danger_high);
+                    return {
+                      below: { level: l, label: levelMap[l] || 'Unknown' },
+                      at: { level: m, label: levelMap[m] || 'Unknown' },
+                      above: { level: u, label: levelMap[u] || 'Unknown' }
+                    };
+                  })()
 	          };
 
 		          // TRY TO GET THE REAL BOTTOM LINE BY PRODUCT ID
@@ -3501,16 +3510,18 @@ const safetyHandler = async (req, res) => {
                 const safeLevel = (val) => { const n = parseInt(val, 10); return Number.isFinite(n) ? n : 0; };
                 if (det.danger && det.danger.length > 0) {
                    const currentDay = det.danger.find(d => d.valid_day === 'current') || det.danger[0];
+                   const safeLabel = (lvl) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
                    avalancheData.elevations = {
-                     below: { level: safeLevel(currentDay.lower), label: levelMap[safeLevel(currentDay.lower)] },
-                     at: { level: safeLevel(currentDay.middle), label: levelMap[safeLevel(currentDay.middle)] },
-                     above: { level: safeLevel(currentDay.upper), label: levelMap[safeLevel(currentDay.upper)] }
+                     below: { level: safeLevel(currentDay.lower), label: safeLabel(safeLevel(currentDay.lower)) },
+                     at: { level: safeLevel(currentDay.middle), label: safeLabel(safeLevel(currentDay.middle)) },
+                     above: { level: safeLevel(currentDay.upper), label: safeLabel(safeLevel(currentDay.upper)) }
                    };
                 } else if (det.danger_low) {
+                  const safeLabel = (lvl) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
                   avalancheData.elevations = {
-                    below: { level: safeLevel(det.danger_low), label: levelMap[safeLevel(det.danger_low)] },
-                    at: { level: safeLevel(det.danger_mid), label: levelMap[safeLevel(det.danger_mid)] },
-                    above: { level: safeLevel(det.danger_high), label: levelMap[safeLevel(det.danger_high)] }
+                    below: { level: safeLevel(det.danger_low), label: safeLabel(safeLevel(det.danger_low)) },
+                    at: { level: safeLevel(det.danger_mid), label: safeLabel(safeLevel(det.danger_mid)) },
+                    above: { level: safeLevel(det.danger_high), label: safeLabel(safeLevel(det.danger_high)) }
 	                  };
 	                }
 	              }
@@ -3641,10 +3652,11 @@ const safetyHandler = async (req, res) => {
                      const l = parseInt(lowerMatch[1]);
                      const m = parseInt(middleMatch[1]);
                      const u = parseInt(upperMatch[1]);
+                     const safeLabel = (lvl) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
                      avalancheData.elevations = {
-                       below: { level: l, label: levelMap[l] },
-                       at: { level: m, label: levelMap[m] },
-                       above: { level: u, label: levelMap[u] }
+                       below: { level: l, label: safeLabel(l) },
+                       at: { level: m, label: safeLabel(m) },
+                       above: { level: u, label: safeLabel(u) }
                      };
                   }
                   } // end if (pageRes.ok)
