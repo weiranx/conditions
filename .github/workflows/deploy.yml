@@ -53,11 +53,8 @@ jobs:
             # Rebuild backend image. --pull ensures the base image is up to date.
             docker compose build --pull backend
 
-            # Restart only the backend container (nginx stays up).
+            # Restart only the backend container.
             docker compose up -d --no-deps backend
-
-            # Reload nginx config without downtime (no-op if config is unchanged).
-            docker compose exec -T nginx nginx -s reload || true
 
             # Verify the backend is healthy after deploy.
             echo "Waiting for health check..."
