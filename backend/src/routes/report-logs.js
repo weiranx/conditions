@@ -58,6 +58,7 @@ try {
 setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
 
 const logReportRequest = (entry) => {
+  if (!entry.name) return;
   const record = { ...entry, timestamp: new Date().toISOString() };
   if (reportLogs.length >= MAX_LOG_ENTRIES) reportLogs.shift();
   reportLogs.push(record);
