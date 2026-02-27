@@ -1,7 +1,8 @@
 # VPS Setup Guide: DigitalOcean Droplet
 
 This guide covers initial provisioning of the DigitalOcean droplet that runs
-the SummitSafe backend behind nginx, managed by Docker Compose.
+the SummitSafe backend. nginx runs on the host (alongside any other services)
+and proxies to the backend container managed by Docker Compose.
 
 ## Prerequisites
 
@@ -125,66 +126,69 @@ DEBUG_AVY=false
 
 ---
 
-## 6. Update nginx Domain Name
+## 6. Obtain a TLS Certificate (First Deploy Only)
 
-Replace `your.domain.example.com` in `nginx/nginx.conf` with your actual domain:
-
-```bash
-nano /opt/summitsafe/nginx/nginx.conf
-# Replace: your.domain.example.com  (appears 3 times)
-# With:    api.summitsafe.app        (or your real domain)
-```
-
----
-
-## 7. Bootstrap TLS with Let's Encrypt (First Deploy Only)
-
-nginx will fail to start if the `ssl_certificate` paths don't exist yet. Use
-this one-time bootstrap sequence.
-
-**Step 7a — Start nginx with the HTTP block only.**
-
-In `nginx/nginx.conf`, comment out the entire `server { listen 443 ssl; ... }`
-block, leaving only the port 80 server block. Then start nginx:
+The nginx site config references cert files that must exist before it can load.
+Get the certificate first using a temporary minimal config for the ACME challenge.
 
 ```bash
-cd /opt/summitsafe
-docker compose up -d nginx
-```
-
-**Step 7b — Obtain certificates via certbot.**
-
-```bash
+# Install certbot.
 apt-get install -y certbot
 
+# Create a minimal nginx config just for the ACME challenge.
+cat > /etc/nginx/sites-available/summitsafe-bootstrap <<'EOF'
+server {
+    listen 80;
+    server_name api.example.com;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 404; }
+}
+EOF
+
+mkdir -p /var/www/certbot
+ln -s /etc/nginx/sites-available/summitsafe-bootstrap /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+
+# Obtain the certificate.
 certbot certonly \
   --webroot \
   --webroot-path /var/www/certbot \
-  -d api.summitsafe.app \
+  -d api.example.com \
   --email you@example.com \
   --agree-tos \
   --non-interactive
+
+# Clean up the bootstrap config.
+rm /etc/nginx/sites-enabled/summitsafe-bootstrap
+rm /etc/nginx/sites-available/summitsafe-bootstrap
 ```
 
-Certificates are written to `/etc/letsencrypt/live/api.summitsafe.app/`.
-
-**Step 7c — Restore the HTTPS block and bring up the full stack.**
-
-```bash
-nano /opt/summitsafe/nginx/nginx.conf   # Re-enable the HTTPS server block.
-docker compose up -d
-curl https://api.summitsafe.app/healthz
-```
-
-**Step 7d — Set up automatic certificate renewal.**
-
-certbot installs a systemd timer by default (`systemctl status certbot.timer`).
-If it's absent, add a cron job:
+Set up automatic renewal — certbot installs a systemd timer by default
+(`systemctl status certbot.timer`). If it's absent, add a cron job:
 
 ```bash
 crontab -e
 # Add:
-0 3 * * * certbot renew --quiet && docker compose -f /opt/summitsafe/docker-compose.yml exec -T nginx nginx -s reload
+0 3 * * * certbot renew --quiet && systemctl reload nginx
+```
+
+---
+
+## 7. Configure Host nginx
+
+Run the setup script, which writes the nginx site config and reloads nginx:
+
+```bash
+cd /opt/summitsafe
+sudo ./scripts/setup-nginx.sh --domain api.example.com
+```
+
+This creates `/etc/nginx/sites-available/summitsafe`, symlinks it into
+`sites-enabled`, and reloads nginx. Verify:
+
+```bash
+curl -I https://api.example.com/healthz
+# Should get a 502 at this point — backend isn't running yet. That's expected.
 ```
 
 ---
@@ -193,17 +197,18 @@ crontab -e
 
 ```bash
 cd /opt/summitsafe
-docker compose build backend
-docker compose up -d
-docker compose logs -f backend
+./scripts/deploy.sh
 ```
 
-Expected startup log line: `Backend Active on 3001`
+Expected output ends with:
+```
+==> Deploy complete.
+```
 
 Smoke test:
 
 ```bash
-curl https://api.summitsafe.app/healthz
+curl https://api.example.com/healthz
 # {"ok":true,"service":"summitsafe-backend","timestamp":"..."}
 ```
 
@@ -231,29 +236,28 @@ Push to `main` to trigger the deploy workflow. Monitor progress in the
 docker compose -f /opt/summitsafe/docker-compose.yml logs -f backend
 ```
 
-**Restart backend only:**
-```bash
-docker compose -f /opt/summitsafe/docker-compose.yml restart backend
-```
-
 **Health check:**
 ```bash
-curl https://api.summitsafe.app/healthz
-```
-
-**Enable avalanche debug logging temporarily:**
-```bash
-# Edit /opt/summitsafe/.env: set DEBUG_AVY=true
-docker compose -f /opt/summitsafe/docker-compose.yml restart backend
-# Reset when done: set DEBUG_AVY=false and restart again.
+curl https://api.example.com/healthz
 ```
 
 **Manual deploy (bypasses GitHub Actions):**
 ```bash
 cd /opt/summitsafe
-git pull origin main
-docker compose build backend
-docker compose up -d --no-deps backend
+./scripts/deploy.sh
+
+# Skip git pull (e.g. deploy current working tree):
+./scripts/deploy.sh --no-pull
+
+# Skip rebuild (e.g. only .env changed):
+./scripts/deploy.sh --no-build
+```
+
+**Enable avalanche debug logging temporarily:**
+```bash
+# Edit /opt/summitsafe/.env: set DEBUG_AVY=true
+./scripts/deploy.sh --no-pull --no-build
+# Reset when done: set DEBUG_AVY=false and repeat.
 ```
 
 ---
@@ -265,7 +269,7 @@ docker compose up -d --no-deps backend
 | nginx returns 502 | `docker compose ps` — is backend healthy? Check `docker compose logs backend` |
 | Backend container exits immediately | Check `.env` for missing/malformed vars; run `docker compose logs backend` |
 | CORS errors in browser | Verify `CORS_ORIGIN` matches the exact frontend origin (scheme+host, no trailing slash) |
-| Certificate errors | Run `certbot certificates` on host; verify paths in `nginx.conf` match |
-| Deploy workflow fails at SSH step | Verify `DO_SSH_KEY` contains the private key; verify `deploy` user can run `docker compose` without sudo |
+| Certificate errors | Run `certbot certificates`; verify domain in `/etc/nginx/sites-available/summitsafe` matches |
+| Deploy workflow fails at SSH step | Verify `DO_SSH_KEY` contains the private key; verify `deploy` user is in the `docker` group |
 | 429 responses from API | Rate limit hit; increase `RATE_LIMIT_MAX_REQUESTS` or widen `RATE_LIMIT_WINDOW_MS` in `.env` |
 | Slow / timeout on `/api/safety` | Enable `DEBUG_AVY=true` if avalanche-related; check upstream provider availability |
