@@ -32,6 +32,10 @@ import {
   Plus,
   BookmarkPlus,
   BookmarkCheck,
+  Activity,
+  Cpu,
+  Wifi,
+  HardDrive,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -69,6 +73,7 @@ import {
   type DayOverDayComparison,
   type DecisionLevel,
   type ElevationUnit,
+  type BackendMeta,
   type HealthCheckResult,
   type LinkState,
   type MapStyle,
@@ -1987,6 +1992,7 @@ function App() {
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [backendMeta, setBackendMeta] = useState<BackendMeta | null>(null);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
   const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
   const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
@@ -2251,21 +2257,39 @@ function App() {
     setHealthLoading(true);
     setHealthError(null);
     try {
+      const t0 = Date.now();
       const { response, payload, requestId } = await fetchApi('/api/healthz');
+      const latencyMs = Date.now() - t0;
+
       if (!response.ok || !payload || typeof payload !== 'object') {
         const baseMessage = readApiErrorMessage(payload, `Health check failed (${response.status})`);
         throw new Error(requestId ? `${baseMessage} (request ${requestId})` : baseMessage);
       }
 
-      const backendOk = Boolean((payload as { ok?: boolean }).ok);
-      const backendService = String((payload as { service?: string }).service || 'summitsafe-backend');
-      const backendEnv = String((payload as { env?: string }).env || 'unknown');
+      const p = payload as {
+        ok?: boolean;
+        service?: string;
+        version?: string;
+        env?: string;
+        uptime?: number;
+        nodeVersion?: string;
+        memory?: { heapUsedMb?: number; rssMb?: number };
+      };
+
+      const backendOk = Boolean(p.ok);
+      const backendService = String(p.service || 'summitsafe-backend');
+      const backendEnv = String(p.env || 'unknown');
+      const backendVersion = String(p.version || '?');
+      const backendUptime = typeof p.uptime === 'number' ? p.uptime : null;
+      const backendNodeVersion = String(p.nodeVersion || '?');
+      const heapUsedMb = p.memory?.heapUsedMb ?? null;
+      const rssMb = p.memory?.rssMb ?? null;
+
       const nowIso = new Date().toISOString();
+
       const localStorageAvailable = (() => {
         try {
-          if (typeof window === 'undefined' || !window.localStorage) {
-            return false;
-          }
+          if (typeof window === 'undefined' || !window.localStorage) return false;
           const probeKey = '__summitsafe_health_probe__';
           window.localStorage.setItem(probeKey, '1');
           window.localStorage.removeItem(probeKey);
@@ -2275,21 +2299,88 @@ function App() {
         }
       })();
 
+      const cookiesAvailable = typeof navigator !== 'undefined' && navigator.cookieEnabled;
+
+      const webGlAvailable = (() => {
+        try {
+          const canvas = document.createElement('canvas');
+          return Boolean(canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl'));
+        } catch {
+          return false;
+        }
+      })();
+
+      const latencyStatus: HealthCheckResult['status'] = latencyMs < 400 ? 'ok' : latencyMs < 1200 ? 'warn' : 'down';
+
+      const formatUptime = (seconds: number) => {
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return `${d}d ${h}h ${m}m`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m ${seconds % 60}s`;
+      };
+
+      if (backendUptime !== null && heapUsedMb !== null && rssMb !== null) {
+        setBackendMeta({
+          version: backendVersion,
+          env: backendEnv,
+          uptime: backendUptime,
+          nodeVersion: backendNodeVersion,
+          heapUsedMb,
+          rssMb,
+          latencyMs,
+        });
+      }
+
       const checks: HealthCheckResult[] = [
         {
           label: 'Backend API',
           status: backendOk ? 'ok' : 'down',
-          detail: backendOk ? `${backendService} responded healthy (${backendEnv}).` : 'Backend health endpoint returned not-ok.',
+          detail: backendOk
+            ? `${backendService} responded healthy (${backendEnv}).`
+            : 'Backend health endpoint returned not-ok.',
+          meta: backendOk && backendUptime !== null ? `Up for ${formatUptime(backendUptime)} · Node ${backendNodeVersion}` : undefined,
+        },
+        {
+          label: 'API Latency',
+          status: latencyStatus,
+          detail:
+            latencyStatus === 'ok'
+              ? `Response in ${latencyMs} ms — within normal range.`
+              : latencyStatus === 'warn'
+                ? `Response in ${latencyMs} ms — slower than expected.`
+                : `Response in ${latencyMs} ms — very slow, possible network issue.`,
+          meta: `Measured round-trip to /api/healthz`,
         },
         {
           label: 'Browser Network',
           status: typeof navigator !== 'undefined' && navigator.onLine ? 'ok' : 'warn',
-          detail: typeof navigator !== 'undefined' && navigator.onLine ? 'Browser reports online.' : 'Browser reports offline mode.',
+          detail:
+            typeof navigator !== 'undefined' && navigator.onLine
+              ? 'Browser reports online.'
+              : 'Browser reports offline mode.',
         },
         {
           label: 'Browser Storage',
           status: localStorageAvailable ? 'ok' : 'warn',
-          detail: localStorageAvailable ? 'Local preferences storage is available.' : 'Local storage unavailable (private mode/policy).',
+          detail: localStorageAvailable
+            ? 'Local preferences storage is available.'
+            : 'Local storage unavailable (private mode or browser policy).',
+        },
+        {
+          label: 'Browser Cookies',
+          status: cookiesAvailable ? 'ok' : 'warn',
+          detail: cookiesAvailable
+            ? 'Cookies are enabled.'
+            : 'Cookies are disabled — some features may not work correctly.',
+        },
+        {
+          label: 'Browser WebGL',
+          status: webGlAvailable ? 'ok' : 'warn',
+          detail: webGlAvailable
+            ? 'WebGL is available for map rendering.'
+            : 'WebGL unavailable — map tile rendering may be degraded.',
         },
       ];
 
@@ -2297,6 +2388,7 @@ function App() {
       setHealthCheckedAt(nowIso);
     } catch (error) {
       setHealthChecks([]);
+      setBackendMeta(null);
       setHealthError(error instanceof Error ? error.message : 'Health check failed.');
       setHealthCheckedAt(new Date().toISOString());
     } finally {
@@ -6170,6 +6262,15 @@ function App() {
   }, [view, hasObjective, tripForecastLoading, tripForecastRows.length, tripForecastError, runTripForecast]);
 
   if (view === 'status') {
+    const formatUptime = (seconds: number) => {
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      if (d > 0) return `${d}d ${h}h ${m}m`;
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m ${seconds % 60}s`;
+    };
+
     return (
       <div key="view-status" className={appShellClassName} aria-busy={isViewPending}>
         <section className="settings-shell status-shell">
@@ -6177,7 +6278,7 @@ function App() {
             <div>
               <div className="home-kicker">Backcountry Conditions System Health</div>
               <h2>Status</h2>
-              <p>Live application health checks for backend availability and browser capabilities.</p>
+              <p>Live health checks for backend availability and browser capabilities.</p>
             </div>
             <div className="settings-nav">
               <button className="settings-btn" onClick={() => navigateToView('home')}>
@@ -6190,7 +6291,8 @@ function App() {
                 <SlidersHorizontal size={14} /> Settings
               </button>
               <button className="primary-btn" onClick={() => void runHealthChecks()} disabled={healthLoading}>
-                <ShieldCheck size={14} /> {healthLoading ? 'Checking…' : 'Run Checks'}
+                <RefreshCw size={14} className={healthLoading ? 'spin-icon' : undefined} />
+                {healthLoading ? 'Checking…' : 'Run Checks'}
               </button>
             </div>
           </div>
@@ -6202,22 +6304,76 @@ function App() {
             </article>
           )}
 
-          <div className="status-grid">
-            {healthChecks.map((check) => (
-              <article key={check.label} className="settings-card status-card">
-                <div className="status-card-head">
-                  <h3>{check.label}</h3>
-                  <span className={`decision-pill ${check.status === 'ok' ? 'go' : check.status === 'warn' ? 'caution' : 'nogo'}`}>
-                    {check.status.toUpperCase()}
-                  </span>
+          {backendMeta && (
+            <article className="settings-card settings-card-full status-meta-bar">
+              <div className="status-meta-bar-inner">
+                <div className="status-meta-stat">
+                  <Activity size={13} />
+                  <span className="status-meta-label">Version</span>
+                  <strong>{backendMeta.version}</strong>
                 </div>
-                <p>{check.detail}</p>
+                <div className="status-meta-stat">
+                  <Clock size={13} />
+                  <span className="status-meta-label">Uptime</span>
+                  <strong>{formatUptime(backendMeta.uptime)}</strong>
+                </div>
+                <div className="status-meta-stat">
+                  <Cpu size={13} />
+                  <span className="status-meta-label">Node</span>
+                  <strong>{backendMeta.nodeVersion}</strong>
+                </div>
+                <div className="status-meta-stat">
+                  <HardDrive size={13} />
+                  <span className="status-meta-label">Heap</span>
+                  <strong>{backendMeta.heapUsedMb} MB</strong>
+                </div>
+                <div className="status-meta-stat">
+                  <HardDrive size={13} />
+                  <span className="status-meta-label">RSS</span>
+                  <strong>{backendMeta.rssMb} MB</strong>
+                </div>
+                <div className="status-meta-stat">
+                  <Wifi size={13} />
+                  <span className="status-meta-label">Latency</span>
+                  <strong>{backendMeta.latencyMs} ms</strong>
+                </div>
+              </div>
+            </article>
+          )}
+
+          <div className="status-grid">
+            {healthChecks.map((check) => {
+              const pillClass = check.status === 'ok' ? 'go' : check.status === 'warn' ? 'caution' : 'nogo';
+              const StatusIcon = check.status === 'ok' ? CheckCircle2 : check.status === 'warn' ? AlertTriangle : XCircle;
+              return (
+                <article key={check.label} className={`settings-card status-card status-card--${check.status}`}>
+                  <div className="status-card-head">
+                    <h3>{check.label}</h3>
+                    <span className={`decision-pill ${pillClass}`}>
+                      <StatusIcon size={11} />
+                      {check.status === 'ok' ? 'OK' : check.status === 'warn' ? 'WARN' : 'DOWN'}
+                    </span>
+                  </div>
+                  <p>{check.detail}</p>
+                  {check.meta && <p className="status-card-meta">{check.meta}</p>}
+                </article>
+              );
+            })}
+            {healthLoading && healthChecks.length === 0 && (
+              <article className="settings-card status-card settings-card-full">
+                <div className="status-empty-state">
+                  <RefreshCw size={24} className="spin-icon status-empty-icon" />
+                  <p>Running checks…</p>
+                </div>
               </article>
-            ))}
+            )}
             {!healthLoading && healthChecks.length === 0 && !healthError && (
-              <article className="settings-card status-card">
-                <h3>No checks yet</h3>
-                <p>Run checks to view current application health.</p>
+              <article className="settings-card status-card settings-card-full">
+                <div className="status-empty-state">
+                  <ShieldCheck size={28} className="status-empty-icon" />
+                  <h3>No checks run yet</h3>
+                  <p>Click <strong>Run Checks</strong> to verify backend connectivity and browser capabilities.</p>
+                </div>
               </article>
             )}
           </div>

@@ -621,6 +621,97 @@ input {
   margin: 0;
 }
 
+.status-card--ok {
+  border-color: #b8d9bf;
+}
+
+.status-card--warn {
+  border-color: #e1ca9f;
+}
+
+.status-card--down {
+  border-color: #e2b1b1;
+}
+
+.status-card-meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #8a9590;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.01em;
+}
+
+.status-meta-bar {
+  padding: 10px 14px;
+}
+
+.status-meta-bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  align-items: center;
+}
+
+.status-meta-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #5d6960;
+}
+
+.status-meta-stat svg {
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.status-meta-label {
+  color: #9aaa9c;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.status-meta-stat strong {
+  font-weight: 600;
+  color: #2e3c30;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+}
+
+.status-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0;
+  text-align: center;
+  color: #7a8a7c;
+}
+
+.status-empty-state h3 {
+  margin: 0;
+  font-size: 0.96rem;
+}
+
+.status-empty-state p {
+  margin: 0;
+}
+
+.status-empty-icon {
+  opacity: 0.45;
+  color: #5d7a62;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .primary-btn,
 .secondary-btn {
   display: inline-flex;
@@ -1624,6 +1715,7 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 0.72rem;

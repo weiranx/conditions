@@ -438,6 +438,17 @@ export interface HealthCheckResult {
   label: string;
   status: 'ok' | 'warn' | 'down';
   detail: string;
+  meta?: string;
+}
+
+export interface BackendMeta {
+  version: string;
+  env: string;
+  uptime: number;
+  nodeVersion: string;
+  heapUsedMb: number;
+  rssMb: number;
+  latencyMs: number;
 }
 
 export type CriticalRiskLevel = 'stable' | 'watch' | 'high';
