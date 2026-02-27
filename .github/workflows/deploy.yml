@@ -45,9 +45,6 @@ jobs:
           script: |
             set -euo pipefail
 
-            # Fix ownership so the deploy user can run git operations.
-            sudo chown -R "$(whoami)":"$(whoami)" /opt/summitsafe
-
             cd /opt/summitsafe
 
             # Pull latest changes.
