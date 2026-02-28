@@ -1,28 +1,52 @@
 const {
+  applyDerivedOverallAvalancheDanger,
+  buildSatOneLiner,
+} = require('../index');
+const {
   normalizeWindDirection,
+  findNearestCardinalFromDegreeSeries,
+  estimateWindGustFromWindSpeed,
+  inferWindGustFromPeriods
+} = require('../src/utils/wind');
+const {
   parseStartClock,
   buildPlannedStartIso,
-  buildLayeringGearSuggestions,
-  buildFireRiskData,
-  buildHeatRiskData,
+  parseIsoTimeToMsWithReference
+} = require('../src/utils/time');
+const {
+  buildLayeringGearSuggestions
+} = require('../src/utils/gear-suggestions');
+const {
+  buildFireRiskData
+} = require('../src/utils/fire-risk');
+const {
+  buildHeatRiskData
+} = require('../src/utils/heat-risk');
+const {
   calculateSafetyScore,
-  findMatchingAvalancheZone,
+  evaluateAvalancheRelevance
+} = require('../src/utils/scoring');
+const {
+  findMatchingAvalancheZone
+} = require('../src/utils/avalanche-service');
+const {
   resolveAvalancheCenterLink,
-  resolveNwsAlertSourceLink,
-  evaluateAvalancheRelevance,
-  deriveTerrainCondition,
-  deriveTrailStatus,
-  deriveOverallDangerLevelFromElevations,
-  applyDerivedOverallAvalancheDanger,
+  deriveOverallDangerLevelFromElevations
+} = require('../src/utils/avalanche-scraper');
+const {
   parseAvalancheDetailPayloads,
   pickBestAvalancheDetailCandidate,
   normalizeAvalancheProblemCollection,
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
-  buildSatOneLiner,
-} = require('../index');
-const { findNearestCardinalFromDegreeSeries, estimateWindGustFromWindSpeed, inferWindGustFromPeriods } = require('../src/utils/wind');
-const { parseIsoTimeToMsWithReference } = require('../src/utils/time');
+} = require('../src/utils/avalanche-detail');
+const {
+  deriveTerrainCondition,
+  deriveTrailStatus
+} = require('../src/utils/terrain-condition');
+const {
+  resolveNwsAlertSourceLink
+} = require('../src/utils/weather-service');
 
 test('normalizeWindDirection handles cardinal abbreviations and words', () => {
   expect(normalizeWindDirection('NW')).toBe('NW');
