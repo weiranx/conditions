@@ -12,7 +12,7 @@ test('GET /api/search?q=mount rainier returns Rainier', async () => {
   expect(res.status).toBe(200);
   expect(Array.isArray(res.body)).toBe(true);
   expect(res.body[0].name).toMatch(/Rainier/i);
-});
+}, 15000);
 
 test('GET /api/safety?lat=46.85&lon=-121.76 returns safety report', async () => {
   // Use a mock response or a long timeout since this calls real external APIs
