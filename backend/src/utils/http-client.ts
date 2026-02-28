@@ -1,10 +1,10 @@
-const nodeFetch = require('node-fetch');
+import nodeFetch from 'node-fetch';
 
-const DEFAULT_FETCH_HEADERS = { 'User-Agent': 'BackcountryConditions/1.0 (+https://summitsafe.app; support@summitsafe.app)' };
+export const DEFAULT_FETCH_HEADERS = { 'User-Agent': 'BackcountryConditions/1.0 (+https://summitsafe.app; support@summitsafe.app)' };
 
-const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : nodeFetch;
+const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : (nodeFetch as any);
 
-const createFetchWithTimeout = (defaultTimeoutMs) => async (url, options = {}, timeoutMs = defaultTimeoutMs) => {
+export const createFetchWithTimeout = (defaultTimeoutMs: number) => async (url: string, options: any = {}, timeoutMs: number = defaultTimeoutMs): Promise<Response> => {
   const controller = new AbortController();
   const upstreamSignal = options?.signal;
   const abortFromUpstream = () => {
@@ -26,9 +26,4 @@ const createFetchWithTimeout = (defaultTimeoutMs) => async (url, options = {}, t
       upstreamSignal.removeEventListener('abort', abortFromUpstream);
     }
   }
-};
-
-module.exports = {
-  DEFAULT_FETCH_HEADERS,
-  createFetchWithTimeout,
 };

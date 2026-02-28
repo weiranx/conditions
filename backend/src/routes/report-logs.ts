@@ -1,13 +1,29 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Express, Request, Response } from 'express';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+interface ReportLogEntry {
+  timestamp: string;
+  name?: string | null;
+  statusCode: number;
+  lat?: number | string | null;
+  lon?: number | string | null;
+  date?: string | null;
+  durationMs?: number;
+  [key: string]: any;
+}
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const LOG_FILE = path.resolve(__dirname, '../../data/report-logs.ndjson');
 
-const reportLogs = [];
+const reportLogs: ReportLogEntry[] = [];
 
-const isWithinOneWeek = (entry) =>
+const isWithinOneWeek = (entry: ReportLogEntry) =>
   Date.now() - new Date(entry.timestamp).getTime() <= ONE_WEEK_MS;
 
 const rewriteFile = () => {
@@ -16,7 +32,7 @@ const rewriteFile = () => {
       ? reportLogs.map((r) => JSON.stringify(r)).join('\n') + '\n'
       : '';
     fs.writeFileSync(LOG_FILE, content, 'utf8');
-  } catch (err) {
+  } catch (err: any) {
     console.error('[report-logs] rewrite failed:', err.message);
   }
 };
@@ -31,7 +47,7 @@ const trimOldEntries = () => {
 // Ensure data directory exists
 try {
   fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-} catch (err) {
+} catch (err: any) {
   console.error('[report-logs] mkdir failed:', err.message);
 }
 console.log('[report-logs] log file:', LOG_FILE);
@@ -51,29 +67,29 @@ try {
     reportLogs.push(...recent);
     if (recent.length !== parsed.length) rewriteFile();
   }
-} catch (err) {
+} catch (err: any) {
   console.error('[report-logs] load failed:', err.message);
 }
 
 // Daily trim to evict entries that aged out during a long-running process
 setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
 
-const logReportRequest = (entry) => {
+export const logReportRequest = (entry: Omit<ReportLogEntry, 'timestamp'>) => {
   if (!entry.name) return;
-  const record = { ...entry, timestamp: new Date().toISOString() };
+  const record: ReportLogEntry = { ...entry, timestamp: new Date().toISOString() };
   if (reportLogs.length >= MAX_LOG_ENTRIES) reportLogs.shift();
   reportLogs.push(record);
   try {
     fs.appendFileSync(LOG_FILE, JSON.stringify(record) + '\n', 'utf8');
-  } catch (err) {
+  } catch (err: any) {
     console.error('[report-logs] append failed:', err.message);
   }
 };
 
 const LOGS_SECRET = process.env.LOGS_SECRET || '';
 
-const registerReportLogsRoute = (app) => {
-  app.get('/api/report-logs', (req, res) => {
+export const registerReportLogsRoute = (app: Express) => {
+  app.get('/api/report-logs', (req: Request, res: Response) => {
     if (LOGS_SECRET) {
       const auth = req.headers['authorization'] ?? '';
       const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -84,5 +100,3 @@ const registerReportLogsRoute = (app) => {
     res.json([...reportLogs].reverse());
   });
 };
-
-module.exports = { logReportRequest, registerReportLogsRoute };

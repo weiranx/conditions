@@ -1,21 +1,21 @@
-const { 
+import { 
   parseWindMph, 
   inferWindGustFromPeriods, 
   findNearestWindDirection,
   normalizeWindDirection
-} = require('./wind');
-const { 
+} from './wind';
+import { 
   parseIsoTimeToMs, 
   buildPlannedStartIso, 
   hourLabelFromIso 
-} = require('./time');
+} from './time';
 
-const FT_PER_METER = 3.28084;
-const TEMP_LAPSE_F_PER_1000FT = 3.3;
-const WIND_INCREASE_MPH_PER_1000FT = 2;
-const GUST_INCREASE_MPH_PER_1000FT = 2.5;
+export const FT_PER_METER = 3.28084;
+export const TEMP_LAPSE_F_PER_1000FT = 3.3;
+export const WIND_INCREASE_MPH_PER_1000FT = 2;
+export const GUST_INCREASE_MPH_PER_1000FT = 2.5;
 
-const OPEN_METEO_CODE_LABELS = {
+export const OPEN_METEO_CODE_LABELS: Record<number, string> = {
   0: 'Clear',
   1: 'Mainly Clear',
   2: 'Partly Cloudy',
@@ -46,9 +46,9 @@ const OPEN_METEO_CODE_LABELS = {
   99: 'Thunderstorm with Heavy Hail',
 };
 
-const openMeteoCodeToText = (code) => OPEN_METEO_CODE_LABELS[code] || 'Unknown';
+export const openMeteoCodeToText = (code: number): string => OPEN_METEO_CODE_LABELS[code] || 'Unknown';
 
-const estimateWindGustFromWindSpeed = (windSpeedMph) => {
+export const estimateWindGustFromWindSpeed = (windSpeedMph: number | string | null | undefined): number => {
   const speed = Number(windSpeedMph);
   if (!Number.isFinite(speed)) {
     return 0;
@@ -59,11 +59,11 @@ const estimateWindGustFromWindSpeed = (windSpeedMph) => {
   return Math.round(speed * 1.25);
 };
 
-const findNearestCardinalFromDegreeSeries = (degreeSeries, anchorIdx) => {
+export const findNearestCardinalFromDegreeSeries = (degreeSeries: (number | string | null | undefined)[] | null | undefined, anchorIdx: number): string | null => {
   if (!Array.isArray(degreeSeries) || !degreeSeries.length) {
     return null;
   }
-  const findValue = (idx) => {
+  const findValue = (idx: number): number | null => {
     const val = degreeSeries[idx];
     return (val !== null && val !== undefined && Number.isFinite(Number(val))) ? Number(val) : null;
   };
@@ -82,12 +82,12 @@ const findNearestCardinalFromDegreeSeries = (degreeSeries, anchorIdx) => {
   return cardinals[index];
 };
 
-const mmToInches = (mm) => (Number.isFinite(mm) ? Number((mm / 25.4).toFixed(2)) : null);
-const cmToInches = (cm) => (Number.isFinite(cm) ? Number((cm / 2.54).toFixed(2)) : null);
+export const mmToInches = (mm: number | null | undefined): number | null => (Number.isFinite(mm) ? Number(((mm as number) / 25.4).toFixed(2)) : null);
+export const cmToInches = (cm: number | null | undefined): number | null => (Number.isFinite(cm) ? Number(((cm as number) / 2.54).toFixed(2)) : null);
 
-const seriesHasFiniteValues = (series) => Array.isArray(series) && series.some((v) => Number.isFinite(Number(v)));
+export const seriesHasFiniteValues = (series: (number | string | null | undefined)[] | null | undefined): boolean => Array.isArray(series) && series.some((v) => Number.isFinite(Number(v)));
 
-const sumRollingAccumulation = (timeArray, valueSeries, anchorMs, windowHours) => {
+export const sumRollingAccumulation = (timeArray: (string | null | undefined)[], valueSeries: (number | string | null | undefined)[], anchorMs: number, windowHours: number): number | null => {
   if (!Array.isArray(timeArray) || !Array.isArray(valueSeries) || !Number.isFinite(anchorMs)) {
     return null;
   }
@@ -108,7 +108,7 @@ const sumRollingAccumulation = (timeArray, valueSeries, anchorMs, windowHours) =
   return hasSamples ? total : null;
 };
 
-const sumForwardAccumulation = (timeArray, valueSeries, startMs, windowHours) => {
+export const sumForwardAccumulation = (timeArray: (string | null | undefined)[], valueSeries: (number | string | null | undefined)[], startMs: number, windowHours: number): number | null => {
   if (!Array.isArray(timeArray) || !Array.isArray(valueSeries) || !Number.isFinite(startMs)) {
     return null;
   }
@@ -129,18 +129,20 @@ const sumForwardAccumulation = (timeArray, valueSeries, startMs, windowHours) =>
   return hasSamples ? total : null;
 };
 
-const computeFeelsLikeF = (tempF, windMph) => {
+export const computeFeelsLikeF = (tempF: number | null | undefined, windMph: number | null | undefined): number | null => {
   if (!Number.isFinite(tempF)) {
-    return tempF;
+    return tempF ?? null;
   }
-  if (tempF <= 50 && windMph >= 3) {
-    const feelsLike = 35.74 + (0.6215 * tempF) - (35.75 * Math.pow(windMph, 0.16)) + (0.4275 * tempF * Math.pow(windMph, 0.16));
+  const t = tempF as number;
+  const w = windMph ?? 0;
+  if (t <= 50 && w >= 3) {
+    const feelsLike = 35.74 + (0.6215 * t) - (35.75 * Math.pow(w, 0.16)) + (0.4275 * t * Math.pow(w, 0.16));
     return Math.round(feelsLike);
   }
-  return Math.round(tempF);
+  return Math.round(t);
 };
 
-const celsiusToF = (valueC) => {
+export const celsiusToF = (valueC: number | string | null | undefined): number | null => {
   const numeric = Number(valueC);
   if (!Number.isFinite(numeric)) {
     return null;
@@ -148,7 +150,7 @@ const celsiusToF = (valueC) => {
   return (numeric * 9) / 5 + 32;
 };
 
-const normalizeNoaaDewPointF = (dewpointField) => {
+export const normalizeNoaaDewPointF = (dewpointField: any): number | null => {
   const value = Number(dewpointField?.value);
   if (!Number.isFinite(value)) {
     return null;
@@ -156,12 +158,12 @@ const normalizeNoaaDewPointF = (dewpointField) => {
   const unitCode = String(dewpointField?.unitCode || '').toLowerCase();
   if (unitCode.includes('degc') || unitCode.includes('unit:degc') || unitCode.includes('wmo:degc')) {
     const converted = celsiusToF(value);
-    return Number.isFinite(converted) ? Math.round(converted) : null;
+    return Number.isFinite(converted) ? Math.round(converted as number) : null;
   }
   return Math.round(value);
 };
 
-const normalizePressureHpa = (value) => {
+export const normalizePressureHpa = (value: number | string | null | undefined): number | null => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return null;
@@ -169,7 +171,7 @@ const normalizePressureHpa = (value) => {
   return Math.round(numeric * 10) / 10;
 };
 
-const normalizeNoaaPressureHpa = (barometricPressureField) => {
+export const normalizeNoaaPressureHpa = (barometricPressureField: any): number | null => {
   if (barometricPressureField === null || barometricPressureField === undefined) {
     return null;
   }
@@ -191,7 +193,7 @@ const normalizeNoaaPressureHpa = (barometricPressureField) => {
   return normalizePressureHpa(rawValue);
 };
 
-const clampPercent = (value) => {
+export const clampPercent = (value: number | string | null | undefined): number | null => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return null;
@@ -199,7 +201,7 @@ const clampPercent = (value) => {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 };
 
-const inferNoaaCloudCoverFromIcon = (iconUrl) => {
+export const inferNoaaCloudCoverFromIcon = (iconUrl: string | null | undefined): number | null => {
   const icon = String(iconUrl || '').toLowerCase();
   if (!icon) {
     return null;
@@ -216,7 +218,7 @@ const inferNoaaCloudCoverFromIcon = (iconUrl) => {
   return null;
 };
 
-const inferNoaaCloudCoverFromForecastText = (shortForecast) => {
+export const inferNoaaCloudCoverFromForecastText = (shortForecast: string | null | undefined): number | null => {
   const text = String(shortForecast || '').toLowerCase().replace(/\s+/g, ' ').trim();
   if (!text) {
     return null;
@@ -230,7 +232,7 @@ const inferNoaaCloudCoverFromForecastText = (shortForecast) => {
   return null;
 };
 
-const resolveNoaaCloudCover = (forecastPeriod) => {
+export const resolveNoaaCloudCover = (forecastPeriod: any): { value: number | null; source: string } => {
   const skyCoverValue = clampPercent(forecastPeriod?.skyCover?.value);
   if (Number.isFinite(skyCoverValue)) {
     return { value: skyCoverValue, source: 'NOAA skyCover' };
@@ -246,14 +248,24 @@ const resolveNoaaCloudCover = (forecastPeriod) => {
   return { value: null, source: 'Unavailable' };
 };
 
-const toFiniteNumberOrNull = (value) => {
+const toFiniteNumberOrNull = (value: any): number | null => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 };
 
-const VISIBILITY_RISK_SOURCE = 'Derived from weather description, precipitation, wind, humidity, and cloud cover signals';
+export const VISIBILITY_RISK_SOURCE = 'Derived from weather description, precipitation, wind, humidity, and cloud cover signals';
 
-const buildVisibilityRisk = (weatherData) => {
+export interface VisibilityRisk {
+  score: number | null;
+  level: string;
+  summary: string;
+  factors: string[];
+  activeHours: number | null;
+  windowHours: number | null;
+  source: string;
+}
+
+export const buildVisibilityRisk = (weatherData: any): VisibilityRisk => {
   const description = String(weatherData?.description || '').toLowerCase().trim();
   const precipChance = toFiniteNumberOrNull(weatherData?.precipChance);
   const humidity = toFiniteNumberOrNull(weatherData?.humidity);
@@ -289,8 +301,8 @@ const buildVisibilityRisk = (weatherData) => {
   }
 
   let score = 0;
-  const factors = [];
-  const addRisk = (points, message) => {
+  const factors: string[] = [];
+  const addRisk = (points: number, message: string) => {
     if (!Number.isFinite(points) || points <= 0 || !message) {
       return;
     }
@@ -346,7 +358,7 @@ const buildVisibilityRisk = (weatherData) => {
 
   let activeHours = 0;
   if (trend.length > 0) {
-    activeHours = trend.filter((point) => {
+    activeHours = trend.filter((point: any) => {
       const pointCondition = String(point?.condition || '').toLowerCase();
       const pointPrecip = toFiniteNumberOrNull(point?.precipChance);
       const pointHumidity = toFiniteNumberOrNull(point?.humidity);
@@ -414,12 +426,30 @@ const buildVisibilityRisk = (weatherData) => {
   };
 };
 
-const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, windGustMph }) => {
+export interface ElevationForecastBand {
+  label: string;
+  deltaFromObjectiveFt: number;
+  elevationFt: number;
+  temp: number;
+  feelsLike: number | null;
+  windSpeed: number;
+  windGust: number;
+}
+
+interface BuildElevationForecastBandsOptions {
+  baseElevationFt: number | null | undefined;
+  tempF: number | null | undefined;
+  windSpeedMph: number | null | undefined;
+  windGustMph: number | null | undefined;
+}
+
+export const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, windGustMph }: BuildElevationForecastBandsOptions): ElevationForecastBand[] => {
   if (!Number.isFinite(baseElevationFt) || !Number.isFinite(tempF)) {
     return [];
   }
 
-  const objectiveElevationFt = Math.max(0, Math.round(baseElevationFt));
+  const objectiveElevationFt = Math.max(0, Math.round(baseElevationFt as number));
+  const tF = tempF as number;
   const bandTemplates =
     objectiveElevationFt >= 13000
       ? [
@@ -449,7 +479,7 @@ const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, win
               { label: 'Objective Elevation', deltaFromObjectiveFt: 0 },
             ];
 
-  const seenElevations = new Set();
+  const seenElevations = new Set<number>();
   return bandTemplates
     .map((band) => {
       const elevationFt = Math.max(
@@ -458,7 +488,7 @@ const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, win
       );
       const actualDeltaFromObjectiveFt = elevationFt - objectiveElevationFt;
       const deltaKft = actualDeltaFromObjectiveFt / 1000;
-      const estimatedTempF = Math.round(tempF - (deltaKft * TEMP_LAPSE_F_PER_1000FT));
+      const estimatedTempF = Math.round(tF - (deltaKft * TEMP_LAPSE_F_PER_1000FT));
       const estimatedWindSpeed = Math.max(0, Math.round((windSpeedMph || 0) + (deltaKft * WIND_INCREASE_MPH_PER_1000FT)));
       const estimatedWindGust = Math.max(0, Math.round((windGustMph || 0) + (deltaKft * GUST_INCREASE_MPH_PER_1000FT)));
 
@@ -482,7 +512,7 @@ const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, win
     .sort((a, b) => a.elevationFt - b.elevationFt);
 };
 
-const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
+export const createUnavailableWeatherData = ({ lat, lon, forecastDate }: { lat: number; lon: number; forecastDate: string | null }): any => ({
   temp: null,
   feelsLike: null,
   dewPoint: null,
@@ -519,7 +549,7 @@ const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
   },
 });
 
-const normalizeAlertSeverity = (value) => {
+export const normalizeAlertSeverity = (value: string | null | undefined): string => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'extreme') return 'extreme';
   if (normalized === 'severe') return 'severe';
@@ -528,20 +558,20 @@ const normalizeAlertSeverity = (value) => {
   return 'unknown';
 };
 
-const formatAlertSeverity = (value) => {
+export const formatAlertSeverity = (value: string | null | undefined): string => {
   const normalized = normalizeAlertSeverity(value);
   if (normalized === 'unknown') return 'Unknown';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
-const getHigherSeverity = (sevA, sevB) => {
-  const ALERT_SEVERITY_RANK = { unknown: 0, minor: 1, moderate: 2, severe: 3, extreme: 4 };
-  const rankA = ALERT_SEVERITY_RANK[normalizeAlertSeverity(sevA)];
-  const rankB = ALERT_SEVERITY_RANK[normalizeAlertSeverity(sevB)];
+export const getHigherSeverity = (sevA: string, sevB: string): string => {
+  const ALERT_SEVERITY_RANK: Record<string, number> = { unknown: 0, minor: 1, moderate: 2, severe: 3, extreme: 4 };
+  const rankA = ALERT_SEVERITY_RANK[normalizeAlertSeverity(sevA)] || 0;
+  const rankB = ALERT_SEVERITY_RANK[normalizeAlertSeverity(sevB)] || 0;
   return rankA >= rankB ? sevA : sevB;
 };
 
-const createUnavailableAlertsData = (status = 'unavailable') => ({
+export const createUnavailableAlertsData = (status: string = 'unavailable'): any => ({
   source: 'NOAA/NWS Active Alerts',
   status,
   activeCount: 0,
@@ -550,7 +580,7 @@ const createUnavailableAlertsData = (status = 'unavailable') => ({
   alerts: [],
 });
 
-const classifyUsAqi = (aqi) => {
+export const classifyUsAqi = (aqi: number | string | null | undefined): string => {
   const value = Number(aqi);
   if (!Number.isFinite(value)) return 'Unknown';
   if (value <= 50) return 'Good';
@@ -561,7 +591,7 @@ const classifyUsAqi = (aqi) => {
   return 'Hazardous';
 };
 
-const createUnavailableAirQualityData = (status = 'unavailable') => ({
+export const createUnavailableAirQualityData = (status: string = 'unavailable'): any => ({
   source: 'Open-Meteo Air Quality API',
   status,
   usAqi: null,
@@ -572,7 +602,7 @@ const createUnavailableAirQualityData = (status = 'unavailable') => ({
   measuredTime: null,
 });
 
-const createUnavailableRainfallData = (status = 'unavailable') => ({
+export const createUnavailableRainfallData = (status: string = 'unavailable'): any => ({
   source: 'Open-Meteo Precipitation History',
   status,
   mode: 'unknown',
@@ -614,7 +644,7 @@ const createUnavailableRainfallData = (status = 'unavailable') => ({
   link: null,
 });
 
-const buildOpenMeteoRainfallSourceLink = (lat, lon) => {
+export const buildOpenMeteoRainfallSourceLink = (lat: number, lon: number): string => {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
@@ -626,7 +656,7 @@ const buildOpenMeteoRainfallSourceLink = (lat, lon) => {
   return `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
 };
 
-const clampTravelWindowHours = (value, fallback = 12) => {
+export const clampTravelWindowHours = (value: number | string | null | undefined, fallback: number = 12): number => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return fallback;
@@ -634,7 +664,7 @@ const clampTravelWindowHours = (value, fallback = 12) => {
   return Math.max(1, Math.min(24, Math.round(numeric)));
 };
 
-const ALERT_SEVERITY_RANK = {
+export const ALERT_SEVERITY_RANK: Record<string, number> = {
   unknown: 0,
   minor: 1,
   moderate: 2,
@@ -642,7 +672,7 @@ const ALERT_SEVERITY_RANK = {
   extreme: 4,
 };
 
-const normalizeNwsAlertText = (value, maxLength = 4000) => {
+export const normalizeNwsAlertText = (value: string | null | undefined, maxLength: number = 4000): string | null => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -663,7 +693,7 @@ const normalizeNwsAlertText = (value, maxLength = 4000) => {
   return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
-const normalizeNwsAreaList = (areaDescValue) => {
+export const normalizeNwsAreaList = (areaDescValue: string | null | undefined): string[] => {
   if (typeof areaDescValue !== 'string') {
     return [];
   }
@@ -672,44 +702,4 @@ const normalizeNwsAreaList = (areaDescValue) => {
     .map((part) => part.trim())
     .filter(Boolean)
     .slice(0, 12);
-};
-
-module.exports = {
-  FT_PER_METER,
-  TEMP_LAPSE_F_PER_1000FT,
-  WIND_INCREASE_MPH_PER_1000FT,
-  GUST_INCREASE_MPH_PER_1000FT,
-  OPEN_METEO_CODE_LABELS,
-  openMeteoCodeToText,
-  estimateWindGustFromWindSpeed,
-  findNearestCardinalFromDegreeSeries,
-  mmToInches,
-  cmToInches,
-  seriesHasFiniteValues,
-  sumRollingAccumulation,
-  sumForwardAccumulation,
-  computeFeelsLikeF,
-  celsiusToF,
-  normalizeNoaaDewPointF,
-  normalizePressureHpa,
-  normalizeNoaaPressureHpa,
-  clampPercent,
-  inferNoaaCloudCoverFromIcon,
-  inferNoaaCloudCoverFromForecastText,
-  resolveNoaaCloudCover,
-  buildVisibilityRisk,
-  buildElevationForecastBands,
-  createUnavailableWeatherData,
-  normalizeAlertSeverity,
-  formatAlertSeverity,
-  getHigherSeverity,
-  createUnavailableAlertsData,
-  classifyUsAqi,
-  createUnavailableAirQualityData,
-  createUnavailableRainfallData,
-  buildOpenMeteoRainfallSourceLink,
-  clampTravelWindowHours,
-  ALERT_SEVERITY_RANK,
-  normalizeNwsAlertText,
-  normalizeNwsAreaList,
 };

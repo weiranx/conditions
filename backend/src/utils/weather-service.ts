@@ -1,7 +1,7 @@
-const { 
+import { 
   REQUEST_TIMEOUT_MS 
-} = require('../server/runtime');
-const { 
+} from '../server/runtime';
+import { 
   parseIsoTimeToMs, 
   findClosestTimeIndex, 
   withExplicitTimezone, 
@@ -9,8 +9,8 @@ const {
   findFirstTimeIndexAtOrAfter,
   normalizeUtcIsoTimestamp,
   buildTemperatureContext24h
-} = require('./time');
-const { 
+} from './time';
+import { 
   computeFeelsLikeF, 
   clampTravelWindowHours,
   normalizePressureHpa,
@@ -31,13 +31,15 @@ const {
   seriesHasFiniteValues,
   sumRollingAccumulation,
   sumForwardAccumulation,
-  buildOpenMeteoRainfallSourceLink
-} = require('./weather');
-const { deriveTrailStatus, deriveTerrainCondition } = require('./terrain-condition');
-const { normalizeExternalLink } = require('./avalanche-scraper');
+  buildOpenMeteoRainfallSourceLink,
+  normalizeNwsAlertText,
+  normalizeNwsAreaList
+} from './weather';
+import { deriveTrailStatus, deriveTerrainCondition } from './terrain-condition';
+import { normalizeExternalLink } from './avalanche-scraper';
 
 const RAINFALL_CACHE_TTL_MS = 30 * 60 * 1000;
-const rainfallPayloadCache = new Map();
+const rainfallPayloadCache = new Map<string, { fetchedAt: number; payload: any }>();
 
 const OPEN_METEO_WEATHER_HOURLY_FIELDS = [
   'temperature_2m',
@@ -53,7 +55,7 @@ const OPEN_METEO_WEATHER_HOURLY_FIELDS = [
   'is_day',
 ].join(',');
 
-const buildOpenMeteoWeatherApiUrl = (host, lat, lon) => {
+const buildOpenMeteoWeatherApiUrl = (host: string, lat: number, lon: number): string => {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
@@ -66,9 +68,22 @@ const buildOpenMeteoWeatherApiUrl = (host, lat, lon) => {
   return `https://${host}/v1/forecast?${params.toString()}`;
 };
 
-const buildOpenMeteoWeatherSourceLink = (lat, lon) => buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon);
+const buildOpenMeteoWeatherSourceLink = (lat: number, lon: number): string => buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon);
 
-const fetchOpenMeteoWeatherFallback = async ({
+interface FetchOpenMeteoWeatherFallbackOptions {
+  lat: number;
+  lon: number;
+  selectedDate: string | null | undefined;
+  startClock: string | null | undefined;
+  fetchWithTimeout: Function;
+  fetchOptions: any;
+  objectiveElevationFt: number | null;
+  objectiveElevationSource: string | null;
+  trendHours: number | string | null | undefined;
+  parseStartClock: Function;
+}
+
+export const fetchOpenMeteoWeatherFallback = async ({
   lat,
   lon,
   selectedDate,
@@ -79,15 +94,15 @@ const fetchOpenMeteoWeatherFallback = async ({
   objectiveElevationSource,
   trendHours,
   parseStartClock
-}) => {
+}: FetchOpenMeteoWeatherFallbackOptions): Promise<any> => {
   const apiUrls = [
     buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon),
     buildOpenMeteoWeatherApiUrl('customer-api.open-meteo.com', lat, lon),
   ];
 
-  let payload = null;
-  let payloadIssuedTime = null;
-  let lastError = null;
+  let payload: any = null;
+  let payloadIssuedTime: string | null = null;
+  let lastError: any = null;
 
   for (const apiUrl of apiUrls) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -128,20 +143,20 @@ const fetchOpenMeteoWeatherFallback = async ({
     throw new Error('Open-Meteo forecast response did not include hourly time series.');
   }
 
-  const availableDates = [...new Set(hourlyTimes.map((timeValue) => String(timeValue).slice(0, 10)).filter(Boolean))];
+  const availableDates = [...new Set(hourlyTimes.map((timeValue: any) => String(timeValue).slice(0, 10)).filter(Boolean))];
   const resolvedDate = selectedDate && availableDates.includes(selectedDate) ? selectedDate : (availableDates[0] || new Date().toISOString().slice(0, 10));
   const dayHourIndexes = hourlyTimes
-    .map((timeValue, idx) => ({ timeValue, idx }))
-    .filter((entry) => String(entry.timeValue).slice(0, 10) === resolvedDate)
-    .map((entry) => entry.idx);
-  const firstHourIndex = dayHourIndexes.length > 0 ? dayHourIndexes[0] : hourlyTimes.findIndex((timeValue) => String(timeValue).slice(0, 10) === resolvedDate);
+    .map((timeValue: any, idx: number) => ({ timeValue, idx }))
+    .filter((entry: any) => String(entry.timeValue).slice(0, 10) === resolvedDate)
+    .map((entry: any) => entry.idx);
+  const firstHourIndex = dayHourIndexes.length > 0 ? dayHourIndexes[0] : hourlyTimes.findIndex((timeValue: any) => String(timeValue).slice(0, 10) === resolvedDate);
   let selectedHourIndex = firstHourIndex >= 0 ? firstHourIndex : 0;
   
   const requestedStartMinutesValue = parseStartClock(startClock);
   if (requestedStartMinutesValue && dayHourIndexes.length > 0) {
     const [hourPart, minutePart] = requestedStartMinutesValue.split(':');
     const targetMinutes = Number(hourPart) * 60 + Number(minutePart);
-    const byStart = dayHourIndexes.find((idx) => {
+    const byStart = dayHourIndexes.find((idx: number) => {
       const ts = String(hourlyTimes[idx] || '');
       const m = ts.match(/T(\d{2}):(\d{2})/);
       if (!m) return false;
@@ -156,7 +171,7 @@ const fetchOpenMeteoWeatherFallback = async ({
   }
   const selectedHourIso = hourlyTimes[selectedHourIndex] || null;
 
-  const readHourlyValue = (key, index, fallback = 0) => {
+  const readHourlyValue = (key: string, index: number, fallback: number = 0) => {
     const series = hourly && Array.isArray(hourly[key]) ? hourly[key] : [];
     const value = Number(series[index]);
     return Number.isFinite(value) ? value : fallback;
@@ -313,7 +328,7 @@ const fetchOpenMeteoWeatherFallback = async ({
   };
 };
 
-const buildNwsAlertUrlFromId = (value) => {
+const buildNwsAlertUrlFromId = (value: string | null | undefined): string | null => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -328,7 +343,7 @@ const buildNwsAlertUrlFromId = (value) => {
   return `https://api.weather.gov/alerts/${encodeURIComponent(trimmed)}`;
 };
 
-const isGenericNwsLink = (value) => {
+const isGenericNwsLink = (value: string | null | undefined): boolean => {
   const normalized = normalizeExternalLink(value);
   if (!normalized) {
     return false;
@@ -349,7 +364,7 @@ const isGenericNwsLink = (value) => {
   return false;
 };
 
-const isIndividualNwsAlertLink = (value) => {
+const isIndividualNwsAlertLink = (value: string | null | undefined): boolean => {
   const normalized = normalizeExternalLink(value);
   if (!normalized) {
     return false;
@@ -370,7 +385,7 @@ const isIndividualNwsAlertLink = (value) => {
   }
 };
 
-const resolveNwsAlertSourceLink = ({ feature, props, lat, lon }) => {
+export const resolveNwsAlertSourceLink = ({ feature, props, lat, lon }: { feature: any; props: any; lat: number | string; lon: number | string }): string | null => {
   const individualAlertUrl = [feature?.id, props?.['@id'], props?.id, props?.identifier]
     .map(buildNwsAlertUrlFromId)
     .find(isIndividualNwsAlertLink);
@@ -396,7 +411,7 @@ const resolveNwsAlertSourceLink = ({ feature, props, lat, lon }) => {
   return `https://api.weather.gov/alerts/active?point=${lat},${lon}`;
 };
 
-const fetchWeatherAlertsData = async (lat, lon, fetchWithTimeout, fetchOptions, targetTimeIso = null) => {
+export const fetchWeatherAlertsData = async (lat: number | string, lon: number | string, fetchWithTimeout: Function, fetchOptions: any, targetTimeIso: string | null = null): Promise<any> => {
   const targetTimeMs = parseIsoTimeToMs(targetTimeIso) ?? Date.now();
 
   const alertsRes = await fetchWithTimeout(
@@ -416,7 +431,7 @@ const fetchWeatherAlertsData = async (lat, lon, fetchWithTimeout, fetchOptions, 
     };
   }
 
-  const alertsActiveAtTarget = features.filter((feature) => {
+  const alertsActiveAtTarget = features.filter((feature: any) => {
     const props = feature?.properties || {};
     const startMs =
       parseIsoTimeToMs(props.onset) ??
@@ -439,9 +454,8 @@ const fetchWeatherAlertsData = async (lat, lon, fetchWithTimeout, fetchOptions, 
   }
 
   let highestSeverity = 'unknown';
-  const { normalizeNwsAlertText, normalizeNwsAreaList } = require('./scoring');
   const parsedAlerts = alertsActiveAtTarget
-    .map((feature) => {
+    .map((feature: any) => {
       const props = feature?.properties || {};
       const severity = normalizeAlertSeverity(props.severity);
       highestSeverity = getHigherSeverity(highestSeverity, severity);
@@ -468,8 +482,8 @@ const fetchWeatherAlertsData = async (lat, lon, fetchWithTimeout, fetchOptions, 
       };
     })
     .sort(
-      (a, b) => {
-        const { ALERT_SEVERITY_RANK } = require('./scoring');
+      (a: any, b: any) => {
+        const { ALERT_SEVERITY_RANK } = require('./weather');
         return ALERT_SEVERITY_RANK[normalizeAlertSeverity(b.severity)] - ALERT_SEVERITY_RANK[normalizeAlertSeverity(a.severity)];
       }
     )
@@ -486,7 +500,7 @@ const fetchWeatherAlertsData = async (lat, lon, fetchWithTimeout, fetchOptions, 
   };
 };
 
-const fetchAirQualityData = async (lat, lon, targetForecastTimeIso, fetchWithTimeout, fetchOptions) => {
+export const fetchAirQualityData = async (lat: number | string, lon: number | string, targetForecastTimeIso: string | null | undefined, fetchWithTimeout: Function, fetchOptions: any): Promise<any> => {
   const aqiRes = await fetchWithTimeout(
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&timezone=UTC`,
     fetchOptions,
@@ -526,7 +540,7 @@ const fetchAirQualityData = async (lat, lon, targetForecastTimeIso, fetchWithTim
   };
 };
 
-const buildOpenMeteoRainfallApiUrl = (host, lat, lon) => {
+const buildOpenMeteoRainfallApiUrl = (host: string, lat: number | string, lon: number | string): string => {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
@@ -538,7 +552,7 @@ const buildOpenMeteoRainfallApiUrl = (host, lat, lon) => {
   return `https://${host}/v1/forecast?${params.toString()}`;
 };
 
-const buildOpenMeteoRainfallArchiveApiUrl = (host, lat, lon, startDate, endDate) => {
+const buildOpenMeteoRainfallArchiveApiUrl = (host: string, lat: number | string, lon: number | string, startDate: string, endDate: string): string => {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
@@ -550,7 +564,7 @@ const buildOpenMeteoRainfallArchiveApiUrl = (host, lat, lon, startDate, endDate)
   return `https://${host}/v1/archive?${params.toString()}`;
 };
 
-const buildRainfallZeroFallback = ({ lat, lon, targetForecastTimeIso, travelWindowHours, reason }) => {
+const buildRainfallZeroFallback = ({ lat, lon, targetForecastTimeIso, travelWindowHours, reason }: { lat: number | string; lon: number | string; targetForecastTimeIso: string | null | undefined; travelWindowHours: number | string | null | undefined; reason: string }): any => {
   const expectedWindowHours = clampTravelWindowHours(travelWindowHours, 12);
   const normalizedTargetTime = normalizeUtcIsoTimestamp(targetForecastTimeIso);
   const fallbackAnchorTime = normalizedTargetTime || new Date().toISOString();
@@ -603,22 +617,22 @@ const buildRainfallZeroFallback = ({ lat, lon, targetForecastTimeIso, travelWind
       past48hIn: null,
     },
     note: `Precipitation totals are on conservative zero fallback because upstream data could not be fetched (${fallbackReason}). Verify upstream before relying on this window.`,
-    link: buildOpenMeteoRainfallSourceLink(lat, lon),
+    link: buildOpenMeteoRainfallSourceLink(Number(lat), Number(lon)),
   };
 };
 
-const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWindowHours, fetchWithTimeout, fetchOptions) => {
+export const fetchRecentRainfallData = async (lat: number | string, lon: number | string, targetForecastTimeIso: string | null | undefined, travelWindowHours: number | string | null | undefined, fetchWithTimeout: Function, fetchOptions: any): Promise<any> => {
   const rainfallCacheKey = `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
   const apiUrls = [
     buildOpenMeteoRainfallApiUrl('api.open-meteo.com', lat, lon),
     buildOpenMeteoRainfallApiUrl('customer-api.open-meteo.com', lat, lon),
   ];
 
-  let rainfallJson = null;
+  let rainfallJson: any = null;
   let usingCachedPayload = false;
   let usingStaleCachedPayload = false;
   let usingArchivePayload = false;
-  let lastError = null;
+  let lastError: any = null;
 
   for (const apiUrl of apiUrls) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -646,12 +660,12 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   if (!rainfallJson) {
     const cachedEntry = rainfallPayloadCache.get(rainfallCacheKey);
     const hasCachedPayload = Boolean(cachedEntry && cachedEntry.payload);
-    const cachedFresh = hasCachedPayload && Date.now() - Number(cachedEntry.fetchedAt || 0) <= RAINFALL_CACHE_TTL_MS;
+    const cachedFresh = hasCachedPayload && Date.now() - Number(cachedEntry!.fetchedAt || 0) <= RAINFALL_CACHE_TTL_MS;
     if (cachedFresh) {
-      rainfallJson = cachedEntry.payload;
+      rainfallJson = cachedEntry!.payload;
       usingCachedPayload = true;
     } else {
-      const staleCachedPayload = hasCachedPayload ? cachedEntry.payload : null;
+      const staleCachedPayload = hasCachedPayload ? cachedEntry!.payload : null;
       const archiveEndDate = new Date().toISOString().slice(0, 10);
       const archiveStartDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const archiveApiUrl = buildOpenMeteoRainfallArchiveApiUrl('archive-api.open-meteo.com', lat, lon, archiveStartDate, archiveEndDate);
@@ -740,7 +754,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
   const snowWindowCm = expectedStartMs === null ? null : sumForwardAccumulation(timeArray, snowfallArray, expectedStartMs, expectedWindowHours);
   const expectedEndMs = expectedStartMs === null ? null : expectedStartMs + expectedWindowHours * 60 * 60 * 1000;
   const expectedEndTime = expectedEndMs === null ? null : new Date(expectedEndMs).toISOString();
-  const expectedHasAnyTotals = [rainWindowMm, snowWindowCm].some((value) => Number.isFinite(value));
+  const expectedHasAnyTotals = [rainWindowMm, snowWindowCm].some((value) => Number.isFinite(value as number));
   const mode = targetTimeMs > Date.now() + 60 * 60 * 1000 ? 'projected_for_selected_start' : 'observed_recent';
   const hasAnyTotals = [
     rainPast12hMm,
@@ -749,7 +763,7 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
     snowPast12hCm,
     snowPast24hCm,
     snowPast48hCm,
-  ].some((value) => Number.isFinite(value));
+  ].some((value) => Number.isFinite(value as number));
   const hasAnyPrecipSignal = hasAnyTotals || expectedHasAnyTotals;
 
   return {
@@ -808,12 +822,4 @@ const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWi
         : 'Precipitation timeseries exists but rolling totals were not computable for this anchor window.',
     link: buildOpenMeteoRainfallSourceLink(lat, lon),
   };
-};
-
-module.exports = {
-  fetchOpenMeteoWeatherFallback,
-  fetchWeatherAlertsData,
-  fetchAirQualityData,
-  fetchRecentRainfallData,
-  resolveNwsAlertSourceLink,
 };

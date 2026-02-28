@@ -1,4 +1,15 @@
-const buildLayeringGearSuggestions = ({
+interface BuildLayeringGearSuggestionsOptions {
+  weatherData: any;
+  trailStatus: string | null | undefined;
+  avalancheData?: any;
+  airQualityData?: any;
+  alertsData?: any;
+  rainfallData?: any;
+  snowpackData?: any;
+  fireRiskData?: any;
+}
+
+export const buildLayeringGearSuggestions = ({
   weatherData,
   trailStatus,
   avalancheData,
@@ -7,9 +18,9 @@ const buildLayeringGearSuggestions = ({
   rainfallData,
   snowpackData,
   fireRiskData,
-}) => {
-  const suggestionMap = new Map();
-  const addSuggestion = (key, text, priority = 50) => {
+}: BuildLayeringGearSuggestionsOptions): string[] => {
+  const suggestionMap = new Map<string, { text: string; priority: number }>();
+  const addSuggestion = (key: string, text: string, priority: number = 50) => {
     if (typeof key !== 'string' || !key.trim() || typeof text !== 'string' || !text.trim()) {
       return;
     }
@@ -18,18 +29,18 @@ const buildLayeringGearSuggestions = ({
       suggestionMap.set(key, { text, priority });
     }
   };
-  const formatWhole = (value, suffix) => {
+  const formatWhole = (value: any, suffix: string): string | null => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? `${Math.round(numeric)}${suffix}` : null;
   };
-  const formatOneDecimal = (value, suffix) => {
+  const formatOneDecimal = (value: any, suffix: string): string | null => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? `${numeric.toFixed(1)}${suffix}` : null;
   };
 
   const description = String(weatherData?.description || '').toLowerCase();
   const tempF = parseFloat(weatherData?.temp);
-  const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
+  const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? (parseFloat(weatherData?.feelsLike) as number) : tempF;
   const windMph = parseFloat(weatherData?.windSpeed);
   const gustMph = parseFloat(weatherData?.windGust);
   const precipChance = parseFloat(weatherData?.precipChance);
@@ -38,22 +49,22 @@ const buildLayeringGearSuggestions = ({
   const snow24hIn = parseFloat(rainfallData?.totals?.snowPast24hIn);
   const snotelDepthIn = parseFloat(snowpackData?.snotel?.snowDepthIn);
   const nohrscDepthIn = parseFloat(snowpackData?.nohrsc?.snowDepthIn);
-  const maxObservedSnowDepthIn = [snotelDepthIn, nohrscDepthIn].filter(Number.isFinite).reduce((max, current) => Math.max(max, current), 0);
+  const maxObservedSnowDepthIn = [snotelDepthIn, nohrscDepthIn].filter(Number.isFinite).reduce((max, current) => Math.max(max as number, current as number), 0) as number;
 
   const hasWetSignal =
     /rain|shower|drizzle|wet|thunder|storm/.test(description) ||
-    (Number.isFinite(precipChance) && precipChance >= 45 && Number.isFinite(tempF) && tempF > 30);
+    (Number.isFinite(precipChance) && (precipChance as number) >= 45 && Number.isFinite(tempF) && (tempF as number) > 30);
   const hasSnowSignal =
     /snow|sleet|freezing|ice|blizzard|wintry|graupel|flurr/.test(description) ||
-    (Number.isFinite(tempF) && tempF <= 34 && Number.isFinite(precipChance) && precipChance >= 40) ||
+    (Number.isFinite(tempF) && (tempF as number) <= 34 && Number.isFinite(precipChance) && (precipChance as number) >= 40) ||
     maxObservedSnowDepthIn >= 2;
-  const windy = (Number.isFinite(gustMph) && gustMph >= 25) || (Number.isFinite(windMph) && windMph >= 18);
-  const cold = Number.isFinite(feelsLikeF) && feelsLikeF <= 20;
-  const veryCold = Number.isFinite(feelsLikeF) && feelsLikeF <= 5;
+  const windy = (Number.isFinite(gustMph) && (gustMph as number) >= 25) || (Number.isFinite(windMph) && (windMph as number) >= 18);
+  const cold = Number.isFinite(feelsLikeF) && (feelsLikeF as number) <= 20;
+  const veryCold = Number.isFinite(feelsLikeF) && (feelsLikeF as number) <= 5;
   const muddy = String(trailStatus || '').toLowerCase().includes('mud');
   const icy = String(trailStatus || '').toLowerCase().includes('icy') || String(trailStatus || '').toLowerCase().includes('snow');
-  const hasRainAccumulation = Number.isFinite(rain24hIn) && rain24hIn >= 0.2;
-  const hasFreshSnow = Number.isFinite(snow24hIn) && snow24hIn >= 2;
+  const hasRainAccumulation = Number.isFinite(rain24hIn) && (rain24hIn as number) >= 0.2;
+  const hasFreshSnow = Number.isFinite(snow24hIn) && (snow24hIn as number) >= 2;
 
   addSuggestion(
     'layering-core',
@@ -100,8 +111,8 @@ const buildLayeringGearSuggestions = ({
     );
   }
 
-  if (Number.isFinite(humidity) && humidity > 80) {
-    addSuggestion('humidity-management', `Moisture backup: Pack one dry base layer for high humidity (${Math.round(humidity)}% RH).`, 48);
+  if (Number.isFinite(humidity) && (humidity as number) > 80) {
+    addSuggestion('humidity-management', `Moisture backup: Pack one dry base layer for high humidity (${Math.round(humidity as number)}% RH).`, 48);
   }
   if (Number(airQualityData?.usAqi) >= 101) {
     addSuggestion('aq-health', `Air quality protection: Buff/mask + lower-intensity pacing (AQI ${Math.round(Number(airQualityData.usAqi))}).`, 30);
@@ -126,8 +137,4 @@ const buildLayeringGearSuggestions = ({
     .sort((a, b) => a.priority - b.priority)
     .map((entry) => entry.text)
     .slice(0, 9);
-};
-
-module.exports = {
-  buildLayeringGearSuggestions,
 };

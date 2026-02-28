@@ -1,20 +1,25 @@
-const { point } = require('@turf/helpers');
-const booleanPointInPolygon = require('@turf/boolean-point-in-polygon').default;
-const { 
+import { point } from '@turf/helpers';
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import { 
   AVALANCHE_MAP_LAYER_TTL_MS 
-} = require('../server/runtime');
-const { 
+} from '../server/runtime';
+import { 
   resolveAvalancheCenterLink 
-} = require('./avalanche-scraper');
+} from './avalanche-scraper';
 
-let avalancheMapLayerCache = {
+interface AvalancheMapLayerCache {
+  fetchedAt: number;
+  data: any;
+}
+
+let avalancheMapLayerCache: AvalancheMapLayerCache = {
   fetchedAt: 0,
   data: null,
 };
 
-const toRadians = (value) => (value * Math.PI) / 180;
+const toRadians = (value: number): number => (value * Math.PI) / 180;
 
-const haversineKm = (latA, lonA, latB, lonB) => {
+export const haversineKm = (latA: number, lonA: number, latB: number, lonB: number): number => {
   const earthRadiusKm = 6371;
   const dLat = toRadians(latB - latA);
   const dLon = toRadians(lonB - lonA);
@@ -24,7 +29,7 @@ const haversineKm = (latA, lonA, latB, lonB) => {
   return 2 * earthRadiusKm * Math.asin(Math.sqrt(a));
 };
 
-const getAvalancheMapLayer = async (fetchWithTimeout, fetchOptions, avyLog) => {
+export const getAvalancheMapLayer = async (fetchWithTimeout: Function, fetchOptions: any, avyLog?: Function): Promise<any> => {
   const now = Date.now();
   if (avalancheMapLayerCache.data && now - avalancheMapLayerCache.fetchedAt < AVALANCHE_MAP_LAYER_TTL_MS) {
     return avalancheMapLayerCache.data;
@@ -45,7 +50,7 @@ const getAvalancheMapLayer = async (fetchWithTimeout, fetchOptions, avyLog) => {
       data: avyJson,
     };
     return avyJson;
-  } catch (error) {
+  } catch (error: any) {
     if (avalancheMapLayerCache.data) {
       if (avyLog) avyLog(`[Avy] map-layer refresh failed, serving cached copy: ${error.message}`);
       return avalancheMapLayerCache.data;
@@ -54,16 +59,16 @@ const getAvalancheMapLayer = async (fetchWithTimeout, fetchOptions, avyLog) => {
   }
 };
 
-const collectGeometryPositions = (geometry, output = []) => {
+const collectGeometryPositions = (geometry: any, output: number[][] = []): number[][] => {
   if (!geometry || !geometry.coordinates) {
     return output;
   }
-  const walk = (node) => {
+  const walk = (node: any) => {
     if (!Array.isArray(node)) {
       return;
     }
     if (node.length >= 2 && typeof node[0] === 'number' && typeof node[1] === 'number') {
-      output.push(node);
+      output.push(node as number[]);
       return;
     }
     for (const child of node) {
@@ -74,7 +79,7 @@ const collectGeometryPositions = (geometry, output = []) => {
   return output;
 };
 
-const minDistanceKmToFeatureVertices = (feature, lat, lon) => {
+const minDistanceKmToFeatureVertices = (feature: any, lat: number, lon: number): number => {
   const positions = collectGeometryPositions(feature?.geometry);
   if (!positions.length) {
     return Number.POSITIVE_INFINITY;
@@ -89,7 +94,7 @@ const minDistanceKmToFeatureVertices = (feature, lat, lon) => {
   return minDistance;
 };
 
-const isWithinUtahBounds = (lat, lon) =>
+const isWithinUtahBounds = (lat: number, lon: number): boolean =>
   Number.isFinite(lat) &&
   Number.isFinite(lon) &&
   lat >= 36.8 &&
@@ -97,7 +102,13 @@ const isWithinUtahBounds = (lat, lon) =>
   lon >= -114.2 &&
   lon <= -108.8;
 
-const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 40) => {
+export interface AvalancheZoneMatch {
+  feature: any;
+  mode: 'polygon' | 'nearest' | 'none';
+  fallbackDistanceKm: number | null;
+}
+
+export const findMatchingAvalancheZone = (features: any[], lat: number, lon: number, maxFallbackDistanceKm: number = 40): AvalancheZoneMatch => {
   if (!Array.isArray(features) || !features.length || !Number.isFinite(lat) || !Number.isFinite(lon)) {
     return { feature: null, mode: 'none', fallbackDistanceKm: null };
   }
@@ -113,7 +124,7 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
     }
   }
 
-  let nearestFeature = null;
+  let nearestFeature: any = null;
   let nearestDistance = Number.POSITIVE_INFINITY;
   for (const feature of features) {
     const distanceKm = minDistanceKmToFeatureVertices(feature, lat, lon);
@@ -128,7 +139,7 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
   }
 
   if (isWithinUtahBounds(lat, lon)) {
-    let nearestUacFeature = null;
+    let nearestUacFeature: any = null;
     let nearestUacDistance = Number.POSITIVE_INFINITY;
     for (const feature of features) {
       if (String(feature?.properties?.center_id || '').toUpperCase() !== 'UAC') {
@@ -147,10 +158,4 @@ const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 4
   }
 
   return { feature: null, mode: 'none', fallbackDistanceKm: nearestDistance };
-};
-
-module.exports = {
-  haversineKm,
-  getAvalancheMapLayer,
-  findMatchingAvalancheZone,
 };
