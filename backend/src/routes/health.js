@@ -1,7 +1,4 @@
-import { Express, Request, Response } from 'express';
-import pkg from '../../package.json' with { type: 'json' };
-
-const { version } = pkg;
+const { version } = require('../../package.json');
 
 const healthPayload = () => {
   const mem = process.memoryUsage();
@@ -20,8 +17,8 @@ const healthPayload = () => {
   };
 };
 
-export const registerHealthRoutes = (app: Express) => {
-  const respond = (_req: Request, res: Response) => {
+const registerHealthRoutes = (app) => {
+  const respond = (_req, res) => {
     res.json(healthPayload());
   };
 
@@ -29,4 +26,8 @@ export const registerHealthRoutes = (app: Express) => {
   app.get('/health', respond);
   app.get('/api/healthz', respond);
   app.get('/api/health', respond);
+};
+
+module.exports = {
+  registerHealthRoutes,
 };

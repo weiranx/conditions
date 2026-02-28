@@ -1,17 +1,5 @@
-interface SatOneLinerBuilderOptions {
-  parseStartClock: (value: string) => string | null;
-  computeFeelsLikeF: (tempF: number | null | undefined, windMph: number | null | undefined) => number | null;
-}
-
-interface SatOneLinerParams {
-  safetyPayload: any;
-  objectiveName?: string;
-  startClock?: string;
-  maxLength?: number;
-}
-
-export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }: SatOneLinerBuilderOptions) => {
-  const satDecisionLevelFromScore = (scoreValue: any) => {
+const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }) => {
+  const satDecisionLevelFromScore = (scoreValue) => {
     const score = Number(scoreValue);
     if (!Number.isFinite(score)) {
       return 'UNKNOWN';
@@ -21,7 +9,7 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
     return 'NO-GO';
   };
 
-  const satAvalancheSnippet = (avalancheData: any) => {
+  const satAvalancheSnippet = (avalancheData) => {
     if (!avalancheData || avalancheData.relevant === false) {
       return 'Avy n/a';
     }
@@ -37,7 +25,7 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
     return `Avy L${Math.round(level)} ${label}`;
   };
 
-  const satCompactCondition = (text: string | null | undefined) => {
+  const satCompactCondition = (text) => {
     const value = String(text || '')
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
@@ -51,13 +39,13 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
     return 'clear';
   };
 
-  const satWorst12hSnippet = (weatherData: any) => {
+  const satWorst12hSnippet = (weatherData) => {
     const trend = Array.isArray(weatherData?.trend) ? weatherData.trend.slice(0, 12) : [];
     if (!trend.length) {
       return 'Worst12h n/a';
     }
 
-    let best: any = null;
+    let best = null;
     for (const point of trend) {
       const gust = Number(point?.gust);
       const precip = Number(point?.precipChance);
@@ -68,7 +56,7 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
       const condition = satCompactCondition(point?.condition);
       const gustRisk = Number.isFinite(gust) ? Math.max(0, gust - 20) * 1.4 : 0;
       const precipRisk = Number.isFinite(precip) ? Math.max(0, precip - 25) * 0.85 : 0;
-      const coldRisk = Number.isFinite(feelsLike as number) ? Math.max(0, 20 - (feelsLike as number)) * 0.7 : 0;
+      const coldRisk = Number.isFinite(feelsLike) ? Math.max(0, 20 - feelsLike) * 0.7 : 0;
       const weatherRisk = /storm/.test(condition) ? 22 : /snow/.test(condition) ? 12 : /rain|visibility/.test(condition) ? 7 : 0;
       const severity = gustRisk + precipRisk + coldRisk + weatherRisk;
 
@@ -88,7 +76,7 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
       return 'Worst12h n/a';
     }
 
-    const parts: string[] = [];
+    const parts = [];
     if (best.time) parts.push(best.time);
     if (best.condition && best.condition !== 'clear') parts.push(best.condition);
     if (Number.isFinite(best.gust)) parts.push(`g${Math.round(best.gust)}mph`);
@@ -97,7 +85,7 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
     return `Worst12h ${parts.join(' ')}`.trim();
   };
 
-  const satStartLabel = (startClock: string) => {
+  const satStartLabel = (startClock) => {
     const normalized = parseStartClock(startClock);
     if (!normalized) return '';
     const [hourRaw, minuteRaw] = normalized.split(':').map((part) => Number(part));
@@ -107,12 +95,12 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
     return `${hour12}:${String(minuteRaw).padStart(2, '0')}${meridiem}`;
   };
 
-  return ({ safetyPayload, objectiveName = '', startClock = '', maxLength = 170 }: SatOneLinerParams): string => {
+  return ({ safetyPayload, objectiveName = '', startClock = '', maxLength = 170 }) => {
     const payload = safetyPayload && typeof safetyPayload === 'object' ? safetyPayload : {};
     const weather = payload.weather && typeof payload.weather === 'object' ? payload.weather : {};
     const avalanche = payload.avalanche && typeof payload.avalanche === 'object' ? payload.avalanche : {};
     const safety = payload.safety && typeof payload.safety === 'object' ? payload.safety : {};
-    const forecastDate = payload.forecast && typeof payload.forecast === 'object' ? payload.forecast.selectedDate : (payload.selectedForecastDate || null);
+    const forecastDate = payload.forecast && typeof payload.forecast === 'object' ? payload.forecast.selectedDate : null;
 
     const label = String(objectiveName || 'Objective')
       .split(',')[0]
@@ -134,7 +122,7 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
       startLabel ? `start ${startLabel}` : '',
       '|',
       Number.isFinite(temp) ? `${Math.round(temp)}F` : 'temp n/a',
-      Number.isFinite(feelsLike as number) ? `feels ${Math.round(feelsLike as number)}F` : '',
+      Number.isFinite(feelsLike) ? `feels ${Math.round(feelsLike)}F` : '',
       Number.isFinite(wind) ? `w${Math.round(wind)}mph` : '',
       Number.isFinite(gust) ? `g${Math.round(gust)}mph` : '',
       Number.isFinite(precip) ? `p${Math.round(precip)}%` : '',
@@ -156,4 +144,8 @@ export const createSatOneLinerBuilder = ({ parseStartClock, computeFeelsLikeF }:
     }
     return `${line.slice(0, cap - 1).trimEnd()}…`;
   };
+};
+
+module.exports = {
+  createSatOneLinerBuilder,
 };

@@ -1,4 +1,4 @@
-export const firstNonEmptyString = (...values: (string | null | undefined)[]): string | null => {
+const firstNonEmptyString = (...values) => {
   for (const value of values) {
     if (typeof value === 'string' && value.trim().length > 0) {
       return value.trim();
@@ -7,13 +7,7 @@ export const firstNonEmptyString = (...values: (string | null | undefined)[]): s
   return null;
 };
 
-interface JsonChunk {
-  chunk: string;
-  startIndex: number;
-  endIndex: number;
-}
-
-const extractBalancedJsonChunk = (input: string, startIndex: number = 0): JsonChunk | null => {
+const extractBalancedJsonChunk = (input, startIndex = 0) => {
   if (typeof input !== 'string' || input.length === 0) {
     return null;
   }
@@ -22,8 +16,6 @@ const extractBalancedJsonChunk = (input: string, startIndex: number = 0): JsonCh
   while (cursor < input.length && /\s/.test(input[cursor])) {
     cursor += 1;
   }
-
-  if (cursor >= input.length) return null;
 
   const opening = input[cursor];
   const closing = opening === '{' ? '}' : opening === '[' ? ']' : null;
@@ -74,14 +66,14 @@ const extractBalancedJsonChunk = (input: string, startIndex: number = 0): JsonCh
   return null;
 };
 
-export const parseAvalancheDetailPayloads = (rawText: string | null | undefined): any[] => {
+const parseAvalancheDetailPayloads = (rawText) => {
   if (typeof rawText !== 'string' || rawText.trim().length === 0) {
     return [];
   }
 
   const text = rawText.trim();
-  const candidateChunks: string[] = [];
-  const addCandidateChunk = (chunk: string | null | undefined) => {
+  const candidateChunks = [];
+  const addCandidateChunk = (chunk) => {
     if (typeof chunk !== 'string') {
       return;
     }
@@ -121,8 +113,8 @@ export const parseAvalancheDetailPayloads = (rawText: string | null | undefined)
     idx = Math.max(idx, extracted.endIndex - 1);
   }
 
-  const parsedPayloads: any[] = [];
-  const seenChunks = new Set<string>();
+  const parsedPayloads = [];
+  const seenChunks = new Set();
   for (const chunk of candidateChunks) {
     if (seenChunks.has(chunk)) {
       continue;
@@ -142,26 +134,26 @@ export const parseAvalancheDetailPayloads = (rawText: string | null | undefined)
   return parsedPayloads;
 };
 
-const normalizeAvalancheLikelihood = (value: any): string | undefined => {
+const normalizeAvalancheLikelihood = (value) => {
   if (value === null || value === undefined) {
     return undefined;
   }
 
   if (typeof value === 'number' && Number.isFinite(value)) {
-    const mapped: Record<number, string> = {
+    const mapped = {
       1: 'unlikely',
       2: 'possible',
       3: 'likely',
       4: 'very likely',
       5: 'certain',
-    };
-    return mapped[Math.round(value)] || String(value);
+    }[Math.round(value)];
+    return mapped || String(value);
   }
 
   if (Array.isArray(value)) {
     const parts = value
       .map((entry) => normalizeAvalancheLikelihood(entry))
-      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+      .filter((entry) => typeof entry === 'string' && entry.trim().length > 0);
 
     if (!parts.length) {
       return undefined;
@@ -200,13 +192,13 @@ const normalizeAvalancheLikelihood = (value: any): string | undefined => {
   return undefined;
 };
 
-const normalizeAvalancheLocation = (value: any): string[] | undefined => {
+const normalizeAvalancheLocation = (value) => {
   if (value === null || value === undefined) {
     return undefined;
   }
 
-  const locations: string[] = [];
-  const appendLocation = (entry: any) => {
+  const locations = [];
+  const appendLocation = (entry) => {
     if (entry === null || entry === undefined) {
       return;
     }
@@ -248,16 +240,7 @@ const normalizeAvalancheLocation = (value: any): string[] | undefined => {
   return deduped.length > 0 ? deduped : undefined;
 };
 
-export interface AvalancheProblem {
-  id?: number | string;
-  name?: string;
-  likelihood?: string;
-  location?: string[];
-  discussion?: string;
-  [key: string]: any;
-}
-
-export const normalizeAvalancheProblemCollection = (rawProblems: any[] | null | undefined): AvalancheProblem[] => {
+const normalizeAvalancheProblemCollection = (rawProblems) => {
   if (!Array.isArray(rawProblems) || rawProblems.length === 0) {
     return [];
   }
@@ -268,7 +251,7 @@ export const normalizeAvalancheProblemCollection = (rawProblems: any[] | null | 
         return null;
       }
 
-      const normalized: AvalancheProblem = { ...problem };
+      const normalized = { ...problem };
       const normalizedName = firstNonEmptyString(problem.name, problem.problem, problem.problem_name, problem.problem_type);
       const normalizedLikelihood = normalizeAvalancheLikelihood(
         problem.likelihood ?? problem.trigger_likelihood ?? problem.probability ?? problem.chance,
@@ -297,13 +280,13 @@ export const normalizeAvalancheProblemCollection = (rawProblems: any[] | null | 
 
       return normalized;
     })
-    .filter((problem): problem is AvalancheProblem => Boolean(problem));
+    .filter((problem) => Boolean(problem));
 };
 
-export const getAvalancheProblemsFromDetail = (detail: any): AvalancheProblem[] =>
+const getAvalancheProblemsFromDetail = (detail) =>
   normalizeAvalancheProblemCollection(detail?.forecast_avalanche_problems || detail?.avalanche_problems || detail?.problems || []);
 
-const getAvalancheBottomLineFromDetail = (detail: any): string | null =>
+const getAvalancheBottomLineFromDetail = (detail) =>
   firstNonEmptyString(
     detail?.bottom_line,
     detail?.bottom_line_summary,
@@ -312,7 +295,7 @@ const getAvalancheBottomLineFromDetail = (detail: any): string | null =>
     detail?.summary,
   );
 
-const hasAvalancheDangerData = (detail: any): boolean =>
+const hasAvalancheDangerData = (detail) =>
   Boolean(
     (Array.isArray(detail?.danger) && detail.danger.length > 0)
       || detail?.danger_low
@@ -321,14 +304,14 @@ const hasAvalancheDangerData = (detail: any): boolean =>
       || detail?.danger_level,
   );
 
-const normalizeAvalancheZoneToken = (value: string | number | null | undefined): string => {
+const normalizeAvalancheZoneToken = (value) => {
   if (value === null || value === undefined) {
     return '';
   }
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
 };
 
-const getAvalancheCandidateZoneHints = (candidate: any): { zoneId: string | null; zoneName: string | null; zoneSlug: string | null } => {
+const getAvalancheCandidateZoneHints = (candidate) => {
   const zoneId = firstNonEmptyString(candidate?.zone_id, candidate?.forecast_zone_id, candidate?.id);
   const zoneName = firstNonEmptyString(candidate?.zone_name, candidate?.name, candidate?.forecast_zone?.name);
   const zoneSlug = firstNonEmptyString(candidate?.zone_slug, candidate?.slug);
@@ -339,19 +322,12 @@ const getAvalancheCandidateZoneHints = (candidate: any): { zoneId: string | null
   };
 };
 
-export interface AvalancheDetailCandidate {
-  candidate: any;
-  score: number;
-  hasUsefulDetail: boolean;
-  problems: AvalancheProblem[];
-}
-
-const scoreAvalancheDetailCandidate = (candidate: any, context: any = {}, options: any = {}): AvalancheDetailCandidate | null => {
+const scoreAvalancheDetailCandidate = (candidate, context = {}, options = {}) => {
   if (!candidate || typeof candidate !== 'object') {
     return null;
   }
 
-  const cleanForecastText = typeof options.cleanForecastText === 'function' ? options.cleanForecastText : (value: any) => String(value || '').trim();
+  const cleanForecastText = typeof options.cleanForecastText === 'function' ? options.cleanForecastText : (value) => String(value || '').trim();
   const bottomLine = getAvalancheBottomLineFromDetail(candidate) || '';
   const cleanedBottomLine = cleanForecastText(bottomLine);
   const problems = getAvalancheProblemsFromDetail(candidate);
@@ -401,9 +377,9 @@ const scoreAvalancheDetailCandidate = (candidate: any, context: any = {}, option
   };
 };
 
-const extractAvalancheDetailCandidates = (payload: any): any[] => {
-  const candidates: any[] = [];
-  const pushCandidate = (value: any) => {
+const extractAvalancheDetailCandidates = (payload) => {
+  const candidates = [];
+  const pushCandidate = (value) => {
     if (!value || typeof value !== 'object') {
       return;
     }
@@ -425,7 +401,7 @@ const extractAvalancheDetailCandidates = (payload: any): any[] => {
   pushCandidate(payload?.properties);
   pushCandidate(payload);
 
-  const seen = new Set<string>();
+  const seen = new Set();
   return candidates.filter((candidate) => {
     const signature = [
       firstNonEmptyString(candidate?.id, ''),
@@ -443,22 +419,13 @@ const extractAvalancheDetailCandidates = (payload: any): any[] => {
   });
 };
 
-interface PickBestAvalancheDetailCandidateOptions {
-  payloads: any[];
-  centerId: string | null | undefined;
-  zoneId: string | number | null | undefined;
-  zoneSlug: string | null | undefined;
-  zoneName: string | null | undefined;
-  cleanForecastText: (text: string) => string;
-}
-
-export const pickBestAvalancheDetailCandidate = ({ payloads, centerId, zoneId, zoneSlug, zoneName, cleanForecastText }: PickBestAvalancheDetailCandidateOptions): AvalancheDetailCandidate | null => {
+const pickBestAvalancheDetailCandidate = ({ payloads, centerId, zoneId, zoneSlug, zoneName, cleanForecastText }) => {
   if (!Array.isArray(payloads) || payloads.length === 0) {
     return null;
   }
 
   const context = { centerId, zoneId, zoneSlug, zoneName };
-  let best: AvalancheDetailCandidate | null = null;
+  let best = null;
 
   for (const payload of payloads) {
     const candidates = extractAvalancheDetailCandidates(payload);
@@ -480,7 +447,7 @@ export const pickBestAvalancheDetailCandidate = ({ payloads, centerId, zoneId, z
   return best;
 };
 
-export const inferAvalancheExpiresTime = (detail: any): string | null => {
+const inferAvalancheExpiresTime = (detail) => {
   if (!detail || typeof detail !== 'object') {
     return null;
   }
@@ -498,7 +465,7 @@ export const inferAvalancheExpiresTime = (detail: any): string | null => {
   }
 
   if (Array.isArray(detail.danger) && detail.danger.length > 0) {
-    const currentDay = detail.danger.find((entry: any) => entry?.valid_day === 'current') || detail.danger[0];
+    const currentDay = detail.danger.find((entry) => entry?.valid_day === 'current') || detail.danger[0];
     const fromDanger = firstNonEmptyString(
       currentDay?.end_time,
       currentDay?.expires,
@@ -514,7 +481,7 @@ export const inferAvalancheExpiresTime = (detail: any): string | null => {
   return null;
 };
 
-export const buildUtahForecastJsonUrl = (forecastLink: string | null | undefined): string | null => {
+const buildUtahForecastJsonUrl = (forecastLink) => {
   if (typeof forecastLink !== 'string' || !forecastLink.trim()) {
     return null;
   }
@@ -542,14 +509,7 @@ export const buildUtahForecastJsonUrl = (forecastLink: string | null | undefined
   }
 };
 
-export interface UtahAvalancheAdvisory {
-  bottomLine: string | null;
-  problems: any[];
-  publishedTime: string | null;
-  rawAdvisory: any;
-}
-
-export const extractUtahAvalancheAdvisory = (payload: any): UtahAvalancheAdvisory | null => {
+const extractUtahAvalancheAdvisory = (payload) => {
   const advisory = (payload?.advisories || [])[0]?.advisory;
   if (!advisory || typeof advisory !== 'object') {
     return null;
@@ -557,7 +517,7 @@ export const extractUtahAvalancheAdvisory = (payload: any): UtahAvalancheAdvisor
 
   const bottomLine = firstNonEmptyString(advisory.bottom_line, advisory.current_conditions, advisory.mountain_weather);
 
-  const problems = ([1, 2, 3] as const)
+  const problems = [1, 2, 3]
     .map((idx) => {
       const name = firstNonEmptyString(advisory[`avalanche_problem_${idx}`]);
       if (!name) {
@@ -570,9 +530,9 @@ export const extractUtahAvalancheAdvisory = (payload: any): UtahAvalancheAdvisor
         discussion: discussion || undefined,
       };
     })
-    .filter((entry): entry is { id: number; name: string; discussion?: string } => Boolean(entry));
+    .filter((entry) => Boolean(entry));
 
-  let publishedTime: string | null = null;
+  let publishedTime = null;
   const issuedTimestamp = Number(advisory.date_issued_timestamp);
   if (Number.isFinite(issuedTimestamp) && issuedTimestamp > 0) {
     publishedTime = new Date(issuedTimestamp * 1000).toISOString();
@@ -584,4 +544,15 @@ export const extractUtahAvalancheAdvisory = (payload: any): UtahAvalancheAdvisor
     publishedTime,
     rawAdvisory: advisory,
   };
+};
+
+module.exports = {
+  firstNonEmptyString,
+  parseAvalancheDetailPayloads,
+  normalizeAvalancheProblemCollection,
+  getAvalancheProblemsFromDetail,
+  pickBestAvalancheDetailCandidate,
+  inferAvalancheExpiresTime,
+  buildUtahForecastJsonUrl,
+  extractUtahAvalancheAdvisory,
 };

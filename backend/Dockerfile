@@ -1,18 +1,11 @@
-# ── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+# ── Stage 1: install production deps ──────────────────────────────────────────
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
 # Copy lockfile and manifest first for layer caching.
 COPY package.json package-lock.json ./
-# Install ALL dependencies including devDeps for compilation
-RUN npm ci
-
-# Copy application source
-COPY . .
-
-# Build the TypeScript code
-RUN npm run build
+RUN npm ci --omit=dev
 
 # ── Stage 2: final runtime image ──────────────────────────────────────────────
 FROM node:20-alpine AS runner
@@ -22,14 +15,11 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy production node_modules only
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Copy production node_modules from deps stage.
+COPY --from=deps /app/node_modules ./node_modules
 
-# Copy compiled code from builder
-COPY --from=builder /app/dist ./dist
-# Copy peaks.json which is required at runtime
-COPY --from=builder /app/peaks.json ./dist/peaks.json
+# Copy application source. .dockerignore excludes node_modules, .env*, test/.
+COPY . .
 
 # Pre-create the data directory so appuser can write logs at runtime.
 RUN mkdir -p /app/data && chown appuser:appgroup /app/data
@@ -42,5 +32,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:3001/healthz || exit 1
 
-# Run the compiled index.js
-CMD ["node", "dist/index.js"]
+# Exec form ensures PID 1 is node itself, so SIGTERM reaches the graceful
+# shutdown handler in src/server/start-server.js directly.
+CMD ["node", "index.js"]

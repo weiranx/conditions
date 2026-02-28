@@ -1,19 +1,10 @@
-import { Express, Request, Response } from 'express';
-
-interface RegisterSatOneLinerRouteOptions {
-  app: Express;
-  invokeSafetyHandler: (query: any) => Promise<{ statusCode: number; payload: any }>;
-  buildSatOneLiner: (options: any) => string;
-  parseStartClock: (value: string) => string | null;
-}
-
-export const registerSatOneLinerRoute = ({
+const registerSatOneLinerRoute = ({
   app,
   invokeSafetyHandler,
   buildSatOneLiner,
   parseStartClock,
-}: RegisterSatOneLinerRouteOptions) => {
-  app.get('/api/sat-oneliner', async (req: Request, res: Response) => {
+}) => {
+  app.get('/api/sat-oneliner', async (req, res) => {
     const { lat, lon, date, start, objective, name, maxLength } = req.query;
 
     if (!lat || !lon) {
@@ -77,11 +68,15 @@ export const registerSatOneLinerRoute = ({
           objective: objectiveName || null,
         },
       });
-    } catch (error: any) {
+    } catch (error) {
       return res.status(500).json({
         error: 'Failed to generate SAT one-liner.',
         details: error?.message || 'Unknown backend error.',
       });
     }
   });
+};
+
+module.exports = {
+  registerSatOneLinerRoute,
 };

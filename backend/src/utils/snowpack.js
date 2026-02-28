@@ -1,14 +1,4 @@
-export interface SnowpackData {
-  source: string;
-  status: string;
-  summary: string;
-  snotel: any | null;
-  nohrsc: any | null;
-  historical: any | null;
-  generatedTime?: string;
-}
-
-export const createUnavailableSnowpackData = (status: string = 'unavailable'): SnowpackData => ({
+const createUnavailableSnowpackData = (status = 'unavailable') => ({
   source: 'NRCS AWDB / SNOTEL, NOAA NOHRSC Snow Analysis',
   status,
   summary: 'Snowpack observations unavailable.',
@@ -17,22 +7,14 @@ export const createUnavailableSnowpackData = (status: string = 'unavailable'): S
   historical: null,
 });
 
-interface CreateSnowpackServiceOptions {
-  fetchWithTimeout: Function;
-  formatIsoDateUtc: (date: Date) => string | null;
-  shiftIsoDateUtc: (isoDate: string, deltaDays: number) => string | null;
-  haversineKm: (latA: number, lonA: number, latB: number, lonB: number) => number;
-  stationCacheTtlMs?: number;
-}
-
-export const createSnowpackService = ({
+const createSnowpackService = ({
   fetchWithTimeout,
   formatIsoDateUtc,
   shiftIsoDateUtc,
   haversineKm,
   stationCacheTtlMs = 12 * 60 * 60 * 1000,
-}: CreateSnowpackServiceOptions) => {
-  let snotelStationCache: { fetchedAt: number; data: any[] | null } = {
+}) => {
+  let snotelStationCache = {
     fetchedAt: 0,
     data: null,
   };
@@ -43,9 +25,9 @@ export const createSnowpackService = ({
   const HISTORICAL_MATCH_WINDOW_DAYS = 7;
   const HISTORICAL_FETCH_LOOKBACK_DAYS = HISTORICAL_BASELINE_LOOKBACK_YEARS * 366 + HISTORICAL_MATCH_WINDOW_DAYS;
 
-  const isValidIsoDate = (value: any): boolean => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const isValidIsoDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-  const getSnotelTargetDate = (selectedDate: string | null | undefined): string | null => {
+  const getSnotelTargetDate = (selectedDate) => {
     const todayIso = formatIsoDateUtc(new Date());
     if (!todayIso) {
       return selectedDate && isValidIsoDate(selectedDate) ? selectedDate : null;
@@ -53,10 +35,10 @@ export const createSnowpackService = ({
     if (!selectedDate || !isValidIsoDate(selectedDate)) {
       return todayIso;
     }
-    return (selectedDate as string) > todayIso ? todayIso : (selectedDate as string);
+    return selectedDate > todayIso ? todayIso : selectedDate;
   };
 
-  const extractLatestAwdbValue = (values: any[] | null | undefined, targetDateIso: string | null | undefined): { date: string; value: number; flag: string | null } | null => {
+  const extractLatestAwdbValue = (values, targetDateIso) => {
     if (!Array.isArray(values) || values.length === 0) {
       return null;
     }
@@ -78,7 +60,7 @@ export const createSnowpackService = ({
     };
   };
 
-  const parseIsoDateParts = (isoValue: string | null | undefined): { year: number; month: number; day: number } | null => {
+  const parseIsoDateParts = (isoValue) => {
     if (!isValidIsoDate(isoValue)) {
       return null;
     }
@@ -92,13 +74,13 @@ export const createSnowpackService = ({
     return { year, month, day };
   };
 
-  const isLeapYear = (year: number): boolean => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const isLeapYear = (year) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 
-  const pad2 = (value: number): string => String(value).padStart(2, '0');
+  const pad2 = (value) => String(value).padStart(2, '0');
 
-  const buildIsoDate = (year: number, month: number, day: number): string => `${year}-${pad2(month)}-${pad2(day)}`;
+  const buildIsoDate = (year, month, day) => `${year}-${pad2(month)}-${pad2(day)}`;
 
-  const toUtcDayStamp = (isoValue: string | null | undefined): number | null => {
+  const toUtcDayStamp = (isoValue) => {
     const parsed = parseIsoDateParts(isoValue);
     if (!parsed) {
       return null;
@@ -106,23 +88,23 @@ export const createSnowpackService = ({
     return Date.UTC(parsed.year, parsed.month - 1, parsed.day);
   };
 
-  const daysBetweenIsoDates = (a: string | null | undefined, b: string | null | undefined): number | null => {
+  const daysBetweenIsoDates = (a, b) => {
     const aStamp = toUtcDayStamp(a);
     const bStamp = toUtcDayStamp(b);
     if (!Number.isFinite(aStamp) || !Number.isFinite(bStamp)) {
       return null;
     }
-    return Math.round(((aStamp as number) - (bStamp as number)) / (24 * 60 * 60 * 1000));
+    return Math.round((aStamp - bStamp) / (24 * 60 * 60 * 1000));
   };
 
-  const buildHistoricalTargetIsoForYear = (year: number, month: number, day: number): string => {
+  const buildHistoricalTargetIsoForYear = (year, month, day) => {
     if (month === 2 && day === 29 && !isLeapYear(year)) {
       return buildIsoDate(year, 2, 28);
     }
     return buildIsoDate(year, month, day);
   };
 
-  const pickClosestHistoricalSample = (values: any[] | null | undefined, targetIso: string, maxWindowDays: number): { date: string; value: number; dayOffset: number } | null => {
+  const pickClosestHistoricalSample = (values, targetIso, maxWindowDays) => {
     if (!Array.isArray(values) || !values.length || !isValidIsoDate(targetIso)) {
       return null;
     }
@@ -133,10 +115,10 @@ export const createSnowpackService = ({
     if (!valid.length) {
       return null;
     }
-    let best: { date: string; value: number; dayOffset: number } | null = null;
+    let best = null;
     for (const entry of valid) {
       const dayOffset = daysBetweenIsoDates(targetIso, entry.date);
-      if (dayOffset === null || dayOffset < 0 || dayOffset > maxWindowDays) {
+      if (!Number.isFinite(dayOffset) || dayOffset < 0 || dayOffset > maxWindowDays) {
         continue;
       }
       if (!best || dayOffset < best.dayOffset || (dayOffset === best.dayOffset && entry.date > best.date)) {
@@ -146,12 +128,12 @@ export const createSnowpackService = ({
     return best;
   };
 
-  const extractHistoricalAverageAwdbValue = (values: any[] | null | undefined, targetDateIso: string, lookbackYears: number = HISTORICAL_BASELINE_LOOKBACK_YEARS) => {
+  const extractHistoricalAverageAwdbValue = (values, targetDateIso, lookbackYears = HISTORICAL_BASELINE_LOOKBACK_YEARS) => {
     const targetParts = parseIsoDateParts(targetDateIso);
     if (!targetParts || !Array.isArray(values) || values.length === 0) {
       return null;
     }
-    const pickedSamples: { date: string; value: number; dayOffset: number }[] = [];
+    const pickedSamples = [];
     for (let year = targetParts.year - 1; year >= targetParts.year - lookbackYears; year -= 1) {
       const historicalTargetIso = buildHistoricalTargetIsoForYear(year, targetParts.month, targetParts.day);
       const sample = pickClosestHistoricalSample(values, historicalTargetIso, HISTORICAL_MATCH_WINDOW_DAYS);
@@ -177,7 +159,7 @@ export const createSnowpackService = ({
     };
   };
 
-  const compareCurrentToHistoricalAverage = (currentValue: number | null | undefined, averageValue: number | null | undefined) => {
+  const compareCurrentToHistoricalAverage = (currentValue, averageValue) => {
     const currentNumeric = Number(currentValue);
     const averageNumeric = Number(averageValue);
     if (!Number.isFinite(currentNumeric) || !Number.isFinite(averageNumeric) || averageNumeric <= 0) {
@@ -197,7 +179,7 @@ export const createSnowpackService = ({
     return { status: 'at_average', percentOfAverage };
   };
 
-  const getSnotelStations = async (fetchOptions: any): Promise<any[]> => {
+  const getSnotelStations = async (fetchOptions) => {
     const now = Date.now();
     if (snotelStationCache.data && now - snotelStationCache.fetchedAt < stationCacheTtlMs) {
       return snotelStationCache.data;
@@ -226,11 +208,11 @@ export const createSnowpackService = ({
     return filtered;
   };
 
-  const findNearestSnotelStation = (lat: number, lon: number, stations: any[], maxDistanceKm: number = 140) => {
+  const findNearestSnotelStation = (lat, lon, stations, maxDistanceKm = 140) => {
     if (!Array.isArray(stations) || !stations.length) {
       return null;
     }
-    let nearest: any = null;
+    let nearest = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     for (const station of stations) {
       const stationLat = Number(station.latitude);
@@ -253,7 +235,7 @@ export const createSnowpackService = ({
     };
   };
 
-  const parseNohrscPixelValue = (resultEntry: any): number | null => {
+  const parseNohrscPixelValue = (resultEntry) => {
     const raw = resultEntry?.attributes?.['Service Pixel Value'];
     const numeric = Number(raw);
     if (!Number.isFinite(numeric)) {
@@ -262,7 +244,7 @@ export const createSnowpackService = ({
     return numeric;
   };
 
-  const sampleNohrscSnowAnalysis = async (lat: number, lon: number, fetchOptions: any): Promise<any> => {
+  const sampleNohrscSnowAnalysis = async (lat, lon, fetchOptions) => {
     const extentPaddingDeg = 0.6;
     const mapExtent = `${(lon - extentPaddingDeg).toFixed(4)},${(lat - extentPaddingDeg).toFixed(4)},${(
       lon + extentPaddingDeg
@@ -283,27 +265,27 @@ export const createSnowpackService = ({
       sampledDate && Number.isFinite(sampledDate.getTime()) ? sampledDate.toISOString() : null;
     const nohrscJson = await nohrscRes.json();
     const results = Array.isArray(nohrscJson?.results) ? nohrscJson.results : [];
-    const snowDepthResult = results.find((entry: any) => Number(entry?.layerId) === 3) || null;
-    const sweResult = results.find((entry: any) => Number(entry?.layerId) === 7) || null;
+    const snowDepthResult = results.find((entry) => Number(entry?.layerId) === 3) || null;
+    const sweResult = results.find((entry) => Number(entry?.layerId) === 7) || null;
     const rawDepthMeters = parseNohrscPixelValue(snowDepthResult);
     const rawSweMillimeters = parseNohrscPixelValue(sweResult);
     const depthMeters =
       Number.isFinite(rawDepthMeters) &&
-      (rawDepthMeters as number) >= 0 &&
-      (rawDepthMeters as number) <= MAX_REASONABLE_NOHRSC_DEPTH_METERS
+      rawDepthMeters >= 0 &&
+      rawDepthMeters <= MAX_REASONABLE_NOHRSC_DEPTH_METERS
         ? rawDepthMeters
         : null;
     const sweMillimeters =
       Number.isFinite(rawSweMillimeters) &&
-      (rawSweMillimeters as number) >= 0 &&
-      (rawSweMillimeters as number) <= MAX_REASONABLE_NOHRSC_SWE_MM
+      rawSweMillimeters >= 0 &&
+      rawSweMillimeters <= MAX_REASONABLE_NOHRSC_SWE_MM
         ? rawSweMillimeters
         : null;
     if (!Number.isFinite(depthMeters) && !Number.isFinite(sweMillimeters)) {
       return null;
     }
-    const depthInches = Number.isFinite(depthMeters) ? Math.max(0, Number(((depthMeters as number) * 39.3701).toFixed(1))) : null;
-    const sweInches = Number.isFinite(sweMillimeters) ? Math.max(0, Number(((sweMillimeters as number) * 0.0393701).toFixed(1))) : null;
+    const depthInches = Number.isFinite(depthMeters) ? Math.max(0, Number((depthMeters * 39.3701).toFixed(1))) : null;
+    const sweInches = Number.isFinite(sweMillimeters) ? Math.max(0, Number((sweMillimeters * 0.0393701).toFixed(1))) : null;
     const filteredSignals = [];
     if (Number.isFinite(rawDepthMeters) && !Number.isFinite(depthMeters)) {
       filteredSignals.push('depth');
@@ -318,8 +300,8 @@ export const createSnowpackService = ({
       sampledTime,
       snowDepthIn: depthInches,
       sweIn: sweInches,
-      depthMeters: Number.isFinite(depthMeters) ? Number((depthMeters as number).toFixed(2)) : null,
-      sweMillimeters: Number.isFinite(sweMillimeters) ? Number((sweMillimeters as number).toFixed(1)) : null,
+      depthMeters: Number.isFinite(depthMeters) ? Number(depthMeters.toFixed(2)) : null,
+      sweMillimeters: Number.isFinite(sweMillimeters) ? Number(sweMillimeters.toFixed(1)) : null,
       depthDataset: snowDepthResult?.attributes?.name || null,
       sweDataset: sweResult?.attributes?.name || null,
       link: 'https://www.nohrsc.noaa.gov/nsa/',
@@ -330,9 +312,9 @@ export const createSnowpackService = ({
     };
   };
 
-  const fetchSnowpackData = async (lat: number, lon: number, selectedDate: string | null | undefined, fetchOptions: any): Promise<SnowpackData> => {
+  const fetchSnowpackData = async (lat, lon, selectedDate, fetchOptions) => {
     const targetDate = getSnotelTargetDate(selectedDate);
-    const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()) || '', -HISTORICAL_FETCH_LOOKBACK_DAYS);
+    const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -HISTORICAL_FETCH_LOOKBACK_DAYS);
     const todayIso = formatIsoDateUtc(new Date());
 
     const snotelTask = (async () => {
@@ -360,7 +342,7 @@ export const createSnowpackService = ({
       const dataJson = await dataRes.json();
       const stationData = Array.isArray(dataJson) ? dataJson[0] : null;
       const elementData = Array.isArray(stationData?.data) ? stationData.data : [];
-      const mapByElement: Record<string, any> = {};
+      const mapByElement = {};
       for (const entry of elementData) {
         const elementCode = String(entry?.stationElement?.elementCode || '').toUpperCase();
         if (!elementCode) {
@@ -374,13 +356,13 @@ export const createSnowpackService = ({
       const precipIn = Number.isFinite(Number(mapByElement.PREC?.value)) ? Number(mapByElement.PREC.value) : null;
       const obsTempF = Number.isFinite(Number(mapByElement.TOBS?.value)) ? Number(mapByElement.TOBS.value) : null;
       const observedDate = mapByElement.SNWD?.date || mapByElement.WTEQ?.date || mapByElement.PREC?.date || mapByElement.TOBS?.date || null;
-      const snwdEntry = elementData.find((entry: any) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'SNWD');
-      const wteqEntry = elementData.find((entry: any) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'WTEQ');
-      const snowDepthHistorical = extractHistoricalAverageAwdbValue(snwdEntry?.values || [], (targetDate || todayIso) as string);
-      const sweHistorical = extractHistoricalAverageAwdbValue(wteqEntry?.values || [], (targetDate || todayIso) as string);
+      const snwdEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'SNWD');
+      const wteqEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'WTEQ');
+      const snowDepthHistorical = extractHistoricalAverageAwdbValue(snwdEntry?.values || [], targetDate || todayIso);
+      const sweHistorical = extractHistoricalAverageAwdbValue(wteqEntry?.values || [], targetDate || todayIso);
       const depthComparison = compareCurrentToHistoricalAverage(snowDepthIn, snowDepthHistorical?.average);
       const sweComparison = compareCurrentToHistoricalAverage(sweIn, sweHistorical?.average);
-      const overallComparison: any =
+      const overallComparison =
         sweComparison.status !== 'unknown'
           ? { metric: 'SWE', status: sweComparison.status, percentOfAverage: sweComparison.percentOfAverage }
           : depthComparison.status !== 'unknown'
@@ -390,7 +372,7 @@ export const createSnowpackService = ({
         const targetParts = parseIsoDateParts(targetDate || todayIso);
         return targetParts ? `${pad2(targetParts.month)}-${pad2(targetParts.day)}` : null;
       })();
-      const statusLabelByCode: Record<string, string> = {
+      const statusLabelByCode = {
         below_average: 'below average',
         at_average: 'at average',
         above_average: 'above average',
@@ -464,7 +446,7 @@ export const createSnowpackService = ({
       return createUnavailableSnowpackData('unavailable');
     }
 
-    const summaryParts: string[] = [];
+    const summaryParts = [];
     if (snotelData) {
       summaryParts.push(
         `SNOTEL ${snotelData.stationName}: depth ${Number.isFinite(snotelData.snowDepthIn) ? `${snotelData.snowDepthIn} in` : 'N/A'}, SWE ${
@@ -497,4 +479,9 @@ export const createSnowpackService = ({
     createUnavailableSnowpackData,
     fetchSnowpackData,
   };
+};
+
+module.exports = {
+  createUnavailableSnowpackData,
+  createSnowpackService,
 };

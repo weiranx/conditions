@@ -1,15 +1,4 @@
-export interface FireRiskData {
-  source: string;
-  status: string;
-  level: number | null;
-  label: string;
-  guidance: string;
-  reasons: string[];
-  alertsConsidered: any[];
-  alertsUsed: number;
-}
-
-export const createUnavailableFireRiskData = (status: string = 'unavailable'): FireRiskData => ({
+const createUnavailableFireRiskData = (status = 'unavailable') => ({
   source: 'Derived from NOAA weather, NWS alerts, and air-quality signals',
   status,
   level: null,
@@ -20,13 +9,7 @@ export const createUnavailableFireRiskData = (status: string = 'unavailable'): F
   alertsUsed: 0,
 });
 
-interface BuildFireRiskDataOptions {
-  weatherData: any;
-  alertsData: any;
-  airQualityData: any;
-}
-
-export const buildFireRiskData = ({ weatherData, alertsData, airQualityData }: BuildFireRiskDataOptions): FireRiskData => {
+const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
   const weatherDescription = String(weatherData?.description || '').toLowerCase();
   const tempF = parseFloat(weatherData?.temp);
   const humidity = parseFloat(weatherData?.humidity);
@@ -37,15 +20,15 @@ export const buildFireRiskData = ({ weatherData, alertsData, airQualityData }: B
   const alertsRelevant = String(alertsData?.status || '') !== 'future_time_not_supported';
 
   const fireAlertEvents = alertsRelevant
-    ? alerts.filter((alert: any) => /red flag|fire weather|wildfire|smoke|air quality/i.test(String(alert?.event || '')))
+    ? alerts.filter((alert) => /red flag|fire weather|wildfire|smoke|air quality/i.test(String(alert?.event || '')))
     : [];
 
   let level = 0;
-  const reasons: string[] = [];
+  const reasons = [];
 
-  const hasRedFlagWarning = fireAlertEvents.some((alert: any) => /red flag warning/i.test(String(alert?.event || '')));
-  const hasFireWeatherWatch = fireAlertEvents.some((alert: any) => /fire weather watch/i.test(String(alert?.event || '')));
-  const hasWildfireOrSmokeAlert = fireAlertEvents.some((alert: any) => /wildfire|smoke|air quality/i.test(String(alert?.event || '')));
+  const hasRedFlagWarning = fireAlertEvents.some((alert) => /red flag warning/i.test(String(alert?.event || '')));
+  const hasFireWeatherWatch = fireAlertEvents.some((alert) => /fire weather watch/i.test(String(alert?.event || '')));
+  const hasWildfireOrSmokeAlert = fireAlertEvents.some((alert) => /wildfire|smoke|air quality/i.test(String(alert?.event || '')));
 
   if (hasRedFlagWarning) {
     level = Math.max(level, 4);
@@ -56,22 +39,22 @@ export const buildFireRiskData = ({ weatherData, alertsData, airQualityData }: B
   }
 
   if (Number.isFinite(tempF) && Number.isFinite(humidity) && Number.isFinite(wind)) {
-    if ((tempF as number) >= 90 && (humidity as number) <= 20 && (wind as number) >= 20) {
+    if (tempF >= 90 && humidity <= 20 && wind >= 20) {
       level = Math.max(level, 4);
       reasons.push(`Hot/dry/windy pattern (${tempF}F, RH ${humidity}%, wind ${wind} mph).`);
-    } else if ((tempF as number) >= 80 && (humidity as number) <= 25 && (wind as number) >= 15) {
+    } else if (tempF >= 80 && humidity <= 25 && wind >= 15) {
       level = Math.max(level, 3);
       reasons.push(`Elevated fire-weather pattern (${tempF}F, RH ${humidity}%, wind ${wind} mph).`);
-    } else if ((tempF as number) >= 70 && (humidity as number) <= 30 && ((wind as number) >= 12 || (gust as number) >= 20)) {
+    } else if (tempF >= 70 && humidity <= 30 && (wind >= 12 || gust >= 20)) {
       level = Math.max(level, 2);
       reasons.push(`Dry and breezy conditions support faster fire spread (${tempF}F, RH ${humidity}%).`);
     }
   }
 
-  if (/smoke|haze/.test(weatherDescription) || (Number.isFinite(usAqi) && (usAqi as number) >= 101) || hasWildfireOrSmokeAlert) {
+  if (/smoke|haze/.test(weatherDescription) || (Number.isFinite(usAqi) && usAqi >= 101) || hasWildfireOrSmokeAlert) {
     level = Math.max(level, 2);
     reasons.push('Smoke/air-quality signal may indicate nearby fire activity or transport.');
-  } else if (Number.isFinite(usAqi) && (usAqi as number) >= 51) {
+  } else if (Number.isFinite(usAqi) && usAqi >= 51) {
     level = Math.max(level, 1);
     reasons.push('Moderate AQI could affect exertion tolerance in exposed terrain.');
   }
@@ -92,7 +75,7 @@ export const buildFireRiskData = ({ weatherData, alertsData, airQualityData }: B
     label: labelMap[level] || 'Low',
     guidance: guidanceMap[level] || guidanceMap[0],
     reasons: reasons.length > 0 ? reasons : [guidanceMap[0]],
-    alertsConsidered: fireAlertEvents.slice(0, 5).map((alert: any) => ({
+    alertsConsidered: fireAlertEvents.slice(0, 5).map((alert) => ({
       event: alert?.event || 'Alert',
       severity: alert?.severity || 'Unknown',
       expires: alert?.expires || null,
@@ -100,4 +83,9 @@ export const buildFireRiskData = ({ weatherData, alertsData, airQualityData }: B
     })),
     alertsUsed: fireAlertEvents.length,
   };
+};
+
+module.exports = {
+  createUnavailableFireRiskData,
+  buildFireRiskData,
 };

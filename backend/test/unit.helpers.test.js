@@ -1,52 +1,28 @@
-import {
-  applyDerivedOverallAvalancheDanger,
-  buildSatOneLiner,
-} from '../index.js';
-import {
+const {
   normalizeWindDirection,
-  findNearestCardinalFromDegreeSeries,
-  estimateWindGustFromWindSpeed,
-  inferWindGustFromPeriods
-} from '../src/utils/wind.js';
-import {
   parseStartClock,
   buildPlannedStartIso,
-  parseIsoTimeToMsWithReference
-} from '../src/utils/time.js';
-import {
-  buildLayeringGearSuggestions
-} from '../src/utils/gear-suggestions.js';
-import {
-  buildFireRiskData
-} from '../src/utils/fire-risk.js';
-import {
-  buildHeatRiskData
-} from '../src/utils/heat-risk.js';
-import {
+  buildLayeringGearSuggestions,
+  buildFireRiskData,
+  buildHeatRiskData,
   calculateSafetyScore,
-  evaluateAvalancheRelevance
-} from '../src/utils/scoring.js';
-import {
-  findMatchingAvalancheZone
-} from '../src/utils/avalanche-service.js';
-import {
+  findMatchingAvalancheZone,
   resolveAvalancheCenterLink,
-  deriveOverallDangerLevelFromElevations
-} from '../src/utils/avalanche-scraper.js';
-import {
+  resolveNwsAlertSourceLink,
+  evaluateAvalancheRelevance,
+  deriveTerrainCondition,
+  deriveTrailStatus,
+  deriveOverallDangerLevelFromElevations,
+  applyDerivedOverallAvalancheDanger,
   parseAvalancheDetailPayloads,
   pickBestAvalancheDetailCandidate,
   normalizeAvalancheProblemCollection,
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
-} from '../src/utils/avalanche-detail.js';
-import {
-  deriveTerrainCondition,
-  deriveTrailStatus
-} from '../src/utils/terrain-condition.js';
-import {
-  resolveNwsAlertSourceLink
-} from '../src/utils/weather-service.js';
+  buildSatOneLiner,
+} = require('../index');
+const { findNearestCardinalFromDegreeSeries, estimateWindGustFromWindSpeed, inferWindGustFromPeriods } = require('../src/utils/wind');
+const { parseIsoTimeToMsWithReference } = require('../src/utils/time');
 
 test('normalizeWindDirection handles cardinal abbreviations and words', () => {
   expect(normalizeWindDirection('NW')).toBe('NW');
@@ -196,13 +172,13 @@ test('buildSatOneLiner enforces max length cap with ellipsis', () => {
 test('parseIsoTimeToMsWithReference applies reference timezone when timestamp omits offset', () => {
   const parsedMs = parseIsoTimeToMsWithReference('2026-02-21T14:58:00', '2026-02-21T11:00:00-08:00');
   expect(parsedMs).not.toBeNull();
-  expect(new Date(parsedMs as number).toISOString()).toBe('2026-02-21T22:58:00.000Z');
+  expect(new Date(parsedMs).toISOString()).toBe('2026-02-21T22:58:00.000Z');
 });
 
 test('parseIsoTimeToMsWithReference respects explicit timezone in value', () => {
   const parsedMs = parseIsoTimeToMsWithReference('2026-02-21T14:58:00Z', '2026-02-21T11:00:00-08:00');
   expect(parsedMs).not.toBeNull();
-  expect(new Date(parsedMs as number).toISOString()).toBe('2026-02-21T14:58:00.000Z');
+  expect(new Date(parsedMs).toISOString()).toBe('2026-02-21T14:58:00.000Z');
 });
 
 test('resolveAvalancheCenterLink uses CAIC forecast page with coordinates when only homepage is available', () => {
@@ -357,14 +333,13 @@ test('pickBestAvalancheDetailCandidate prefers zone-matched rich payload', () =>
     zoneId: 1740,
     zoneSlug: 'uintas',
     zoneName: 'Uintas',
-    cleanForecastText: (t) => t.trim()
   });
 
   expect(picked).not.toBeNull();
-  expect(picked!.candidate.zone_id).toBe('1740');
-  expect(picked!.problems).toHaveLength(1);
-  expect(picked!.problems[0].likelihood).toBe('likely');
-  expect(Array.isArray(picked!.problems[0].location)).toBe(true);
+  expect(picked.candidate.zone_id).toBe('1740');
+  expect(picked.problems).toHaveLength(1);
+  expect(picked.problems[0].likelihood).toBe('likely');
+  expect(Array.isArray(picked.problems[0].location)).toBe(true);
 });
 
 test('normalizeAvalancheProblemCollection normalizes likelihood and location variants', () => {
@@ -411,10 +386,10 @@ test('extractUtahAvalancheAdvisory extracts bottom line and problem set from UAC
   });
 
   expect(parsed).not.toBeNull();
-  expect(parsed!.bottomLine).toContain('Very dangerous');
-  expect(parsed!.problems).toHaveLength(2);
-  expect(parsed!.problems[0].name).toBe('Wind Drifted Snow');
-  expect(parsed!.publishedTime).toBe('2026-02-20T10:39:00.000Z');
+  expect(parsed.bottomLine).toContain('Very dangerous');
+  expect(parsed.problems).toHaveLength(2);
+  expect(parsed.problems[0].name).toBe('Wind Drifted Snow');
+  expect(parsed.publishedTime).toBe('2026-02-20T10:39:00.000Z');
 });
 
 test('buildLayeringGearSuggestions includes core layering framework and weather shell choice', () => {
@@ -930,20 +905,10 @@ test('deriveOverallDangerLevelFromElevations returns the maximum level regardles
 
 test('applyDerivedOverallAvalancheDanger updates reported overall risk from elevation bands', () => {
   const updated = applyDerivedOverallAvalancheDanger({
-    center: 'Test',
-    center_id: 'TEST',
-    zone: 'Test Zone',
-    relevant: true,
-    relevanceReason: null,
-    problems: [],
-    publishedTime: null,
-    expiresTime: null,
     risk: 'Moderate',
     dangerLevel: 2,
     dangerUnknown: false,
     coverageStatus: 'reported',
-    link: null,
-    bottomLine: null,
     elevations: {
       above: { level: 4, label: 'High' },
       at: { level: 2, label: 'Moderate' },
@@ -976,7 +941,6 @@ test('evaluateAvalancheRelevance marks avalanche relevant when Snowpack Snapshot
       snotel: { snowDepthIn: 14, sweIn: 4.1, distanceKm: 12 },
       nohrsc: { snowDepthIn: 18, sweIn: 5.2 },
     },
-    rainfallData: {}
   });
 
   expect(result.relevant).toBe(true);
@@ -1004,7 +968,6 @@ test('evaluateAvalancheRelevance de-emphasizes avalanche when snowpack is measur
       snotel: { snowDepthIn: 2.4, sweIn: 0.8, distanceKm: 11 },
       nohrsc: { snowDepthIn: 2.1, sweIn: 0.6 },
     },
-    rainfallData: {}
   });
 
   expect(result.relevant).toBe(false);
@@ -1032,7 +995,6 @@ test('evaluateAvalancheRelevance keeps avalanche relevant for measurable snow in
       snotel: { snowDepthIn: 2.8, sweIn: 0.9, distanceKm: 10 },
       nohrsc: { snowDepthIn: 2.3, sweIn: 0.7 },
     },
-    rainfallData: {}
   });
 
   expect(result.relevant).toBe(true);
@@ -1062,7 +1024,6 @@ test('evaluateAvalancheRelevance de-emphasizes avalanche when snowpack is near-z
       snotel: { snowDepthIn: 0, sweIn: 0, distanceKm: 9 },
       nohrsc: { snowDepthIn: 0, sweIn: 0 },
     },
-    rainfallData: {}
   });
 
   expect(result.relevant).toBe(false);
@@ -1090,7 +1051,6 @@ test('evaluateAvalancheRelevance de-emphasizes avalanche when snowpack is near-z
       snotel: { snowDepthIn: 0, sweIn: 0, distanceKm: 12 },
       nohrsc: { snowDepthIn: 0, sweIn: 0 },
     },
-    rainfallData: {}
   });
 
   expect(result.relevant).toBe(false);
@@ -1118,7 +1078,6 @@ test('evaluateAvalancheRelevance still uses winter/elevation fallback when snowp
       snotel: null,
       nohrsc: null,
     },
-    rainfallData: {}
   });
 
   expect(result.relevant).toBe(true);
@@ -1155,11 +1114,7 @@ test('calculateSafetyScore applies lower score for future start due forecast unc
     alertsData: { status: 'none', activeCount: 0, alerts: [] },
     airQualityData: { status: 'ok', usAqi: 30, category: 'Good' },
     fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
-    heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
-    rainfallData: { status: 'ok', anchorTime: nowIso(), totals: {}, expected: {} },
     selectedDate: tomorrowIso,
-    solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
-    selectedStartClock: '09:00',
   });
 
   const futureResult = calculateSafetyScore({
@@ -1168,18 +1123,12 @@ test('calculateSafetyScore applies lower score for future start due forecast unc
     alertsData: { status: 'future_time_not_supported', activeCount: 0, alerts: [] },
     airQualityData: { status: 'ok', usAqi: 30, category: 'Good' },
     fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
-    heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
-    rainfallData: { status: 'ok', anchorTime: nowIso(), totals: {}, expected: {} },
     selectedDate: inTwoDaysIso,
-    solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
-    selectedStartClock: '09:00',
   });
 
   expect(futureResult.score).toBeLessThan(nearResult.score);
   expect(futureResult.explanations.some((line) => /fewer real-time feeds can be projected/i.test(String(line)))).toBe(true);
 });
-
-function nowIso() { return new Date().toISOString(); }
 
 test('calculateSafetyScore ignores AQI when air quality is not applicable for future dates', () => {
   const now = Date.now();
@@ -1207,11 +1156,7 @@ test('calculateSafetyScore ignores AQI when air quality is not applicable for fu
     avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
     alertsData: { status: 'none_for_selected_start', activeCount: 0, alerts: [] },
     fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
-    heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
-    rainfallData: { status: 'ok', anchorTime: nowIso(), totals: {}, expected: {} },
     selectedDate: inTwoDaysIso,
-    solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
-    selectedStartClock: '09:00',
   };
 
   const withApplicableAqi = calculateSafetyScore({
@@ -1247,8 +1192,6 @@ test('calculateSafetyScore does not apply darkness penalty for pre-sunrise alpin
     alertsData: { status: 'none', activeCount: 0, alerts: [] },
     airQualityData: { status: 'ok', usAqi: 25, category: 'Good' },
     fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
-    heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
-    rainfallData: { status: 'ok', anchorTime: nowIso(), totals: {}, expected: {} },
     selectedDate: '2026-02-20',
     solarData: { sunrise: '6:48:21 AM', sunset: '5:44:50 PM' },
   };
@@ -1274,7 +1217,7 @@ test('calculateSafetyScore penalizes persistent wind and precip hazards across t
     airQualityData: { status: 'ok', usAqi: 30, category: 'Good' },
     fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
     heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
-    rainfallData: { status: 'ok', anchorTime: nowIso(), totals: {}, expected: {} },
+    rainfallData: { status: 'ok', anchorTime: new Date().toISOString(), totals: {}, expected: {} },
     selectedDate: new Date().toISOString().slice(0, 10),
     selectedStartClock: '06:00',
     solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
@@ -1328,7 +1271,7 @@ test('calculateSafetyScore penalizes persistent wind and precip hazards across t
 });
 
 test('calculateSafetyScore incorporates rainfall totals, expected precipitation, and heat risk synthesis', () => {
-  const nowIsoStr = nowIso();
+  const nowIso = new Date().toISOString();
   const dryResult = calculateSafetyScore({
     weatherData: {
       description: 'Partly Cloudy',
@@ -1339,7 +1282,7 @@ test('calculateSafetyScore incorporates rainfall totals, expected precipitation,
       temp: 58,
       feelsLike: 58,
       isDaytime: true,
-      issuedTime: nowIsoStr,
+      issuedTime: nowIso,
       trend: [],
     },
     avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
@@ -1350,11 +1293,11 @@ test('calculateSafetyScore incorporates rainfall totals, expected precipitation,
     rainfallData: {
       status: 'ok',
       source: 'Open-Meteo precipitation',
-      anchorTime: nowIsoStr,
+      anchorTime: nowIso,
       totals: { rainPast24hIn: 0.0, snowPast24hIn: 0.0 },
       expected: { rainWindowIn: 0.0, snowWindowIn: 0.0 },
     },
-    selectedDate: nowIsoStr.slice(0, 10),
+    selectedDate: nowIso.slice(0, 10),
     selectedStartClock: '09:00',
     solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
   });
@@ -1369,7 +1312,7 @@ test('calculateSafetyScore incorporates rainfall totals, expected precipitation,
       temp: 78,
       feelsLike: 84,
       isDaytime: true,
-      issuedTime: nowIsoStr,
+      issuedTime: nowIso,
       trend: [],
     },
     avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
@@ -1380,11 +1323,11 @@ test('calculateSafetyScore incorporates rainfall totals, expected precipitation,
     rainfallData: {
       status: 'ok',
       source: 'Open-Meteo precipitation',
-      anchorTime: nowIsoStr,
+      anchorTime: nowIso,
       totals: { rainPast24hIn: 0.82, snowPast24hIn: 2.1 },
       expected: { rainWindowIn: 0.55, snowWindowIn: 1.8 },
     },
-    selectedDate: nowIsoStr.slice(0, 10),
+    selectedDate: nowIso.slice(0, 10),
     selectedStartClock: '09:00',
     solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
   });

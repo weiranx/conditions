@@ -1,26 +1,19 @@
-import express, { Express } from 'express';
-import cors from 'cors';
-import compression from 'compression';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import crypto from 'node:crypto';
+const express = require('express');
+const cors = require('cors');
+const compression = require('compression');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const crypto = require('node:crypto');
 
-interface CreateAppOptions {
-  isProduction: boolean;
-  corsAllowlist: string[];
-  rateLimitWindowMs: number;
-  rateLimitMaxRequests: number;
-}
-
-export const createApp = ({
+const createApp = ({
   isProduction,
   corsAllowlist,
   rateLimitWindowMs,
   rateLimitMaxRequests,
-}: CreateAppOptions): Express => {
+}) => {
   const app = express();
 
-  const corsOptions: cors.CorsOptions = {
+  const corsOptions = {
     origin(origin, callback) {
       if (!origin) {
         callback(null, true);
@@ -41,7 +34,7 @@ export const createApp = ({
   app.use(helmet());
   app.use(express.json({ limit: '1mb' }));
 
-  app.use((req: any, res: any, next) => {
+  app.use((req, res, next) => {
     const requestId = crypto.randomUUID();
     const startedAt = Date.now();
     req.requestId = requestId;
@@ -68,4 +61,8 @@ export const createApp = ({
   );
 
   return app;
+};
+
+module.exports = {
+  createApp,
 };

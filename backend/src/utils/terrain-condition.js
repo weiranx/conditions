@@ -1,35 +1,10 @@
-const toFinite = (value: any): number | null => {
+const toFinite = (value) => {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
     return null;
   }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 };
-
-export interface SnowProfile {
-  code: string;
-  label: string;
-  summary: string;
-  confidence: 'high' | 'medium' | 'low';
-  reasons: string[];
-}
-
-interface DeriveSnowProfileOptions {
-  hasSnowCoverage: boolean;
-  hasSnowWeatherSignal: boolean;
-  hasFreshSnowSignal: boolean;
-  hasFreezeThawSignal: boolean;
-  hasRainAccumulationSignal: boolean;
-  wetTrendHours: number;
-  snowTrendHours: number;
-  tempF: number | null;
-  precipChance: number | null;
-  freezeThawMinTempF: number | null;
-  freezeThawMaxTempF: number | null;
-  tempContextWindowHours: number;
-  maxDepthIn: number | null;
-  maxSweIn: number | null;
-}
 
 const deriveSnowProfile = ({
   hasSnowCoverage,
@@ -46,7 +21,7 @@ const deriveSnowProfile = ({
   tempContextWindowHours,
   maxDepthIn,
   maxSweIn,
-}: DeriveSnowProfileOptions): SnowProfile => {
+}) => {
   const hasAnySnowSignal =
     hasSnowCoverage ||
     hasSnowWeatherSignal ||
@@ -55,8 +30,8 @@ const deriveSnowProfile = ({
     (maxDepthIn !== null && maxDepthIn >= 0.5) ||
     (maxSweIn !== null && maxSweIn >= 0.1);
 
-  const reasons: string[] = [];
-  const addReason = (reason: string) => {
+  const reasons = [];
+  const addReason = (reason) => {
     if (typeof reason === 'string' && reason.trim()) {
       reasons.push(reason.trim());
     }
@@ -130,12 +105,12 @@ const deriveSnowProfile = ({
 
   if (
     hasSnowCoverage &&
-    ((tempF !== null && (tempF as number) >= 34) || (freezeThawMaxTempF !== null && (freezeThawMaxTempF as number) >= 36)) &&
-    (hasRainAccumulationSignal || wetTrendHours >= 1 || (precipChance !== null && (precipChance as number) >= 45))
+    ((tempF !== null && tempF >= 34) || (freezeThawMaxTempF !== null && freezeThawMaxTempF >= 36)) &&
+    (hasRainAccumulationSignal || wetTrendHours >= 1 || (precipChance !== null && precipChance >= 45))
   ) {
     addReason('Warm/wet signal on top of snowpack supports wet, heavy, or slushy surface snow.');
     if (precipChance !== null) {
-      addReason(`Precipitation chance (${Math.round(precipChance as number)}%) increases wet-snow likelihood.`);
+      addReason(`Precipitation chance (${Math.round(precipChance)}%) increases wet-snow likelihood.`);
     }
     return {
       code: 'wet_slushy_snow',
@@ -149,12 +124,12 @@ const deriveSnowProfile = ({
   if (
     hasSnowCoverage &&
     !hasFreshSnowSignal &&
-    ((tempF !== null && (tempF as number) <= 30) || (freezeThawMinTempF !== null && (freezeThawMinTempF as number) <= 28)) &&
+    ((tempF !== null && tempF <= 30) || (freezeThawMinTempF !== null && freezeThawMinTempF <= 28)) &&
     wetTrendHours === 0
   ) {
     addReason('Cold, non-stormy snowpack signal favors firm or icy surface conditions.');
     if (tempF !== null) {
-      addReason(`Current temperature near ${Math.round(tempF as number)}F supports surface hardening/refreeze.`);
+      addReason(`Current temperature near ${Math.round(tempF)}F supports surface hardening/refreeze.`);
     }
     return {
       code: 'icy_hardpack',
@@ -175,47 +150,7 @@ const deriveSnowProfile = ({
   };
 };
 
-export interface TerrainConditionSignals {
-  tempF: number | null;
-  precipChance: number | null;
-  humidity: number | null;
-  windMph: number | null;
-  gustMph: number | null;
-  wetTrendHours: number;
-  snowTrendHours: number;
-  rain12hIn: number | null;
-  rain24hIn: number | null;
-  rain48hIn: number | null;
-  snow12hIn: number | null;
-  snow24hIn: number | null;
-  snow48hIn: number | null;
-  expectedRainWindowIn: number | null;
-  expectedSnowWindowIn: number | null;
-  maxSnowDepthIn: number | null;
-  maxSweIn: number | null;
-  snotelDistanceKm: number | null;
-  tempContextWindowHours: number;
-  tempContextMinF: number | null;
-  tempContextMaxF: number | null;
-  tempContextOvernightLowF: number | null;
-  tempContextDaytimeHighF: number | null;
-  freezeThawMinTempF: number | null;
-  freezeThawMaxTempF: number | null;
-}
-
-export interface TerrainConditionResult {
-  code: string;
-  label: string;
-  impact: 'low' | 'moderate' | 'high';
-  recommendedTravel: string;
-  snowProfile: SnowProfile;
-  confidence: 'high' | 'medium' | 'low';
-  summary: string;
-  reasons: string[];
-  signals: TerrainConditionSignals;
-}
-
-export const deriveTerrainCondition = (weatherData: any, snowpackData: any = null, rainfallData: any = null): TerrainConditionResult => {
+const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData = null) => {
 
   const description = String(weatherData?.description || '').toLowerCase();
   const precipChance = toFinite(weatherData?.precipChance);
@@ -227,21 +162,21 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
   const nearTermTrend = trend.slice(0, 6);
   const contextTrend = trend.slice(0, 24);
-  const wetTrendHours = nearTermTrend.filter((point: any) => {
+  const wetTrendHours = nearTermTrend.filter((point) => {
     const pointPrecip = toFinite(point?.precipChance);
     const pointCondition = String(point?.condition || '').toLowerCase();
     return (pointPrecip !== null && pointPrecip >= 55) || /rain|drizzle|shower|thunder|storm|wet/.test(pointCondition);
   }).length;
-  const snowTrendHours = nearTermTrend.filter((point: any) => {
+  const snowTrendHours = nearTermTrend.filter((point) => {
     const pointPrecip = toFinite(point?.precipChance);
     const pointTemp = toFinite(point?.temp);
     const pointCondition = String(point?.condition || '').toLowerCase();
     return (pointPrecip !== null && pointPrecip >= 35 && pointTemp !== null && pointTemp <= 34) || /snow|sleet|freezing|flurr|wintry|ice/.test(pointCondition);
   }).length;
-  const trendTemps = nearTermTrend.map((point: any) => toFinite(point?.temp)).filter((value: any): value is number => value !== null);
+  const trendTemps = nearTermTrend.map((point) => toFinite(point?.temp)).filter((value) => value !== null);
   const trendMinTemp = trendTemps.length > 0 ? Math.min(...trendTemps) : null;
   const trendMaxTemp = trendTemps.length > 0 ? Math.max(...trendTemps) : null;
-  const contextTrendTemps = contextTrend.map((point: any) => toFinite(point?.temp)).filter((value: any): value is number => value !== null);
+  const contextTrendTemps = contextTrend.map((point) => toFinite(point?.temp)).filter((value) => value !== null);
   const contextTrendMinTemp = contextTrendTemps.length > 0 ? Math.min(...contextTrendTemps) : null;
   const contextTrendMaxTemp = contextTrendTemps.length > 0 ? Math.max(...contextTrendTemps) : null;
   const tempContext24h = weatherData?.temperatureContext24h || null;
@@ -258,8 +193,8 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
   const snotelDistanceKm = toFinite(snotel?.distanceKm);
   const snotelNearby = snotelDistanceKm === null || snotelDistanceKm <= 80;
 
-  const depthSamples: number[] = [];
-  const sweSamples: number[] = [];
+  const depthSamples = [];
+  const sweSamples = [];
   const snotelDepth = toFinite(snotel?.snowDepthIn);
   const snotelSwe = toFinite(snotel?.sweIn);
   const nohrscDepth = toFinite(nohrsc?.snowDepthIn);
@@ -278,10 +213,10 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
 
   const hasSnowWeatherSignal =
     /snow|sleet|ice|freezing|blizzard|flurr|graupel|rime|wintry/.test(description) ||
-    (tempF !== null && (tempF as number) <= 34 && precipChance !== null && (precipChance as number) >= 35);
+    (tempF !== null && tempF <= 34 && precipChance !== null && precipChance >= 35);
   const hasRainWeatherSignal =
     /rain|drizzle|shower|thunder|storm|wet/.test(description) ||
-    (precipChance !== null && (precipChance as number) >= 60 && tempF !== null && (tempF as number) > 34);
+    (precipChance !== null && precipChance >= 60 && tempF !== null && tempF > 34);
   const rain12hIn = toFinite(rainfallData?.totals?.rainPast12hIn ?? rainfallData?.totals?.past12hIn);
   const rain24hIn = toFinite(rainfallData?.totals?.rainPast24hIn ?? rainfallData?.totals?.past24hIn);
   const rain48hIn = toFinite(rainfallData?.totals?.rainPast48hIn ?? rainfallData?.totals?.past48hIn);
@@ -305,10 +240,10 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
     (expectedSnowWindowIn !== null && expectedSnowWindowIn >= 1.0);
   const hasFreezeThawSignal =
     (freezeThawMinTempF !== null && freezeThawMaxTempF !== null && freezeThawMinTempF <= 31 && freezeThawMaxTempF >= 35) ||
-    (tempF !== null && (tempF as number) >= 30 && (tempF as number) <= 36 && precipChance !== null && (precipChance as number) >= 35);
+    (tempF !== null && tempF >= 30 && tempF <= 36 && precipChance !== null && precipChance >= 35);
   const hasDryWindySignal =
     (humidity !== null && humidity <= 30) &&
-    (precipChance === null || (precipChance as number) < 20) &&
+    (precipChance === null || precipChance < 20) &&
     ((gustMph !== null && gustMph >= 25) || (windMph !== null && windMph >= 16));
   const weatherUnavailableSignal = !description || /weather data unavailable|weather unavailable|unavailable/.test(description);
   const noBroadSnowSignal =
@@ -346,11 +281,11 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
 
   let code = 'variable_surface';
   let label = '🌲 Variable Surface';
-  let impact: 'low' | 'moderate' | 'high' = 'moderate';
+  let impact = 'moderate';
   let recommendedTravel = 'Use adaptable pacing and verify traction/footing at key transitions.';
-  const reasons: string[] = [];
+  const reasons = [];
   let evidenceWeight = 0;
-  const addReason = (reason: string, weight = 1) => {
+  const addReason = (reason, weight = 1) => {
     if (typeof reason !== 'string' || !reason.trim()) {
       return;
     }
@@ -366,9 +301,9 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
     addReason('Weather feed is unavailable, so terrain classification confidence is limited.', 1);
   } else if (
     noSnowOrWetSignal &&
-    (precipChance === null || (precipChance as number) <= 25) &&
+    (precipChance === null || precipChance <= 25) &&
     (humidity === null || humidity <= 75) &&
-    (tempF === null || (tempF as number) >= 35)
+    (tempF === null || tempF >= 35)
   ) {
     code = 'dry_firm';
     label = '✅ Dry / Firm Trail';
@@ -376,7 +311,7 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
     recommendedTravel = 'Traction is generally favorable; maintain normal pacing and watch for isolated loose or rocky sections.';
     addReason('No strong snow, rain, or freeze-thaw signal is present in recent/expected conditions.', 2);
     if (precipChance !== null) {
-      addReason(`Low precipitation chance (${Math.round(precipChance as number)}%) supports drier surfaces.`, 1);
+      addReason(`Low precipitation chance (${Math.round(precipChance)}%) supports drier surfaces.`, 1);
     }
     if (humidity !== null) {
       addReason(`Humidity near ${Math.round(humidity)}% indicates limited moisture loading at the surface.`, 1);
@@ -442,8 +377,8 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
         1,
       );
     }
-    if (tempF !== null && (tempF as number) <= 34) {
-      addReason(`Temperature near ${Math.round(tempF as number)}F supports firm/refrozen surface conditions.`, 1);
+    if (tempF !== null && tempF <= 34) {
+      addReason(`Temperature near ${Math.round(tempF)}F supports firm/refrozen surface conditions.`, 1);
     }
   } else if (hasRainWeatherSignal || wetTrendHours >= 1 || hasRainAccumulationSignal || hasExpectedRainSignal) {
     code = 'wet_muddy';
@@ -470,26 +405,26 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
     if (hasRainWeatherSignal) {
       addReason(`Forecast condition carries wet surface cues ("${weatherData?.description || 'rain signal'}").`, 1);
     }
-  } else if (hasFreezeThawSignal || (tempF !== null && (tempF as number) <= 38 && precipChance !== null && (precipChance as number) >= 35)) {
+  } else if (hasFreezeThawSignal || (tempF !== null && tempF <= 38 && precipChance !== null && precipChance >= 35)) {
     code = 'cold_slick';
     label = '🧊 Cold / Slick';
     impact = 'moderate';
     recommendedTravel = 'Expect patchy slick surfaces in shade and early hours; prioritize stable footing and conservative pace.';
     if (hasFreezeThawSignal && freezeThawMinTempF !== null && freezeThawMaxTempF !== null) {
       addReason(
-        `Freeze-thaw signal in next ${Math.round(tempContextWindowHours)} hours (${Math.round(freezeThawMinTempF as number)}F to ${Math.round(
-          freezeThawMaxTempF as number,
+        `Freeze-thaw signal in next ${Math.round(tempContextWindowHours)} hours (${Math.round(freezeThawMinTempF)}F to ${Math.round(
+          freezeThawMaxTempF,
         )}F).`,
         2,
       );
     }
     if (tempF !== null) {
-      addReason(`Current temperature near freezing (${Math.round(tempF as number)}F).`, 1);
+      addReason(`Current temperature near freezing (${Math.round(tempF)}F).`, 1);
     }
-    if (precipChance !== null && (precipChance as number) >= 35) {
-      addReason(`Moisture risk remains elevated (${Math.round(precipChance as number)}% precip chance).`, 1);
+    if (precipChance !== null && precipChance >= 35) {
+      addReason(`Moisture risk remains elevated (${Math.round(precipChance)}% precip chance).`, 1);
     }
-  } else if (hasDryWindySignal || (humidity !== null && humidity < 30 && (precipChance === null || (precipChance as number) < 20))) {
+  } else if (hasDryWindySignal || (humidity !== null && humidity < 30 && (precipChance === null || precipChance < 20))) {
     code = 'dry_loose';
     label = '🌵 Dry / Loose';
     impact = 'moderate';
@@ -498,10 +433,10 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
       addReason(`Low humidity (${Math.round(humidity)}%) supports loose/dry surface texture.`, 1);
     }
     if (gustMph !== null || windMph !== null) {
-      addReason(`Wind exposure ${Math.round((gustMph ?? windMph ?? 0) as number)} mph can dry and loosen top surface layers.`, 1);
+      addReason(`Wind exposure ${Math.round(gustMph ?? windMph ?? 0)} mph can dry and loosen top surface layers.`, 1);
     }
     if (precipChance !== null) {
-      addReason(`Low moisture signal (${Math.round(precipChance as number)}% precip chance).`, 1);
+      addReason(`Low moisture signal (${Math.round(precipChance)}% precip chance).`, 1);
     }
   } else {
     code = 'mixed_variable';
@@ -510,7 +445,7 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
     recommendedTravel = 'Surface may change quickly across aspect/elevation; check footing often and keep route options flexible.';
     addReason('No single dominant wet, snow/ice, or freeze-thaw signal in current upstream data.', 1);
     if (tempF !== null) {
-      addReason(`Temperature ${Math.round(tempF as number)}F with ${precipChance !== null ? `${Math.round(precipChance as number)}%` : 'unknown'} precip chance supports mixed surface outcomes.`, 1);
+      addReason(`Temperature ${Math.round(tempF)}F with ${precipChance !== null ? `${Math.round(precipChance)}%` : 'unknown'} precip chance supports mixed surface outcomes.`, 1);
     }
   }
 
@@ -562,7 +497,12 @@ export const deriveTerrainCondition = (weatherData: any, snowpackData: any = nul
   };
 };
 
-export const deriveTrailStatus = (weatherData: any, snowpackData: any = null, rainfallData: any = null): string => {
+const deriveTrailStatus = (weatherData, snowpackData = null, rainfallData = null) => {
   const terrainCondition = deriveTerrainCondition(weatherData, snowpackData, rainfallData);
   return terrainCondition?.label || '🌲 Variable Surface';
+};
+
+module.exports = {
+  deriveTerrainCondition,
+  deriveTrailStatus,
 };

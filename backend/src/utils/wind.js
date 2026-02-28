@@ -1,4 +1,4 @@
-export const CARDINAL_DIRECTIONS = new Set([
+const CARDINAL_DIRECTIONS = new Set([
   'N',
   'NNE',
   'NE',
@@ -17,7 +17,7 @@ export const CARDINAL_DIRECTIONS = new Set([
   'NNW',
 ]);
 
-export const normalizeWindDirection = (value: string | null | undefined): string | null => {
+const normalizeWindDirection = (value) => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -38,7 +38,7 @@ export const normalizeWindDirection = (value: string | null | undefined): string
     return compact;
   }
 
-  const wordMap: [string, string][] = [
+  const wordMap = [
     ['NORTH NORTHWEST', 'NNW'],
     ['NORTH NORTHEAST', 'NNE'],
     ['SOUTH SOUTHEAST', 'SSE'],
@@ -67,7 +67,7 @@ export const normalizeWindDirection = (value: string | null | undefined): string
   return null;
 };
 
-export const parseWindMph = (input: number | string | null | undefined, fallback: number = 0): number => {
+const parseWindMph = (input, fallback = 0) => {
   if (typeof input === 'number' && Number.isFinite(input)) {
     return Math.max(0, Math.round(input));
   }
@@ -82,7 +82,7 @@ export const parseWindMph = (input: number | string | null | undefined, fallback
   return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
 };
 
-export const estimateWindGustFromWindSpeed = (windSpeedMph: number | string | null | undefined): number => {
+const estimateWindGustFromWindSpeed = (windSpeedMph) => {
   const wind = Number(windSpeedMph);
   if (!Number.isFinite(wind) || wind <= 0) {
     return 0;
@@ -100,12 +100,7 @@ export const estimateWindGustFromWindSpeed = (windSpeedMph: number | string | nu
   return Math.round(wind * 1.45);
 };
 
-export interface WindGustResult {
-  gustMph: number;
-  source: 'reported' | 'estimated_from_wind' | 'inferred_nearby';
-}
-
-export const inferWindGustFromPeriods = (periods: any[] | null | undefined, anchorIndex: number, windSpeedMph: number | string | null | undefined): WindGustResult => {
+const inferWindGustFromPeriods = (periods, anchorIndex, windSpeedMph) => {
   const wind = Number.isFinite(Number(windSpeedMph)) ? Math.max(0, Math.round(Number(windSpeedMph))) : 0;
   const fallback = Math.max(wind, estimateWindGustFromWindSpeed(wind));
 
@@ -113,7 +108,7 @@ export const inferWindGustFromPeriods = (periods: any[] | null | undefined, anch
     return { gustMph: fallback, source: 'estimated_from_wind' };
   }
 
-  const directGust = parseWindMph(periods[anchorIndex]?.windGust, null as any);
+  const directGust = parseWindMph(periods[anchorIndex]?.windGust, null);
   if (Number.isFinite(directGust)) {
     return { gustMph: Math.max(wind, Math.round(directGust)), source: 'reported' };
   }
@@ -124,12 +119,12 @@ export const inferWindGustFromPeriods = (periods: any[] | null | undefined, anch
       if (index < 0 || index >= periods.length) {
         continue;
       }
-      const nearbyGust = parseWindMph(periods[index]?.windGust, null as any);
+      const nearbyGust = parseWindMph(periods[index]?.windGust, null);
       if (!Number.isFinite(nearbyGust)) {
         continue;
       }
 
-      const nearbyWind = parseWindMph(periods[index]?.windSpeed, null as any);
+      const nearbyWind = parseWindMph(periods[index]?.windSpeed, null);
       if (Number.isFinite(nearbyWind) && nearbyWind > 0 && wind > 0) {
         const ratio = Math.min(1.8, Math.max(1.05, nearbyGust / nearbyWind));
         return { gustMph: Math.max(wind, Math.round(wind * ratio)), source: 'inferred_nearby' };
@@ -142,7 +137,7 @@ export const inferWindGustFromPeriods = (periods: any[] | null | undefined, anch
   return { gustMph: fallback, source: 'estimated_from_wind' };
 };
 
-export const findNearestWindDirection = (periods: any[] | null | undefined, anchorIndex: number): string | null => {
+const findNearestWindDirection = (periods, anchorIndex) => {
   if (!Array.isArray(periods) || periods.length === 0 || !Number.isInteger(anchorIndex)) {
     return null;
   }
@@ -170,7 +165,7 @@ export const findNearestWindDirection = (periods: any[] | null | undefined, anch
   return null;
 };
 
-export const windDegreesToCardinal = (degrees: number | string | null | undefined): string | null => {
+const windDegreesToCardinal = (degrees) => {
   if (degrees === null || degrees === undefined) {
     return null;
   }
@@ -187,7 +182,7 @@ export const windDegreesToCardinal = (degrees: number | string | null | undefine
   return labels[index];
 };
 
-export const findNearestCardinalFromDegreeSeries = (degreeSeries: (number | string | null | undefined)[] | null | undefined, anchorIndex: number): string | null => {
+const findNearestCardinalFromDegreeSeries = (degreeSeries, anchorIndex) => {
   if (!Array.isArray(degreeSeries) || degreeSeries.length === 0 || !Number.isInteger(anchorIndex)) {
     return null;
   }
@@ -216,4 +211,14 @@ export const findNearestCardinalFromDegreeSeries = (degreeSeries: (number | stri
   }
 
   return null;
+};
+
+module.exports = {
+  parseWindMph,
+  estimateWindGustFromWindSpeed,
+  inferWindGustFromPeriods,
+  normalizeWindDirection,
+  findNearestWindDirection,
+  windDegreesToCardinal,
+  findNearestCardinalFromDegreeSeries,
 };
