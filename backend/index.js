@@ -3020,6 +3020,7 @@ const safetyHandler = async (req, res) => {
 
   try {
     const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
+    const avyMapLayerPromise = getAvalancheMapLayer(fetchOptions);
 
     try {
       // 1. Get NOAA grid data
@@ -3309,9 +3310,37 @@ const safetyHandler = async (req, res) => {
       }
     }
 
+  const airQualityTargetTime =
+    selectedForecastPeriod?.startTime ||
+    (selectedForecastDate ? `${selectedForecastDate}T12:00:00Z` : new Date().toISOString());
+  const objectiveTimeZone = typeof weatherData?.timezone === 'string' ? weatherData.timezone.trim() : '';
+  const objectiveTodayDate = dateKeyInTimeZone(new Date(), objectiveTimeZone || null);
+  const selectedDateForAirQuality = selectedForecastDate || requestedDate || objectiveTodayDate;
+  const useCurrentDayAirQuality =
+    Boolean(selectedDateForAirQuality)
+    && Boolean(objectiveTodayDate)
+    && selectedDateForAirQuality === objectiveTodayDate;
+  const alertTargetTimeIso = buildPlannedStartIso({
+    selectedDate: selectedForecastDate || requestedDate || '',
+    startClock: requestedStartClock,
+    referenceIso: weatherData?.forecastStartTime || selectedForecastPeriod?.startTime || weatherData?.issuedTime || null,
+  });
+
+  const parallelBatchPromise = Promise.allSettled([
+    fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso),
+    useCurrentDayAirQuality
+      ? fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)
+      : Promise.resolve({
+          ...createUnavailableAirQualityData('not_applicable_future_date'),
+          note: 'Air quality is current-day only and is not applied to future-date forecasts.',
+        }),
+    fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions),
+    fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
+  ]);
+
 	    // 3. Get Live Avalanche Data using Map Layer + Point in Polygon
 	    try {
-	      const avyJson = await getAvalancheMapLayer(fetchOptions);
+	      const avyJson = await avyMapLayerPromise;
 	      if (avyJson?.features) {
         const zoneMatch = findMatchingAvalancheZone(avyJson.features, parsedLat, parsedLon);
         const matchingZone = zoneMatch.feature;
@@ -3413,47 +3442,45 @@ const safetyHandler = async (req, res) => {
 	              });
 	            }
 
-		            for (const attempt of detailAttempts) {
-		              try {
-		                avyLog(`[Avy] Trying ${attempt.label}: ${attempt.url}`);
-		                const candidateRes = await fetchWithTimeout(attempt.url, fetchOptions);
-		                if (!candidateRes.ok) {
-		                  avyLog(`[Avy] ${attempt.label} failed with status ${candidateRes.status}`);
-		                  continue;
-		                }
-
-		                const candidateText = await candidateRes.text();
-                const candidatePayloads = parseAvalancheDetailPayloads(candidateText);
-                if (!candidatePayloads.length) {
-                  avyLog(`[Avy] ${attempt.label} returned non-JSON payload.`);
-                  continue;
-                }
-
-                const bestCandidate = pickBestAvalancheDetailCandidate({
-                  payloads: candidatePayloads,
-                  centerId: props.center_id,
-                  zoneId,
-                  zoneSlug,
-                  zoneName: props.name,
-                  cleanForecastText,
-                });
-
-                if (!bestCandidate) {
-                  avyLog(`[Avy] ${attempt.label} returned shell data. Trying next endpoint.`);
-                  continue;
-                }
-
-			                detailDet = bestCandidate.candidate;
-                detailProblems = bestCandidate.problems;
-			                avyLog(
-                  `[Avy] Using ${attempt.label} for ${props.center_id} ` +
-                    `(score ${bestCandidate.score}, problems ${detailProblems.length}).`,
+		            const detailSettled = await Promise.allSettled(
+                detailAttempts.map(async (attempt) => {
+                  avyLog(`[Avy] Trying ${attempt.label}: ${attempt.url}`);
+                  const candidateRes = await fetchWithTimeout(attempt.url, fetchOptions);
+                  if (!candidateRes.ok) throw new Error(`${attempt.label} HTTP ${candidateRes.status}`);
+                  const candidateText = await candidateRes.text();
+                  const candidatePayloads = parseAvalancheDetailPayloads(candidateText);
+                  if (!candidatePayloads.length) throw new Error(`${attempt.label} non-JSON payload`);
+                  const bestCandidate = pickBestAvalancheDetailCandidate({
+                    payloads: candidatePayloads,
+                    centerId: props.center_id,
+                    zoneId,
+                    zoneSlug,
+                    zoneName: props.name,
+                    cleanForecastText,
+                  });
+                  if (!bestCandidate) throw new Error(`${attempt.label} shell data`);
+                  return { attempt, ...bestCandidate };
+                })
+              );
+              const detailWinners = detailSettled
+                .filter((r) => r.status === 'fulfilled')
+                .map((r) => r.value)
+                .sort((a, b) => b.score - a.score);
+              if (detailWinners.length) {
+                const winner = detailWinners[0];
+                detailDet = winner.candidate;
+                detailProblems = winner.problems;
+                avyLog(
+                  `[Avy] Using ${winner.attempt.label} for ${props.center_id} ` +
+                    `(parallel winner, score ${winner.score}, problems ${detailProblems.length}).`,
                 );
-			                break;
-			              } catch (attemptErr) {
-			                avyLog(`[Avy] ${attempt.label} parse/fetch error: ${attemptErr.message}`);
-			              }
-			            }
+              } else {
+                detailSettled.forEach((r, i) => {
+                  if (r.status === 'rejected') {
+                    avyLog(`[Avy] ${detailAttempts[i]?.label} parse/fetch error: ${r.reason?.message || r.reason}`);
+                  }
+                });
+              }
 
 		            // MWAC occasionally returns generic API link values; prefer a direct forecast page link fallback.
 		            if (props.center_id === 'MWAC') {
@@ -3698,24 +3725,6 @@ const safetyHandler = async (req, res) => {
 
     avalancheData = applyDerivedOverallAvalancheDanger(avalancheData);
 
-    const airQualityTargetTime =
-      selectedForecastPeriod?.startTime ||
-      (selectedForecastDate ? `${selectedForecastDate}T12:00:00Z` : new Date().toISOString());
-
-    const objectiveTimeZone = typeof weatherData?.timezone === 'string' ? weatherData.timezone.trim() : '';
-    const objectiveTodayDate = dateKeyInTimeZone(new Date(), objectiveTimeZone || null);
-    const selectedDateForAirQuality = selectedForecastDate || requestedDate || objectiveTodayDate;
-    const useCurrentDayAirQuality =
-      Boolean(selectedDateForAirQuality)
-      && Boolean(objectiveTodayDate)
-      && selectedDateForAirQuality === objectiveTodayDate;
-
-    const alertTargetTimeIso = buildPlannedStartIso({
-      selectedDate: selectedForecastDate || requestedDate || '',
-      startClock: requestedStartClock,
-      referenceIso: weatherData?.forecastStartTime || selectedForecastPeriod?.startTime || weatherData?.issuedTime || null,
-    });
-
     const avalancheTargetMs = parseIsoTimeToMs(alertTargetTimeIso);
     const avalancheExpiresMs = parseIsoTimeToMsWithReference(avalancheData?.expiresTime, alertTargetTimeIso);
     if (
@@ -3753,17 +3762,7 @@ const safetyHandler = async (req, res) => {
       }
     }
 
-    const [alertsResult, airQualityResult, rainfallResult, snowpackResult] = await Promise.allSettled([
-      fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso),
-      useCurrentDayAirQuality
-        ? fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)
-        : Promise.resolve({
-            ...createUnavailableAirQualityData('not_applicable_future_date'),
-            note: 'Air quality is current-day only and is not applied to future-date forecasts.',
-          }),
-      fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions),
-      fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
-    ]);
+    const [alertsResult, airQualityResult, rainfallResult, snowpackResult] = await parallelBatchPromise;
 
     if (alertsResult.status === 'fulfilled') {
       alertsData = alertsResult.value;
