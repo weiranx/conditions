@@ -28,4 +28,4 @@ test('GET /api/safety?lat=46.85&lon=-121.76 returns safety report', async () => 
     // If external APIs fail, it might return a 500 but still have partial data
     expect([200, 500]).toContain(res.status);
   }
-});
+}, 35000);
