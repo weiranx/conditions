@@ -1,4 +1,6 @@
-const normalizeSearchText = (value = '') =>
+import { Express, Request, Response } from 'express';
+
+const normalizeSearchText = (value: string = '') =>
   String(value)
     .toLowerCase()
     .replace(/[.,]/g, ' ')
@@ -6,8 +8,15 @@ const normalizeSearchText = (value = '') =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks }) => {
-  app.get('/api/search', async (req, res) => {
+interface RegisterSearchRoutesOptions {
+  app: Express;
+  fetchWithTimeout: Function;
+  defaultFetchHeaders: any;
+  peaks: any[];
+}
+
+export const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks }: RegisterSearchRoutesOptions) => {
+  app.get('/api/search', async (req: Request, res: Response) => {
     const { q } = req.query;
     const query = typeof q === 'string' ? q.trim().slice(0, 120) : '';
     const normalizedQuery = normalizeSearchText(query);
@@ -31,7 +40,7 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
       }
 
       const payload = await response.json();
-      const apiResults = payload.map((item) => ({
+      const apiResults = payload.map((item: any) => ({
         name: item.display_name,
         lat: parseFloat(item.lat),
         lon: parseFloat(item.lon),
@@ -49,8 +58,4 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
       return res.json(localMatches);
     }
   });
-};
-
-module.exports = {
-  registerSearchRoutes,
 };

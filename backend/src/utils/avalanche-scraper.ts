@@ -1,6 +1,6 @@
-const { FT_PER_METER } = require('./weather');
+import { FT_PER_METER } from './weather';
 
-const decodeHtmlEntities = (input = "") => {
+export const decodeHtmlEntities = (input: string = ""): string => {
   return input
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -10,7 +10,7 @@ const decodeHtmlEntities = (input = "") => {
     .replace(/&gt;/g, ">");
 };
 
-const cleanForecastText = (input = "") => {
+export const cleanForecastText = (input: string = ""): string => {
   return decodeHtmlEntities(input)
     .replace(/<[^>]*>?/gm, " ")
     .replace(/\\n/g, " ")
@@ -18,20 +18,24 @@ const cleanForecastText = (input = "") => {
     .trim();
 };
 
-const scoreBottomLineCandidate = (text = "") => {
+export const scoreBottomLineCandidate = (text: string = ""): number => {
   let score = text.length;
   if (/avalanche|danger|snow|terrain|slab|trigger|wind/i.test(text)) score += 200;
   if (text.length > 1500) score -= 250;
   return score;
 };
 
-const pickBestBottomLine = (candidates = []) => {
-  const cleaned = candidates.map(cleanForecastText).filter(Boolean).filter(t => t.length >= 40);
+export const pickBestBottomLine = (candidates: (string | null | undefined)[] = []): string | null => {
+  const cleaned = candidates
+    .filter((c): c is string => typeof c === 'string')
+    .map(cleanForecastText)
+    .filter(Boolean)
+    .filter(t => t.length >= 40);
   if (!cleaned.length) return null;
   return cleaned.sort((a, b) => scoreBottomLineCandidate(b) - scoreBottomLineCandidate(a))[0];
 };
 
-const normalizeHttpUrl = (value) => {
+export const normalizeHttpUrl = (value: string | null | undefined): string | null => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -48,7 +52,7 @@ const normalizeHttpUrl = (value) => {
   return null;
 };
 
-const normalizeExternalLink = (value) => {
+export const normalizeExternalLink = (value: string | null | undefined): string | null => {
   const normalized = normalizeHttpUrl(value);
   if (!normalized) {
     return null;
@@ -69,13 +73,13 @@ const normalizeExternalLink = (value) => {
   }
 };
 
-const isAvalancheApiLink = (value) =>
+export const isAvalancheApiLink = (value: string | null | undefined): boolean =>
   typeof value === 'string' && /^https?:\/\/api\.avalanche\.(org|state\.co\.us)\b/i.test(value.trim());
 
-const isCaicHomepageLink = (value) =>
+export const isCaicHomepageLink = (value: string | null | undefined): boolean =>
   typeof value === 'string' && /^https?:\/\/(?:www\.)?avalanche\.state\.co\.us\/?(?:[?#].*)?$/i.test(value.trim());
 
-const formatCoordinateForLink = (value) => {
+export const formatCoordinateForLink = (value: number | string | null | undefined): string | null => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return null;
@@ -83,7 +87,7 @@ const formatCoordinateForLink = (value) => {
   return numeric.toFixed(5);
 };
 
-const buildCaicForecastLink = (lat, lon) => {
+export const buildCaicForecastLink = (lat: number | string, lon: number | string): string => {
   const latParam = formatCoordinateForLink(lat);
   const lonParam = formatCoordinateForLink(lon);
   if (!latParam || !lonParam) {
@@ -92,7 +96,15 @@ const buildCaicForecastLink = (lat, lon) => {
   return `https://avalanche.state.co.us/?lat=${encodeURIComponent(latParam)}&lng=${encodeURIComponent(lonParam)}`;
 };
 
-const resolveAvalancheCenterLink = ({ centerId, link, centerLink, lat, lon }) => {
+interface ResolveAvalancheCenterLinkOptions {
+  centerId: string | null | undefined;
+  link: string | null | undefined;
+  centerLink: string | null | undefined;
+  lat: number | string;
+  lon: number | string;
+}
+
+export const resolveAvalancheCenterLink = ({ centerId, link, centerLink, lat, lon }: ResolveAvalancheCenterLinkOptions): string | null => {
   const primaryLink = normalizeExternalLink(link);
   const fallbackLink = normalizeExternalLink(centerLink);
   const nonApiLink = [primaryLink, fallbackLink].find((candidate) => candidate && !isAvalancheApiLink(candidate));
@@ -119,7 +131,7 @@ const resolveAvalancheCenterLink = ({ centerId, link, centerLink, lat, lon }) =>
   return nonApiLink || primaryLink || fallbackLink || null;
 };
 
-const normalizeAvalancheLevel = (value) => {
+const normalizeAvalancheLevel = (value: number | string | null | undefined): number => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return 0;
@@ -127,7 +139,7 @@ const normalizeAvalancheLevel = (value) => {
   return Math.min(5, Math.max(0, Math.round(numeric)));
 };
 
-const deriveOverallDangerLevelFromElevations = (elevations, fallbackLevel = 0) => {
+export const deriveOverallDangerLevelFromElevations = (elevations: any, fallbackLevel: number | string = 0): number => {
   const fallback = normalizeAvalancheLevel(fallbackLevel);
   if (!elevations || typeof elevations !== 'object') {
     return fallback;
@@ -143,13 +155,4 @@ const deriveOverallDangerLevelFromElevations = (elevations, fallbackLevel = 0) =
 
   const maxLevel = Math.max(...levels);
   return maxLevel;
-};
-
-module.exports = {
-  decodeHtmlEntities,
-  cleanForecastText,
-  pickBestBottomLine,
-  normalizeExternalLink,
-  resolveAvalancheCenterLink,
-  deriveOverallDangerLevelFromElevations,
 };

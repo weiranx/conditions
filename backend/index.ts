@@ -1,95 +1,75 @@
-const { point } = require('@turf/helpers');
-const booleanPointInPolygon = require('@turf/boolean-point-in-polygon').default;
-const { createApp } = require('./src/server/create-app');
-const { startServer: startBackendServer } = require('./src/server/start-server');
-const {
+import { createApp } from './src/server/create-app.js';
+import { startServer as startBackendServer } from './src/server/start-server.js';
+import {
   PORT,
   IS_PRODUCTION,
   DEBUG_AVY,
   REQUEST_TIMEOUT_MS,
-  AVALANCHE_MAP_LAYER_TTL_MS,
   SNOTEL_STATION_CACHE_TTL_MS,
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_MAX_REQUESTS,
   CORS_ALLOWLIST,
-} = require('./src/server/runtime');
-const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout } = require('./src/utils/http-client');
-const {
+} from './src/server/runtime.js';
+import { DEFAULT_FETCH_HEADERS, createFetchWithTimeout } from './src/utils/http-client.js';
+import {
   parseWindMph,
-  estimateWindGustFromWindSpeed,
   inferWindGustFromPeriods,
-  normalizeWindDirection,
   findNearestWindDirection,
-  findNearestCardinalFromDegreeSeries,
-} = require('./src/utils/wind');
-const { 
+} from './src/utils/wind.js';
+import { 
   parseIsoTimeToMs, 
-  parseIsoTimeToMsWithReference, 
   parseStartClock, 
   buildPlannedStartIso, 
-  findClosestTimeIndex,
   hourLabelFromIso,
-  localHourFromIso,
-  dateKeyInTimeZone,
-  withExplicitTimezone,
-  parseClockToMinutes,
-  formatMinutesToClock,
   parseIsoClockMinutes,
-  findFirstTimeIndexAtOrAfter,
-  normalizeUtcIsoTimestamp,
   buildTemperatureContext24h
-} = require('./src/utils/time');
-const { 
+} from './src/utils/time.js';
+import { 
   computeFeelsLikeF,
   clampTravelWindowHours,
   normalizeNoaaDewPointF,
-  normalizePressureHpa,
   normalizeNoaaPressureHpa,
-  clampPercent,
-  inferNoaaCloudCoverFromIcon,
-  inferNoaaCloudCoverFromForecastText,
   resolveNoaaCloudCover,
   buildVisibilityRisk,
   buildElevationForecastBands,
   createUnavailableWeatherData,
+  createUnavailableAlertsData,
+  createUnavailableAirQualityData,
+  createUnavailableRainfallData,
   FT_PER_METER,
-  TEMP_LAPSE_F_PER_1000FT,
-  WIND_INCREASE_MPH_PER_1000FT,
-  GUST_INCREASE_MPH_PER_1000FT
-} = require('./src/utils/weather');
-const { 
-  AVALANCHE_UNKNOWN_MESSAGE,
-  AVALANCHE_OFF_SEASON_MESSAGE,
+} from './src/utils/weather.js';
+import { 
   AVALANCHE_LEVEL_LABELS,
-  createUnknownAvalancheData
-} = require('./src/utils/avalanche');
-const {
+  createUnknownAvalancheData,
+  AVALANCHE_OFF_SEASON_MESSAGE,
+  AvalancheData
+} from './src/utils/avalanche.js';
+import {
   cleanForecastText,
   pickBestBottomLine,
   normalizeExternalLink,
   resolveAvalancheCenterLink,
   deriveOverallDangerLevelFromElevations
-} = require('./src/utils/avalanche-scraper');
-const {
+} from './src/utils/avalanche-scraper.js';
+import {
   fetchOpenMeteoWeatherFallback,
   fetchWeatherAlertsData,
   fetchAirQualityData,
   fetchRecentRainfallData
-} = require('./src/utils/weather-service');
-const {
-  haversineKm,
+} from './src/utils/weather-service.js';
+import {
   getAvalancheMapLayer,
   findMatchingAvalancheZone
-} = require('./src/utils/avalanche-service');
-const {
+} from './src/utils/avalanche-service.js';
+import {
   calculateSafetyScore,
   evaluateAvalancheRelevance
-} = require('./src/utils/scoring');
+} from './src/utils/scoring.js';
 
-const { createUnavailableFireRiskData, buildFireRiskData } = require('./src/utils/fire-risk');
-const { createUnavailableHeatRiskData, buildHeatRiskData } = require('./src/utils/heat-risk');
-const { createSnowpackService } = require('./src/utils/snowpack');
-const {
+import { createUnavailableFireRiskData, buildFireRiskData } from './src/utils/fire-risk.js';
+import { createUnavailableHeatRiskData, buildHeatRiskData } from './src/utils/heat-risk.js';
+import { createSnowpackService } from './src/utils/snowpack.js';
+import {
   firstNonEmptyString,
   parseAvalancheDetailPayloads,
   normalizeAvalancheProblemCollection,
@@ -98,23 +78,26 @@ const {
   inferAvalancheExpiresTime,
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
-} = require('./src/utils/avalanche-detail');
-const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terrain-condition');
-const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions');
-const { createSatOneLinerBuilder } = require('./src/utils/sat-oneliner');
-const { registerSearchRoutes } = require('./src/routes/search');
-const { registerHealthRoutes } = require('./src/routes/health');
-const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
-const { registerSatOneLinerRoute } = require('./src/routes/sat-oneliner');
-const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
-const POPULAR_PEAKS = require('./peaks.json');
+} from './src/utils/avalanche-detail.js';
+import { deriveTerrainCondition } from './src/utils/terrain-condition.js';
+import { buildLayeringGearSuggestions } from './src/utils/gear-suggestions.js';
+import { createSatOneLinerBuilder } from './src/utils/sat-oneliner.js';
+import { registerSearchRoutes } from './src/routes/search.js';
+import { registerHealthRoutes } from './src/routes/health.js';
+import { registerSafetyRoute, createSafetyInvoker } from './src/routes/safety.js';
+import { registerSatOneLinerRoute } from './src/routes/sat-oneliner.js';
+import { registerReportLogsRoute } from './src/routes/report-logs.js';
+import { logReportRequest } from './src/routes/report-logs.js';
 
-const avyLog = (...args) => {
+import POPULAR_PEAKS from './peaks.json' with { type: 'json' };
+
+const avyLog = (...args: any[]) => {
   if (DEBUG_AVY) {
     console.log(...args);
   }
 };
-const app = createApp({
+
+export const app = createApp({
   isProduction: IS_PRODUCTION,
   corsAllowlist: CORS_ALLOWLIST,
   rateLimitWindowMs: RATE_LIMIT_WINDOW_MS,
@@ -123,9 +106,9 @@ const app = createApp({
 
 const MAX_REASONABLE_ELEVATION_FT = 20000;
 
-const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
+export const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
-const applyDerivedOverallAvalancheDanger = (avalancheData) => {
+export const applyDerivedOverallAvalancheDanger = (avalancheData: AvalancheData): AvalancheData => {
   if (!avalancheData || typeof avalancheData !== 'object') {
     return avalancheData;
   }
@@ -151,14 +134,14 @@ const applyDerivedOverallAvalancheDanger = (avalancheData) => {
 
 const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 
-const formatIsoDateUtc = (date) => {
+const formatIsoDateUtc = (date: Date): string | null => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return null;
   }
   return date.toISOString().slice(0, 10);
 };
 
-const shiftIsoDateUtc = (isoDate, deltaDays) => {
+const shiftIsoDateUtc = (isoDate: string, deltaDays: number): string | null => {
   if (typeof isoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
     return null;
   }
@@ -170,7 +153,7 @@ const shiftIsoDateUtc = (isoDate, deltaDays) => {
   return formatIsoDateUtc(base);
 };
 
-const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
+const fetchObjectiveElevationFt = async (lat: number, lon: number, fetchOptions: any): Promise<{ elevationFt: number | null; source: string | null }> => {
   try {
     const usgsRes = await fetchWithTimeout(
       `https://epqs.nationalmap.gov/v1/json?x=${lon}&y=${lat}&units=Feet&wkid=4326`,
@@ -183,7 +166,7 @@ const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
         return { elevationFt: Math.round(usgsElevationFt), source: 'USGS 3DEP elevation service' };
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.warn('[Elevation] USGS lookup failed:', error.message);
   }
 
@@ -200,7 +183,7 @@ const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
         return { elevationFt, source: 'Open-Meteo elevation API' };
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.warn('[Elevation] Open-Meteo lookup failed:', error.message);
   }
 
@@ -211,11 +194,20 @@ const { createUnavailableSnowpackData, fetchSnowpackData } = createSnowpackServi
   fetchWithTimeout,
   formatIsoDateUtc,
   shiftIsoDateUtc,
-  haversineKm,
+  haversineKm: (latA: number, lonA: number, latB: number, lonB: number) => {
+    const earthRadiusKm = 6371;
+    const toRadians = (v: number) => (v * Math.PI) / 180;
+    const dLat = toRadians(latB - latA);
+    const dLon = toRadians(lonB - lonA);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(latA)) * Math.cos(toRadians(latB)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * earthRadiusKm * Math.asin(Math.sqrt(a));
+  },
   stationCacheTtlMs: SNOTEL_STATION_CACHE_TTL_MS,
 });
 
-const safetyHandler = async (req, res) => {
+export const safetyHandler = async (req: any, res: any) => {
   const startedAt = Date.now();
   const { lat, lon, date, start, travel_window_hours: travelWindowHoursRaw, travelWindowHours, name } = req.query;
   const logName = typeof name === 'string' ? name.trim() || null : null;
@@ -224,42 +216,42 @@ const safetyHandler = async (req, res) => {
   const baseLogFields = { ip: logIp, userAgent: logUserAgent, name: logName };
 
   if (!lat || !lon) {
-    logReportRequest({ statusCode: 400, lat: lat || null, lon: lon || null, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
+    logReportRequest({ statusCode: 400, lat: lat || null, lon: lon || null, date: (date as string) || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude and longitude are required' });
   }
 
   const parsedLat = Number(lat);
   const parsedLon = Number(lon);
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
-    logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
+    logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: (date as string) || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
   }
 
-  const requestedDate = typeof date === 'string' ? date.trim() : '';
+  const requestedDate = typeof date === 'string' ? (date as string).trim() : '';
   if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
     logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
   }
-  const requestedStartClock = parseStartClock(typeof start === 'string' ? start : '');
+  const requestedStartClock = parseStartClock(typeof start === 'string' ? (start as string) : '');
   const requestedTravelWindowHours = clampTravelWindowHours(
-    typeof travelWindowHoursRaw === 'string' ? travelWindowHoursRaw : typeof travelWindowHours === 'string' ? travelWindowHours : null,
+    typeof travelWindowHoursRaw === 'string' ? (travelWindowHoursRaw as string) : typeof travelWindowHours === 'string' ? (travelWindowHours as string) : null,
     12
   );
 
-  let selectedForecastDate = requestedDate || null;
-  let forecastDateRange = null;
-  let selectedForecastPeriod = null;
-  let weatherData = null;
-  let avalancheData = createUnknownAvalancheData();
-  let solarData = { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" };
-  let alertsData = createUnavailableAlertsData();
-  let airQualityData = createUnavailableAirQualityData();
-  let rainfallData = createUnavailableRainfallData();
-  let snowpackData = createUnavailableSnowpackData();
-  let terrainConditionData = null;
-  let trailStatus = "Unknown";
-  let fireRiskData = createUnavailableFireRiskData("unavailable");
-  let heatRiskData = createUnavailableHeatRiskData("unavailable");
+  let selectedForecastDate: string | null = requestedDate || null;
+  let forecastDateRange: any = null;
+  let selectedForecastPeriod: any = null;
+  let weatherData: any = null;
+  let avalancheData: AvalancheData = createUnknownAvalancheData();
+  let solarData: any = { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" };
+  let alertsData: any = createUnavailableAlertsData();
+  let airQualityData: any = createUnavailableAirQualityData();
+  let rainfallData: any = createUnavailableRainfallData();
+  let snowpackData: any = createUnavailableSnowpackData();
+  let terrainConditionData: any = null;
+  let trailStatus: string = "Unknown";
+  let fireRiskData: any = createUnavailableFireRiskData("unavailable");
+  let heatRiskData: any = createUnavailableHeatRiskData("unavailable");
 
   try {
     const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
@@ -290,16 +282,16 @@ const safetyHandler = async (req, res) => {
           const periods = hourlyData?.properties?.periods || [];
           if (!periods.length) throw new Error('No hourly forecast data available for this location');
 
-          const availableDates = [...new Set(periods.map((p) => (p.startTime || '').slice(0, 10)).filter(Boolean))];
+          const availableDates = [...new Set(periods.map((p: any) => (p.startTime || '').slice(0, 10)).filter(Boolean))];
           forecastDateRange = { start: availableDates[0] || null, end: availableDates[availableDates.length - 1] || null };
 
           if (!selectedForecastDate) {
             selectedForecastDate = (periods[0].startTime || '').slice(0, 10);
           }
 
-          let forecastStartIndex = periods.findIndex((p) => (p.startTime || '').slice(0, 10) === selectedForecastDate);
+          let forecastStartIndex = periods.findIndex((p: any) => (p.startTime || '').slice(0, 10) === selectedForecastDate);
           if (forecastStartIndex === -1 && requestedDate) {
-            const err = new Error('Requested forecast date is outside NOAA forecast range');
+            const err: any = new Error('Requested forecast date is outside NOAA forecast range');
             err.statusCode = 400;
             err.details = `Choose a date between ${forecastDateRange.start} and ${forecastDateRange.end}.`;
             err.availableRange = forecastDateRange;
@@ -307,8 +299,8 @@ const safetyHandler = async (req, res) => {
           }
           if (forecastStartIndex === -1) forecastStartIndex = 0;
           const dayPeriods = periods
-            .map((period, idx) => ({ period, idx }))
-            .filter((entry) => (entry.period?.startTime || '').slice(0, 10) === selectedForecastDate);
+            .map((period: any, idx: number) => ({ period, idx }))
+            .filter((entry: any) => (entry.period?.startTime || '').slice(0, 10) === selectedForecastDate);
 
           if (requestedStartClock && dayPeriods.length > 0) {
             const targetIso = buildPlannedStartIso({
@@ -318,7 +310,7 @@ const safetyHandler = async (req, res) => {
             });
             const targetMs = parseIsoTimeToMs(targetIso);
             if (targetMs !== null) {
-              const firstAtOrAfter = dayPeriods.find((entry) => {
+              const firstAtOrAfter = dayPeriods.find((entry: any) => {
                 const periodStartMs = parseIsoTimeToMs(entry.period?.startTime);
                 return periodStartMs !== null && periodStartMs >= targetMs;
               });
@@ -334,7 +326,7 @@ const safetyHandler = async (req, res) => {
 
           const temperatureContextPoints = periods
             .slice(forecastStartIndex, forecastStartIndex + 24)
-            .map((p) => ({
+            .map((p: any) => ({
               timeIso: p?.startTime || null,
               tempF: Number.isFinite(Number(p?.temperature)) ? Number(p.temperature) : null,
               isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
@@ -346,7 +338,7 @@ const safetyHandler = async (req, res) => {
           });
 
           const forecastTrendHours = clampTravelWindowHours(requestedTravelWindowHours, 12);
-          const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + forecastTrendHours).map((p, offset) => {
+          const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + forecastTrendHours).map((p: any, offset: number) => {
             const rowIndex = forecastStartIndex + offset;
             const windSpeedValue = parseWindMph(p.windSpeed, 0);
             const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
@@ -395,7 +387,7 @@ const safetyHandler = async (req, res) => {
             windGustMph: currentWindGust,
           });
 
-          let currentWeatherData = {
+          let currentWeatherData: any = {
             temp: currentTemp,
             feelsLike: feelsLike,
             dewPoint: currentDewPoint,
@@ -486,8 +478,8 @@ const safetyHandler = async (req, res) => {
               
               const merged = { ...currentWeatherData };
               const fieldSources = { ...merged.sourceDetails.fieldSources };
-              const supplementedFields = [];
-              const isMissing = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim().length === 0);
+              const supplementedFields: string[] = [];
+              const isMissing = (v: any) => v === null || v === undefined || (typeof v === 'string' && v.trim().length === 0);
 
               ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h', 'cloudCover', 'pressure'].forEach(key => {
                 if (isMissing(merged[key]) && !isMissing(supplement.weatherData[key])) {
@@ -515,7 +507,7 @@ const safetyHandler = async (req, res) => {
           const solarPromise = fetchWithTimeout(`https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`, fetchOptions)
             .then(async res => {
               if (res.ok) {
-                const solarJson = await res.json();
+                const solarJson: any = await res.json();
                 if (solarJson.status === "OK") {
                   return {
                     sunrise: solarJson.results.sunrise,
@@ -542,7 +534,7 @@ const safetyHandler = async (req, res) => {
             forecastDateRange,
             selectedForecastPeriod
           };
-        } catch (weatherError) {
+        } catch (weatherError: any) {
           console.error("Weather API error:", weatherError);
           if (weatherError.statusCode === 400) throw weatherError;
 
@@ -675,7 +667,7 @@ const safetyHandler = async (req, res) => {
             elevations: (centerNoActiveForecast || noRatingForecast)
               ? null
               : (() => {
-                  const parseLevel = (val) => {
+                  const parseLevel = (val: any) => {
                     const n = parseInt(val);
                     return Number.isFinite(n) ? n : mainLvl;
                   };
@@ -695,7 +687,7 @@ const safetyHandler = async (req, res) => {
             const normalizedLinkValue = normalizeExternalLink(props.link);
             const zoneSlugRaw = normalizedLinkValue?.split('#/')[1] || normalizedLinkValue?.split('/').filter(Boolean).pop();
             const zoneSlug = zoneSlugRaw ? String(zoneSlugRaw).trim().replace(/^\/+|\/+$/g, '') : null;
-            const detailAttempts = [];
+            const detailAttempts: any[] = [];
 
             if (props.center_id && zoneId) {
               detailAttempts.push({
@@ -754,7 +746,7 @@ const safetyHandler = async (req, res) => {
                   const pageRes = await fetchWithTimeout(scrapeLink, { headers: DEFAULT_FETCH_HEADERS });
                   if (!pageRes.ok) return null;
                   const pageText = await pageRes.text();
-                  const bottomLineCandidates = [];
+                  const bottomLineCandidates: string[] = [];
                   const blMatch = pageText.match(/"(bottom_line|bottom_line_summary|overall_summary)"\s*:\s*"([^"]+)"/);
                   if (blMatch && blMatch[2]) bottomLineCandidates.push(blMatch[2].replace(/\\"/g, '"'));
                   const htmlSummary = pageText.match(/class="[^"]*(field--name-field-avalanche-summary|field-bottom-line)[^"]*"[^>]*>([\s\S]*?)<\/div>/);
@@ -779,7 +771,7 @@ const safetyHandler = async (req, res) => {
                   const lowerMatch = pageText.match(/"danger_lower"\s*:\s*(\d)/);
                   const middleMatch = pageText.match(/"danger_middle"\s*:\s*(\d)/);
                   const upperMatch = pageText.match(/"danger_upper"\s*:\s*(\d)/);
-                  let elevations = null;
+                  let elevations: any = null;
                   if (lowerMatch && middleMatch && upperMatch) {
                     elevations = { lower: parseInt(lowerMatch[1]), middle: parseInt(middleMatch[1]), upper: parseInt(upperMatch[1]) };
                   }
@@ -788,10 +780,10 @@ const safetyHandler = async (req, res) => {
               })()
             ]);
 
-            let detailDet = null;
-            let detailProblems = [];
+            let detailDet: any = null;
+            let detailProblems: any[] = [];
             if (detailResults.status === 'fulfilled') {
-              const best = detailResults.value.filter(Boolean).sort((a, b) => b.score - a.score)[0];
+              const best: any = detailResults.value.filter(Boolean).sort((a: any, b: any) => b.score - a.score)[0];
               if (best) {
                 detailDet = best.candidate;
                 detailProblems = best.problems;
@@ -843,17 +835,17 @@ const safetyHandler = async (req, res) => {
                   avalancheData.problems = fetchedProblems;
                 }
 
-                const safeLevel = (val) => { const n = parseInt(val, 10); return Number.isFinite(n) ? n : 0; };
+                const safeLevel = (val: any) => { const n = parseInt(val, 10); return Number.isFinite(n) ? n : 0; };
                 if (det.danger && det.danger.length > 0) {
-                   const currentDay = det.danger.find(d => d.valid_day === 'current') || det.danger[0];
-                   const safeLabel = (lvl) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
+                   const currentDay = det.danger.find((d: any) => d.valid_day === 'current') || det.danger[0];
+                   const safeLabel = (lvl: any) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
                    avalancheData.elevations = {
                      below: { level: safeLevel(currentDay.lower), label: safeLabel(safeLevel(currentDay.lower)) },
                      at: { level: safeLevel(currentDay.middle), label: safeLabel(safeLevel(currentDay.middle)) },
                      above: { level: safeLevel(currentDay.upper), label: safeLabel(safeLevel(currentDay.upper)) }
                    };
                 } else if (det.danger_low) {
-                  const safeLabel = (lvl) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
+                  const safeLabel = (lvl: any) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
                   avalancheData.elevations = {
                     below: { level: safeLevel(det.danger_low), label: safeLabel(safeLevel(det.danger_low)) },
                     at: { level: safeLevel(det.danger_mid), label: safeLabel(safeLevel(det.danger_mid)) },
@@ -873,16 +865,16 @@ const safetyHandler = async (req, res) => {
               !hasGenericBottomLine;
 
             if ((hasGenericBottomLine || (!avalancheData.problems.length && !hasDetailedBottomLine) || (props.center_id === 'CAIC' && (avalancheData.bottomLine || '').length < 180)) && scraperResult.status === 'fulfilled' && scraperResult.value) {
-              const s = scraperResult.value;
+              const s: any = scraperResult.value;
               if (s.source === 'UAC_JSON') {
                 if (s.data.bottomLine && s.data.bottomLine.length > 20) avalancheData.bottomLine = cleanForecastText(s.data.bottomLine);
                 if (Array.isArray(s.data.problems) && s.data.problems.length > 0) avalancheData.problems = normalizeAvalancheProblemCollection(s.data.problems);
                 if (s.data.publishedTime) avalancheData.publishedTime = s.data.publishedTime;
               } else if (s.source === 'HTML_SCRAPE') {
                 if (s.bottomLine) avalancheData.bottomLine = s.bottomLine;
-                if (s.problems.length > 0) avalancheData.problems = normalizeAvalancheProblemCollection(s.problems.map(name => ({ name })));
+                if (s.problems.length > 0) avalancheData.problems = normalizeAvalancheProblemCollection(s.problems.map((name: string) => ({ name })));
                 if (s.elevations) {
-                  const safeLabel = (lvl) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
+                  const safeLabel = (lvl: any) => (Array.isArray(levelMap) && levelMap[lvl]) ? levelMap[lvl] : 'Unknown';
                   avalancheData.elevations = {
                     below: { level: s.elevations.lower, label: safeLabel(s.elevations.lower) },
                     at: { level: s.elevations.middle, label: safeLabel(s.elevations.middle) },
@@ -895,7 +887,7 @@ const safetyHandler = async (req, res) => {
             if (avalancheData.bottomLine === props.travel_advice) {
               avalancheData.bottomLine = `OFFICIAL SUMMARY: ${props.travel_advice}`;
             }
-          } catch (e) { avyLog("[Avy] Error in detail/scraper parallel fetch:", e.message); }
+          } catch (e: any) { avyLog("[Avy] Error in detail/scraper parallel fetch:", e.message); }
         }
       } catch (e) {
         console.error("Avalanche processing error:", e);
@@ -915,7 +907,7 @@ const safetyHandler = async (req, res) => {
       fetchWeatherAlertsData(parsedLat, parsedLon, fetchWithTimeout, fetchOptions, alertTargetTimeIso),
       fetchAirQualityData(parsedLat, parsedLon, alertTargetTimeIso, fetchWithTimeout, fetchOptions),
       fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso, requestedTravelWindowHours, fetchWithTimeout, fetchOptions),
-      fetchSnowpackData(parsedLat, parsedLon, fetchOptions),
+      fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
     ]);
 
     if (alertsResult.status === 'fulfilled') {
@@ -979,7 +971,7 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
 
-    const stampGeneratedTime = (obj) => {
+    const stampGeneratedTime = (obj: any) => {
       if (obj && typeof obj === 'object') {
         obj.generatedTime = new Date().toISOString();
       }
@@ -993,7 +985,7 @@ const safetyHandler = async (req, res) => {
       trailStatus,
     });
 
-    const responsePayload = {
+    const responsePayload: any = {
       lat: parsedLat,
       lon: parsedLon,
       requestedDate: requestedDate || null,
@@ -1015,10 +1007,9 @@ const safetyHandler = async (req, res) => {
       aiAnalysis: `Terrain Report (${selectedForecastDate}): ${trailStatus} conditions. ${weatherData?.description || ''}. Primary hazard: ${analysis.primaryHazard}. Safety Score: ${analysis.score}/100.`,
     };
 
-    delete responsePayload.activity;
-    logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
+    logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate as string, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.json(responsePayload);
-  } catch (error) {
+  } catch (error: any) {
     console.error('API Error:', error);
     if (res.headersSent) {
       return;
@@ -1047,7 +1038,7 @@ const safetyHandler = async (req, res) => {
       alertsData: alertsData || createUnavailableAlertsData(),
       airQualityData: airQualityData || createUnavailableAirQualityData(),
       fireRiskData: safeFireRiskData,
-      heatRisk: safeHeatRiskData,
+      heatRiskData: safeHeatRiskData,
       rainfallData: rainfallData || createUnavailableRainfallData(),
       selectedDate: fallbackSelectedDate,
       solarData: solarData || { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" },
@@ -1085,13 +1076,11 @@ registerSatOneLinerRoute({
 });
 registerReportLogsRoute(app);
 
-if (require.main === module) {
-  startBackendServer(app, PORT);
+if (process.env.NODE_ENV !== 'test') {
+  startBackendServer({ app, port: PORT });
 }
 
-module.exports = {
-  app,
-  safetyHandler,
+export {
   createUnknownAvalancheData,
   computeFeelsLikeF,
   normalizeNoaaDewPointF,
@@ -1100,11 +1089,4 @@ module.exports = {
   buildVisibilityRisk,
   buildElevationForecastBands,
   deriveOverallDangerLevelFromElevations,
-  applyDerivedOverallAvalancheDanger,
-  parseAvalancheDetailPayloads,
-  pickBestAvalancheDetailCandidate,
-  normalizeAvalancheProblemCollection,
-  buildUtahForecastJsonUrl,
-  extractUtahAvalancheAdvisory,
-  buildSatOneLiner,
 };

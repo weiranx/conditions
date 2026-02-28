@@ -1,4 +1,4 @@
-const parseIsoTimeToMs = (value) => {
+export const parseIsoTimeToMs = (value: string | null | undefined): number | null => {
   if (typeof value !== 'string' || !value.trim()) {
     return null;
   }
@@ -9,14 +9,14 @@ const parseIsoTimeToMs = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const getIsoTimezoneSuffix = (value) => {
+export const getIsoTimezoneSuffix = (value: string | null | undefined): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   const match = trimmed.match(/([+\-]\d{2}:\d{2}|Z)$/);
   return match ? match[1] : null;
 };
 
-const parseIsoTimeToMsWithReference = (value, referenceIso) => {
+export const parseIsoTimeToMsWithReference = (value: string | null | undefined, referenceIso: string | null | undefined): number | null => {
   if (typeof value !== 'string' || !value.trim()) {
     return null;
   }
@@ -34,7 +34,7 @@ const parseIsoTimeToMsWithReference = (value, referenceIso) => {
   return parseIsoTimeToMs(trimmed);
 };
 
-const parseStartClock = (value) => {
+export const parseStartClock = (value: string | null | undefined): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   const match = trimmed.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -42,7 +42,13 @@ const parseStartClock = (value) => {
   return `${match[1]}:${match[2]}`;
 };
 
-const buildPlannedStartIso = ({ selectedDate, startClock, referenceIso }) => {
+interface BuildPlannedStartIsoOptions {
+  selectedDate: string | null | undefined;
+  startClock: string | null | undefined;
+  referenceIso: string | null | undefined;
+}
+
+export const buildPlannedStartIso = ({ selectedDate, startClock, referenceIso }: BuildPlannedStartIsoOptions): string | null => {
   if (typeof selectedDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) || !startClock) {
     return referenceIso || null;
   }
@@ -50,7 +56,7 @@ const buildPlannedStartIso = ({ selectedDate, startClock, referenceIso }) => {
   return `${selectedDate}T${startClock}:00${tzSuffix === 'Z' ? 'Z' : tzSuffix}`;
 };
 
-const findClosestTimeIndex = (timeArray, targetTimeMs) => {
+export const findClosestTimeIndex = (timeArray: (string | null | undefined)[] | null | undefined, targetTimeMs: number): number => {
   if (!Array.isArray(timeArray) || !timeArray.length) {
     return -1;
   }
@@ -71,12 +77,12 @@ const findClosestTimeIndex = (timeArray, targetTimeMs) => {
   return bestIdx;
 };
 
-const hourLabelFromIso = (input, timeZone = null) => {
+export const hourLabelFromIso = (input: string | number | Date, timeZone: string | null = null): string => {
   const date = new Date(input);
   if (Number.isNaN(date.getTime())) {
     return '';
   }
-  const baseOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+  const baseOptions: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
   try {
     const localized = date.toLocaleTimeString('en-US', timeZone ? { ...baseOptions, timeZone } : baseOptions);
     return localized.replace(':00 ', ' ');
@@ -86,7 +92,7 @@ const hourLabelFromIso = (input, timeZone = null) => {
   }
 };
 
-const localHourFromIso = (input, timeZone = null) => {
+export const localHourFromIso = (input: string | null | undefined, timeZone: string | null = null): number | null => {
   if (typeof input !== 'string' || !input.trim()) {
     return null;
   }
@@ -110,13 +116,13 @@ const localHourFromIso = (input, timeZone = null) => {
   }
 };
 
-const dateKeyInTimeZone = (value = new Date(), timeZone = null) => {
+export const dateKeyInTimeZone = (value: Date | string | number = new Date(), timeZone: string | null = null): string | null => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return null;
   }
 
-  const formatWithZone = (zone) => {
+  const formatWithZone = (zone: string | null): string | null => {
     try {
       const formatter = new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
@@ -131,6 +137,7 @@ const dateKeyInTimeZone = (value = new Date(), timeZone = null) => {
       if (!year || !month || !day) {
         return null;
       }
+      // MM/DD/YYYY -> YYYY-MM-DD
       return `${year}-${month}-${day}`;
     } catch {
       return null;
@@ -141,7 +148,7 @@ const dateKeyInTimeZone = (value = new Date(), timeZone = null) => {
   return formatWithZone(normalizedTimeZone || null) || formatWithZone('UTC') || date.toISOString().slice(0, 10);
 };
 
-const withExplicitTimezone = (value, timezoneHint = 'UTC') => {
+export const withExplicitTimezone = (value: string | null | undefined, timezoneHint: string = 'UTC'): string | null => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -163,7 +170,7 @@ const withExplicitTimezone = (value, timezoneHint = 'UTC') => {
   return trimmed;
 };
 
-const parseClockToMinutes = (value) => {
+export const parseClockToMinutes = (value: string | null | undefined): number | null => {
   if (typeof value !== 'string') {
     return null;
   }
@@ -194,13 +201,13 @@ const parseClockToMinutes = (value) => {
   return hour * 60 + minute;
 };
 
-const formatMinutesToClock = (totalMinutes) => {
+export const formatMinutesToClock = (totalMinutes: number): string => {
   const h = Math.floor(totalMinutes / 60) % 24;
   const m = totalMinutes % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-const parseIsoClockMinutes = (isoValue) => {
+export const parseIsoClockMinutes = (isoValue: string | null | undefined): number | null => {
   if (typeof isoValue !== 'string') {
     return null;
   }
@@ -211,7 +218,7 @@ const parseIsoClockMinutes = (isoValue) => {
   return Number(match[1]) * 60 + Number(match[2]);
 };
 
-const findFirstTimeIndexAtOrAfter = (timeArray, targetTimeMs) => {
+export const findFirstTimeIndexAtOrAfter = (timeArray: (string | null | undefined)[] | null | undefined, targetTimeMs: number): number => {
   if (!Array.isArray(timeArray) || !timeArray.length || !Number.isFinite(targetTimeMs)) {
     return -1;
   }
@@ -230,7 +237,7 @@ const findFirstTimeIndexAtOrAfter = (timeArray, targetTimeMs) => {
   return bestIdx;
 };
 
-const normalizeUtcIsoTimestamp = (value) => {
+export const normalizeUtcIsoTimestamp = (value: string | null | undefined): string | null => {
   if (typeof value !== 'string' || !value.trim()) {
     return null;
   }
@@ -241,7 +248,22 @@ const normalizeUtcIsoTimestamp = (value) => {
   return new Date(parsedMs).toISOString();
 };
 
-const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 }) => {
+export interface TemperatureContext24h {
+  windowHours: number;
+  timezone: string | null;
+  minTempF: number;
+  maxTempF: number;
+  overnightLowF: number | null;
+  daytimeHighF: number | null;
+}
+
+interface BuildTemperatureContext24hOptions {
+  points: { timeIso: string | null | undefined; tempF: number | null | undefined; isDaytime?: boolean | null | undefined }[];
+  timeZone?: string | null;
+  windowHours?: number;
+}
+
+export const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 }: BuildTemperatureContext24hOptions): TemperatureContext24h | null => {
   const normalizedWindow = Math.max(1, Math.round(Number(windowHours) || 24));
   const sourcePoints = Array.isArray(points) ? points.slice(0, normalizedWindow) : [];
   const validPoints = sourcePoints.filter((point) => Number.isFinite(Number(point?.tempF)));
@@ -250,15 +272,15 @@ const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 
   }
 
   const temps = validPoints.map((point) => Number(point.tempF));
-  const dayTemps = [];
-  const nightTemps = [];
+  const dayTemps: number[] = [];
+  const nightTemps: number[] = [];
 
   validPoints.forEach((point) => {
     let isDaytime = typeof point?.isDaytime === 'boolean' ? point.isDaytime : null;
     if (isDaytime === null) {
       const localHour = localHourFromIso(point?.timeIso, timeZone);
       if (Number.isFinite(localHour)) {
-        isDaytime = localHour >= 6 && localHour < 18;
+        isDaytime = (localHour as number) >= 6 && (localHour as number) < 18;
       }
     }
     if (isDaytime === true) {
@@ -276,22 +298,4 @@ const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 
     overnightLowF: nightTemps.length ? Math.min(...nightTemps) : null,
     daytimeHighF: dayTemps.length ? Math.max(...dayTemps) : null,
   };
-};
-
-module.exports = {
-  parseIsoTimeToMs,
-  parseIsoTimeToMsWithReference,
-  parseStartClock,
-  buildPlannedStartIso,
-  findClosestTimeIndex,
-  hourLabelFromIso,
-  localHourFromIso,
-  dateKeyInTimeZone,
-  withExplicitTimezone,
-  parseClockToMinutes,
-  formatMinutesToClock,
-  parseIsoClockMinutes,
-  findFirstTimeIndexAtOrAfter,
-  normalizeUtcIsoTimestamp,
-  buildTemperatureContext24h,
 };
