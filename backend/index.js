@@ -3021,370 +3021,312 @@ const safetyHandler = async (req, res) => {
   try {
     const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
 
-    const [weatherAndSolarResult, avalancheMapResult] = await Promise.allSettled([
-      (async () => {
+    try {
+      // 1. Get NOAA grid data
+      const pointsRes = await fetchWithTimeout(`https://api.weather.gov/points/${parsedLat},${parsedLon}`, fetchOptions);
+      if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
+      const pointsData = await pointsRes.json();
+      const pointElevationMeters = Number(pointsData?.properties?.elevation?.value);
+      let objectiveElevationFt = Number.isFinite(pointElevationMeters) ? Math.round(pointElevationMeters * FT_PER_METER) : null;
+      let objectiveElevationSource = Number.isFinite(pointElevationMeters) ? 'NOAA points metadata' : null;
+      if (!Number.isFinite(objectiveElevationFt)) {
+        const fallbackElevation = await fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions);
+        objectiveElevationFt = fallbackElevation.elevationFt;
+        objectiveElevationSource = fallbackElevation.source;
+      }
+
+      const hourlyForecastUrl = pointsData.properties.forecastHourly;
+
+      // 2. Get Forecasts
+      const hourlyRes = await fetchWithTimeout(hourlyForecastUrl, fetchOptions);
+      if (!hourlyRes.ok) throw new Error(`NOAA hourly forecast failed: ${hourlyRes.status}`);
+      const hourlyData = await hourlyRes.json();
+
+      const periods = hourlyData?.properties?.periods || [];
+      if (!periods.length) throw new Error('No hourly forecast data available for this location');
+
+      const availableDates = [...new Set(periods.map((p) => (p.startTime || '').slice(0, 10)).filter(Boolean))];
+      forecastDateRange = { start: availableDates[0] || null, end: availableDates[availableDates.length - 1] || null };
+
+      if (!selectedForecastDate) {
+        selectedForecastDate = (periods[0].startTime || '').slice(0, 10);
+      }
+
+      let forecastStartIndex = periods.findIndex((p) => (p.startTime || '').slice(0, 10) === selectedForecastDate);
+      if (forecastStartIndex === -1 && requestedDate) {
+        logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
+        return res.status(400).json({
+          error: 'Requested forecast date is outside NOAA forecast range',
+          details: `Choose a date between ${forecastDateRange.start} and ${forecastDateRange.end}.`,
+          availableRange: forecastDateRange
+        });
+      }
+      if (forecastStartIndex === -1) forecastStartIndex = 0;
+      const dayPeriods = periods
+        .map((period, idx) => ({ period, idx }))
+        .filter((entry) => (entry.period?.startTime || '').slice(0, 10) === selectedForecastDate);
+
+      if (requestedStartClock && dayPeriods.length > 0) {
+        const targetIso = buildPlannedStartIso({
+          selectedDate: selectedForecastDate,
+          startClock: requestedStartClock,
+          referenceIso: dayPeriods[0].period?.startTime || null,
+        });
+        const targetMs = parseIsoTimeToMs(targetIso);
+        if (targetMs !== null) {
+          const firstAtOrAfter = dayPeriods.find((entry) => {
+            const periodStartMs = parseIsoTimeToMs(entry.period?.startTime);
+            return periodStartMs !== null && periodStartMs >= targetMs;
+          });
+          if (firstAtOrAfter) {
+            forecastStartIndex = firstAtOrAfter.idx;
+          } else {
+            forecastStartIndex = dayPeriods[dayPeriods.length - 1].idx;
+          }
+        }
+      }
+
+      selectedForecastPeriod = periods[forecastStartIndex];
+
+      // Build 24-hour temperature context from selected period for freeze/thaw and day/night analysis.
+      const temperatureContextPoints = periods
+        .slice(forecastStartIndex, forecastStartIndex + 24)
+        .map((p) => ({
+          timeIso: p?.startTime || null,
+          tempF: Number.isFinite(Number(p?.temperature)) ? Number(p.temperature) : null,
+          isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
+        }));
+      const temperatureContext24h = buildTemperatureContext24h({
+        points: temperatureContextPoints,
+        timeZone: pointsData?.properties?.timeZone || null,
+        windowHours: 24,
+      });
+
+      const forecastTrendHours = clampTravelWindowHours(requestedTravelWindowHours, 12);
+      // Build trend window from selected hour using user-selected travel window length (up to 24h).
+      const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + forecastTrendHours).map((p, offset) => {
+        const rowIndex = forecastStartIndex + offset;
+        const windSpeedValue = parseWindMph(p.windSpeed, 0);
+        const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
+        const trendTemp = Number.isFinite(p.temperature) ? p.temperature : 0;
+        const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value) ? p.probabilityOfPrecipitation.value : 0;
+        const trendHumidity = Number.isFinite(p?.relativeHumidity?.value) ? p.relativeHumidity.value : null;
+        const trendDewPoint = normalizeNoaaDewPointF(p?.dewpoint);
+        const trendCloudCover = resolveNoaaCloudCover(p).value;
+        const trendPressure = normalizeNoaaPressureHpa(p?.barometricPressure);
+
+        return {
+          time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
+          timeIso: p.startTime || null,
+          temp: trendTemp,
+          wind: windSpeedValue,
+          gust: windGustValue,
+          windDirection: findNearestWindDirection(periods, rowIndex),
+          precipChance: trendPrecip,
+          humidity: trendHumidity,
+          dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
+          cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
+          pressure: trendPressure,
+          condition: p.shortForecast || 'Unknown',
+          isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
+        };
+      });
+
+      const currentWindSpeed = parseWindMph(selectedForecastPeriod?.windSpeed, 0);
+      const inferredCurrentGust = inferWindGustFromPeriods(periods, forecastStartIndex, currentWindSpeed);
+      const currentWindGust = inferredCurrentGust.gustMph;
+      const currentCloudCover = resolveNoaaCloudCover(selectedForecastPeriod);
+      const windGustSource =
+        inferredCurrentGust.source === 'reported'
+          ? 'NOAA'
+          : inferredCurrentGust.source === 'inferred_nearby'
+            ? 'NOAA (inferred from nearby gust hours)'
+            : 'Estimated from NOAA sustained wind';
+      const currentTemp = Number.isFinite(selectedForecastPeriod?.temperature) ? selectedForecastPeriod.temperature : 0;
+      const feelsLike = computeFeelsLikeF(currentTemp, currentWindSpeed);
+      const currentDewPoint = normalizeNoaaDewPointF(selectedForecastPeriod?.dewpoint);
+      const currentPressure = normalizeNoaaPressureHpa(selectedForecastPeriod?.barometricPressure);
+      const elevationForecastBands = buildElevationForecastBands({
+        baseElevationFt: objectiveElevationFt,
+        tempF: currentTemp,
+        windSpeedMph: currentWindSpeed,
+        windGustMph: currentWindGust,
+      });
+
+      weatherData = {
+        temp: currentTemp,
+        feelsLike: feelsLike,
+        dewPoint: currentDewPoint,
+        elevation: objectiveElevationFt,
+        elevationSource: objectiveElevationSource,
+        elevationUnit: 'ft',
+        description: selectedForecastPeriod?.shortForecast || 'Unknown',
+        windSpeed: currentWindSpeed,
+        windGust: currentWindGust,
+        windDirection: findNearestWindDirection(periods, forecastStartIndex),
+        pressure: currentPressure,
+        humidity: Number.isFinite(selectedForecastPeriod?.relativeHumidity?.value) ? selectedForecastPeriod.relativeHumidity.value : 0,
+        cloudCover: currentCloudCover.value,
+        precipChance: Number.isFinite(selectedForecastPeriod?.probabilityOfPrecipitation?.value) ? selectedForecastPeriod.probabilityOfPrecipitation.value : 0,
+        isDaytime: selectedForecastPeriod?.isDaytime ?? null,
+        issuedTime: hourlyData?.properties?.updateTime || hourlyData?.properties?.generatedAt || null,
+        timezone: pointsData?.properties?.timeZone || null,
+        forecastStartTime: selectedForecastPeriod?.startTime || null,
+        forecastEndTime: selectedForecastPeriod?.endTime || null,
+        forecastDate: selectedForecastDate,
+        trend: hourlyTrend,
+        temperatureContext24h,
+        visibilityRisk: null,
+        sourceDetails: {
+          primary: 'NOAA',
+          blended: false,
+          fieldSources: {
+            temp: 'NOAA',
+            feelsLike: 'NOAA',
+            dewPoint: Number.isFinite(Number(currentDewPoint)) ? 'NOAA' : 'Unavailable',
+            description: 'NOAA',
+            windSpeed: 'NOAA',
+            windGust: windGustSource,
+            windDirection: 'NOAA',
+            pressure: currentPressure !== null ? 'NOAA' : 'Unavailable',
+            humidity: 'NOAA',
+            cloudCover: currentCloudCover.source,
+            precipChance: 'NOAA',
+            isDaytime: 'NOAA',
+            issuedTime: 'NOAA',
+            timezone: 'NOAA',
+            forecastStartTime: 'NOAA',
+            forecastEndTime: 'NOAA',
+            trend: 'NOAA',
+            temperatureContext24h: 'NOAA',
+            visibilityRisk: 'Derived from NOAA weather fields',
+          },
+        },
+        elevationForecast: elevationForecastBands,
+        elevationForecastNote:
+          objectiveElevationFt !== null
+            ? `Estimated from objective elevation down through terrain bands using lapse-rate adjustments per 1,000 ft. Baseline elevation source: ${objectiveElevationSource || 'unknown source'}.`
+            : 'Objective elevation unavailable from NOAA and fallback elevation services; elevation-based estimate could not be generated.',
+        forecastLink: `https://forecast.weather.gov/MapClick.php?lat=${parsedLat}&lon=${parsedLon}`
+      };
+
+      weatherData.visibilityRisk = buildVisibilityRisk(weatherData);
+
+      if (!weatherData.windDirection && currentWindSpeed <= 2) {
+        weatherData.windDirection = 'CALM';
+      }
+
+      terrainConditionData = deriveTerrainCondition(weatherData);
+      trailStatus = terrainConditionData.label;
+
+      // NOAA remains primary; supplement missing/noisy fields with Open-Meteo when needed.
+      if (
+        !weatherData.windDirection ||
+        !weatherData.issuedTime ||
+        weatherData.pressure === null ||
+        weatherData.pressure === undefined ||
+        weatherData.cloudCover === null ||
+        weatherData.cloudCover === undefined ||
+        (Array.isArray(weatherData.trend) && weatherData.trend.length < 6)
+      ) {
         try {
-          // 1. Get NOAA grid data
-          const pointsRes = await fetchWithTimeout(`https://api.weather.gov/points/${parsedLat},${parsedLon}`, fetchOptions);
-          if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
-          const pointsData = await pointsRes.json();
-          const pointElevationMeters = Number(pointsData?.properties?.elevation?.value);
-          let objectiveElevationFt = Number.isFinite(pointElevationMeters) ? Math.round(pointElevationMeters * FT_PER_METER) : null;
-          let objectiveElevationSource = Number.isFinite(pointElevationMeters) ? 'NOAA points metadata' : null;
-          if (!Number.isFinite(objectiveElevationFt)) {
-            const fallbackElevation = await fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions);
-            objectiveElevationFt = fallbackElevation.elevationFt;
-            objectiveElevationSource = fallbackElevation.source;
-          }
-
-          const hourlyForecastUrl = pointsData.properties.forecastHourly;
-
-          // 2. Get Forecasts
-          const hourlyRes = await fetchWithTimeout(hourlyForecastUrl, fetchOptions);
-          if (!hourlyRes.ok) throw new Error(`NOAA hourly forecast failed: ${hourlyRes.status}`);
-          const hourlyData = await hourlyRes.json();
-
-          const periods = hourlyData?.properties?.periods || [];
-          if (!periods.length) throw new Error('No hourly forecast data available for this location');
-
-          const availableDates = [...new Set(periods.map((p) => (p.startTime || '').slice(0, 10)).filter(Boolean))];
-          forecastDateRange = { start: availableDates[0] || null, end: availableDates[availableDates.length - 1] || null };
-
-          if (!selectedForecastDate) {
-            selectedForecastDate = (periods[0].startTime || '').slice(0, 10);
-          }
-
-          let forecastStartIndex = periods.findIndex((p) => (p.startTime || '').slice(0, 10) === selectedForecastDate);
-          if (forecastStartIndex === -1 && requestedDate) {
-            // We can't return from here because we are in an async block. We'll throw an error to be handled.
-            const err = new Error('Requested forecast date is outside NOAA forecast range');
-            err.statusCode = 400;
-            err.details = `Choose a date between ${forecastDateRange.start} and ${forecastDateRange.end}.`;
-            err.availableRange = forecastDateRange;
-            throw err;
-          }
-          if (forecastStartIndex === -1) forecastStartIndex = 0;
-          const dayPeriods = periods
-            .map((period, idx) => ({ period, idx }))
-            .filter((entry) => (entry.period?.startTime || '').slice(0, 10) === selectedForecastDate);
-
-          if (requestedStartClock && dayPeriods.length > 0) {
-            const targetIso = buildPlannedStartIso({
-              selectedDate: selectedForecastDate,
-              startClock: requestedStartClock,
-              referenceIso: dayPeriods[0].period?.startTime || null,
-            });
-            const targetMs = parseIsoTimeToMs(targetIso);
-            if (targetMs !== null) {
-              const firstAtOrAfter = dayPeriods.find((entry) => {
-                const periodStartMs = parseIsoTimeToMs(entry.period?.startTime);
-                return periodStartMs !== null && periodStartMs >= targetMs;
-              });
-              if (firstAtOrAfter) {
-                forecastStartIndex = firstAtOrAfter.idx;
-              } else {
-                forecastStartIndex = dayPeriods[dayPeriods.length - 1].idx;
-              }
-            }
-          }
-
-          selectedForecastPeriod = periods[forecastStartIndex];
-
-          // Build 24-hour temperature context from selected period for freeze/thaw and day/night analysis.
-          const temperatureContextPoints = periods
-            .slice(forecastStartIndex, forecastStartIndex + 24)
-            .map((p) => ({
-              timeIso: p?.startTime || null,
-              tempF: Number.isFinite(Number(p?.temperature)) ? Number(p.temperature) : null,
-              isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
-            }));
-          const temperatureContext24h = buildTemperatureContext24h({
-            points: temperatureContextPoints,
-            timeZone: pointsData?.properties?.timeZone || null,
-            windowHours: 24,
+          const supplement = await fetchOpenMeteoWeatherFallback({
+            lat: parsedLat,
+            lon: parsedLon,
+            selectedDate: selectedForecastDate,
+            startClock: requestedStartClock,
+            fetchOptions,
+            objectiveElevationFt,
+            objectiveElevationSource,
+            trendHours: requestedTravelWindowHours,
           });
-
-          const forecastTrendHours = clampTravelWindowHours(requestedTravelWindowHours, 12);
-          // Build trend window from selected hour using user-selected travel window length (up to 24h).
-          const hourlyTrend = periods.slice(forecastStartIndex, forecastStartIndex + forecastTrendHours).map((p, offset) => {
-            const rowIndex = forecastStartIndex + offset;
-            const windSpeedValue = parseWindMph(p.windSpeed, 0);
-            const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
-            const trendTemp = Number.isFinite(p.temperature) ? p.temperature : 0;
-            const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value) ? p.probabilityOfPrecipitation.value : 0;
-            const trendHumidity = Number.isFinite(p?.relativeHumidity?.value) ? p.relativeHumidity.value : null;
-            const trendDewPoint = normalizeNoaaDewPointF(p?.dewpoint);
-            const trendCloudCover = resolveNoaaCloudCover(p).value;
-            const trendPressure = normalizeNoaaPressureHpa(p?.barometricPressure);
-
-            return {
-              time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
-              timeIso: p.startTime || null,
-              temp: trendTemp,
-              wind: windSpeedValue,
-              gust: windGustValue,
-              windDirection: findNearestWindDirection(periods, rowIndex),
-              precipChance: trendPrecip,
-              humidity: trendHumidity,
-              dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
-              cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
-              pressure: trendPressure,
-              condition: p.shortForecast || 'Unknown',
-              isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
-            };
-          });
-
-          const currentWindSpeed = parseWindMph(selectedForecastPeriod?.windSpeed, 0);
-          const inferredCurrentGust = inferWindGustFromPeriods(periods, forecastStartIndex, currentWindSpeed);
-          const currentWindGust = inferredCurrentGust.gustMph;
-          const currentCloudCover = resolveNoaaCloudCover(selectedForecastPeriod);
-          const windGustSource =
-            inferredCurrentGust.source === 'reported'
-              ? 'NOAA'
-              : inferredCurrentGust.source === 'inferred_nearby'
-                ? 'NOAA (inferred from nearby gust hours)'
-                : 'Estimated from NOAA sustained wind';
-          const currentTemp = Number.isFinite(selectedForecastPeriod?.temperature) ? selectedForecastPeriod.temperature : 0;
-          const feelsLike = computeFeelsLikeF(currentTemp, currentWindSpeed);
-          const currentDewPoint = normalizeNoaaDewPointF(selectedForecastPeriod?.dewpoint);
-          const currentPressure = normalizeNoaaPressureHpa(selectedForecastPeriod?.barometricPressure);
-          const elevationForecastBands = buildElevationForecastBands({
-            baseElevationFt: objectiveElevationFt,
-            tempF: currentTemp,
-            windSpeedMph: currentWindSpeed,
-            windGustMph: currentWindGust,
-          });
-
-          let currentWeatherData = {
-            temp: currentTemp,
-            feelsLike: feelsLike,
-            dewPoint: currentDewPoint,
-            elevation: objectiveElevationFt,
-            elevationSource: objectiveElevationSource,
-            elevationUnit: 'ft',
-            description: selectedForecastPeriod?.shortForecast || 'Unknown',
-            windSpeed: currentWindSpeed,
-            windGust: currentWindGust,
-            windDirection: findNearestWindDirection(periods, forecastStartIndex),
-            pressure: currentPressure,
-            humidity: Number.isFinite(selectedForecastPeriod?.relativeHumidity?.value) ? selectedForecastPeriod.relativeHumidity.value : 0,
-            cloudCover: currentCloudCover.value,
-            precipChance: Number.isFinite(selectedForecastPeriod?.probabilityOfPrecipitation?.value) ? selectedForecastPeriod.probabilityOfPrecipitation.value : 0,
-            isDaytime: selectedForecastPeriod?.isDaytime ?? null,
-            issuedTime: hourlyData?.properties?.updateTime || hourlyData?.properties?.generatedAt || null,
-            timezone: pointsData?.properties?.timeZone || null,
-            forecastStartTime: selectedForecastPeriod?.startTime || null,
-            forecastEndTime: selectedForecastPeriod?.endTime || null,
-            forecastDate: selectedForecastDate,
-            trend: hourlyTrend,
-            temperatureContext24h,
-            visibilityRisk: null,
-            sourceDetails: {
-              primary: 'NOAA',
-              blended: false,
-              fieldSources: {
-                temp: 'NOAA',
-                feelsLike: 'NOAA',
-                dewPoint: Number.isFinite(Number(currentDewPoint)) ? 'NOAA' : 'Unavailable',
-                description: 'NOAA',
-                windSpeed: 'NOAA',
-                windGust: windGustSource,
-                windDirection: 'NOAA',
-                pressure: currentPressure !== null ? 'NOAA' : 'Unavailable',
-                humidity: 'NOAA',
-                cloudCover: currentCloudCover.source,
-                precipChance: 'NOAA',
-                isDaytime: 'NOAA',
-                issuedTime: 'NOAA',
-                timezone: 'NOAA',
-                forecastStartTime: 'NOAA',
-                forecastEndTime: 'NOAA',
-                trend: 'NOAA',
-                temperatureContext24h: 'NOAA',
-                visibilityRisk: 'Derived from NOAA weather fields',
-              },
-            },
-            elevationForecast: elevationForecastBands,
-            elevationForecastNote:
-              objectiveElevationFt !== null
-                ? `Estimated from objective elevation down through terrain bands using lapse-rate adjustments per 1,000 ft. Baseline elevation source: ${objectiveElevationSource || 'unknown source'}.`
-                : 'Objective elevation unavailable from NOAA and fallback elevation services; elevation-based estimate could not be generated.',
-            forecastLink: `https://forecast.weather.gov/MapClick.php?lat=${parsedLat}&lon=${parsedLon}`
-          };
-
-          currentWeatherData.visibilityRisk = buildVisibilityRisk(currentWeatherData);
-
-          if (!currentWeatherData.windDirection && currentWindSpeed <= 2) {
-            currentWeatherData.windDirection = 'CALM';
+          const blended = blendNoaaWeatherWithFallback(weatherData, supplement.weatherData);
+          weatherData = blended.weatherData;
+          if (blended.usedSupplement) {
+            terrainConditionData = deriveTerrainCondition(weatherData);
+            trailStatus = terrainConditionData.label;
+            console.warn(`NOAA weather supplemented with Open-Meteo fields: ${blended.supplementedFields.join(', ')}`);
           }
+        } catch (supplementError) {
+          console.warn('NOAA weather supplement from Open-Meteo failed; continuing with NOAA-only weather.', supplementError);
+        }
+      }
 
-          let currentTerrainConditionData = deriveTerrainCondition(currentWeatherData);
-          let currentTrailStatus = currentTerrainConditionData.label;
-
-          // NOAA remains primary; supplement missing/noisy fields with Open-Meteo when needed.
-          if (
-            !currentWeatherData.windDirection ||
-            !currentWeatherData.issuedTime ||
-            currentWeatherData.pressure === null ||
-            currentWeatherData.pressure === undefined ||
-            currentWeatherData.cloudCover === null ||
-            currentWeatherData.cloudCover === undefined ||
-            (Array.isArray(currentWeatherData.trend) && currentWeatherData.trend.length < 6)
-          ) {
-            try {
-              const supplement = await fetchOpenMeteoWeatherFallback({
-                lat: parsedLat,
-                lon: parsedLon,
-                selectedDate: selectedForecastDate,
-                startClock: requestedStartClock,
-                fetchOptions,
-                objectiveElevationFt,
-                objectiveElevationSource,
-                trendHours: requestedTravelWindowHours,
-              });
-              const blended = blendNoaaWeatherWithFallback(currentWeatherData, supplement.weatherData);
-              currentWeatherData = blended.weatherData;
-              if (blended.usedSupplement) {
-                currentTerrainConditionData = deriveTerrainCondition(currentWeatherData);
-                currentTrailStatus = currentTerrainConditionData.label;
-                console.warn(`NOAA weather supplemented with Open-Meteo fields: ${blended.supplementedFields.join(', ')}`);
-              }
-            } catch (supplementError) {
-              console.warn('NOAA weather supplement from Open-Meteo failed; continuing with NOAA-only weather.', supplementError);
-            }
-          }
-
-          // Fetch solar data in parallel within the weather block
-          const solarDate = selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
-          const solarPromise = fetchWithTimeout(`https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`, fetchOptions)
-            .then(async res => {
-              if (res.ok) {
-                const solarJson = await res.json();
-                if (solarJson.status === "OK") {
-                  return {
-                    sunrise: solarJson.results.sunrise,
-                    sunset: solarJson.results.sunset,
-                    dayLength: solarJson.results.day_length
-                  };
-                }
-              }
-              return { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" };
-            })
-            .catch(e => {
-              console.error("Solar API error:", e);
-              return { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" };
-            });
-
-          const currentSolarData = await solarPromise;
-
-          return {
-            weatherData: currentWeatherData,
-            terrainConditionData: currentTerrainConditionData,
-            trailStatus: currentTrailStatus,
-            solarData: currentSolarData,
-            selectedForecastDate,
-            forecastDateRange,
-            selectedForecastPeriod
-          };
-        } catch (weatherError) {
-          console.error("Weather API error:", weatherError);
-          if (weatherError.statusCode === 400) throw weatherError;
-
-          if (!selectedForecastDate) {
-            selectedForecastDate = requestedDate || new Date().toISOString().slice(0, 10);
-          }
-
-          try {
-            let fallbackElevationFt = typeof weatherData?.elevation === 'number' ? weatherData.elevation : null;
-            let fallbackElevationSource = weatherData?.elevationSource || null;
-            if (!Number.isFinite(fallbackElevationFt)) {
-              const fallbackElevation = await fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions);
-              fallbackElevationFt = fallbackElevation.elevationFt;
-              fallbackElevationSource = fallbackElevation.source;
-            }
-
-            const fallback = await fetchOpenMeteoWeatherFallback({
-              lat: parsedLat,
-              lon: parsedLon,
-              selectedDate: selectedForecastDate,
-              startClock: requestedStartClock,
-              fetchOptions,
-              objectiveElevationFt: Number.isFinite(fallbackElevationFt) ? fallbackElevationFt : null,
-              objectiveElevationSource: fallbackElevationSource,
-              trendHours: requestedTravelWindowHours,
-            });
-
-            return {
-              weatherData: fallback.weatherData,
-              terrainConditionData: fallback.terrainCondition || deriveTerrainCondition(fallback.weatherData),
-              trailStatus: (fallback.terrainCondition || deriveTerrainCondition(fallback.weatherData)).label,
-              solarData: { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" },
-              selectedForecastDate: fallback.selectedForecastDate,
-              forecastDateRange: fallback.forecastDateRange,
-              selectedForecastPeriod: null
-            };
-          } catch (fallbackError) {
-            console.error("Weather fallback API error:", fallbackError);
-            const unavailableWeather = createUnavailableWeatherData({ lat: parsedLat, lon: parsedLon, forecastDate: selectedForecastDate });
-            return {
-              weatherData: unavailableWeather,
-              terrainConditionData: deriveTerrainCondition(unavailableWeather),
-              trailStatus: deriveTerrainCondition(unavailableWeather).label,
-              solarData: { sunrise: "N/A", sunset: "N/A", dayLength: "N/A" },
-              selectedForecastDate,
-              forecastDateRange,
-              selectedForecastPeriod: null
+      // 2.5 Get Solar Data
+      try {
+        const solarDate = selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
+        const solarRes = await fetchWithTimeout(`https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`, fetchOptions);
+        if (solarRes.ok) {
+          const solarJson = await solarRes.json();
+          if (solarJson.status === "OK") {
+            solarData = {
+              sunrise: solarJson.results.sunrise,
+              sunset: solarJson.results.sunset,
+              dayLength: solarJson.results.day_length
             };
           }
         }
-      })(),
-      getAvalancheMapLayer(fetchOptions)
-    ]);
-
-    if (weatherAndSolarResult.status === 'fulfilled') {
-      const w = weatherAndSolarResult.value;
-      weatherData = w.weatherData;
-      terrainConditionData = w.terrainConditionData;
-      trailStatus = w.trailStatus;
-      solarData = w.solarData;
-      selectedForecastDate = w.selectedForecastDate;
-      forecastDateRange = w.forecastDateRange;
-      selectedForecastPeriod = w.selectedForecastPeriod;
-    } else {
-      // If the error was a 400 from within the async block, we should return it.
-      const error = weatherAndSolarResult.reason;
-      if (error && error.statusCode === 400) {
-        logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
-        return res.status(400).json({
-          error: error.message,
-          details: error.details,
-          availableRange: error.availableRange
-        });
+      } catch (e) {
+        console.error("Solar API error:", e);
       }
-      // Fallback to unavailable if everything crashed
-      weatherData = createUnavailableWeatherData({ lat: parsedLat, lon: parsedLon, forecastDate: selectedForecastDate });
-      terrainConditionData = deriveTerrainCondition(weatherData);
-      trailStatus = terrainConditionData.label;
+    } catch (weatherError) {
+      console.error("Weather API error:", weatherError);
+      if (!selectedForecastDate) {
+        selectedForecastDate = requestedDate || new Date().toISOString().slice(0, 10);
+      }
+
+      try {
+        let fallbackElevationFt = typeof weatherData?.elevation === 'number' ? weatherData.elevation : null;
+        let fallbackElevationSource = weatherData?.elevationSource || null;
+        if (!Number.isFinite(fallbackElevationFt)) {
+          const fallbackElevation = await fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions);
+          fallbackElevationFt = fallbackElevation.elevationFt;
+          fallbackElevationSource = fallbackElevation.source;
+        }
+
+        const fallback = await fetchOpenMeteoWeatherFallback({
+          lat: parsedLat,
+          lon: parsedLon,
+          selectedDate: selectedForecastDate,
+          startClock: requestedStartClock,
+          fetchOptions,
+          objectiveElevationFt: Number.isFinite(fallbackElevationFt) ? fallbackElevationFt : null,
+          objectiveElevationSource: fallbackElevationSource,
+          trendHours: requestedTravelWindowHours,
+        });
+
+        weatherData = fallback.weatherData;
+        selectedForecastDate = fallback.selectedForecastDate;
+        terrainConditionData = fallback.terrainCondition || deriveTerrainCondition(weatherData);
+        trailStatus = terrainConditionData.label;
+        forecastDateRange = fallback.forecastDateRange;
+        console.warn("NOAA weather unavailable; served Open-Meteo fallback weather.");
+      } catch (fallbackError) {
+        console.error("Weather fallback API error:", fallbackError);
+        weatherData = createUnavailableWeatherData({ lat: parsedLat, lon: parsedLon, forecastDate: selectedForecastDate });
+        terrainConditionData = deriveTerrainCondition(weatherData);
+        trailStatus = terrainConditionData.label;
+      }
     }
 
-    // Process Avalanche Map Layer
-    if (avalancheMapResult.status === 'fulfilled' && avalancheMapResult.value?.features) {
-      try {
-        const avyFeatures = avalancheMapResult.value.features;
-        const zoneMatch = findMatchingAvalancheZone(avyFeatures, parsedLat, parsedLon);
+	    // 3. Get Live Avalanche Data using Map Layer + Point in Polygon
+	    try {
+	      const avyJson = await getAvalancheMapLayer(fetchOptions);
+	      if (avyJson?.features) {
+        const zoneMatch = findMatchingAvalancheZone(avyJson.features, parsedLat, parsedLon);
         const matchingZone = zoneMatch.feature;
 
-        if (matchingZone) {
-          if (zoneMatch.mode === 'nearest') {
-            avyLog(
-              `[Avy] No direct polygon match for ${parsedLat},${parsedLon}; using nearest zone fallback ` +
-                `at ${Math.round(Number(zoneMatch.fallbackDistanceKm || 0))} km.`,
-            );
-          }
-          const props = matchingZone.properties;
-          const zoneId = matchingZone.id; // Use the feature ID (e.g. 1648 for West Slopes South)
-          const levelMap = ["None", "Low", "Moderate", "Considerable", "High", "Extreme"];
-          const mainLvl = parseInt(props.danger_level) || 0;
+	        if (matchingZone) {
+            if (zoneMatch.mode === 'nearest') {
+              avyLog(
+                `[Avy] No direct polygon match for ${parsedLat},${parsedLon}; using nearest zone fallback ` +
+                  `at ${Math.round(Number(zoneMatch.fallbackDistanceKm || 0))} km.`,
+              );
+            }
+	          const props = matchingZone.properties;
+	          const zoneId = matchingZone.id; // Use the feature ID (e.g. 1648 for West Slopes South)
+	          const levelMap = ["None", "Low", "Moderate", "Considerable", "High", "Extreme"];
+	          const mainLvl = parseInt(props.danger_level) || 0;
           const reportedRisk = String(props.danger || "").trim();
           const normalizedRisk = reportedRisk.toLowerCase();
           const travelAdviceText = String(props.travel_advice || "");
@@ -3401,46 +3343,46 @@ const safetyHandler = async (req, res) => {
             || hasNoForecastLanguage
             || (!hasIssuedWindow && noRatingForecast);
           
-          avalancheData = {
-            center: props.center,
-            center_id: props.center_id,
-            zone: props.name,
-            risk: centerNoActiveForecast ? "Unknown" : (reportedRisk || "No Rating"),
-            dangerLevel: (centerNoActiveForecast || noRatingForecast) ? 0 : mainLvl,
-            dangerUnknown: centerNoActiveForecast || noRatingForecast,
-            relevant: true,
-            relevanceReason: null,
-            coverageStatus: centerNoActiveForecast ? "no_active_forecast" : "reported",
-            link: resolveAvalancheCenterLink({
-              centerId: props.center_id,
-              link: props.link,
-              centerLink: props.center_link,
-              lat: parsedLat,
-              lon: parsedLon,
-            }),
-            bottomLine: centerNoActiveForecast
-              ? (cleanForecastText(travelAdviceText) || AVALANCHE_OFF_SEASON_MESSAGE)
-              : props.travel_advice, // Primary Fallback
-            problems: [],
-            publishedTime: centerNoActiveForecast ? null : (props.start_date || props.published_time || null),
-            expiresTime: centerNoActiveForecast ? null : firstNonEmptyString(props.end_date, props.expires, props.expire_time),
-            elevations: (centerNoActiveForecast || noRatingForecast)
-              ? null
-              : (() => {
-                  const parseLevel = (val) => {
-                    const n = parseInt(val);
-                    return Number.isFinite(n) ? n : mainLvl;
-                  };
-                  const l = parseLevel(props.danger_low);
-                  const m = parseLevel(props.danger_mid);
-                  const u = parseLevel(props.danger_high);
-                  return {
-                    below: { level: l, label: levelMap[l] || 'Unknown' },
-                    at: { level: m, label: levelMap[m] || 'Unknown' },
-                    above: { level: u, label: levelMap[u] || 'Unknown' }
-                  };
-                })()
-          };
+			          avalancheData = {
+			            center: props.center,
+			            center_id: props.center_id,
+			            zone: props.name,
+			            risk: centerNoActiveForecast ? "Unknown" : (reportedRisk || "No Rating"),
+			            dangerLevel: (centerNoActiveForecast || noRatingForecast) ? 0 : mainLvl,
+			            dangerUnknown: centerNoActiveForecast || noRatingForecast,
+                  relevant: true,
+                  relevanceReason: null,
+			            coverageStatus: centerNoActiveForecast ? "no_active_forecast" : "reported",
+			            link: resolveAvalancheCenterLink({
+                    centerId: props.center_id,
+                    link: props.link,
+                    centerLink: props.center_link,
+                    lat: parsedLat,
+                    lon: parsedLon,
+                  }),
+			            bottomLine: centerNoActiveForecast
+                    ? (cleanForecastText(travelAdviceText) || AVALANCHE_OFF_SEASON_MESSAGE)
+                    : props.travel_advice, // Primary Fallback
+			            problems: [],
+			            publishedTime: centerNoActiveForecast ? null : (props.start_date || props.published_time || null),
+                  expiresTime: centerNoActiveForecast ? null : firstNonEmptyString(props.end_date, props.expires, props.expire_time),
+	            elevations: (centerNoActiveForecast || noRatingForecast)
+                ? null
+                : (() => {
+                    const parseLevel = (val) => {
+                      const n = parseInt(val);
+                      return Number.isFinite(n) ? n : mainLvl;
+                    };
+                    const l = parseLevel(props.danger_low);
+                    const m = parseLevel(props.danger_mid);
+                    const u = parseLevel(props.danger_high);
+                    return {
+                      below: { level: l, label: levelMap[l] || 'Unknown' },
+                      at: { level: m, label: levelMap[m] || 'Unknown' },
+                      above: { level: u, label: levelMap[u] || 'Unknown' }
+                    };
+                  })()
+	          };
 
 		          // TRY TO GET THE REAL BOTTOM LINE BY PRODUCT ID
 			          try {
@@ -3471,32 +3413,47 @@ const safetyHandler = async (req, res) => {
 	              });
 	            }
 
-              // Parallelize API detail attempts
-              const detailResults = await Promise.all(detailAttempts.map(async (attempt) => {
-                try {
-                  const candidateRes = await fetchWithTimeout(attempt.url, fetchOptions);
-                  if (!candidateRes.ok) return null;
-                  const candidateText = await candidateRes.text();
-                  const candidatePayloads = parseAvalancheDetailPayloads(candidateText);
-                  return pickBestAvalancheDetailCandidate({
-                    payloads: candidatePayloads,
-                    centerId: props.center_id,
-                    zoneId,
-                    zoneSlug,
-                    zoneName: props.name,
-                    cleanForecastText,
-                  });
-                } catch (e) {
-                  return null;
-                }
-              }));
+		            for (const attempt of detailAttempts) {
+		              try {
+		                avyLog(`[Avy] Trying ${attempt.label}: ${attempt.url}`);
+		                const candidateRes = await fetchWithTimeout(attempt.url, fetchOptions);
+		                if (!candidateRes.ok) {
+		                  avyLog(`[Avy] ${attempt.label} failed with status ${candidateRes.status}`);
+		                  continue;
+		                }
 
-              const bestCandidate = detailResults.filter(Boolean).sort((a, b) => b.score - a.score)[0];
-              if (bestCandidate) {
-                detailDet = bestCandidate.candidate;
+		                const candidateText = await candidateRes.text();
+                const candidatePayloads = parseAvalancheDetailPayloads(candidateText);
+                if (!candidatePayloads.length) {
+                  avyLog(`[Avy] ${attempt.label} returned non-JSON payload.`);
+                  continue;
+                }
+
+                const bestCandidate = pickBestAvalancheDetailCandidate({
+                  payloads: candidatePayloads,
+                  centerId: props.center_id,
+                  zoneId,
+                  zoneSlug,
+                  zoneName: props.name,
+                  cleanForecastText,
+                });
+
+                if (!bestCandidate) {
+                  avyLog(`[Avy] ${attempt.label} returned shell data. Trying next endpoint.`);
+                  continue;
+                }
+
+			                detailDet = bestCandidate.candidate;
                 detailProblems = bestCandidate.problems;
-                avyLog(`[Avy] Using best detail candidate (score ${bestCandidate.score}, problems ${detailProblems.length}).`);
-              }
+			                avyLog(
+                  `[Avy] Using ${attempt.label} for ${props.center_id} ` +
+                    `(score ${bestCandidate.score}, problems ${detailProblems.length}).`,
+                );
+			                break;
+			              } catch (attemptErr) {
+			                avyLog(`[Avy] ${attempt.label} parse/fetch error: ${attemptErr.message}`);
+			              }
+			            }
 
 		            // MWAC occasionally returns generic API link values; prefer a direct forecast page link fallback.
 		            if (props.center_id === 'MWAC') {
@@ -3730,12 +3687,12 @@ const safetyHandler = async (req, res) => {
               bottomLine: cleanForecastText(travelAdviceText) || offSeasonFallback.bottomLine,
             };
           }
-        }
-      } catch (e) {
-        console.error("Avalanche processing error:", e);
-        if (avalancheData.dangerUnknown) {
-          avalancheData = createUnknownAvalancheData("temporarily_unavailable");
-        }
+	        }
+	      }
+			    } catch (e) {
+      console.error("Avalanche API error:", e);
+      if (avalancheData.dangerUnknown) {
+        avalancheData = createUnknownAvalancheData("temporarily_unavailable");
       }
     }
 
