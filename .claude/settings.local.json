@@ -5,7 +5,10 @@
       "Bash(git:*)",
       "Bash(tail:*)",
       "Bash(npm run:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(python3:*)"
     ]
   }
 }

@@ -20,11 +20,18 @@
 ### `alertsRelevantForSelectedTime` (L2157)
 - Hardcoded `true` — never computed. The else-branch at L2545-2546 is dead code. The `+2` uncertainty bump at L2421-2423 can never fire. All confidence/scoring guards that check `!alertsRelevantForSelectedTime` are dead.
 
-### NOAA Hourly Response Not `.ok`-Checked (L3032-3033)
-- `hourlyRes` is used without checking `hourlyRes.ok`. Non-200 response falls through to JSON parsing, which may throw or silently return an empty periods array.
+### NOAA Hourly Response `.ok` Check (now fixed in parallelization PR)
+- Original code lacked `.ok` check; new code at L3044 adds `if (!hourlyRes.ok) throw new Error(...)`. Fixed.
 
-### Avalanche Scraper `pageRes.ok` Not Checked (L3564-3565)
-- HTML scrape goes directly to `pageRes.text()` without checking `pageRes.ok`. Error pages get scraped.
+### Avalanche Scraper `pageRes.ok` (now fixed in parallelization PR)
+- `pageRes.ok` is now checked at L3631 before calling `.text()`. Fixed.
+
+### Parallelization Refactor Bugs (backend/index.js L3024-3368, PR: perf/parallelize-safety-handler)
+- BUG: `weatherError` catch block at L3298 reads outer `weatherData?.elevation` — which is the pre-initialized sentinel (unavailable) object, not any partial NOAA data. The original code had the same bug.
+- BUG: Outer `forecastDateRange` and `selectedForecastDate` are mutated inside the IIFE via closure at L3051/3054/3294 — these mutations occur concurrently with `getAvalancheMapLayer`. Avalanche processing after `allSettled` reads `selectedForecastDate` from `w.selectedForecastDate`; safe for that flow. BUT the 400-error throw at L3060-3064 captures `forecastDateRange` from the outer scope at mutation time — that part is fine (sequential within the IIFE).
+- BUG: Solar fetch is now sequential inside the IIFE (awaited at L3278) — not actually parallel with NOAA weather. It's parallel with avalanche map, but was supposed to be parallel with weather too. The `solarPromise` starts before Open-Meteo supplement but `await solarPromise` blocks before `return`, so solar and supplement are not overlapped.
+- The "catastrophic rejection" path in `Promise.allSettled` `else` branch at L3353-3368 does NOT return/throw — it falls through and continues with the avalanche processing using the sentinel `weatherData`. This is correct partial-failure behavior (matches the HTTP 200 + `partialData: true` design).
+- The 400 statusCode re-throw path: the 400 error is caught by `allSettled` (status='rejected'), then re-read from `weatherAndSolarResult.reason` at L3355 and correctly returned. But the 400 error object's `err.details` string uses `forecastDateRange` captured from the outer mutable variable at throw time — since line 3051 sets it just before the throw, it is correctly populated.
 
 ### `parseInt` on Undefined Fields — NaN label risk (L3493-3495)
 - `parseInt(currentDay.lower/middle/upper)` → NaN if field missing → `levelMap[NaN]` → `undefined` label.
