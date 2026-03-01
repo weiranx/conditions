@@ -57,7 +57,6 @@ import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
 import { CollapsibleCard } from './components/planner/CollapsibleCard';
 import {
   APP_CREDIT_TEXT,
-  BACKEND_WAKE_NOTICE_DELAY_MS,
   BACKEND_WAKE_RETRY_DELAY_MS,
   BACKEND_WAKE_RETRY_MAX_ATTEMPTS,
   DATE_FMT,
@@ -170,7 +169,6 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
-const PLANNER_VIEW_MODE_STORAGE_KEY = 'summitsafe-planner-view-mode';
 const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
 const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
 const MAX_RECENT_SEARCHES = 8;
@@ -2191,13 +2189,6 @@ function App() {
   );
   const [mapStyle, setMapStyle] = useState<MapStyle>('topo');
   const [mobileMapControlsExpanded, setMobileMapControlsExpanded] = useState(true);
-  const [plannerViewMode, setPlannerViewMode] = useState<'essential' | 'full'>(() => {
-    if (typeof window === 'undefined') {
-      return 'full';
-    }
-    const storedMode = window.localStorage.getItem(PLANNER_VIEW_MODE_STORAGE_KEY);
-    return storedMode === 'essential' ? 'essential' : 'full';
-  });
   const [mapFocusNonce, setMapFocusNonce] = useState(0);
   const [locatingUser, setLocatingUser] = useState(false);
   const lastLoadedSafetyKeyRef = useRef<string | null>(null);
@@ -2233,7 +2224,6 @@ function App() {
   );
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [showBackendWakeNotice, setShowBackendWakeNotice] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const searchWrapperRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -2245,7 +2235,6 @@ function App() {
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const satCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const teamBriefCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const backendWakeNoticeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
 
   const clearWakeRetry = useCallback(() => {
@@ -2582,30 +2571,6 @@ function App() {
     };
   }, [clearWakeRetry]);
 
-  useEffect(() => {
-    if (backendWakeNoticeTimeout.current) {
-      clearTimeout(backendWakeNoticeTimeout.current);
-      backendWakeNoticeTimeout.current = null;
-    }
-
-    if (!isProductionBuild || (!loading && !searchLoading)) {
-      setShowBackendWakeNotice(false);
-      return;
-    }
-
-    setShowBackendWakeNotice(false);
-    backendWakeNoticeTimeout.current = setTimeout(() => {
-      setShowBackendWakeNotice(true);
-      backendWakeNoticeTimeout.current = null;
-    }, BACKEND_WAKE_NOTICE_DELAY_MS);
-
-    return () => {
-      if (backendWakeNoticeTimeout.current) {
-        clearTimeout(backendWakeNoticeTimeout.current);
-        backendWakeNoticeTimeout.current = null;
-      }
-    };
-  }, [isProductionBuild, loading, searchLoading]);
 
   useEffect(() => {
     if (!hasObjective || view !== 'planner') {
@@ -2755,13 +2720,6 @@ function App() {
       mediaQuery.removeEventListener('change', applyTheme);
     };
   }, [preferences.themeMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    window.localStorage.setItem(PLANNER_VIEW_MODE_STORAGE_KEY, plannerViewMode);
-  }, [plannerViewMode]);
 
   useEffect(() => {
     suggestionCacheRef.current.clear();
@@ -5436,7 +5394,6 @@ function App() {
             .slice(0, 3)
             .map((check) => check.label)
     : [];
-  const isEssentialView = plannerViewMode === 'essential';
   const missionDecisionClass = decision ? decision.level.toLowerCase().replace('-', '') : 'caution';
   const missionBriefTopBlockers = decision ? decision.blockers.slice(0, 2) : [];
   const missionBriefBestWindow = travelWindowInsights.bestWindow
@@ -6202,29 +6159,11 @@ function App() {
       cardMeta,
     };
   })();
-  const [showAllRankedCards, setShowAllRankedCards] = useState(false);
   const shouldRenderRankedCard = useCallback(
-    (key: SortableCardKey): boolean => {
-      const meta = reportCardOrder.cardMeta[key];
-      if (!meta) {
-        return true;
-      }
-      if (isEssentialView) {
-        return meta.rank <= 8 || meta.riskLevel >= 3;
-      }
-      return showAllRankedCards || meta.defaultVisible;
-    },
-    [isEssentialView, reportCardOrder.cardMeta, showAllRankedCards],
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (_key: SortableCardKey): boolean => true,
+    [],
   );
-  const collapsedRankedCardCount = (Object.keys(reportCardOrder.cardMeta) as SortableCardKey[]).filter(
-    (key) => !isEssentialView && !reportCardOrder.cardMeta[key]?.defaultVisible,
-  ).length;
-
-  useEffect(() => {
-    if (isEssentialView && showAllRankedCards) {
-      setShowAllRankedCards(false);
-    }
-  }, [isEssentialView, showAllRankedCards]);
 
   useEffect(() => {
     setCopiedSatLine(false);
@@ -7102,7 +7041,6 @@ function App() {
             trimmedSearchQuery={trimmedSearchQuery}
             showSuggestions={showSuggestions}
             searchLoading={searchLoading}
-            showBackendWakeNotice={showBackendWakeNotice}
             suggestions={suggestions}
             activeSuggestionIndex={activeSuggestionIndex}
             canUseCoordinates={Boolean(parsedTypedCoordinates)}
@@ -7296,12 +7234,12 @@ function App() {
         </div>
       )}
 
-      {loading && !safetyData && <ForecastLoading showBackendWakeNotice={showBackendWakeNotice} />}
+      {loading && !safetyData && <ForecastLoading />}
 
       {loading && safetyData && (
         <div className="loading-state inline-loading-state" role="status" aria-live="polite">
           <strong>Refreshing conditions…</strong>
-          <span>{showBackendWakeNotice ? 'Backend API is waking up. Existing report remains visible until fresh data arrives.' : 'Existing report remains visible until fresh data arrives.'}</span>
+          <span>Existing report remains visible until fresh data arrives.</span>
         </div>
       )}
 
@@ -7327,24 +7265,6 @@ function App() {
               Best window <strong>{missionBriefBestWindow}</strong>
             </span>
             <span className="mission-brief-objective">{objectiveName || 'Pinned objective'} • {displayStartTime}</span>
-            <div className="planner-view-toggle" role="group" aria-label="Planner detail mode">
-              <button
-                type="button"
-                className={`planner-view-btn ${isEssentialView ? 'active' : ''}`}
-                onClick={() => setPlannerViewMode('essential')}
-                aria-pressed={isEssentialView}
-              >
-                Essential
-              </button>
-              <button
-                type="button"
-                className={`planner-view-btn ${!isEssentialView ? 'active' : ''}`}
-                onClick={() => setPlannerViewMode('full')}
-                aria-pressed={!isEssentialView}
-              >
-                Full
-              </button>
-            </div>
           </div>
           <div className="mission-brief-signals">
             <span className="mission-brief-label">Top blockers</span>
@@ -7435,29 +7355,6 @@ function App() {
                   {loading
                     ? 'Showing last successful report while new data loads.'
                     : 'Showing last successful report. Latest refresh failed.'}
-                </div>
-              )}
-              {!isEssentialView && !showAllRankedCards && collapsedRankedCardCount > 0 && (
-                <div className="source-line">
-                  {collapsedRankedCardCount} lower-priority card{collapsedRankedCardCount === 1 ? '' : 's'} hidden.{' '}
-                  <button
-                    type="button"
-                    className="settings-btn report-action-btn"
-                    onClick={() => setShowAllRankedCards(true)}
-                  >
-                    Show all
-                  </button>
-                </div>
-              )}
-              {!isEssentialView && showAllRankedCards && collapsedRankedCardCount > 0 && (
-                <div className="source-line">
-                  <button
-                    type="button"
-                    className="settings-btn report-action-btn"
-                    onClick={() => setShowAllRankedCards(false)}
-                  >
-                    Priority view
-                  </button>
                 </div>
               )}
               <div className="report-action-row">
@@ -8915,45 +8812,7 @@ function App() {
             </div>
           </div>
 
-          {isEssentialView && avalancheRelevant && safetyData?.avalanche && (
-            <div className="card avy-card essential-avy-summary" style={{ order: reportCardOrder.avalancheForecast }}>
-              <div className="card-header">
-                <span className="card-title">Avalanche Summary</span>
-                <span className={`danger-badge ${getDangerLevelClass(overallAvalancheLevel ?? 0)}`}>
-                  {getDangerText(overallAvalancheLevel ?? 0)}
-                </span>
-              </div>
-              <div className="essential-avy-body">
-                {avalancheElevationRows.length > 0 && (
-                  <div className="avy-elevation-compact">
-                    {avalancheElevationRows.map(row => (
-                      <span key={row.key} className={`elev-chip ${getDangerLevelClass(row.rating?.level ?? 0)}`}>
-                        {row.label}: {row.rating?.label ?? 'No Rating'}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {safetyData.avalanche.bottomLine && (
-                  <p className="avy-bottom-line-compact">
-                    {summarizeText(safetyData.avalanche.bottomLine, 200)}
-                  </p>
-                )}
-                {(safetyData.avalanche.problems ?? []).slice(0, 3).map((p, i) => {
-                  const terrain = parseTerrainFromLocation(p.location);
-                  return (
-                    <div key={i} className="avy-problem-compact">
-                      <span className="problem-name">{p.name ?? 'Problem'}</span>
-                      {[...terrain.aspects].map(a => (
-                        <span key={a} className="aspect-chip">{a}</span>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {!isEssentialView && (() => {
+          {(() => {
             const avyHeaderMeta = (
               <div className="source-meta">
                 <span>Avalanche center: {safetyData.avalanche.center || 'N/A'}</span>
@@ -9001,34 +8860,31 @@ function App() {
             );
           })()}
 
-          {!isEssentialView && (
-            <CollapsibleCard
-              cardKey="fieldBrief"
-              defaultExpanded={false}
-              order={reportCardOrder.fieldBrief}
-              className="ai-box field-brief-card"
-              title={<span className="card-title"><ShieldCheck size={14} /> Field Brief <HelpHint text="Action-first field brief with primary call, top risks, immediate actions, and optional details." /></span>}
-              headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
-              summary={`${decision.level}: ${fieldBriefHeadline.slice(0, 80)}${fieldBriefHeadline.length > 80 ? '…' : ''}`}
-            >
-            <FieldBriefCard
-            fieldBriefHeadline={fieldBriefHeadline}
-            fieldBriefPrimaryReason={fieldBriefPrimaryReason}
-            decisionActionLine={decisionActionLine}
-            fieldBriefAtAGlance={fieldBriefAtAGlance}
-            fieldBriefExecutionSteps={fieldBriefExecutionSteps}
-            fieldBriefTopRisks={fieldBriefTopRisks}
-            fieldBriefImmediateActions={fieldBriefImmediateActions}
-            fieldBriefSnapshot={fieldBriefSnapshot}
-            fieldBriefAbortTriggers={fieldBriefAbortTriggers}
-            fieldBriefActions={fieldBriefActions}
-            localizeUnitText={localizeUnitText}
-            />
-            </CollapsibleCard>
-          )}
+          <CollapsibleCard
+            cardKey="fieldBrief"
+            defaultExpanded={false}
+            order={reportCardOrder.fieldBrief}
+            className="ai-box field-brief-card"
+            title={<span className="card-title"><ShieldCheck size={14} /> Field Brief <HelpHint text="Action-first field brief with primary call, top risks, immediate actions, and optional details." /></span>}
+            headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
+            summary={`${decision.level}: ${fieldBriefHeadline.slice(0, 80)}${fieldBriefHeadline.length > 80 ? '…' : ''}`}
+          >
+          <FieldBriefCard
+          fieldBriefHeadline={fieldBriefHeadline}
+          fieldBriefPrimaryReason={fieldBriefPrimaryReason}
+          decisionActionLine={decisionActionLine}
+          fieldBriefAtAGlance={fieldBriefAtAGlance}
+          fieldBriefExecutionSteps={fieldBriefExecutionSteps}
+          fieldBriefTopRisks={fieldBriefTopRisks}
+          fieldBriefImmediateActions={fieldBriefImmediateActions}
+          fieldBriefSnapshot={fieldBriefSnapshot}
+          fieldBriefAbortTriggers={fieldBriefAbortTriggers}
+          fieldBriefActions={fieldBriefActions}
+          localizeUnitText={localizeUnitText}
+          />
+          </CollapsibleCard>
 
-          {!isEssentialView && (
-            <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
+          <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
             <div className="card-header">
               <span className="card-title">
                 <Search size={14} /> Deep Dive Report Data
@@ -9462,7 +9318,6 @@ function App() {
               </details>
             </details>
             </div>
-          )}
 
         </div>
       )}

@@ -9,7 +9,6 @@ interface SearchBoxProps {
   trimmedSearchQuery: string;
   showSuggestions: boolean;
   searchLoading: boolean;
-  showBackendWakeNotice: boolean;
   suggestions: Suggestion[];
   activeSuggestionIndex: number;
   canUseCoordinates: boolean;
@@ -30,7 +29,6 @@ export function SearchBox({
   trimmedSearchQuery,
   showSuggestions,
   searchLoading,
-  showBackendWakeNotice,
   suggestions,
   activeSuggestionIndex,
   canUseCoordinates,
@@ -87,7 +85,7 @@ export function SearchBox({
         <ul className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
           {searchLoading && (
             <li className="suggestion-status">
-              {showBackendWakeNotice ? 'Backend API is waking up. Search is taking longer than usual…' : 'Searching...'}
+              Searching...
             </li>
           )}
           {!searchLoading && canUseCoordinates && (
