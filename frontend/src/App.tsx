@@ -1379,7 +1379,9 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
 
   const objectiveName = (params.get('name') || '').trim();
   const searchQuery = (params.get('q') || objectiveName).trim();
-  const viewParam = params.get('view');
+  // Support path-based routing (/logs, /settings, etc.) with legacy ?view= fallback
+  const pathSegment = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  const viewParam = pathSegment || params.get('view') || '';
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitStatusView = viewParam === 'status';
   const hasExplicitTripView = viewParam === 'trip';
@@ -1420,18 +1422,6 @@ function buildShareQuery(state: {
   targetElevationInput: string;
 }): string {
   const params = new URLSearchParams();
-
-  if (state.view === 'planner') {
-    params.set('view', 'planner');
-  } else if (state.view === 'settings') {
-    params.set('view', 'settings');
-  } else if (state.view === 'status') {
-    params.set('view', 'status');
-  } else if (state.view === 'trip') {
-    params.set('view', 'trip');
-  } else if (state.view === 'logs') {
-    params.set('view', 'logs');
-  }
 
   if (state.hasObjective) {
     params.set('lat', state.position.lat.toFixed(5));
@@ -2654,7 +2644,8 @@ function App() {
         })
       : '';
 
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
+    const viewPath = view === 'home' ? '' : view;
+    const nextUrl = `/${viewPath}${query ? `?${query}` : ''}`;
     const currentUrl = `${window.location.pathname}${window.location.search}`;
     if (nextUrl !== currentUrl) {
       if (isApplyingPopStateRef.current || !hasInitializedHistoryRef.current) {
