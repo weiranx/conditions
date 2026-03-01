@@ -36,6 +36,7 @@ import {
   Cpu,
   Wifi,
   HardDrive,
+  Zap,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -53,6 +54,7 @@ import { AvalancheForecastCard } from './components/planner/cards/AvalancheForec
 import { FieldBriefCard } from './components/planner/cards/FieldBriefCard';
 import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
+import { CollapsibleCard } from './components/planner/CollapsibleCard';
 import {
   APP_CREDIT_TEXT,
   BACKEND_WAKE_NOTICE_DELAY_MS,
@@ -7458,14 +7460,16 @@ function App() {
 
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
             <div className="report-column">
-              <div id="planner-section-decision" className="card decision-card" style={{ order: reportCardOrder.decisionGate }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <ShieldCheck size={14} /> Decision Gate
-                    <HelpHint text="Top-line go/caution/no-go recommendation based on weather, avalanche, alerts, score, and daylight checks." />
-                  </span>
-                  <span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>
-                </div>
+              <CollapsibleCard
+                cardKey="decisionGate"
+                domId="planner-section-decision"
+                defaultExpanded={true}
+                order={reportCardOrder.decisionGate}
+                className="decision-card"
+                title={<span className="card-title"><ShieldCheck size={14} /> Decision Gate <HelpHint text="Top-line go/caution/no-go recommendation based on weather, avalanche, alerts, score, and daylight checks." /></span>}
+                headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
+                summary={<>{decision.level}{decision.blockers.length > 0 ? ` · ${decision.blockers[0]}` : decision.cautions.length > 0 ? ` · ${decision.cautions[0]}` : ''}</>}
+              >
                 <p className="decision-headline">{decision.headline}</p>
                 <div className={`decision-action ${decision.level.toLowerCase().replace('-', '')}`}>
                   <span className="decision-action-label">Recommended action</span>
@@ -7600,12 +7604,18 @@ function App() {
                     </ul>
                   </div>
                 </details>
-              </div>
+              </CollapsibleCard>
 
-              <TravelWindowPlannerCard
-                sectionId="planner-section-travel"
+              <CollapsibleCard
+                cardKey="travelWindowPlanner"
+                domId="planner-section-travel"
+                defaultExpanded={false}
                 order={reportCardOrder.travelWindowPlanner}
-                travelWindowHoursLabel={travelWindowHoursLabel}
+                className="projection-card"
+                title={<span className="card-title">Travel Window Planner ({travelWindowHoursLabel}) <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your selected window length, plus wind, precip, and feels-like thresholds." /></span>}
+                summary={travelWindowInsights.bestWindow ? `Best: ${formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)} (${travelWindowInsights.bestWindow.length}h)` : 'No safe window'}
+              >
+              <TravelWindowPlannerCard
                 peakCriticalWindow={peakCriticalWindow}
                 timeStyle={preferences.timeStyle}
                 criticalRiskLevelText={criticalRiskLevelText}
@@ -7647,18 +7657,18 @@ function App() {
                 formatTempDisplay={formatTempDisplay}
                 formatWindDisplay={formatWindDisplay}
               />
+              </CollapsibleCard>
 
               {shouldRenderRankedCard('criticalChecks') && (
-                <div className="card checks-card" style={{ order: reportCardOrder.criticalChecks }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <CheckCircle2 size={14} /> Critical Checks
-                    <HelpHint text="Must-pass gates before committing. Failed checks are sorted first with live threshold context." />
-                  </span>
-                  <span className={`decision-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>
-                    {criticalCheckPassCount}/{criticalCheckTotal} passing
-                  </span>
-                </div>
+                <CollapsibleCard
+                  cardKey="criticalChecks"
+                  defaultExpanded={false}
+                  order={reportCardOrder.criticalChecks}
+                  className="checks-card"
+                  title={<span className="card-title"><CheckCircle2 size={14} /> Critical Checks <HelpHint text="Must-pass gates before committing. Failed checks are sorted first with live threshold context." /></span>}
+                  headerMeta={<span className={`decision-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>{criticalCheckPassCount}/{criticalCheckTotal} passing</span>}
+                  summary={`${criticalCheckPassCount} passed · ${criticalCheckFailCount} attention`}
+                >
                 {topCriticalAttentionChecks.length > 0 && (
                   <div className="checks-attention" role="status" aria-live="polite">
                     <strong className="checks-attention-title">Needs attention now</strong>
@@ -7699,23 +7709,19 @@ function App() {
                     </div>
                   ))}
                 </div>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('scoreTrace') && (
-                <div className="card score-trace-card" style={{ order: reportCardOrder.scoreTrace }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <ShieldCheck size={14} /> Score Trace
-                    <HelpHint text="Shows top factors pulling the safety score down or up, plus what changed vs yesterday." />
-                  </span>
-                  {dayOverDay && (
-                    <span className={`decision-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>
-                      {dayOverDay.delta > 0 ? '+' : ''}
-                      {dayOverDay.delta} vs {dayOverDay.previousDate}
-                    </span>
-                  )}
-                </div>
+                <CollapsibleCard
+                  cardKey="scoreTrace"
+                  defaultExpanded={false}
+                  order={reportCardOrder.scoreTrace}
+                  className="score-trace-card"
+                  title={<span className="card-title"><ShieldCheck size={14} /> Score Trace <HelpHint text="Shows top factors pulling the safety score down or up, plus what changed vs yesterday." /></span>}
+                  headerMeta={dayOverDay ? <span className={`decision-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>{dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}</span> : undefined}
+                  summary={`${Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors.length : 0} factors`}
+                >
                 {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 ? (
                   <ul className="score-trace-list">
                     {safetyData.safety.factors
@@ -7746,26 +7752,21 @@ function App() {
                     </ul>
                   </div>
                 )}
-                </div>
+                </CollapsibleCard>
               )}
             </div>
 
             <div className="report-column">
-              <div id="planner-section-weather" className="card weather-card" style={{ order: reportCardOrder.atmosphericData }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Thermometer size={14} /> Weather
-                    <HelpHint text="Weather for your selected start time with optional hour preview, including temperature, wind, pressure, precip, humidity, cloud cover, and source attribution." />
-                  </span>
-                  <div className="weather-header-meta">
-                    <span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>
-                      {safetyData.forecast?.isFuture ? 'Forecast' : 'Current'} • {safetyData.forecast?.selectedDate || forecastDate}
-                    </span>
-                    {safetyData.weather.issuedTime && <span className="weather-issued">Issued • {formatPubTime(safetyData.weather.issuedTime)}</span>}
-                    <span className="weather-source-pill">Source • {weatherSourceDisplay}</span>
-                  </div>
-                </div>
-
+              <CollapsibleCard
+                cardKey="atmosphericData"
+                domId="planner-section-weather"
+                defaultExpanded={false}
+                order={reportCardOrder.atmosphericData}
+                className="weather-card"
+                title={<span className="card-title"><Thermometer size={14} /> Weather <HelpHint text="Weather for your selected start time with optional hour preview, including temperature, wind, pressure, precip, humidity, cloud cover, and source attribution." /></span>}
+                headerMeta={<div className="weather-header-meta"><span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>{safetyData.forecast?.isFuture ? 'Forecast' : 'Current'} • {safetyData.forecast?.selectedDate || forecastDate}</span>{safetyData.weather.issuedTime && <span className="weather-issued">Issued • {formatPubTime(safetyData.weather.issuedTime)}</span>}<span className="weather-source-pill">Source • {weatherSourceDisplay}</span></div>}
+                summary={`${formatTempDisplay(weatherCardTemp)} · Wind ${formatWindDisplay(weatherCardWind)}`}
+              >
                 <div className="weather-row">
                   <div>
                     <div className="big-stat">{formatTempDisplay(weatherCardTemp)}</div>
@@ -8077,17 +8078,18 @@ function App() {
                     <p className="elevation-note">{localizeUnitText(safetyData.weather.elevationForecastNote)}</p>
                   )}
                 </section>
-              </div>
+              </CollapsibleCard>
 
               {shouldRenderRankedCard('heatRisk') && (
-                <div className="card heat-risk-card" style={{ order: reportCardOrder.heatRisk }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Sun size={14} /> Heat Risk
-                    <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, near-term trend peaks, and lower-terrain elevation estimates." />
-                  </span>
-                  <span className={`decision-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>
-                </div>
+                <CollapsibleCard
+                  cardKey="heatRisk"
+                  defaultExpanded={false}
+                  order={reportCardOrder.heatRisk}
+                  className="heat-risk-card"
+                  title={<span className="card-title"><Sun size={14} /> Heat Risk <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, near-term trend peaks, and lower-terrain elevation estimates." /></span>}
+                  headerMeta={<span className={`decision-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>}
+                  summary={String(heatRiskLabel || 'Low').toUpperCase()}
+                >
                 <p className="muted-note">{heatRiskGuidance}</p>
                 <div className="plan-grid">
                   <div>
@@ -8122,18 +8124,19 @@ function App() {
                   <p className="muted-note">No strong heat-stress signal was detected for this objective/time.</p>
                 )}
                 <p className="muted-note">Source: {safetyData.heatRisk?.source || 'Derived from forecast temperature and humidity signals'}</p>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('terrainTrailCondition') && (
-                <div className="card terrain-condition-card" style={{ order: reportCardOrder.terrainTrailCondition }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Route size={14} /> Terrain / Trail Condition
-                    <HelpHint text={terrainConditionDetails.summary} />
-                  </span>
-                  <span className={`decision-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
-                </div>
+                <CollapsibleCard
+                  cardKey="terrainTrailCondition"
+                  defaultExpanded={false}
+                  order={reportCardOrder.terrainTrailCondition}
+                  className="terrain-condition-card"
+                  title={<span className="card-title"><Route size={14} /> Terrain / Trail Condition <HelpHint text={terrainConditionDetails.summary} /></span>}
+                  headerMeta={<span className={`decision-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>}
+                  summary={safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}
+                >
                 <p className="muted-note">{terrainConditionDetails.summary}</p>
                 {terrainConditionDetails.impact && (
                   <p className="terrain-context-line">
@@ -8185,21 +8188,19 @@ function App() {
                   </ul>
                 ) : null}
                 <p className="muted-note">Classification updates when you change location, date, or start time.</p>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('recentRainfall') && (
-                <div className="card rainfall-card" style={{ order: reportCardOrder.recentRainfall }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <CloudRain size={14} /> Recent Precipitation Totals
-                    <HelpHint text="Observed rolling totals (past 12h/24h/48h) plus expected precipitation for your selected travel-window duration." />
-                  </span>
-                  <span className={`decision-pill ${rainfall24hSeverityClass}`}>
-                    24h rain {rainfall24hDisplay}
-                    {Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}
-                  </span>
-                </div>
+                <CollapsibleCard
+                  cardKey="recentRainfall"
+                  defaultExpanded={false}
+                  order={reportCardOrder.recentRainfall}
+                  className="rainfall-card"
+                  title={<span className="card-title"><CloudRain size={14} /> Recent Precipitation Totals <HelpHint text="Observed rolling totals (past 12h/24h/48h) plus expected precipitation for your selected travel-window duration." /></span>}
+                  headerMeta={<span className={`decision-pill ${rainfall24hSeverityClass}`}>24h rain {rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}</span>}
+                  summary={`${rainfall24hDisplay}/24h${Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}`}
+                >
                 <p className="precip-insight-line">{precipInsightLine}</p>
                 <p className="precip-insight-line expected">{expectedPrecipSummaryLine}</p>
                 <div className="precip-split-grid">
@@ -8323,18 +8324,25 @@ function App() {
                     rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'
                   )}
                 </p>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('windLoading') && windLoadingHintsRelevant && (
-                <WindLoadingCard
+                <CollapsibleCard
+                  cardKey="windLoading"
+                  defaultExpanded={false}
                   order={reportCardOrder.windLoading}
+                  className="wind-loading-card"
+                  title={<span className="card-title"><Wind size={14} /> Wind Loading <HelpHint text="Compass rose showing which aspects are wind-loaded right now based on current wind direction. Arrow points toward the upwind source; leeward (loading) aspects are highlighted opposite." /></span>}
+                  headerMeta={safetyData.weather.windDirection && !['CALM', 'VRB', 'VARIABLE'].includes((safetyData.weather.windDirection || '').trim().toUpperCase()) ? <span className="wind-loading-subtitle">From {safetyData.weather.windDirection.toUpperCase()} · {formatWindDisplay(safetyData.weather.windSpeed)}, gusts {formatWindDisplay(safetyData.weather.windGust)}</span> : <span className="wind-loading-subtitle">Calm / variable winds</span>}
+                  summary={`${formatWindDisplay(safetyData.weather.windSpeed)} ${safetyData.weather.windDirection || 'Calm'} · Primary: ${leewardAspectHints.length > 0 ? leewardAspectHints.join(', ') : 'N/A'}`}
+                >
+                <WindLoadingCard
                   windDirection={safetyData.weather.windDirection}
-                  windSpeed={safetyData.weather.windSpeed}
                   windGust={safetyData.weather.windGust}
                   avalancheProblems={safetyData.avalanche?.problems}
-                  formatWindDisplay={formatWindDisplay}
                 />
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('windLoadingHints') && windLoadingHintsRelevant && (
@@ -8421,13 +8429,14 @@ function App() {
               )}
 
               {shouldRenderRankedCard('sourceFreshness') && (
-                <div className="card source-freshness-card" style={{ order: reportCardOrder.sourceFreshness }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Clock size={14} /> Source Freshness
-                    <HelpHint text="How old each feed is based on upstream publish/observation timestamps (not local report generation time)." />
-                  </span>
-                </div>
+                <CollapsibleCard
+                  cardKey="sourceFreshness"
+                  defaultExpanded={false}
+                  order={reportCardOrder.sourceFreshness}
+                  className="source-freshness-card"
+                  title={<span className="card-title"><Clock size={14} /> Source Freshness <HelpHint text="How old each feed is based on upstream publish/observation timestamps (not local report generation time)." /></span>}
+                  summary={reportGeneratedAt ? `Updated ${formatAgeFromNow(reportGeneratedAt)}` : 'Freshness data unavailable'}
+                >
                 <ul className="source-freshness-list">
                   {sourceFreshnessRows.map((row) => {
                     const state = row.stateOverride || freshnessClass(row.issued, row.staleHours);
@@ -8452,17 +8461,19 @@ function App() {
                     {deviceTimezone ? ` • Device: ${deviceTimezone}` : ''}
                   </p>
                 )}
-                </div>
+                </CollapsibleCard>
               )}
 
-              <div id="planner-section-alerts" className="card nws-alerts-card" style={{ order: reportCardOrder.nwsAlerts }}>
-                  <div className="card-header">
-                    <span className="card-title">
-                      <AlertTriangle size={14} /> NWS Alerts
-                      <HelpHint text="Official National Weather Service alerts active at your selected start time for this location." />
-                    </span>
-                    <span className={`decision-pill ${nwsAlertCount > 0 ? 'nogo' : 'go'}`}>{nwsAlertCount} active</span>
-                  </div>
+              <CollapsibleCard
+                cardKey="nwsAlerts"
+                domId="planner-section-alerts"
+                defaultExpanded={false}
+                order={reportCardOrder.nwsAlerts}
+                className="nws-alerts-card"
+                title={<span className="card-title"><AlertTriangle size={14} /> NWS Alerts <HelpHint text="Official National Weather Service alerts active at your selected start time for this location." /></span>}
+                headerMeta={<span className={`decision-pill ${nwsAlertCount > 0 ? 'nogo' : 'go'}`}>{nwsAlertCount} active</span>}
+                summary={nwsAlertCount > 0 ? `${nwsAlertCount} active` : 'None active'}
+              >
                   <p className="muted-note">
                     Source: {safetyData.alerts?.source || 'NWS CAP feed'}
                     {safetyData.alerts?.highestSeverity ? ` • Highest: ${safetyData.alerts.highestSeverity}` : ''}
@@ -8578,21 +8589,18 @@ function App() {
                   ) : (
                     <p className="muted-note">No active NWS alerts for this objective point.</p>
                   )}
-                </div>
+              </CollapsibleCard>
 
               {shouldRenderRankedCard('airQuality') && (
-                <div className="card air-quality-card" style={{ order: reportCardOrder.airQuality }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Wind size={14} /> Air Quality
-                    <HelpHint text="AQI and pollutant values near your objective. Elevated values can reduce performance and increase risk." />
-                  </span>
-                  <span className={`decision-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClass(safetyData.airQuality?.usAqi)}`}>
-                    {airQualityFutureNotApplicable
-                      ? 'Current-day only'
-                      : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}
-                  </span>
-                </div>
+                <CollapsibleCard
+                  cardKey="airQuality"
+                  defaultExpanded={false}
+                  order={reportCardOrder.airQuality}
+                  className="air-quality-card"
+                  title={<span className="card-title"><Wind size={14} /> Air Quality <HelpHint text="AQI and pollutant values near your objective. Elevated values can reduce performance and increase risk." /></span>}
+                  headerMeta={<span className={`decision-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClass(safetyData.airQuality?.usAqi)}`}>{airQualityFutureNotApplicable ? 'Current-day only' : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}</span>}
+                  summary={`AQI: ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'} (${safetyData.airQuality?.category || 'Unknown'})`}
+                >
                 <div className="plan-grid">
                   <div>
                     <span className="stat-label">Category</span>
@@ -8618,20 +8626,19 @@ function App() {
                         safetyData.airQuality?.measuredTime ? ` • Measured ${formatPubTime(safetyData.airQuality.measuredTime)}` : ''
                       }`}
                 </p>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('snowpackSnapshot') && (
-                <div className="card snowpack-card" style={{ order: reportCardOrder.snowpackSnapshot }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Mountain size={14} /> Snowpack Snapshot
-                    <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC, plus historical average comparison for your selected date." />
-                  </span>
-                  <span className={`decision-pill ${snowpackPillClass}`}>
-                    {snowpackStatusLabel}
-                  </span>
-                </div>
+                <CollapsibleCard
+                  cardKey="snowpackSnapshot"
+                  defaultExpanded={false}
+                  order={reportCardOrder.snowpackSnapshot}
+                  className="snowpack-card"
+                  title={<span className="card-title"><Mountain size={14} /> Snowpack Snapshot <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC, plus historical average comparison for your selected date." /></span>}
+                  headerMeta={<span className={`decision-pill ${snowpackPillClass}`}>{snowpackStatusLabel}</span>}
+                  summary={snowpackStatusLabel}
+                >
 
                 {snowpackInsights && (
                   <div className="snowpack-insight-grid snowpack-insight-grid-compact">
@@ -8767,18 +8774,19 @@ function App() {
                     )}
                   </p>
                 </details>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('fireRisk') && (
-                <div className="card fire-risk-card" style={{ order: reportCardOrder.fireRisk }}>
-                <div className="card-header">
-                  <span className="card-title">
-                    <Flame size={14} /> Fire Risk
-                    <HelpHint text="Fire-weather and smoke risk synthesized from forecast heat/dryness/wind, NWS fire-weather alerts, and air-quality context." />
-                  </span>
-                  <span className={`decision-pill ${fireRiskPillClass}`}>{fireRiskLabel.toUpperCase()}</span>
-                </div>
+                <CollapsibleCard
+                  cardKey="fireRisk"
+                  defaultExpanded={false}
+                  order={reportCardOrder.fireRisk}
+                  className="fire-risk-card"
+                  title={<span className="card-title"><Flame size={14} /> Fire Risk <HelpHint text="Fire-weather and smoke risk synthesized from forecast heat/dryness/wind, NWS fire-weather alerts, and air-quality context." /></span>}
+                  headerMeta={<span className={`decision-pill ${fireRiskPillClass}`}>{fireRiskLabel.toUpperCase()}</span>}
+                  summary={fireRiskLabel.toUpperCase()}
+                >
                 <p className="muted-note">{safetyData.fireRisk?.guidance || 'No fire-risk guidance available.'}</p>
                 {safetyData.fireRisk?.reasons && safetyData.fireRisk.reasons.length > 0 && (
                   <ul className="signal-list compact">
@@ -8809,7 +8817,7 @@ function App() {
                   </ul>
                 )}
                 <p className="muted-note">Source: {safetyData.fireRisk?.source || 'Not provided'}</p>
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('planSnapshot') && (
@@ -8937,9 +8945,34 @@ function App() {
             </div>
           )}
 
-          {!isEssentialView && (
+          {!isEssentialView && (() => {
+            const avyHeaderMeta = (
+              <div className="source-meta">
+                <span>Avalanche center: {safetyData.avalanche.center || 'N/A'}</span>
+                {safetyData.avalanche.zone && <span className="source-zone">{safetyData.avalanche.zone}</span>}
+                {safetyData.avalanche.publishedTime && (
+                  <span className="published-chip">
+                    <Clock size={10} /> Issued: {formatPubTime(safetyData.avalanche.publishedTime)}
+                  </span>
+                )}
+                {safetyData.avalanche.expiresTime && (
+                  <span className={`published-chip ${avalancheExpiredForSelectedStart ? 'published-chip-expired' : ''}`}>
+                    <Clock size={10} /> {avalancheExpiredForSelectedStart ? 'Expired:' : 'Expires:'} {formatPubTime(safetyData.avalanche.expiresTime)}
+                  </span>
+                )}
+              </div>
+            );
+            return (
+            <CollapsibleCard
+              cardKey="avalancheForecast"
+              defaultExpanded={false}
+              order={reportCardOrder.avalancheForecast}
+              className="avy-card"
+              title={<span className="card-title"><Zap size={14} /> Avalanche Forecast <HelpHint text="Center-issued avalanche danger by elevation, bottom line, and published avalanche problems for this zone/date." /></span>}
+              headerMeta={avyHeaderMeta}
+              summary={avalancheRelevant ? (overallAvalancheLevel != null ? `L${overallAvalancheLevel}: ${getDangerText(overallAvalancheLevel)}` : 'Unknown danger level') : 'Not applicable'}
+            >
             <AvalancheForecastCard
-            order={reportCardOrder.avalancheForecast}
             avalanche={safetyData.avalanche}
             avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
             avalancheRelevant={avalancheRelevant}
@@ -8948,7 +8981,6 @@ function App() {
             overallAvalancheLevel={overallAvalancheLevel}
             avalancheElevationRows={avalancheElevationRows}
             safeAvalancheLink={safeAvalancheLink}
-            formatPubTime={formatPubTime}
             getDangerLevelClass={getDangerLevelClass}
             getDangerText={getDangerText}
             normalizeDangerLevel={normalizeDangerLevel}
@@ -8957,13 +8989,21 @@ function App() {
             toPlainText={toPlainText}
             objectiveElevationFt={safetyData.weather.elevation ?? null}
             />
-          )}
+            </CollapsibleCard>
+            );
+          })()}
 
           {!isEssentialView && (
+            <CollapsibleCard
+              cardKey="fieldBrief"
+              defaultExpanded={false}
+              order={reportCardOrder.fieldBrief}
+              className="ai-box field-brief-card"
+              title={<span className="card-title"><ShieldCheck size={14} /> Field Brief <HelpHint text="Action-first field brief with primary call, top risks, immediate actions, and optional details." /></span>}
+              headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
+              summary={`${decision.level}: ${fieldBriefHeadline.slice(0, 80)}${fieldBriefHeadline.length > 80 ? '…' : ''}`}
+            >
             <FieldBriefCard
-            order={reportCardOrder.fieldBrief}
-            decisionLevelClass={decision.level.toLowerCase().replace('-', '')}
-            decisionLevelLabel={decision.level}
             fieldBriefHeadline={fieldBriefHeadline}
             fieldBriefPrimaryReason={fieldBriefPrimaryReason}
             decisionActionLine={decisionActionLine}
@@ -8976,6 +9016,7 @@ function App() {
             fieldBriefActions={fieldBriefActions}
             localizeUnitText={localizeUnitText}
             />
+            </CollapsibleCard>
           )}
 
           {!isEssentialView && (

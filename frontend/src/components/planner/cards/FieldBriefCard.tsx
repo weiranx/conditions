@@ -1,5 +1,3 @@
-import { ShieldCheck } from 'lucide-react';
-import { HelpHint } from '../CardHelpHint';
 
 interface FieldBriefItem {
   label: string;
@@ -7,9 +5,6 @@ interface FieldBriefItem {
 }
 
 interface FieldBriefCardProps {
-  order: number;
-  decisionLevelClass: string;
-  decisionLevelLabel: string;
   fieldBriefHeadline: string;
   fieldBriefPrimaryReason: string;
   decisionActionLine: string;
@@ -24,9 +19,6 @@ interface FieldBriefCardProps {
 }
 
 export function FieldBriefCard({
-  order,
-  decisionLevelClass,
-  decisionLevelLabel,
   fieldBriefHeadline,
   fieldBriefPrimaryReason,
   decisionActionLine,
@@ -40,14 +32,7 @@ export function FieldBriefCard({
   localizeUnitText,
 }: FieldBriefCardProps) {
   return (
-    <div className="ai-box field-brief-card" style={{ order }}>
-      <div className="card-header">
-        <span className="card-title">
-          <ShieldCheck size={14} /> Field Brief
-          <HelpHint text="Action-first field brief with primary call, top risks, immediate actions, and optional details." />
-        </span>
-        <span className={`decision-pill ${decisionLevelClass}`}>{decisionLevelLabel}</span>
-      </div>
+    <>
       <p className="field-brief-headline">{fieldBriefHeadline}</p>
 
       <div className="field-brief-primary">
@@ -124,6 +109,6 @@ export function FieldBriefCard({
           </ul>
         </div>
       </details>
-    </div>
+    </>
   );
 }

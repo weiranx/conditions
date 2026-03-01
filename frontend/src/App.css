@@ -1651,6 +1651,90 @@ input {
   border-bottom: 1px solid #ddd7c8;
 }
 
+/* ── Collapsible Card ────────────────────────────────────── */
+
+button.collapsible-card-header {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0 0 12px;
+  margin: 0 0 16px;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid #ddd7c8;
+}
+
+button.collapsible-card-header:focus-visible {
+  outline: 2px solid var(--focus-ring, #4a90d9);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.is-collapsed button.collapsible-card-header {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.collapsible-title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.collapsible-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.collapsible-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.collapsible-chevron {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  transform: rotate(90deg);
+}
+
+.is-expanded .collapsible-chevron {
+  transform: rotate(-90deg);
+}
+
+.collapsible-summary {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 4px 0 2px;
+}
+
+:root[data-theme='dark'] button.collapsible-card-header {
+  border-bottom-color: var(--line-color);
+}
+
+.report-columns .ai-box {
+  break-inside: avoid;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapsible-chevron {
+    transition: none;
+  }
+}
+
+/* ── End Collapsible Card ──────────────────────────────────── */
+
 .card-title {
   display: inline-flex;
   align-items: center;

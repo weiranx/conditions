@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { AlertTriangle, Clock, Zap } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import type { AvalancheElevationBand, SafetyData } from '../../../app/types';
 import {
   getLocationEntries,
@@ -8,7 +8,6 @@ import {
   parseTerrainFromLocation,
 } from '../../../utils/avalanche';
 import { AspectElevationRose } from './AspectElevationRose';
-import { HelpHint } from '../CardHelpHint';
 
 interface AvalancheElevationRow {
   key: string;
@@ -17,7 +16,6 @@ interface AvalancheElevationRow {
 }
 
 interface AvalancheForecastCardProps {
-  order: number;
   avalanche: SafetyData['avalanche'];
   avalancheExpiredForSelectedStart: boolean;
   avalancheRelevant: boolean;
@@ -26,7 +24,6 @@ interface AvalancheForecastCardProps {
   overallAvalancheLevel: number | null;
   avalancheElevationRows: AvalancheElevationRow[];
   safeAvalancheLink: string | null;
-  formatPubTime: (value: string) => string;
   getDangerLevelClass: (level?: number) => string;
   getDangerText: (level: number) => string;
   normalizeDangerLevel: (level?: number) => number;
@@ -37,7 +34,6 @@ interface AvalancheForecastCardProps {
 }
 
 export function AvalancheForecastCard({
-  order,
   avalanche,
   avalancheExpiredForSelectedStart,
   avalancheRelevant,
@@ -46,7 +42,6 @@ export function AvalancheForecastCard({
   overallAvalancheLevel,
   avalancheElevationRows,
   safeAvalancheLink,
-  formatPubTime,
   getDangerLevelClass,
   getDangerText,
   normalizeDangerLevel,
@@ -56,28 +51,7 @@ export function AvalancheForecastCard({
   objectiveElevationFt,
 }: AvalancheForecastCardProps) {
   return (
-    <div className="card avy-card" style={{ order }}>
-      <div className="card-header">
-        <span className="card-title">
-          <Zap size={14} /> Avalanche Forecast
-          <HelpHint text="Center-issued avalanche danger by elevation, bottom line, and published avalanche problems for this zone/date." />
-        </span>
-        <div className="source-meta">
-          <span>Avalanche center: {avalanche.center || 'N/A'}</span>
-          {avalanche.zone && <span className="source-zone">{avalanche.zone}</span>}
-          {avalanche.publishedTime && (
-            <span className="published-chip">
-              <Clock size={10} /> Issued: {formatPubTime(avalanche.publishedTime)}
-            </span>
-          )}
-          {avalanche.expiresTime && (
-            <span className={`published-chip ${avalancheExpiredForSelectedStart ? 'published-chip-expired' : ''}`}>
-              <Clock size={10} /> {avalancheExpiredForSelectedStart ? 'Expired:' : 'Expires:'} {formatPubTime(avalanche.expiresTime)}
-            </span>
-          )}
-        </div>
-      </div>
-
+    <>
       {avalancheExpiredForSelectedStart && (
         <p className="muted-note">This bulletin is expired for the selected start time and is shown for context only.</p>
       )}
@@ -292,6 +266,6 @@ export function AvalancheForecastCard({
           View full forecast at {avalanche.center?.toUpperCase() || 'OFFICIAL CENTER'} →
         </a>
       )}
-    </div>
+    </>
   );
 }

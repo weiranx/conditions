@@ -1,7 +1,6 @@
 import type { ChangeEventHandler, Dispatch, FocusEventHandler, SetStateAction } from 'react';
 import { formatClockForStyle } from '../../../app/core';
 import type { CriticalRiskLevel, TimeStyle, TravelWindowInsights, TravelWindowRow, TravelWindowSpan } from '../../../app/types';
-import { HelpHint } from '../CardHelpHint';
 
 interface CriticalWindowRow {
   time: string;
@@ -17,9 +16,6 @@ interface CriticalWindowRow {
 type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
 
 interface TravelWindowPlannerCardProps {
-  sectionId?: string;
-  order: number;
-  travelWindowHoursLabel: string;
   peakCriticalWindow: CriticalWindowRow | null;
   timeStyle: TimeStyle;
   criticalRiskLevelText: (level: CriticalRiskLevel) => string;
@@ -66,9 +62,6 @@ interface TravelWindowPlannerCardProps {
 }
 
 export function TravelWindowPlannerCard({
-  sectionId,
-  order,
-  travelWindowHoursLabel,
   peakCriticalWindow,
   timeStyle,
   criticalRiskLevelText,
@@ -118,13 +111,7 @@ export function TravelWindowPlannerCard({
         : 'is-watch';
 
   return (
-    <div id={sectionId} className="card projection-card" style={{ order }}>
-      <div className="card-header">
-        <span className="card-title">
-          Travel Window Planner ({travelWindowHoursLabel})
-          <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your selected window length, plus wind, precip, and feels-like thresholds." />
-        </span>
-      </div>
+    <>
       {peakCriticalWindow ? (
         <div className="critical-window">
           <p className="critical-summary">
@@ -318,6 +305,6 @@ export function TravelWindowPlannerCard({
       ) : (
         <p className="muted-note">Hourly trend data is unavailable for this objective/date.</p>
       )}
-    </div>
+    </>
   );
 }

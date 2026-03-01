@@ -1,4 +1,3 @@
-import { Wind } from 'lucide-react';
 import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
@@ -8,7 +7,6 @@ import {
 } from '../../../utils/avalanche';
 import type { TerrainAspect } from '../../../utils/avalanche';
 import type { AvalancheProblem } from '../../../app/types';
-import { HelpHint } from '../CardHelpHint';
 
 // --- Rose geometry (mirrors AspectElevationRose constants) ---
 
@@ -161,21 +159,15 @@ function WindLoadingRose({ primaryAspects, secondaryAspects, windFromDeg }: Wind
 // --- Main card ---
 
 interface WindLoadingCardProps {
-  order: number;
   windDirection: string | null | undefined;
-  windSpeed: number;
   windGust: number;
   avalancheProblems?: AvalancheProblem[];
-  formatWindDisplay: (mph: number | null | undefined) => string;
 }
 
 export function WindLoadingCard({
-  order,
   windDirection,
-  windSpeed,
   windGust,
   avalancheProblems,
-  formatWindDisplay,
 }: WindLoadingCardProps) {
   const windFromDeg = windDirectionToDegrees(windDirection);
   const isCalm =
@@ -198,27 +190,8 @@ export function WindLoadingCard({
     return [...aspects].some((a) => primarySet.has(a));
   });
 
-  const windSpeedStr = Number.isFinite(windSpeed) ? formatWindDisplay(windSpeed) : '—';
-  const windGustStr = Number.isFinite(windGust) ? formatWindDisplay(windGust) : '—';
-  const directionLabel = windDirection && !isCalm ? windDirection.toUpperCase() : null;
-
   return (
-    <div className="card wind-loading-card" style={{ order }}>
-      <div className="card-header">
-        <span className="card-title">
-          <Wind size={14} /> Wind Loading
-          <HelpHint text="Compass rose showing which aspects are wind-loaded right now based on current wind direction. Arrow points toward the upwind source; leeward (loading) aspects are highlighted opposite." />
-        </span>
-        {directionLabel && (
-          <span className="wind-loading-subtitle">
-            From {directionLabel} · {windSpeedStr}, gusts {windGustStr}
-          </span>
-        )}
-        {isCalm && (
-          <span className="wind-loading-subtitle">Calm / variable winds</span>
-        )}
-      </div>
-
+    <>
       {isCalm ? (
         <p className="wind-loading-calm">
           Wind direction is calm or variable — broad lee-aspect loading is unlikely, but small
@@ -261,6 +234,6 @@ export function WindLoadingCard({
           Wind Slab problem reported on primary loading aspects — evaluate carefully before committing to leeward terrain.
         </p>
       )}
-    </div>
+    </>
   );
 }
