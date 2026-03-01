@@ -52,6 +52,7 @@ import { HelpHint } from './components/planner/CardHelpHint';
 import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
 import { FieldBriefCard } from './components/planner/cards/FieldBriefCard';
 import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
+import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
 import {
   APP_CREDIT_TEXT,
   BACKEND_WAKE_NOTICE_DELAY_MS,
@@ -138,6 +139,7 @@ import {
   ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
   parseTerrainFromLocation,
+  secondaryCrossLoadingAspects,
   windDirectionToDegrees,
 } from './utils/avalanche';
 import {
@@ -182,6 +184,7 @@ type SortableCardKey =
   | 'planSnapshot'
   | 'terrainTrailCondition'
   | 'snowpackSnapshot'
+  | 'windLoading'
   | 'windLoadingHints'
   | 'recentRainfall'
   | 'fireRisk'
@@ -675,18 +678,6 @@ function resolveDominantTrendWindDirection(trend: WeatherTrendPoint[] | null | u
     total: directionalRows.length,
     ratio: top[1] / directionalRows.length,
   };
-}
-
-function secondaryCrossLoadingAspects(direction: string | null | undefined): string[] {
-  const directionDeg = windDirectionToDegrees(direction || null);
-  if (directionDeg === null) {
-    return [];
-  }
-  const leewardDeg = (directionDeg + 180) % 360;
-  const centerIndex = Math.round(leewardDeg / 45) % ASPECT_ROSE_ORDER.length;
-  const left = ASPECT_ROSE_ORDER[(centerIndex + 2) % ASPECT_ROSE_ORDER.length];
-  const right = ASPECT_ROSE_ORDER[(centerIndex + ASPECT_ROSE_ORDER.length - 2) % ASPECT_ROSE_ORDER.length];
-  return Array.from(new Set([left, right]));
 }
 
 function assessCriticalWindowPoint(point: WeatherTrendPoint): { level: CriticalRiskLevel; reasons: string[]; score: number } {
@@ -6119,6 +6110,13 @@ function App() {
       { key: 'terrainTrailCondition', base: 84, available: terrainAvailable, relevant: true, riskLevel: terrainRiskLevel },
       { key: 'snowpackSnapshot', base: 82, available: snowpackAvailable, relevant: true, riskLevel: snowpackRiskLevel },
       {
+        key: 'windLoading',
+        base: 81,
+        available: windHintsAvailable,
+        relevant: windLoadingHintsRelevant,
+        riskLevel: windLoadingRiskLevel,
+      },
+      {
         key: 'windLoadingHints',
         base: 80,
         available: windHintsAvailable,
@@ -6190,13 +6188,14 @@ function App() {
       planSnapshot: innerOrder.get('planSnapshot') ?? 16,
       terrainTrailCondition: innerOrder.get('terrainTrailCondition') ?? 17,
       snowpackSnapshot: innerOrder.get('snowpackSnapshot') ?? 18,
-      windLoadingHints: innerOrder.get('windLoadingHints') ?? 19,
-      recentRainfall: innerOrder.get('recentRainfall') ?? 20,
-      fireRisk: innerOrder.get('fireRisk') ?? 21,
-      airQuality: innerOrder.get('airQuality') ?? 22,
-      sourceFreshness: innerOrder.get('sourceFreshness') ?? 23,
-      scoreTrace: innerOrder.get('scoreTrace') ?? 24,
-      recommendedGear: innerOrder.get('recommendedGear') ?? 25,
+      windLoading: innerOrder.get('windLoading') ?? 19,
+      windLoadingHints: innerOrder.get('windLoadingHints') ?? 20,
+      recentRainfall: innerOrder.get('recentRainfall') ?? 21,
+      fireRisk: innerOrder.get('fireRisk') ?? 22,
+      airQuality: innerOrder.get('airQuality') ?? 23,
+      sourceFreshness: innerOrder.get('sourceFreshness') ?? 24,
+      scoreTrace: innerOrder.get('scoreTrace') ?? 25,
+      recommendedGear: innerOrder.get('recommendedGear') ?? 26,
       deepDiveData: 140,
       cardMeta,
     };
@@ -8325,6 +8324,17 @@ function App() {
                   )}
                 </p>
                 </div>
+              )}
+
+              {shouldRenderRankedCard('windLoading') && windLoadingHintsRelevant && (
+                <WindLoadingCard
+                  order={reportCardOrder.windLoading}
+                  windDirection={safetyData.weather.windDirection}
+                  windSpeed={safetyData.weather.windSpeed}
+                  windGust={safetyData.weather.windGust}
+                  avalancheProblems={safetyData.avalanche?.problems}
+                  formatWindDisplay={formatWindDisplay}
+                />
               )}
 
               {shouldRenderRankedCard('windLoadingHints') && windLoadingHintsRelevant && (

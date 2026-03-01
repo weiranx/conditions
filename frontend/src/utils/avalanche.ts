@@ -59,6 +59,16 @@ export function leewardAspectsFromWind(direction: string | null | undefined): Te
   return Array.from(result);
 }
 
+export function secondaryCrossLoadingAspects(direction: string | null | undefined): TerrainAspect[] {
+  const directionDeg = windDirectionToDegrees(direction ?? null);
+  if (directionDeg === null) return [];
+  const leewardDeg = (directionDeg + 180) % 360;
+  const centerIndex = Math.round(leewardDeg / 45) % ASPECT_ROSE_ORDER.length;
+  const left = ASPECT_ROSE_ORDER[(centerIndex + 2) % ASPECT_ROSE_ORDER.length];
+  const right = ASPECT_ROSE_ORDER[(centerIndex + ASPECT_ROSE_ORDER.length - 2) % ASPECT_ROSE_ORDER.length];
+  return Array.from(new Set([left, right]));
+}
+
 export function polarPoint(cx: number, cy: number, radius: number, angleDeg: number): { x: number; y: number } {
   const radians = (angleDeg * Math.PI) / 180;
   return {

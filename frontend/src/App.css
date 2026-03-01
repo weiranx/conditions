@@ -3700,6 +3700,108 @@ input {
   color: #57635a;
 }
 
+/* WindLoadingCard */
+
+.wind-loading-card .card-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.wind-loading-subtitle {
+  font-size: 0.8rem;
+  color: #6b7c72;
+}
+
+.wind-loading-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.wind-loading-body .wind-loading-rose {
+  flex: 0 0 auto;
+  width: 140px;
+}
+
+.wind-loading-aspects {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.wind-loading-aspect-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wind-loading-aspect-group .wind-aspect-chips {
+  margin-top: 0;
+}
+
+.wind-loading-primary-chip {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.wind-loading-secondary-chip {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #78716c;
+}
+
+.wind-loading-overlap-alert {
+  margin: 10px 0 0;
+  padding: 8px 11px;
+  border-radius: 6px;
+  border-left: 3px solid #f59e0b;
+  background: #fef9ec;
+  color: #78350f;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.wind-loading-calm {
+  margin: 6px 0 0;
+  color: #6b7c72;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+/* WindLoadingRose SVG cell states */
+.wind-rose-cell {
+  fill: var(--rose-inactive, #e8ece9);
+  stroke: var(--surface, #fff);
+  stroke-width: 1;
+}
+
+.wind-rose-cell.primary {
+  fill: #f59e0b;
+  opacity: 0.85;
+}
+
+.wind-rose-cell.secondary {
+  fill: #fde68a;
+  opacity: 0.85;
+}
+
+/* Wind arrow SVG elements */
+.wind-arrow-shaft {
+  stroke: #1e3a2f;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.wind-arrow-head {
+  fill: #1e3a2f;
+}
+
 .unknown-mode-panel {
   display: grid;
   gap: 8px;
@@ -6125,6 +6227,52 @@ input {
   background: #2b3641;
   border-color: #4b5d6d;
   color: #c6d5e3;
+}
+
+:root[data-theme='dark'] .wind-loading-subtitle {
+  color: #8faabe;
+}
+
+:root[data-theme='dark'] .wind-loading-primary-chip {
+  background: #4a3200;
+  border-color: #d97706;
+  color: #fde68a;
+}
+
+:root[data-theme='dark'] .wind-loading-secondary-chip {
+  background: #2d2a1e;
+  border-color: #a37e20;
+  color: #d4c47a;
+}
+
+:root[data-theme='dark'] .wind-loading-overlap-alert {
+  background: #2e1f07;
+  border-color: #d97706;
+  color: #fde68a;
+}
+
+:root[data-theme='dark'] .wind-loading-calm {
+  color: #8faabe;
+}
+
+:root[data-theme='dark'] .wind-rose-cell {
+  fill: #263332;
+}
+
+:root[data-theme='dark'] .wind-rose-cell.primary {
+  fill: #d97706;
+}
+
+:root[data-theme='dark'] .wind-rose-cell.secondary {
+  fill: #92400e;
+}
+
+:root[data-theme='dark'] .wind-arrow-shaft {
+  stroke: #d1e8de;
+}
+
+:root[data-theme='dark'] .wind-arrow-head {
+  fill: #d1e8de;
 }
 
 :root[data-theme='dark'] .plan-summary-item {
