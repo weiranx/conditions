@@ -7390,25 +7390,46 @@ function App() {
       {hasObjective && safetyData && decision && (
         <div className="data-grid">
           <div className="score-card" style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
-            <div className="score-value" style={{ color: getScoreColor(safetyData.safety.score) }}>
-              {safetyData.safety.score}%
+            <div className="score-left">
+              <div className="score-value" style={{ color: getScoreColor(safetyData.safety.score) }}>
+                {safetyData.safety.score}%
+              </div>
+              <div className="score-bar-track">
+                <div className="score-bar-fill" style={{ width: `${safetyData.safety.score}%`, background: getScoreColor(safetyData.safety.score) }} />
+              </div>
+              {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (
+                <div className="score-top-factors">
+                  {safetyData.safety.factors
+                    .slice()
+                    .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)))
+                    .slice(0, 2)
+                    .map((f, idx) => (
+                      <div key={idx} className="score-top-factor-row">
+                        <span className="score-top-factor-impact">−{Math.abs(Math.round(Number(f.impact || 0)))}</span>
+                        <span className="score-top-factor-label">{f.hazard || 'Factor'}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
             <div className="score-meta">
               <span className="status-badge" style={{ color: getScoreColor(safetyData.safety.score) }}>
                 {safetyData.safety.score >= 80 ? 'Optimal' : safetyData.safety.score >= 50 ? 'Caution' : 'Critical'}
               </span>
               <div className="hazard-badge">
-                <AlertTriangle size={12} /> Primary hazard: {safetyData.safety.primaryHazard}
+                <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
               </div>
-              <div className="source-line">
-                Confidence: {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}%` : 'N/A'}
+              <div className="score-confidence-row">
+                <span className="score-confidence-dot" style={{
+                  background: typeof safetyData.safety.confidence === 'number'
+                    ? safetyData.safety.confidence >= 70 ? '#4a9b6a' : safetyData.safety.confidence >= 40 ? '#c8841b' : '#b04040'
+                    : '#aaa'
+                }} />
+                Confidence {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}%` : 'N/A'}
               </div>
               <div className="objective-line">
                 {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}
               </div>
-              {Array.isArray(safetyData.safety.sourcesUsed) && safetyData.safety.sourcesUsed.length > 0 && (
-                <div className="source-line">Score sources: {safetyData.safety.sourcesUsed.join(' • ')}</div>
-              )}
               {(loading || error) && (
                 <div className="source-line">
                   {loading
@@ -7416,16 +7437,15 @@ function App() {
                     : 'Showing last successful report. Latest refresh failed.'}
                 </div>
               )}
-              <div className="source-line">Report cards below are sorted dynamically by current risk level and data relevance.</div>
               {!isEssentialView && !showAllRankedCards && collapsedRankedCardCount > 0 && (
                 <div className="source-line">
-                  Showing top-priority cards first ({collapsedRankedCardCount} lower-priority card{collapsedRankedCardCount === 1 ? '' : 's'} hidden).
+                  {collapsedRankedCardCount} lower-priority card{collapsedRankedCardCount === 1 ? '' : 's'} hidden.{' '}
                   <button
                     type="button"
                     className="settings-btn report-action-btn"
                     onClick={() => setShowAllRankedCards(true)}
                   >
-                    Show all cards
+                    Show all
                   </button>
                 </div>
               )}
@@ -7436,24 +7456,24 @@ function App() {
                     className="settings-btn report-action-btn"
                     onClick={() => setShowAllRankedCards(false)}
                   >
-                    Show priority cards only
+                    Priority view
                   </button>
                 </div>
               )}
               <div className="report-action-row">
                 <button type="button" className="settings-btn report-action-btn" onClick={handlePrintReport}>
-                  <Printer size={14} /> Printable Report
+                  <Printer size={14} /> Print
                 </button>
                 <button type="button" className="settings-btn report-action-btn" onClick={handleCopySatelliteLine} disabled={!satelliteConditionLine}>
-                  <MessageSquare size={14} /> {copiedSatLine ? 'Copied SAT Message' : 'Copy SAT Message'}
+                  <MessageSquare size={14} /> {copiedSatLine ? 'Copied SAT' : 'SAT Message'}
                 </button>
                 <button type="button" className="settings-btn report-action-btn" onClick={handleCopyTeamBrief} disabled={!teamBriefChecklist}>
-                  <ShieldCheck size={14} /> {copiedTeamBrief ? 'Copied Field Brief' : 'Copy Field Brief'}
+                  <ShieldCheck size={14} /> {copiedTeamBrief ? 'Copied' : 'Field Brief'}
                 </button>
               </div>
               {satelliteConditionLine && <p className="sat-line-preview">{satelliteConditionLine}</p>}
               {satelliteConditionLine && (
-                <p className="muted-note sat-limit-note">Formatted for 170-character InReach/SPOT satellite messenger limit ({satelliteConditionLine.length}/170 chars)</p>
+                <p className="muted-note sat-limit-note">{satelliteConditionLine.length}/170 chars (InReach/SPOT)</p>
               )}
             </div>
           </div>
@@ -7564,32 +7584,32 @@ function App() {
                     )}
                   </div>
                 )}
+                {decision.blockers.length > 0 && (
+                  <div className="decision-group decision-blockers-inline">
+                    <h4>
+                      <XCircle size={14} /> Blockers
+                    </h4>
+                    <ul className="signal-list compact">
+                      {decision.blockers.map((item, idx) => (
+                        <li key={idx}>{localizeUnitText(item)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {decision.cautions.length > 0 && (
+                  <div className="decision-group decision-cautions-inline">
+                    <h4>
+                      <AlertTriangle size={14} /> Cautions
+                    </h4>
+                    <ul className="signal-list compact">
+                      {decision.cautions.map((item, idx) => (
+                        <li key={idx}>{localizeUnitText(item)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <details className="decision-details">
-                  <summary>Show detailed blockers, cautions, and check outcomes</summary>
-                  {decision.blockers.length > 0 && (
-                    <div className="decision-group">
-                      <h4>
-                        <XCircle size={14} /> Blockers
-                      </h4>
-                      <ul className="signal-list compact">
-                        {decision.blockers.map((item, idx) => (
-                          <li key={idx}>{localizeUnitText(item)}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {decision.cautions.length > 0 && (
-                    <div className="decision-group">
-                      <h4>
-                        <AlertTriangle size={14} /> Cautions
-                      </h4>
-                      <ul className="signal-list compact">
-                        {decision.cautions.map((item, idx) => (
-                          <li key={idx}>{localizeUnitText(item)}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  <summary>Show all check outcomes</summary>
                   <div className="decision-group">
                     <h4>
                       <CheckCircle2 size={14} /> Check outcomes
@@ -7597,8 +7617,8 @@ function App() {
                     <ul className="signal-list compact">
                       {orderedCriticalChecks.map((check, idx) => (
                         <li key={`${check.label}-${idx}`}>
-                          <strong>{check.ok ? 'PASS' : 'ATTN'}:</strong> {localizeUnitText(check.label)}
-                          {check.detail ? ` - ${localizeUnitText(check.detail)}` : ''}
+                          <strong>{check.ok ? '✓' : '✗'}</strong> {localizeUnitText(check.label)}
+                          {check.detail ? ` — ${localizeUnitText(check.detail)}` : ''}
                         </li>
                       ))}
                     </ul>
@@ -8327,33 +8347,21 @@ function App() {
                 </CollapsibleCard>
               )}
 
-              {shouldRenderRankedCard('windLoading') && windLoadingHintsRelevant && (
+              {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
                 <CollapsibleCard
                   cardKey="windLoading"
                   defaultExpanded={false}
                   order={reportCardOrder.windLoading}
                   className="wind-loading-card"
-                  title={<span className="card-title"><Wind size={14} /> Wind Loading <HelpHint text="Compass rose showing which aspects are wind-loaded right now based on current wind direction. Arrow points toward the upwind source; leeward (loading) aspects are highlighted opposite." /></span>}
-                  headerMeta={safetyData.weather.windDirection && !['CALM', 'VRB', 'VARIABLE'].includes((safetyData.weather.windDirection || '').trim().toUpperCase()) ? <span className="wind-loading-subtitle">From {safetyData.weather.windDirection.toUpperCase()} · {formatWindDisplay(safetyData.weather.windSpeed)}, gusts {formatWindDisplay(safetyData.weather.windGust)}</span> : <span className="wind-loading-subtitle">Calm / variable winds</span>}
-                  summary={`${formatWindDisplay(safetyData.weather.windSpeed)} ${safetyData.weather.windDirection || 'Calm'} · Primary: ${leewardAspectHints.length > 0 ? leewardAspectHints.join(', ') : 'N/A'}`}
+                  title={<span className="card-title"><Wind size={14} /> Wind Loading <HelpHint text="Compass rose and transport analysis: which aspects are loading based on wind direction, trend agreement, and active transport hours." /></span>}
+                  headerMeta={<span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} · {windLoadingConfidence}</span>}
+                  summary={`${windLoadingLevel} · ${formatWindDisplay(safetyData.weather.windSpeed)} ${safetyData.weather.windDirection || 'Calm'} · Lee: ${leewardAspectHints.length > 0 ? leewardAspectHints.join(', ') : 'N/A'}`}
                 >
-                <WindLoadingCard
-                  windDirection={safetyData.weather.windDirection}
-                  windGust={safetyData.weather.windGust}
-                  avalancheProblems={safetyData.avalanche?.problems}
-                />
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('windLoadingHints') && windLoadingHintsRelevant && (
-                <div className="card wind-hints-card" style={{ order: reportCardOrder.windLoadingHints }}>
-                  <div className="card-header">
-                    <span className="card-title">
-                      <Wind size={14} /> Wind Loading Hints
-                      <HelpHint text="Uses start-time wind plus nearby trend hours to infer likely loaded aspects and where wind transport is most relevant." />
-                    </span>
-                    <span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} • {windLoadingConfidence}</span>
-                  </div>
+                  <WindLoadingCard
+                    windDirection={safetyData.weather.windDirection}
+                    windGust={safetyData.weather.windGust}
+                    avalancheProblems={safetyData.avalanche?.problems}
+                  />
                   {avalancheUnknown && (
                     <p className="wind-coverage-note">No official forecast available — use wind loading as your primary terrain-selection signal.</p>
                   )}
@@ -8425,7 +8433,7 @@ function App() {
                       Wind loading aligns with active avalanche problem aspects: {aspectOverlapProblems.join(', ')}.
                     </p>
                   )}
-                </div>
+                </CollapsibleCard>
               )}
 
               {shouldRenderRankedCard('sourceFreshness') && (

@@ -1,3 +1,4 @@
+import { AlertTriangle, Clock, ShieldCheck, XCircle, List } from 'lucide-react';
 
 interface FieldBriefItem {
   label: string;
@@ -36,7 +37,7 @@ export function FieldBriefCard({
       <p className="field-brief-headline">{fieldBriefHeadline}</p>
 
       <div className="field-brief-primary">
-        <span className="field-brief-primary-label">Command intent</span>
+        <span className="field-brief-primary-label">Mission summary</span>
         <p className="field-brief-primary-text">{fieldBriefPrimaryReason}</p>
         <p className="field-brief-primary-action">{decisionActionLine}</p>
       </div>
@@ -52,7 +53,7 @@ export function FieldBriefCard({
 
       <div className="field-brief-split">
         <div className="field-brief-group">
-          <h4>Execution Plan (Time + Route)</h4>
+          <h4><Clock size={12} /> Execution Plan</h4>
           <ol className="field-brief-steps">
             {(fieldBriefExecutionSteps.length > 0
               ? fieldBriefExecutionSteps
@@ -64,7 +65,7 @@ export function FieldBriefCard({
         </div>
 
         <div className="field-brief-group">
-          <h4>Top Watchouts</h4>
+          <h4><AlertTriangle size={12} /> Top Watchouts</h4>
           <ul className="signal-list compact">
             {(fieldBriefTopRisks.length > 0 ? fieldBriefTopRisks : ['No dominant risk trigger detected from current model signals.']).map((item, idx) => (
               <li key={idx}>{localizeUnitText(item)}</li>
@@ -74,7 +75,7 @@ export function FieldBriefCard({
       </div>
 
       <div className="field-brief-group">
-        <h4>Immediate Actions (Before Commit)</h4>
+        <h4><ShieldCheck size={12} /> Immediate Actions</h4>
         <ul className="signal-list compact">
           {(fieldBriefImmediateActions.length > 0 ? fieldBriefImmediateActions : fieldBriefActions).map((item, idx) => (
             <li key={idx}>{localizeUnitText(item)}</li>
@@ -82,20 +83,23 @@ export function FieldBriefCard({
         </ul>
       </div>
 
-      <details className="field-brief-details">
-        <summary>Show full snapshot, abort triggers, and all actions</summary>
-        <div className="field-brief-group">
-          <h4>Situation Snapshot</h4>
+      {fieldBriefAbortTriggers.length > 0 && (
+        <div className="field-brief-group field-brief-abort">
+          <h4><XCircle size={12} /> Abort Triggers</h4>
           <ul className="signal-list compact">
-            {fieldBriefSnapshot.map((item, idx) => (
+            {fieldBriefAbortTriggers.map((item, idx) => (
               <li key={idx}>{localizeUnitText(item)}</li>
             ))}
           </ul>
         </div>
+      )}
+
+      <details className="field-brief-details">
+        <summary><List size={12} /> Show situation snapshot and full action list</summary>
         <div className="field-brief-group">
-          <h4>Abort Triggers</h4>
+          <h4>Situation Snapshot</h4>
           <ul className="signal-list compact">
-            {fieldBriefAbortTriggers.map((item, idx) => (
+            {fieldBriefSnapshot.map((item, idx) => (
               <li key={idx}>{localizeUnitText(item)}</li>
             ))}
           </ul>
