@@ -409,9 +409,9 @@ test('buildLayeringGearSuggestions includes core layering framework and weather 
     alertsData: { activeCount: 0 },
   });
 
-  expect(suggestions.some((item) => item.includes('Layering core'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Storm shell'))).toBe(true);
-  expect(suggestions.some((item) => /traction/i.test(item))).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Layering core')).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Storm shell')).toBe(true);
+  expect(suggestions.some((item) => /traction/i.test(item.title))).toBe(true);
 });
 
 test('buildLayeringGearSuggestions adds hazard-specific items when risk signals are present', () => {
@@ -431,10 +431,10 @@ test('buildLayeringGearSuggestions adds hazard-specific items when risk signals 
     alertsData: { activeCount: 2 },
   });
 
-  expect(suggestions.some((item) => item.includes('Static insulation'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Avalanche rescue kit'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Air quality protection'))).toBe(true);
-  expect(suggestions.some((item) => item.includes('Alerts contingency'))).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Static insulation')).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Avalanche rescue kit')).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Air quality protection')).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Alerts contingency')).toBe(true);
 });
 
 test('buildFireRiskData marks high risk for red flag warning', () => {

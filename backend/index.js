@@ -2153,6 +2153,7 @@ const safetyHandler = async (req, res) => {
       rainfallData,
       snowpackData,
       fireRiskData,
+      heatRiskData,
     });
 
     const analysis = calculateSafetyScore({

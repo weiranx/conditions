@@ -3392,7 +3392,12 @@ function App() {
         : '<li>No active NWS alerts at objective point</li>';
     const gearMarkup =
       safetyData.gear && safetyData.gear.length > 0
-        ? safetyData.gear.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+        ? safetyData.gear.map((item) => {
+            if (item && typeof item === 'object' && typeof item.title === 'string') {
+              return `<li><strong>${escapeHtml(item.title)}:</strong> ${escapeHtml(item.detail || '')}</li>`;
+            }
+            return `<li>${escapeHtml(String(item || ''))}</li>`;
+          }).join('')
         : '<li>Standard kit only (no special gear flags)</li>';
     const printAvalancheSection = printAvalancheRelevant
       ? `<article class="section">
@@ -5854,6 +5859,17 @@ function App() {
   const gearRecommendations = Array.isArray(safetyData?.gear)
     ? safetyData.gear
         .map((rawItem) => {
+          // Structured object from backend
+          if (rawItem && typeof rawItem === 'object' && typeof rawItem.title === 'string') {
+            const { title, detail, category, tone } = rawItem;
+            return {
+              title: String(title || '').trim(),
+              detail: String(detail || '').trim(),
+              category: String(category || 'General'),
+              tone: String(tone || 'go'),
+            };
+          }
+          // Legacy: plain text string fallback
           const text = String(rawItem || '').replace(/\s+/g, ' ').trim();
           if (!text) {
             return null;
