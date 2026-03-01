@@ -2630,7 +2630,7 @@ function App() {
       return;
     }
 
-    const hasSharableState = view === 'planner' || view === 'trip' || hasObjective || committedSearchQuery.trim();
+    const hasSharableState = view === 'planner' || view === 'trip';
     const query = hasSharableState
       ? buildShareQuery({
           view,
