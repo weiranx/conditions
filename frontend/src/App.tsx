@@ -5770,6 +5770,7 @@ function App() {
             confidence: upstreamTerrain.confidence || null,
             impact: upstreamTerrain.impact || null,
             recommendedTravel: upstreamTerrain.recommendedTravel || null,
+            footwear: upstreamTerrain.footwear || null,
             snowProfile,
           };
         }
@@ -5780,6 +5781,7 @@ function App() {
           confidence: null as 'high' | 'medium' | 'low' | null,
           impact: null as string | null,
           recommendedTravel: null as string | null,
+          footwear: null as string | null,
           snowProfile,
         };
       })()
@@ -5789,6 +5791,7 @@ function App() {
         confidence: null as 'high' | 'medium' | 'low' | null,
         impact: null as string | null,
         recommendedTravel: null as string | null,
+        footwear: null as string | null,
         snowProfile: null as { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null,
       };
   const terrainConditionPillClass = (() => {
@@ -5799,7 +5802,7 @@ function App() {
     if (terrainCode === 'weather_unavailable') {
       return 'watch';
     }
-    if (['snow_ice', 'snow_fresh_powder', 'spring_snow', 'wet_snow', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode)) {
+    if (['snow_ice', 'snow_fresh_powder', 'snow_mixed', 'spring_snow', 'wet_snow', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode)) {
       return 'caution';
     }
     if (terrainCode) {
@@ -8039,6 +8042,12 @@ function App() {
                   <div className="decision-action">
                     <span className="decision-action-label">Recommended travel mode</span>
                     <p>{terrainConditionDetails.recommendedTravel}</p>
+                  </div>
+                )}
+                {terrainConditionDetails.footwear && (
+                  <div className="decision-action">
+                    <span className="decision-action-label">Footwear / traction</span>
+                    <p>{terrainConditionDetails.footwear}</p>
                   </div>
                 )}
                 {terrainConditionDetails.snowProfile && (

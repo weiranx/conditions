@@ -330,6 +330,7 @@ export interface SafetyData {
     label?: string;
     impact?: 'low' | 'moderate' | 'high' | string;
     recommendedTravel?: string;
+    footwear?: string;
     snowProfile?: {
       code?: string;
       label?: string;
