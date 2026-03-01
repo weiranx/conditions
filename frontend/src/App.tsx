@@ -5394,14 +5394,6 @@ function App() {
             .slice(0, 3)
             .map((check) => check.label)
     : [];
-  const missionDecisionClass = decision ? decision.level.toLowerCase().replace('-', '') : 'caution';
-  const missionBriefTopBlockers = decision ? decision.blockers.slice(0, 2) : [];
-  const missionBriefBestWindow = travelWindowInsights.bestWindow
-    ? `${formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)} (${travelWindowInsights.bestWindow.length}h)`
-    : `No clean window in next ${travelWindowHours}h`;
-  const missionBriefPrimarySignal = decision
-    ? missionBriefTopBlockers[0] || decision.cautions[0] || 'No hard blocker detected in current model signals.'
-    : '';
   const fieldBriefExecutionSteps = decision
     ? uniqueNonEmptyLines([
         `Step 1 - Departure gate (${displayStartTime}): verify weather, avalanche, alerts, and travel-window thresholds are still valid.`,
@@ -7257,31 +7249,6 @@ function App() {
         </div>
       )}
 
-      {hasObjective && safetyData && decision && (
-        <section className="mission-brief" role="region" aria-label="Mission brief">
-          <div className="mission-brief-head">
-            <span className={`decision-pill ${missionDecisionClass}`}>Mission: {decision.level}</span>
-            <span className="mission-brief-window">
-              Best window <strong>{missionBriefBestWindow}</strong>
-            </span>
-            <span className="mission-brief-objective">{objectiveName || 'Pinned objective'} • {displayStartTime}</span>
-          </div>
-          <div className="mission-brief-signals">
-            <span className="mission-brief-label">Top blockers</span>
-            {missionBriefTopBlockers.length > 0 ? (
-              <div className="mission-brief-chip-row" role="list" aria-label="Top blockers">
-                {missionBriefTopBlockers.map((item, idx) => (
-                  <span key={`mission-blocker-${idx}`} className="mission-brief-chip" role="listitem">
-                    {localizeUnitText(item)}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="mission-brief-fallback">{localizeUnitText(missionBriefPrimarySignal)}</span>
-            )}
-          </div>
-        </section>
-      )}
 
       {hasObjective && safetyData && decision && hasFreshnessWarning && (
         <section className="top-freshness-alert" role="status" aria-live="polite">
