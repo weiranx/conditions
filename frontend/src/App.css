@@ -6709,6 +6709,54 @@ button.collapsible-card-header:focus-visible {
   color: #f2b4b4;
 }
 
+/* ── Score card new elements ── */
+:root[data-theme='dark'] .score-bar-track {
+  background: #2a3a44;
+}
+
+:root[data-theme='dark'] .score-top-factor-impact {
+  color: #d08080;
+}
+
+:root[data-theme='dark'] .score-top-factor-label {
+  color: #9db0a0;
+}
+
+:root[data-theme='dark'] .score-confidence-row {
+  border-color: #2e4050;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9db3c3;
+}
+
+/* ── Decision gate inline panels ── */
+:root[data-theme='dark'] .decision-blockers-inline {
+  border-color: #7b4548;
+  background: #3a2326;
+}
+
+:root[data-theme='dark'] .decision-blockers-inline h4 {
+  color: #cf8f8f;
+}
+
+:root[data-theme='dark'] .decision-cautions-inline {
+  border-color: #6a5735;
+  background: #332a1a;
+}
+
+:root[data-theme='dark'] .decision-cautions-inline h4 {
+  color: #c9953c;
+}
+
+/* ── Field brief abort triggers ── */
+:root[data-theme='dark'] .field-brief-abort {
+  border-color: #7b4548;
+  background: #3a2326;
+}
+
+:root[data-theme='dark'] .field-brief-abort h4 {
+  color: #cf8f8f;
+}
+
 @media (hover: hover) {
   .home-card:hover,
   .settings-card:hover {
