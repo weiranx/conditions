@@ -8712,26 +8712,67 @@ function App() {
                 <div className="card plan-card" style={{ order: reportCardOrder.planSnapshot }}>
                 <div className="card-header">
                   <span className="card-title">
-                    <Route size={14} /> Plan Snapshot
-                    <HelpHint text="Quick view of start time, solar windows, and selected forecast date for the current plan." />
+                    <Sun size={14} /> Plan Snapshot
+                    <HelpHint text="Start time, solar windows, and selected forecast date for the current plan." />
                   </span>
+                  {sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (
+                    <span className="plan-daylight-badge">
+                      {Math.floor((sunsetMinutesForPlan - sunriseMinutesForPlan) / 60)}h {(sunsetMinutesForPlan - sunriseMinutesForPlan) % 60}m daylight
+                    </span>
+                  )}
                 </div>
+                {/* Solar day-arc timeline */}
+                {sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
+                  const WING = 90;
+                  const winMin = Math.max(0, sunriseMinutesForPlan - WING);
+                  const winMax = Math.min(1440, sunsetMinutesForPlan + WING);
+                  const span = winMax - winMin;
+                  const p = (m: number) => parseFloat(Math.max(0, Math.min(100, (m - winMin) / span * 100)).toFixed(2));
+                  const srP = p(sunriseMinutesForPlan);
+                  const ssP = p(sunsetMinutesForPlan);
+                  const stP = startMinutesForPlan !== null ? p(startMinutesForPlan) : null;
+                  const ttMin = turnaroundTime ? parseTimeInputMinutes(turnaroundTime) : null;
+                  const ttP = ttMin !== null ? p(ttMin) : null;
+                  const ttMargin = ttMin !== null ? sunsetMinutesForPlan - ttMin : null;
+                  const ttPinColor = ttMargin === null ? 'rgba(255,255,255,0.9)' : ttMargin < 0 ? '#f87171' : ttMargin < 30 ? '#fbbf24' : '#4ade80';
+                  const stops = [
+                    `#0f172a 0%`, `#0f172a ${srP}%`,
+                    `#f97316 ${srP}%`, `#fde68a ${Math.min(srP + 8, 50)}%`,
+                    `#7dd3fc ${Math.min(srP + 18, 48)}%`, `#60a5fa 50%`,
+                    `#93c5fd ${Math.max(ssP - 18, 52)}%`, `#fed7aa ${Math.max(ssP - 8, 50)}%`,
+                    `#f97316 ${ssP}%`, `#0f172a ${ssP}%`, `#0f172a 100%`,
+                  ].join(', ');
+                  return (
+                    <div className="solar-timeline">
+                      <div className="solar-timeline-bar" style={{ background: `linear-gradient(to right, ${stops})` }}>
+                        <span className="solar-tick" style={{ left: `${srP}%` }} aria-hidden="true" />
+                        <span className="solar-tick" style={{ left: `${ssP}%` }} aria-hidden="true" />
+                        {stP !== null && (
+                          <span className="solar-pin" style={{ left: `${stP}%`, background: 'rgba(255,255,255,0.95)' }} title={`Start: ${displayStartTime}`} />
+                        )}
+                        {ttP !== null && (
+                          <span className="solar-pin" style={{ left: `${ttP}%`, background: ttPinColor }} title={`Back by: ${formatClockShort(turnaroundTime, preferences.timeStyle)}`} />
+                        )}
+                      </div>
+                      <div className="solar-timeline-footer">
+                        <span>↑ {formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)} sunrise</span>
+                        <span>sunset {formatClockShort(safetyData.solar.sunset, preferences.timeStyle)} ↓</span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="plan-summary-grid">
                   <article className="plan-summary-item">
                     <span className="plan-label">{startLabel}</span>
                     <strong className="plan-value">{displayStartTime}</strong>
                   </article>
                   <article className="plan-summary-item">
-                    <span className="plan-label">Sunrise</span>
-                    <strong className="plan-value">{formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)}</strong>
-                  </article>
-                  <article className="plan-summary-item">
-                    <span className="plan-label">Sunset</span>
-                    <strong className="plan-value">{formatClockShort(safetyData.solar.sunset, preferences.timeStyle)}</strong>
-                  </article>
-                  <article className="plan-summary-item">
-                    <span className="plan-label">Daylight left from start</span>
+                    <span className="plan-label">Daylight from start</span>
                     <strong className="plan-value">{daylightRemainingFromStartLabel}</strong>
+                  </article>
+                  <article className="plan-summary-item">
+                    <span className="plan-label">Forecast date</span>
+                    <strong className="plan-value">{safetyData.forecast?.selectedDate || forecastDate}</strong>
                   </article>
                   {turnaroundTime && (
                     <article className="plan-summary-item">
@@ -8749,15 +8790,11 @@ function App() {
                       : `${margin} min before sunset`;
                     return (
                       <article className="plan-summary-item">
-                        <span className="plan-label">Back-by margin</span>
+                        <span className="plan-label">Sunset margin</span>
                         <strong className={cls}>{label}</strong>
                       </article>
                     );
                   })()}
-                  <article className="plan-summary-item plan-summary-item-wide">
-                    <span className="plan-label">Forecast date</span>
-                    <strong className="plan-value">{safetyData.forecast?.selectedDate || forecastDate}</strong>
-                  </article>
                 </div>
                 </div>
               )}

@@ -3501,10 +3501,58 @@ button.collapsible-card-header:focus-visible {
   margin-bottom: 8px;
 }
 
+.plan-daylight-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6b5a1e;
+  padding: 2px 9px;
+  background: #fef9c3;
+  border-radius: 12px;
+  border: 1px solid #fde68a;
+}
+
+.solar-timeline {
+  margin: 2px 0 14px;
+}
+
+.solar-timeline-bar {
+  position: relative;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.solar-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateX(-50%);
+}
+
+.solar-pin {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+}
+
+.solar-timeline-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #5f6a62;
+}
+
 .plan-summary-grid {
   display: grid;
   gap: 9px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .plan-summary-item {
@@ -6455,6 +6503,16 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .wind-arrow-head {
   fill: #d1e8de;
+}
+
+:root[data-theme='dark'] .plan-daylight-badge {
+  background: #292218;
+  border-color: #4d3d1c;
+  color: #c8b580;
+}
+
+:root[data-theme='dark'] .solar-timeline-footer {
+  color: #9fb1bf;
 }
 
 :root[data-theme='dark'] .plan-summary-item {
