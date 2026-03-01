@@ -2082,7 +2082,7 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
         <tbody>
           {logs.map((entry, i) => {
             const plannerHref = entry.lat != null && entry.lon != null
-              ? `?view=planner&lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
+              ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
               : null;
             return (
               <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #eee)', background: i % 2 === 0 ? 'var(--surface-alt, transparent)' : 'transparent' }}>
