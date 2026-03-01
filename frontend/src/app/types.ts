@@ -323,7 +323,7 @@ export interface SafetyData {
     };
     generatedTime?: string | null;
   };
-  gear?: string[];
+  gear?: (string | { id?: string; title: string; detail: string; category: string; tone: string })[];
   trail?: string;
   terrainCondition?: {
     code?: string;
