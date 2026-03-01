@@ -255,6 +255,19 @@ export interface SafetyData {
       link?: string | null;
       note?: string | null;
     } | null;
+    cdec?: {
+      source?: string;
+      status?: string;
+      stationCode?: string;
+      stationName?: string;
+      elevationFt?: number | null;
+      distanceKm?: number | null;
+      snowDepthIn?: number | null;
+      sweIn?: number | null;
+      observedDate?: string | null;
+      link?: string | null;
+      note?: string | null;
+    } | null;
     historical?: {
       targetDate?: string | null;
       monthDay?: string | null;

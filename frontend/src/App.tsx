@@ -303,31 +303,46 @@ function buildSnowpackInterpretation(
 ): SnowpackInterpretation | null {
   const snotel = snowpack?.snotel || null;
   const nohrsc = snowpack?.nohrsc || null;
+  const cdec = snowpack?.cdec || null;
 
   const snotelDepth = Number(snotel?.snowDepthIn);
   const nohrscDepth = Number(nohrsc?.snowDepthIn);
+  const cdecDepth = Number(cdec?.snowDepthIn);
   const snotelSwe = Number(snotel?.sweIn);
   const nohrscSwe = Number(nohrsc?.sweIn);
+  const cdecSwe = Number(cdec?.sweIn);
   const stationDistanceKm = Number(snotel?.distanceKm);
   const stationElevationFt = Number(snotel?.elevationFt);
 
   const hasSnotelDepth = Number.isFinite(snotelDepth);
   const hasNohrscDepth = Number.isFinite(nohrscDepth);
+  const hasCdecDepth = Number.isFinite(cdecDepth);
   const hasSnotelSwe = Number.isFinite(snotelSwe);
   const hasNohrscSwe = Number.isFinite(nohrscSwe);
+  const hasCdecSwe = Number.isFinite(cdecSwe);
   const hasAnySnowSignal =
     (hasSnotelDepth && snotelDepth > 0) ||
     (hasNohrscDepth && nohrscDepth > 0) ||
+    (hasCdecDepth && cdecDepth > 0) ||
     (hasSnotelSwe && snotelSwe > 0) ||
-    (hasNohrscSwe && nohrscSwe > 0);
-  const maxDepthIn = Math.max(hasSnotelDepth ? snotelDepth : 0, hasNohrscDepth ? nohrscDepth : 0);
-  const maxSweIn = Math.max(hasSnotelSwe ? snotelSwe : 0, hasNohrscSwe ? nohrscSwe : 0);
+    (hasNohrscSwe && nohrscSwe > 0) ||
+    (hasCdecSwe && cdecSwe > 0);
+  const maxDepthIn = Math.max(
+    hasSnotelDepth ? snotelDepth : 0,
+    hasNohrscDepth ? nohrscDepth : 0,
+    hasCdecDepth ? cdecDepth : 0,
+  );
+  const maxSweIn = Math.max(
+    hasSnotelSwe ? snotelSwe : 0,
+    hasNohrscSwe ? nohrscSwe : 0,
+    hasCdecSwe ? cdecSwe : 0,
+  );
   const lowBroadSnowSignal =
-    (hasSnotelDepth || hasNohrscDepth || hasSnotelSwe || hasNohrscSwe) &&
+    (hasSnotelDepth || hasNohrscDepth || hasCdecDepth || hasSnotelSwe || hasNohrscSwe || hasCdecSwe) &&
     maxDepthIn <= 1 &&
     maxSweIn <= 0.2;
 
-  if (!hasSnotelDepth && !hasNohrscDepth && !hasSnotelSwe && !hasNohrscSwe) {
+  if (!hasSnotelDepth && !hasNohrscDepth && !hasCdecDepth && !hasSnotelSwe && !hasNohrscSwe && !hasCdecSwe) {
     return null;
   }
 
@@ -389,9 +404,27 @@ function buildSnowpackInterpretation(
     }
   }
 
+  const nohrscIsZeroOrMissing = !hasNohrscDepth || nohrscDepth <= 0;
+  const cdecIsZeroOrMissing = !hasCdecDepth || cdecDepth <= 0;
+  const snotelIsZeroOrMissing = !hasSnotelDepth || snotelDepth <= 0;
+  const highElevation = Number.isFinite(Number(objectiveElevationFt)) && Number(objectiveElevationFt) >= 7500;
+
+  if (
+    highElevation &&
+    !hasAnySnowSignal &&
+    nohrscIsZeroOrMissing &&
+    cdecIsZeroOrMissing &&
+    snotelIsZeroOrMissing
+  ) {
+    bullets.push(
+      'All automated sources show minimal or no snow at this elevation. Gridded models can underrepresent isolated mountain snowpack — verify with local avalanche center, ranger station, or recent trip reports.',
+    );
+  }
+
   if (hasAnySnowSignal) {
     const headline =
-      (hasNohrscDepth && nohrscDepth >= 24) || (hasSnotelSwe && snotelSwe >= 8) || (hasNohrscSwe && nohrscSwe >= 8)
+      (hasNohrscDepth && nohrscDepth >= 24) || (hasCdecDepth && cdecDepth >= 24) ||
+      (hasSnotelSwe && snotelSwe >= 8) || (hasNohrscSwe && nohrscSwe >= 8) || (hasCdecSwe && cdecSwe >= 8)
         ? 'Substantial snowpack signal. Treat avalanche terrain as consequential.'
         : 'Some snowpack signal present. Validate terrain-specific stability as you travel.';
     return {
@@ -415,31 +448,38 @@ function buildSnowpackInsights(
 ): SnowpackSnapshotInsights {
   const snotel = snowpack?.snotel || null;
   const nohrsc = snowpack?.nohrsc || null;
+  const cdec = snowpack?.cdec || null;
 
   const snotelDepth = Number(snotel?.snowDepthIn);
   const nohrscDepth = Number(nohrsc?.snowDepthIn);
+  const cdecDepth = Number(cdec?.snowDepthIn);
   const snotelSwe = Number(snotel?.sweIn);
   const nohrscSwe = Number(nohrsc?.sweIn);
+  const cdecSwe = Number(cdec?.sweIn);
   const maxDepth = Math.max(
     Number.isFinite(snotelDepth) ? snotelDepth : 0,
     Number.isFinite(nohrscDepth) ? nohrscDepth : 0,
+    Number.isFinite(cdecDepth) ? cdecDepth : 0,
   );
   const maxSwe = Math.max(
     Number.isFinite(snotelSwe) ? snotelSwe : 0,
     Number.isFinite(nohrscSwe) ? nohrscSwe : 0,
+    Number.isFinite(cdecSwe) ? cdecSwe : 0,
   );
   const hasObservedSnowpack =
     Number.isFinite(snotelDepth) ||
     Number.isFinite(nohrscDepth) ||
+    Number.isFinite(cdecDepth) ||
     Number.isFinite(snotelSwe) ||
-    Number.isFinite(nohrscSwe);
+    Number.isFinite(nohrscSwe) ||
+    Number.isFinite(cdecSwe);
   const lowBroadSnowSignal = hasObservedSnowpack && maxDepth <= 1 && maxSwe <= 0.2;
 
   let signal: SnowpackInsightBadge;
   if (!hasObservedSnowpack) {
     signal = {
       label: 'Signal limited',
-      detail: 'No usable SNOTEL/NOHRSC snow metrics were returned.',
+      detail: 'No usable SNOTEL/NOHRSC/CDEC snow metrics were returned.',
       tone: 'watch',
     };
   } else if (maxDepth >= 24 || maxSwe >= 8) {
@@ -4596,6 +4636,7 @@ function App() {
   const safeRainfallLink = sanitizeExternalUrl(rainfallPayload?.link || undefined);
   const safeSnotelLink = sanitizeExternalUrl(safetyData?.snowpack?.snotel?.link || undefined);
   const safeNohrscLink = sanitizeExternalUrl(safetyData?.snowpack?.nohrsc?.link || undefined);
+  const safeCdecLink = sanitizeExternalUrl(safetyData?.snowpack?.cdec?.link || undefined);
   const rainfallTotals = rainfallPayload?.totals || null;
   const rainfall12hIn = parsePrecipNumericValue(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
   const rainfall24hIn = parsePrecipNumericValue(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
@@ -4704,18 +4745,33 @@ function App() {
   const snotelDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.snotel?.snowDepthIn), preferences.elevationUnit);
   const nohrscSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.sweIn), preferences.elevationUnit);
   const nohrscDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.snowDepthIn), preferences.elevationUnit);
+  const cdecSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.cdec?.sweIn), preferences.elevationUnit);
+  const cdecDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.cdec?.snowDepthIn), preferences.elevationUnit);
+  const cdecDistanceDisplay = formatDistanceForElevationUnit(Number(safetyData?.snowpack?.cdec?.distanceKm), preferences.elevationUnit);
   const snotelDistanceDisplay = formatDistanceForElevationUnit(Number(safetyData?.snowpack?.snotel?.distanceKm), preferences.elevationUnit);
   const snotelDepthIn = Number(safetyData?.snowpack?.snotel?.snowDepthIn);
   const nohrscDepthIn = Number(safetyData?.snowpack?.nohrsc?.snowDepthIn);
+  const cdecDepthIn = Number(safetyData?.snowpack?.cdec?.snowDepthIn);
   const snotelSweIn = Number(safetyData?.snowpack?.snotel?.sweIn);
   const nohrscSweIn = Number(safetyData?.snowpack?.nohrsc?.sweIn);
+  const cdecSweIn = Number(safetyData?.snowpack?.cdec?.sweIn);
   const snowpackMetricAvailable =
     Number.isFinite(snotelDepthIn) ||
     Number.isFinite(nohrscDepthIn) ||
+    Number.isFinite(cdecDepthIn) ||
     Number.isFinite(snotelSweIn) ||
-    Number.isFinite(nohrscSweIn);
-  const maxSnowDepthSignalIn = Math.max(Number.isFinite(snotelDepthIn) ? snotelDepthIn : 0, Number.isFinite(nohrscDepthIn) ? nohrscDepthIn : 0);
-  const maxSnowSweSignalIn = Math.max(Number.isFinite(snotelSweIn) ? snotelSweIn : 0, Number.isFinite(nohrscSweIn) ? nohrscSweIn : 0);
+    Number.isFinite(nohrscSweIn) ||
+    Number.isFinite(cdecSweIn);
+  const maxSnowDepthSignalIn = Math.max(
+    Number.isFinite(snotelDepthIn) ? snotelDepthIn : 0,
+    Number.isFinite(nohrscDepthIn) ? nohrscDepthIn : 0,
+    Number.isFinite(cdecDepthIn) ? cdecDepthIn : 0,
+  );
+  const maxSnowSweSignalIn = Math.max(
+    Number.isFinite(snotelSweIn) ? snotelSweIn : 0,
+    Number.isFinite(nohrscSweIn) ? nohrscSweIn : 0,
+    Number.isFinite(cdecSweIn) ? cdecSweIn : 0,
+  );
   const lowBroadSnowSignal = snowpackMetricAvailable && maxSnowDepthSignalIn <= 1 && maxSnowSweSignalIn <= 0.2;
   const snowpackPillClass = lowBroadSnowSignal
     ? 'go'
@@ -8567,6 +8623,17 @@ function App() {
                         : 'Sample time unavailable'}
                     </small>
                   </div>
+                  {safetyData.snowpack?.cdec && (
+                    <div className="snowpack-core-item">
+                      <span className="stat-label">CDEC Station Snow</span>
+                      <strong>Depth {cdecDepthDisplay} • SWE {cdecSweDisplay}</strong>
+                      <small>
+                        {safetyData.snowpack.cdec.stationName || 'CDEC station'}
+                        {cdecDistanceDisplay !== 'N/A' ? ` • ${cdecDistanceDisplay} away` : ''}
+                        {safetyData.snowpack.cdec.observedDate ? ` • Observed ${safetyData.snowpack.cdec.observedDate}` : ''}
+                      </small>
+                    </div>
+                  )}
                   <div className="snowpack-core-item">
                     <span className="stat-label">Recent 24h</span>
                     <strong>Rain {rainfall24hDisplay} • Snow {snowfall24hDisplay}</strong>
@@ -8660,6 +8727,18 @@ function App() {
                       </a>
                     ) : (
                       'NOAA NOHRSC Snow Analysis'
+                    )}
+                    {safetyData.snowpack?.cdec && (
+                      <>
+                        {' • '}
+                        {safeCdecLink ? (
+                          <a href={safeCdecLink} target="_blank" rel="noreferrer" className="raw-link-value">
+                            CDEC ({safetyData.snowpack.cdec.stationCode})
+                          </a>
+                        ) : (
+                          `CDEC (${safetyData.snowpack.cdec.stationCode || 'N/A'})`
+                        )}
+                      </>
                     )}
                   </p>
                 </details>
@@ -9252,10 +9331,20 @@ function App() {
                           : 'N/A'}
                       </span>
                     </li>
+                    {safetyData.snowpack?.cdec && (
+                      <li>
+                        <span className="raw-key">CDEC SWE / Depth</span>
+                        <span className="raw-value">
+                          {Number.isFinite(Number(safetyData.snowpack.cdec.sweIn)) || Number.isFinite(Number(safetyData.snowpack.cdec.snowDepthIn))
+                            ? `${cdecSweDisplay !== 'N/A' ? cdecSweDisplay : 'SWE N/A'} • ${cdecDepthDisplay !== 'N/A' ? `${cdecDepthDisplay} depth` : 'Depth N/A'} (${safetyData.snowpack.cdec.stationName || safetyData.snowpack.cdec.stationCode})`
+                            : 'N/A'}
+                        </span>
+                      </li>
+                    )}
                     <li>
                       <span className="raw-key">Snowpack Source Links</span>
-                      <span className={`raw-value ${safeSnotelLink || safeNohrscLink ? 'raw-value-stack' : ''}`}>
-                        {safeSnotelLink || safeNohrscLink ? (
+                      <span className={`raw-value ${safeSnotelLink || safeNohrscLink || safeCdecLink ? 'raw-value-stack' : ''}`}>
+                        {safeSnotelLink || safeNohrscLink || safeCdecLink ? (
                           <>
                             {safeSnotelLink ? (
                               <span>
@@ -9268,6 +9357,13 @@ function App() {
                               <span>
                                 <a href={safeNohrscLink} target="_blank" rel="noreferrer" className="raw-link-value">
                                   NOAA NOHRSC Snow Analysis
+                                </a>
+                              </span>
+                            ) : null}
+                            {safeCdecLink ? (
+                              <span>
+                                <a href={safeCdecLink} target="_blank" rel="noreferrer" className="raw-link-value">
+                                  CDEC ({safetyData.snowpack?.cdec?.stationCode})
                                 </a>
                               </span>
                             ) : null}

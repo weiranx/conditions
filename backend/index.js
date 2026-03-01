@@ -189,8 +189,9 @@ const evaluateSnowpackSignal = (snowpackData) => {
 
   const snotel = snowpackData?.snotel || null;
   const nohrsc = snowpackData?.nohrsc || null;
+  const cdec = snowpackData?.cdec || null;
   const snotelDistanceKm = parseFiniteNumber(snotel?.distanceKm);
-  const snotelNearObjective = snotelDistanceKm === null || snotelDistanceKm <= 80;
+  const snotelNearObjective = snotelDistanceKm === null || snotelDistanceKm <= 120;
 
   const depthSamples = [];
   const sweSamples = [];
@@ -204,6 +205,13 @@ const evaluateSnowpackSignal = (snowpackData) => {
   const nohrscSweIn = parseFiniteNumber(nohrsc?.sweIn);
   if (nohrscDepthIn !== null) depthSamples.push(nohrscDepthIn);
   if (nohrscSweIn !== null) sweSamples.push(nohrscSweIn);
+
+  const cdecDistanceKm = parseFiniteNumber(cdec?.distanceKm);
+  const cdecNearObjective = cdecDistanceKm === null || cdecDistanceKm <= 120;
+  const cdecDepthIn = parseFiniteNumber(cdec?.snowDepthIn);
+  const cdecSweIn = parseFiniteNumber(cdec?.sweIn);
+  if (cdecNearObjective && cdecDepthIn !== null) depthSamples.push(cdecDepthIn);
+  if (cdecNearObjective && cdecSweIn !== null) sweSamples.push(cdecSweIn);
 
   const hasObservations = depthSamples.length > 0 || sweSamples.length > 0;
   if (!hasObservations) {

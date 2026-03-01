@@ -1,9 +1,18 @@
+const CDEC_STATIONS = (() => {
+  try {
+    return require('../data/cdec-snow-stations.json');
+  } catch (_e) {
+    return [];
+  }
+})();
+
 const createUnavailableSnowpackData = (status = 'unavailable') => ({
   source: 'NRCS AWDB / SNOTEL, NOAA NOHRSC Snow Analysis',
   status,
   summary: 'Snowpack observations unavailable.',
   snotel: null,
   nohrsc: null,
+  cdec: null,
   historical: null,
 });
 
@@ -312,6 +321,86 @@ const createSnowpackService = ({
     };
   };
 
+  const sampleCdecStationData = async (lat, lon, selectedDate, fetchOptions) => {
+    if (!Array.isArray(CDEC_STATIONS) || CDEC_STATIONS.length === 0) {
+      return null;
+    }
+    const MAX_CDEC_DISTANCE_KM = 160;
+    let nearest = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const station of CDEC_STATIONS) {
+      const stationLat = Number(station.lat);
+      const stationLon = Number(station.lon);
+      if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) {
+        continue;
+      }
+      const distanceKm = haversineKm(lat, lon, stationLat, stationLon);
+      if (distanceKm < nearestDistance) {
+        nearestDistance = distanceKm;
+        nearest = station;
+      }
+    }
+    if (!nearest || !Number.isFinite(nearestDistance) || nearestDistance > MAX_CDEC_DISTANCE_KM) {
+      return null;
+    }
+
+    const todayIso = formatIsoDateUtc(new Date());
+    const targetDate = selectedDate && isValidIsoDate(selectedDate) && selectedDate <= todayIso ? selectedDate : todayIso;
+    const startDate = shiftIsoDateUtc(targetDate, -1) || targetDate;
+
+    const url =
+      `https://cdec.water.ca.gov/dynamicapp/req/JSONDataServlet` +
+      `?Stations=${encodeURIComponent(nearest.code)}` +
+      `&SensorNums=18,3&dur_code=d` +
+      `&Start=${encodeURIComponent(startDate)}&End=${encodeURIComponent(targetDate)}`;
+
+    const res = await fetchWithTimeout(url, fetchOptions);
+    if (!res.ok) {
+      throw new Error(`CDEC request failed with status ${res.status}`);
+    }
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      return null;
+    }
+
+    const MISSING_VALUE = -9999;
+    const depthSensor18 = data.filter((e) => Number(e.SENSOR_NUM) === 18 && Number(e.VALUE) !== MISSING_VALUE && Number.isFinite(Number(e.VALUE)));
+    const sweSensor3 = data.filter((e) => Number(e.SENSOR_NUM) === 3 && Number(e.VALUE) !== MISSING_VALUE && Number.isFinite(Number(e.VALUE)));
+
+    const latestDepth = depthSensor18.length ? depthSensor18[depthSensor18.length - 1] : null;
+    const latestSwe = sweSensor3.length ? sweSensor3[sweSensor3.length - 1] : null;
+
+    const snowDepthIn = latestDepth ? Number(Number(latestDepth.VALUE).toFixed(1)) : null;
+    const sweIn = latestSwe ? Number(Number(latestSwe.VALUE).toFixed(1)) : null;
+
+    if (snowDepthIn === null && sweIn === null) {
+      return null;
+    }
+
+    const observedDateRaw = latestDepth?.DATE_TIME || latestSwe?.DATE_TIME || null;
+    let observedDate = null;
+    if (observedDateRaw) {
+      const parsed = new Date(observedDateRaw);
+      if (Number.isFinite(parsed.getTime())) {
+        observedDate = parsed.toISOString().slice(0, 10);
+      }
+    }
+
+    return {
+      source: 'CDEC',
+      status: 'ok',
+      stationCode: nearest.code,
+      stationName: nearest.name,
+      elevationFt: nearest.elevationFt,
+      distanceKm: Number(nearestDistance.toFixed(1)),
+      snowDepthIn,
+      sweIn,
+      observedDate,
+      link: `https://cdec.water.ca.gov/dynamicapp/staMeta?station_id=${nearest.code}`,
+      note: 'Daily snow depth (sensor 18) and SWE (sensor 3) from CDEC snow sensor.',
+    };
+  };
+
   const fetchSnowpackData = async (lat, lon, selectedDate, fetchOptions) => {
     const targetDate = getSnotelTargetDate(selectedDate);
     const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -HISTORICAL_FETCH_LOOKBACK_DAYS);
@@ -437,12 +526,14 @@ const createSnowpackService = ({
     })();
 
     const nohrscTask = sampleNohrscSnowAnalysis(lat, lon, fetchOptions);
-    const [snotelResult, nohrscResult] = await Promise.allSettled([snotelTask, nohrscTask]);
+    const cdecTask = sampleCdecStationData(lat, lon, selectedDate, fetchOptions);
+    const [snotelResult, nohrscResult, cdecResult] = await Promise.allSettled([snotelTask, nohrscTask, cdecTask]);
 
     const snotelData = snotelResult.status === 'fulfilled' ? snotelResult.value : null;
     const nohrscData = nohrscResult.status === 'fulfilled' ? nohrscResult.value : null;
+    const cdecData = cdecResult.status === 'fulfilled' ? cdecResult.value : null;
 
-    if (!snotelData && !nohrscData) {
+    if (!snotelData && !nohrscData && !cdecData) {
       return createUnavailableSnowpackData('unavailable');
     }
 
@@ -464,13 +555,23 @@ const createSnowpackService = ({
         }.`,
       );
     }
+    if (cdecData) {
+      summaryParts.push(
+        `CDEC ${cdecData.stationName}: depth ${Number.isFinite(cdecData.snowDepthIn) ? `${cdecData.snowDepthIn} in` : 'N/A'}, SWE ${
+          Number.isFinite(cdecData.sweIn) ? `${cdecData.sweIn} in` : 'N/A'
+        } (${cdecData.distanceKm} km).`,
+      );
+    }
 
+    const sourcesOk = [snotelData, nohrscData, cdecData].filter(Boolean).length;
+    const totalSources = 3;
     return {
-      source: 'NRCS AWDB / SNOTEL, NOAA NOHRSC Snow Analysis',
-      status: snotelData && nohrscData ? 'ok' : 'partial',
+      source: 'NRCS AWDB / SNOTEL, NOAA NOHRSC Snow Analysis, CDEC',
+      status: sourcesOk === totalSources ? 'ok' : 'partial',
       summary: summaryParts.join(' '),
       snotel: snotelData,
       nohrsc: nohrscData,
+      cdec: cdecData,
       historical: snotelData?.historical || null,
     };
   };
@@ -478,6 +579,7 @@ const createSnowpackService = ({
   return {
     createUnavailableSnowpackData,
     fetchSnowpackData,
+    sampleCdecStationData,
   };
 };
 
