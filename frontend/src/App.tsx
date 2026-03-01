@@ -37,6 +37,7 @@ import {
   Wifi,
   HardDrive,
   Zap,
+  Check,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -7067,7 +7068,7 @@ function App() {
               </button>
             )}
             <button className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
-              <Link2 size={14} /> <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
+              {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
             </button>
           </nav>
         </div>
@@ -7339,10 +7340,10 @@ function App() {
                   <Printer size={14} /> Print
                 </button>
                 <button type="button" className="settings-btn report-action-btn" onClick={handleCopySatelliteLine} disabled={!satelliteConditionLine}>
-                  <MessageSquare size={14} /> {copiedSatLine ? 'Copied SAT' : 'SAT Message'}
+                  {copiedSatLine ? <Check size={14} /> : <MessageSquare size={14} />} {copiedSatLine ? 'Copied SAT' : 'SAT Message'}
                 </button>
                 <button type="button" className="settings-btn report-action-btn" onClick={handleCopyTeamBrief} disabled={!teamBriefChecklist}>
-                  <ShieldCheck size={14} /> {copiedTeamBrief ? 'Copied' : 'Field Brief'}
+                  {copiedTeamBrief ? <Check size={14} /> : <ShieldCheck size={14} />} {copiedTeamBrief ? 'Copied' : 'Field Brief'}
                 </button>
               </div>
               {satelliteConditionLine && <p className="sat-line-preview">{satelliteConditionLine}</p>}

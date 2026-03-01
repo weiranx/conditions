@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 
 const STORAGE_PREFIX = 'summitsafe:card-expanded:';
 
@@ -66,7 +67,7 @@ export function CollapsibleCard({
         <span className="collapsible-title-wrap">{title}</span>
         <span className="collapsible-header-right">
           {headerMeta && <span className="collapsible-header-meta">{headerMeta}</span>}
-          <span className="collapsible-chevron" aria-hidden="true">›</span>
+          <ChevronRight className="collapsible-chevron" size={15} aria-hidden="true" />
         </span>
       </button>
       {!isExpanded && <div className="collapsible-summary">{summary}</div>}

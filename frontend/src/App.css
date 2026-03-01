@@ -1599,7 +1599,7 @@ input {
 }
 
 .report-action-btn {
-  min-height: 34px;
+  min-height: 36px;
   padding: 7px 12px;
   border-color: #cfd5c9;
   background: #f7f8f1;
@@ -1765,7 +1765,6 @@ button.collapsible-card-header:focus-visible {
 
 .collapsible-chevron {
   flex-shrink: 0;
-  font-size: 1.1rem;
   color: var(--text-muted);
   transition: transform 0.2s ease;
   transform: rotate(90deg);
@@ -1782,6 +1781,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] button.collapsible-card-header {
+  border-bottom-color: var(--line-color);
+}
+
+:root[data-theme='dark'] .card-header {
   border-bottom-color: var(--line-color);
 }
 
@@ -5559,7 +5562,6 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .data-grid,
-:root[data-theme='dark'] .score-card,
 :root[data-theme='dark'] .mission-brief,
 :root[data-theme='dark'] .critical-window,
 :root[data-theme='dark'] .critical-summary,
@@ -5578,6 +5580,12 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .check-item,
 :root[data-theme='dark'] .sat-line-preview {
   background: var(--surface-muted);
+  border-color: #31414e;
+  color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .score-card {
+  background: linear-gradient(115deg, #1b2b38 0%, #162028 60%, #182d2a 100%);
   border-color: #31414e;
   color: var(--text-dark);
 }
