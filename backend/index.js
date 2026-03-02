@@ -97,6 +97,8 @@ const { registerHealthRoutes } = require('./src/routes/health');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { registerSatOneLinerRoute } = require('./src/routes/sat-oneliner');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
+const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
+const { askClaude } = require('./src/utils/ai-client');
 const POPULAR_PEAKS = require('./peaks.json');
 
 const avyLog = (...args) => {
@@ -2381,6 +2383,7 @@ registerSearchRoutes({
 });
 registerHealthRoutes(app);
 registerReportLogsRoute(app);
+registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler });
 
 const startServer = () => startBackendServer({ app, port: PORT });
 

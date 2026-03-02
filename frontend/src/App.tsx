@@ -1974,6 +1974,30 @@ type MultiDayTripForecastDay = {
   sourceIssuedTime: string | null;
 };
 
+interface RouteOption {
+  name: string;
+  distance_rt_miles: number;
+  elev_gain_ft: number;
+  class: string;
+  description: string;
+}
+
+interface RouteWaypointSummary {
+  name: string;
+  elev_ft: number;
+  score: number | null;
+  weather: { temp?: number; windSpeed?: number; description?: string; precipChance?: number };
+  avalanche: { risk?: string; dangerLevel?: number };
+  activeAlerts: number;
+  snowDepthIn: number | null;
+}
+
+interface RouteAnalysisResult {
+  waypoints: { name: string; lat: number; lon: number; elev_ft: number }[];
+  summaries: RouteWaypointSummary[];
+  analysis: string;
+}
+
 interface ReportLogEntry {
   timestamp: string;
   lat: number | null;
@@ -2202,6 +2226,10 @@ function App() {
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [backendMeta, setBackendMeta] = useState<BackendMeta | null>(null);
+  const [routeSuggestions, setRouteSuggestions] = useState<RouteOption[] | null>(null);
+  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
   const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
   const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
@@ -2350,6 +2378,9 @@ function App() {
     setTripForecastRows([]);
     setTripForecastError(null);
     setTripForecastNote(null);
+    setRouteSuggestions(null);
+    setRouteAnalysis(null);
+    setRouteError(null);
     if (label) {
       setObjectiveName(label);
     } else {
@@ -2452,6 +2483,43 @@ function App() {
   useEffect(() => {
     fetchSafetyDataRef.current = fetchSafetyData;
   }, [fetchSafetyData]);
+
+  const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number) => {
+    setRouteSuggestions(null);
+    setRouteAnalysis(null);
+    setRouteError(null);
+    setRouteLoading(true);
+    try {
+      const res = await fetch(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
+      if (!res.ok) throw new Error('Failed to load route suggestions');
+      const data: RouteOption[] = await res.json();
+      setRouteSuggestions(data);
+    } catch (err) {
+      setRouteError('Could not load route suggestions. Try again.');
+    } finally {
+      setRouteLoading(false);
+    }
+  }, []);
+
+  const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string) => {
+    setRouteAnalysis(null);
+    setRouteError(null);
+    setRouteLoading(true);
+    try {
+      const res = await fetch('/api/route-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ peak, route, lat, lon, date, start }),
+      });
+      if (!res.ok) throw new Error('Failed to analyze route');
+      const data: RouteAnalysisResult = await res.json();
+      setRouteAnalysis(data);
+    } catch (err) {
+      setRouteError('Route analysis failed. Try again.');
+    } finally {
+      setRouteLoading(false);
+    }
+  }, []);
 
   const runHealthChecks = useCallback(async () => {
     setHealthLoading(true);
@@ -9449,6 +9517,85 @@ function App() {
 
         </div>
       )}
+
+      {hasObjective && safetyData && !loading && !error && decision && objectiveName && (
+        <div className="route-analysis-section">
+          {!routeSuggestions && !routeAnalysis && !routeLoading && (
+            <button
+              type="button"
+              className="route-analyze-btn"
+              onClick={() => fetchRouteSuggestions(objectiveName, position.lat, position.lng)}
+            >
+              Analyze Full Route
+            </button>
+          )}
+
+          {routeLoading && (
+            <div className="route-loading">Analyzing route conditions...</div>
+          )}
+
+          {routeError && (
+            <div className="route-error">{routeError}</div>
+          )}
+
+          {routeSuggestions && !routeAnalysis && !routeLoading && (
+            <div className="route-picker-card">
+              <div className="route-picker-header">Choose a route to analyze</div>
+              <ul className="route-picker-list">
+                {routeSuggestions.map((r) => (
+                  <li key={r.name} className="route-picker-item">
+                    <button
+                      type="button"
+                      className="route-picker-option"
+                      onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime)}
+                    >
+                      <span className="route-option-name">{r.name}</span>
+                      <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
+                      <span className="route-option-desc">{r.description}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="route-picker-cancel"
+                onClick={() => { setRouteSuggestions(null); setRouteError(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {routeAnalysis && (
+            <div className="route-analysis-card">
+              <div className="route-analysis-header">Route Analysis</div>
+              <div className="route-waypoints">
+                {routeAnalysis.summaries.map((wp) => (
+                  <div key={wp.name} className="route-waypoint-row">
+                    <span className="route-wp-name">{wp.name}</span>
+                    <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
+                    {wp.score !== null && (
+                      <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
+                    )}
+                    {wp.avalanche.risk && (
+                      <span className="route-wp-avy">{wp.avalanche.risk}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="route-analysis-text">{routeAnalysis.analysis}</div>
+              <button
+                type="button"
+                className="route-picker-cancel"
+                onClick={() => { setRouteAnalysis(null); setRouteSuggestions(null); }}
+              >
+                Back to summit-only view
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="planner-footer-stack">
         <AppDisclaimer compact />
         {hasObjective && safetyData && !loading && !error && decision && (

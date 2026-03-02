@@ -5533,6 +5533,165 @@ button.collapsible-card-header:focus-visible {
   letter-spacing: 0.04em;
 }
 
+/* Route Analysis */
+.route-analysis-section {
+  margin: 16px 0 8px;
+  padding: 0 4px;
+}
+
+.route-analyze-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: #1a2e1a;
+  border: 1px solid #3a5c3a;
+  border-radius: 8px;
+  color: #7ecf7e;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.route-analyze-btn:hover {
+  background: #243824;
+  border-color: #5a8c5a;
+}
+
+.route-loading {
+  text-align: center;
+  color: #9ab09a;
+  font-size: 0.85rem;
+  padding: 12px 0;
+}
+
+.route-error {
+  color: #e07070;
+  font-size: 0.85rem;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.route-picker-card,
+.route-analysis-card {
+  background: #111c11;
+  border: 1px solid #2e4a2e;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.route-picker-header,
+.route-analysis-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7ecf7e;
+  margin-bottom: 12px;
+}
+
+.route-picker-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-picker-option {
+  width: 100%;
+  text-align: left;
+  background: #1a2e1a;
+  border: 1px solid #3a5c3a;
+  border-radius: 7px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 0.15s;
+}
+
+.route-picker-option:hover {
+  background: #243824;
+}
+
+.route-option-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #d4e8d4;
+}
+
+.route-option-meta {
+  font-size: 0.75rem;
+  color: #7a9a7a;
+}
+
+.route-option-desc {
+  font-size: 0.78rem;
+  color: #9ab09a;
+}
+
+.route-picker-cancel {
+  background: none;
+  border: none;
+  color: #7a9a7a;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+.route-waypoints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #2e4a2e;
+}
+
+.route-waypoint-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.route-wp-name {
+  flex: 1;
+  color: #c4d8c4;
+}
+
+.route-wp-elev {
+  color: #7a9a7a;
+  font-size: 0.75rem;
+}
+
+.route-wp-score {
+  font-weight: 700;
+  font-size: 0.8rem;
+  min-width: 36px;
+  text-align: right;
+}
+
+.route-wp-avy {
+  font-size: 0.72rem;
+  color: #9ab09a;
+  background: #1a2e1a;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.route-analysis-text {
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: #c4d8c4;
+  white-space: pre-wrap;
+  margin-bottom: 14px;
+}
+
 .planner-footer-stack {
   margin-top: 14px;
   display: grid;

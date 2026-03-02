@@ -47,6 +47,7 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `RATE_LIMIT_WINDOW_MS` | — | API rate-limit window (ms) |
 | `RATE_LIMIT_MAX_REQUESTS` | — | Max requests per rate-limit window |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
+| `ANTHROPIC_API_KEY` | — | Required for route analysis feature (`/api/route-suggestions`, `/api/route-analysis`). Without this key, those endpoints return `500`. |
 
 ### Frontend (`frontend/.env`)
 

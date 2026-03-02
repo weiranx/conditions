@@ -111,6 +111,8 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 | NWS alerts unavailable for future windows | `alerts` section empty | By design — NWS only issues alerts for near-term windows |
 | SNOTEL/NOHRSC variability | Snowpack section sparse or unavailable | Availability varies by location, elevation, and season |
 | Nominatim rate limiting | Search returns only local results | Nominatim enforces usage policies; heavy automated use will be throttled |
+| `ANTHROPIC_API_KEY` missing | `/api/route-suggestions` and `/api/route-analysis` return `500` | Add key to `.env`; route analysis feature is gracefully hidden in the UI when these endpoints fail |
+| Claude API error during route analysis | Route analysis returns `500` | Transient Anthropic API errors; user can retry. Check API key validity and quota. |
 | Rate limiting (`429`) | Clients receive `429 Too Many Requests` | Configurable via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX_REQUESTS` |
 | Avalanche zone not found | `avalanche.zone` null, score confidence reduced | Polygon match failed; nearest fallback attempted before returning null |
 
@@ -123,7 +125,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 3. **Inspect the response** for `partialData`, `apiWarning`, and per-section `status` fields to identify which upstream feed failed.
 4. **Correlate backend logs** using the `X-Request-Id` from the response header.
 5. **Enable avalanche debug logging** with `DEBUG_AVY=true` if the issue is in avalanche zone matching or bulletin parsing.
-6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, and `LOGS_SECRET`.
+6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `LOGS_SECRET`, and `ANTHROPIC_API_KEY`.
 7. **Check network egress** — confirm the backend can reach all upstream providers (NOAA, Avalanche.org, NRCS, Open-Meteo).
 8. **Check the frontend proxy** — verify the frontend is pointing to the expected backend origin or proxy target.
 
@@ -141,3 +143,4 @@ Before deploying a new version:
 6. Smoke-test report actions: print report, SAT one-liner copy, team brief copy
 7. Verify the health endpoint returns `ok: true` in the deployed environment
 8. Verify API proxying routes correctly (check at least one `/api/safety` request end-to-end)
+9. If `ANTHROPIC_API_KEY` is set, verify route analysis: load a named peak report and click "Analyze Full Route"
