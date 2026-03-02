@@ -5688,8 +5688,15 @@ button.collapsible-card-header:focus-visible {
   font-size: 0.84rem;
   line-height: 1.6;
   color: #c4d8c4;
-  white-space: pre-wrap;
   margin-bottom: 14px;
+}
+
+.route-analysis-text p {
+  margin: 0 0 10px;
+}
+
+.route-analysis-text p:last-child {
+  margin-bottom: 0;
 }
 
 .planner-footer-stack {

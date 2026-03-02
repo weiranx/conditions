@@ -9581,7 +9581,17 @@ function App() {
                   </div>
                 ))}
               </div>
-              <div className="route-analysis-text">{routeAnalysis.analysis}</div>
+              <div className="route-analysis-text">
+                {routeAnalysis.analysis.split(/\n\n+/).map((para, i) => (
+                  <p key={i}>
+                    {para.split(/(\*\*[^*]+\*\*)/).map((seg, j) =>
+                      seg.startsWith('**') && seg.endsWith('**')
+                        ? <strong key={j}>{seg.slice(2, -2)}</strong>
+                        : seg
+                    )}
+                  </p>
+                ))}
+              </div>
               <button
                 type="button"
                 className="route-picker-cancel"
