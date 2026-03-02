@@ -7552,6 +7552,86 @@ function App() {
             </div>
           </div>
 
+          {objectiveName && (
+            <div className="route-analysis-section" style={{ order: reportCardOrder.reportColumns - 1 }}>
+              {!routeSuggestions && !routeAnalysis && !routeLoading && (
+                <button
+                  type="button"
+                  className="route-analyze-btn"
+                  onClick={() => fetchRouteSuggestions(objectiveName, position.lat, position.lng)}
+                >
+                  Analyze Full Route
+                </button>
+              )}
+
+              {routeLoading && (
+                <div className="route-loading">Analyzing route conditions...</div>
+              )}
+
+              {routeError && (
+                <div className="route-error">{routeError}</div>
+              )}
+
+              {routeSuggestions && !routeAnalysis && !routeLoading && (
+                <div className="route-picker-card">
+                  <div className="route-picker-header">Choose a route to analyze</div>
+                  <ul className="route-picker-list">
+                    {routeSuggestions.map((r) => (
+                      <li key={r.name} className="route-picker-item">
+                        <button
+                          type="button"
+                          className="route-picker-option"
+                          onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime)}
+                        >
+                          <span className="route-option-name">{r.name}</span>
+                          <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
+                          <span className="route-option-desc">{r.description}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="route-picker-cancel"
+                    onClick={() => { setRouteSuggestions(null); setRouteError(null); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {routeAnalysis && (
+                <div className="route-analysis-card">
+                  <div className="route-analysis-header">Route Analysis</div>
+                  <div className="route-waypoints">
+                    {routeAnalysis.summaries.map((wp) => (
+                      <div key={wp.name} className="route-waypoint-row">
+                        <span className="route-wp-name">{wp.name}</span>
+                        <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
+                        {wp.score !== null && (
+                          <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
+                        )}
+                        {wp.avalanche.risk && (
+                          <span className="route-wp-avy">{wp.avalanche.risk}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="route-analysis-text">
+                    {renderSimpleMarkdown(routeAnalysis.analysis)}
+                  </div>
+                  <button
+                    type="button"
+                    className="route-picker-cancel"
+                    onClick={() => { setRouteAnalysis(null); setRouteSuggestions(null); }}
+                  >
+                    Back to summit-only view
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
             <div className="report-column">
               <CollapsibleCard
@@ -9591,86 +9671,6 @@ function App() {
             </details>
             </div>
 
-        </div>
-      )}
-
-      {hasObjective && safetyData && !loading && !error && decision && objectiveName && (
-        <div className="route-analysis-section">
-          {!routeSuggestions && !routeAnalysis && !routeLoading && (
-            <button
-              type="button"
-              className="route-analyze-btn"
-              onClick={() => fetchRouteSuggestions(objectiveName, position.lat, position.lng)}
-            >
-              Analyze Full Route
-            </button>
-          )}
-
-          {routeLoading && (
-            <div className="route-loading">Analyzing route conditions...</div>
-          )}
-
-          {routeError && (
-            <div className="route-error">{routeError}</div>
-          )}
-
-          {routeSuggestions && !routeAnalysis && !routeLoading && (
-            <div className="route-picker-card">
-              <div className="route-picker-header">Choose a route to analyze</div>
-              <ul className="route-picker-list">
-                {routeSuggestions.map((r) => (
-                  <li key={r.name} className="route-picker-item">
-                    <button
-                      type="button"
-                      className="route-picker-option"
-                      onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime)}
-                    >
-                      <span className="route-option-name">{r.name}</span>
-                      <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
-                      <span className="route-option-desc">{r.description}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="route-picker-cancel"
-                onClick={() => { setRouteSuggestions(null); setRouteError(null); }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {routeAnalysis && (
-            <div className="route-analysis-card">
-              <div className="route-analysis-header">Route Analysis</div>
-              <div className="route-waypoints">
-                {routeAnalysis.summaries.map((wp) => (
-                  <div key={wp.name} className="route-waypoint-row">
-                    <span className="route-wp-name">{wp.name}</span>
-                    <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
-                    {wp.score !== null && (
-                      <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
-                    )}
-                    {wp.avalanche.risk && (
-                      <span className="route-wp-avy">{wp.avalanche.risk}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="route-analysis-text">
-                {renderSimpleMarkdown(routeAnalysis.analysis)}
-              </div>
-              <button
-                type="button"
-                className="route-picker-cancel"
-                onClick={() => { setRouteAnalysis(null); setRouteSuggestions(null); }}
-              >
-                Back to summit-only view
-              </button>
-            </div>
-          )}
         </div>
       )}
 
