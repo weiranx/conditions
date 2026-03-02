@@ -6,10 +6,14 @@ const pick = (obj, keys) => {
   }, {});
 };
 
-const parseJsonFromClaude = (text) => {
-  // Strip markdown code fences if present
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-  return JSON.parse(cleaned);
+const parseJsonArrayFromClaude = (text) => {
+  // Extract the first JSON array found anywhere in the response
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error(`No JSON array found in Claude response: ${text.slice(0, 200)}`);
+  }
+  return JSON.parse(text.slice(start, end + 1));
 };
 
 const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler }) => {
@@ -27,11 +31,11 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
         { maxTokens: 512 }
       );
-      const routes = parseJsonFromClaude(text);
+      const routes = parseJsonArrayFromClaude(text);
       return res.json(routes);
     } catch (err) {
       console.error('[route-suggestions] error:', err.message);
-      return res.status(500).json({ error: 'Failed to fetch route suggestions' });
+      return res.status(500).json({ error: err.message });
     }
   });
 
@@ -52,7 +56,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
         { maxTokens: 512 }
       );
-      const waypoints = parseJsonFromClaude(waypointText);
+      const waypoints = parseJsonArrayFromClaude(waypointText);
 
       // Step 2: Run safety checks for each waypoint in parallel
       const safetyResults = await Promise.all(

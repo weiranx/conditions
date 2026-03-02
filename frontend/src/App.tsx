@@ -2491,11 +2491,11 @@ function App() {
     setRouteLoading(true);
     try {
       const res = await fetch(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
-      if (!res.ok) throw new Error('Failed to load route suggestions');
-      const data: RouteOption[] = await res.json();
-      setRouteSuggestions(data);
-    } catch {
-      setRouteError('Could not load route suggestions. Try again.');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load route suggestions');
+      setRouteSuggestions(data as RouteOption[]);
+    } catch (err) {
+      setRouteError(err instanceof Error ? err.message : 'Could not load route suggestions. Try again.');
     } finally {
       setRouteLoading(false);
     }
