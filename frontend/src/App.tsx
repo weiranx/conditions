@@ -2494,7 +2494,7 @@ function App() {
       if (!res.ok) throw new Error('Failed to load route suggestions');
       const data: RouteOption[] = await res.json();
       setRouteSuggestions(data);
-    } catch (err) {
+    } catch {
       setRouteError('Could not load route suggestions. Try again.');
     } finally {
       setRouteLoading(false);
@@ -2514,7 +2514,7 @@ function App() {
       if (!res.ok) throw new Error('Failed to analyze route');
       const data: RouteAnalysisResult = await res.json();
       setRouteAnalysis(data);
-    } catch (err) {
+    } catch {
       setRouteError('Route analysis failed. Try again.');
     } finally {
       setRouteLoading(false);
