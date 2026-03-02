@@ -1,3 +1,11 @@
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+
 const pick = (obj, keys) => {
   if (!obj || typeof obj !== 'object') return {};
   return keys.reduce((acc, k) => {
@@ -49,20 +57,23 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 
     try {
       // Step 1: Get waypoints from Claude
-      const waypointText = await askClaude(
+      const waypointText = await withTimeout(askClaude(
         `Return 4-5 key waypoints for the "${route}" on ${peak} near (${lat}, ${lon}).
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
         { maxTokens: 512 }
-      );
+      ), 20000, 'Waypoint lookup');
       const waypoints = parseJsonArrayFromClaude(waypointText);
 
       // Step 2: Run safety checks for each waypoint in parallel
-      const safetyResults = await Promise.all(
-        waypoints.map((wp) =>
-          invokeSafetyHandler({ lat: wp.lat, lon: wp.lon, date, start: start || '06:00' })
-        )
+      const safetyResults = await withTimeout(
+        Promise.all(
+          waypoints.map((wp) =>
+            invokeSafetyHandler({ lat: wp.lat, lon: wp.lon, date, start: start || '06:00' })
+          )
+        ),
+        60000, 'Safety checks'
       );
 
       // Step 3: Strip each payload to key fields to keep synthesis prompt small
@@ -80,7 +91,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       });
 
       // Step 4: Synthesize
-      const analysis = await askClaude(
+      const analysis = await withTimeout(askClaude(
         `You are analyzing backcountry conditions for a trip on ${peak}.
 Route: ${route}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
@@ -94,7 +105,7 @@ Write a concise route-wide briefing (3-5 short paragraphs) covering:
 3. Any gear needs specific to current route conditions
 4. Overall go / go-with-caution / no-go recommendation with one-line reasoning`,
         { maxTokens: 700 }
-      );
+      ), 20000, 'Route synthesis');
 
       return res.json({ waypoints, summaries, analysis });
     } catch (err) {

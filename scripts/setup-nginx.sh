@@ -51,6 +51,12 @@ server {
     # /api/safety makes multiple upstream calls; allow up to 30s.
     proxy_read_timeout 30s;
 
+    # Route analysis makes multiple parallel safety calls + Claude calls; needs more time.
+    location /api/route-analysis {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_read_timeout 120s;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:3001;
     }
