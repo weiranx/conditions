@@ -46,10 +46,10 @@ const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler }) =>
 
     try {
       const text = await askClaude(
-        `List the 2-3 most common hiking or climbing routes for ${peak} near coordinates (${lat}, ${lon}) in the United States.
+        `List all well-known hiking, climbing, and scrambling routes for ${peak} near coordinates (${lat}, ${lon}) in the United States. Include 4-6 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-        { maxTokens: 512 }
+        { maxTokens: 1024 }
       );
       const routes = parseJsonArrayFromClaude(text);
       return res.json(routes);
