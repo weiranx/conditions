@@ -4,7 +4,7 @@ const registerSafetyRoute = ({ app, safetyHandler }) => {
 
 const createSafetyInvoker = ({ safetyHandler }) => async (query) =>
   new Promise((resolve, reject) => {
-    const mockReq = { query };
+    const mockReq = { query, headers: {}, ip: null };
     const mockRes = {
       statusCode: 200,
       headersSent: false,
