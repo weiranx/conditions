@@ -21,7 +21,19 @@ const parseJsonArrayFromClaude = (text) => {
   if (start === -1 || end === -1 || end < start) {
     throw new Error(`No JSON array found in Claude response: ${text.slice(0, 200)}`);
   }
-  return JSON.parse(text.slice(start, end + 1));
+  let raw = text.slice(start, end + 1);
+
+  // Fix common Claude JSON quirks: trailing commas, single-quoted keys
+  raw = raw.replace(/,\s*([}\]])/g, '$1');
+  raw = raw.replace(/(['"])?(\w+)(['"])?\s*:/g, (_, q1, key, q2) =>
+    (q1 === '"' && q2 === '"') ? `"${key}":` : `"${key}":`
+  );
+
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`Failed to parse JSON from Claude: ${e.message}\nRaw: ${raw.slice(0, 300)}`);
+  }
 };
 
 const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler }) => {
