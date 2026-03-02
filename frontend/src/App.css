@@ -2188,6 +2188,153 @@ button.collapsible-card-header:focus-visible {
   margin-top: 0;
 }
 
+.terrain-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+
+.terrain-impact-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.terrain-impact-badge.go {
+  background: #e7f3e8;
+  color: #2d6f41;
+  border-color: #b8d9bf;
+}
+
+.terrain-impact-badge.caution {
+  background: #fdf3e2;
+  color: #9a6a1f;
+  border-color: #e1ca9f;
+}
+
+.terrain-impact-badge.nogo {
+  background: #fbe8e8;
+  color: #9b2f2f;
+  border-color: #e2b1b1;
+}
+
+.terrain-confidence-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+
+.terrain-confidence-chip.high {
+  color: #2d6f41;
+  background: #f0f8f1;
+  border-color: #c8e0cc;
+}
+
+.terrain-confidence-chip.medium {
+  color: #8a6220;
+  background: #fef9f0;
+  border-color: #e5d5a8;
+}
+
+.terrain-confidence-chip.low {
+  color: #6a7570;
+  background: #f4f5f4;
+  border-color: #d4d8d5;
+}
+
+.terrain-snow-profile-block {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d5e4d8;
+  background: #f3f8f4;
+}
+
+.terrain-snow-profile-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.terrain-snow-profile-title {
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4a6552;
+  flex-shrink: 0;
+}
+
+.terrain-snow-profile-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #2a4535;
+}
+
+.terrain-snow-profile-summary {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: #4a5e51;
+  line-height: 1.45;
+}
+
+.terrain-precip-grid {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f5f7f5;
+  border: 1px solid #dde5de;
+  font-family: var(--font-data);
+}
+
+.terrain-precip-row {
+  display: grid;
+  grid-template-columns: 34px 1fr 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+}
+
+.terrain-precip-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5e6e63;
+}
+
+.terrain-precip-val {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.78rem;
+  color: #2a3830;
+  gap: 1px;
+}
+
+.terrain-precip-window {
+  font-size: 0.59rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a9e91;
+  font-weight: 600;
+}
+
 .weather-issued {
   color: #59645d;
   font-size: 0.72rem;
@@ -5937,6 +6084,76 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .terrain-context-line {
   color: #9eb3c2;
+}
+
+:root[data-theme='dark'] .terrain-impact-badge.go {
+  background: #1d3524;
+  color: #79c98c;
+  border-color: #2e5038;
+}
+
+:root[data-theme='dark'] .terrain-impact-badge.caution {
+  background: #2f2415;
+  color: #d4a052;
+  border-color: #4a3520;
+}
+
+:root[data-theme='dark'] .terrain-impact-badge.nogo {
+  background: #2e1818;
+  color: #e07070;
+  border-color: #4a2525;
+}
+
+:root[data-theme='dark'] .terrain-confidence-chip.high {
+  color: #79c98c;
+  background: #182a1e;
+  border-color: #2e5038;
+}
+
+:root[data-theme='dark'] .terrain-confidence-chip.medium {
+  color: #d4a052;
+  background: #2a2015;
+  border-color: #4a3520;
+}
+
+:root[data-theme='dark'] .terrain-confidence-chip.low {
+  color: #8a9a90;
+  background: #232b26;
+  border-color: #3a4a40;
+}
+
+:root[data-theme='dark'] .terrain-snow-profile-block {
+  border-color: #2a4535;
+  background: #162318;
+}
+
+:root[data-theme='dark'] .terrain-snow-profile-title {
+  color: #7ab08a;
+}
+
+:root[data-theme='dark'] .terrain-snow-profile-label {
+  color: #c5dfc9;
+}
+
+:root[data-theme='dark'] .terrain-snow-profile-summary {
+  color: #8ab598;
+}
+
+:root[data-theme='dark'] .terrain-precip-grid {
+  background: #1a2420;
+  border-color: #2c3d32;
+}
+
+:root[data-theme='dark'] .terrain-precip-label {
+  color: #8ab598;
+}
+
+:root[data-theme='dark'] .terrain-precip-val {
+  color: #c5dfc9;
+}
+
+:root[data-theme='dark'] .terrain-precip-window {
+  color: #6a8a72;
 }
 
 :root[data-theme='dark'] .precip-insight-line {

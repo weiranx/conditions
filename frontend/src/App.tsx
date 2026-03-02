@@ -4668,8 +4668,7 @@ function App() {
     formatSnowfallAmountForElevationUnit(snowfall24hIn, snowfall24hCm, preferences.elevationUnit),
     formatSnowfallAmountForElevationUnit(snowfall48hIn, snowfall48hCm, preferences.elevationUnit),
   ].join(' / ');
-  const terrainPrecipContextLine = `Rain 12h/24h/48h: ${rainfallWindowSummary} • Snowfall 12h/24h/48h: ${snowfallWindowSummary}`;
-  const rainfall12hDisplay = formatRainAmountForElevationUnit(rainfall12hIn, rainfall12hMm, preferences.elevationUnit);
+  const rainfall12hDisplay =formatRainAmountForElevationUnit(rainfall12hIn, rainfall12hMm, preferences.elevationUnit);
   const rainfall24hDisplay = formatRainAmountForElevationUnit(rainfall24hIn, rainfall24hMm, preferences.elevationUnit);
   const rainfall48hDisplay = formatRainAmountForElevationUnit(rainfall48hIn, rainfall48hMm, preferences.elevationUnit);
   const snowfall12hDisplay = formatSnowfallAmountForElevationUnit(snowfall12hIn, snowfall12hCm, preferences.elevationUnit);
@@ -8089,11 +8088,19 @@ function App() {
                   summary={safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}
                 >
                 <p className="muted-note">{terrainConditionDetails.summary}</p>
-                {terrainConditionDetails.impact && (
-                  <p className="terrain-context-line">
-                    Operational impact:{' '}
-                    <strong>{terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'}</strong>
-                  </p>
+                {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
+                  <div className="terrain-meta-row">
+                    {terrainConditionDetails.impact && (
+                      <span className={`terrain-impact-badge ${terrainConditionDetails.impact === 'high' ? 'nogo' : terrainConditionDetails.impact === 'low' ? 'go' : 'caution'}`}>
+                        {terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'} impact
+                      </span>
+                    )}
+                    {terrainConditionDetails.confidence && (
+                      <span className={`terrain-confidence-chip ${terrainConditionDetails.confidence}`}>
+                        {terrainConditionDetails.confidence === 'high' ? 'High' : terrainConditionDetails.confidence === 'medium' ? 'Moderate' : 'Low'} confidence
+                      </span>
+                    )}
+                  </div>
                 )}
                 {terrainConditionDetails.recommendedTravel && (
                   <div className="decision-action">
@@ -8108,26 +8115,37 @@ function App() {
                   </div>
                 )}
                 {terrainConditionDetails.snowProfile && (
-                  <>
-                    <p className="terrain-context-line">
-                      Snow profile: <strong>{terrainConditionDetails.snowProfile.label}</strong>
-                    </p>
+                  <div className="terrain-snow-profile-block">
+                    <div className="terrain-snow-profile-header">
+                      <span className="terrain-snow-profile-title">Snow Profile</span>
+                      <strong className="terrain-snow-profile-label">{terrainConditionDetails.snowProfile.label}</strong>
+                    </div>
                     {terrainConditionDetails.snowProfile.summary ? (
-                      <p className="muted-note">{terrainConditionDetails.snowProfile.summary}</p>
+                      <p className="terrain-snow-profile-summary">{terrainConditionDetails.snowProfile.summary}</p>
                     ) : null}
-                  </>
+                    {terrainConditionDetails.snowProfile.reasons.length > 0 && (
+                      <ul className="signal-list compact">
+                        {terrainConditionDetails.snowProfile.reasons.map((reason, index) => (
+                          <li key={`snow-profile-reason-${index}`}>{reason}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
-                <p className="terrain-context-line">{terrainPrecipContextLine}</p>
-                {terrainConditionDetails.confidence && (
-                  <p className="muted-note">
-                    Classification confidence:{' '}
-                    {terrainConditionDetails.confidence === 'high'
-                      ? 'High'
-                      : terrainConditionDetails.confidence === 'medium'
-                        ? 'Moderate'
-                        : 'Low'}
-                  </p>
-                )}
+                <div className="terrain-precip-grid">
+                  <div className="terrain-precip-row">
+                    <span className="terrain-precip-label">Rain</span>
+                    <span className="terrain-precip-val"><span className="terrain-precip-window">12h</span>{rainfall12hDisplay}</span>
+                    <span className="terrain-precip-val"><span className="terrain-precip-window">24h</span>{rainfall24hDisplay}</span>
+                    <span className="terrain-precip-val"><span className="terrain-precip-window">48h</span>{rainfall48hDisplay}</span>
+                  </div>
+                  <div className="terrain-precip-row">
+                    <span className="terrain-precip-label">Snow</span>
+                    <span className="terrain-precip-val"><span className="terrain-precip-window">12h</span>{snowfall12hDisplay}</span>
+                    <span className="terrain-precip-val"><span className="terrain-precip-window">24h</span>{snowfall24hDisplay}</span>
+                    <span className="terrain-precip-val"><span className="terrain-precip-window">48h</span>{snowfall48hDisplay}</span>
+                  </div>
+                </div>
                 {terrainConditionDetails.reasons.length > 0 ? (
                   <ul className="signal-list compact">
                     {terrainConditionDetails.reasons.map((reason, index) => (
@@ -8137,13 +8155,6 @@ function App() {
                 ) : (
                   <p className="muted-note">No strong surface signal was detected from current upstream data.</p>
                 )}
-                {terrainConditionDetails.snowProfile && terrainConditionDetails.snowProfile.reasons.length > 0 ? (
-                  <ul className="signal-list compact">
-                    {terrainConditionDetails.snowProfile.reasons.map((reason, index) => (
-                      <li key={`snow-profile-reason-${index}`}>{reason}</li>
-                    ))}
-                  </ul>
-                ) : null}
                 <p className="muted-note">Classification updates when you change location, date, or start time.</p>
                 </CollapsibleCard>
               )}
