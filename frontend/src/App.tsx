@@ -2512,8 +2512,8 @@ function App() {
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       setRouteAnalysis(payload as RouteAnalysisResult);
-    } catch {
-      setRouteError('Route analysis failed. Try again.');
+    } catch (err) {
+      setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');
     } finally {
       setRouteLoading(false);
     }
