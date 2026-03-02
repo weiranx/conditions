@@ -1998,6 +1998,84 @@ interface RouteAnalysisResult {
   analysis: string;
 }
 
+function renderSimpleMarkdown(text: string): React.ReactNode[] {
+  const elements: React.ReactNode[] = [];
+  let listBuffer: string[] = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    elements.push(
+      <ul key={key++} className="route-md-list">
+        {listBuffer.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
+      </ul>
+    );
+    listBuffer = [];
+  };
+
+  const renderInline = (line: string): React.ReactNode[] =>
+    line.split(/(\*\*[^*]+\*\*)/).map((seg, j) =>
+      seg.startsWith('**') && seg.endsWith('**')
+        ? <strong key={j}>{seg.slice(2, -2)}</strong>
+        : seg
+    );
+
+  const lines = text.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    // Blank line
+    if (!line) {
+      flushList();
+      i++;
+      continue;
+    }
+
+    // Heading
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      flushList();
+      const level = headingMatch[1].length;
+      if (level === 1) elements.push(<h3 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h3>);
+      else if (level === 2) elements.push(<h4 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h4>);
+      else elements.push(<h5 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h5>);
+      i++;
+      continue;
+    }
+
+    // Bullet list
+    if (/^[-*]\s+/.test(line)) {
+      listBuffer.push(line.replace(/^[-*]\s+/, ''));
+      i++;
+      continue;
+    }
+
+    // Numbered list
+    if (/^\d+\.\s+/.test(line)) {
+      listBuffer.push(line.replace(/^\d+\.\s+/, ''));
+      i++;
+      continue;
+    }
+
+    // Paragraph — collect consecutive non-blank, non-special lines
+    flushList();
+    const paraLines: string[] = [line];
+    i++;
+    while (i < lines.length) {
+      const next = lines[i].trim();
+      if (!next || /^(#{1,3}\s|[-*]\s|\d+\.\s)/.test(next)) break;
+      paraLines.push(next);
+      i++;
+    }
+    elements.push(<p key={key++}>{renderInline(paraLines.join(' '))}</p>);
+  }
+
+  flushList();
+  return elements;
+}
+
 interface ReportLogEntry {
   timestamp: string;
   lat: number | null;
@@ -9582,15 +9660,7 @@ function App() {
                 ))}
               </div>
               <div className="route-analysis-text">
-                {routeAnalysis.analysis.split(/\n\n+/).map((para, i) => (
-                  <p key={i}>
-                    {para.split(/(\*\*[^*]+\*\*)/).map((seg, j) =>
-                      seg.startsWith('**') && seg.endsWith('**')
-                        ? <strong key={j}>{seg.slice(2, -2)}</strong>
-                        : seg
-                    )}
-                  </p>
-                ))}
+                {renderSimpleMarkdown(routeAnalysis.analysis)}
               </div>
               <button
                 type="button"

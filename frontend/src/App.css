@@ -5699,6 +5699,28 @@ button.collapsible-card-header:focus-visible {
   margin-bottom: 0;
 }
 
+.route-md-heading {
+  color: #9ad09a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 14px 0 4px;
+}
+
+.route-md-heading:first-child {
+  margin-top: 0;
+}
+
+.route-md-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+}
+
+.route-md-list li {
+  margin-bottom: 3px;
+}
+
 .planner-footer-stack {
   margin-top: 14px;
   display: grid;
