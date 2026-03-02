@@ -2490,10 +2490,9 @@ function App() {
     setRouteError(null);
     setRouteLoading(true);
     try {
-      const res = await fetch(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Failed to load route suggestions');
-      setRouteSuggestions(data as RouteOption[]);
+      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
+      if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to load route suggestions'));
+      setRouteSuggestions(payload as RouteOption[]);
     } catch (err) {
       setRouteError(err instanceof Error ? err.message : 'Could not load route suggestions. Try again.');
     } finally {
@@ -2506,14 +2505,13 @@ function App() {
     setRouteError(null);
     setRouteLoading(true);
     try {
-      const res = await fetch('/api/route-analysis', {
+      const { response, payload } = await fetchApi('/api/route-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ peak, route, lat, lon, date, start }),
       });
-      if (!res.ok) throw new Error('Failed to analyze route');
-      const data: RouteAnalysisResult = await res.json();
-      setRouteAnalysis(data);
+      if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
+      setRouteAnalysis(payload as RouteAnalysisResult);
     } catch {
       setRouteError('Route analysis failed. Try again.');
     } finally {
