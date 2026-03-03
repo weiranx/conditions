@@ -10,6 +10,7 @@ interface CollapsibleCardProps {
   title: ReactNode;
   headerMeta?: ReactNode;
   summary: ReactNode;
+  preview?: ReactNode;
   defaultExpanded?: boolean;
   children: ReactNode;
   order?: number;
@@ -22,6 +23,7 @@ export function CollapsibleCard({
   title,
   headerMeta,
   summary,
+  preview,
   defaultExpanded = false,
   children,
   order,
@@ -70,7 +72,16 @@ export function CollapsibleCard({
           <ChevronRight className="collapsible-chevron" size={15} aria-hidden="true" />
         </span>
       </button>
-      {!isExpanded && <div className="collapsible-summary">{summary}</div>}
+      {!isExpanded && (
+        preview ? (
+          <>
+            <span className="sr-only">{summary}</span>
+            <div className="card-preview">{preview}</div>
+          </>
+        ) : (
+          <div className="collapsible-summary">{summary}</div>
+        )
+      )}
       <div id={bodyId} hidden={!isExpanded}>
         {children}
       </div>

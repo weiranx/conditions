@@ -1820,6 +1820,87 @@ button.collapsible-card-header:focus-visible {
   }
 }
 
+/* ── Card Preview (Apple Weather-style collapsed previews) ── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.card-preview {
+  padding: 10px 0 4px;
+}
+
+.card-preview-hero {
+  font-size: clamp(1.4rem, 3vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.card-preview-hero.mono {
+  font-family: var(--font-data);
+}
+
+.card-preview-hero.go {
+  color: var(--go-text, #16a34a);
+}
+.card-preview-hero.caution {
+  color: var(--caution-text, #d97706);
+}
+.card-preview-hero.nogo {
+  color: var(--nogo-text, #dc2626);
+}
+
+:root[data-theme='dark'] .card-preview-hero.go {
+  color: #4ade80;
+}
+:root[data-theme='dark'] .card-preview-hero.caution {
+  color: #fbbf24;
+}
+:root[data-theme='dark'] .card-preview-hero.nogo {
+  color: #f87171;
+}
+
+.card-preview-caption {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.card-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.card-preview-chip {
+  font-size: 0.74rem;
+  font-family: var(--font-data);
+  padding: 2px 8px;
+  border-radius: 100px;
+  border: 1px solid var(--line-color);
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.03));
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+:root[data-theme='dark'] .card-preview-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ── End Card Preview ──────────────────────────────────────── */
+
 /* ── End Collapsible Card ──────────────────────────────────── */
 
 .card-title {
