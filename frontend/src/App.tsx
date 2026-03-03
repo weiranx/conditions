@@ -23,8 +23,6 @@ import {
   Route,
   ShieldCheck,
   SlidersHorizontal,
-  Printer,
-  MessageSquare,
   Flame,
   Sun,
   RefreshCw,
@@ -39,6 +37,8 @@ import {
   Zap,
   Check,
   ExternalLink,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -53,7 +53,6 @@ import { SearchBox } from './components/planner/SearchBox';
 import { ForecastLoading } from './components/planner/ForecastLoading';
 import { HelpHint } from './components/planner/CardHelpHint';
 import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
-import { FieldBriefCard } from './components/planner/cards/FieldBriefCard';
 import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
 import { CollapsibleCard } from './components/planner/CollapsibleCard';
@@ -113,7 +112,6 @@ import {
   formatDistanceForElevationUnit,
   formatElevationDeltaForUnit,
   formatElevationForUnit,
-  formatMinutesRelativeToSunset,
   formatRainAmountForElevationUnit,
   formatSnowDepthForElevationUnit,
   formatSnowfallAmountForElevationUnit,
@@ -156,7 +154,6 @@ import {
 import { getDefaultUserPreferences, loadUserPreferences, persistUserPreferences } from './app/preferences';
 import {
   collapseWhitespace,
-  escapeHtml,
   normalizeAlertNarrative,
   splitAlertNarrativeParagraphs,
   stringifyRawPayload,
@@ -2287,8 +2284,6 @@ function App() {
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
-  const [copiedSatLine, setCopiedSatLine] = useState(false);
-  const [copiedTeamBrief, setCopiedTeamBrief] = useState(false);
   const [dayOverDay, setDayOverDay] = useState<DayOverDayComparison | null>(null);
   const [tripStartDate, setTripStartDate] = useState(initialLinkState.forecastDate);
   const [tripStartTime, setTripStartTime] = useState(initialLinkState.alpineStartTime);
@@ -2371,8 +2366,6 @@ function App() {
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const satCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const teamBriefCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
 
   const clearWakeRetry = useCallback(() => {
@@ -2925,12 +2918,6 @@ function App() {
       }
       if (rawCopyResetTimeout.current) {
         clearTimeout(rawCopyResetTimeout.current);
-      }
-      if (satCopyResetTimeout.current) {
-        clearTimeout(satCopyResetTimeout.current);
-      }
-      if (teamBriefCopyResetTimeout.current) {
-        clearTimeout(teamBriefCopyResetTimeout.current);
       }
     };
   }, []);
@@ -3528,388 +3515,6 @@ function App() {
     } catch {
       setCopiedRawPayload(false);
     }
-  };
-
-  const handleCopySatelliteLine = async () => {
-    if (!satelliteConditionLine || typeof navigator === 'undefined' || !navigator.clipboard) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(satelliteConditionLine);
-      setCopiedSatLine(true);
-      if (satCopyResetTimeout.current) {
-        clearTimeout(satCopyResetTimeout.current);
-      }
-      satCopyResetTimeout.current = setTimeout(() => setCopiedSatLine(false), 1600);
-    } catch {
-      setCopiedSatLine(false);
-    }
-  };
-
-  const handleCopyTeamBrief = async () => {
-    if (!teamBriefChecklist || typeof navigator === 'undefined' || !navigator.clipboard) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(teamBriefChecklist);
-      setCopiedTeamBrief(true);
-      if (teamBriefCopyResetTimeout.current) {
-        clearTimeout(teamBriefCopyResetTimeout.current);
-      }
-      teamBriefCopyResetTimeout.current = setTimeout(() => setCopiedTeamBrief(false), 1600);
-    } catch {
-      setCopiedTeamBrief(false);
-    }
-  };
-
-  const handlePrintReport = () => {
-    if (typeof window === 'undefined' || !safetyData || !decision) {
-      return;
-    }
-
-    const reportObjective = objectiveName || 'Pinned Objective';
-    const reportDate = safetyData.forecast?.selectedDate || forecastDate;
-    const normalizedDanger = normalizeDangerLevel(safetyData.avalanche.dangerLevel);
-    const avalancheSummary = avalancheUnknown ? 'Unknown (no official center coverage)' : `L${normalizedDanger} ${getDangerText(normalizedDanger)}`;
-    const blockersMarkup =
-      decision.blockers.length > 0
-        ? decision.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-        : '<li>None listed</li>';
-    const cautionsMarkup =
-      decision.cautions.length > 0
-        ? decision.cautions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-        : '<li>None listed</li>';
-    const checksMarkup =
-      decision.checks.length > 0
-        ? decision.checks
-            .map((check) => `<li>${check.ok ? 'PASS' : 'WARN'} - ${escapeHtml(check.label)}${check.detail ? ` (${escapeHtml(check.detail)})` : ''}</li>`)
-            .join('')
-        : '<li>No checks available</li>';
-    const printAvalancheRelevant = safetyData.avalanche.relevant !== false;
-    const printAvalancheExpired = safetyData.avalanche.coverageStatus === 'expired_for_selected_start';
-    const printNwsAlerts = safetyData.alerts?.alerts || [];
-    const printAlertsMarkup =
-      printNwsAlerts.length > 0
-        ? printNwsAlerts
-            .slice(0, 4)
-            .map((alert) => {
-              const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
-              return `<li>${escapeHtml(alert.event || 'Alert')} • ${escapeHtml(alert.severity || 'Unknown')} • ${escapeHtml(
-                alert.urgency || 'Unknown urgency',
-              )}${alert.expires ? ` • Expires ${escapeHtml(formatPubTime(alert.expires))}` : ''}${
-                safeAlertLink ? ` • <a href="${escapeHtml(safeAlertLink)}" target="_blank" rel="noreferrer">Source link</a>` : ''
-              }</li>`;
-            })
-            .join('')
-        : '<li>No active NWS alerts at objective point</li>';
-    const gearMarkup =
-      safetyData.gear && safetyData.gear.length > 0
-        ? safetyData.gear.map((item) => {
-            if (item && typeof item === 'object' && typeof item.title === 'string') {
-              return `<li><strong>${escapeHtml(item.title)}:</strong> ${escapeHtml(item.detail || '')}</li>`;
-            }
-            return `<li>${escapeHtml(String(item || ''))}</li>`;
-          }).join('')
-        : '<li>Standard kit only (no special gear flags)</li>';
-    const printAvalancheSection = printAvalancheRelevant
-      ? `<article class="section">
-        <h3>Avalanche Snapshot</h3>
-        <ul>
-          <li>${escapeHtml(avalancheSummary)}</li>
-          <li>Avalanche center: ${escapeHtml(safetyData.avalanche.center || 'N/A')}</li>
-          <li>Zone: ${escapeHtml(safetyData.avalanche.zone || 'N/A')}</li>
-          <li>Published: ${escapeHtml(safetyData.avalanche.publishedTime ? formatPubTime(safetyData.avalanche.publishedTime) : 'Not available')}</li>
-          <li>Expires: ${escapeHtml(safetyData.avalanche.expiresTime ? formatPubTime(safetyData.avalanche.expiresTime) : 'Not available')}</li>
-          ${printAvalancheExpired ? '<li>This bulletin expired before the selected start time. Treat as stale context and verify latest update.</li>' : ''}
-        </ul>
-      </article>`
-      : `<article class="section">
-        <h3>Avalanche Snapshot</h3>
-        <ul>
-          <li>Not applicable for this objective/time.</li>
-          <li>${escapeHtml(localizeUnitText(safetyData.avalanche.relevanceReason || 'Avalanche forecasting is currently de-emphasized based on season and snowpack context.'))}</li>
-        </ul>
-      </article>`;
-    const printAlertsSection = `<article class="section">
-        <h3>NWS Alerts</h3>
-        <ul>${printAlertsMarkup}</ul>
-      </article>`;
-    const printFireAlertRows =
-      safetyData.fireRisk?.alertsConsidered && safetyData.fireRisk.alertsConsidered.length > 0
-        ? safetyData.fireRisk.alertsConsidered
-            .slice(0, 4)
-            .map((alert) => {
-              const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
-              return `<li>${escapeHtml(alert.event || 'Alert')} • ${escapeHtml(alert.severity || 'Unknown')}${
-                alert.expires ? ` • Expires ${escapeHtml(formatPubTime(alert.expires || undefined))}` : ''
-              }${safeAlertLink ? ` • <a href="${escapeHtml(safeAlertLink)}" target="_blank" rel="noreferrer">Source link</a>` : ''}</li>`;
-            })
-            .join('')
-        : '<li>No fire-weather specific alerts in current NWS set.</li>';
-    const printFireSection = `<article class="section">
-        <h3>Fire Risk</h3>
-        <ul>
-          <li>Level: ${escapeHtml(safetyData.fireRisk?.label || 'Unknown')}</li>
-          <li>${escapeHtml(safetyData.fireRisk?.guidance || 'No fire-risk guidance available.')}</li>
-          <li>Signal: ${escapeHtml((safetyData.fireRisk?.reasons && safetyData.fireRisk.reasons[0]) || 'No notable fire signal.')}</li>
-          ${printFireAlertRows}
-        </ul>
-      </article>`;
-    const printSnotelDistance = formatDistanceForElevationUnit(Number(safetyData.snowpack?.snotel?.distanceKm), preferences.elevationUnit);
-    const printSnotelSwe = formatSweForElevationUnit(Number(safetyData.snowpack?.snotel?.sweIn), preferences.elevationUnit);
-    const printSnotelDepth = formatSnowDepthForElevationUnit(Number(safetyData.snowpack?.snotel?.snowDepthIn), preferences.elevationUnit);
-    const printNohrscSwe = formatSweForElevationUnit(Number(safetyData.snowpack?.nohrsc?.sweIn), preferences.elevationUnit);
-    const printNohrscDepth = formatSnowDepthForElevationUnit(Number(safetyData.snowpack?.nohrsc?.snowDepthIn), preferences.elevationUnit);
-    const printSnowpackSection = `<article class="section">
-        <h3>Snowpack Snapshot</h3>
-        <ul>
-          <li>${escapeHtml(localizeUnitText(safetyData.snowpack?.summary || 'Snowpack observations unavailable.'))}</li>
-          <li>Nearest SNOTEL: ${escapeHtml(safetyData.snowpack?.snotel?.stationName || 'N/A')}${
-            Number.isFinite(Number(safetyData.snowpack?.snotel?.distanceKm))
-              ? ` (${escapeHtml(printSnotelDistance)})`
-              : ''
-          }</li>
-          <li>SNOTEL SWE: ${escapeHtml(
-            printSnotelSwe,
-          )} • Depth: ${escapeHtml(
-            printSnotelDepth,
-          )}</li>
-          <li>NOHRSC SWE: ${escapeHtml(
-            printNohrscSwe,
-          )} • Depth: ${escapeHtml(
-            printNohrscDepth,
-          )}</li>
-        </ul>
-      </article>`;
-    const bottomLine = localizeUnitText(
-      toPlainText(safetyData.avalanche.bottomLine || safetyData.avalanche.advice || 'No avalanche bottom line available.'),
-    );
-    const defaultPrintAbortTrigger = 'Abort if wind slabs, whiteout conditions, unstable snow signs, or collapsing daylight margin appear.';
-    const printFieldBriefText = collapseWhitespace(
-      [
-        decision.headline,
-        `Weather: ${weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime)} ${safetyData.weather.description}, ${formatTempDisplay(
-          safetyData.weather.temp,
-        )} (feels ${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)}), wind ${formatWindDisplay(
-          safetyData.weather.windSpeed,
-        )} (gust ${formatWindDisplay(safetyData.weather.windGust)}).`,
-        `Avalanche: ${avalancheSummary}.`,
-        `Primary abort trigger: ${decision.blockers[0] || defaultPrintAbortTrigger}`,
-      ].join(' '),
-    );
-    const printTitle = `${reportObjective} - Backcountry Conditions Printable Report`;
-
-    const printHtml = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>${escapeHtml(printTitle)}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      :root {
-        color-scheme: light;
-      }
-      body {
-        margin: 0;
-        padding: 24px;
-        background: #fff;
-        color: #112118;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        line-height: 1.45;
-      }
-      h1, h2, h3 {
-        margin: 0 0 8px;
-        line-height: 1.2;
-      }
-      p {
-        margin: 0;
-      }
-      .header {
-        border: 1px solid #d5dfd5;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 14px;
-        background: #f6faf6;
-      }
-      .kicker {
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #466357;
-        font-weight: 700;
-        margin-bottom: 6px;
-      }
-      .meta {
-        margin-top: 10px;
-        font-size: 13px;
-        color: #2d4338;
-      }
-      .summary {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-      }
-      .tile {
-        border: 1px solid #d5dfd5;
-        border-radius: 10px;
-        padding: 10px;
-        background: #fff;
-      }
-      .tile-label {
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #567163;
-        margin-bottom: 4px;
-        font-weight: 700;
-      }
-      .tile-value {
-        font-size: 17px;
-        font-weight: 700;
-        color: #1a2d23;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-      }
-      .section {
-        border: 1px solid #dce4dc;
-        border-radius: 10px;
-        padding: 12px;
-      }
-      .section h3 {
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #466458;
-        margin-bottom: 8px;
-      }
-      .section ul {
-        margin: 0;
-        padding-left: 18px;
-      }
-      .section li {
-        margin: 4px 0;
-      }
-      .line {
-        margin-top: 10px;
-        border: 1px solid #dce4dc;
-        border-radius: 10px;
-        padding: 10px;
-        background: #f8faf8;
-        font-size: 13px;
-      }
-      .footer {
-        margin-top: 16px;
-        border-top: 1px solid #dce4dc;
-        padding-top: 10px;
-        font-size: 11px;
-        color: #61766c;
-      }
-      @media print {
-        body {
-          padding: 12mm;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <section class="header">
-      <div class="kicker">Backcountry Conditions Printable Report</div>
-      <h1>${escapeHtml(reportObjective)}</h1>
-      <p>Objective plan for ${escapeHtml(reportDate)}</p>
-      <p class="meta">Start ${escapeHtml(displayStartTime)} | Coordinates ${escapeHtml(position.lat.toFixed(5))}, ${escapeHtml(position.lng.toFixed(5))}</p>
-    </section>
-
-    <section class="summary">
-      <article class="tile">
-        <div class="tile-label">Safety Score</div>
-        <div class="tile-value">${escapeHtml(String(safetyData.safety.score))}%</div>
-      </article>
-      <article class="tile">
-        <div class="tile-label">Decision</div>
-        <div class="tile-value">${escapeHtml(decision.level)}</div>
-      </article>
-      <article class="tile">
-        <div class="tile-label">Primary Hazard</div>
-        <div class="tile-value">${escapeHtml(safetyData.safety.primaryHazard || 'N/A')}</div>
-      </article>
-    </section>
-
-    <section class="grid">
-      <article class="section">
-        <h3>Weather Snapshot</h3>
-        <ul>
-          <li>${escapeHtml(`${weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime)} ${safetyData.weather.description}`)}</li>
-          <li>Temp ${escapeHtml(formatTempDisplay(safetyData.weather.temp))}, feels ${escapeHtml(formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp))}</li>
-          <li>Wind ${escapeHtml(formatWindDisplay(safetyData.weather.windSpeed))}, gust ${escapeHtml(formatWindDisplay(safetyData.weather.windGust))}</li>
-          <li>Precipitation chance ${escapeHtml(String(safetyData.weather.precipChance))}%</li>
-          <li>Forecast issued ${escapeHtml(safetyData.weather.issuedTime ? formatPubTime(safetyData.weather.issuedTime) : 'Not available')}</li>
-        </ul>
-      </article>
-
-      ${printAvalancheSection}
-      ${printAlertsSection}
-      ${printSnowpackSection}
-      ${printFireSection}
-
-      <article class="section">
-        <h3>Decision Checks</h3>
-        <ul>${checksMarkup}</ul>
-      </article>
-
-      <article class="section">
-        <h3>Gear Recommendations</h3>
-        <ul>${gearMarkup}</ul>
-      </article>
-
-      <article class="section">
-        <h3>Blockers</h3>
-        <ul>${blockersMarkup}</ul>
-      </article>
-
-      <article class="section">
-        <h3>Cautions</h3>
-        <ul>${cautionsMarkup}</ul>
-      </article>
-    </section>
-
-    <section class="line">
-      <h3 style="margin-bottom: 6px;">Avalanche Bottom Line</h3>
-      <p>${escapeHtml(bottomLine)}</p>
-    </section>
-
-    <section class="line">
-      <h3 style="margin-bottom: 6px;">SAT One-Liner</h3>
-      <p>${escapeHtml(satelliteConditionLine)}</p>
-    </section>
-
-    <section class="line">
-      <h3 style="margin-bottom: 6px;">Field Brief</h3>
-      <p>${escapeHtml(printFieldBriefText)}</p>
-    </section>
-
-    <p class="footer">Generated ${escapeHtml(formatGeneratedAt())} by Backcountry Conditions. ${escapeHtml(APP_CREDIT_TEXT)} Sources include NOAA weather products and avalanche center data where available. Disclaimer: Backcountry Conditions is planning support only, not a safety guarantee. Verify official products and current field conditions before committing.</p>
-  </body>
-</html>`;
-
-    const printWindow = window.open('', '_blank', 'width=960,height=1100');
-    if (!printWindow) {
-      window.print();
-      return;
-    }
-
-    printWindow.document.open();
-    printWindow.document.write(printHtml);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.onload = () => {
-      printWindow.print();
-    };
   };
 
   const handleRetryFetch = () => {
@@ -5123,8 +4728,6 @@ function App() {
     }
     return label || formatElevationDisplay(elevationFt);
   })();
-  const weatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '';
-  const weatherWithEmoji = safetyData ? `${weatherEmoji} ${safetyData.weather.description}` : '';
   const mapWeatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '🌤️';
   const mapWeatherTempLabel = safetyData ? formatTempDisplay(safetyData.weather.temp) : loading ? 'Loading…' : 'N/A';
   const mapWeatherConditionLabel = safetyData
@@ -5444,15 +5047,6 @@ function App() {
           170,
         )
       : '';
-  const dangerSummaryText =
-    !safetyData
-      ? 'Unknown'
-      : !avalancheRelevant
-        ? 'Not primary for this objective'
-        : !avalancheUnknown
-          ? `L${normalizeDangerLevel(safetyData.avalanche.dangerLevel)} ${getDangerText(normalizeDangerLevel(safetyData.avalanche.dangerLevel))}`
-          : 'Unknown (no official center coverage)';
-  const daylightBufferMinutes = 30;
   const startMinutesForPlan = parseTimeInputMinutes(alpineStartTime);
   const sunriseMinutesForPlan = safetyData ? parseSolarClockMinutes(safetyData.solar.sunrise) : null;
   const sunsetMinutesForPlan = safetyData ? parseSolarClockMinutes(safetyData.solar.sunset) : null;
@@ -5468,25 +5062,6 @@ function App() {
           ? `${formatDurationMinutes(daylightRemainingFromStartMinutes)} (start before sunrise)`
           : formatDurationMinutes(daylightRemainingFromStartMinutes)
       : 'N/A';
-  const daylightMarginMinutes = sunsetMinutesForPlan !== null && cutoffMinutes !== null ? sunsetMinutesForPlan - cutoffMinutes : null;
-  const daylightBriefLine = safetyData
-    ? daylightMarginMinutes !== null
-      ? `Conservative daylight margin is ${formatMinutesRelativeToSunset(daylightMarginMinutes, daylightBufferMinutes)}.`
-      : `Sunset ${formatClockShort(safetyData.solar.sunset, preferences.timeStyle)}; keep at least ${daylightBufferMinutes} min daylight buffer.`
-    : '';
-  const fieldBriefSnapshot = safetyData
-    ? [
-        `Forecast ${safetyData.forecast?.selectedDate || forecastDate}: ${weatherWithEmoji}.`,
-        `Temp ${formatTempDisplay(safetyData.weather.temp)} (feels ${formatTempDisplay(
-          safetyData.weather.feelsLike ?? safetyData.weather.temp,
-        )}), wind ${formatWindDisplay(safetyData.weather.windSpeed)}, gust ${formatWindDisplay(safetyData.weather.windGust)}.`,
-        Number.isFinite(rainfall24hIn) || Number.isFinite(snowfall24hIn)
-          ? `Recent precip (24h): rain ${rainfall24hDisplay}${Number.isFinite(snowfall24hIn) ? `, snowfall ${snowfall24hDisplay}` : ''}.`
-          : '',
-        `Avalanche ${dangerSummaryText}${safetyData.avalanche.center ? ` • ${safetyData.avalanche.center}` : ''}.`,
-        daylightBriefLine,
-      ].filter(Boolean)
-    : [];
   const snowpackDepthSignalValues = [
     Number(safetyData?.snowpack?.snotel?.snowDepthIn),
     Number(safetyData?.snowpack?.nohrsc?.snowDepthIn),
@@ -5496,53 +5071,6 @@ function App() {
     Number(safetyData?.snowpack?.nohrsc?.sweIn),
   ].filter((value) => Number.isFinite(value) && value > 0);
   const hasSnowpackSignal = snowpackDepthSignalValues.length > 0 || snowpackSweSignalValues.length > 0;
-  const hasWintryWeatherSignal = safetyData
-    ? /snow|sleet|ice|freezing|blizzard|flurr|graupel|rime|wintry/.test(String(safetyData.weather.description || '').toLowerCase()) ||
-      (Number.isFinite(Number(safetyData.weather.temp)) && Number(safetyData.weather.temp) <= 34)
-    : false;
-  const shouldUseSnowAbortTriggers = Boolean(safetyData) && (avalancheRelevant || hasSnowpackSignal || hasWintryWeatherSignal);
-  const defaultAbortTriggers = [
-    ...(shouldUseSnowAbortTriggers
-      ? [
-          'Abort if signs of slab instability or active loading appear.',
-          'Abort if ridge wind exposure exceeds team stability limits.',
-        ]
-      : [
-          'Abort if surface conditions degrade beyond team traction/footing limits.',
-          'Abort if sustained wind exposure exceeds team terrain limits on open ridges/slabs.',
-        ]),
-    'Abort if daylight margin begins collapsing.',
-  ];
-  const fieldBriefAbortTriggers = decision
-    ? (decision.blockers.length > 0 ? decision.blockers.slice(0, 3) : defaultAbortTriggers)
-    : [];
-  const uniqueNonEmptyLines = (items: string[]): string[] => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    items.forEach((raw) => {
-      const normalized = String(raw || '').trim();
-      if (!normalized) return;
-      const key = normalized.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      out.push(normalized);
-    });
-    return out;
-  };
-  const failingCheckActions = decision
-    ? uniqueNonEmptyLines(
-        decision.checks
-          .filter((check) => !check.ok)
-          .map((check) => check.action || `${check.label}${check.detail ? `: ${check.detail}` : ''}`),
-      )
-    : [];
-  const fieldBriefHeadline = decision
-    ? decision.level === 'NO-GO'
-      ? 'Do not commit to this objective window. Switch to a safer alternative or delay.'
-      : decision.level === 'CAUTION'
-        ? 'Proceed only with conservative terrain choices and strict timing discipline.'
-        : 'Conditions are within plan limits. Execute with routine risk controls.'
-    : '';
   const fieldBriefPrimaryReason = decision
     ? decision.level === 'NO-GO'
       ? decision.blockers[0] || 'High-likelihood failure modes detected. Delay or choose a safer objective.'
@@ -5552,62 +5080,6 @@ function App() {
     : '';
   const fieldBriefTopRisks = decision
     ? (decision.blockers.length > 0 ? decision.blockers : decision.cautions).slice(0, 3)
-    : [];
-  const bestTravelWindowLine = travelWindowInsights.bestWindow
-    ? (() => {
-        const windowLabel = formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle);
-        const startsAfterSelectedHour = travelWindowRows.length > 0 && travelWindowInsights.bestWindow.start !== travelWindowRows[0].time;
-        return startsAfterSelectedHour
-          ? `Primary movement window opens at ${formatClockForStyle(travelWindowInsights.bestWindow.start, preferences.timeStyle)} (${windowLabel}, ${travelWindowInsights.bestWindow.length}h).`
-          : `Primary movement window starts at departure (${windowLabel}, ${travelWindowInsights.bestWindow.length}h).`;
-      })()
-    : `No fully passing window in the next ${travelWindowHours}h under current thresholds. Stay in low-consequence terrain.`;
-  const peakRiskTimeLine = worstTravelWindowRow
-    ? (() => {
-        const peakLabel = formatClockForStyle(worstTravelWindowRow.time, preferences.timeStyle);
-        const dominantFailures = worstTravelWindowRow.failedRuleLabels.slice(0, 2);
-        if (dominantFailures.length > 0) {
-          return `Peak risk near ${peakLabel}: ${dominantFailures.join(' + ')}.`;
-        }
-        return `Peak risk near ${peakLabel}: monitor trend shift and preserve retreat options.`;
-      })()
-    : '';
-  const routeDisciplineLine =
-    decision?.level === 'GO'
-      ? 'Maintain checkpoint cadence every 60-90 min and continue only while field observations match forecast assumptions.'
-      : decision?.level === 'NO-GO'
-        ? 'Use backup objective criteria: lower angle, shorter commitment, and simple retreat lines.'
-        : 'Bias to lower-angle / lower-consequence terrain and shorten commitments between safe regroup points.';
-  const fieldBriefImmediateActions = decision
-    ? uniqueNonEmptyLines([
-        `Refresh official products at ${displayStartTime} and confirm forecast period + publish/expiry times before departure.`,
-        ...failingCheckActions.slice(0, 2),
-        travelWindowInsights.nextCleanWindow && travelWindowRows.length > 0 && travelWindowInsights.nextCleanWindow.start !== travelWindowRows[0].time
-          ? `Delay exposed/committing terrain until ${formatClockForStyle(travelWindowInsights.nextCleanWindow.start, preferences.timeStyle)} when the first clean hour begins.`
-          : '',
-        peakRiskTimeLine
-          ? `${peakRiskTimeLine.replace(/\.$/, '')}; plan to be in lower-consequence terrain before this hour.`
-          : '',
-        'Send SAT one-liner and team brief to your support contact before departure.',
-      ]).slice(0, 4)
-    : [];
-  const fieldBriefActions = decision
-    ? uniqueNonEmptyLines([
-        ...fieldBriefImmediateActions,
-        ...failingCheckActions,
-        decision.level === 'GO'
-          ? 'Proceed only if observed conditions remain aligned with forecast and field checks.'
-          : 'Use a shorter/lower-angle backup objective and enforce conservative turn-around timing.',
-      ])
-    : [];
-  const fieldBriefAtAGlance = safetyData
-    ? [
-        { label: 'Start', value: displayStartTime },
-        { label: 'Daylight left', value: daylightRemainingFromStartLabel },
-        { label: 'Surface', value: safetyData.terrainCondition?.label || safetyData.trail || 'Unknown' },
-        { label: 'Avalanche', value: dangerSummaryText },
-        { label: 'Safety score', value: `${safetyData.safety.score}%` },
-      ]
     : [];
   const decisionFailingChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
   const decisionPassingChecksCount = decision ? decision.checks.filter((check) => check.ok).length : 0;
@@ -5627,17 +5099,6 @@ function App() {
             .filter((check) => check.ok)
             .slice(0, 3)
             .map((check) => check.label)
-    : [];
-  const fieldBriefExecutionSteps = decision
-    ? uniqueNonEmptyLines([
-        `Step 1 - Departure gate (${displayStartTime}): verify weather, avalanche, alerts, and travel-window thresholds are still valid.`,
-        `Step 2 - Movement timing: ${bestTravelWindowLine}`,
-        peakRiskTimeLine ? `Step 3 - Hazard timing: ${peakRiskTimeLine}` : '',
-        `Step 4 - Route discipline: ${routeDisciplineLine}`,
-        `Abort immediately if ${String(fieldBriefAbortTriggers[0] || 'daylight margin begins collapsing')
-          .replace(/^Abort if\s+/i, '')
-          .replace(/\.$/, '')}.`,
-      ]).slice(0, 5)
     : [];
   const objectiveTimezone = safetyData?.weather.timezone || null;
   const precipitationDisplayTimezone = objectiveTimezone || safetyData?.rainfall?.timezone || null;
@@ -6058,36 +5519,6 @@ function App() {
     }
     return 'go';
   })();
-  const teamBriefChecklist =
-    safetyData && decision
-      ? [
-          `${objectiveName || 'Pinned Objective'} - ${safetyData.forecast?.selectedDate || forecastDate}`,
-          `Decision: ${decision.level}`,
-          `Start: ${displayStartTime}`,
-          `Weather: ${weatherWithEmoji}, ${formatTempDisplay(safetyData.weather.temp)} (feels ${formatTempDisplay(
-            safetyData.weather.feelsLike ?? safetyData.weather.temp,
-          )}), wind ${formatWindDisplay(safetyData.weather.windSpeed)}, gust ${formatWindDisplay(safetyData.weather.windGust)}${
-            resolvedWindDirection ? ` from ${resolvedWindDirection}` : ''
-          }.`,
-          `Avalanche: ${
-            !avalancheRelevant
-              ? 'Not primary for this objective'
-              : avalancheUnknown
-                ? 'Limited avalanche coverage (no official center coverage)'
-                : `L${normalizeDangerLevel(safetyData.avalanche.dangerLevel)} ${getDangerText(normalizeDangerLevel(safetyData.avalanche.dangerLevel))}`
-          }`,
-          '',
-          'Situation snapshot:',
-          ...fieldBriefSnapshot.map((item) => `- ${item}`),
-          '',
-          'Abort triggers:',
-          ...fieldBriefAbortTriggers.map((item) => `- ${item}`),
-          '',
-          'Immediate actions:',
-          ...fieldBriefActions.map((item) => `- ${item}`),
-          ...(windLoadingHintsRelevant ? ['', `Wind loading hint: ${windLoadingSummary}`] : []),
-        ].join('\n')
-      : '';
   const gearRecommendations = Array.isArray(safetyData?.gear)
     ? safetyData.gear
         .map((rawItem) => {
@@ -6376,9 +5807,8 @@ function App() {
     return {
       decisionGate: 0,
       scoreCard: 1,
-      fieldBrief: 2,
-      avalancheForecast: avalancheRelevant ? 3 : 130,
-      reportColumns: 4,
+      avalancheForecast: avalancheRelevant ? 2 : 130,
+      reportColumns: 3,
       criticalChecks: innerOrder.get('criticalChecks') ?? 11,
       atmosphericData: innerOrder.get('atmosphericData') ?? 12,
       heatRisk: innerOrder.get('heatRisk') ?? 13,
@@ -6405,21 +5835,6 @@ function App() {
     [],
   );
 
-  useEffect(() => {
-    setCopiedSatLine(false);
-    if (satCopyResetTimeout.current) {
-      clearTimeout(satCopyResetTimeout.current);
-      satCopyResetTimeout.current = null;
-    }
-  }, [satelliteConditionLine]);
-
-  useEffect(() => {
-    setCopiedTeamBrief(false);
-    if (teamBriefCopyResetTimeout.current) {
-      clearTimeout(teamBriefCopyResetTimeout.current);
-      teamBriefCopyResetTimeout.current = null;
-    }
-  }, [teamBriefChecklist]);
 
   useEffect(() => {
     if (!hasObjective || !safetyData) {
@@ -7323,136 +6738,139 @@ function App() {
             <LocationMarker position={position} setPosition={updateObjectivePosition} />
             <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
           </MapContainer>
+
+          {/* ── Map overlays ── */}
+          <div className="map-overlay map-overlay-tr">
+            <button
+              type="button"
+              className={`map-overlay-btn ${mapStyle === 'street' ? 'is-active' : ''}`}
+              onClick={() => setMapStyle(mapStyle === 'topo' ? 'street' : 'topo')}
+              title={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
+              aria-label={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
+            >
+              <Layers size={16} />
+            </button>
+            <button
+              type="button"
+              className="map-overlay-btn"
+              onClick={handleUseCurrentLocation}
+              disabled={locatingUser}
+              title={locatingUser ? 'Locating...' : 'Use my location'}
+              aria-label="Use my location"
+            >
+              <LocateFixed size={16} />
+            </button>
+            <button
+              type="button"
+              className="map-overlay-btn"
+              onClick={handleRecenterMap}
+              title="Recenter map"
+              aria-label="Recenter map"
+            >
+              <Navigation size={16} />
+            </button>
+          </div>
+
+          <div className="map-overlay map-overlay-bl">
+            <span className="map-overlay-coords">
+              {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
+            </span>
+          </div>
+
+          {hasObjective && (
+            <div className="map-overlay map-overlay-br">
+              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapElevationChipTitle}>
+                <Mountain size={12} aria-hidden="true" />
+                <span className="map-elevation-value">{mapElevationLabel}</span>
+              </span>
+              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
+                <span className="map-weather-chip-emoji" aria-hidden="true">{mapWeatherEmoji}</span>
+                <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
+                <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
+              </span>
+            </div>
+          )}
         </div>
 
+        {/* ── Flat below-map controls ── */}
         <div className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
           <button
             type="button"
             className="mobile-map-controls-btn"
             onClick={() => setMobileMapControlsExpanded((prev) => !prev)}
             aria-expanded={mobileMapControlsExpanded}
-            aria-controls="map-actions-top"
+            aria-controls="map-actions-flat"
           >
             <SlidersHorizontal size={14} />
             {mobileMapControlsExpanded ? 'Hide plan controls' : 'Show plan controls'}
           </button>
-          <div id="map-actions-top" className="map-actions-top">
-            <section className="map-control-group" aria-label="Plan time controls">
-              <p className="map-control-title">
-                <Clock size={13} /> Plan time
-              </p>
-              <div className="map-control-row">
-                <label className="date-control">
-                  <span>Forecast date</span>
-                  <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
-                </label>
 
-                <label className="date-control compact">
-                  <span>{startLabel}</span>
-                  <input
-                    type="time"
-                    aria-label={startLabel}
-                    title="When you plan to start moving."
-                    value={alpineStartTime}
-                    onChange={handlePlannerTimeChange(setAlpineStartTime)}
-                  />
-                </label>
+          <div id="map-actions-flat" className="map-actions-flat">
+            <label className="date-control">
+              <span>Date</span>
+              <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
+            </label>
 
-                <label className="date-control compact travel-window-control">
-                  <span>Window (h)</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    aria-label="Travel window hours"
-                    title="How many hours to evaluate from the selected start time."
-                    min={MIN_TRAVEL_WINDOW_HOURS}
-                    max={MAX_TRAVEL_WINDOW_HOURS}
-                    step={1}
-                    value={travelWindowHoursDraft}
-                    onChange={handleTravelWindowHoursDraftChange}
-                    onBlur={handleTravelWindowHoursDraftBlur}
-                  />
-                </label>
+            <label className="date-control compact">
+              <span>{startLabel}</span>
+              <input
+                type="time"
+                aria-label={startLabel}
+                title="When you plan to start moving."
+                value={alpineStartTime}
+                onChange={handlePlannerTimeChange(setAlpineStartTime)}
+              />
+            </label>
 
-                <button
-                  type="button"
-                  className="now-control-btn"
-                  onClick={handleUseNowConditions}
-                  title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
-                >
-                  <Clock size={14} /> Now
-                </button>
-              </div>
-            </section>
+            <label className="date-control compact travel-window-control">
+              <span>Window (h)</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                aria-label="Travel window hours"
+                title="How many hours to evaluate from the selected start time."
+                min={MIN_TRAVEL_WINDOW_HOURS}
+                max={MAX_TRAVEL_WINDOW_HOURS}
+                step={1}
+                value={travelWindowHoursDraft}
+                onChange={handleTravelWindowHoursDraftChange}
+                onBlur={handleTravelWindowHoursDraftBlur}
+              />
+            </label>
 
-            <section className="map-control-group" aria-label="Map and location tools">
-              <p className="map-control-title">
-                <Layers size={13} /> Map & tools
-              </p>
-              <div className="map-control-row map-control-row-tools">
-                <label className="date-control compact">
-                  <span>Basemap</span>
-                  <select
-                    aria-label="Basemap style"
-                    title="Switch between terrain and street basemaps."
-                    value={mapStyle}
-                    onChange={(e) => setMapStyle(e.target.value as MapStyle)}
-                  >
-                    <option value="topo">Terrain</option>
-                    <option value="street">Street</option>
-                  </select>
-                </label>
-                <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
-                  <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
-                </button>
-                <button type="button" className="action-btn" onClick={handleUseCurrentLocation} disabled={locatingUser}>
-                  <LocateFixed size={14} /> {locatingUser ? 'Locating...' : 'Use My Location'}
-                </button>
-                <button type="button" className="action-btn" onClick={handleRecenterMap}>
-                  <Navigation size={14} /> Recenter
-                </button>
-              </div>
-            </section>
+            <button
+              type="button"
+              className="now-control-btn"
+              onClick={handleUseNowConditions}
+              title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
+            >
+              <Clock size={14} /> Now
+            </button>
           </div>
+
+          <div className="map-actions-utils">
+            <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
+              <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+
+            <div className="map-ext-links">
+              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
+                <MapIcon size={15} />
+              </a>
+              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Gaia GPS">
+                <Compass size={15} />
+              </a>
+              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Windy">
+                <Wind size={15} />
+              </a>
+            </div>
+          </div>
+
           {timezoneMismatch && (
             <p className="map-time-help is-warning">
               Objective timezone: <strong>{objectiveTimezone}</strong>. Your device timezone is <strong>{deviceTimezone}</strong>. Times in this report are objective-local.
             </p>
           )}
-
-          <div className="map-actions-bottom">
-            <span className="map-coords">
-              {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
-            </span>
-            {hasObjective && (
-              <span className={`map-elevation-chip ${safetyData ? '' : 'is-pending'}`} title={mapElevationChipTitle}>
-                <Mountain size={13} aria-hidden="true" />
-                <span className="map-elevation-label">Elev</span>
-                <span className="map-elevation-value">{mapElevationLabel}</span>
-              </span>
-            )}
-            {hasObjective && (
-              <span className={`map-weather-chip ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
-                <span className="map-weather-chip-emoji" aria-hidden="true">
-                  {mapWeatherEmoji}
-                </span>
-                <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
-                <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
-              </span>
-            )}
-
-            <div className="map-link-group">
-              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="action-btn">
-                <MapIcon size={14} /> CalTopo
-              </a>
-              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="action-btn">
-                <Compass size={14} /> Gaia GPS
-              </a>
-              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="action-btn">
-                <Wind size={14} /> Windy
-              </a>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -7561,21 +6979,22 @@ function App() {
                     : 'Showing last successful report. Latest refresh failed.'}
                 </div>
               )}
-              <div className="report-action-row">
-                <button type="button" className="settings-btn report-action-btn" onClick={handlePrintReport}>
-                  <Printer size={14} /> Print
-                </button>
-                <button type="button" className="settings-btn report-action-btn" onClick={handleCopySatelliteLine} disabled={!satelliteConditionLine}>
-                  {copiedSatLine ? <Check size={14} /> : <MessageSquare size={14} />} {copiedSatLine ? 'Copied SAT' : 'SAT Message'}
-                </button>
-                <button type="button" className="settings-btn report-action-btn" onClick={handleCopyTeamBrief} disabled={!teamBriefChecklist}>
-                  {copiedTeamBrief ? <Check size={14} /> : <ShieldCheck size={14} />} {copiedTeamBrief ? 'Copied' : 'Field Brief'}
-                </button>
+              <div className="score-ai-brief">
+                {aiBriefNarrative ? (
+                  <p className="score-ai-narrative"><Sparkles size={12} /> {aiBriefNarrative}</p>
+                ) : aiBriefError ? (
+                  <div className="score-ai-error">
+                    <span>{aiBriefError}</span>
+                    <button type="button" className="btn-ai-brief" onClick={handleRequestAiBrief}>Retry</button>
+                  </div>
+                ) : (
+                  <button type="button" className="btn-ai-brief" onClick={handleRequestAiBrief} disabled={aiBriefLoading}>
+                    {aiBriefLoading
+                      ? <><Loader2 size={12} className="spinner" /> Generating...</>
+                      : <><Sparkles size={12} /> AI Analysis</>}
+                  </button>
+                )}
               </div>
-              {satelliteConditionLine && <p className="sat-line-preview">{satelliteConditionLine}</p>}
-              {satelliteConditionLine && (
-                <p className="muted-note sat-limit-note">{satelliteConditionLine.length}/170 chars (InReach/SPOT)</p>
-              )}
             </div>
           </div>
 
@@ -9366,38 +8785,6 @@ function App() {
             </CollapsibleCard>
             );
           })()}
-
-          <CollapsibleCard
-            cardKey="fieldBrief"
-            defaultExpanded={false}
-            order={reportCardOrder.fieldBrief}
-            className="ai-box field-brief-card"
-            title={<span className="card-title"><ShieldCheck size={14} /> Field Brief <HelpHint text="Action-first field brief with primary call, top risks, immediate actions, and optional details." /></span>}
-            headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
-            summary={`${decision.level}: ${fieldBriefHeadline.slice(0, 80)}${fieldBriefHeadline.length > 80 ? '…' : ''}`}
-            preview={<>
-              <div className={`card-preview-hero ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</div>
-              <div className="card-preview-caption">{fieldBriefHeadline.slice(0, 120)}{fieldBriefHeadline.length > 120 ? '…' : ''}</div>
-            </>}
-          >
-          <FieldBriefCard
-          fieldBriefHeadline={fieldBriefHeadline}
-          fieldBriefPrimaryReason={fieldBriefPrimaryReason}
-          decisionActionLine={decisionActionLine}
-          fieldBriefAtAGlance={fieldBriefAtAGlance}
-          fieldBriefExecutionSteps={fieldBriefExecutionSteps}
-          fieldBriefTopRisks={fieldBriefTopRisks}
-          fieldBriefImmediateActions={fieldBriefImmediateActions}
-          fieldBriefSnapshot={fieldBriefSnapshot}
-          fieldBriefAbortTriggers={fieldBriefAbortTriggers}
-          fieldBriefActions={fieldBriefActions}
-          localizeUnitText={localizeUnitText}
-          aiNarrative={aiBriefNarrative}
-          aiLoading={aiBriefLoading}
-          aiError={aiBriefError}
-          onRequestAiBrief={handleRequestAiBrief}
-          />
-          </CollapsibleCard>
 
           <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
             <div className="card-header">
