@@ -516,6 +516,40 @@ const calculateSafetyScore = ({
   const coldExposureHours = trendFeelsLike.filter((value) => value <= 15).length;
   const extremeColdHours = trendFeelsLike.filter((value) => value <= 0).length;
   const heatExposureHours = trendFeelsLike.filter((value) => value >= 85).length;
+
+  // Temporal weighting: early-window hazards penalize more than late-window
+  const trendLen = trend.length;
+  const temporalWeight = (i) => {
+    if (trendLen <= 1) return 1.0;
+    return 1.0 - 0.7 * (i / (trendLen - 1));
+  };
+  let weightedSevereWindHours = 0;
+  let weightedStrongWindHours = 0;
+  let weightedHighPrecipHours = 0;
+  let weightedModeratePrecipHours = 0;
+  let weightedTrendPeakGust = 0;
+  trend.forEach((item, i) => {
+    const w = temporalWeight(i);
+    const rowWind = Number(item?.wind);
+    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
+    if ((Number.isFinite(rowWind) && rowWind >= 30) || (Number.isFinite(rowGust) && rowGust >= 45)) {
+      weightedSevereWindHours += w;
+    }
+    if ((Number.isFinite(rowWind) && rowWind >= 20) || (Number.isFinite(rowGust) && rowGust >= 30)) {
+      weightedStrongWindHours += w;
+    }
+    if (Number.isFinite(rowGust)) {
+      weightedTrendPeakGust = Math.max(weightedTrendPeakGust, rowGust * w);
+    }
+    const rowPrecip = Number(item?.precipChance);
+    if (Number.isFinite(rowPrecip) && rowPrecip >= 60) {
+      weightedHighPrecipHours += w;
+    }
+    if (Number.isFinite(rowPrecip) && rowPrecip >= 40) {
+      weightedModeratePrecipHours += w;
+    }
+  });
+
   const rainfallTotals = rainfallData?.totals || {};
   const rainfallExpected = rainfallData?.expected || {};
   const rainPast24hIn = Number(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
@@ -571,7 +605,7 @@ const calculateSafetyScore = ({
   const effectiveWind = Math.max(
     Number.isFinite(wind) ? wind : 0,
     Number.isFinite(gust) ? gust : 0,
-    Number.isFinite(trendPeakGust) ? trendPeakGust : 0,
+    weightedTrendPeakGust,
   );
   if (effectiveWind >= 50 || (Number.isFinite(wind) && wind >= 35)) {
     applyFactor(
@@ -591,13 +625,13 @@ const calculateSafetyScore = ({
     applyFactor('Wind', 6, `Moderate wind signal (trend peak ${Math.round(effectiveWind)} mph) may affect exposed movement.`, 'NOAA hourly forecast');
   }
 
-  if (severeWindHours >= 4) {
+  if (weightedSevereWindHours >= 2.8) {
     applyFactor('Wind', 8, `${severeWindHours}/${trend.length} trend hours are severe wind windows (>=30 mph sustained or >=45 mph gust).`, 'NOAA hourly trend');
-  } else if (severeWindHours >= 2) {
+  } else if (weightedSevereWindHours >= 1.5) {
     applyFactor('Wind', 5, `${severeWindHours}/${trend.length} trend hours show severe wind windows.`, 'NOAA hourly trend');
-  } else if (strongWindHours >= 6) {
+  } else if (weightedStrongWindHours >= 4.0) {
     applyFactor('Wind', 4, `${strongWindHours}/${trend.length} trend hours are windy (>=20 mph sustained or >=30 mph gust).`, 'NOAA hourly trend');
-  } else if (strongWindHours >= 3) {
+  } else if (weightedStrongWindHours >= 2.0) {
     applyFactor('Wind', 2, `${strongWindHours}/${trend.length} trend hours are windy and may reduce margin on exposed terrain.`, 'NOAA hourly trend');
   }
 
@@ -609,11 +643,11 @@ const calculateSafetyScore = ({
     applyFactor('Storm', 4, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
   }
 
-  if (highPrecipHours >= 4) {
+  if (weightedHighPrecipHours >= 2.8) {
     applyFactor('Storm', 7, `${highPrecipHours}/${trend.length} trend hours are high precip windows (>=60%).`, 'NOAA hourly trend');
-  } else if (highPrecipHours >= 2) {
+  } else if (weightedHighPrecipHours >= 1.5) {
     applyFactor('Storm', 4, `${highPrecipHours}/${trend.length} trend hours are high precip windows.`, 'NOAA hourly trend');
-  } else if (moderatePrecipHours >= 6) {
+  } else if (weightedModeratePrecipHours >= 4.0) {
     applyFactor('Storm', 3, `${moderatePrecipHours}/${trend.length} trend hours are moderate precip windows (>=40%).`, 'NOAA hourly trend');
   }
 
@@ -660,10 +694,13 @@ const calculateSafetyScore = ({
     applyFactor('Cold', 3, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
   }
 
-  if (extremeColdHours >= 3) {
-    applyFactor('Cold', 6, `${extremeColdHours}/${trend.length} trend hours are at or below 0F apparent temperature.`, 'NOAA hourly trend');
-  } else if (coldExposureHours >= 5) {
-    applyFactor('Cold', 4, `${coldExposureHours}/${trend.length} trend hours are at or below 15F apparent temperature.`, 'NOAA hourly trend');
+  const coldOnlyHours = coldExposureHours - extremeColdHours;
+  const coldDurationImpact = Math.min(12, Math.round(extremeColdHours * 1.5 + coldOnlyHours * 0.8));
+  if (coldDurationImpact > 0) {
+    const coldLabel = extremeColdHours > 0
+      ? `${extremeColdHours}/${trend.length} trend hours are at or below 0F and ${coldOnlyHours} additional hours are below 15F apparent temperature.`
+      : `${coldExposureHours}/${trend.length} trend hours are at or below 15F apparent temperature.`;
+    applyFactor('Cold', coldDurationImpact, coldLabel, 'NOAA hourly trend');
   }
 
   const heatRiskLevel = Number(heatRiskData?.level);
@@ -721,6 +758,61 @@ const calculateSafetyScore = ({
   }
   if (Number.isFinite(trendPeakGust) && trendPeakGust >= 45 && (!Number.isFinite(gust) || gust < 45)) {
     applyFactor('Wind', 6, `Peak gusts in the next ${effectiveTrendWindowHours} hours reach ${Math.round(trendPeakGust)} mph.`, 'NOAA hourly trend');
+  }
+
+  // Combined hazard escalation: co-occurring weather hazards compound risk
+  const weatherCats = {
+    wind: factors.some((f) => f.group === 'weather' && /^wind$/i.test(f.hazard)),
+    coldHeat: factors.some((f) => f.group === 'weather' && /^(cold|heat)$/i.test(f.hazard)),
+    precipStorm: factors.some((f) => f.group === 'weather' && /^(storm|winter weather)$/i.test(f.hazard)),
+    visibility: factors.some((f) => f.group === 'weather' && /^visibility$/i.test(f.hazard)),
+  };
+  const activeWeatherCategories = Object.values(weatherCats).filter(Boolean).length;
+  if (activeWeatherCategories >= 3) {
+    applyFactor('Combined Exposure', 10, `${activeWeatherCategories} weather hazard categories are active simultaneously, compounding exposure risk.`, 'Safety score synthesis');
+  } else if (activeWeatherCategories >= 2) {
+    const hasDangerousPair =
+      (weatherCats.wind && weatherCats.coldHeat) ||
+      (weatherCats.wind && weatherCats.precipStorm) ||
+      (weatherCats.coldHeat && weatherCats.precipStorm);
+    if (hasDangerousPair) {
+      applyFactor('Combined Exposure', 5, 'Co-occurring weather hazards increase exposure risk.', 'Safety score synthesis');
+    }
+  }
+
+  // Condition trajectory: deteriorating conditions are riskier than improving
+  if (trend.length >= 4) {
+    const halfLen = Math.floor(trend.length / 2);
+    const firstHalfGusts = trend.slice(0, halfLen).map((item) => {
+      const g = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind);
+      return Number.isFinite(g) ? g : 0;
+    });
+    const secondHalfGusts = trend.slice(halfLen).map((item) => {
+      const g = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind);
+      return Number.isFinite(g) ? g : 0;
+    });
+    const firstHalfPrecips = trend.slice(0, halfLen).map((item) => {
+      const p = Number(item?.precipChance);
+      return Number.isFinite(p) ? p : 0;
+    });
+    const secondHalfPrecips = trend.slice(halfLen).map((item) => {
+      const p = Number(item?.precipChance);
+      return Number.isFinite(p) ? p : 0;
+    });
+    const avgArr = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const firstAvgGust = avgArr(firstHalfGusts);
+    const secondAvgGust = avgArr(secondHalfGusts);
+    const firstAvgPrecip = avgArr(firstHalfPrecips);
+    const secondAvgPrecip = avgArr(secondHalfPrecips);
+    const windDeteriorating = secondAvgGust >= firstAvgGust + 8 && secondAvgGust >= 20;
+    const precipDeteriorating = secondAvgPrecip >= firstAvgPrecip + 15 && secondAvgPrecip >= 40;
+    if (windDeteriorating && precipDeteriorating) {
+      applyFactor('Condition Trajectory', 7, 'Both wind and precipitation are deteriorating through the travel window.', 'NOAA hourly trend');
+    } else if (windDeteriorating) {
+      applyFactor('Condition Trajectory', 4, 'Wind conditions are deteriorating through the travel window.', 'NOAA hourly trend');
+    } else if (precipDeteriorating) {
+      applyFactor('Condition Trajectory', 4, 'Precipitation is increasing through the travel window.', 'NOAA hourly trend');
+    }
   }
 
   if (forecastLeadHours !== null && forecastLeadHours > 6) {

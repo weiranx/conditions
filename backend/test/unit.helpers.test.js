@@ -1350,3 +1350,204 @@ test('deriveTerrainCondition correctly handles null/missing weather data without
   // It should NOT be icy_hardpack (which would happen if temp was incorrectly 0)
   expect(result.code).toBe('weather_unavailable');
 });
+
+// --- Safety score improvements: temporal weighting, combined hazard, trajectory, proportional cold ---
+
+const safetyScoreBaseInput = () => ({
+  avalancheData: { relevant: false, dangerUnknown: false, coverageStatus: 'no_center_coverage' },
+  alertsData: { status: 'none', activeCount: 0, alerts: [] },
+  airQualityData: { status: 'ok', usAqi: 30, category: 'Good' },
+  fireRiskData: { status: 'ok', level: 1, source: 'Fire risk synthesis' },
+  heatRiskData: { status: 'ok', level: 0, label: 'Low', source: 'Heat risk synthesis' },
+  rainfallData: { status: 'ok', anchorTime: new Date().toISOString(), totals: {}, expected: {} },
+  selectedDate: new Date().toISOString().slice(0, 10),
+  selectedStartClock: '08:00',
+  solarData: { sunrise: '6:30 AM', sunset: '6:00 PM' },
+});
+
+test('temporal weighting: early severe wind penalizes more than late severe wind', () => {
+  const makeTrend = (severeAtStart) => Array.from({ length: 12 }, (_, idx) => {
+    const isSevere = severeAtStart ? idx < 3 : idx >= 9;
+    return { temp: 50, wind: isSevere ? 32 : 10, gust: isSevere ? 48 : 15, precipChance: 10 };
+  });
+
+  const earlyResult = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 32, windGust: 48, precipChance: 10, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: makeTrend(true),
+    },
+  });
+
+  const lateResult = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 10, windGust: 15, precipChance: 10, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: makeTrend(false),
+    },
+  });
+
+  // Early severe wind should produce a worse (lower) score than late severe wind
+  expect(earlyResult.score).toBeLessThan(lateResult.score);
+});
+
+test('temporal weighting: late-only gust does not inflate effectiveWind as much', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Mostly Cloudy',
+      windSpeed: 8, windGust: 12, precipChance: 10, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 12 }, (_, idx) => ({
+        temp: 50, wind: idx === 11 ? 35 : 8, gust: idx === 11 ? 55 : 12, precipChance: 10,
+      })),
+    },
+  });
+
+  // A 55mph gust only at the last hour (weight 0.3) → weighted peak = 55*0.3 = 16.5
+  // Start wind/gust (8/12) dominates effectiveWind, so no severe wind tier should fire
+  const windFactors = result.factors.filter((f) => f.hazard === 'Wind');
+  const hasSevereWindTier = windFactors.some((f) => f.impact >= 12);
+  expect(hasSevereWindTier).toBe(false);
+});
+
+test('combined hazard escalation: 3+ weather categories triggers +10 compound penalty', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Snow Showers',
+      windSpeed: 25, windGust: 42, precipChance: 75, humidity: 80, temp: 10, feelsLike: -5,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, () => ({
+        temp: 10, wind: 25, gust: 42, precipChance: 75,
+      })),
+    },
+  });
+
+  const combinedFactor = result.factors.find((f) => f.hazard === 'Combined Exposure');
+  expect(combinedFactor).toBeDefined();
+  expect(combinedFactor.impact).toBe(10);
+});
+
+test('combined hazard escalation: 2 dangerous categories triggers +5 penalty', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Mostly Cloudy',
+      windSpeed: 25, windGust: 42, precipChance: 15, humidity: 40, temp: 5, feelsLike: -8,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, () => ({
+        temp: 5, wind: 25, gust: 42, precipChance: 15,
+      })),
+    },
+  });
+
+  // Wind + Cold active, no Storm
+  const combinedFactor = result.factors.find((f) => f.hazard === 'Combined Exposure');
+  expect(combinedFactor).toBeDefined();
+  expect(combinedFactor.impact).toBe(5);
+});
+
+test('condition trajectory: deteriorating wind adds penalty', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 8, windGust: 12, precipChance: 10, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, (_, idx) => ({
+        temp: 50,
+        wind: idx < 4 ? 8 : 22,
+        gust: idx < 4 ? 12 : 34,
+        precipChance: 10,
+      })),
+    },
+  });
+
+  const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
+  expect(trajectoryFactor).toBeDefined();
+  expect(trajectoryFactor.impact).toBe(4);
+  expect(trajectoryFactor.message).toMatch(/wind.*deteriorating/i);
+});
+
+test('condition trajectory: both wind and precip deteriorating gives +7 (not additive)', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 8, windGust: 12, precipChance: 15, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, (_, idx) => ({
+        temp: 50,
+        wind: idx < 4 ? 8 : 22,
+        gust: idx < 4 ? 12 : 34,
+        precipChance: idx < 4 ? 15 : 55,
+      })),
+    },
+  });
+
+  const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
+  expect(trajectoryFactor).toBeDefined();
+  expect(trajectoryFactor.impact).toBe(7);
+  expect(trajectoryFactor.message).toMatch(/both wind and precipitation/i);
+});
+
+test('condition trajectory: stable/improving conditions get no trajectory penalty', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Mostly Cloudy',
+      windSpeed: 22, windGust: 34, precipChance: 50, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, (_, idx) => ({
+        temp: 50,
+        wind: idx < 4 ? 22 : 8,
+        gust: idx < 4 ? 34 : 12,
+        precipChance: idx < 4 ? 50 : 15,
+      })),
+    },
+  });
+
+  const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
+  expect(trajectoryFactor).toBeUndefined();
+});
+
+test('proportional cold duration: scales with exposure hours', () => {
+  const makeWeather = (hours, feelsLikeTarget) => {
+    // Choose temp/wind to produce the desired feels-like
+    const temp = feelsLikeTarget <= 0 ? -5 : 10;
+    const wind = feelsLikeTarget <= 0 ? 15 : 10;
+    return {
+      description: 'Clear',
+      windSpeed: wind, windGust: wind + 2, precipChance: 5, humidity: 30,
+      temp, feelsLike: feelsLikeTarget,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: hours }, () => ({
+        temp, wind, gust: wind + 2, precipChance: 5,
+      })),
+    };
+  };
+
+  // 1h at extreme cold → small penalty
+  const result1h = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: makeWeather(1, -5),
+  });
+  const cold1h = result1h.factors.filter((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  // With 1 extreme-cold hour: round(1*1.5) = 2
+  expect(cold1h.length).toBe(1);
+  expect(cold1h[0].impact).toBe(2);
+
+  // 8h at extreme cold → max penalty
+  const result8h = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: makeWeather(8, -10),
+  });
+  const cold8h = result8h.factors.filter((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  expect(cold8h.length).toBe(1);
+  expect(cold8h[0].impact).toBe(12);
+});
