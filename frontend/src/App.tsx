@@ -8643,7 +8643,7 @@ function App() {
                           <span className="solar-pin" style={{ left: `${stP}%`, background: 'rgba(255,255,255,0.95)' }} title={`Start: ${displayStartTime}`} />
                         )}
                         {ttP !== null && (
-                          <span className="solar-pin" style={{ left: `${ttP}%`, background: ttPinColor }} title={`Return: ${returnTimeFormatted ? formatClockShort(returnTimeFormatted, preferences.timeStyle) : ''}`} />
+                          <span className="solar-pin" style={{ left: `${ttP}%`, background: ttPinColor }} title={`Return: ${returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : ''}`} />
                         )}
                       </div>
                       <div className="solar-timeline-footer">
@@ -8669,7 +8669,7 @@ function App() {
                   {returnTimeFormatted && (
                     <article className="plan-summary-item">
                       <span className="plan-label">Return by</span>
-                      <strong className="plan-value">{formatClockShort(returnTimeFormatted, preferences.timeStyle)}</strong>
+                      <strong className="plan-value">{formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}</strong>
                     </article>
                   )}
                   {returnMinutes !== null && sunsetMinutesForPlan !== null && (() => {
