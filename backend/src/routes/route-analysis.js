@@ -113,7 +113,7 @@ ${JSON.stringify(summaries, null, 2)}
 
 Write a concise route-wide briefing (3-5 short paragraphs) covering:
 1. Key hazard zones by elevation and where conditions change significantly
-2. Timing concerns (weather windows, storm timing, turnaround pressure)
+2. Weather windows — when storms arrive, when winds intensify, or when conditions deteriorate (do NOT assume pace or method of travel)
 3. Any gear needs specific to current route conditions
 4. Overall go / go-with-caution / no-go recommendation with one-line reasoning`,
         { maxTokens: 700 }
