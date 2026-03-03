@@ -9328,6 +9328,11 @@ function App() {
           {(() => {
             const avyHeaderMeta = (
               <div className="source-meta">
+                {avalancheRelevant && (
+                  <span className={`avy-header-danger-chip ${avalancheUnknown ? 'danger-level-unknown' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
+                    {avalancheUnknown ? 'Unknown' : `L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
+                  </span>
+                )}
                 <span>Avalanche center: {safetyData.avalanche.center || 'N/A'}</span>
                 {safetyData.avalanche.zone && <span className="source-zone">{safetyData.avalanche.zone}</span>}
                 {safetyData.avalanche.publishedTime && (
