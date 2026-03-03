@@ -1555,6 +1555,10 @@ input {
   margin: 0 0 18px;
 }
 
+.report-columns .collapsible-card.is-expanded {
+  column-span: all;
+}
+
 .score-card {
   display: flex;
   flex-wrap: wrap;
