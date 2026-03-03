@@ -5535,109 +5535,116 @@ button.collapsible-card-header:focus-visible {
 
 /* Route Analysis */
 .route-analysis-section {
-  margin: 16px 0 8px;
-  padding: 0 4px;
+  margin: 0;
+  padding: 0;
 }
 
 .route-analyze-btn {
   width: 100%;
-  padding: 10px 16px;
-  background: #1a2e1a;
-  border: 1px solid #3a5c3a;
-  border-radius: 8px;
-  color: #7ecf7e;
-  font-size: 0.9rem;
+  padding: 14px 20px;
+  background: var(--surface-base);
+  border: 1px dashed var(--line-color);
+  border-radius: 12px;
+  color: var(--accent-green);
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  letter-spacing: 0.02em;
-  transition: background 0.15s, border-color 0.15s;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, border-color 0.15s, border-style 0.15s;
 }
 
 .route-analyze-btn:hover {
-  background: #243824;
-  border-color: #5a8c5a;
+  background: var(--surface-muted);
+  border-color: var(--accent-green);
+  border-style: solid;
 }
 
 .route-loading {
   text-align: center;
-  color: #9ab09a;
-  font-size: 0.85rem;
-  padding: 12px 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  padding: 20px 0;
 }
 
 .route-error {
-  color: #e07070;
-  font-size: 0.85rem;
-  padding: 8px 0;
+  color: var(--accent-red);
+  font-size: 0.9rem;
+  padding: 12px 16px;
   text-align: center;
+  background: var(--surface-muted);
+  border-radius: 10px;
 }
 
 .route-picker-card,
 .route-analysis-card {
-  background: #111c11;
-  border: 1px solid #2e4a2e;
-  border-radius: 10px;
-  padding: 16px;
+  background: var(--surface-base);
+  border: 1px solid var(--line-color);
+  border-radius: 14px;
+  padding: 20px;
 }
 
 .route-picker-header,
 .route-analysis-header {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #7ecf7e;
-  margin-bottom: 12px;
+  color: var(--accent-green);
+  margin-bottom: 14px;
 }
 
 .route-picker-list {
   list-style: none;
   padding: 0;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .route-picker-option {
   width: 100%;
   text-align: left;
-  background: #1a2e1a;
-  border: 1px solid #3a5c3a;
-  border-radius: 7px;
-  padding: 10px 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line-color);
+  border-radius: 10px;
+  padding: 14px 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  transition: background 0.15s;
+  gap: 4px;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .route-picker-option:hover {
-  background: #243824;
+  background: var(--bg-secondary);
+  border-color: var(--accent-green);
 }
 
 .route-option-name {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: #d4e8d4;
+  color: var(--text-dark);
 }
 
 .route-option-meta {
-  font-size: 0.75rem;
-  color: #7a9a7a;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .route-option-desc {
-  font-size: 0.78rem;
-  color: #9ab09a;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 2px;
 }
 
 .route-picker-cancel {
   background: none;
   border: none;
-  color: #7a9a7a;
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
   cursor: pointer;
   padding: 4px 0;
   text-decoration: underline;
@@ -5646,66 +5653,82 @@ button.collapsible-card-header:focus-visible {
 .route-waypoints {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #2e4a2e;
+  gap: 0;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  background: var(--surface-muted);
+  border-radius: 10px;
 }
 
 .route-waypoint-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.8rem;
+  gap: 12px;
+  font-size: 0.88rem;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-color);
+}
+
+.route-waypoint-row:last-child {
+  border-bottom: none;
 }
 
 .route-wp-name {
   flex: 1;
-  color: #c4d8c4;
+  color: var(--text-dark);
+  font-weight: 500;
 }
 
 .route-wp-elev {
-  color: #7a9a7a;
-  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .route-wp-score {
   font-weight: 700;
-  font-size: 0.8rem;
-  min-width: 36px;
+  font-size: 0.88rem;
+  min-width: 40px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .route-wp-avy {
-  font-size: 0.72rem;
-  color: #9ab09a;
-  background: #1a2e1a;
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: var(--surface-base);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid var(--line-color);
 }
 
 .route-analysis-text {
-  font-size: 0.84rem;
-  line-height: 1.6;
-  color: #c4d8c4;
-  margin-bottom: 14px;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text-dark);
 }
 
 .route-analysis-text p {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 
 .route-analysis-text p:last-child {
   margin-bottom: 0;
 }
 
+.route-analysis-text strong {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
 .route-md-heading {
-  color: #9ad09a;
-  font-size: 0.82rem;
+  color: var(--accent-green);
+  font-size: 0.88rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin: 14px 0 4px;
+  margin: 20px 0 8px;
 }
 
 .route-md-heading:first-child {
@@ -5713,12 +5736,19 @@ button.collapsible-card-header:focus-visible {
 }
 
 .route-md-list {
-  margin: 0 0 10px;
-  padding-left: 18px;
+  margin: 0 0 14px;
+  padding-left: 20px;
+  line-height: 1.7;
 }
 
 .route-md-list li {
-  margin-bottom: 3px;
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+  color: var(--text-dark);
+}
+
+.route-md-list li:last-child {
+  margin-bottom: 0;
 }
 
 .planner-footer-stack {
