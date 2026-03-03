@@ -1778,6 +1778,8 @@ input {
   display: grid;
   gap: 8px;
   justify-items: start;
+  flex: 1 1 0%;
+  min-width: 200px;
 }
 
 .status-badge {
@@ -5791,7 +5793,7 @@ button.collapsible-card-header:focus-visible {
 
 .score-ai-brief {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 4px;
 }
 
 .score-ai-narrative {
