@@ -98,6 +98,7 @@ input {
 
 .home-hero {
   position: relative;
+  z-index: 10;
   margin-top: 14px;
   padding: clamp(22px, 4vw, 38px);
   border-radius: 24px;
