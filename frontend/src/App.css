@@ -736,7 +736,10 @@ input {
 
 .primary-btn {
   padding: 10px 16px;
-  background: linear-gradient(135deg, #f2f6ed 0%, #dbe8d5 100%);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(215, 210, 194, 0.35);
   color: #173626;
 }
 
@@ -767,8 +770,10 @@ input {
   min-height: 38px;
   padding: 9px 13px;
   border-radius: 999px;
-  border: 1px solid #d2d6c8;
-  background: linear-gradient(180deg, #f8f6ee 0%, #f1eee4 100%);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #2f4236;
   font-size: 0.82rem;
   font-weight: 700;
@@ -784,8 +789,8 @@ input {
 }
 
 .settings-reset-btn {
-  border-color: #e2c2c2;
-  background: #fbefef;
+  border-color: rgba(226, 194, 194, 0.5);
+  background: rgba(251, 239, 239, 0.72);
   color: #7f3e3e;
 }
 
@@ -1161,8 +1166,10 @@ input {
   min-height: 56px;
   padding: 8px 14px;
   border-radius: var(--radius-pill);
-  border: 1px solid #d3cebc;
-  background: linear-gradient(180deg, #f8f6ef 0%, #f1ecdf 100%);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #314037;
   font-size: 0.84rem;
   font-weight: 700;
@@ -1306,8 +1313,10 @@ input {
   gap: 7px;
   padding: 8px 13px;
   border-radius: 999px;
-  border: 1px solid #d3cebc;
-  background: var(--surface-base);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #33433a;
   text-decoration: none;
   font-size: 0.84rem;
@@ -1590,8 +1599,10 @@ input {
   gap: 6px;
   padding: 7px 11px;
   border-radius: 999px;
-  border: 1px solid #d8d2c3;
-  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #4a524b;
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -1621,8 +1632,10 @@ input {
 .report-action-btn {
   min-height: 36px;
   padding: 7px 12px;
-  border-color: #cfd5c9;
-  background: #f7f8f1;
+  border-color: rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #2e4639;
   font-size: 0.76rem;
   letter-spacing: 0.03em;
@@ -1888,18 +1901,33 @@ button.collapsible-card-header:focus-visible {
   font-family: var(--font-data);
   padding: 2px 8px;
   border-radius: 100px;
-  border: 1px solid var(--line-color);
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.03));
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 :root[data-theme='dark'] .card-preview-chip {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(26, 39, 49, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(43, 57, 70, 0.45);
 }
 
 /* ── End Card Preview ──────────────────────────────────────── */
+
+@media (max-width: 520px) {
+  button.collapsible-card-header {
+    flex-wrap: wrap;
+  }
+
+  .collapsible-header-meta {
+    font-size: 0.65rem;
+    max-width: 100%;
+  }
+}
 
 /* ── End Collapsible Card ──────────────────────────────────── */
 
@@ -1977,27 +2005,35 @@ button.collapsible-card-header:focus-visible {
 }
 
 .decision-pill.go {
-  background: #e7f3e8;
+  background: rgba(231, 243, 232, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #2d6f41;
-  border: 1px solid #b8d9bf;
+  border: 1px solid rgba(184, 217, 191, 0.5);
 }
 
 .decision-pill.caution {
-  background: #fdf3e2;
+  background: rgba(253, 243, 226, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #9a6a1f;
-  border: 1px solid #e1ca9f;
+  border: 1px solid rgba(225, 202, 159, 0.5);
 }
 
 .decision-pill.watch {
-  background: #eef3f8;
+  background: rgba(238, 243, 248, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #35556e;
-  border: 1px solid #bfd0e0;
+  border: 1px solid rgba(191, 208, 224, 0.5);
 }
 
 .decision-pill.nogo {
-  background: #fbe8e8;
+  background: rgba(251, 232, 232, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #9b2f2f;
-  border: 1px solid #e2b1b1;
+  border: 1px solid rgba(226, 177, 177, 0.5);
 }
 
 .decision-headline {
@@ -2255,8 +2291,10 @@ button.collapsible-card-header:focus-visible {
   justify-content: center;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid #d3d6c5;
-  background: #eef3e7;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #4f6155;
   font-size: 0.73rem;
   font-weight: 700;
@@ -2453,8 +2491,10 @@ button.collapsible-card-header:focus-visible {
   justify-content: center;
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid #d6d3c7;
-  background: #f3f0e6;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #596459;
   font-size: 0.72rem;
   font-weight: 700;
@@ -2467,8 +2507,10 @@ button.collapsible-card-header:focus-visible {
   justify-content: center;
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid #d6d3c7;
-  background: #f3f0e6;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #596459;
   font-size: 0.72rem;
   font-weight: 700;
@@ -2477,8 +2519,8 @@ button.collapsible-card-header:focus-visible {
 }
 
 .forecast-badge.future {
-  border-color: #cab47e;
-  background: #f7efdd;
+  border-color: rgba(202, 180, 126, 0.5);
+  background: rgba(247, 239, 221, 0.7);
   color: #7d6532;
 }
 
@@ -2597,8 +2639,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 .weather-trend-btn {
-  border: 1px solid #d6cfbf;
-  background: #f3efe4;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #54645b;
   border-radius: 999px;
   min-height: 27px;
@@ -2681,8 +2725,10 @@ button.collapsible-card-header:focus-visible {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  border: 1px solid #cfc8b7;
-  background: #fbf8f1;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #3f4f45;
   cursor: pointer;
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
@@ -2898,9 +2944,11 @@ button.collapsible-card-header:focus-visible {
 .target-elev-step-btn {
   width: 30px;
   height: 30px;
-  border: 1px solid #cfc7b4;
+  border: 1px solid rgba(215, 210, 194, 0.35);
   border-radius: 999px;
-  background: #fbf8ef;
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #2f3d35;
   font-size: 1rem;
   font-weight: 700;
@@ -3041,8 +3089,10 @@ button.collapsible-card-header:focus-visible {
   align-items: center;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid #d8d1bf;
-  background: #f8f3e6;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #4b5a52;
   font-size: 0.72rem;
   font-weight: 700;
@@ -3056,8 +3106,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 .travel-preset-btn {
-  border: 1px solid #d2cdbd;
-  background: #f7f2e6;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #47564e;
   border-radius: 999px;
   min-height: 30px;
@@ -3087,8 +3139,10 @@ button.collapsible-card-header:focus-visible {
   gap: 5px;
   padding: 7px 8px;
   border-radius: 10px;
-  border: 1px solid #d8d1bf;
-  background: #faf6ea;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(250, 246, 234, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 .travel-threshold-row span {
@@ -3100,10 +3154,12 @@ button.collapsible-card-header:focus-visible {
 }
 
 .travel-threshold-row input {
-  border: 1px solid #d8d3c5;
+  border: 1px solid rgba(215, 210, 194, 0.35);
   border-radius: 8px;
   padding: 5px 7px;
-  background: #fdfaf2;
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #2f3f36;
   font-family: var(--font-data);
   font-size: 0.8rem;
@@ -3772,9 +3828,11 @@ button.collapsible-card-header:focus-visible {
   font-weight: 600;
   color: #6b5a1e;
   padding: 2px 9px;
-  background: #fef9c3;
+  background: rgba(254, 249, 195, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border-radius: 12px;
-  border: 1px solid #fde68a;
+  border: 1px solid rgba(253, 230, 138, 0.5);
 }
 
 .solar-timeline {
@@ -4168,8 +4226,10 @@ button.collapsible-card-header:focus-visible {
   min-width: 34px;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid #c6d8c9;
-  background: #e7f3e9;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(231, 243, 233, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #2f613f;
   font-size: 0.72rem;
   font-weight: 700;
@@ -4177,8 +4237,8 @@ button.collapsible-card-header:focus-visible {
 }
 
 .wind-aspect-chip.secondary {
-  border-color: #cfccbe;
-  background: #f3f1e8;
+  border-color: rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.65);
   color: #57635a;
 }
 
@@ -4473,7 +4533,9 @@ button.collapsible-card-header:focus-visible {
   justify-content: center;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -5525,10 +5587,12 @@ button.collapsible-card-header:focus-visible {
 }
 
 .raw-copy-btn {
-  border: 1px solid #d2ccbb;
+  border: 1px solid rgba(215, 210, 194, 0.35);
   border-radius: 999px;
   padding: 5px 10px;
-  background: #f7f4ea;
+  background: rgba(255, 253, 248, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #304238;
   font-size: 0.68rem;
   text-transform: uppercase;
@@ -6072,7 +6136,6 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .map-actions,
 :root[data-theme='dark'] .map-control-group,
 :root[data-theme='dark'] .date-control,
-:root[data-theme='dark'] .action-btn,
 :root[data-theme='dark'] .empty-state,
 :root[data-theme='dark'] .loading-state,
 :root[data-theme='dark'] .error-banner {
@@ -6082,6 +6145,23 @@ button.collapsible-card-header:focus-visible {
   border-color: rgba(43, 57, 70, 0.45);
   box-shadow: 0 4px 24px rgba(0,0,0,0.2);
   color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .action-btn,
+:root[data-theme='dark'] .primary-btn,
+:root[data-theme='dark'] .settings-btn,
+:root[data-theme='dark'] .report-action-btn {
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
+  color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .settings-reset-btn {
+  background: rgba(58, 32, 38, 0.75);
+  border-color: rgba(139, 74, 82, 0.5);
+  color: #f7c1c1;
 }
 
 :root[data-theme='dark'] .settings-card p,
@@ -6158,12 +6238,19 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .date-control input,
 :root[data-theme='dark'] .date-control select,
-:root[data-theme='dark'] .now-control-btn,
 :root[data-theme='dark'] .raw-report-details > summary,
-:root[data-theme='dark'] .raw-json-details > summary,
-:root[data-theme='dark'] .raw-copy-btn {
+:root[data-theme='dark'] .raw-json-details > summary {
   background: #1b2a35;
   border-color: #36495a;
+  color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .now-control-btn,
+:root[data-theme='dark'] .raw-copy-btn {
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: var(--text-dark);
 }
 
@@ -6439,8 +6526,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .target-elev-step-btn {
-  border-color: #4a6378;
-  background: #223a4c;
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #e2edf6;
 }
 
@@ -6460,8 +6549,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .weather-hour-step-btn {
-  background: #223847;
-  border-color: #3e5a6f;
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #d6e5ef;
 }
 
@@ -6501,8 +6592,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .weather-trend-btn {
-  background: #1a2c39;
-  border-color: #365164;
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #b9cddd;
 }
 
@@ -6539,16 +6632,22 @@ button.collapsible-card-header:focus-visible {
   color: #d8e7f2 !important;
 }
 
-:root[data-theme='dark'] .forecast-badge,
-:root[data-theme='dark'] .weather-source-pill,
-:root[data-theme='dark'] .trail-badge,
-:root[data-theme='dark'] .hazard-badge,
-:root[data-theme='dark'] .overall-danger-chip,
 :root[data-theme='dark'] .danger-row-band,
 :root[data-theme='dark'] .published-chip,
 :root[data-theme='dark'] .raw-report-hint {
   background: #1c2c37;
   border-color: #3a4f60;
+}
+
+:root[data-theme='dark'] .forecast-badge,
+:root[data-theme='dark'] .weather-source-pill,
+:root[data-theme='dark'] .trail-badge,
+:root[data-theme='dark'] .hazard-badge,
+:root[data-theme='dark'] .overall-danger-chip {
+  background: rgba(26, 39, 49, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(43, 57, 70, 0.45);
 }
 
 :root[data-theme='dark'] .hazard-badge {
@@ -6692,8 +6791,8 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .forecast-badge.future {
-  background: #3b3020;
-  border-color: #7f6541;
+  background: rgba(59, 48, 32, 0.65);
+  border-color: rgba(127, 101, 65, 0.5);
   color: #edd7ae;
 }
 
@@ -6798,26 +6897,34 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .decision-pill.go {
-  background: #244738;
-  border-color: #3f6e58;
+  background: rgba(36, 71, 56, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(63, 110, 88, 0.5);
   color: #d9efe3;
 }
 
 :root[data-theme='dark'] .decision-pill.caution {
-  background: #4a3a20;
-  border-color: #7f6541;
+  background: rgba(74, 58, 32, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(127, 101, 65, 0.5);
   color: #f2ddb5;
 }
 
 :root[data-theme='dark'] .decision-pill.watch {
-  background: #223645;
-  border-color: #3f6078;
+  background: rgba(34, 54, 69, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(63, 96, 120, 0.5);
   color: #d0e5f6;
 }
 
 :root[data-theme='dark'] .decision-pill.nogo {
-  background: #4c2626;
-  border-color: #915252;
+  background: rgba(76, 38, 38, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(145, 82, 82, 0.5);
   color: #f4cccc;
 }
 
@@ -7152,14 +7259,18 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .wind-aspect-chip {
-  background: #244234;
-  border-color: #3f6e58;
+  background: rgba(36, 66, 52, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(63, 110, 88, 0.45);
   color: #d9efe3;
 }
 
 :root[data-theme='dark'] .wind-aspect-chip.secondary {
-  background: #2b3641;
-  border-color: #4b5d6d;
+  background: rgba(26, 39, 49, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #c6d5e3;
 }
 
@@ -7210,8 +7321,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .plan-daylight-badge {
-  background: #292218;
-  border-color: #4d3d1c;
+  background: rgba(41, 34, 24, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(77, 61, 28, 0.5);
   color: #c8b580;
 }
 
@@ -7232,8 +7345,13 @@ button.collapsible-card-header:focus-visible {
   color: #e8f1f9;
 }
 
-:root[data-theme='dark'] .travel-thresholds span,
-:root[data-theme='dark'] .travel-threshold-row,
+:root[data-theme='dark'] .travel-threshold-row {
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
+}
+
 :root[data-theme='dark'] .weather-source-item,
 :root[data-theme='dark'] .score-change-block {
   background: #1b2a35;
@@ -7241,12 +7359,18 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .travel-thresholds span {
+  background: rgba(26, 39, 49, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #d2e0ec;
 }
 
 :root[data-theme='dark'] .travel-preset-btn {
-  background: #1b2a35;
-  border-color: #364a5a;
+  background: rgba(22, 32, 41, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #c5d4e1;
 }
 
@@ -7261,8 +7385,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .travel-threshold-row input {
-  background: #152330;
-  border-color: #365063;
+  background: rgba(21, 35, 48, 0.75);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-color: rgba(43, 57, 70, 0.45);
   color: #dce8f2;
 }
 
