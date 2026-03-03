@@ -90,7 +90,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const safetyResults = await withTimeout(
         Promise.all(
           waypoints.map((wp) =>
-            invokeSafetyHandler({ lat: wp.lat, lon: wp.lon, date, start: start || '06:00', travel_window_hours: travel_window_hours || undefined })
+            invokeSafetyHandler({ lat: String(wp.lat), lon: String(wp.lon), date, start: start || '06:00', travel_window_hours: String(travel_window_hours || 12) })
           )
         ),
         60000, 'Safety checks'

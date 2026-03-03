@@ -7620,6 +7620,7 @@ function App() {
                         name: wp.name,
                         date: forecastDate,
                         start: alpineStartTime,
+                        travel_window_hours: String(travelWindowHours),
                       });
                       return (
                         <div key={wp.name} className="route-waypoint-row">
