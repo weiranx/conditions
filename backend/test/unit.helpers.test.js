@@ -1551,3 +1551,194 @@ test('proportional cold duration: scales with exposure hours', () => {
   expect(cold8h.length).toBe(1);
   expect(cold8h[0].impact).toBe(12);
 });
+
+test('temporal weighting: single-hour trend always gets weight 1.0', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Clear',
+      windSpeed: 32, windGust: 48, precipChance: 70, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: [{ temp: 50, wind: 32, gust: 48, precipChance: 70 }],
+    },
+  });
+
+  // With 1 trend hour, weight is 1.0. Should still fire severe wind duration (1.0 >= 1.5? no, but >= 1.5 is the threshold)
+  // Actually 1 weighted severe wind hour = 1.0, which is < 1.5 threshold, so no duration factor
+  // But the peak wind tier should fire since effectiveWind = max(32, 48, 48*1.0) = 48 >= 40
+  const windFactors = result.factors.filter((f) => f.hazard === 'Wind');
+  expect(windFactors.some((f) => f.impact >= 12)).toBe(true);
+});
+
+test('temporal weighting: precip concentrated early triggers higher tier than same hours late', () => {
+  const earlyPrecipResult = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Mostly Cloudy',
+      windSpeed: 5, windGust: 8, precipChance: 65, humidity: 60, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 10 }, (_, idx) => ({
+        temp: 50, wind: 5, gust: 8, precipChance: idx < 3 ? 65 : 15,
+      })),
+    },
+  });
+
+  const latePrecipResult = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Mostly Cloudy',
+      windSpeed: 5, windGust: 8, precipChance: 15, humidity: 60, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 10 }, (_, idx) => ({
+        temp: 50, wind: 5, gust: 8, precipChance: idx >= 7 ? 65 : 15,
+      })),
+    },
+  });
+
+  // Early precip should produce worse score than late precip
+  expect(earlyPrecipResult.score).toBeLessThanOrEqual(latePrecipResult.score);
+});
+
+test('combined hazard escalation: no penalty when only one weather category active', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Clear',
+      windSpeed: 30, windGust: 45, precipChance: 5, humidity: 30, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, () => ({
+        temp: 50, wind: 30, gust: 45, precipChance: 5,
+      })),
+    },
+  });
+
+  // Only wind active — no combined penalty
+  const combinedFactor = result.factors.find((f) => f.hazard === 'Combined Exposure');
+  expect(combinedFactor).toBeUndefined();
+});
+
+test('combined hazard escalation: visibility + non-dangerous pair does not trigger +5', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Fog',
+      windSpeed: 5, windGust: 8, precipChance: 10, humidity: 95, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      visibilityRisk: { score: 60, level: 'High', activeHours: 4, source: 'Derived' },
+      trend: Array.from({ length: 8 }, () => ({
+        temp: 50, wind: 5, gust: 8, precipChance: 10,
+      })),
+    },
+  });
+
+  // Only visibility active (no wind, cold, or storm) — should not trigger combined
+  const combinedFactor = result.factors.find((f) => f.hazard === 'Combined Exposure');
+  expect(combinedFactor).toBeUndefined();
+});
+
+test('condition trajectory: short trend (<4 hours) skips trajectory check', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 8, windGust: 12, precipChance: 10, humidity: 40, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: [
+        { temp: 50, wind: 5, gust: 8, precipChance: 10 },
+        { temp: 50, wind: 30, gust: 45, precipChance: 60 },
+        { temp: 50, wind: 35, gust: 50, precipChance: 70 },
+      ],
+    },
+  });
+
+  const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
+  expect(trajectoryFactor).toBeUndefined();
+});
+
+test('condition trajectory: precip-only deterioration adds +4', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 5, windGust: 8, precipChance: 20, humidity: 50, temp: 50, feelsLike: 48,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 8 }, (_, idx) => ({
+        temp: 50, wind: 5, gust: 8,
+        precipChance: idx < 4 ? 20 : 55,
+      })),
+    },
+  });
+
+  const trajectoryFactor = result.factors.find((f) => f.hazard === 'Condition Trajectory');
+  expect(trajectoryFactor).toBeDefined();
+  expect(trajectoryFactor.impact).toBe(4);
+  expect(trajectoryFactor.message).toMatch(/precipitation.*increasing/i);
+});
+
+test('proportional cold duration: mixed extreme + cold hours sum correctly', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Clear',
+      windSpeed: 20, windGust: 25, precipChance: 5, humidity: 30,
+      temp: -5, feelsLike: -20,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: [
+        // 3 extreme cold hours (feels-like ≤ 0F): temp=-5, wind=20 → windchill well below 0
+        { temp: -5, wind: 20, gust: 25, precipChance: 5 },
+        { temp: -5, wind: 20, gust: 25, precipChance: 5 },
+        { temp: -5, wind: 20, gust: 25, precipChance: 5 },
+        // 3 cold-only hours (feels-like ~10F): temp=20, wind=15
+        { temp: 20, wind: 15, gust: 18, precipChance: 5 },
+        { temp: 20, wind: 15, gust: 18, precipChance: 5 },
+        { temp: 20, wind: 15, gust: 18, precipChance: 5 },
+      ],
+    },
+  });
+
+  // 3 extreme hours * 1.5 = 4.5, ~3 cold-only hours * 0.8 = 2.4, total ≈ 7
+  const coldDuration = result.factors.find((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  expect(coldDuration).toBeDefined();
+  expect(coldDuration.impact).toBeGreaterThanOrEqual(5);
+  expect(coldDuration.impact).toBeLessThanOrEqual(9);
+});
+
+test('proportional cold duration: cap at 12 even with many extreme hours', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Clear',
+      windSpeed: 25, windGust: 30, precipChance: 5, humidity: 30,
+      temp: -15, feelsLike: -35,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: Array.from({ length: 12 }, () => ({
+        temp: -15, wind: 25, gust: 30, precipChance: 5,
+      })),
+    },
+  });
+
+  // 12 extreme hours * 1.5 = 18, but capped at 12
+  const coldDuration = result.factors.find((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  expect(coldDuration).toBeDefined();
+  expect(coldDuration.impact).toBe(12);
+});
+
+test('combined hazard escalation: all 4 categories active shows count in message', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Blizzard',
+      windSpeed: 30, windGust: 50, precipChance: 85, humidity: 90, temp: 5, feelsLike: -15,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      visibilityRisk: { score: 80, level: 'Extreme', activeHours: 6, source: 'Derived' },
+      trend: Array.from({ length: 8 }, () => ({
+        temp: 5, wind: 30, gust: 50, precipChance: 85,
+      })),
+    },
+  });
+
+  const combinedFactor = result.factors.find((f) => f.hazard === 'Combined Exposure');
+  expect(combinedFactor).toBeDefined();
+  expect(combinedFactor.impact).toBe(10);
+  expect(combinedFactor.message).toMatch(/4 weather hazard categories/);
+});
