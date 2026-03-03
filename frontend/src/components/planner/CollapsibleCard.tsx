@@ -68,7 +68,7 @@ export function CollapsibleCard({
       >
         <span className="collapsible-title-wrap">{title}</span>
         <span className="collapsible-header-right">
-          {headerMeta && <span className="collapsible-header-meta">{headerMeta}</span>}
+          {isExpanded && headerMeta && <span className="collapsible-header-meta">{headerMeta}</span>}
           <ChevronRight className="collapsible-chevron" size={15} aria-hidden="true" />
         </span>
       </button>
