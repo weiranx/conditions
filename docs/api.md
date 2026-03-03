@@ -82,7 +82,6 @@ curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21
 | `trail` | Trail/terrain surface classification string |
 | `gear` | Array of gear-focus suggestion strings |
 | `safety` | Risk score, confidence level, contributing factors, and plain-language explanations |
-| `aiAnalysis` | Plain-language condition summary |
 
 **Partial data fields** (present when one or more upstream feeds failed):
 

@@ -386,7 +386,6 @@ export interface SafetyData {
     confidenceReasons?: string[];
     airQualityCategory?: string;
   };
-  aiAnalysis: string;
 }
 
 export interface SummitDecision {

@@ -72,7 +72,6 @@ const {
 const {
   mmToInches,
   cmToInches,
-  buildPrecipitationSummaryForAi,
   createUnavailableRainfallData,
   createPrecipitationService,
 } = require('./src/utils/precipitation');
@@ -2273,27 +2272,6 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
     const todayDate = new Date().toISOString().slice(0, 10);
-    const avalancheSummaryForAi = avalancheData.relevant === false
-      ? `Avalanche hazard is de-emphasized for this objective (${avalancheData.relevanceReason || 'low snow relevance'}).`
-      : avalancheData.dangerUnknown
-        ? "Avalanche forecast coverage unavailable for this objective. Risk is unknown."
-        : `Avalanche danger is Level ${avalancheData.dangerLevel}.`;
-    const alertsSummaryForAi =
-      Number(alertsData.activeCount) > 0
-        ? `${alertsData.activeCount} active NWS alert(s) (highest severity: ${alertsData.highestSeverity}).`
-        : "No active NWS alerts for this point.";
-    const airQualitySummaryForAi = Number.isFinite(Number(airQualityData.usAqi))
-      ? `US AQI ${airQualityData.usAqi} (${airQualityData.category}).`
-      : airQualityData?.status === 'not_applicable_future_date'
-        ? 'Air quality is current-day only and is not applied to this future-date forecast.'
-        : "Air quality data unavailable.";
-    const rainfallSummaryForAi = buildPrecipitationSummaryForAi(rainfallData);
-    const snowpackSummaryForAi = snowpackData?.summary
-      ? `Snowpack: ${snowpackData.summary}`
-      : 'Snowpack observations unavailable.';
-    const fireSummaryForAi = fireRiskData?.status === 'ok'
-      ? `Fire risk ${fireRiskData.label} (${fireRiskData.reasons?.[0] || 'no notable signal'}).`
-      : 'Fire risk signal unavailable.';
 
     const responseGeneratedAt = new Date().toISOString();
     const stampGeneratedTime = (value) => {
@@ -2329,7 +2307,6 @@ const safetyHandler = async (req, res) => {
 	      trail: trailStatus,
       terrainCondition: terrainConditionData,
 	      safety: analysis,
-	      aiAnalysis: `Terrain Report (${selectedForecastDate}): ${trailStatus} conditions. ${weatherData.temp}F with ${weatherData.humidity}% humidity. ${rainfallSummaryForAi} ${avalancheSummaryForAi} ${alertsSummaryForAi} ${airQualitySummaryForAi} ${snowpackSummaryForAi} ${fireSummaryForAi} ${analysis.explanations.join(' ')}`
 	    };
 	    delete responsePayload.activity;
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
@@ -2392,28 +2369,6 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
 
-    const avalancheSummaryForAi = safeAvalancheData.relevant === false
-      ? `Avalanche hazard is de-emphasized for this objective (${safeAvalancheData.relevanceReason || 'low snow relevance'}).`
-      : safeAvalancheData.dangerUnknown
-        ? "Avalanche forecast coverage unavailable for this objective. Risk is unknown."
-        : `Avalanche danger is Level ${safeAvalancheData.dangerLevel}.`;
-    const alertsSummaryForAi =
-      Number(safeAlertsData.activeCount) > 0
-        ? `${safeAlertsData.activeCount} active NWS alert(s) (highest severity: ${safeAlertsData.highestSeverity}).`
-        : "No active NWS alerts for this point.";
-    const airQualitySummaryForAi = Number.isFinite(Number(safeAirQualityData.usAqi))
-      ? `US AQI ${safeAirQualityData.usAqi} (${safeAirQualityData.category}).`
-      : safeAirQualityData?.status === 'not_applicable_future_date'
-        ? 'Air quality is current-day only and is not applied to this future-date forecast.'
-        : "Air quality data unavailable.";
-    const rainfallSummaryForAi = buildPrecipitationSummaryForAi(safeRainfallData);
-    const snowpackSummaryForAi = safeSnowpackData?.summary
-      ? `Snowpack: ${safeSnowpackData.summary}`
-      : 'Snowpack observations unavailable.';
-    const fireSummaryForAi = safeFireRiskData?.status === 'ok'
-      ? `Fire risk ${safeFireRiskData.label} (${safeFireRiskData.reasons?.[0] || 'no notable signal'}).`
-      : 'Fire risk signal unavailable.';
-
     const fallbackGeneratedAt = new Date().toISOString();
     const stampGeneratedTime = (value) => {
       if (!value || typeof value !== 'object') {
@@ -2450,7 +2405,6 @@ const safetyHandler = async (req, res) => {
       safety: analysis,
 	      partialData: true,
 	      apiWarning: error?.message || 'One or more upstream data providers failed during this request.',
-	      aiAnalysis: `Terrain Report (${fallbackSelectedDate}): ${safeTrailStatus} conditions. ${safeWeatherData.temp}F with ${safeWeatherData.humidity}% humidity. ${rainfallSummaryForAi} ${avalancheSummaryForAi} ${alertsSummaryForAi} ${airQualitySummaryForAi} ${snowpackSummaryForAi} ${fireSummaryForAi} ${analysis.explanations.join(' ')}`
 	    };
 	    delete fallbackResponsePayload.activity;
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
