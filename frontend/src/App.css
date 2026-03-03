@@ -5542,9 +5542,11 @@ button.collapsible-card-header:focus-visible {
 .route-analyze-btn {
   width: 100%;
   padding: 14px 20px;
-  background: var(--surface-base);
-  border: 1px dashed var(--line-color);
-  border-radius: 12px;
+  background: rgba(255, 253, 248, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px dashed rgba(215, 210, 194, 0.5);
+  border-radius: 14px;
   color: var(--accent-green);
   font-size: 0.95rem;
   font-weight: 600;
@@ -5554,7 +5556,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 .route-analyze-btn:hover {
-  background: var(--surface-muted);
+  background: rgba(255, 253, 248, 0.75);
   border-color: var(--accent-green);
   border-style: solid;
 }
@@ -5565,9 +5567,12 @@ button.collapsible-card-header:focus-visible {
   align-items: center;
   gap: 14px;
   padding: 32px 16px;
-  background: var(--surface-base);
-  border: 1px solid var(--line-color);
-  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 
 .route-loading-dots {
@@ -5608,16 +5613,21 @@ button.collapsible-card-header:focus-visible {
   font-size: 0.9rem;
   padding: 12px 16px;
   text-align: center;
-  background: var(--surface-muted);
-  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
 }
 
 .route-picker-card,
 .route-analysis-card {
-  background: var(--surface-base);
-  border: 1px solid var(--line-color);
-  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  border-radius: 18px;
   padding: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 
 .route-picker-header,
@@ -5642,8 +5652,8 @@ button.collapsible-card-header:focus-visible {
 .route-picker-option {
   width: 100%;
   text-align: left;
-  background: var(--surface-muted);
-  border: 1px solid var(--line-color);
+  background: rgba(246, 241, 230, 0.5);
+  border: 1px solid rgba(215, 210, 194, 0.3);
   border-radius: 10px;
   padding: 14px 16px;
   cursor: pointer;
@@ -5654,8 +5664,8 @@ button.collapsible-card-header:focus-visible {
 }
 
 .route-picker-option:hover {
-  background: var(--bg-secondary);
-  border-color: var(--accent-green);
+  background: rgba(246, 241, 230, 0.7);
+  border-color: rgba(215, 210, 194, 0.6);
 }
 
 .route-option-name {
@@ -5693,8 +5703,10 @@ button.collapsible-card-header:focus-visible {
   gap: 0;
   margin-bottom: 18px;
   padding: 12px 16px;
-  background: var(--surface-muted);
-  border-radius: 10px;
+  background: rgba(246, 241, 230, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
 }
 
 .route-waypoint-row {
@@ -5703,7 +5715,7 @@ button.collapsible-card-header:focus-visible {
   gap: 12px;
   font-size: 0.88rem;
   padding: 8px 0;
-  border-bottom: 1px solid var(--line-color);
+  border-bottom: 1px solid rgba(215, 210, 194, 0.3);
 }
 
 .route-waypoint-row:last-child {
@@ -5733,11 +5745,13 @@ button.collapsible-card-header:focus-visible {
 .route-wp-avy {
   font-size: 0.78rem;
   color: var(--text-muted);
-  background: var(--surface-base);
+  background: rgba(255, 253, 248, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   padding: 2px 8px;
   border-radius: 6px;
   font-weight: 500;
-  border: 1px solid var(--line-color);
+  border: 1px solid rgba(215, 210, 194, 0.3);
 }
 
 .route-analysis-text {
@@ -5786,6 +5800,56 @@ button.collapsible-card-header:focus-visible {
 
 .route-md-list li:last-child {
   margin-bottom: 0;
+}
+
+/* Route Analysis — Dark mode frosted glass overrides */
+:root[data-theme='dark'] .route-picker-card,
+:root[data-theme='dark'] .route-analysis-card {
+  background: rgba(22, 32, 41, 0.55);
+  border-color: rgba(43, 57, 70, 0.45);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='dark'] .route-loading {
+  background: rgba(22, 32, 41, 0.55);
+  border-color: rgba(43, 57, 70, 0.45);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='dark'] .route-analyze-btn {
+  background: rgba(22, 32, 41, 0.5);
+  border-color: rgba(43, 57, 70, 0.5);
+}
+
+:root[data-theme='dark'] .route-analyze-btn:hover {
+  background: rgba(22, 32, 41, 0.7);
+}
+
+:root[data-theme='dark'] .route-picker-option {
+  background: rgba(26, 39, 49, 0.5);
+  border-color: rgba(43, 57, 70, 0.35);
+}
+
+:root[data-theme='dark'] .route-picker-option:hover {
+  background: rgba(26, 39, 49, 0.7);
+  border-color: rgba(43, 57, 70, 0.55);
+}
+
+:root[data-theme='dark'] .route-waypoints {
+  background: rgba(26, 39, 49, 0.45);
+}
+
+:root[data-theme='dark'] .route-waypoint-row {
+  border-bottom-color: rgba(43, 57, 70, 0.35);
+}
+
+:root[data-theme='dark'] .route-wp-avy {
+  background: rgba(22, 32, 41, 0.5);
+  border-color: rgba(43, 57, 70, 0.35);
+}
+
+:root[data-theme='dark'] .route-error {
+  background: rgba(22, 32, 41, 0.5);
 }
 
 .planner-footer-stack {
