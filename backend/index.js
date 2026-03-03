@@ -2430,7 +2430,7 @@ registerSearchRoutes({
 });
 registerHealthRoutes(app);
 registerReportLogsRoute(app);
-registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler });
+registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askClaude });
 
 const startServer = () => startBackendServer({ app, port: PORT });

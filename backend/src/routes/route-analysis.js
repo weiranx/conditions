@@ -38,7 +38,48 @@ const parseJsonArrayFromClaude = (text) => {
   }
 };
 
-const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler }) => {
+// Haversine distance in km between two lat/lon points
+const haversineKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+// Geocode a waypoint name near the peak using Nominatim, return { lat, lon } or null
+const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHeaders) => {
+  try {
+    const viewbox = `${peakLon - 0.5},${peakLat + 0.5},${peakLon + 0.5},${peakLat - 0.5}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=us&limit=3&bounded=1&viewbox=${viewbox}`;
+    const res = await fetchWithTimeout(url, { headers: fetchHeaders });
+    if (!res.ok) return null;
+    const results = await res.json();
+    if (!results.length) return null;
+
+    // Pick the closest result to the peak
+    let best = null;
+    let bestDist = Infinity;
+    for (const r of results) {
+      const d = haversineKm(peakLat, peakLon, parseFloat(r.lat), parseFloat(r.lon));
+      if (d < bestDist) {
+        bestDist = d;
+        best = r;
+      }
+    }
+    if (best && bestDist < 80) {
+      return { lat: parseFloat(best.lat), lon: parseFloat(best.lon) };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders }) => {
   // GET /api/route-suggestions?peak=Mt+Whitney&lat=36.578&lon=-118.292
   app.get('/api/route-suggestions', async (req, res) => {
     const { peak, lat, lon } = req.query;
@@ -87,6 +128,20 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         summit.lat = Number(lat);
         summit.lon = Number(lon);
       }
+
+      // Step 1b: Geocode non-summit waypoints via Nominatim to correct
+      // coordinates that Claude may have hallucinated.
+      const peakLat = Number(lat);
+      const peakLon = Number(lon);
+      await Promise.all(
+        waypoints.slice(0, -1).map(async (wp) => {
+          const geo = await geocodeWaypoint(wp.name, peakLat, peakLon, fetchWithTimeout, fetchHeaders);
+          if (geo) {
+            wp.lat = geo.lat;
+            wp.lon = geo.lon;
+          }
+        })
+      );
 
       // Step 2: Run safety checks for each waypoint in parallel
       const safetyResults = await withTimeout(
