@@ -104,7 +104,7 @@ input {
   background: linear-gradient(132deg, #10261d 0%, #234733 45%, #325f49 100%);
   box-shadow: var(--shadow-deep);
   color: #e8f6ef;
-  overflow: hidden;
+  overflow: visible;
   animation: fade-up 0.5s ease both;
   text-align: center;
 }
@@ -113,22 +113,20 @@ input {
   content: '';
   position: absolute;
   width: 320px;
-  height: 320px;
-  top: -140px;
-  right: -90px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(222, 241, 226, 0.2) 0%, rgba(222, 241, 226, 0) 70%);
+  height: 180px;
+  top: 0;
+  right: 0;
+  border-radius: 0 24px 0 50%;
+  background: radial-gradient(circle at 80% -20%, rgba(222, 241, 226, 0.2) 0%, rgba(222, 241, 226, 0) 70%);
   pointer-events: none;
 }
 
 .home-hero::before {
   content: '';
   position: absolute;
-  inset: auto -12% -55% 38%;
-  width: 60%;
-  height: 70%;
+  inset: 40% 0 0 38%;
   transform: rotate(-8deg);
-  background: linear-gradient(180deg, rgba(223, 244, 230, 0.16), rgba(223, 244, 230, 0));
+  background: linear-gradient(180deg, rgba(223, 244, 230, 0.1), rgba(223, 244, 230, 0));
   pointer-events: none;
 }
 
