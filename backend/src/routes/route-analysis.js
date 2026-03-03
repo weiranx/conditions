@@ -15,19 +15,21 @@ const pick = (obj, keys) => {
 };
 
 const parseJsonArrayFromClaude = (text) => {
-  // Extract the first JSON array found anywhere in the response
-  const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
+  // Strip markdown code fences and XML-like tags that Claude sometimes wraps around JSON
+  let cleaned = text
+    .replace(/```(?:json)?\s*/gi, '')
+    .replace(/```/g, '')
+    .replace(/<\/?[a-z][\w-]*>/gi, '');
+
+  const start = cleaned.indexOf('[');
+  const end = cleaned.lastIndexOf(']');
   if (start === -1 || end === -1 || end < start) {
     throw new Error(`No JSON array found in Claude response: ${text.slice(0, 200)}`);
   }
-  let raw = text.slice(start, end + 1);
+  let raw = cleaned.slice(start, end + 1);
 
-  // Fix common Claude JSON quirks: trailing commas, single-quoted keys
+  // Fix trailing commas before } or ]
   raw = raw.replace(/,\s*([}\]])/g, '$1');
-  raw = raw.replace(/(['"])?(\w+)(['"])?\s*:/g, (_, q1, key, q2) =>
-    (q1 === '"' && q2 === '"') ? `"${key}":` : `"${key}":`
-  );
 
   try {
     return JSON.parse(raw);
@@ -46,10 +48,10 @@ const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler }) =>
 
     try {
       const text = await askClaude(
-        `List all well-known hiking, climbing, and scrambling routes for ${peak} near coordinates (${lat}, ${lon}) in the United States. Include 4-6 routes covering a range of difficulty levels.
+        `List all well-known hiking, climbing, and scrambling routes for ${peak} near coordinates (${lat}, ${lon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-        { maxTokens: 1024 }
+        { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
       );
       const routes = parseJsonArrayFromClaude(text);
       return res.json(routes);
@@ -74,7 +76,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-        { maxTokens: 512 }
+        { maxTokens: 512, model: 'claude-haiku-4-5-20251001' }
       ), 20000, 'Waypoint lookup');
       const waypoints = parseJsonArrayFromClaude(waypointText);
 
@@ -124,7 +126,7 @@ Write a concise route-wide briefing (3-5 short paragraphs) covering:
 2. Weather windows — when storms arrive, when winds intensify, or when conditions deteriorate (do NOT assume pace or method of travel)
 3. Any gear needs specific to current route conditions
 4. Overall go / go-with-caution / no-go recommendation with one-line reasoning`,
-        { maxTokens: 700 }
+        { maxTokens: 700, model: 'claude-haiku-4-5-20251001' }
       ), 20000, 'Route synthesis');
 
       return res.json({ waypoints, summaries, analysis });

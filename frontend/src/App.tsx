@@ -2304,6 +2304,7 @@ function App() {
   const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [customRouteName, setCustomRouteName] = useState('');
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
   const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
   const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
@@ -2567,6 +2568,7 @@ function App() {
     setRouteAnalysis(null);
     setRouteError(null);
     setRouteLoading(true);
+    setCustomRouteName('');
     try {
       const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to load route suggestions'));
@@ -3728,9 +3730,6 @@ function App() {
     startViewChange(() => setView('planner'));
   };
 
-  const openStatusView = () => {
-    startViewChange(() => setView('status'));
-  };
   const openTripToolView = () => {
     setTripStartDate(forecastDate);
     setTripStartTime(alpineStartTime);
@@ -6539,80 +6538,58 @@ function App() {
   }
 
   if (view === 'home') {
-    const objectiveSummary = hasObjective ? objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}` : 'Not selected yet';
-    const forecastModeSummary = forecastDate > todayDate ? `Future • ${forecastDate}` : `Today • ${forecastDate}`;
-    const decisionSummary = decision ? decision.level : 'Not evaluated';
-    const weatherSourceSummary = safetyData ? weatherSourceDisplay : 'Loads after selecting an objective';
-    const mapStyleSummary = activeBasemap.label;
-    const resumeLabel = hasObjective ? `Resume ${objectiveName || 'Current Objective'}` : 'Open Backcountry Planner';
+    const navigateToPlanner = () => startViewChange(() => setView('planner'));
 
     return (
       <div key="view-home" className={appShellClassName} aria-busy={isViewPending}>
         <section className="home-hero">
           <div className="home-hero-main">
             <div className="home-kicker">Backcountry Conditions</div>
-            <h1>Plan safer backcountry days in one place.</h1>
+            <h1>Plan your next summit.</h1>
             <p>
-              Build objective-aware weather, avalanche, alert, snowpack, and travel-window checks before committing your route and timing.
+              Weather, avalanche, snowpack, and alert checks — synthesized for your route and timing.
             </p>
+            <div className="home-search-wrapper">
+              <SearchBox
+                searchWrapperRef={searchWrapperRef}
+                searchInputRef={searchInputRef}
+                searchQuery={searchQuery}
+                trimmedSearchQuery={trimmedSearchQuery}
+                showSuggestions={showSuggestions}
+                searchLoading={searchLoading}
+                suggestions={suggestions}
+                activeSuggestionIndex={activeSuggestionIndex}
+                canUseCoordinates={Boolean(parsedTypedCoordinates)}
+                onInputChange={handleInputChange}
+                onFocus={handleFocus}
+                onKeyDown={(e) => {
+                  handleSearchKeyDown(e);
+                  if (e.key === 'Enter' && searchQuery.trim()) navigateToPlanner();
+                }}
+                onSubmit={() => {
+                  handleSearchSubmit();
+                  if (searchQuery.trim()) navigateToPlanner();
+                }}
+                onClear={handleSearchClear}
+                onUseCoordinates={(v) => {
+                  handleUseTypedCoordinates(v);
+                  navigateToPlanner();
+                }}
+                onSelectSuggestion={(s) => {
+                  selectSuggestion(s);
+                  navigateToPlanner();
+                }}
+                onHoverSuggestion={setActiveSuggestionIndex}
+              />
+            </div>
             <div className="home-actions">
-              <button className="primary-btn" onClick={openPlannerView}>
-                {resumeLabel}
-              </button>
               <button className="settings-btn" onClick={openTripToolView}>
                 <CalendarDays size={14} /> Multi-Day Trip Tool
               </button>
               <button className="settings-btn" onClick={() => navigateToView('settings')}>
                 <SlidersHorizontal size={14} /> Settings
               </button>
-              <button className="settings-btn" onClick={openStatusView}>
-                <ShieldCheck size={14} /> App Health
-              </button>
             </div>
-          </div>
-          <aside className="home-hero-panel" aria-label="Current planning context">
-            <div className="home-panel-kicker">Current Plan Context</div>
-            <dl className="home-context-grid">
-              <div className="home-context-item">
-                <dt>Objective</dt>
-                <dd>{objectiveSummary}</dd>
-              </div>
-              <div className="home-context-item">
-                <dt>Forecast</dt>
-                <dd>{forecastModeSummary}</dd>
-              </div>
-              <div className="home-context-item">
-                <dt>{startLabel}</dt>
-                <dd>{displayStartTime}</dd>
-              </div>
-              <div className="home-context-item">
-                <dt>Decision</dt>
-                <dd>{decisionSummary}</dd>
-              </div>
-              <div className="home-context-item">
-                <dt>Weather Source</dt>
-                <dd>{weatherSourceSummary}</dd>
-              </div>
-              <div className="home-context-item">
-                <dt>Map Style</dt>
-                <dd>{mapStyleSummary}</dd>
-              </div>
-            </dl>
-          </aside>
-        </section>
-
-        <section className="home-quick-row" aria-label="Planner quick facts">
-          <div className="home-chip">
-            <CalendarDays size={14} /> Date-aware planning
-          </div>
-          <div className="home-chip">
-            <Clock size={14} /> {travelWindowHoursLabel} travel window analysis
-          </div>
-          <div className="home-chip">
-            <MapIcon size={14} /> Shareable objective link
-          </div>
-          <div className="home-chip">
-            <ShieldCheck size={14} /> Risk-ranked report cards
           </div>
         </section>
 
@@ -7043,10 +7020,34 @@ function App() {
                       </li>
                     ))}
                   </ul>
+                  <div className="route-picker-custom">
+                    <input
+                      type="text"
+                      placeholder="Or type a route name…"
+                      value={customRouteName}
+                      onChange={(e) => setCustomRouteName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && customRouteName.trim()) {
+                          fetchRouteAnalysis(objectiveName, customRouteName.trim(), position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours);
+                          setCustomRouteName('');
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={!customRouteName.trim()}
+                      onClick={() => {
+                        fetchRouteAnalysis(objectiveName, customRouteName.trim(), position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours);
+                        setCustomRouteName('');
+                      }}
+                    >
+                      Go
+                    </button>
+                  </div>
                   <button
                     type="button"
                     className="route-picker-cancel"
-                    onClick={() => { setRouteSuggestions(null); setRouteError(null); }}
+                    onClick={() => { setRouteSuggestions(null); setRouteError(null); setCustomRouteName(''); }}
                   >
                     Cancel
                   </button>
