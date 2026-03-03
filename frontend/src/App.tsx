@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
-import { fetchApi, readApiErrorMessage } from './lib/api-client';
+import { fetchApi, readApiErrorMessage, fetchAiBrief } from './lib/api-client';
 import {
   getLocalPopularSuggestions,
   normalizeSuggestionText,
@@ -2276,6 +2276,9 @@ function App() {
   const [safetyData, setSafetyData] = useState<SafetyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(null);
+  const [aiBriefLoading, setAiBriefLoading] = useState(false);
+  const [aiBriefError, setAiBriefError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState(initialLinkState.searchQuery);
   const [committedSearchQuery, setCommittedSearchQuery] = useState(initialLinkState.searchQuery);
@@ -2452,6 +2455,9 @@ function App() {
     setSafetyData(null);
     setDayOverDay(null);
     setError(null);
+    setAiBriefNarrative(null);
+    setAiBriefLoading(false);
+    setAiBriefError(null);
     setTargetElevationInput('');
     setTargetElevationManual(false);
     setTripForecastRows([]);
@@ -2532,6 +2538,9 @@ function App() {
           : null;
         if (!pendingRequestKey || pendingRequestKey === requestKey) {
           setSafetyData(payload as SafetyData);
+          setAiBriefNarrative(null);
+          setAiBriefLoading(false);
+          setAiBriefError(null);
           lastLoadedSafetyKeyRef.current = requestKey;
           if (wakeRetryStateRef.current?.key === requestKey) {
             clearWakeRetry();
@@ -2856,6 +2865,9 @@ function App() {
       clearWakeRetry();
       setSafetyData(null);
       setDayOverDay(null);
+      setAiBriefNarrative(null);
+      setAiBriefLoading(false);
+      setAiBriefError(null);
       setBetterDaySuggestions([]);
       setBetterDaySuggestionsLoading(false);
       setBetterDaySuggestionsNote(null);
@@ -3474,6 +3486,35 @@ function App() {
       copyResetTimeout.current = setTimeout(() => setCopiedLink(false), 1500);
     } catch {
       setCopiedLink(false);
+    }
+  };
+
+  const handleRequestAiBrief = async () => {
+    if (!safetyData || !decision || aiBriefLoading) return;
+    setAiBriefLoading(true);
+    setAiBriefError(null);
+    try {
+      const factors = Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors : [];
+      const contextParts = [
+        fieldBriefPrimaryReason,
+        ...fieldBriefTopRisks.slice(0, 3),
+      ].filter(Boolean);
+      const result = await fetchAiBrief({
+        score: safetyData.safety.score,
+        confidence: typeof safetyData.safety.confidence === 'number' ? safetyData.safety.confidence : null,
+        primaryHazard: safetyData.safety.primaryHazard || 'Unknown',
+        decisionLevel: decision.level,
+        factors: factors.slice(0, 5).map((f: Record<string, unknown>) => ({
+          hazard: String(f.hazard || f.name || ''),
+          impact: Number(f.impact || 0),
+        })),
+        context: contextParts.join('. '),
+      });
+      setAiBriefNarrative(result.narrative);
+    } catch (err) {
+      setAiBriefError(err instanceof Error ? err.message : 'AI brief unavailable');
+    } finally {
+      setAiBriefLoading(false);
     }
   };
 
@@ -9361,6 +9402,10 @@ function App() {
           fieldBriefAbortTriggers={fieldBriefAbortTriggers}
           fieldBriefActions={fieldBriefActions}
           localizeUnitText={localizeUnitText}
+          aiNarrative={aiBriefNarrative}
+          aiLoading={aiBriefLoading}
+          aiError={aiBriefError}
+          onRequestAiBrief={handleRequestAiBrief}
           />
           </CollapsibleCard>
 

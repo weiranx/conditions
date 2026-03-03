@@ -100,6 +100,33 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
   throw new Error('API request failed');
 }
 
+export interface AiBriefRequest {
+  score: number;
+  confidence: number | null;
+  primaryHazard: string;
+  decisionLevel: string;
+  factors: Array<{ hazard?: string; name?: string; impact: number }>;
+  context?: string;
+}
+
+export interface AiBriefResponse {
+  narrative: string;
+  cached: boolean;
+}
+
+export async function fetchAiBrief(data: AiBriefRequest): Promise<AiBriefResponse> {
+  const { response, payload } = await fetchApi('/api/ai-brief', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const msg = readApiErrorMessage(payload, 'AI brief unavailable');
+    throw new Error(msg);
+  }
+  return payload as AiBriefResponse;
+}
+
 export function readApiErrorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
     const record = payload as Record<string, unknown>;

@@ -5415,6 +5415,72 @@ button.collapsible-card-header:focus-visible {
   line-height: 1.5;
 }
 
+.field-brief-ai {
+  margin-bottom: 10px;
+}
+
+.btn-ai-brief {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid rgba(140, 160, 150, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.78);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: #3b5346;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-ai-brief:hover:not(:disabled) {
+  background: rgba(240, 245, 240, 0.9);
+  border-color: rgba(100, 140, 120, 0.5);
+}
+
+.btn-ai-brief:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.btn-ai-brief .spinner {
+  animation: spin-ai 1s linear infinite;
+}
+
+@keyframes spin-ai {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.field-brief-ai-narrative {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(140, 180, 160, 0.35);
+  background: rgba(245, 252, 248, 0.78);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: #25372f;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.field-brief-ai-narrative svg {
+  color: #6b8f7b;
+  vertical-align: -1px;
+}
+
+.field-brief-ai-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #b04040;
+}
+
 .field-brief-primary {
   padding: 10px 12px;
   border-radius: 12px;
@@ -7105,6 +7171,31 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .field-brief-card .signal-list,
 :root[data-theme='dark'] .field-brief-card .signal-list li {
   color: #d6e3ee;
+}
+
+:root[data-theme='dark'] .btn-ai-brief {
+  border-color: rgba(60, 80, 90, 0.5);
+  background: rgba(26, 39, 49, 0.7);
+  color: #b0cce0;
+}
+
+:root[data-theme='dark'] .btn-ai-brief:hover:not(:disabled) {
+  background: rgba(35, 50, 60, 0.8);
+  border-color: rgba(80, 110, 130, 0.6);
+}
+
+:root[data-theme='dark'] .field-brief-ai-narrative {
+  border-color: rgba(50, 80, 70, 0.4);
+  background: rgba(20, 35, 30, 0.7);
+  color: #d6e3ee;
+}
+
+:root[data-theme='dark'] .field-brief-ai-narrative svg {
+  color: #7aa896;
+}
+
+:root[data-theme='dark'] .field-brief-ai-error {
+  color: #e88;
 }
 
 :root[data-theme='dark'] .field-brief-primary {

@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, XCircle, List } from 'lucide-react';
+import { AlertTriangle, Clock, XCircle, List, Sparkles, Loader2 } from 'lucide-react';
 
 interface FieldBriefItem {
   label: string;
@@ -17,6 +17,10 @@ interface FieldBriefCardProps {
   fieldBriefAbortTriggers: string[];
   fieldBriefActions: string[];
   localizeUnitText: (value: string) => string;
+  aiNarrative?: string | null;
+  aiLoading?: boolean;
+  aiError?: string | null;
+  onRequestAiBrief?: () => void;
 }
 
 export function FieldBriefCard({
@@ -28,6 +32,10 @@ export function FieldBriefCard({
   fieldBriefAbortTriggers,
   fieldBriefActions,
   localizeUnitText,
+  aiNarrative,
+  aiLoading,
+  aiError,
+  onRequestAiBrief,
 }: FieldBriefCardProps) {
   // Merge top risks + immediate actions, dedup, cap at 4
   const seen = new Set<string>();
@@ -49,6 +57,32 @@ export function FieldBriefCard({
 
   return (
     <>
+      {onRequestAiBrief && (
+        <div className="field-brief-ai">
+          {aiNarrative ? (
+            <p className="field-brief-ai-narrative"><Sparkles size={12} /> {aiNarrative}</p>
+          ) : aiError ? (
+            <div className="field-brief-ai-error">
+              <span>{aiError}</span>
+              <button type="button" className="btn-ai-brief" onClick={onRequestAiBrief}>Retry</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-ai-brief"
+              onClick={onRequestAiBrief}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <><Loader2 size={12} className="spinner" /> Generating...</>
+              ) : (
+                <><Sparkles size={12} /> Generate AI Brief</>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="field-brief-primary">
         <p className="field-brief-primary-text">{fieldBriefPrimaryReason}</p>
       </div>

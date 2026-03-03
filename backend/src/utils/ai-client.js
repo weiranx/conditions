@@ -11,12 +11,14 @@ const getClient = () => {
   return client;
 };
 
-const askClaude = async (prompt, { maxTokens = 1024 } = {}) => {
-  const msg = await getClient().messages.create({
-    model: 'claude-sonnet-4-6',
+const askClaude = async (prompt, { maxTokens = 1024, model = 'claude-sonnet-4-6', system } = {}) => {
+  const params = {
+    model,
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
-  });
+  };
+  if (system) params.system = system;
+  const msg = await getClient().messages.create(params);
   return msg.content[0].text;
 };
 
