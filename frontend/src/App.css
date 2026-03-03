@@ -5941,6 +5941,13 @@ button.collapsible-card-header:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.route-wp-temp {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .route-wp-avy {
   font-size: 0.78rem;
   color: var(--text-muted);
@@ -5951,6 +5958,19 @@ button.collapsible-card-header:focus-visible {
   border-radius: 6px;
   font-weight: 500;
   border: 1px solid rgba(215, 210, 194, 0.3);
+}
+
+.route-wp-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.route-wp-link:hover {
+  opacity: 1;
 }
 
 .route-analysis-text {

@@ -62,7 +62,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
   // POST /api/route-analysis
   // Body: { peak, route, lat, lon, date, start }
   app.post('/api/route-analysis', async (req, res) => {
-    const { peak, route, lat, lon, date, start } = req.body;
+    const { peak, route, lat, lon, date, start, travel_window_hours } = req.body;
     if (!peak || !route || !lat || !lon || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
@@ -78,11 +78,19 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       ), 20000, 'Waypoint lookup');
       const waypoints = parseJsonArrayFromClaude(waypointText);
 
+      // Pin the last waypoint (summit) to the user's actual peak coordinates
+      // so its safety score matches the main report.
+      if (waypoints.length > 0) {
+        const summit = waypoints[waypoints.length - 1];
+        summit.lat = Number(lat);
+        summit.lon = Number(lon);
+      }
+
       // Step 2: Run safety checks for each waypoint in parallel
       const safetyResults = await withTimeout(
         Promise.all(
           waypoints.map((wp) =>
-            invokeSafetyHandler({ lat: wp.lat, lon: wp.lon, date, start: start || '06:00' })
+            invokeSafetyHandler({ lat: wp.lat, lon: wp.lon, date, start: start || '06:00', travel_window_hours: travel_window_hours || undefined })
           )
         ),
         60000, 'Safety checks'

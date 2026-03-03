@@ -38,6 +38,7 @@ import {
   HardDrive,
   Zap,
   Check,
+  ExternalLink,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -2578,7 +2579,7 @@ function App() {
     }
   }, []);
 
-  const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string) => {
+  const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string, travelWindowHours: number) => {
     setRouteAnalysis(null);
     setRouteError(null);
     setRouteLoading(true);
@@ -2586,7 +2587,7 @@ function App() {
       const { response, payload } = await fetchApi('/api/route-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ peak, route, lat, lon, date, start }),
+        body: JSON.stringify({ peak, route, lat, lon, date, start, travel_window_hours: travelWindowHours }),
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       setRouteAnalysis(payload as RouteAnalysisResult);
@@ -7588,7 +7589,7 @@ function App() {
                         <button
                           type="button"
                           className="route-picker-option"
-                          onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime)}
+                          onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours)}
                         >
                           <span className="route-option-name">{r.name}</span>
                           <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
@@ -7611,18 +7612,42 @@ function App() {
                 <div className="route-analysis-card">
                   <div className="route-analysis-header">Route Analysis</div>
                   <div className="route-waypoints">
-                    {routeAnalysis.summaries.map((wp) => (
-                      <div key={wp.name} className="route-waypoint-row">
-                        <span className="route-wp-name">{wp.name}</span>
-                        <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
-                        {wp.score !== null && (
-                          <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
-                        )}
-                        {wp.avalanche.risk && (
-                          <span className="route-wp-avy">{wp.avalanche.risk}</span>
-                        )}
-                      </div>
-                    ))}
+                    {routeAnalysis.summaries.map((wp, i) => {
+                      const wpCoords = routeAnalysis.waypoints[i];
+                      const wpReportParams = new URLSearchParams({
+                        lat: String(wpCoords?.lat ?? ''),
+                        lon: String(wpCoords?.lon ?? ''),
+                        name: wp.name,
+                        date: forecastDate,
+                        start: alpineStartTime,
+                      });
+                      return (
+                        <div key={wp.name} className="route-waypoint-row">
+                          <span className="route-wp-name">{wp.name}</span>
+                          <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
+                          {wp.weather.temp != null && (
+                            <span className="route-wp-temp">{formatTempDisplay(wp.weather.temp)}</span>
+                          )}
+                          {wp.score !== null && (
+                            <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
+                          )}
+                          {wp.avalanche.risk && (
+                            <span className="route-wp-avy">{wp.avalanche.risk}</span>
+                          )}
+                          {wpCoords && (
+                            <a
+                              href={`/?${wpReportParams.toString()}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="route-wp-link"
+                              title={`Open full report for ${wp.name}`}
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="route-analysis-text">
                     {renderSimpleMarkdown(routeAnalysis.analysis)}
