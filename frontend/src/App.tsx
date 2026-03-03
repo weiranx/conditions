@@ -1406,7 +1406,6 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
     searchQuery: '',
     forecastDate: todayDate,
     alpineStartTime: preferences.defaultStartTime,
-    turnaroundTime: preferences.defaultBackByTime,
     targetElevationInput: '',
   };
 
@@ -1448,7 +1447,6 @@ function parseLinkState(todayDate: string, maxForecastDate: string, preferences:
     searchQuery,
     forecastDate: normalizeForecastDate(params.get('date'), todayDate, maxForecastDate),
     alpineStartTime: normalizeTimeOrFallback(params.get('start'), preferences.defaultStartTime),
-    turnaroundTime: normalizeTimeOrFallback(params.get('turn'), preferences.defaultBackByTime),
     targetElevationInput: normalizeElevationInput(params.get('elev')),
   };
 }
@@ -2284,7 +2282,6 @@ function App() {
   const [committedSearchQuery, setCommittedSearchQuery] = useState(initialLinkState.searchQuery);
   const [forecastDate, setForecastDate] = useState(initialLinkState.forecastDate);
   const [alpineStartTime, setAlpineStartTime] = useState(initialLinkState.alpineStartTime);
-  const [turnaroundTime, setTurnaroundTime] = useState(initialLinkState.turnaroundTime);
   const [isViewPending, startViewChange] = useTransition();
   const [targetElevationInput, setTargetElevationInput] = useState(initialLinkState.targetElevationInput);
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
@@ -2880,7 +2877,6 @@ function App() {
       setCommittedSearchQuery(linkState.searchQuery);
       setForecastDate(linkState.forecastDate);
       setAlpineStartTime(linkState.alpineStartTime);
-      setTurnaroundTime(linkState.turnaroundTime);
       setTargetElevationInput(linkState.targetElevationInput);
       setTargetElevationManual(Boolean(linkState.targetElevationInput));
       setError(null);
@@ -3931,7 +3927,7 @@ function App() {
     });
   };
 
-  const handlePreferenceTimeChange = (field: 'defaultStartTime' | 'defaultBackByTime', value: string) => {
+  const handlePreferenceTimeChange = (field: 'defaultStartTime', value: string) => {
     if (parseTimeInputMinutes(value) === null) {
       return;
     }
@@ -4111,7 +4107,6 @@ function App() {
 
   const applyPreferencesToPlanner = () => {
     setAlpineStartTime(preferences.defaultStartTime);
-    setTurnaroundTime(preferences.defaultBackByTime);
     startViewChange(() => setView('planner'));
   };
 
@@ -4124,7 +4119,6 @@ function App() {
   const openPlannerView = () => {
     if (!hasObjective && !searchQuery.trim()) {
       setAlpineStartTime(preferences.defaultStartTime);
-      setTurnaroundTime(preferences.defaultBackByTime);
     }
     startViewChange(() => setView('planner'));
   };
@@ -4391,8 +4385,10 @@ function App() {
     MIN_TRAVEL_WINDOW_HOURS,
     Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
   );
+  const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
+  const returnTimeFormatted = returnMinutes !== null ? minutesToTwentyFourHourClock(Math.min(returnMinutes, 1439)) : null;
   const decision = safetyData
-    ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime })
+    ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime: returnTimeFormatted ?? undefined })
     : null;
   const failedCriticalChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
   const passedCriticalChecks = decision ? decision.checks.filter((check) => check.ok) : [];
@@ -4765,7 +4761,7 @@ function App() {
               coordinates: { lat: Number(position.lat.toFixed(5)), lon: Number(position.lng.toFixed(5)) },
               forecastDate: safetyData.forecast?.selectedDate || forecastDate,
               startTime: alpineStartTime,
-              backByTime: turnaroundTime,
+              backByTime: returnTimeFormatted,
               targetElevationFt: hasTargetElevation ? Math.round(targetElevationFt) : null,
             },
             forecast: safetyData.forecast || null,
@@ -4790,7 +4786,7 @@ function App() {
       position.lng,
       forecastDate,
       alpineStartTime,
-      turnaroundTime,
+      returnTimeFormatted,
       hasTargetElevation,
       targetElevationFt,
       decision,
@@ -7378,17 +7374,6 @@ function App() {
                   />
                 </label>
 
-                <label className="date-control compact">
-                  <span>Back by</span>
-                  <input
-                    type="time"
-                    aria-label="Turnaround / back-by time"
-                    title="Latest time you must be turning around or back at the trailhead."
-                    value={turnaroundTime}
-                    onChange={handlePlannerTimeChange(setTurnaroundTime)}
-                  />
-                </label>
-
                 <button
                   type="button"
                   className="now-control-btn"
@@ -9219,7 +9204,7 @@ function App() {
                   const srP = p(sunriseMinutesForPlan);
                   const ssP = p(sunsetMinutesForPlan);
                   const stP = startMinutesForPlan !== null ? p(startMinutesForPlan) : null;
-                  const ttMin = turnaroundTime ? parseTimeInputMinutes(turnaroundTime) : null;
+                  const ttMin = returnMinutes;
                   const ttP = ttMin !== null ? p(ttMin) : null;
                   const ttMargin = ttMin !== null ? sunsetMinutesForPlan - ttMin : null;
                   const ttPinColor = ttMargin === null ? 'rgba(255,255,255,0.9)' : ttMargin < 0 ? '#f87171' : ttMargin < 30 ? '#fbbf24' : '#4ade80';
@@ -9239,7 +9224,7 @@ function App() {
                           <span className="solar-pin" style={{ left: `${stP}%`, background: 'rgba(255,255,255,0.95)' }} title={`Start: ${displayStartTime}`} />
                         )}
                         {ttP !== null && (
-                          <span className="solar-pin" style={{ left: `${ttP}%`, background: ttPinColor }} title={`Back by: ${formatClockShort(turnaroundTime, preferences.timeStyle)}`} />
+                          <span className="solar-pin" style={{ left: `${ttP}%`, background: ttPinColor }} title={`Return: ${returnTimeFormatted ? formatClockShort(returnTimeFormatted, preferences.timeStyle) : ''}`} />
                         )}
                       </div>
                       <div className="solar-timeline-footer">
@@ -9248,7 +9233,7 @@ function App() {
                       </div>
                       <div className="solar-timeline-legend">
                         {stP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: 'rgba(255,255,255,0.95)' }} />Start</span>}
-                        {ttP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: ttPinColor }} />Back by</span>}
+                        {ttP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: ttPinColor }} />Return</span>}
                       </div>
                     </div>
                   );
@@ -9262,20 +9247,20 @@ function App() {
                     <span className="plan-label">Daylight from start</span>
                     <strong className="plan-value">{daylightRemainingFromStartLabel}</strong>
                   </article>
-                  {turnaroundTime && (
+                  {returnTimeFormatted && (
                     <article className="plan-summary-item">
-                      <span className="plan-label">Back by</span>
-                      <strong className="plan-value">{formatClockShort(turnaroundTime, preferences.timeStyle)}</strong>
+                      <span className="plan-label">Return by</span>
+                      <strong className="plan-value">{formatClockShort(returnTimeFormatted, preferences.timeStyle)}</strong>
                     </article>
                   )}
-                  {turnaroundTime && sunsetMinutesForPlan !== null && (() => {
-                    const ttMin = parseTimeInputMinutes(turnaroundTime);
-                    if (ttMin === null) return null;
-                    const margin = sunsetMinutesForPlan - ttMin;
+                  {returnMinutes !== null && sunsetMinutesForPlan !== null && (() => {
+                    const margin = sunsetMinutesForPlan - returnMinutes;
                     const cls = margin < 0 ? 'plan-value danger' : margin < 30 ? 'plan-value caution' : 'plan-value';
+                    const abs = Math.abs(margin);
+                    const timePart = abs >= 60 ? `${Math.floor(abs / 60)} h ${abs % 60} min` : `${abs} min`;
                     const label = margin < 0
-                      ? `${Math.abs(margin)} min after sunset`
-                      : `${margin} min before sunset`;
+                      ? `${timePart} after sunset`
+                      : `${timePart} before sunset`;
                     return (
                       <article className="plan-summary-item">
                         <span className="plan-label">Sunset margin</span>

@@ -37,7 +37,6 @@ export function getDefaultUserPreferences(): UserPreferences {
   return {
     defaultActivity: 'backcountry',
     defaultStartTime: currentLocalTimeInput(),
-    defaultBackByTime: '12:00',
     themeMode: 'system',
     temperatureUnit: 'f',
     elevationUnit: 'ft',
@@ -72,7 +71,6 @@ export function loadUserPreferences(): UserPreferences {
     return {
       defaultActivity: parsed.defaultActivity ? normalizeActivity(parsed.defaultActivity) : defaults.defaultActivity,
       defaultStartTime: normalizedStartTime,
-      defaultBackByTime: normalizeTimeOrFallback(parsed.defaultBackByTime || null, defaults.defaultBackByTime),
       themeMode: normalizeThemeMode(parsed.themeMode),
       temperatureUnit: normalizeTemperatureUnit(parsed.temperatureUnit),
       elevationUnit: normalizeElevationUnit(parsed.elevationUnit),

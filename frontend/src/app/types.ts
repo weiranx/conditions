@@ -426,14 +426,12 @@ export interface LinkState {
   searchQuery: string;
   forecastDate: string;
   alpineStartTime: string;
-  turnaroundTime: string;
   targetElevationInput: string;
 }
 
 export interface UserPreferences {
   defaultActivity: ActivityType;
   defaultStartTime: string;
-  defaultBackByTime: string;
   themeMode: ThemeMode;
   temperatureUnit: TemperatureUnit;
   elevationUnit: ElevationUnit;
