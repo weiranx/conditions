@@ -9197,12 +9197,12 @@ function App() {
                   defaultExpanded={false}
                   order={reportCardOrder.planSnapshot}
                   className="plan-card"
-                  title={<span className="card-title"><Sun size={14} /> Plan Snapshot <HelpHint text="Start time, solar windows, and selected forecast date for the current plan." /></span>}
+                  title={<span className="card-title"><Sun size={14} /> Daylight &amp; Timing <HelpHint text="Your start time, daylight window, and sunset margin for this trip." /></span>}
                   headerMeta={sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null ? <span className="plan-daylight-badge">{Math.floor((sunsetMinutesForPlan - sunriseMinutesForPlan) / 60)}h {(sunsetMinutesForPlan - sunriseMinutesForPlan) % 60}m daylight</span> : undefined}
                   summary={`Start ${displayStartTime} · ${daylightRemainingFromStartLabel} daylight`}
                   preview={<>
                     <div className="card-preview-hero mono">{displayStartTime}</div>
-                    <div className="card-preview-caption">{daylightRemainingFromStartLabel} daylight remaining</div>
+                    <div className="card-preview-caption">{daylightRemainingFromStartLabel} daylight from start</div>
                     <div className="card-preview-row">
                       <span className="card-preview-chip">↑ {formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)}</span>
                       <span className="card-preview-chip">↓ {formatClockShort(safetyData.solar.sunset, preferences.timeStyle)}</span>
@@ -9246,6 +9246,10 @@ function App() {
                         <span>↑ {formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)} sunrise</span>
                         <span>sunset {formatClockShort(safetyData.solar.sunset, preferences.timeStyle)} ↓</span>
                       </div>
+                      <div className="solar-timeline-legend">
+                        {stP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: 'rgba(255,255,255,0.95)' }} />Start</span>}
+                        {ttP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: ttPinColor }} />Back by</span>}
+                      </div>
                     </div>
                   );
                 })()}
@@ -9257,10 +9261,6 @@ function App() {
                   <article className="plan-summary-item">
                     <span className="plan-label">Daylight from start</span>
                     <strong className="plan-value">{daylightRemainingFromStartLabel}</strong>
-                  </article>
-                  <article className="plan-summary-item">
-                    <span className="plan-label">Forecast date</span>
-                    <strong className="plan-value">{safetyData.forecast?.selectedDate || forecastDate}</strong>
                   </article>
                   {turnaroundTime && (
                     <article className="plan-summary-item">

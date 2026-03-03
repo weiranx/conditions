@@ -1555,9 +1555,7 @@ input {
   margin: 0 0 18px;
 }
 
-.report-columns .collapsible-card.is-expanded {
-  column-span: all;
-}
+
 
 .score-card {
   display: flex;
@@ -1778,12 +1776,6 @@ button.collapsible-card-header:focus-visible {
   border-radius: 4px;
 }
 
-.is-collapsed button.collapsible-card-header {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
 .collapsible-title-wrap {
   flex: 1;
   min-width: 0;
@@ -1802,17 +1794,6 @@ button.collapsible-card-header:focus-visible {
   gap: 6px;
 }
 
-.collapsible-chevron {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: transform 0.2s ease;
-  transform: rotate(90deg);
-}
-
-.is-expanded .collapsible-chevron {
-  transform: rotate(-90deg);
-}
-
 .collapsible-summary {
   font-size: 0.82rem;
   color: var(--text-muted);
@@ -1827,14 +1808,168 @@ button.collapsible-card-header:focus-visible {
   border-bottom-color: var(--line-color);
 }
 
-.report-columns .ai-box {
-  break-inside: avoid;
+/* ── Card Modal Overlay ──────────────────────────────────── */
+
+.collapsible-card.is-modal-open {
+  border-color: var(--focus-ring, #4a90d9);
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.25);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .collapsible-chevron {
-    transition: none;
+.card-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: modal-backdrop-in 0.2s ease both;
+}
+
+.card-modal {
+  background: rgba(255, 253, 248, 0.95);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(215, 210, 194, 0.5);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.08);
+  max-width: 720px;
+  width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  animation: modal-panel-in 0.25s ease both;
+}
+
+.card-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #ddd7c8;
+  flex-shrink: 0;
+}
+
+.card-modal-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-modal-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.card-modal-close {
+  appearance: none;
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #596459;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.card-modal-close:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: #2e4639;
+}
+
+.card-modal-close:focus-visible {
+  outline: 2px solid var(--focus-ring, #4a90d9);
+  outline-offset: 2px;
+}
+
+.card-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Mobile: bottom sheet */
+@media (max-width: 639px) {
+  .card-modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
   }
+
+  .card-modal {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+    animation: modal-sheet-in 0.25s ease both;
+  }
+}
+
+@keyframes modal-sheet-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dark mode */
+:root[data-theme='dark'] .card-modal-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .card-modal {
+  background: rgba(22, 30, 38, 0.95);
+  border-color: rgba(43, 57, 70, 0.5);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='dark'] .card-modal-header {
+  border-bottom-color: var(--line-color);
+}
+
+:root[data-theme='dark'] .card-modal-close {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a0b0a8;
+}
+
+:root[data-theme='dark'] .card-modal-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #d0ddd6;
+}
+
+:root[data-theme='dark'] .collapsible-card.is-modal-open {
+  border-color: var(--focus-ring, #4a90d9);
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.3);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .card-modal-backdrop,
+  .card-modal {
+    animation: none;
+  }
+}
+
+/* ── End Card Modal Overlay ──────────────────────────────── */
+
+.report-columns .ai-box {
+  break-inside: avoid;
 }
 
 /* ── Card Preview (Apple Weather-style collapsed previews) ── */
@@ -3877,10 +4012,33 @@ button.collapsible-card-header:focus-visible {
   color: #5f6a62;
 }
 
+.solar-timeline-legend {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: #5f6a62;
+}
+
+.solar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.solar-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
 .plan-summary-grid {
   display: grid;
   gap: 9px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .plan-summary-item {
@@ -7447,6 +7605,14 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .solar-timeline-footer {
   color: #9fb1bf;
+}
+
+:root[data-theme='dark'] .solar-timeline-legend {
+  color: #9fb1bf;
+}
+
+:root[data-theme='dark'] .solar-legend-dot {
+  border-color: rgba(255,255,255,0.2);
 }
 
 :root[data-theme='dark'] .plan-summary-item {
