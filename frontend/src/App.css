@@ -260,9 +260,11 @@ input {
 .home-card {
   padding: 16px 16px 14px;
   border-radius: 16px;
-  border: 1px solid var(--line-color);
-  background: var(--surface-base);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   color: #32443a;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   display: grid;
@@ -314,9 +316,11 @@ input {
   margin-top: 14px;
   padding: clamp(20px, 3vw, 30px);
   border-radius: 22px;
-  border: 1px solid rgba(145, 159, 140, 0.24);
-  background: linear-gradient(180deg, #fdfbf5 0%, #f8f3e8 100%);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   animation: fade-up 0.5s ease both;
 }
 
@@ -355,9 +359,11 @@ input {
 .settings-card {
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid #ddd7c7;
-  background: #fffdf8;
-  box-shadow: 0 6px 16px rgba(19, 29, 22, 0.06);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -402,9 +408,11 @@ input {
 }
 
 .trip-overview-item {
-  border: 1px solid #ded7c7;
+  border: 1px solid rgba(215, 210, 194, 0.3);
   border-radius: 10px;
-  background: #f8f4ea;
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   padding: 8px 10px;
   display: grid;
   gap: 2px;
@@ -1009,8 +1017,10 @@ input {
   gap: 8px;
   padding: 9px;
   border-radius: 14px;
-  border: 1px solid #dad4c4;
-  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .map-control-title {
@@ -1324,9 +1334,11 @@ input {
   margin-top: 14px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid #d7d1c1;
-  background: linear-gradient(160deg, rgba(255, 252, 245, 0.97) 0%, rgba(243, 249, 240, 0.97) 100%);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   display: grid;
   gap: 10px;
 }
@@ -1344,8 +1356,10 @@ input {
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid #d5d0bf;
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   color: #33463c;
   font-size: 0.78rem;
   font-weight: 600;
@@ -1367,8 +1381,10 @@ input {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid #cfd3c5;
-  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   padding: 2px;
 }
 
@@ -1416,8 +1432,10 @@ input {
   min-height: 28px;
   padding: 5px 9px;
   border-radius: 999px;
-  border: 1px solid #d6d2c3;
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   color: #394c42;
   font-size: 0.77rem;
   font-weight: 600;
@@ -1500,11 +1518,11 @@ input {
   align-items: start;
   padding: 16px;
   border-radius: 22px;
-  border: 1px solid var(--line-color);
-  background:
-    radial-gradient(130% 90% at 0% 0%, rgba(141, 185, 157, 0.1) 0%, rgba(141, 185, 157, 0) 54%),
-    linear-gradient(180deg, #f8f4ea 0%, #f4efe3 100%);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
 
 .data-grid > * {
@@ -1537,8 +1555,10 @@ input {
   padding: 20px;
   border-radius: 20px;
   border: 2px solid;
-  background: linear-gradient(115deg, #fefcf4 0%, #f5efe4 70%, #ebf3ea 100%);
-  box-shadow: var(--shadow-soft);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   transition: transform 0.22s ease, box-shadow 0.22s ease;
   animation: fade-up 0.55s ease both;
 }
@@ -1694,11 +1714,13 @@ input {
 
 .card,
 .ai-box {
-  background: var(--surface-base);
-  border: 1px solid var(--line-color);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(215, 210, 194, 0.35);
   border-radius: var(--radius-card);
   padding: 18px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   animation: fade-up 0.7s ease both;
 }
@@ -2120,8 +2142,10 @@ button.collapsible-card-header:focus-visible {
 .gear-item {
   padding: 10px 11px;
   border-radius: 12px;
-  border: 1px solid #ddd8c8;
-  background: #f8f4e9;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .gear-item-head {
@@ -2655,8 +2679,10 @@ button.collapsible-card-header:focus-visible {
 .metric-chip {
   padding: 10px 11px;
   border-radius: 12px;
-  border: 1px solid #dfd9c9;
-  background: #faf6eb;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .metric-chip.metric-chip-wide {
@@ -2829,8 +2855,10 @@ button.collapsible-card-header:focus-visible {
 .elevation-row {
   padding: 10px 11px;
   border-radius: 12px;
-  border: 1px solid #ddd7c7;
-  background: #f8f4ea;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   display: grid;
   gap: 5px;
 }
@@ -2879,16 +2907,21 @@ button.collapsible-card-header:focus-visible {
   gap: 12px;
   padding: 10px;
   border-radius: 14px;
-  border: 1px solid #d8d1bf;
-  background: linear-gradient(180deg, #fffdf7 0%, #f6f0e2 100%);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
 
 .critical-summary {
   margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid #d6d0bf;
-  background: linear-gradient(180deg, #faf6ea 0%, #f2ead7 100%);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #2f4137;
   font-size: 0.87rem;
   font-weight: 500;
@@ -3122,8 +3155,10 @@ button.collapsible-card-header:focus-visible {
   gap: 12px;
   padding: 11px 12px;
   border-radius: 12px;
-  border: 1px solid #d7cfbc;
-  background: #f9f4e8;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   position: relative;
   overflow: hidden;
 }
@@ -4221,8 +4256,10 @@ button.collapsible-card-header:focus-visible {
   gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid #d9d4c5;
-  background: #f7f3e8;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   color: #3d4b44;
   font-size: 0.86rem;
 }
@@ -4334,8 +4371,11 @@ button.collapsible-card-header:focus-visible {
   margin-bottom: 18px;
   padding: 12px;
   border-radius: 14px;
-  border: 1px solid #d8d2bf;
-  background: linear-gradient(180deg, #fffef9 0%, #f8f3e6 100%);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
 
 .danger-summary-header {
@@ -4650,8 +4690,10 @@ button.collapsible-card-header:focus-visible {
   margin: 0;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid #d8c59f;
-  background: #fdf2df;
+  border: 1px solid rgba(216, 197, 159, 0.45);
+  background: rgba(253, 242, 223, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   color: #664016;
   line-height: 1.55;
 }
@@ -4660,9 +4702,11 @@ button.collapsible-card-header:focus-visible {
   margin: 0 0 16px;
   padding: 17px 16px;
   border-radius: 14px;
-  border: 1px solid #d7d1bf;
-  background: linear-gradient(180deg, #fffef9 0%, #f9f4e7 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
 
 .bl-header {
@@ -4705,19 +4749,21 @@ button.collapsible-card-header:focus-visible {
   gap: 11px;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid #ddd7c7;
-  background: #f8f3e8;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .avy-problem-card-structured {
   gap: 14px;
   padding: 18px 16px 16px;
   border-radius: 16px;
-  border: 1px solid #cfd3d8;
-  background: linear-gradient(180deg, #eff2f6 0%, #e4e8ee 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 1px 0 rgba(33, 43, 52, 0.04);
+  border: 1px solid rgba(207, 211, 216, 0.4);
+  background: rgba(239, 242, 246, 0.55);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
 
 .problem-structured-title {
@@ -5229,8 +5275,10 @@ button.collapsible-card-header:focus-visible {
 .field-brief-primary {
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid #cfd7c9;
-  background: #f5f9f2;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 .field-brief-primary-label {
@@ -5268,8 +5316,10 @@ button.collapsible-card-header:focus-visible {
   gap: 3px;
   padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid #d6dccf;
-  background: #f8faf5;
+  border: 1px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .field-brief-glance-item span {
@@ -5348,7 +5398,9 @@ button.collapsible-card-header:focus-visible {
   padding: 9px 11px;
   border-radius: 10px;
   border: 1px solid #e2b1b1;
-  background: #fdf1f1;
+  background: rgba(253, 241, 241, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .field-brief-abort h4 {
@@ -5447,10 +5499,12 @@ button.collapsible-card-header:focus-visible {
 }
 
 .raw-group {
-  border: 1px solid #ddd8ca;
+  border: 1px solid rgba(215, 210, 194, 0.3);
   border-radius: 12px;
   padding: 12px;
-  background: #fcfaf4;
+  background: rgba(246, 241, 230, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .raw-group h4 {
@@ -5863,9 +5917,11 @@ button.collapsible-card-header:focus-visible {
   gap: 6px;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid #d6cfbb;
-  background: linear-gradient(180deg, #f9f4e7 0%, #f5efe0 100%);
-  box-shadow: 0 4px 14px rgba(34, 43, 35, 0.05);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(255, 253, 248, 0.65);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
 
 .app-disclaimer.compact {
@@ -5891,8 +5947,11 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .settings-shell {
-  background: linear-gradient(180deg, #17232c 0%, #131d26 100%);
-  border-color: #2b3946;
+  background: rgba(22, 32, 41, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-color: rgba(43, 57, 70, 0.45);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
 }
 
 :root[data-theme='dark'] .home-hero-panel {
@@ -5936,8 +5995,11 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .empty-state,
 :root[data-theme='dark'] .loading-state,
 :root[data-theme='dark'] .error-banner {
-  background: var(--surface-base);
-  border-color: var(--line-color);
+  background: rgba(22, 32, 41, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-color: rgba(43, 57, 70, 0.45);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
   color: var(--text-dark);
 }
 
@@ -5964,8 +6026,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .trip-overview-item {
-  background: #1a2a35;
-  border-color: #344a5b;
+  background: rgba(26, 39, 49, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-color: rgba(43, 57, 70, 0.35);
 }
 
 :root[data-theme='dark'] .trip-overview-item span {
@@ -6045,27 +6109,36 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .elevation-row,
 :root[data-theme='dark'] .check-item,
 :root[data-theme='dark'] .sat-line-preview {
-  background: var(--surface-muted);
-  border-color: #31414e;
+  background: rgba(26, 39, 49, 0.5);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(43, 57, 70, 0.4);
   color: var(--text-dark);
 }
 
 :root[data-theme='dark'] .score-card {
-  background: linear-gradient(115deg, #1b2b38 0%, #162028 60%, #182d2a 100%);
-  border-color: #31414e;
+  background: rgba(22, 32, 41, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-color: rgba(43, 57, 70, 0.45);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
   color: var(--text-dark);
 }
 
 :root[data-theme='dark'] .mission-brief-window,
 :root[data-theme='dark'] .mission-brief-chip {
-  background: rgba(24, 38, 48, 0.7);
-  border-color: #3b5060;
+  background: rgba(24, 38, 48, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-color: rgba(43, 57, 70, 0.4);
   color: #ddebf5;
 }
 
 :root[data-theme='dark'] .planner-view-toggle {
-  border-color: #3b5060;
-  background: rgba(24, 38, 48, 0.74);
+  border-color: rgba(43, 57, 70, 0.4);
+  background: rgba(24, 38, 48, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 :root[data-theme='dark'] .planner-view-btn {
@@ -6691,8 +6764,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .gear-item {
-  border-color: #355063;
-  background: #1a2a36;
+  border-color: rgba(43, 57, 70, 0.35);
+  background: rgba(26, 39, 49, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 :root[data-theme='dark'] .gear-item-title {
@@ -6825,8 +6900,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .field-brief-primary {
-  border-color: #3a4f60;
-  background: #1a2a35;
+  border-color: rgba(43, 57, 70, 0.4);
+  background: rgba(26, 39, 49, 0.5);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 :root[data-theme='dark'] .field-brief-primary-label {
@@ -6844,8 +6921,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .field-brief-glance-item {
-  border-color: #355064;
-  background: #1a2b37;
+  border-color: rgba(43, 57, 70, 0.35);
+  background: rgba(26, 39, 49, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 :root[data-theme='dark'] .field-brief-glance-item span {
@@ -7352,7 +7431,9 @@ button.collapsible-card-header:focus-visible {
 /* ── Field brief abort triggers ── */
 :root[data-theme='dark'] .field-brief-abort {
   border-color: #7b4548;
-  background: #3a2326;
+  background: rgba(58, 35, 38, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 :root[data-theme='dark'] .field-brief-abort h4 {
