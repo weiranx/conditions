@@ -261,7 +261,7 @@ input {
   padding: 16px 16px 14px;
   border-radius: 16px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -317,7 +317,7 @@ input {
   padding: clamp(20px, 3vw, 30px);
   border-radius: 22px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -360,7 +360,7 @@ input {
   padding: 14px;
   border-radius: 16px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -410,7 +410,7 @@ input {
 .trip-overview-item {
   border: 1px solid rgba(215, 210, 194, 0.3);
   border-radius: 10px;
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   padding: 8px 10px;
@@ -1018,7 +1018,7 @@ input {
   padding: 9px;
   border-radius: 14px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -1335,7 +1335,7 @@ input {
   padding: 12px;
   border-radius: 16px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -1357,7 +1357,7 @@ input {
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   color: #33463c;
@@ -1382,7 +1382,7 @@ input {
   align-items: center;
   border-radius: 999px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   padding: 2px;
@@ -1433,7 +1433,7 @@ input {
   padding: 5px 9px;
   border-radius: 999px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   color: #394c42;
@@ -1519,7 +1519,7 @@ input {
   padding: 16px;
   border-radius: 22px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -1555,7 +1555,7 @@ input {
   padding: 20px;
   border-radius: 20px;
   border: 2px solid;
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -1714,7 +1714,7 @@ input {
 
 .card,
 .ai-box {
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(215, 210, 194, 0.35);
@@ -2143,7 +2143,7 @@ button.collapsible-card-header:focus-visible {
   padding: 10px 11px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -2680,7 +2680,7 @@ button.collapsible-card-header:focus-visible {
   padding: 10px 11px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -2856,7 +2856,7 @@ button.collapsible-card-header:focus-visible {
   padding: 10px 11px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   display: grid;
@@ -2908,7 +2908,7 @@ button.collapsible-card-header:focus-visible {
   padding: 10px;
   border-radius: 14px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 253, 248, 0.78);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -2919,7 +2919,7 @@ button.collapsible-card-header:focus-visible {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 253, 248, 0.78);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   color: #2f4137;
@@ -3156,7 +3156,7 @@ button.collapsible-card-header:focus-visible {
   padding: 11px 12px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   position: relative;
@@ -4257,7 +4257,7 @@ button.collapsible-card-header:focus-visible {
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   color: #3d4b44;
@@ -4372,7 +4372,7 @@ button.collapsible-card-header:focus-visible {
   padding: 12px;
   border-radius: 14px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 253, 248, 0.78);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -4691,7 +4691,7 @@ button.collapsible-card-header:focus-visible {
   padding: 12px;
   border-radius: 12px;
   border: 1px solid rgba(216, 197, 159, 0.45);
-  background: rgba(253, 242, 223, 0.6);
+  background: rgba(253, 242, 223, 0.75);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   color: #664016;
@@ -4703,7 +4703,7 @@ button.collapsible-card-header:focus-visible {
   padding: 17px 16px;
   border-radius: 14px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 253, 248, 0.78);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -4750,7 +4750,7 @@ button.collapsible-card-header:focus-visible {
   padding: 12px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -4760,7 +4760,7 @@ button.collapsible-card-header:focus-visible {
   padding: 18px 16px 16px;
   border-radius: 16px;
   border: 1px solid rgba(207, 211, 216, 0.4);
-  background: rgba(239, 242, 246, 0.55);
+  background: rgba(239, 242, 246, 0.72);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -5276,7 +5276,7 @@ button.collapsible-card-header:focus-visible {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 253, 248, 0.78);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
@@ -5317,7 +5317,7 @@ button.collapsible-card-header:focus-visible {
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -5398,7 +5398,7 @@ button.collapsible-card-header:focus-visible {
   padding: 9px 11px;
   border-radius: 10px;
   border: 1px solid #e2b1b1;
-  background: rgba(253, 241, 241, 0.55);
+  background: rgba(253, 241, 241, 0.72);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -5502,7 +5502,7 @@ button.collapsible-card-header:focus-visible {
   border: 1px solid rgba(215, 210, 194, 0.3);
   border-radius: 12px;
   padding: 12px;
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -5621,7 +5621,7 @@ button.collapsible-card-header:focus-visible {
   align-items: center;
   gap: 14px;
   padding: 32px 16px;
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(215, 210, 194, 0.35);
@@ -5675,7 +5675,7 @@ button.collapsible-card-header:focus-visible {
 
 .route-picker-card,
 .route-analysis-card {
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(215, 210, 194, 0.35);
@@ -5706,7 +5706,7 @@ button.collapsible-card-header:focus-visible {
 .route-picker-option {
   width: 100%;
   text-align: left;
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   border: 1px solid rgba(215, 210, 194, 0.3);
   border-radius: 10px;
   padding: 14px 16px;
@@ -5799,7 +5799,7 @@ button.collapsible-card-header:focus-visible {
 .route-wp-avy {
   font-size: 0.78rem;
   color: var(--text-muted);
-  background: rgba(255, 253, 248, 0.6);
+  background: rgba(255, 253, 248, 0.78);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   padding: 2px 8px;
@@ -5859,13 +5859,13 @@ button.collapsible-card-header:focus-visible {
 /* Route Analysis — Dark mode frosted glass overrides */
 :root[data-theme='dark'] .route-picker-card,
 :root[data-theme='dark'] .route-analysis-card {
-  background: rgba(22, 32, 41, 0.55);
+  background: rgba(22, 32, 41, 0.78);
   border-color: rgba(43, 57, 70, 0.45);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
 :root[data-theme='dark'] .route-loading {
-  background: rgba(22, 32, 41, 0.55);
+  background: rgba(22, 32, 41, 0.78);
   border-color: rgba(43, 57, 70, 0.45);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
@@ -5880,7 +5880,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .route-picker-option {
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   border-color: rgba(43, 57, 70, 0.35);
 }
 
@@ -5918,7 +5918,7 @@ button.collapsible-card-header:focus-visible {
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -5947,7 +5947,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .settings-shell {
-  background: rgba(22, 32, 41, 0.55);
+  background: rgba(22, 32, 41, 0.78);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border-color: rgba(43, 57, 70, 0.45);
@@ -5995,7 +5995,7 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .empty-state,
 :root[data-theme='dark'] .loading-state,
 :root[data-theme='dark'] .error-banner {
-  background: rgba(22, 32, 41, 0.55);
+  background: rgba(22, 32, 41, 0.78);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border-color: rgba(43, 57, 70, 0.45);
@@ -6026,7 +6026,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .trip-overview-item {
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border-color: rgba(43, 57, 70, 0.35);
@@ -6109,7 +6109,7 @@ button.collapsible-card-header:focus-visible {
 :root[data-theme='dark'] .elevation-row,
 :root[data-theme='dark'] .check-item,
 :root[data-theme='dark'] .sat-line-preview {
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-color: rgba(43, 57, 70, 0.4);
@@ -6117,7 +6117,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] .score-card {
-  background: rgba(22, 32, 41, 0.55);
+  background: rgba(22, 32, 41, 0.78);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border-color: rgba(43, 57, 70, 0.45);
@@ -6127,7 +6127,7 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .mission-brief-window,
 :root[data-theme='dark'] .mission-brief-chip {
-  background: rgba(24, 38, 48, 0.55);
+  background: rgba(24, 38, 48, 0.72);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border-color: rgba(43, 57, 70, 0.4);
@@ -6136,7 +6136,7 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .planner-view-toggle {
   border-color: rgba(43, 57, 70, 0.4);
-  background: rgba(24, 38, 48, 0.55);
+  background: rgba(24, 38, 48, 0.72);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -6765,7 +6765,7 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .gear-item {
   border-color: rgba(43, 57, 70, 0.35);
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -6901,7 +6901,7 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .field-brief-primary {
   border-color: rgba(43, 57, 70, 0.4);
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
@@ -6922,7 +6922,7 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .field-brief-glance-item {
   border-color: rgba(43, 57, 70, 0.35);
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -7431,7 +7431,7 @@ button.collapsible-card-header:focus-visible {
 /* ── Field brief abort triggers ── */
 :root[data-theme='dark'] .field-brief-abort {
   border-color: #7b4548;
-  background: rgba(58, 35, 38, 0.55);
+  background: rgba(58, 35, 38, 0.72);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }

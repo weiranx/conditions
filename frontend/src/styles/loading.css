@@ -5,7 +5,7 @@
   padding: 16px 18px;
   border-radius: 16px;
   border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.65);
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
@@ -13,7 +13,7 @@
 
 .empty-state {
   border-style: dashed;
-  background: rgba(251, 248, 240, 0.6);
+  background: rgba(251, 248, 240, 0.78);
 }
 
 .empty-state h3 {
@@ -39,7 +39,7 @@
   gap: 4px;
   text-align: left;
   border-style: solid;
-  background: rgba(246, 241, 230, 0.5);
+  background: rgba(246, 241, 230, 0.68);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -64,7 +64,7 @@
   overflow: hidden;
   background:
     radial-gradient(120% 100% at 0% 0%, rgba(141, 196, 166, 0.12) 0%, rgba(141, 196, 166, 0) 56%),
-    rgba(255, 253, 248, 0.65);
+    rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
@@ -74,7 +74,7 @@
   height: 78px;
   border-radius: 12px;
   border: 1px solid rgba(213, 207, 191, 0.4);
-  background: rgba(234, 243, 247, 0.55);
+  background: rgba(234, 243, 247, 0.72);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   overflow: hidden;
@@ -183,7 +183,7 @@
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(217, 199, 146, 0.45);
-  background: rgba(247, 241, 223, 0.55);
+  background: rgba(247, 241, 223, 0.72);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -202,7 +202,7 @@
 
 .error-banner {
   border-color: rgba(200, 68, 68, 0.36);
-  background: rgba(255, 245, 244, 0.6);
+  background: rgba(255, 245, 244, 0.78);
   display: grid;
   gap: 8px;
 }
@@ -232,13 +232,13 @@
 :root[data-theme='dark'] .forecast-loading {
   background:
     radial-gradient(120% 100% at 0% 0%, rgba(94, 143, 173, 0.15) 0%, rgba(94, 143, 173, 0) 56%),
-    rgba(22, 32, 41, 0.55);
+    rgba(22, 32, 41, 0.78);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
 
 :root[data-theme='dark'] .inline-loading-state {
-  background: rgba(26, 39, 49, 0.5);
+  background: rgba(26, 39, 49, 0.7);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border-color: rgba(43, 57, 70, 0.4);
@@ -254,7 +254,7 @@
 
 :root[data-theme='dark'] .forecast-loading-sky {
   border-color: rgba(43, 57, 70, 0.4);
-  background: rgba(34, 56, 71, 0.5);
+  background: rgba(34, 56, 71, 0.68);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -287,7 +287,7 @@
 
 :root[data-theme='dark'] .forecast-loading-wakeup {
   border-color: rgba(90, 77, 40, 0.5);
-  background: rgba(47, 42, 31, 0.55);
+  background: rgba(47, 42, 31, 0.72);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
