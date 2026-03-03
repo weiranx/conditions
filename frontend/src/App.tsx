@@ -7565,7 +7565,14 @@ function App() {
               )}
 
               {routeLoading && (
-                <div className="route-loading">Analyzing route conditions...</div>
+                <div className="route-loading">
+                  <div className="route-loading-dots">
+                    <span /><span /><span />
+                  </div>
+                  <div className="route-loading-label">
+                    {routeAnalysis === null && routeSuggestions ? 'Running safety checks along route...' : 'Fetching routes...'}
+                  </div>
+                </div>
               )}
 
               {routeError && (
