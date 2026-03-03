@@ -1,5 +1,8 @@
 const { normalizeHttpUrl } = require('./url-utils');
 const { parseIsoTimeToMs, findClosestTimeIndex, withExplicitTimezone } = require('./time');
+const { createCache, normalizeCoordKey } = require('./cache');
+
+const airQualityCache = createCache({ name: 'air-quality', ttlMs: 30 * 60 * 1000, staleTtlMs: 30 * 60 * 1000, maxEntries: 100 });
 
 const ALERT_SEVERITY_RANK = {
   unknown: 0,
@@ -265,15 +268,18 @@ const createAlertsService = ({ fetchWithTimeout }) => {
   };
 
   const fetchAirQualityData = async (lat, lon, targetForecastTimeIso, fetchOptions) => {
-    const aqiRes = await fetchWithTimeout(
-      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&timezone=UTC`,
-      fetchOptions,
-    );
-    if (!aqiRes.ok) {
-      throw new Error(`Open-Meteo air quality request failed with status ${aqiRes.status}`);
-    }
+    const cacheKey = normalizeCoordKey(lat, lon);
+    const aqiJson = await airQualityCache.getOrFetch(cacheKey, async () => {
+      const aqiRes = await fetchWithTimeout(
+        `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&timezone=UTC`,
+        fetchOptions,
+      );
+      if (!aqiRes.ok) {
+        throw new Error(`Open-Meteo air quality request failed with status ${aqiRes.status}`);
+      }
+      return aqiRes.json();
+    });
 
-    const aqiJson = await aqiRes.json();
     const hourly = aqiJson?.hourly || {};
     const timeArray = Array.isArray(hourly?.time) ? hourly.time : [];
     if (!timeArray.length) {

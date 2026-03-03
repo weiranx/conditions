@@ -1,3 +1,5 @@
+const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
+
 const withTimeout = (promise, ms, label) =>
   Promise.race([
     promise,
@@ -5,6 +7,10 @@ const withTimeout = (promise, ms, label) =>
       setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
     ),
   ]);
+
+const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 100 });
+const waypointCache = createCache({ name: 'waypoints', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 200 });
+const nominatimGeocodeCache = createCache({ name: 'nominatim-geocode', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 500 });
 
 const pick = (obj, keys) => {
   if (!obj || typeof obj !== 'object') return {};
@@ -50,9 +56,10 @@ const haversineKm = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// Geocode a waypoint name near the peak using Nominatim, return { lat, lon } or null
+// Geocode a waypoint name near the peak using Nominatim (cached 24h), return { lat, lon } or null
 const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHeaders) => {
-  try {
+  const cacheKey = `${normalizeTextKey(name)}|${normalizeCoordKey(peakLat, peakLon)}`;
+  return nominatimGeocodeCache.getOrFetch(cacheKey, async () => {
     const viewbox = `${peakLon - 0.5},${peakLat + 0.5},${peakLon + 0.5},${peakLat - 0.5}`;
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=us&limit=3&bounded=1&viewbox=${viewbox}`;
     const res = await fetchWithTimeout(url, { headers: fetchHeaders });
@@ -60,7 +67,6 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
     const results = await res.json();
     if (!results.length) return null;
 
-    // Pick the closest result to the peak
     let best = null;
     let bestDist = Infinity;
     for (const r of results) {
@@ -74,9 +80,7 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
       return { lat: parseFloat(best.lat), lon: parseFloat(best.lon) };
     }
     return null;
-  } catch {
-    return null;
-  }
+  }).catch(() => null);
 };
 
 const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders }) => {
@@ -88,13 +92,16 @@ const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetc
     }
 
     try {
-      const text = await askClaude(
-        `List all well-known hiking, climbing, and scrambling routes for ${peak} near coordinates (${lat}, ${lon}) in the United States. Include 3 routes covering a range of difficulty levels.
+      const suggestCacheKey = `${normalizeTextKey(peak)}|${normalizeCoordKey(lat, lon)}`;
+      const routes = await routeSuggestionsCache.getOrFetch(suggestCacheKey, async () => {
+        const text = await askClaude(
+          `List all well-known hiking, climbing, and scrambling routes for ${peak} near coordinates (${lat}, ${lon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-        { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
-      );
-      const routes = parseJsonArrayFromClaude(text);
+          { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
+        );
+        return parseJsonArrayFromClaude(text);
+      });
       return res.json(routes);
     } catch (err) {
       console.error('[route-suggestions] error:', err.message);
@@ -111,20 +118,25 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     }
 
     try {
-      // Step 1: Get waypoints from Claude
-      const waypointText = await withTimeout(askClaude(
-        `Return 4-5 key waypoints for the "${route}" on ${peak} near (${lat}, ${lon}).
+      // Step 1: Get waypoints from Claude (cached 24h per peak+route)
+      const wpCacheKey = `${normalizeTextKey(peak)}|${normalizeTextKey(route)}|${normalizeCoordKey(lat, lon)}`;
+      const waypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
+        const waypointText = await withTimeout(askClaude(
+          `Return 4-5 key waypoints for the "${route}" on ${peak} near (${lat}, ${lon}).
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-        { maxTokens: 512, model: 'claude-haiku-4-5-20251001' }
-      ), 20000, 'Waypoint lookup');
-      const waypoints = parseJsonArrayFromClaude(waypointText);
+          { maxTokens: 512, model: 'claude-haiku-4-5-20251001' }
+        ), 20000, 'Waypoint lookup');
+        return parseJsonArrayFromClaude(waypointText);
+      });
+      // Clone so summit pinning doesn't mutate cached array
+      const waypointsCopy = waypoints.map((wp) => ({ ...wp }));
 
       // Pin the last waypoint (summit) to the user's actual peak coordinates
       // so its safety score matches the main report.
-      if (waypoints.length > 0) {
-        const summit = waypoints[waypoints.length - 1];
+      if (waypointsCopy.length > 0) {
+        const summit = waypointsCopy[waypointsCopy.length - 1];
         summit.lat = Number(lat);
         summit.lon = Number(lon);
       }
@@ -134,7 +146,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const peakLat = Number(lat);
       const peakLon = Number(lon);
       await Promise.all(
-        waypoints.slice(0, -1).map(async (wp) => {
+        waypointsCopy.slice(0, -1).map(async (wp) => {
           const geo = await geocodeWaypoint(wp.name, peakLat, peakLon, fetchWithTimeout, fetchHeaders);
           if (geo) {
             wp.lat = geo.lat;
@@ -146,7 +158,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       // Step 2: Run safety checks for each waypoint in parallel
       const safetyResults = await withTimeout(
         Promise.all(
-          waypoints.map((wp) =>
+          waypointsCopy.map((wp) =>
             invokeSafetyHandler({ lat: String(wp.lat), lon: String(wp.lon), date, start: start || '06:00', travel_window_hours: String(travel_window_hours || 12) })
           )
         ),
@@ -154,7 +166,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       );
 
       // Step 3: Strip each payload to key fields to keep synthesis prompt small
-      const summaries = waypoints.map((wp, i) => {
+      const summaries = waypointsCopy.map((wp, i) => {
         const p = safetyResults[i]?.payload || {};
         return {
           name: wp.name,
@@ -184,7 +196,7 @@ Write a concise route-wide briefing (3-5 short paragraphs) covering:
         { maxTokens: 700, model: 'claude-haiku-4-5-20251001' }
       ), 20000, 'Route synthesis');
 
-      return res.json({ waypoints, summaries, analysis });
+      return res.json({ waypoints: waypointsCopy, summaries, analysis });
     } catch (err) {
       console.error('[route-analysis] error:', err.message);
       return res.status(500).json({ error: 'Failed to analyze route: ' + err.message });

@@ -1,3 +1,5 @@
+const { createCache, normalizeCoordDateKey } = require('./cache');
+
 const CDEC_STATIONS = (() => {
   try {
     return require('../data/cdec-snow-stations.json');
@@ -23,10 +25,8 @@ const createSnowpackService = ({
   haversineKm,
   stationCacheTtlMs = 12 * 60 * 60 * 1000,
 }) => {
-  let snotelStationCache = {
-    fetchedAt: 0,
-    data: null,
-  };
+  const snotelStationCacheInstance = createCache({ name: 'snotel-stations', ttlMs: stationCacheTtlMs, staleTtlMs: stationCacheTtlMs, maxEntries: 1 });
+  const snowpackDataCache = createCache({ name: 'snowpack', ttlMs: 4 * 60 * 60 * 1000, staleTtlMs: 8 * 60 * 60 * 1000, maxEntries: 100 });
 
   const MAX_REASONABLE_NOHRSC_DEPTH_METERS = 20;
   const MAX_REASONABLE_NOHRSC_SWE_MM = 5000;
@@ -188,34 +188,24 @@ const createSnowpackService = ({
     return { status: 'at_average', percentOfAverage };
   };
 
-  const getSnotelStations = async (fetchOptions) => {
-    const now = Date.now();
-    if (snotelStationCache.data && now - snotelStationCache.fetchedAt < stationCacheTtlMs) {
-      return snotelStationCache.data;
-    }
-
-    const stationRes = await fetchWithTimeout(
-      'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations?elements=WTEQ,SNWD,PREC&durations=DAILY&activeOnly=true',
-      fetchOptions,
-    );
-    if (!stationRes.ok) {
-      throw new Error(`AWDB station metadata request failed with status ${stationRes.status}`);
-    }
-    const stationJson = await stationRes.json();
-    const filtered = Array.isArray(stationJson)
-      ? stationJson.filter((station) =>
-          ['SNTL', 'SNTLT', 'MSNT'].includes(String(station?.networkCode || '').toUpperCase()) &&
-          Number.isFinite(Number(station?.latitude)) &&
-          Number.isFinite(Number(station?.longitude)),
-        )
-      : [];
-
-    snotelStationCache = {
-      fetchedAt: now,
-      data: filtered,
-    };
-    return filtered;
-  };
+  const getSnotelStations = (fetchOptions) =>
+    snotelStationCacheInstance.getOrFetch('global', async () => {
+      const stationRes = await fetchWithTimeout(
+        'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations?elements=WTEQ,SNWD,PREC&durations=DAILY&activeOnly=true',
+        fetchOptions,
+      );
+      if (!stationRes.ok) {
+        throw new Error(`AWDB station metadata request failed with status ${stationRes.status}`);
+      }
+      const stationJson = await stationRes.json();
+      return Array.isArray(stationJson)
+        ? stationJson.filter((station) =>
+            ['SNTL', 'SNTLT', 'MSNT'].includes(String(station?.networkCode || '').toUpperCase()) &&
+            Number.isFinite(Number(station?.latitude)) &&
+            Number.isFinite(Number(station?.longitude)),
+          )
+        : [];
+    });
 
   const findNearestSnotelStation = (lat, lon, stations, maxDistanceKm = 140) => {
     if (!Array.isArray(stations) || !stations.length) {
@@ -401,7 +391,7 @@ const createSnowpackService = ({
     };
   };
 
-  const fetchSnowpackData = async (lat, lon, selectedDate, fetchOptions) => {
+  const _fetchSnowpackDataUncached = async (lat, lon, selectedDate, fetchOptions) => {
     const targetDate = getSnotelTargetDate(selectedDate);
     const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -HISTORICAL_FETCH_LOOKBACK_DAYS);
     const todayIso = formatIsoDateUtc(new Date());
@@ -574,6 +564,11 @@ const createSnowpackService = ({
       cdec: cdecData,
       historical: snotelData?.historical || null,
     };
+  };
+
+  const fetchSnowpackData = (lat, lon, selectedDate, fetchOptions) => {
+    const key = normalizeCoordDateKey(lat, lon, selectedDate || 'today');
+    return snowpackDataCache.getOrFetch(key, () => _fetchSnowpackDataUncached(lat, lon, selectedDate, fetchOptions));
   };
 
   return {

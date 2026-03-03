@@ -1,8 +1,9 @@
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const cache = new Map();
+const { createCache } = require('../utils/cache');
 
 const SYSTEM_PROMPT =
   'You are a backcountry conditions analyst. Write a 2-3 sentence actionable field brief. Be direct, specific, and focus on the most important decision factors. Do not use markdown formatting.';
+
+const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, staleTtlMs: 60 * 60 * 1000, maxEntries: 200 });
 
 function buildCacheKey({ score, primaryHazard, decisionLevel, factors }) {
   const topFactorNames = (factors || [])
@@ -11,13 +12,6 @@ function buildCacheKey({ score, primaryHazard, decisionLevel, factors }) {
     .filter(Boolean)
     .join(',');
   return `${score}|${primaryHazard}|${decisionLevel}|${topFactorNames}`;
-}
-
-function pruneCache() {
-  const now = Date.now();
-  for (const [key, entry] of cache) {
-    if (now - entry.ts > CACHE_TTL_MS) cache.delete(key);
-  }
 }
 
 const registerAiBriefRoute = ({ app, askClaude }) => {
@@ -30,10 +24,9 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
 
     const cacheKey = buildCacheKey({ score, primaryHazard, decisionLevel, factors });
 
-    pruneCache();
-    const cached = cache.get(cacheKey);
+    const cached = aiBriefCache.get(cacheKey);
     if (cached) {
-      return res.json({ narrative: cached.narrative, cached: true });
+      return res.json({ narrative: cached.value, cached: true });
     }
 
     const topFactorsText = (factors || [])
@@ -56,12 +49,11 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
         system: SYSTEM_PROMPT,
       });
 
-      cache.set(cacheKey, { narrative, ts: Date.now() });
+      aiBriefCache.set(cacheKey, narrative);
       return res.json({ narrative, cached: false });
     } catch (err) {
       const msg = err.message || 'AI service unavailable';
-      const status = msg.includes('ANTHROPIC_API_KEY') ? 503 : 503;
-      return res.status(status).json({ error: msg });
+      return res.status(503).json({ error: msg });
     }
   });
 };

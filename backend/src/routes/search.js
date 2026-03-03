@@ -1,3 +1,5 @@
+const { createCache, normalizeTextKey } = require('../utils/cache');
+
 const normalizeSearchText = (value = '') =>
   String(value)
     .toLowerCase()
@@ -5,6 +7,8 @@ const normalizeSearchText = (value = '') =>
     .replace(/\bmt\b/g, 'mount')
     .replace(/\s+/g, ' ')
     .trim();
+
+const nominatimSearchCache = createCache({ name: 'nominatim-search', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 300 });
 
 const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peaks }) => {
   app.get('/api/search', async (req, res) => {
@@ -24,20 +28,22 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
 
     try {
       const fetchOptions = { headers: defaultFetchHeaders };
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=5&addressdetails=1`;
-      const response = await fetchWithTimeout(url, fetchOptions);
-      if (!response.ok) {
-        throw new Error(`Nominatim request failed with status ${response.status}`);
-      }
-
-      const payload = await response.json();
-      const apiResults = payload.map((item) => ({
-        name: item.display_name,
-        lat: parseFloat(item.lat),
-        lon: parseFloat(item.lon),
-        type: item.type,
-        class: item.class,
-      }));
+      const searchCacheKey = normalizeTextKey(query);
+      const apiResults = await nominatimSearchCache.getOrFetch(searchCacheKey, async () => {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=5&addressdetails=1`;
+        const response = await fetchWithTimeout(url, fetchOptions);
+        if (!response.ok) {
+          throw new Error(`Nominatim request failed with status ${response.status}`);
+        }
+        const payload = await response.json();
+        return payload.map((item) => ({
+          name: item.display_name,
+          lat: parseFloat(item.lat),
+          lon: parseFloat(item.lon),
+          type: item.type,
+          class: item.class,
+        }));
+      });
 
       const combined = [...localMatches, ...apiResults];
       const uniqueResults = combined

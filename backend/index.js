@@ -99,6 +99,7 @@ const { logReportRequest, registerReportLogsRoute } = require('./src/routes/repo
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { askClaude } = require('./src/utils/ai-client');
+const { createCache, normalizeCoordKey, normalizeCoordDateKey } = require('./src/utils/cache');
 const POPULAR_PEAKS = require('./peaks.json');
 
 const avyLog = (...args) => {
@@ -1174,6 +1175,11 @@ let avalancheMapLayerCache = {
   data: null,
 };
 
+const noaaPointsCache = createCache({ name: 'noaa-points', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 48 * 60 * 60 * 1000, maxEntries: 200 });
+const elevationCache = createCache({ name: 'elevation', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 500 });
+const solarCache = createCache({ name: 'solar', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 300 });
+const noaaForecastCache = createCache({ name: 'noaa-forecast', ttlMs: 20 * 60 * 1000, staleTtlMs: 25 * 60 * 1000, maxEntries: 100 });
+
 const formatIsoDateUtc = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return null;
@@ -1193,7 +1199,7 @@ const shiftIsoDateUtc = (isoDate, deltaDays) => {
   return formatIsoDateUtc(base);
 };
 
-const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
+const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
   try {
     const usgsRes = await fetchWithTimeout(
       `https://epqs.nationalmap.gov/v1/json?x=${lon}&y=${lat}&units=Feet&wkid=4326`,
@@ -1228,6 +1234,11 @@ const fetchObjectiveElevationFt = async (lat, lon, fetchOptions) => {
   }
 
   return { elevationFt: null, source: null };
+};
+
+const fetchObjectiveElevationFt = (lat, lon, fetchOptions) => {
+  const key = normalizeCoordKey(lat, lon);
+  return elevationCache.getOrFetch(key, () => _fetchObjectiveElevationFtUncached(lat, lon, fetchOptions));
 };
 
 const getAvalancheMapLayer = async (fetchOptions) => {
@@ -1442,10 +1453,13 @@ const safetyHandler = async (req, res) => {
     const avyMapLayerPromise = getAvalancheMapLayer(fetchOptions);
 
     try {
-      // 1. Get NOAA grid data
-      const pointsRes = await fetchWithTimeout(`https://api.weather.gov/points/${parsedLat},${parsedLon}`, fetchOptions);
-      if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
-      const pointsData = await pointsRes.json();
+      // 1. Get NOAA grid data (cached 24h)
+      const pointsCacheKey = normalizeCoordKey(parsedLat, parsedLon);
+      const pointsData = await noaaPointsCache.getOrFetch(pointsCacheKey, async () => {
+        const pointsRes = await fetchWithTimeout(`https://api.weather.gov/points/${parsedLat},${parsedLon}`, fetchOptions);
+        if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
+        return pointsRes.json();
+      });
       const pointElevationMeters = Number(pointsData?.properties?.elevation?.value);
       let objectiveElevationFt = Number.isFinite(pointElevationMeters) ? Math.round(pointElevationMeters * FT_PER_METER) : null;
       let objectiveElevationSource = Number.isFinite(pointElevationMeters) ? 'NOAA points metadata' : null;
@@ -1457,10 +1471,12 @@ const safetyHandler = async (req, res) => {
 
       const hourlyForecastUrl = pointsData.properties.forecastHourly;
 
-      // 2. Get Forecasts
-      const hourlyRes = await fetchWithTimeout(hourlyForecastUrl, fetchOptions);
-      if (!hourlyRes.ok) throw new Error(`NOAA hourly forecast failed: ${hourlyRes.status}`);
-      const hourlyData = await hourlyRes.json();
+      // 2. Get Forecasts (cached 20m)
+      const hourlyData = await noaaForecastCache.getOrFetch(hourlyForecastUrl, async () => {
+        const hourlyRes = await fetchWithTimeout(hourlyForecastUrl, fetchOptions);
+        if (!hourlyRes.ok) throw new Error(`NOAA hourly forecast failed: ${hourlyRes.status}`);
+        return hourlyRes.json();
+      });
 
       const periods = hourlyData?.properties?.periods || [];
       if (!periods.length) throw new Error('No hourly forecast data available for this location');
@@ -1672,20 +1688,18 @@ const safetyHandler = async (req, res) => {
         }
       }
 
-      // 2.5 Get Solar Data
+      // 2.5 Get Solar Data (cached 7d per coord+date)
       try {
         const solarDate = selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
-        const solarRes = await fetchWithTimeout(`https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`, fetchOptions);
-        if (solarRes.ok) {
+        const solarCacheKey = normalizeCoordDateKey(parsedLat, parsedLon, solarDate);
+        const cachedSolar = await solarCache.getOrFetch(solarCacheKey, async () => {
+          const solarRes = await fetchWithTimeout(`https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`, fetchOptions);
+          if (!solarRes.ok) return null;
           const solarJson = await solarRes.json();
-          if (solarJson.status === "OK") {
-            solarData = {
-              sunrise: solarJson.results.sunrise,
-              sunset: solarJson.results.sunset,
-              dayLength: solarJson.results.day_length
-            };
-          }
-        }
+          if (solarJson.status !== 'OK') return null;
+          return { sunrise: solarJson.results.sunrise, sunset: solarJson.results.sunset, dayLength: solarJson.results.day_length };
+        });
+        if (cachedSolar) solarData = cachedSolar;
       } catch (e) {
         console.error("Solar API error:", e);
       }
