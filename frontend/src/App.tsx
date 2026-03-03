@@ -7620,13 +7620,6 @@ function App() {
                   <div className="route-analysis-text">
                     {renderSimpleMarkdown(routeAnalysis.analysis)}
                   </div>
-                  <button
-                    type="button"
-                    className="route-picker-cancel"
-                    onClick={() => { setRouteAnalysis(null); setRouteSuggestions(null); }}
-                  >
-                    Back to summit-only view
-                  </button>
                 </div>
               )}
             </div>
