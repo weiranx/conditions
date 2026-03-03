@@ -170,6 +170,8 @@ input {
 }
 
 .home-search-wrapper {
+  position: relative;
+  z-index: 50;
   max-width: 520px;
   margin: 20px auto 0;
   width: 100%;
