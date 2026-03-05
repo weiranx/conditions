@@ -36,7 +36,7 @@ Built-in controls:
 | API rate limiting | Protects `/api/*` from high-volume polling (configurable via env) |
 | Request tracing (`X-Request-Id`) | Unique ID per request for log correlation |
 | Upstream timeout handling | Prevents hung requests from blocking the event loop |
-| Avalanche map-layer caching | Reduces repeated calls to upstream polygon feed |
+| Tiered in-memory caching | TTL + stale-while-revalidate caching across all upstream API calls (weather, avalanche, snowpack, AI brief, etc.) |
 | Graceful shutdown | Handles `SIGINT`, `SIGTERM`, and uncaught exceptions cleanly |
 | Report-logs access control | `LOGS_SECRET` env var gates `GET /api/report-logs`; requests without a matching `Authorization: Bearer` header receive `401`. Leave blank to allow open access (not recommended in production). |
 

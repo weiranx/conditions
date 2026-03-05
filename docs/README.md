@@ -1,4 +1,4 @@
-# Backcountry Conditions Documentation
+# SummitSafe Documentation
 
 This folder contains technical documentation for development and operations.
 
@@ -8,6 +8,7 @@ This folder contains technical documentation for development and operations.
 - `api.md`: HTTP endpoint contracts and response model
 - `development.md`: Local setup, scripts, and engineering workflow
 - `operations.md`: Production deployment, health, and troubleshooting
+- `vps-setup.md`: DigitalOcean droplet provisioning and first deploy
 
 ## Suggested Reading Order
 
@@ -16,3 +17,4 @@ This folder contains technical documentation for development and operations.
 3. `api.md`
 4. `development.md`
 5. `operations.md`
+6. `vps-setup.md`

@@ -59,20 +59,32 @@ Browser
 - Settings persistence (theme, units, time style, decision thresholds)
 - Multi-view navigation (`home`, `planner`, `settings`, `status`, `trip`)
 - Report actions (print report, SAT one-liner copy, team brief copy)
+- Route analysis UI with route selection and multi-waypoint briefing display
+- AI field brief on-demand narrative
+- Wind loading / aspect elevation rose visualization
+- Collapsible card UI with preview summaries and modal expand
 - URL state encoding for shareable planner/trip links
 
 **Module layout:**
 
 | Path | Purpose |
 |---|---|
-| `frontend/src/App.tsx` | Main orchestration layer for UI state and rendering (~8500 lines) |
+| `frontend/src/App.tsx` | Main orchestration layer for UI state and rendering |
 | `frontend/src/app/constants.ts` | App-wide constants |
 | `frontend/src/app/types.ts` | Domain TypeScript interfaces |
 | `frontend/src/app/core.ts` | Formatting and calculation utilities |
+| `frontend/src/app/preferences.ts` | User preference management |
+| `frontend/src/app/planner-helpers.ts` | Planner-specific helper functions |
+| `frontend/src/app/date-time-inputs.ts` | Date/time input handling |
+| `frontend/src/app/text-utils.ts` | Text formatting utilities (markdown rendering, etc.) |
 | `frontend/src/app/map-components.tsx` | Map-related components |
 | `frontend/src/lib/api-client.ts` | API calls + retry logic |
 | `frontend/src/lib/search.ts` | Local peak catalog + Nominatim integration |
-| `frontend/src/components/planner/` | Extracted UI components (SearchBox, cards) |
+| `frontend/src/components/planner/SearchBox.tsx` | Objective search input |
+| `frontend/src/components/planner/CollapsibleCard.tsx` | Card container with collapse/expand modal |
+| `frontend/src/components/planner/ForecastLoading.tsx` | Loading state component |
+| `frontend/src/components/planner/CardHelpHint.tsx` | Contextual help hints for cards |
+| `frontend/src/components/planner/cards/` | Domain-specific cards (avalanche forecast, wind loading, travel window, aspect rose) |
 
 **User preferences** are persisted under `summitsafe:user-preferences:v1` in browser `localStorage`. Unit conversions (temperature, elevation, wind, time) are display-side only — the backend always returns SI-adjacent values.
 
@@ -87,7 +99,11 @@ Browser
 - Avalanche zone matching and bulletin ingestion
 - NWS alert filtering by travel window
 - Air quality, precipitation, snowpack, fire-risk, and heat-risk enrichment
-- Safety score synthesis and confidence-weighted explanation generation
+- Safety score synthesis with temporal weighting, combined hazard detection, and confidence-weighted explanation generation
+- Claude-powered route suggestions and multi-waypoint route analysis
+- On-demand AI field brief generation
+- Report logging with access-controlled retrieval
+- Tiered in-memory caching across all upstream API calls
 - Search, SAT one-liner, and health route registration
 
 **Route modules:**
@@ -97,6 +113,9 @@ Browser
 | `backend/src/routes/safety.js` | `GET /api/safety` |
 | `backend/src/routes/sat-oneliner.js` | `GET /api/sat-oneliner` |
 | `backend/src/routes/search.js` | `GET /api/search` |
+| `backend/src/routes/route-analysis.js` | `GET /api/route-suggestions`, `POST /api/route-analysis` |
+| `backend/src/routes/ai-brief.js` | `POST /api/ai-brief` |
+| `backend/src/routes/report-logs.js` | `GET /api/report-logs`, `POST /api/report-logs` |
 | `backend/src/routes/health.js` | `GET /healthz`, `/health`, `/api/healthz`, `/api/health` |
 
 **Server bootstrap modules:**
@@ -120,6 +139,15 @@ Browser
 | `heat-risk.js` | Heat-risk signal synthesis |
 | `gear-suggestions.js` | Gear focus recommendation logic |
 | `time.js` | Time zone and date utilities |
+| `cache.js` | Tiered in-memory caching with TTL and stale-while-revalidate |
+| `ai-client.js` | Claude/Anthropic API client wrapper |
+| `weather-data.js` | Weather data fetching and assembly |
+| `weather-normalizers.js` | Weather field normalization and unit conversion |
+| `precipitation.js` | Precipitation data fetching and rolling totals |
+| `alerts.js` | NWS alert fetching and filtering |
+| `visibility-risk.js` | Visibility risk signal synthesis |
+| `url-utils.js` | URL construction helpers |
+| `sat-oneliner.js` | SAT one-liner text generation logic |
 
 Core domain and orchestration logic remains in `backend/index.js`.
 
@@ -134,6 +162,7 @@ Core domain and orchestration logic remains in `backend/index.js`.
 | CORS allowlist | Origin-based access control, configured per environment |
 | Rate limiter | Protects `/api/*` routes from abuse |
 | Request ID injection | `X-Request-Id` header on every response for log correlation |
+| Tiered in-memory cache | TTL + stale-while-revalidate caching for all upstream API calls |
 | Graceful shutdown | `SIGINT` / `SIGTERM` handlers + uncaught exception handling |
 
 ---

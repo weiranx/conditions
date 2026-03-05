@@ -258,6 +258,56 @@ Array of result objects, each with:
 
 ---
 
+## `POST /api/ai-brief`
+
+Generates an on-demand AI narrative field brief summarizing current conditions. Uses Claude to produce a 2-3 sentence actionable summary. Responses are cached by score/hazard/decision key.
+
+### Request Body (JSON)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `score` | number | Yes | Safety risk score (0-100) |
+| `primaryHazard` | string | Yes | Primary hazard identifier |
+| `decisionLevel` | string | Yes | Decision level (e.g. `"go"`, `"caution"`, `"no-go"`) |
+| `confidence` | number | No | Score confidence percentage |
+| `factors` | array | No | Array of risk factor objects with `hazard`/`name` and `impact` |
+| `context` | string | No | Additional context text for the AI prompt |
+
+### Response Shape
+
+| Field | Description |
+|---|---|
+| `narrative` | AI-generated field brief text (2-3 sentences) |
+| `cached` | `true` if the response was served from cache |
+
+**Note:** Requires `ANTHROPIC_API_KEY` to be set.
+
+---
+
+## `GET /api/report-logs`
+
+Retrieves logged report entries from the last 7 days, newest first. Access-controlled via `LOGS_SECRET`.
+
+### Authentication
+
+Requires `Authorization: Bearer <LOGS_SECRET>` header. Returns `403` if `LOGS_SECRET` is not configured on the server, `401` if the token is missing or invalid.
+
+### Response Shape
+
+Array of log entry objects, each containing the fields from the original report request plus a `timestamp` field.
+
+---
+
+## `POST /api/report-logs`
+
+Logs a report entry. Called by the frontend after generating a safety report. Entries with no `name` field are silently ignored.
+
+### Request Body (JSON)
+
+The request body is stored as-is. At minimum, include a `name` field (the objective name) for the entry to be recorded.
+
+---
+
 ## Health Endpoints
 
 All four aliases return the same response:

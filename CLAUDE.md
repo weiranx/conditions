@@ -40,11 +40,11 @@ Two-tier: React + Vite SPA (`frontend/`) + Express API (`backend/`).
 ### Key files
 
 - **`backend/index.js`** — 4000+ line monolith: orchestrates the full `/api/safety` pipeline, all upstream provider calls, safety score synthesis, and explanation generation. All new backend logic typically goes here.
-- **`backend/src/utils/`** — Extracted helpers: `http-client.js`, `avalanche-detail.js`, `snowpack.js`, `wind.js`, `terrain-condition.js`, `fire-risk.js`, `heat-risk.js`, `gear-suggestions.js`, `time.js`.
-- **`backend/src/routes/`** — Thin route handlers: `safety.js`, `search.js`, `sat-oneliner.js`, `health.js`.
+- **`backend/src/utils/`** — Extracted helpers: `http-client.js`, `avalanche-detail.js`, `snowpack.js`, `wind.js`, `terrain-condition.js`, `fire-risk.js`, `heat-risk.js`, `gear-suggestions.js`, `time.js`, `cache.js`, `ai-client.js`, `weather-data.js`, `weather-normalizers.js`, `precipitation.js`, `alerts.js`, `visibility-risk.js`, `url-utils.js`, `sat-oneliner.js`.
+- **`backend/src/routes/`** — Thin route handlers: `safety.js`, `search.js`, `sat-oneliner.js`, `route-analysis.js`, `ai-brief.js`, `report-logs.js`, `health.js`.
 - **`frontend/src/App.tsx`** — 8500+ line monolith: all planner UI state, report card rendering, settings, URL sharing, print views.
-- **`frontend/src/app/`** — Extracted modules: `types.ts` (domain interfaces), `constants.ts`, `core.ts` (formatting + calculations), `map-components.tsx`.
-- **`frontend/src/components/planner/`** — Extracted UI components: `SearchBox.tsx`, card components.
+- **`frontend/src/app/`** — Extracted modules: `types.ts` (domain interfaces), `constants.ts`, `core.ts` (formatting + calculations), `preferences.ts`, `planner-helpers.ts`, `date-time-inputs.ts`, `text-utils.ts`, `map-components.tsx`.
+- **`frontend/src/components/planner/`** — Extracted UI components: `SearchBox.tsx`, `CollapsibleCard.tsx`, `ForecastLoading.tsx`, `CardHelpHint.tsx`, and domain-specific cards in `cards/` (avalanche forecast, wind loading, travel window, aspect rose).
 - **`frontend/src/lib/`** — `api-client.ts` (API calls + retry), `search.ts` (local peak catalog + Nominatim).
 
 ### `/api/safety` pipeline
