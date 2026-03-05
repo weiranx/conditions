@@ -298,6 +298,109 @@ input {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+/* ── Logs page ── */
+
+.logs-unlock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 24rem;
+  margin-top: 0.5rem;
+}
+
+.logs-unlock-form label {
+  font-weight: 600;
+}
+
+.logs-unlock-form input {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(215, 210, 194, 0.45);
+  font-size: 1rem;
+  font-family: var(--font-main);
+  background: rgba(255, 253, 248, 0.7);
+}
+
+.logs-unlock-error {
+  color: var(--accent-red, #e55);
+  margin: 0;
+}
+
+.logs-status-msg {
+  padding: 1rem 0;
+  opacity: 0.6;
+}
+
+.logs-error-msg {
+  opacity: 1;
+  color: var(--accent-red, #e55);
+}
+
+.logs-meta {
+  font-size: 0.8rem;
+  opacity: 0.6;
+  margin: 0 0 0.5rem;
+}
+
+.logs-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+}
+
+.logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.logs-table thead tr {
+  border-bottom: 2px solid rgba(215, 210, 194, 0.5);
+  text-align: left;
+}
+
+.logs-table th {
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.logs-table td {
+  padding: 0.4rem 0.75rem;
+}
+
+.logs-table tbody tr {
+  border-bottom: 1px solid rgba(215, 210, 194, 0.25);
+}
+
+.logs-row-alt {
+  background: rgba(130, 167, 145, 0.04);
+}
+
+.logs-cell-nowrap {
+  white-space: nowrap;
+}
+
+.logs-cell-mono {
+  font-family: var(--font-mono, monospace);
+}
+
+.logs-cell-ok {
+  color: var(--accent-green, #3a8);
+}
+
+.logs-cell-err {
+  color: var(--accent-red, #e55);
+}
+
+.logs-cell-ua {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-card {
   padding: 14px;
   border-radius: 16px;
@@ -6291,6 +6394,28 @@ button.collapsible-card-header:focus-visible {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
+:root[data-theme='dark'] .logs-unlock-form input {
+  background: rgba(22, 32, 41, 0.6);
+  border-color: rgba(43, 57, 70, 0.45);
+  color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .logs-table-wrap {
+  border-color: rgba(43, 57, 70, 0.45);
+}
+
+:root[data-theme='dark'] .logs-table thead tr {
+  border-bottom-color: rgba(43, 57, 70, 0.6);
+}
+
+:root[data-theme='dark'] .logs-table tbody tr {
+  border-bottom-color: rgba(43, 57, 70, 0.3);
+}
+
+:root[data-theme='dark'] .logs-row-alt {
+  background: rgba(22, 32, 41, 0.3);
+}
+
 :root[data-theme='dark'] .route-loading {
   background: rgba(22, 32, 41, 0.78);
   border-color: rgba(43, 57, 70, 0.45);
@@ -8413,6 +8538,19 @@ button.collapsible-card-header:focus-visible {
   .settings-activity-switch {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .logs-table {
+    font-size: 0.78rem;
+  }
+
+  .logs-table th,
+  .logs-table td {
+    padding: 0.35rem 0.5rem;
+  }
+
+  .logs-unlock-form {
+    max-width: 100%;
   }
 
   .map-shell {

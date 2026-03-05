@@ -2111,12 +2111,12 @@ function LogsView({ onHome }: { onHome: () => void }) {
   }, [draft]);
 
   return (
-    <div className="settings-head" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <>
+      <div className="settings-head">
         <div>
           <div className="home-kicker">Backcountry Conditions</div>
           <h2>Report Logs</h2>
-          <p>All safety report requests received by the server since last restart. Auto-refreshes every 30 seconds.</p>
+          <p>All safety report requests received by the server. Auto-refreshes every 30 seconds.</p>
         </div>
         <div className="settings-nav">
           <button className="settings-btn" onClick={onHome}>
@@ -2127,9 +2127,9 @@ function LogsView({ onHome }: { onHome: () => void }) {
       {secretKey
         ? <ReportLogsTable secretKey={secretKey} onUnauthorized={handleUnauthorized} />
         : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '24rem' }}>
-            {rejected && <p style={{ color: 'var(--accent-red, #e55)', margin: 0 }}>Incorrect key — try again.</p>}
-            <label htmlFor="logs-key-input" style={{ fontWeight: 600 }}>Access key</label>
+          <form onSubmit={handleSubmit} className="logs-unlock-form">
+            {rejected && <p className="logs-unlock-error">Incorrect key — try again.</p>}
+            <label htmlFor="logs-key-input">Access key</label>
             <input
               id="logs-key-input"
               type="password"
@@ -2137,13 +2137,12 @@ function LogsView({ onHome }: { onHome: () => void }) {
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Enter access key"
               autoFocus
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color, #ccc)', fontSize: '1rem' }}
             />
-            <button type="submit" className="primary-btn" style={{ alignSelf: 'flex-start' }}>Unlock</button>
+            <button type="submit" className="primary-btn">Unlock</button>
           </form>
         )
       }
-    </div>
+    </>
   );
 }
 
@@ -2180,42 +2179,42 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
   }, [fetchLogs]);
 
   if (loading) {
-    return <p style={{ padding: '1rem', opacity: 0.6 }}>Loading logs…</p>;
+    return <p className="logs-status-msg">Loading logs…</p>;
   }
   if (error) {
-    return <p style={{ padding: '1rem', color: 'var(--accent-red, #e55)' }}>{error}</p>;
+    return <p className="logs-status-msg logs-error-msg">{error}</p>;
   }
   if (logs.length === 0) {
     return (
-      <div style={{ padding: '1rem', opacity: 0.7 }}>
+      <div className="logs-status-msg">
         <p>No report requests logged yet. Run a safety report to see entries here.</p>
-        {lastRefreshed && <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Last checked: {lastRefreshed.toLocaleTimeString()}</p>}
+        {lastRefreshed && <p className="logs-meta">Last checked: {lastRefreshed.toLocaleTimeString()}</p>}
       </div>
     );
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div className="logs-table-wrap">
       {lastRefreshed && (
-        <p style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', opacity: 0.6 }}>
+        <p className="logs-meta">
           {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · Last refreshed: {lastRefreshed.toLocaleTimeString()}
         </p>
       )}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+      <table className="logs-table">
         <thead>
-          <tr style={{ borderBottom: '1px solid var(--border-color, #ddd)', textAlign: 'left' }}>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Time</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Name</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Lat / Lon</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Date</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Start</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Status</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Score</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Partial</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Duration</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>IP</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>User-Agent</th>
-            <th style={{ padding: '0.5rem 0.75rem' }}>Link</th>
+          <tr>
+            <th>Time</th>
+            <th>Name</th>
+            <th>Lat / Lon</th>
+            <th>Date</th>
+            <th>Start</th>
+            <th>Status</th>
+            <th>Score</th>
+            <th>Partial</th>
+            <th>Duration</th>
+            <th>IP</th>
+            <th>User-Agent</th>
+            <th>Link</th>
           </tr>
         </thead>
         <tbody>
@@ -2224,23 +2223,23 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
               ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
               : null;
             return (
-              <tr key={i} style={{ borderBottom: '1px solid var(--border-color, #eee)', background: i % 2 === 0 ? 'var(--surface-alt, transparent)' : 'transparent' }}>
-                <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>{new Date(entry.timestamp).toLocaleString()}</td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.name ?? '—'}</td>
-                <td style={{ padding: '0.4rem 0.75rem', fontFamily: 'monospace' }}>
+              <tr key={i} className={i % 2 === 0 ? 'logs-row-alt' : ''}>
+                <td className="logs-cell-nowrap">{new Date(entry.timestamp).toLocaleString()}</td>
+                <td>{entry.name ?? '—'}</td>
+                <td className="logs-cell-mono">
                   {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
                 </td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.date ?? '—'}</td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.startTime ?? '—'}</td>
-                <td style={{ padding: '0.4rem 0.75rem', color: entry.statusCode === 200 ? 'var(--accent-green, green)' : 'var(--accent-red, red)' }}>
+                <td>{entry.date ?? '—'}</td>
+                <td>{entry.startTime ?? '—'}</td>
+                <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'}>
                   {entry.statusCode}
                 </td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.safetyScore != null ? entry.safetyScore : '—'}</td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>{entry.durationMs}ms</td>
-                <td style={{ padding: '0.4rem 0.75rem', fontFamily: 'monospace' }}>{entry.ip ?? '—'}</td>
-                <td style={{ padding: '0.4rem 0.75rem', maxWidth: '16rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.userAgent ?? undefined}>{entry.userAgent ?? '—'}</td>
-                <td style={{ padding: '0.4rem 0.75rem' }}>
+                <td>{entry.safetyScore != null ? entry.safetyScore : '—'}</td>
+                <td>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
+                <td>{entry.durationMs}ms</td>
+                <td className="logs-cell-mono">{entry.ip ?? '—'}</td>
+                <td className="logs-cell-ua" title={entry.userAgent ?? undefined}>{entry.userAgent ?? '—'}</td>
+                <td>
                   {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
                 </td>
               </tr>
