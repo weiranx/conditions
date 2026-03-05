@@ -96,5 +96,9 @@ export function persistUserPreferences(preferences: UserPreferences): void {
     return;
   }
 
-  window.localStorage.setItem(USER_PREFERENCES_KEY, JSON.stringify(preferences));
+  try {
+    window.localStorage.setItem(USER_PREFERENCES_KEY, JSON.stringify(preferences));
+  } catch {
+    // QuotaExceededError or SecurityError — silently ignore
+  }
 }

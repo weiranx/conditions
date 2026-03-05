@@ -39,6 +39,7 @@ import {
   ExternalLink,
   Sparkles,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
@@ -267,7 +268,11 @@ function writeStoredSuggestions(storageKey: string, items: Suggestion[], maxItem
     seen.add(key);
     deduped.push(normalized);
   });
-  window.localStorage.setItem(storageKey, JSON.stringify(deduped.slice(0, maxItems)));
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(deduped.slice(0, maxItems)));
+  } catch {
+    // QuotaExceededError or SecurityError — silently ignore
+  }
 }
 
 function mergeSuggestionBuckets(buckets: Suggestion[][], limit: number): Suggestion[] {
@@ -2325,7 +2330,14 @@ function App() {
     ),
   );
   const [mapStyle, setMapStyle] = useState<MapStyle>('topo');
-  const [mobileMapControlsExpanded, setMobileMapControlsExpanded] = useState(true);
+  const [mobileMapControlsExpanded, setMobileMapControlsExpanded] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('summitsafe:mobile-controls-expanded');
+      return stored === null ? true : stored === 'true';
+    } catch {
+      return true;
+    }
+  });
   const [mapFocusNonce, setMapFocusNonce] = useState(0);
   const [locatingUser, setLocatingUser] = useState(false);
   const lastLoadedSafetyKeyRef = useRef<string | null>(null);
@@ -6346,7 +6358,7 @@ function App() {
               <p>Preferences are saved in your browser and stay on this device.</p>
               <div className="settings-actions">
                 <button className="primary-btn" onClick={applyPreferencesToPlanner}>
-                  Apply Defaults To Planner
+                  Open Planner with These Settings
                 </button>
                 <button className="settings-btn settings-reset-btn" onClick={resetPreferences}>
                   Reset Built-in Defaults
@@ -6783,7 +6795,11 @@ function App() {
           <button
             type="button"
             className="mobile-map-controls-btn"
-            onClick={() => setMobileMapControlsExpanded((prev) => !prev)}
+            onClick={() => setMobileMapControlsExpanded((prev) => {
+              const next = !prev;
+              try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', String(next)); } catch { /* ignore */ }
+              return next;
+            })}
             aria-expanded={mobileMapControlsExpanded}
             aria-controls="map-actions-flat"
           >
@@ -7122,6 +7138,12 @@ function App() {
             </div>
           )}
 
+          {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
+            <div className={`visibility-banner visibility-banner-${weatherVisibilityPill}`} style={{ order: reportCardOrder.reportColumns }}>
+              <Eye size={14} /> Visibility risk: <strong>{weatherVisibilityRisk.level}</strong>{weatherVisibilityDetail ? ` — ${weatherVisibilityDetail}` : ''}
+            </div>
+          )}
+
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
             <div className="report-column">
               <CollapsibleCard
@@ -7409,7 +7431,7 @@ function App() {
                         {check.detail && <small className="check-item-detail">{localizeUnitText(check.detail)}</small>}
                         {!check.ok && check.action && <small className="check-item-action">{localizeUnitText(check.action)}</small>}
                       </div>
-                      <span className={`check-item-status ${check.ok ? 'ok' : 'warn'}`}>{check.ok ? 'PASS' : 'ATTN'}</span>
+                      <span className={`check-item-status ${check.ok ? 'ok' : 'warn'}`}>{check.ok ? 'PASS' : 'FAIL'}</span>
                     </div>
                   ))}
                 </div>
@@ -7437,11 +7459,19 @@ function App() {
                 >
                 {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 ? (
                   <ul className="score-trace-list">
-                    {safetyData.safety.factors
-                      .slice()
-                      .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)))
-                      .slice(0, 5)
-                      .map((factor, idx) => (
+                    {(() => {
+                      const sorted = safetyData.safety.factors
+                        .slice()
+                        .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
+                      const dataGapKeywords = /unavailable|unknown|no data|coverage|data gap/i;
+                      const dataGapFactors = sorted.filter((f) => dataGapKeywords.test(f.hazard || '') || dataGapKeywords.test(f.message || ''));
+                      const nonGapFactors = sorted.filter((f) => !dataGapKeywords.test(f.hazard || '') && !dataGapKeywords.test(f.message || ''));
+                      const hasGap = dataGapFactors.length > 0;
+                      const topFactors = hasGap
+                        ? [...nonGapFactors.slice(0, 4), dataGapFactors[0]]
+                        : nonGapFactors.slice(0, 5);
+                      return topFactors;
+                    })().map((factor, idx) => (
                         <li key={`${factor.hazard || 'factor'}-${idx}`}>
                           <span className="score-trace-hazard">{factor.hazard || 'Factor'}</span>
                           <span className={`score-trace-impact ${(factor.impact || 0) >= 0 ? 'down' : 'up'}`}>
