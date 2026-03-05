@@ -60,6 +60,18 @@ export interface ApiFetchResult {
   requestId: string | null;
 }
 
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503]);
+const MAX_RETRIES = 2;
+const RETRY_DELAYS_MS = [1000, 2000];
+
+function isRetryableStatus(status: number): boolean {
+  return RETRYABLE_STATUS_CODES.has(status);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const attemptUrls = [buildApiUrl(normalizedPath), ...buildDevFallbackApiUrls(normalizedPath)];
@@ -68,25 +80,42 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
 
   for (let index = 0; index < attemptUrls.length; index += 1) {
     const requestUrl = attemptUrls[index];
-    try {
-      const response = await fetch(requestUrl, init);
-      const payload = await parseJsonFromResponse(response);
-      const shouldRetryEmpty500 = index < attemptUrls.length - 1;
-      if (shouldRetryEmpty500 && response.status === 500 && payload === null) {
-        sawEmptyProxy500 = true;
-        continue;
-      }
 
-      return {
-        response,
-        payload,
-        requestId: response.headers.get('x-request-id'),
-      };
-    } catch (error) {
-      lastError = error;
-      if (index < attemptUrls.length - 1) {
-        continue;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+      try {
+        const response = await fetch(requestUrl, init);
+        const payload = await parseJsonFromResponse(response);
+        const shouldRetryEmpty500 = index < attemptUrls.length - 1;
+        if (shouldRetryEmpty500 && response.status === 500 && payload === null) {
+          sawEmptyProxy500 = true;
+          break;
+        }
+
+        if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
+          await delay(RETRY_DELAYS_MS[attempt]);
+          continue;
+        }
+
+        return {
+          response,
+          payload,
+          requestId: response.headers.get('x-request-id'),
+        };
+      } catch (error) {
+        lastError = error;
+        if (attempt < MAX_RETRIES) {
+          await delay(RETRY_DELAYS_MS[attempt]);
+          continue;
+        }
+        break;
       }
+    }
+
+    if (sawEmptyProxy500 && index < attemptUrls.length - 1) {
+      continue;
+    }
+    if (lastError && index < attemptUrls.length - 1) {
+      continue;
     }
   }
 

@@ -864,7 +864,7 @@ const calculateSafetyScore = ({
         'Open-Meteo Air Quality',
       );
     } else if (usAqi >= 51) {
-      applyFactor('Air Quality', 3, `Air quality is moderate (US AQI ${Math.round(usAqi)}).`, 'Open-Meteo Air Quality');
+      applyFactor('Air Quality', 3, `Air quality is moderate (US AQI ${Math.round(usAqi)}). Consider reducing intensity for sustained exertion.`, 'Open-Meteo Air Quality');
     }
   }
 
@@ -1642,6 +1642,7 @@ const safetyHandler = async (req, res) => {
         forecastLink: `https://forecast.weather.gov/MapClick.php?lat=${parsedLat}&lon=${parsedLon}`
       };
 
+      weatherData.dataSource = 'noaa';
       weatherData.visibilityRisk = buildVisibilityRisk(weatherData);
 
       if (!weatherData.windDirection && currentWindSpeed <= 2) {
@@ -1726,6 +1727,7 @@ const safetyHandler = async (req, res) => {
         });
 
         weatherData = fallback.weatherData;
+        weatherData.dataSource = 'open-meteo-fallback';
         selectedForecastDate = fallback.selectedForecastDate;
         terrainConditionData = fallback.terrainCondition || deriveTerrainCondition(weatherData);
         trailStatus = terrainConditionData.label;
@@ -1734,6 +1736,7 @@ const safetyHandler = async (req, res) => {
       } catch (fallbackError) {
         console.error("Weather fallback API error:", fallbackError);
         weatherData = createUnavailableWeatherData({ lat: parsedLat, lon: parsedLon, forecastDate: selectedForecastDate });
+        weatherData.dataSource = 'unavailable';
         terrainConditionData = deriveTerrainCondition(weatherData);
         trailStatus = terrainConditionData.label;
       }
@@ -2457,7 +2460,7 @@ registerSearchRoutes({
   defaultFetchHeaders: DEFAULT_FETCH_HEADERS,
   peaks: POPULAR_PEAKS,
 });
-registerHealthRoutes(app);
+registerHealthRoutes(app, { caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache] });
 registerReportLogsRoute(app);
 registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askClaude });

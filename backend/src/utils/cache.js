@@ -127,10 +127,10 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
 }
 
 const normalizeCoordKey = (lat, lon) =>
-  `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
+  `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`;
 
 const normalizeCoordDateKey = (lat, lon, date) =>
-  `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}|${date}`;
+  `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}|${date}`;
 
 const normalizeTextKey = (text) =>
   String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();

@@ -119,6 +119,9 @@ const buildLayeringGearSuggestions = ({
       26,
     );
   }
+  if (maxObservedSnowDepthIn >= 12 || (icy && cold)) {
+    addSuggestion('alpine-hardware', 'Alpine hardware', 'Ice axe + crampons for steep snow/ice; consider helmet for exposed terrain above treeline.', 'Safety', 'caution', 15);
+  }
 
   if (Number.isFinite(humidity) && humidity > 80) {
     addSuggestion('humidity-management', 'Moisture backup', `Pack one dry base layer for high humidity (${Math.round(humidity)}% RH).`, 'Conditions', 'go', 48);
@@ -162,7 +165,7 @@ const buildLayeringGearSuggestions = ({
   return Array.from(suggestionMap.values())
     .sort((a, b) => a.priority - b.priority)
     .map(({ id, title, detail, category, tone }) => ({ id, title, detail, category, tone }))
-    .slice(0, 9);
+    .slice(0, 10);
 };
 
 module.exports = {

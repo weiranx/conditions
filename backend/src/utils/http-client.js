@@ -28,7 +28,37 @@ const createFetchWithTimeout = (defaultTimeoutMs) => async (url, options = {}, t
   }
 };
 
+const createCircuitBreaker = ({ name, failureThreshold = 5, resetTimeMs = 60000 }) => {
+  let failures = 0;
+  let lastFailureAt = 0;
+  let open = false;
+
+  return {
+    get isOpen() {
+      if (open && Date.now() - lastFailureAt > resetTimeMs) {
+        open = false;
+        failures = 0;
+      }
+      return open;
+    },
+    recordSuccess() {
+      failures = 0;
+      open = false;
+    },
+    recordFailure() {
+      failures += 1;
+      lastFailureAt = Date.now();
+      if (failures >= failureThreshold) {
+        open = true;
+        console.warn(`[circuit-breaker] ${name} opened after ${failures} consecutive failures`);
+      }
+    },
+    get name() { return name; },
+  };
+};
+
 module.exports = {
   DEFAULT_FETCH_HEADERS,
   createFetchWithTimeout,
+  createCircuitBreaker,
 };

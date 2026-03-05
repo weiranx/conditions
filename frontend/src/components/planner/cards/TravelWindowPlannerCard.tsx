@@ -13,7 +13,7 @@ interface CriticalWindowRow {
   precipChance?: number;
 }
 
-type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
+type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive' | 'runner';
 
 interface TravelWindowPlannerCardProps {
   peakCriticalWindow: CriticalWindowRow | null;
@@ -163,7 +163,7 @@ export function TravelWindowPlannerCard({
             <span>Feels-like &gt;= {feelsLikeThresholdDisplay}</span>
           </div>
           <div className="travel-preset-row" role="group" aria-label="Travel threshold presets">
-            {(['conservative', 'standard', 'aggressive'] as const).map((presetKey) => (
+            {(['conservative', 'standard', 'aggressive', 'runner'] as const).map((presetKey) => (
               <button
                 key={presetKey}
                 type="button"
@@ -171,7 +171,8 @@ export function TravelWindowPlannerCard({
                 onClick={() => onApplyTravelThresholdPreset(presetKey)}
                 aria-pressed={activeTravelThresholdPreset === presetKey}
               >
-                {travelThresholdPresets[presetKey].label}
+                <span className="preset-label-main">{travelThresholdPresets[presetKey].label}</span>
+                <span className="preset-label-sub">&le;{travelThresholdPresets[presetKey].maxWindGustMph}mph gust &middot; &le;{travelThresholdPresets[presetKey].maxPrecipChance}% precip</span>
               </button>
             ))}
           </div>
@@ -191,39 +192,75 @@ export function TravelWindowPlannerCard({
               <div className="travel-threshold-editor" id="travel-threshold-editor" aria-label="Travel window threshold controls">
                 <label className="travel-threshold-row">
                   <span>Max gust ({windUnitLabel})</span>
-                  <input
-                    type="number"
-                    min={windThresholdMin}
-                    max={windThresholdMax}
-                    step={windThresholdStep}
-                    value={maxWindGustDraft}
-                    onChange={handleWindThresholdDisplayChange}
-                    onBlur={handleWindThresholdDisplayBlur}
-                  />
+                  <div className="threshold-input-group">
+                    <input
+                      type="range"
+                      className="threshold-range"
+                      min={windThresholdMin}
+                      max={windThresholdMax}
+                      step={windThresholdStep}
+                      value={maxWindGustDraft}
+                      onChange={handleWindThresholdDisplayChange}
+                      onPointerUp={handleWindThresholdDisplayBlur}
+                    />
+                    <input
+                      type="number"
+                      min={windThresholdMin}
+                      max={windThresholdMax}
+                      step={windThresholdStep}
+                      value={maxWindGustDraft}
+                      onChange={handleWindThresholdDisplayChange}
+                      onBlur={handleWindThresholdDisplayBlur}
+                    />
+                  </div>
                 </label>
                 <label className="travel-threshold-row">
                   <span>Max precip (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={maxPrecipChanceDraft}
-                    onChange={handleMaxPrecipChanceDraftChange}
-                    onBlur={handleMaxPrecipChanceDraftBlur}
-                  />
+                  <div className="threshold-input-group">
+                    <input
+                      type="range"
+                      className="threshold-range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={maxPrecipChanceDraft}
+                      onChange={handleMaxPrecipChanceDraftChange}
+                      onPointerUp={handleMaxPrecipChanceDraftBlur}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={maxPrecipChanceDraft}
+                      onChange={handleMaxPrecipChanceDraftChange}
+                      onBlur={handleMaxPrecipChanceDraftBlur}
+                    />
+                  </div>
                 </label>
                 <label className="travel-threshold-row">
                   <span>Min feels-like ({tempUnitLabel})</span>
-                  <input
-                    type="number"
-                    min={feelsLikeThresholdMin}
-                    max={feelsLikeThresholdMax}
-                    step={feelsLikeThresholdStep}
-                    value={minFeelsLikeDraft}
-                    onChange={handleFeelsLikeThresholdDisplayChange}
-                    onBlur={handleFeelsLikeThresholdDisplayBlur}
-                  />
+                  <div className="threshold-input-group">
+                    <input
+                      type="range"
+                      className="threshold-range"
+                      min={feelsLikeThresholdMin}
+                      max={feelsLikeThresholdMax}
+                      step={feelsLikeThresholdStep}
+                      value={minFeelsLikeDraft}
+                      onChange={handleFeelsLikeThresholdDisplayChange}
+                      onPointerUp={handleFeelsLikeThresholdDisplayBlur}
+                    />
+                    <input
+                      type="number"
+                      min={feelsLikeThresholdMin}
+                      max={feelsLikeThresholdMax}
+                      step={feelsLikeThresholdStep}
+                      value={minFeelsLikeDraft}
+                      onChange={handleFeelsLikeThresholdDisplayChange}
+                      onBlur={handleFeelsLikeThresholdDisplayBlur}
+                    />
+                  </div>
                 </label>
               </div>
               <p className="muted-note travel-threshold-note">Edits apply immediately and are saved to Settings.</p>

@@ -8,6 +8,19 @@ import {
   parseTerrainFromLocation,
 } from '../../../utils/avalanche';
 import { AspectElevationRose } from './AspectElevationRose';
+import { HelpHint } from '../CardHelpHint';
+
+const AVY_PROBLEM_DESCRIPTIONS: Record<string, string> = {
+  'storm slab': 'Cohesive slabs formed during or shortly after storms. Most reactive in the first 24-48 hours.',
+  'wind slab': 'Dense slabs of wind-transported snow on lee aspects. Can be triggered remotely from below.',
+  'persistent slab': 'Slabs sitting on a persistent weak layer (facets, crusts). Can produce large, destructive avalanches days to weeks after burial.',
+  'deep slab': 'Avalanches that break on weak layers deep in the snowpack. Difficult to trigger but very destructive when they release.',
+  'wet loose': 'Point-release avalanches in wet, unconsolidated snow. Common during warming or rain-on-snow events.',
+  'wet slab': 'Cohesive slab releases caused by free water weakening a layer. Often triggered by rapid warming or rain.',
+  'dry loose': 'Point-release avalanches in dry, unconsolidated snow (sluffs). Low consequence but can push you into terrain traps.',
+  'cornice fall': 'Overhanging snow on ridgelines that breaks off. Can trigger avalanches on slopes below.',
+  'glide': 'Entire snowpack sliding on the ground surface. Unpredictable timing; avoid glide cracks.',
+};
 
 interface AvalancheElevationRow {
   key: string;
@@ -175,7 +188,12 @@ export function AvalancheForecastCard({
                             <div className="problem-icon problem-icon-lg">
                               {iconUrl ? <img src={iconUrl} alt={`${problem.name || 'Avalanche problem'} icon`} /> : <AlertTriangle size={18} />}
                             </div>
-                            <div className="problem-type-name">{problem.name || `Problem ${i + 1}`}</div>
+                            <div className="problem-type-name">
+                              {problem.name || `Problem ${i + 1}`}
+                              {problem.name && AVY_PROBLEM_DESCRIPTIONS[problem.name.toLowerCase()] && (
+                                <HelpHint text={AVY_PROBLEM_DESCRIPTIONS[problem.name.toLowerCase()]} />
+                              )}
+                            </div>
                           </div>
                         </section>
 

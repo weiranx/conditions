@@ -173,7 +173,7 @@ const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
 const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
 const MAX_RECENT_SEARCHES = 8;
 const MAX_SAVED_OBJECTIVES = 12;
-type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive';
+type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive' | 'runner';
 type SortableCardKey =
   | 'decisionGate'
   | 'criticalChecks'
@@ -199,6 +199,7 @@ const TRAVEL_THRESHOLD_PRESETS: Record<
   conservative: { label: 'Conservative', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 15 },
   standard: { label: 'Standard', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5 },
   aggressive: { label: 'Aggressive', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5 },
+  runner: { label: 'Runner / Summer', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25 },
 };
 
 function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'name'>): string {
@@ -1962,6 +1963,7 @@ type BetterDaySuggestion = {
   gustMph: number | null;
   precipChance: number | null;
   summary: string;
+  bestWindowStart: string | null;
 };
 
 type MultiDayTripForecastDay = {
@@ -4305,7 +4307,7 @@ function App() {
                   : weatherTrendMetric === 'cloudCover'
                     ? '#7f8e99'
                     : '#6d7a88';
-  const weatherPressureTrendSummary = (() => {
+  const weatherPressureTrend = (() => {
     const pressureValues = weatherTrendRows
       .map((row) => row.pressure)
       .filter((value): value is number => Number.isFinite(Number(value)));
@@ -4317,7 +4319,18 @@ function App() {
     const delta = end - start;
     const direction = delta >= 1 ? 'Rising' : delta <= -1 ? 'Falling' : 'Steady';
     const deltaLabel = `${delta > 0 ? '+' : ''}${delta.toFixed(1)} hPa`;
-    return `${direction} pressure over ${travelWindowHoursLabel}: ${deltaLabel} (${start.toFixed(1)} → ${end.toFixed(1)} hPa)`;
+    const rangeLabel = `${start.toFixed(1)} → ${end.toFixed(1)} hPa`;
+    const summary = `${direction} pressure over ${travelWindowHoursLabel}: ${deltaLabel} (${rangeLabel})`;
+    return { summary, direction, deltaLabel, rangeLabel };
+  })();
+  const weatherPressureTrendSummary = weatherPressureTrend?.summary ?? null;
+  const pressureTrendDirection = weatherPressureTrend?.direction ?? null;
+  const pressureDeltaLabel = weatherPressureTrend?.deltaLabel ?? null;
+  const pressureRangeLabel = weatherPressureTrend?.rangeLabel ?? null;
+  const weatherTrendTempRange = (() => {
+    const temps = weatherTrendRows.map(r => r.temp).filter((t): t is number => Number.isFinite(Number(t)));
+    if (temps.length < 2) return null;
+    return { low: Math.min(...temps), high: Math.max(...temps) };
   })();
   const windThresholdPrecision = preferences.windSpeedUnit === 'kph' ? 1 : 0;
   const windThresholdStep = preferences.windSpeedUnit === 'kph' ? 0.5 : 1;
@@ -5061,6 +5074,17 @@ function App() {
           170,
         )
       : '';
+  const forecastLeadHoursDisplay = (() => {
+    if (!safetyData?.forecast?.selectedDate) return null;
+    const selectedDateStr = safetyData.forecast.selectedDate;
+    const startTimeStr = safetyData.forecast.selectedStartTime || '00:00';
+    const forecastMs = Date.parse(`${selectedDateStr}T${startTimeStr.length === 5 ? startTimeStr : '00:00'}:00`);
+    if (!Number.isFinite(forecastMs)) return null;
+    const leadHours = (forecastMs - Date.now()) / (1000 * 60 * 60);
+    if (leadHours <= 24) return null;
+    const rounded = Math.round(leadHours);
+    return `${rounded}h forecast`;
+  })();
   const startMinutesForPlan = parseTimeInputMinutes(alpineStartTime);
   const sunriseMinutesForPlan = safetyData ? parseSolarClockMinutes(safetyData.solar.sunrise) : null;
   const sunsetMinutesForPlan = safetyData ? parseSolarClockMinutes(safetyData.solar.sunset) : null;
@@ -5973,6 +5997,12 @@ function App() {
               const gustRaw = Number(candidateData?.weather?.windGust);
               const precipRaw = Number(candidateData?.weather?.precipChance);
               const riskSummary = summarizeBetterDayWithoutAvalancheText(candidateDecision);
+              const candidateTrend = Array.isArray(candidateData?.weather?.trend) ? candidateData.weather.trend : [];
+              const candidateRows = buildTravelWindowRows(candidateTrend, preferences);
+              const firstPassIdx = candidateRows.findIndex((r) => r.pass);
+              const bestWindowStart = firstPassIdx >= 0 && candidateRows[firstPassIdx].time
+                ? String(candidateRows[firstPassIdx].time).slice(0, 5)
+                : null;
               return {
                 date: candidateData?.forecast?.selectedDate && DATE_FMT.test(candidateData.forecast.selectedDate) ? candidateData.forecast.selectedDate : date,
                 level: candidateDecision.level,
@@ -5981,6 +6011,7 @@ function App() {
                 gustMph: Number.isFinite(gustRaw) ? gustRaw : null,
                 precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
                 summary: riskSummary,
+                bestWindowStart,
               } as BetterDaySuggestion;
             } catch {
               return null;
@@ -6854,6 +6885,12 @@ function App() {
             <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
             </button>
+            <button type="button" className="settings-btn" onClick={openTripToolView}>
+              <CalendarDays size={14} /> Multi-day
+            </button>
+            <button type="button" className="settings-btn" onClick={() => { if (satelliteConditionLine) { navigator.clipboard.writeText(satelliteConditionLine); } }} disabled={!satelliteConditionLine} title={satelliteConditionLine || 'SAT one-liner (load a report first)'}>
+              <Zap size={14} /> SAT Msg
+            </button>
 
             <div className="map-ext-links">
               <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
@@ -6911,6 +6948,13 @@ function App() {
         <section className="top-freshness-alert" role="status" aria-live="polite">
           <strong>Data freshness warning</strong>
           <span>{freshnessWarningSummary}</span>
+        </section>
+      )}
+
+      {hasObjective && safetyData && (position.lat < 24.5 || position.lat > 49.5 || position.lng < -125 || position.lng > -66.5) && (
+        <section className="top-freshness-alert coverage-warning" role="status">
+          <strong>Limited coverage</strong>
+          <span>Primary data sources (NOAA, NWS, SNOTEL, avalanche centers) are US-focused. Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.</span>
         </section>
       )}
 
@@ -6978,6 +7022,7 @@ function App() {
                     : '#aaa'
                 }} />
                 Confidence {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}% (${safetyData.safety.confidence >= 70 ? 'high' : safetyData.safety.confidence >= 40 ? 'moderate' : 'low'})` : 'N/A'}
+                {forecastLeadHoursDisplay && <span className="forecast-lead-badge">{forecastLeadHoursDisplay}</span>}
               </div>
               <div className="objective-line">
                 {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}{returnTimeFormatted ? ` • Back by ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ''}
@@ -7258,6 +7303,7 @@ function App() {
                                 </div>
                                 <p className="decision-better-day-meta">
                                   {localizeUnitText(suggestion.summary)}
+                                  {suggestion.bestWindowStart ? ` • best window ${formatClockForStyle(suggestion.bestWindowStart, preferences.timeStyle)}` : ''}
                                   {suggestion.precipChance !== null ? ` • precip ${suggestion.precipChance}%` : ''}
                                   {suggestion.gustMph !== null ? ` • gust ${formatWindDisplay(suggestion.gustMph)}` : ''}
                                 </p>
@@ -7523,6 +7569,11 @@ function App() {
                   <div>
                     <div className="big-stat">{formatTempDisplay(weatherCardTemp)}</div>
                     <div className="stat-label">Feels like {formatTempDisplay(weatherCardFeelsLike)}</div>
+                    {weatherTrendTempRange && (
+                      <div className="weather-temp-range">
+                        Low {formatTempDisplay(weatherTrendTempRange.low)} / High {formatTempDisplay(weatherTrendTempRange.high)}
+                      </div>
+                    )}
                   </div>
                   <div className="weather-condition">
                     <div className={`big-stat condition-text ${weatherCardDescription.toLowerCase().includes('snow') ? 'is-cold' : ''}`}>
@@ -7532,7 +7583,14 @@ function App() {
                   </div>
                 </div>
                 <p className="weather-period-line">Using forecast period: {weatherForecastPeriodLabel}</p>
-                {weatherPressureTrendSummary && <p className="weather-pressure-line">{weatherPressureTrendSummary}</p>}
+                {weatherPressureTrendSummary && (
+                  <div className="weather-pressure-chip-row" title={weatherPressureTrendSummary}>
+                    <span className={`weather-pressure-chip ${pressureTrendDirection === 'Falling' ? 'pressure-falling' : pressureTrendDirection === 'Rising' ? 'pressure-rising' : 'pressure-steady'}`}>
+                      {pressureTrendDirection} {pressureDeltaLabel}
+                    </span>
+                    <small className="weather-pressure-range">{pressureRangeLabel}</small>
+                  </div>
+                )}
                 {weatherPreviewActive && <p className="weather-preview-note">Hour preview only updates this Weather card.</p>}
                 {weatherHourQuickOptions.length > 0 && (
                   <div className="weather-hour-picker" role="group" aria-label="Weather hour preview selector">
@@ -8474,12 +8532,12 @@ function App() {
                     <small>{snotelDistanceDisplay !== 'N/A' ? `${snotelDistanceDisplay} from objective` : 'Distance unavailable'}</small>
                   </div>
                   <div className="snowpack-core-item">
-                    <span className="stat-label">SNOTEL Station Snow</span>
+                    <span className="stat-label stat-label-with-help">SNOTEL Station Snow <HelpHint text="SNOTEL (Snow Telemetry): automated USDA stations measuring snow depth and snow water equivalent (SWE) in real time." /></span>
                     <strong>Depth {snotelDepthDisplay} • SWE {snotelSweDisplay}</strong>
                     <small>{safetyData.snowpack?.snotel?.observedDate ? `Observed ${safetyData.snowpack.snotel.observedDate}` : 'Observation date unavailable'}</small>
                   </div>
                   <div className="snowpack-core-item">
-                    <span className="stat-label">NOHRSC Grid Snow</span>
+                    <span className="stat-label stat-label-with-help">NOHRSC Grid Snow <HelpHint text="NOHRSC (National Operational Hydrologic Remote Sensing Center): NOAA-modeled gridded snow estimates for any location." /></span>
                     <strong>Depth {nohrscDepthDisplay} • SWE {nohrscSweDisplay}</strong>
                     <small>
                       {safetyData.snowpack?.nohrsc?.sampledTime
@@ -8489,7 +8547,7 @@ function App() {
                   </div>
                   {safetyData.snowpack?.cdec && (
                     <div className="snowpack-core-item">
-                      <span className="stat-label">CDEC Station Snow</span>
+                      <span className="stat-label stat-label-with-help">CDEC Station Snow <HelpHint text="CDEC (California Data Exchange Center): DWR-operated snow monitoring stations, primarily in the Sierra Nevada." /></span>
                       <strong>Depth {cdecDepthDisplay} • SWE {cdecSweDisplay}</strong>
                       <small>
                         {safetyData.snowpack.cdec.stationName || 'CDEC station'}
