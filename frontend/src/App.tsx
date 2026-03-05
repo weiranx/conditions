@@ -56,6 +56,10 @@ import { HelpHint } from './components/planner/CardHelpHint';
 import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
 import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
+import { HourlyConditionsDashboard } from './components/planner/cards/HourlyConditionsDashboard';
+import { ElevationDangerGradient } from './components/planner/cards/ElevationDangerGradient';
+import { MultiDayRiskArc } from './components/planner/cards/MultiDayRiskArc';
+import { RouteConditionsProfile } from './components/planner/cards/RouteConditionsProfile';
 import { CollapsibleCard } from './components/planner/CollapsibleCard';
 import {
   APP_CREDIT_TEXT,
@@ -6542,6 +6546,18 @@ function App() {
                 {tripForecastNote && <p className="muted-note">{tripForecastNote}</p>}
               </article>
 
+              <MultiDayRiskArc
+                tripDays={tripForecastRows.map((row) => ({
+                  date: row.date,
+                  dateLabel: formatIsoDateLabel(row.date),
+                  score: row.score,
+                  decisionLevel: row.decisionLevel,
+                  precipChance: row.precipChance,
+                  windGustMph: row.windGustMph,
+                }))}
+                getScoreColor={getScoreColor}
+              />
+
               <div className="trip-day-grid">
                 {tripForecastRows.map((row) => {
                   const rowClass = row.decisionLevel.toLowerCase().replace('-', '');
@@ -7175,6 +7191,12 @@ function App() {
                       );
                     })}
                   </div>
+                  <RouteConditionsProfile
+                    waypoints={routeAnalysis.summaries}
+                    getScoreColor={getScoreColor}
+                    formatTempDisplay={formatTempDisplay}
+                    formatWindDisplay={formatWindDisplay}
+                  />
                   <div className="route-analysis-text">
                     {renderSimpleMarkdown(routeAnalysis.analysis)}
                   </div>
@@ -7734,6 +7756,20 @@ function App() {
                   )}
                 </div>
 
+                <HourlyConditionsDashboard
+                  trendData={weatherTrendRows.map((r) => ({
+                    label: r.label,
+                    temp: r.temp,
+                    feelsLike: r.feelsLike,
+                    wind: r.wind,
+                    gust: r.gust,
+                    precipChance: r.precipChance,
+                  }))}
+                  formatTempDisplay={formatTempDisplay}
+                  formatWindDisplay={formatWindDisplay}
+                  timeStyle={preferences.timeStyle}
+                />
+
                 <div className="weather-metrics">
                   <div className="metric-chip">
                     <span className="stat-label">Wind</span>
@@ -7884,6 +7920,16 @@ function App() {
                   ) : (
                     <p className="muted-note">Elevation-adjusted forecast is unavailable for this point.</p>
                   )}
+                  <ElevationDangerGradient
+                    elevationBands={elevationForecastBands}
+                    avalancheElevations={safetyData.avalanche.elevations}
+                    objectiveElevationFt={Number.isFinite(objectiveElevationFt) ? objectiveElevationFt : null}
+                    formatTempDisplay={formatTempDisplay}
+                    formatWindDisplay={formatWindDisplay}
+                    formatElevationDisplay={formatElevationDisplay}
+                    getDangerLevelClass={getDangerLevelClass}
+                    getDangerText={getDangerText}
+                  />
                   {safetyData.weather.elevationForecastNote && (
                     <p className="elevation-note">{localizeUnitText(safetyData.weather.elevationForecastNote)}</p>
                   )}
