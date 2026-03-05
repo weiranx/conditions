@@ -6179,6 +6179,27 @@ button.collapsible-card-header:focus-visible {
   margin-bottom: 14px;
 }
 
+.route-ai-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e8d9f0;
+  color: #7b4f9e;
+  margin-left: 8px;
+  vertical-align: middle;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.route-analysis-disclaimer {
+  font-size: 0.78rem;
+  color: #8a7e6d;
+  margin: 0 0 10px;
+  font-style: italic;
+}
+
 .route-picker-list {
   list-style: none;
   padding: 0;

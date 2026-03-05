@@ -61,7 +61,7 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
   const cacheKey = `${normalizeTextKey(name)}|${normalizeCoordKey(peakLat, peakLon)}`;
   return nominatimGeocodeCache.getOrFetch(cacheKey, async () => {
     const viewbox = `${peakLon - 0.5},${peakLat + 0.5},${peakLon + 0.5},${peakLat - 0.5}`;
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=us&limit=3&bounded=1&viewbox=${viewbox}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&limit=3&bounded=1&viewbox=${viewbox}`;
     const res = await fetchWithTimeout(url, { headers: fetchHeaders });
     if (!res.ok) return null;
     const results = await res.json();
@@ -76,7 +76,7 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
         best = r;
       }
     }
-    if (best && bestDist < 80) {
+    if (best && bestDist < 15) {
       return { lat: parseFloat(best.lat), lon: parseFloat(best.lon) };
     }
     return null;

@@ -1751,18 +1751,22 @@ function evaluateBackcountryDecision(
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
   const sunsetMinutes = parseSolarClockMinutes(data.solar.sunset);
   const daylightBuffer = 30;
+  const turnaroundMinutes = options.turnaroundTime
+    ? parseTimeInputMinutes(options.turnaroundTime)
+    : null;
   const hasDaylightInputs = cutoffMinutes !== null && sunsetMinutes !== null;
-  const daylightOkay = hasDaylightInputs ? cutoffMinutes <= sunsetMinutes - daylightBuffer : false;
-  const daylightMarginMinutes = hasDaylightInputs ? sunsetMinutes - cutoffMinutes : null;
+  const effectiveReturnMinutes = turnaroundMinutes ?? cutoffMinutes;
+  const daylightOkay = hasDaylightInputs && effectiveReturnMinutes !== null
+    ? effectiveReturnMinutes <= sunsetMinutes - daylightBuffer
+    : false;
+  const daylightMarginMinutes = hasDaylightInputs && effectiveReturnMinutes !== null
+    ? sunsetMinutes - effectiveReturnMinutes
+    : null;
   if (!hasDaylightInputs) {
     addCaution('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
   } else if (!daylightOkay) {
     addCaution(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
   }
-
-  const turnaroundMinutes = options.turnaroundTime
-    ? parseTimeInputMinutes(options.turnaroundTime)
-    : null;
   if (turnaroundMinutes !== null && sunsetMinutes !== null) {
     const margin = sunsetMinutes - turnaroundMinutes;
     if (margin < 0) {
@@ -1816,10 +1820,10 @@ function evaluateBackcountryDecision(
     },
     {
       key: 'daylight',
-      label: 'Start time is at least 30 min before sunset',
+      label: 'Plan finishes at least 30 min before sunset',
       ok: daylightOkay,
       detail: hasDaylightInputs
-        ? `${cutoffTime} start • ${data.solar.sunset} sunset • ${
+        ? `${cutoffTime} start${turnaroundMinutes !== null && options.turnaroundTime ? ` • back by ${options.turnaroundTime}` : ''} • ${data.solar.sunset} sunset • ${
             daylightMarginMinutes === null
               ? 'margin unavailable'
               : daylightMarginMinutes < 0
@@ -5452,7 +5456,7 @@ function App() {
               : null,
       ].filter((entry): entry is string => Boolean(entry))
     : [];
-  const windLoadingHintsRelevant = avalancheRelevant;
+  const windLoadingHintsRelevant = avalancheRelevant || Boolean(resolvedWindDirection);
   const terrainConditionDetails = safetyData
     ? (() => {
         const upstreamTerrain = safetyData.terrainCondition;
@@ -6805,11 +6809,11 @@ function App() {
             </label>
 
             <label className="date-control compact travel-window-control">
-              <span>Window (h)</span>
+              <span>Trip hours</span>
               <input
                 type="number"
                 inputMode="numeric"
-                aria-label="Travel window hours"
+                aria-label="Trip duration in hours"
                 title="How many hours to evaluate from the selected start time."
                 min={MIN_TRAVEL_WINDOW_HOURS}
                 max={MAX_TRAVEL_WINDOW_HOURS}
@@ -6905,8 +6909,16 @@ function App() {
           <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-weather')}>
             Weather
           </button>
+          {avalancheRelevant && (
+            <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-avalanche')}>
+              Avalanche
+            </button>
+          )}
           <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-alerts')}>
             Alerts
+          </button>
+          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-gear')}>
+            Gear
           </button>
         </nav>
       )}
@@ -6938,7 +6950,7 @@ function App() {
             </div>
             <div className="score-meta">
               <span className="status-badge" style={{ color: getScoreColor(safetyData.safety.score) }}>
-                {safetyData.safety.score >= 80 ? 'Optimal' : safetyData.safety.score >= 50 ? 'Caution' : 'Critical'}
+                {safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}
               </span>
               <div className="hazard-badge">
                 <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
@@ -6949,10 +6961,10 @@ function App() {
                     ? safetyData.safety.confidence >= 70 ? '#4a9b6a' : safetyData.safety.confidence >= 40 ? '#c8841b' : '#b04040'
                     : '#aaa'
                 }} />
-                Confidence {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}%` : 'N/A'}
+                Confidence {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}% (${safetyData.safety.confidence >= 70 ? 'high' : safetyData.safety.confidence >= 40 ? 'moderate' : 'low'})` : 'N/A'}
               </div>
               <div className="objective-line">
-                {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}
+                {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}{returnTimeFormatted ? ` • Back by ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ''}
               </div>
               {(loading || error) && (
                 <div className="source-line">
@@ -7061,7 +7073,8 @@ function App() {
 
               {routeAnalysis && (
                 <div className="route-analysis-card">
-                  <div className="route-analysis-header">Route Analysis</div>
+                  <div className="route-analysis-header">Route Analysis <span className="route-ai-badge">AI Advisory</span></div>
+                  <p className="route-analysis-disclaimer">Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.</p>
                   <div className="route-waypoints">
                     {routeAnalysis.summaries.map((wp, i) => {
                       const wpCoords = routeAnalysis.waypoints[i];
@@ -7409,7 +7422,7 @@ function App() {
                   defaultExpanded={false}
                   order={reportCardOrder.scoreTrace}
                   className="score-trace-card"
-                  title={<span className="card-title"><ShieldCheck size={14} /> Score Trace <HelpHint text="Shows top factors pulling the safety score down or up, plus what changed vs yesterday." /></span>}
+                  title={<span className="card-title"><ShieldCheck size={14} /> Score Breakdown <HelpHint text="Shows top factors pulling the safety score down or up, plus what changed vs yesterday." /></span>}
                   headerMeta={dayOverDay ? <span className={`decision-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>{dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}</span> : undefined}
                   summary={`${Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors.length : 0} factors`}
                   preview={(() => {
@@ -8712,6 +8725,7 @@ function App() {
               {shouldRenderRankedCard('recommendedGear') && (
                 <CollapsibleCard
                   cardKey="recommendedGear"
+                  domId="planner-section-gear"
                   defaultExpanded={false}
                   order={reportCardOrder.recommendedGear}
                   className="gear-card"
@@ -8772,6 +8786,7 @@ function App() {
             return (
             <CollapsibleCard
               cardKey="avalancheForecast"
+              domId="planner-section-avalanche"
               defaultExpanded={false}
               order={reportCardOrder.avalancheForecast}
               className="avy-card"
