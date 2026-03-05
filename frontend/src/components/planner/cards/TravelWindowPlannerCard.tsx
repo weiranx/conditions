@@ -1,4 +1,4 @@
-import type { ChangeEventHandler, Dispatch, FocusEventHandler, SetStateAction } from 'react';
+import type { ChangeEventHandler, Dispatch, FocusEvent, FocusEventHandler, SetStateAction } from 'react';
 import { formatClockForStyle } from '../../../app/core';
 import type { CriticalRiskLevel, TimeStyle, TravelWindowInsights, TravelWindowRow, TravelWindowSpan } from '../../../app/types';
 
@@ -200,8 +200,7 @@ export function TravelWindowPlannerCard({
                       max={windThresholdMax}
                       step={windThresholdStep}
                       value={maxWindGustDraft}
-                      onChange={handleWindThresholdDisplayChange}
-                      onPointerUp={handleWindThresholdDisplayBlur}
+                      onChange={(e) => { handleWindThresholdDisplayChange(e); handleWindThresholdDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>); }}
                     />
                     <input
                       type="number"
@@ -224,8 +223,7 @@ export function TravelWindowPlannerCard({
                       max={100}
                       step={1}
                       value={maxPrecipChanceDraft}
-                      onChange={handleMaxPrecipChanceDraftChange}
-                      onPointerUp={handleMaxPrecipChanceDraftBlur}
+                      onChange={(e) => { handleMaxPrecipChanceDraftChange(e); handleMaxPrecipChanceDraftBlur(e as unknown as FocusEvent<HTMLInputElement>); }}
                     />
                     <input
                       type="number"
@@ -248,8 +246,7 @@ export function TravelWindowPlannerCard({
                       max={feelsLikeThresholdMax}
                       step={feelsLikeThresholdStep}
                       value={minFeelsLikeDraft}
-                      onChange={handleFeelsLikeThresholdDisplayChange}
-                      onPointerUp={handleFeelsLikeThresholdDisplayBlur}
+                      onChange={(e) => { handleFeelsLikeThresholdDisplayChange(e); handleFeelsLikeThresholdDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>); }}
                     />
                     <input
                       type="number"
