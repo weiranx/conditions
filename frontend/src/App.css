@@ -2502,6 +2502,26 @@ button.collapsible-card-header:focus-visible {
   letter-spacing: 0.06em;
 }
 
+.decision-departure-brief {
+  padding: 10px 11px;
+  border-radius: 12px;
+  border: 1px solid #d4dde0;
+  background: #f0f5f3;
+}
+
+.departure-brief-primary {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin: 0 0 6px;
+}
+
+.departure-brief-action {
+  font-size: 0.8rem;
+  color: #546258;
+  margin: 6px 0 0;
+  font-style: italic;
+}
+
 .decision-better-days {
   padding: 10px 11px;
   border-radius: 12px;
@@ -7479,6 +7499,19 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .decision-details summary {
   color: #9cb5c8;
+}
+
+:root[data-theme='dark'] .decision-departure-brief {
+  border-color: #2e4a3e;
+  background: #1a2b24;
+}
+
+:root[data-theme='dark'] .departure-brief-primary {
+  color: #c8ddd0;
+}
+
+:root[data-theme='dark'] .departure-brief-action {
+  color: #8ba898;
 }
 
 :root[data-theme='dark'] .decision-better-days {

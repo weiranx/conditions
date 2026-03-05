@@ -1676,7 +1676,7 @@ function evaluateBackcountryDecision(
   if (avalancheGateRequired && !avalancheUnknown && danger >= 4) {
     addBlocker('Avalanche danger is High/Extreme. Avoid avalanche terrain.');
   } else if (avalancheGateRequired && !avalancheUnknown && danger === 3) {
-    addCaution('Avalanche danger is Considerable. Conservative terrain choices are required.');
+    addBlocker('Avalanche danger is Considerable. Avoid avalanche terrain unless trained in terrain selection and risk management.');
   }
   if (hasStormSignal) {
     addCaution('Storm or thunder signal in forecast. Avoid exposed terrain and keep fallback options ready.');
@@ -5252,6 +5252,12 @@ function App() {
       return [...aspects].some(a => leewardAspectSet.has(a));
     })
     .map(p => p.name ?? 'Unknown Problem');
+  if (decision && aspectOverlapProblems.length > 0) {
+    const overlapCaution = `Wind loading aligns with active avalanche problem aspects (${aspectOverlapProblems.join(', ')}). Current winds may be actively building slabs on these aspects.`;
+    if (!decision.cautions.includes(overlapCaution)) {
+      decision.cautions.push(overlapCaution);
+    }
+  }
   const windSpeedMph = Number(safetyData?.weather.windSpeed);
   const windGustMph = Number(safetyData?.weather.windGust);
   const calmOrVariableSignal = primaryWindDirection === 'CALM' || primaryWindDirection === 'VRB';
@@ -7129,6 +7135,18 @@ function App() {
                   <span className="decision-action-label">Recommended action</span>
                   <p>{decisionActionLine}</p>
                 </div>
+                {fieldBriefTopRisks.length > 0 && (
+                  <div className="decision-group decision-departure-brief">
+                    <h4><AlertTriangle size={14} /> Departure Brief</h4>
+                    <p className="departure-brief-primary">{fieldBriefPrimaryReason}</p>
+                    <ul className="signal-list compact">
+                      {fieldBriefTopRisks.map((risk, idx) => (
+                        <li key={`brief-risk-${idx}`}>{localizeUnitText(risk)}</li>
+                      ))}
+                    </ul>
+                    <p className="departure-brief-action">{decisionActionLine}</p>
+                  </div>
+                )}
                 {rainfall24hSeverityClass === 'nogo' && (
                   <div className="decision-group decision-creek-warning nogo">
                     <p>{`Creek crossing risk: recent rainfall (${rainfall24hDisplay}) may make stream crossings dangerous. Scout before committing.`}</p>

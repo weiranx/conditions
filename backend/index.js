@@ -1146,11 +1146,7 @@ const deriveOverallDangerLevelFromElevations = (elevations, fallbackLevel = 0) =
     return fallback;
   }
 
-  const maxLevel = Math.max(...levels);
-  const minLevel = Math.min(...levels);
-  const maxCount = levels.filter((level) => level === maxLevel).length;
-
-  return maxLevel;
+  return Math.max(...levels);
 };
 
 const applyDerivedOverallAvalancheDanger = (avalancheData) => {
@@ -2426,7 +2422,26 @@ const safetyHandler = async (req, res) => {
   }
 };
 
-registerSafetyRoute({ app, safetyHandler });
+const SAFETY_HANDLER_TIMEOUT_MS = 30000;
+
+const safetyHandlerWithTimeout = async (req, res) => {
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      console.warn(`[safety] Request timed out after ${SAFETY_HANDLER_TIMEOUT_MS}ms — lat=${req.query.lat} lon=${req.query.lon}`);
+      res.status(504).json({
+        error: 'Request timed out. One or more upstream providers did not respond in time.',
+        partialData: true,
+      });
+    }
+  }, SAFETY_HANDLER_TIMEOUT_MS);
+  try {
+    await safetyHandler(req, res);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+registerSafetyRoute({ app, safetyHandler: safetyHandlerWithTimeout });
 const invokeSafetyHandler = createSafetyInvoker({ safetyHandler });
 
 registerSatOneLinerRoute({
