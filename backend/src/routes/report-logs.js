@@ -74,12 +74,13 @@ const LOGS_SECRET = process.env.LOGS_SECRET || '';
 
 const registerReportLogsRoute = (app) => {
   app.get('/api/report-logs', (req, res) => {
-    if (LOGS_SECRET) {
-      const auth = req.headers['authorization'] ?? '';
-      const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-      if (provided !== LOGS_SECRET) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+    if (!LOGS_SECRET) {
+      return res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
+    }
+    const auth = req.headers['authorization'] ?? '';
+    const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (provided !== LOGS_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
     res.json([...reportLogs].reverse());
   });
