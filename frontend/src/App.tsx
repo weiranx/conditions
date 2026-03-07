@@ -2191,17 +2191,23 @@ function getLogSortValue(entry: ReportLogEntry, key: LogSortKey): string | numbe
   }
 }
 
-function getLogSearchText(entry: ReportLogEntry): string {
-  return [
-    entry.name,
-    entry.date,
-    entry.startTime,
-    entry.ip,
-    entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)} ${entry.lon.toFixed(4)}` : null,
-    entry.statusCode.toString(),
-    entry.safetyScore != null ? entry.safetyScore.toString() : null,
-  ].filter(Boolean).join(' ').toLowerCase();
+function getLogCellText(entry: ReportLogEntry, key: LogSortKey): string {
+  switch (key) {
+    case 'timestamp': return new Date(entry.timestamp).toLocaleString();
+    case 'name': return entry.name ?? '';
+    case 'coords': return entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '';
+    case 'date': return entry.date ?? '';
+    case 'startTime': return entry.startTime ?? '';
+    case 'statusCode': return String(entry.statusCode);
+    case 'safetyScore': return entry.safetyScore != null ? String(entry.safetyScore) : '';
+    case 'partialData': return entry.partialData == null ? '' : entry.partialData ? 'Yes' : 'No';
+    case 'durationMs': return String(entry.durationMs);
+    case 'ip': return entry.ip ?? '';
+    default: return '';
+  }
 }
+
+type LogColumnFilters = Partial<Record<LogSortKey, string>>;
 
 function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
@@ -2210,10 +2216,9 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
   const [sortAsc, setSortAsc] = useState(false);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | '200' | 'error'>('all');
-  const [partialFilter, setPartialFilter] = useState<'all' | 'yes' | 'no'>('all');
-  const [ipFilter, setIpFilter] = useState<string>('all');
+  const [columnSearches, setColumnSearches] = useState<LogColumnFilters>({});
+  const [exactFilters, setExactFilters] = useState<LogColumnFilters>({});
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: LogSortKey; value: string } | null>(null);
 
   const fetchLogs = useCallback(async () => {
     const { response, payload } = await fetchApi('/api/report-logs', {
@@ -2241,6 +2246,13 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
     return () => clearInterval(interval);
   }, [fetchLogs]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismiss = () => setContextMenu(null);
+    document.addEventListener('click', dismiss);
+    return () => document.removeEventListener('click', dismiss);
+  }, [contextMenu]);
+
   const handleSort = (key: LogSortKey) => {
     if (key === sortKey) {
       setSortAsc((prev) => !prev);
@@ -2250,26 +2262,50 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
     }
   };
 
-  const uniqueIps = useMemo(() => {
-    const ips = logs.map((l) => l.ip).filter(Boolean) as string[];
-    return [...new Set(ips)].sort();
-  }, [logs]);
+  const setColumnSearch = (key: LogSortKey, value: string) => {
+    setColumnSearches((prev) => {
+      if (!value) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: value };
+    });
+  };
+
+  const handleCellContextMenu = (e: React.MouseEvent, key: LogSortKey, entry: ReportLogEntry) => {
+    e.preventDefault();
+    const value = getLogCellText(entry, key);
+    if (!value) return;
+    setContextMenu({ x: e.clientX, y: e.clientY, key, value });
+  };
+
+  const applyExactFilter = (key: LogSortKey, value: string) => {
+    setExactFilters((prev) => ({ ...prev, [key]: value }));
+    setContextMenu(null);
+  };
+
+  const clearExactFilter = (key: LogSortKey) => {
+    setExactFilters((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const activeFilterCount = Object.keys(exactFilters).length;
 
   const filteredAndSorted = useMemo(() => {
     let result = logs;
 
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((e) => getLogSearchText(e).includes(q));
+    for (const [key, q] of Object.entries(columnSearches) as [LogSortKey, string][]) {
+      if (!q) continue;
+      const lower = q.toLowerCase();
+      result = result.filter((e) => getLogCellText(e, key).toLowerCase().includes(lower));
     }
-    if (statusFilter !== 'all') {
-      result = result.filter((e) => statusFilter === '200' ? e.statusCode === 200 : e.statusCode !== 200);
-    }
-    if (partialFilter !== 'all') {
-      result = result.filter((e) => partialFilter === 'yes' ? e.partialData === true : e.partialData === false);
-    }
-    if (ipFilter !== 'all') {
-      result = result.filter((e) => e.ip === ipFilter);
+
+    for (const [key, val] of Object.entries(exactFilters) as [LogSortKey, string][]) {
+      result = result.filter((e) => getLogCellText(e, key) === val);
     }
 
     return [...result].sort((a, b) => {
@@ -2278,7 +2314,7 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortAsc ? cmp : -cmp;
     });
-  }, [logs, search, statusFilter, partialFilter, ipFilter, sortKey, sortAsc]);
+  }, [logs, columnSearches, exactFilters, sortKey, sortAsc]);
 
   if (loading) {
     return <p className="logs-status-msg">Loading logs…</p>;
@@ -2307,31 +2343,20 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
             {' '}· Last refreshed: {lastRefreshed.toLocaleTimeString()}
           </p>
         )}
-        <div className="logs-filters">
-          <input
-            type="text"
-            className="logs-search"
-            placeholder="Search logs…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <select className="logs-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | '200' | 'error')}>
-            <option value="all">All statuses</option>
-            <option value="200">200 OK</option>
-            <option value="error">Errors</option>
-          </select>
-          <select className="logs-filter-select" value={partialFilter} onChange={(e) => setPartialFilter(e.target.value as 'all' | 'yes' | 'no')}>
-            <option value="all">All partial</option>
-            <option value="yes">Partial: Yes</option>
-            <option value="no">Partial: No</option>
-          </select>
-          {uniqueIps.length > 1 && (
-            <select className="logs-filter-select" value={ipFilter} onChange={(e) => setIpFilter(e.target.value)}>
-              <option value="all">All IPs</option>
-              {uniqueIps.map((ip) => <option key={ip} value={ip}>{ip}</option>)}
-            </select>
-          )}
-        </div>
+        {activeFilterCount > 0 && (
+          <div className="logs-active-filters">
+            {(Object.entries(exactFilters) as [LogSortKey, string][]).map(([key, val]) => {
+              const col = LOG_COLUMNS.find((c) => c.key === key);
+              return (
+                <span key={key} className="logs-filter-tag">
+                  {col?.label}: {val}
+                  <button className="logs-filter-tag-x" onClick={() => clearExactFilter(key)}>×</button>
+                </span>
+              );
+            })}
+            <button className="logs-clear-filters" onClick={() => setExactFilters({})}>Clear all</button>
+          </div>
+        )}
       </div>
       <table className="logs-table">
         <thead>
@@ -2344,6 +2369,20 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
             ))}
             <th>Link</th>
           </tr>
+          <tr className="logs-search-row">
+            {LOG_COLUMNS.map((col) => (
+              <th key={col.key} className="logs-search-cell">
+                <input
+                  type="text"
+                  className="logs-col-search"
+                  placeholder="Filter…"
+                  value={columnSearches[col.key] ?? ''}
+                  onChange={(e) => setColumnSearch(col.key, e.target.value)}
+                />
+              </th>
+            ))}
+            <th />
+          </tr>
         </thead>
         <tbody>
           {filteredAndSorted.map((entry, i) => {
@@ -2352,22 +2391,22 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
               : null;
             return (
               <tr key={i} className={i % 2 === 0 ? 'logs-row-alt' : ''}>
-                <td className="logs-cell-nowrap">{new Date(entry.timestamp).toLocaleString()}</td>
-                <td>{entry.name ?? '—'}</td>
-                <td className="logs-cell-mono">
+                <td className="logs-cell-nowrap" onContextMenu={(e) => handleCellContextMenu(e, 'timestamp', entry)}>{new Date(entry.timestamp).toLocaleString()}</td>
+                <td onContextMenu={(e) => handleCellContextMenu(e, 'name', entry)}>{entry.name ?? '—'}</td>
+                <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'coords', entry)}>
                   {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
                 </td>
-                <td>{entry.date ?? '—'}</td>
-                <td>{entry.startTime ?? '—'}</td>
-                <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'}>
+                <td onContextMenu={(e) => handleCellContextMenu(e, 'date', entry)}>{entry.date ?? '—'}</td>
+                <td onContextMenu={(e) => handleCellContextMenu(e, 'startTime', entry)}>{entry.startTime ?? '—'}</td>
+                <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'} onContextMenu={(e) => handleCellContextMenu(e, 'statusCode', entry)}>
                   {entry.statusCode}
                 </td>
-                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 80 ? 'var(--accent-green)' : entry.safetyScore >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)', fontWeight: 600 } : undefined}>
+                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 80 ? 'var(--accent-green)' : entry.safetyScore >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)', fontWeight: 600 } : undefined} onContextMenu={(e) => handleCellContextMenu(e, 'safetyScore', entry)}>
                   {entry.safetyScore != null ? `${entry.safetyScore}%` : '—'}
                 </td>
-                <td>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
-                <td>{entry.durationMs}ms</td>
-                <td className="logs-cell-mono">{entry.ip ?? '—'}</td>
+                <td onContextMenu={(e) => handleCellContextMenu(e, 'partialData', entry)}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
+                <td onContextMenu={(e) => handleCellContextMenu(e, 'durationMs', entry)}>{entry.durationMs}ms</td>
+                <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'ip', entry)}>{entry.ip ?? '—'}</td>
                 <td>
                   {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
                 </td>
@@ -2376,6 +2415,13 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
           })}
         </tbody>
       </table>
+      {contextMenu && (
+        <div className="logs-context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
+          <button className="logs-context-item" onClick={() => applyExactFilter(contextMenu.key, contextMenu.value)}>
+            Filter by "{contextMenu.value}"
+          </button>
+        </div>
+      )}
     </div>
   );
 }
