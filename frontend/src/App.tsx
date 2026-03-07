@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useTransition } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useTransition, useMemo } from 'react';
 import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -2160,11 +2160,60 @@ function LogsView({ onHome }: { onHome: () => void }) {
   );
 }
 
+type LogSortKey = 'timestamp' | 'name' | 'coords' | 'date' | 'startTime' | 'statusCode' | 'safetyScore' | 'partialData' | 'durationMs' | 'ip';
+
+const LOG_COLUMNS: { key: LogSortKey; label: string }[] = [
+  { key: 'timestamp', label: 'Time' },
+  { key: 'name', label: 'Name' },
+  { key: 'coords', label: 'Lat / Lon' },
+  { key: 'date', label: 'Date' },
+  { key: 'startTime', label: 'Start' },
+  { key: 'statusCode', label: 'Status' },
+  { key: 'safetyScore', label: 'Score' },
+  { key: 'partialData', label: 'Partial' },
+  { key: 'durationMs', label: 'Duration' },
+  { key: 'ip', label: 'IP' },
+];
+
+function getLogSortValue(entry: ReportLogEntry, key: LogSortKey): string | number {
+  switch (key) {
+    case 'timestamp': return entry.timestamp;
+    case 'name': return entry.name ?? '';
+    case 'coords': return entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)},${entry.lon.toFixed(4)}` : '';
+    case 'date': return entry.date ?? '';
+    case 'startTime': return entry.startTime ?? '';
+    case 'statusCode': return entry.statusCode;
+    case 'safetyScore': return entry.safetyScore ?? -1;
+    case 'partialData': return entry.partialData == null ? -1 : entry.partialData ? 1 : 0;
+    case 'durationMs': return entry.durationMs;
+    case 'ip': return entry.ip ?? '';
+    default: return '';
+  }
+}
+
+function getLogSearchText(entry: ReportLogEntry): string {
+  return [
+    entry.name,
+    entry.date,
+    entry.startTime,
+    entry.ip,
+    entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)} ${entry.lon.toFixed(4)}` : null,
+    entry.statusCode.toString(),
+    entry.safetyScore != null ? entry.safetyScore.toString() : null,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
 function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | '200' | 'error'>('all');
+  const [partialFilter, setPartialFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [ipFilter, setIpFilter] = useState<string>('all');
 
   const fetchLogs = useCallback(async () => {
     const { response, payload } = await fetchApi('/api/report-logs', {
@@ -2192,6 +2241,45 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
     return () => clearInterval(interval);
   }, [fetchLogs]);
 
+  const handleSort = (key: LogSortKey) => {
+    if (key === sortKey) {
+      setSortAsc((prev) => !prev);
+    } else {
+      setSortKey(key);
+      setSortAsc(key === 'name' || key === 'ip' || key === 'date');
+    }
+  };
+
+  const uniqueIps = useMemo(() => {
+    const ips = logs.map((l) => l.ip).filter(Boolean) as string[];
+    return [...new Set(ips)].sort();
+  }, [logs]);
+
+  const filteredAndSorted = useMemo(() => {
+    let result = logs;
+
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((e) => getLogSearchText(e).includes(q));
+    }
+    if (statusFilter !== 'all') {
+      result = result.filter((e) => statusFilter === '200' ? e.statusCode === 200 : e.statusCode !== 200);
+    }
+    if (partialFilter !== 'all') {
+      result = result.filter((e) => partialFilter === 'yes' ? e.partialData === true : e.partialData === false);
+    }
+    if (ipFilter !== 'all') {
+      result = result.filter((e) => e.ip === ipFilter);
+    }
+
+    return [...result].sort((a, b) => {
+      const av = getLogSortValue(a, sortKey);
+      const bv = getLogSortValue(b, sortKey);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortAsc ? cmp : -cmp;
+    });
+  }, [logs, search, statusFilter, partialFilter, ipFilter, sortKey, sortAsc]);
+
   if (loading) {
     return <p className="logs-status-msg">Loading logs…</p>;
   }
@@ -2211,29 +2299,54 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
 
   return (
     <div className="logs-table-wrap">
-      {lastRefreshed && (
-        <p className="logs-meta">
-          {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · {uniqueVisitors} unique visitor{uniqueVisitors === 1 ? '' : 's'} · Last refreshed: {lastRefreshed.toLocaleTimeString()}
-        </p>
-      )}
+      <div className="logs-toolbar">
+        {lastRefreshed && (
+          <p className="logs-meta">
+            {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · {uniqueVisitors} unique visitor{uniqueVisitors === 1 ? '' : 's'}
+            {filteredAndSorted.length !== logs.length && ` · ${filteredAndSorted.length} shown`}
+            {' '}· Last refreshed: {lastRefreshed.toLocaleTimeString()}
+          </p>
+        )}
+        <div className="logs-filters">
+          <input
+            type="text"
+            className="logs-search"
+            placeholder="Search logs…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select className="logs-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | '200' | 'error')}>
+            <option value="all">All statuses</option>
+            <option value="200">200 OK</option>
+            <option value="error">Errors</option>
+          </select>
+          <select className="logs-filter-select" value={partialFilter} onChange={(e) => setPartialFilter(e.target.value as 'all' | 'yes' | 'no')}>
+            <option value="all">All partial</option>
+            <option value="yes">Partial: Yes</option>
+            <option value="no">Partial: No</option>
+          </select>
+          {uniqueIps.length > 1 && (
+            <select className="logs-filter-select" value={ipFilter} onChange={(e) => setIpFilter(e.target.value)}>
+              <option value="all">All IPs</option>
+              {uniqueIps.map((ip) => <option key={ip} value={ip}>{ip}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
       <table className="logs-table">
         <thead>
           <tr>
-            <th>Time</th>
-            <th>Name</th>
-            <th>Lat / Lon</th>
-            <th>Date</th>
-            <th>Start</th>
-            <th>Status</th>
-            <th>Score</th>
-            <th>Partial</th>
-            <th>Duration</th>
-            <th>IP</th>
+            {LOG_COLUMNS.map((col) => (
+              <th key={col.key} className="logs-th-sortable" onClick={() => handleSort(col.key)}>
+                {col.label}
+                {sortKey === col.key && <span className="logs-sort-arrow">{sortAsc ? ' ▲' : ' ▼'}</span>}
+              </th>
+            ))}
             <th>Link</th>
           </tr>
         </thead>
         <tbody>
-          {logs.map((entry, i) => {
+          {filteredAndSorted.map((entry, i) => {
             const plannerHref = entry.lat != null && entry.lon != null
               ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
               : null;
