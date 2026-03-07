@@ -6,7 +6,7 @@ test('GET /healthz returns healthy payload', async () => {
   const res = await request(app).get('/healthz');
   expect(res.status).toBe(200);
   expect(res.body.ok).toBe(true);
-  expect(res.body.service).toBe('summitsafe-backend');
+  expect(res.body.service).toBe('backcountry-conditions-backend');
   expect(typeof res.body.timestamp).toBe('string');
   expect(res.body.timestamp.length).toBeGreaterThan(0);
   expect(typeof res.headers['x-request-id']).toBe('string');
@@ -23,7 +23,7 @@ test('GET /api/healthz returns healthy payload for API-prefixed clients', async 
   const res = await request(app).get('/api/healthz');
   expect(res.status).toBe(200);
   expect(res.body.ok).toBe(true);
-  expect(res.body.service).toBe('summitsafe-backend');
+  expect(res.body.service).toBe('backcountry-conditions-backend');
 });
 
 test('GET /api/safety rejects missing coordinates', async () => {

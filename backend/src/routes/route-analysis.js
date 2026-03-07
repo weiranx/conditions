@@ -1,4 +1,5 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
+const { logger } = require('../utils/logger');
 
 const withTimeout = (promise, ms, label) =>
   Promise.race([
@@ -104,7 +105,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       });
       return res.json(routes);
     } catch (err) {
-      console.error('[route-suggestions] error:', err.message);
+      logger.error({ err }, 'route-suggestions error');
       return res.status(500).json({ error: err.message });
     }
   });
@@ -198,7 +199,7 @@ Write a concise route-wide briefing (3-5 short paragraphs) covering:
 
       return res.json({ waypoints: waypointsCopy, summaries, analysis });
     } catch (err) {
-      console.error('[route-analysis] error:', err.message);
+      logger.error({ err }, 'route-analysis error');
       return res.status(500).json({ error: 'Failed to analyze route: ' + err.message });
     }
   });

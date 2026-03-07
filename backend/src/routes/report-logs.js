@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { logger } = require('../utils/logger');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,7 +18,7 @@ const rewriteFile = () => {
       : '';
     fs.writeFileSync(LOG_FILE, content, 'utf8');
   } catch (err) {
-    console.error('[report-logs] rewrite failed:', err.message);
+    logger.error({ err }, 'report-logs rewrite failed');
   }
 };
 
@@ -32,9 +33,9 @@ const trimOldEntries = () => {
 try {
   fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
 } catch (err) {
-  console.error('[report-logs] mkdir failed:', err.message);
+  logger.error({ err }, 'report-logs mkdir failed');
 }
-console.log('[report-logs] log file:', LOG_FILE);
+logger.info({ file: LOG_FILE }, 'report-logs initialized');
 
 // Load existing logs on startup — filter to last week, rewrite file if any were pruned
 try {
@@ -52,7 +53,7 @@ try {
     if (recent.length !== parsed.length) rewriteFile();
   }
 } catch (err) {
-  console.error('[report-logs] load failed:', err.message);
+  logger.error({ err }, 'report-logs load failed');
 }
 
 // Daily trim to evict entries that aged out during a long-running process
@@ -66,7 +67,7 @@ const logReportRequest = (entry) => {
   try {
     fs.appendFileSync(LOG_FILE, JSON.stringify(record) + '\n', 'utf8');
   } catch (err) {
-    console.error('[report-logs] append failed:', err.message);
+    logger.error({ err }, 'report-logs append failed');
   }
 };
 

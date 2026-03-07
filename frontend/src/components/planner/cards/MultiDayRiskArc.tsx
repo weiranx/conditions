@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Area,
   Bar,
@@ -37,7 +38,19 @@ function CustomDot(props: Record<string, unknown>) {
   return <circle cx={cx} cy={cy} r={5} fill={fill} stroke="#fff" strokeWidth={1.5} />;
 }
 
+function useChartTooltipStyle(): React.CSSProperties {
+  return useMemo(() => {
+    const isDark =
+      typeof document !== 'undefined' &&
+      document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDark
+      ? { fontSize: 12, padding: '6px 10px', background: '#1a2731', border: '1px solid #2b3946', color: '#e9f1f8' }
+      : { fontSize: 12, padding: '6px 10px' };
+  }, []);
+}
+
 export function MultiDayRiskArc({ tripDays, getScoreColor }: MultiDayRiskArcProps) {
+  const tooltipStyle = useChartTooltipStyle();
   if (!tripDays || tripDays.length === 0) return null;
 
   const chartData = tripDays.map((d) => ({
@@ -80,7 +93,7 @@ export function MultiDayRiskArc({ tripDays, getScoreColor }: MultiDayRiskArcProp
             hide
           />
           <Tooltip
-            contentStyle={{ fontSize: 12, padding: '6px 10px' }}
+            contentStyle={tooltipStyle}
             formatter={(value, name) => {
               const v = Number(value);
               if (name === 'scoreVal') return [`${Math.round(v)}`, 'Score'];

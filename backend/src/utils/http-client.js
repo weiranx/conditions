@@ -1,6 +1,6 @@
 const nodeFetch = require('node-fetch');
 
-const DEFAULT_FETCH_HEADERS = { 'User-Agent': 'BackcountryConditions/1.0 (+https://summitsafe.app; support@summitsafe.app)' };
+const DEFAULT_FETCH_HEADERS = { 'User-Agent': 'BackcountryConditions/1.0 (+https://backcountryconditions.app; support@backcountryconditions.app)' };
 
 const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : nodeFetch;
 
@@ -50,7 +50,7 @@ const createCircuitBreaker = ({ name, failureThreshold = 5, resetTimeMs = 60000 
       lastFailureAt = Date.now();
       if (failures >= failureThreshold) {
         open = true;
-        console.warn(`[circuit-breaker] ${name} opened after ${failures} consecutive failures`);
+        require('./logger').logger.warn({ breaker: name, failures }, 'Circuit breaker opened');
       }
     },
     get name() { return name; },

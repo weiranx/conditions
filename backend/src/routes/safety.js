@@ -1,10 +1,12 @@
+const { logger } = require('../utils/logger');
+
 const registerSafetyRoute = ({ app, safetyHandler }) => {
   app.get('/api/safety', safetyHandler);
 };
 
 const createSafetyInvoker = ({ safetyHandler }) => async (query) =>
   new Promise((resolve, reject) => {
-    const mockReq = { query, headers: {}, ip: null };
+    const mockReq = { query, headers: {}, ip: null, log: logger };
     const mockRes = {
       statusCode: 200,
       headersSent: false,

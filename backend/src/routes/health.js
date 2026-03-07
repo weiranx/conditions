@@ -5,7 +5,7 @@ const registerHealthRoutes = (app, { caches = [] } = {}) => {
     const mem = process.memoryUsage();
     res.json({
       ok: true,
-      service: 'summitsafe-backend',
+      service: 'backcountry-conditions-backend',
       version,
       env: process.env.NODE_ENV || 'development',
       uptime: Math.floor(process.uptime()),

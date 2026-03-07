@@ -4,6 +4,7 @@ const compression = require('compression');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const crypto = require('node:crypto');
+const { logger, withRequestId } = require('../utils/logger');
 
 const createApp = ({
   isProduction,
@@ -38,11 +39,12 @@ const createApp = ({
     const requestId = crypto.randomUUID();
     const startedAt = Date.now();
     req.requestId = requestId;
+    req.log = withRequestId(requestId);
     res.setHeader('X-Request-Id', requestId);
     res.on('finish', () => {
       if (!isProduction || res.statusCode >= 500) {
         const elapsed = Date.now() - startedAt;
-        console.log(`[${requestId}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${elapsed}ms)`);
+        req.log.info({ method: req.method, url: req.originalUrl, status: res.statusCode, elapsed }, 'request');
       }
     });
     next();

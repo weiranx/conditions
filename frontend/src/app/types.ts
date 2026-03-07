@@ -53,6 +53,8 @@ export interface ElevationForecastBand {
 
 export interface SafetyData {
   generatedAt?: string;
+  partialData?: boolean;
+  apiWarning?: string;
   location: { lat: number; lon: number };
   forecast?: {
     selectedDate?: string;

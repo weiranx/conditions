@@ -1,4 +1,16 @@
+import { useMemo } from 'react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+
+function useChartTooltipStyle(): React.CSSProperties {
+  return useMemo(() => {
+    const isDark =
+      typeof document !== 'undefined' &&
+      document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDark
+      ? { fontSize: 12, padding: '4px 8px', background: '#1a2731', border: '1px solid #2b3946', color: '#e9f1f8' }
+      : { fontSize: 12, padding: '4px 8px' };
+  }, []);
+}
 
 interface HourlyConditionsDashboardProps {
   trendData: Array<{
@@ -30,6 +42,7 @@ function MiniSparkline({
   config: SparklineConfig;
   showXAxis: boolean;
 }) {
+  const tooltipStyle = useChartTooltipStyle();
   return (
     <div className="hourly-sparkline-row">
       <span className="hourly-sparkline-label">{config.title}</span>
@@ -46,7 +59,7 @@ function MiniSparkline({
               />
             )}
             <Tooltip
-              contentStyle={{ fontSize: 12, padding: '4px 8px' }}
+              contentStyle={tooltipStyle}
               formatter={(value) => [config.formatter(Number(value)), '']}
               labelFormatter={(label) => String(label)}
             />

@@ -100,11 +100,12 @@ const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { askClaude } = require('./src/utils/ai-client');
 const { createCache, normalizeCoordKey, normalizeCoordDateKey } = require('./src/utils/cache');
+const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
 const avyLog = (...args) => {
   if (DEBUG_AVY) {
-    console.log(...args);
+    logger.debug(args.length === 1 ? { msg: args[0] } : { data: args }, 'avy-debug');
   }
 };
 const app = createApp({
@@ -1209,7 +1210,7 @@ const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
       }
     }
   } catch (error) {
-    console.warn('[Elevation] USGS lookup failed:', error.message);
+    logger.warn({ err: error }, 'Elevation USGS lookup failed');
   }
 
   try {
@@ -1226,7 +1227,7 @@ const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
       }
     }
   } catch (error) {
-    console.warn('[Elevation] Open-Meteo lookup failed:', error.message);
+    logger.warn({ err: error }, 'Elevation Open-Meteo lookup failed');
   }
 
   return { elevationFt: null, source: null };
@@ -1678,10 +1679,10 @@ const safetyHandler = async (req, res) => {
           if (blended.usedSupplement) {
             terrainConditionData = deriveTerrainCondition(weatherData);
             trailStatus = terrainConditionData.label;
-            console.warn(`NOAA weather supplemented with Open-Meteo fields: ${blended.supplementedFields.join(', ')}`);
+            logger.warn({ fields: blended.supplementedFields }, 'NOAA weather supplemented with Open-Meteo');
           }
         } catch (supplementError) {
-          console.warn('NOAA weather supplement from Open-Meteo failed; continuing with NOAA-only weather.', supplementError);
+          logger.warn({ err: supplementError }, 'NOAA weather supplement from Open-Meteo failed');
         }
       }
 
@@ -1698,10 +1699,10 @@ const safetyHandler = async (req, res) => {
         });
         if (cachedSolar) solarData = cachedSolar;
       } catch (e) {
-        console.error("Solar API error:", e);
+        logger.error({ err: e }, 'Solar API error');
       }
     } catch (weatherError) {
-      console.error("Weather API error:", weatherError);
+      logger.error({ err: weatherError }, 'Weather API error');
       if (!selectedForecastDate) {
         selectedForecastDate = requestedDate || new Date().toISOString().slice(0, 10);
       }
@@ -1732,9 +1733,9 @@ const safetyHandler = async (req, res) => {
         terrainConditionData = fallback.terrainCondition || deriveTerrainCondition(weatherData);
         trailStatus = terrainConditionData.label;
         forecastDateRange = fallback.forecastDateRange;
-        console.warn("NOAA weather unavailable; served Open-Meteo fallback weather.");
+        logger.warn('NOAA weather unavailable; served Open-Meteo fallback');
       } catch (fallbackError) {
-        console.error("Weather fallback API error:", fallbackError);
+        logger.error({ err: fallbackError }, 'Weather fallback API error');
         weatherData = createUnavailableWeatherData({ lat: parsedLat, lon: parsedLon, forecastDate: selectedForecastDate });
         weatherData.dataSource = 'unavailable';
         terrainConditionData = deriveTerrainCondition(weatherData);
@@ -2149,7 +2150,7 @@ const safetyHandler = async (req, res) => {
 	        }
 	      }
 			    } catch (e) {
-      console.error("Avalanche API error:", e);
+      logger.error({ err: e }, 'Avalanche API error');
       if (avalancheData.dangerUnknown) {
         avalancheData = createUnknownAvalancheData("temporarily_unavailable");
       }
@@ -2199,28 +2200,28 @@ const safetyHandler = async (req, res) => {
     if (alertsResult.status === 'fulfilled') {
       alertsData = alertsResult.value;
     } else {
-      console.warn('[Alerts] fetch failed:', alertsResult.reason?.message || alertsResult.reason);
+      logger.warn({ err: alertsResult.reason }, 'Alerts fetch failed');
       alertsData = createUnavailableAlertsData("unavailable");
     }
 
     if (airQualityResult.status === 'fulfilled') {
       airQualityData = airQualityResult.value;
     } else {
-      console.warn('[AirQuality] fetch failed:', airQualityResult.reason?.message || airQualityResult.reason);
+      logger.warn({ err: airQualityResult.reason }, 'AirQuality fetch failed');
       airQualityData = createUnavailableAirQualityData("unavailable");
     }
 
     if (rainfallResult.status === 'fulfilled') {
       rainfallData = rainfallResult.value;
     } else {
-      console.warn('[Rainfall] fetch failed:', rainfallResult.reason?.message || rainfallResult.reason);
+      logger.warn({ err: rainfallResult.reason }, 'Rainfall fetch failed');
       rainfallData = createUnavailableRainfallData("unavailable");
     }
 
     if (snowpackResult.status === 'fulfilled') {
       snowpackData = snowpackResult.value;
     } else {
-      console.warn('[Snowpack] fetch failed:', snowpackResult.reason?.message || snowpackResult.reason);
+      logger.warn({ err: snowpackResult.reason }, 'Snowpack fetch failed');
       snowpackData = createUnavailableSnowpackData("unavailable");
     }
 
@@ -2325,7 +2326,7 @@ const safetyHandler = async (req, res) => {
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
 	    res.json(responsePayload);
   } catch (error) {
-    console.error('API Error:', error);
+    logger.error({ err: error }, 'API error');
     if (res.headersSent) {
       return;
     }
@@ -2430,7 +2431,7 @@ const SAFETY_HANDLER_TIMEOUT_MS = 30000;
 const safetyHandlerWithTimeout = async (req, res) => {
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
-      console.warn(`[safety] Request timed out after ${SAFETY_HANDLER_TIMEOUT_MS}ms — lat=${req.query.lat} lon=${req.query.lon}`);
+      logger.warn({ lat: req.query.lat, lon: req.query.lon, timeoutMs: SAFETY_HANDLER_TIMEOUT_MS }, 'Safety request timed out');
       res.status(504).json({
         error: 'Request timed out. One or more upstream providers did not respond in time.',
         partialData: true,

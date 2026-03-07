@@ -1,18 +1,20 @@
+const { logger } = require('../utils/logger');
+
 const startServer = ({ app, port }) => {
-  const server = app.listen(port, () => console.log(`Backend Active on ${port}`));
+  const server = app.listen(port, () => logger.info({ port }, 'Backend active'));
 
   const shutdown = (signal) => {
-    console.log(`Received ${signal}. Shutting down...`);
+    logger.info({ signal }, 'Shutting down');
     server.close((err) => {
       if (err) {
-        console.error('Graceful shutdown failed:', err);
+        logger.error({ err }, 'Graceful shutdown failed');
         process.exit(1);
       }
       process.exit(0);
     });
 
     setTimeout(() => {
-      console.error('Shutdown timeout reached, forcing exit.');
+      logger.error('Shutdown timeout reached, forcing exit');
       process.exit(1);
     }, 10000).unref();
   };
@@ -20,10 +22,10 @@ const startServer = ({ app, port }) => {
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled rejection:', reason);
+    logger.error({ err: reason }, 'Unhandled rejection');
   });
   process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception:', error);
+    logger.error({ err: error }, 'Uncaught exception');
     shutdown('uncaughtException');
   });
 

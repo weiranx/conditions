@@ -2644,7 +2644,7 @@ function App() {
       };
 
       const backendOk = Boolean(p.ok);
-      const backendService = String(p.service || 'summitsafe-backend');
+      const backendService = String(p.service || 'backcountry-conditions-backend');
       const backendEnv = String(p.env || 'unknown');
       const backendVersion = String(p.version || '?');
       const backendUptime = typeof p.uptime === 'number' ? p.uptime : null;
@@ -6617,7 +6617,7 @@ function App() {
         <section className="home-hero">
           <div className="home-hero-main">
             <div className="home-kicker">Backcountry Conditions</div>
-            <h1>Plan your next summit.</h1>
+            <h1>Plan your next backcountry day.</h1>
             <p>
               Weather, avalanche, snowpack, and alert checks — synthesized for your route and timing.
             </p>
@@ -6759,16 +6759,16 @@ function App() {
           />
 
           <nav className="header-nav" aria-label="Planner controls">
-            <button className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
+            <button type="button" className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
               <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
             </button>
             {hasObjective && (
-              <button className="secondary-btn header-nav-btn" onClick={handleToggleSaveObjective}>
+              <button type="button" className="secondary-btn header-nav-btn" onClick={handleToggleSaveObjective}>
                 {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
                 <span className="nav-btn-label">{objectiveIsSaved ? 'Saved' : 'Save'}</span>
               </button>
             )}
-            <button className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
+            <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
               {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
             </button>
           </nav>
@@ -6950,7 +6950,7 @@ function App() {
       )}
 
       {error && (
-        <div className="error-banner">
+        <div className="error-banner" role="alert" aria-live="assertive">
           <h3>System Alert</h3>
           <p>{error}</p>
           {hasObjective && (
@@ -6975,6 +6975,13 @@ function App() {
         <section className="top-freshness-alert coverage-warning" role="status">
           <strong>Limited coverage</strong>
           <span>Primary data sources (NOAA, NWS, SNOTEL, avalanche centers) are US-focused. Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.</span>
+        </section>
+      )}
+
+      {hasObjective && safetyData && safetyData.partialData && (
+        <section className="top-freshness-alert coverage-warning" role="status" aria-live="assertive">
+          <strong>Incomplete data</strong>
+          <span>{safetyData.apiWarning || 'One or more upstream data providers failed. Some report sections may be missing or degraded.'}</span>
         </section>
       )}
 
