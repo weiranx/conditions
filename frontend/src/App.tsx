@@ -8079,12 +8079,13 @@ function App() {
                   headerMeta={<span className={`decision-pill ${rainfall24hSeverityClass}`}>24h rain {rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}</span>}
                   summary={`${rainfall24hDisplay}/24h${Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}`}
                   preview={<>
-                    <div className="card-preview-hero mono">{rainfall24hDisplay}</div>
-                    <div className="card-preview-caption">Rain past 24h{Number.isFinite(snowfall24hIn) ? ` · Snow ${snowfall24hDisplay}` : ''}</div>
+                    <div className="card-preview-hero mono">{rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · ${snowfall24hDisplay}` : ''}</div>
+                    <div className="card-preview-caption">Rain · Snow past 24h</div>
                     <div className="card-preview-row">
-                      <span className="card-preview-chip">12h {rainfall12hDisplay}</span>
-                      <span className="card-preview-chip">48h {rainfall48hDisplay}</span>
-                      <span className="card-preview-chip">Expected {expectedRainWindowDisplay}</span>
+                      <span className="card-preview-chip">Rain 12h {rainfall12hDisplay}</span>
+                      <span className="card-preview-chip">Snow 12h {snowfall12hDisplay}</span>
+                      <span className="card-preview-chip">48h {rainfall48hDisplay} · {snowfall48hDisplay}</span>
+                      <span className="card-preview-chip">Expected {expectedRainWindowDisplay} · {expectedSnowWindowDisplay}</span>
                     </div>
                   </>}
                 >
