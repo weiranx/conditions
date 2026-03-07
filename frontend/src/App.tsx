@@ -2418,7 +2418,7 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
       {contextMenu && (
         <div className="logs-context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
           <button className="logs-context-item" onClick={() => applyExactFilter(contextMenu.key, contextMenu.value)}>
-            Filter by "{contextMenu.value}"
+            Filter {LOG_COLUMNS.find((c) => c.key === contextMenu.key)?.label} = "{contextMenu.value.length > 24 ? contextMenu.value.slice(0, 24) + '…' : contextMenu.value}"
           </button>
         </div>
       )}
