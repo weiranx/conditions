@@ -86,6 +86,13 @@ input {
   will-change: transform, opacity;
 }
 
+/* ── Perf: disable invisible backdrop-filter inside opaque cards ── */
+.card *,
+.ai-box * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 .page-shell.page-shell-planner {
   animation-duration: 0.21s;
 }
@@ -1014,7 +1021,7 @@ input {
   border: 1px solid rgba(148, 154, 140, 0.26);
   overflow: hidden;
   box-shadow: var(--shadow-soft);
-  animation: fade-up 0.65s ease both;
+  animation: fade-up 0.35s ease both;
 }
 
 .map-section {
@@ -1794,12 +1801,11 @@ input {
   padding: 20px;
   border-radius: 20px;
   border: 2px solid;
-  background: rgba(255, 253, 248, 0.82);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 253, 248, 0.92);
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
   transition: transform 0.22s ease, box-shadow 0.22s ease;
-  animation: fade-up 0.55s ease both;
+  animation: fade-up 0.3s ease both;
+  contain: layout style;
 }
 
 .score-value {
@@ -1959,15 +1965,13 @@ input {
 
 .card,
 .ai-box {
-  background: rgba(255, 253, 248, 0.82);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 253, 248, 0.92);
   border: 1px solid rgba(215, 210, 194, 0.35);
   border-radius: var(--radius-card);
   padding: 18px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  animation: fade-up 0.7s ease both;
+  animation: fade-up 0.35s ease both;
+  contain: layout style;
 }
 
 .card-header {
