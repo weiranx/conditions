@@ -56,7 +56,6 @@ import { HelpHint } from './components/planner/CardHelpHint';
 import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
 import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
-import { HourlyConditionsDashboard } from './components/planner/cards/HourlyConditionsDashboard';
 import { ElevationDangerGradient } from './components/planner/cards/ElevationDangerGradient';
 import { MultiDayRiskArc } from './components/planner/cards/MultiDayRiskArc';
 import { RouteConditionsProfile } from './components/planner/cards/RouteConditionsProfile';
@@ -7760,20 +7759,6 @@ function App() {
                     <p className="muted-note">No {weatherTrendMetricLabel.toLowerCase()} trend data is available for this selected window.</p>
                   )}
                 </div>
-
-                <HourlyConditionsDashboard
-                  trendData={weatherTrendRows.map((r) => ({
-                    label: r.label,
-                    temp: r.temp,
-                    feelsLike: r.feelsLike,
-                    wind: r.wind,
-                    gust: r.gust,
-                    precipChance: r.precipChance,
-                  }))}
-                  formatTempDisplay={formatTempDisplay}
-                  formatWindDisplay={formatWindDisplay}
-                  timeStyle={preferences.timeStyle}
-                />
 
                 <div className="weather-metrics">
                   <div className="metric-chip">
