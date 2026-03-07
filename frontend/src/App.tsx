@@ -8886,7 +8886,7 @@ function App() {
             </div>
           </div>
 
-          {(() => {
+          {avalancheRelevant && (() => {
             const avyHeaderMeta = (
               <div className="source-meta">
                 {avalancheRelevant && (
