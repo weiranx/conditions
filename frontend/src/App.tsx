@@ -2229,7 +2229,6 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
             <th>Partial</th>
             <th>Duration</th>
             <th>IP</th>
-            <th>User-Agent</th>
             <th>Link</th>
           </tr>
         </thead>
@@ -2250,11 +2249,12 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
                 <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'}>
                   {entry.statusCode}
                 </td>
-                <td>{entry.safetyScore != null ? entry.safetyScore : '—'}</td>
+                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 80 ? 'var(--accent-green)' : entry.safetyScore >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)', fontWeight: 600 } : undefined}>
+                  {entry.safetyScore != null ? `${entry.safetyScore}%` : '—'}
+                </td>
                 <td>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
                 <td>{entry.durationMs}ms</td>
                 <td className="logs-cell-mono">{entry.ip ?? '—'}</td>
-                <td className="logs-cell-ua" title={entry.userAgent ?? undefined}>{entry.userAgent ?? '—'}</td>
                 <td>
                   {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
                 </td>
