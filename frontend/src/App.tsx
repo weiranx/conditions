@@ -1358,7 +1358,7 @@ function buildDayOverDayChanges(current: SafetyData, previous: SafetyData, prefe
   const currentFeels = Number(current?.weather?.feelsLike ?? current?.weather?.temp);
   const previousFeels = Number(previous?.weather?.feelsLike ?? previous?.weather?.temp);
   if (Number.isFinite(currentFeels) && Number.isFinite(previousFeels) && Math.abs(currentFeels - previousFeels) >= 3) {
-    const feelsDelta = convertTempFToDisplayValue(currentFeels - previousFeels, preferences.temperatureUnit);
+    const feelsDelta = convertTempFToDisplayValue(currentFeels, preferences.temperatureUnit) - convertTempFToDisplayValue(previousFeels, preferences.temperatureUnit);
     changes.push(`Feels-like changed ${formatSignedDelta(feelsDelta)}°${preferences.temperatureUnit.toUpperCase()}.`);
   }
 
@@ -2385,6 +2385,7 @@ function App() {
   const latestSuggestionRequestId = useRef(0);
   const suggestionCacheRef = useRef<Map<string, Suggestion[]>>(new Map());
   const suggestionAbortControllerRef = useRef<AbortController | null>(null);
+  const suggestionsQueryRef = useRef<string>('');
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3013,6 +3014,7 @@ function App() {
     const storedMatches = getStoredSuggestionsForQuery(query);
     if (!query || query.length < 2) {
       const discoverySuggestions = getStoredSuggestionsForQuery(query, { includePopular: true });
+      suggestionsQueryRef.current = query;
       setSuggestions(discoverySuggestions);
       setShowSuggestions(true);
       setActiveSuggestionIndex(-1);
@@ -3024,6 +3026,7 @@ function App() {
     const cached = suggestionCacheRef.current.get(cacheKey);
 
     if (cached) {
+      suggestionsQueryRef.current = query;
       setSuggestions(cached);
       setShowSuggestions(true);
       setActiveSuggestionIndex(-1);
@@ -3063,6 +3066,7 @@ function App() {
           suggestionCacheRef.current.delete(oldestKey);
         }
       }
+      suggestionsQueryRef.current = query;
       setSuggestions(resolvedSuggestions);
       setShowSuggestions(true);
       setActiveSuggestionIndex(-1);
@@ -3075,6 +3079,7 @@ function App() {
       }
       const fallback = mergeSuggestionBuckets([storedMatches, getLocalPopularSuggestions(query)], 8);
       suggestionCacheRef.current.set(cacheKey, fallback);
+      suggestionsQueryRef.current = query;
       setSuggestions(fallback);
       setShowSuggestions(true);
       setActiveSuggestionIndex(-1);
@@ -3325,7 +3330,7 @@ function App() {
     e.preventDefault();
     const liveQuery = searchQuery;
     const suggestionsMatchLiveQuery =
-      normalizeSuggestionText(liveQuery) === normalizeSuggestionText(searchQuery);
+      normalizeSuggestionText(liveQuery) === normalizeSuggestionText(suggestionsQueryRef.current);
 
     if (suggestionsMatchLiveQuery && activeSuggestionIndex >= 0 && suggestions[activeSuggestionIndex]) {
       selectSuggestion(suggestions[activeSuggestionIndex]);
@@ -3343,7 +3348,7 @@ function App() {
   const handleSearchSubmit = () => {
     const liveQuery = searchQuery;
     const suggestionsMatchLiveQuery =
-      normalizeSuggestionText(liveQuery) === normalizeSuggestionText(searchQuery);
+      normalizeSuggestionText(liveQuery) === normalizeSuggestionText(suggestionsQueryRef.current);
     if (!liveQuery.trim()) {
       setShowSuggestions(true);
       setActiveSuggestionIndex(-1);
@@ -4012,7 +4017,7 @@ function App() {
   );
   const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
   const returnTimeFormatted = returnMinutes !== null ? minutesToTwentyFourHourClock(Math.min(returnMinutes, 1439)) : null;
-  const decision = safetyData
+  let decision = safetyData
     ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime: returnTimeFormatted ?? undefined })
     : null;
   const failedCriticalChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
@@ -5299,7 +5304,7 @@ function App() {
   if (decision && aspectOverlapProblems.length > 0) {
     const overlapCaution = `Wind loading aligns with active avalanche problem aspects (${aspectOverlapProblems.join(', ')}). Current winds may be actively building slabs on these aspects.`;
     if (!decision.cautions.includes(overlapCaution)) {
-      decision.cautions.push(overlapCaution);
+      decision = { ...decision, cautions: [...decision.cautions, overlapCaution] };
     }
   }
   const windSpeedMph = Number(safetyData?.weather.windSpeed);
