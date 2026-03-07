@@ -2207,11 +2207,13 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
     );
   }
 
+  const uniqueVisitors = new Set(logs.map((l) => l.ip).filter(Boolean)).size;
+
   return (
     <div className="logs-table-wrap">
       {lastRefreshed && (
         <p className="logs-meta">
-          {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · Last refreshed: {lastRefreshed.toLocaleTimeString()}
+          {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · {uniqueVisitors} unique visitor{uniqueVisitors === 1 ? '' : 's'} · Last refreshed: {lastRefreshed.toLocaleTimeString()}
         </p>
       )}
       <table className="logs-table">
