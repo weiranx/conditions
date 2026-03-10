@@ -2234,6 +2234,7 @@ button.collapsible-card-header:focus-visible {
   max-width: 720px;
   width: 100%;
   max-height: 88vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   animation: modal-panel-in 0.25s ease both;
@@ -2246,6 +2247,10 @@ button.collapsible-card-header:focus-visible {
   padding: 20px 20px 16px;
   border-bottom: 1px solid #ddd7c8;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: inherit;
 }
 
 .card-modal-title {
