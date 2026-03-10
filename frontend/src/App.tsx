@@ -7351,7 +7351,7 @@ function App() {
                           {wp.score !== null && (
                             <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
                           )}
-                          {wp.avalanche.risk && (
+                          {wp.avalanche?.risk && (
                             <span className="route-wp-avy">{wp.avalanche.risk}</span>
                           )}
                           {wpCoords && (

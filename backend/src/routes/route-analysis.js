@@ -188,23 +188,27 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       // Step 3: Strip each payload to key fields to keep synthesis prompt small
       const summaries = waypointsCopy.map((wp, i) => {
         const p = safetyResults[i]?.payload || {};
+        const avyRelevant = p.avalanche?.relevant !== false;
+        const snowDepthIn = p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null;
+        const hasSnow = snowDepthIn != null && snowDepthIn > 0;
         return {
           name: wp.name,
           elev_ft: wp.elev_ft,
           score: p.safety?.score ?? null,
           weather: pick(p.weather, ['temp', 'feelsLike', 'windSpeed', 'windGust', 'description', 'precipChance']),
-          avalanche: pick(p.avalanche, ['risk', 'dangerLevel', 'bottomLine']),
+          ...(avyRelevant && hasSnow ? { avalanche: pick(p.avalanche, ['risk', 'dangerLevel', 'bottomLine']) } : {}),
           activeAlerts: Array.isArray(p.alerts?.alerts) ? p.alerts.alerts.length : 0,
-          snowDepthIn: p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null,
+          ...(hasSnow ? { snowDepthIn } : {}),
         };
       });
 
       // Step 4: Synthesize
+      const hasAvalancheData = summaries.some((s) => s.avalanche);
       const analysis = await withTimeout(askClaude(
         `You are analyzing backcountry conditions for a trip on ${safePeak}.
 Route: ${safeRoute}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
-
+${hasAvalancheData ? '' : '\nNo snowpack or avalanche data is present — do NOT discuss avalanche hazards, snow conditions, or avalanche gear.\n'}
 Waypoint conditions from trailhead to summit:
 ${JSON.stringify(summaries, null, 2)}
 

@@ -13,7 +13,7 @@ interface RouteConditionsProfileProps {
     elev_ft: number;
     score: number | null;
     weather: { temp?: number; windSpeed?: number; description?: string; precipChance?: number };
-    avalanche: { risk?: string; dangerLevel?: number };
+    avalanche?: { risk?: string; dangerLevel?: number };
   }>;
   getScoreColor: (score: number) => string;
   formatTempDisplay: (value: number | null | undefined) => string;
@@ -73,7 +73,7 @@ function CustomTooltip({
         <div>Precip: {Math.round(wp.weather.precipChance)}%</div>
       )}
       {wp.weather.description && <div>{wp.weather.description}</div>}
-      {wp.avalanche.risk && <div>Avy: {wp.avalanche.risk}</div>}
+      {wp.avalanche?.risk && <div>Avy: {wp.avalanche.risk}</div>}
     </div>
   );
 }
