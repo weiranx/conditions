@@ -8064,27 +8064,6 @@ function App() {
                     </span>
                   </div>
                   {elevationForecastBands.length > 0 ? (
-                    <div className="elevation-rows">
-                      {elevationForecastBands.map((band) => (
-                        <article key={`${band.label}-${band.elevationFt}`} className="elevation-row">
-                          <div className="elevation-row-main">
-                            <strong>{band.label}</strong>
-                            <span>
-                              {formatElevationDisplay(band.elevationFt)} ({formatElevationDeltaDisplay(band.deltaFromObjectiveFt)})
-                            </span>
-                          </div>
-                          <div className="elevation-row-metrics">
-                            <span>{formatTempDisplay(band.temp)}</span>
-                            <span>Feels {formatTempDisplay(band.feelsLike)}</span>
-                            <span>Wind {formatWindDisplay(band.windSpeed)}</span>
-                            <span>Gust {formatWindDisplay(band.windGust)}</span>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="muted-note">Elevation-adjusted forecast is unavailable for this point.</p>
-                  )}
                   <ElevationDangerGradient
                     elevationBands={elevationForecastBands}
                     avalancheElevations={safetyData.avalanche.elevations}
@@ -8095,6 +8074,9 @@ function App() {
                     getDangerLevelClass={getDangerLevelClass}
                     getDangerText={getDangerText}
                   />
+                  ) : (
+                    <p className="muted-note">Elevation-adjusted forecast is unavailable for this point.</p>
+                  )}
                   {safetyData.weather.elevationForecastNote && (
                     <p className="elevation-note">{localizeUnitText(safetyData.weather.elevationForecastNote)}</p>
                   )}
