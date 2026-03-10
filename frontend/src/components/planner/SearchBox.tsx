@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, History, LoaderCircle, Mountain, Search, X } from 'lucide-react';
+import { Bookmark, History, LoaderCircle, Mountain, Search, Star, X } from 'lucide-react';
 import { isMountainSuggestion, type Suggestion } from '../../lib/search';
 
 interface SearchBoxProps {
@@ -120,11 +120,7 @@ export function SearchBox({
                   onMouseEnter={() => onHoverSuggestion(index)}
                 >
                   <strong className="suggestion-title">
-                    {suggestion.class === 'popular' && (
-                      <span className="suggestion-popular-star" aria-hidden="true">
-                        ⭐
-                      </span>
-                    )}
+                    {suggestion.class === 'popular' && <Star size={13} className="suggestion-title-icon" aria-hidden="true" />}
                     {suggestion.class === 'saved' && <Bookmark size={13} className="suggestion-title-icon" aria-hidden="true" />}
                     {suggestion.class === 'recent' && <History size={13} className="suggestion-title-icon" aria-hidden="true" />}
                     {isMountainSuggestion(suggestion) && <Mountain size={14} className="suggestion-title-icon" aria-hidden="true" />}
@@ -134,7 +130,7 @@ export function SearchBox({
                 </button>
               </li>
             ))}
-          {!searchLoading && (
+          {!searchLoading && suggestions.length > 0 && (
             <li className="suggestion-status search-shortcuts">Tip: Press `/` to focus, `↑/↓` to navigate, `Enter` to select.</li>
           )}
         </ul>

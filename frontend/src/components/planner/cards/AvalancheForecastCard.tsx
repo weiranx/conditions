@@ -44,6 +44,7 @@ interface AvalancheForecastCardProps {
   summarizeText: (text: string | undefined, maxLength?: number) => string;
   toPlainText: (value: string) => string;
   objectiveElevationFt?: number | null;
+  formatElevationDisplay?: (value: number | null | undefined) => string;
 }
 
 export function AvalancheForecastCard({
@@ -62,6 +63,7 @@ export function AvalancheForecastCard({
   summarizeText,
   toPlainText,
   objectiveElevationFt,
+  formatElevationDisplay,
 }: AvalancheForecastCardProps) {
   return (
     <>
@@ -95,7 +97,7 @@ export function AvalancheForecastCard({
               </span>
             </div>
             {!avalancheUnknown && Number.isFinite(objectiveElevationFt) && objectiveElevationFt != null && (
-              <span className="objective-elev-note muted-note">Objective: ~{Math.round(objectiveElevationFt).toLocaleString()} ft — check which band applies to your route.</span>
+              <span className="objective-elev-note muted-note">Objective: ~{formatElevationDisplay ? formatElevationDisplay(objectiveElevationFt) : `${Math.round(objectiveElevationFt).toLocaleString()} ft`} — check which band applies to your route.</span>
             )}
 
             {avalancheUnknown ? (

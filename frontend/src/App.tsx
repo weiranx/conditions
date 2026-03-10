@@ -7177,8 +7177,9 @@ function App() {
       )}
 
       {hasObjective && safetyData && decision && (
-        <div className="data-grid">
-          <div className="score-card" style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
+        <div className="data-grid" role="main" aria-label="Conditions report">
+          <h2 className="sr-only">Conditions Report</h2>
+          <div className="score-card" role="region" aria-label={`Safety score: ${safetyData.safety.score}%, ${safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}`} style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
             <div className="score-left">
               <div className="score-value" style={{ color: getScoreColor(safetyData.safety.score) }}>
                 {safetyData.safety.score}%
@@ -7202,7 +7203,7 @@ function App() {
               )}
             </div>
             <div className="score-meta">
-              <span className="status-badge" style={{ color: getScoreColor(safetyData.safety.score) }}>
+              <span className={`status-badge ${safetyData.safety.score >= 80 ? 'is-low-risk' : safetyData.safety.score >= 50 ? 'is-elevated-risk' : 'is-high-risk'}`}>
                 {safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}
               </span>
               <div className="hazard-badge">
@@ -7373,6 +7374,7 @@ function App() {
                     getScoreColor={getScoreColor}
                     formatTempDisplay={formatTempDisplay}
                     formatWindDisplay={formatWindDisplay}
+                    formatElevationDisplay={formatElevationDisplay}
                   />
                   <div className="route-analysis-text">
                     {renderSimpleMarkdown(routeAnalysis.analysis)}
@@ -9092,7 +9094,7 @@ function App() {
               headerMeta={avyHeaderMeta}
               summary={avalancheRelevant ? (overallAvalancheLevel != null ? `L${overallAvalancheLevel}: ${getDangerText(overallAvalancheLevel)}` : 'Unknown danger level') : 'Not applicable'}
               preview={<>
-                <div className="card-preview-hero">{avalancheRelevant ? (overallAvalancheLevel != null ? `${getDangerGlyph(overallAvalancheLevel)} ${getDangerText(overallAvalancheLevel)}` : 'Unknown') : 'N/A'}</div>
+                <div className={`card-preview-hero ${avalancheRelevant && overallAvalancheLevel != null ? (overallAvalancheLevel >= 4 ? 'avy-nogo' : overallAvalancheLevel >= 3 ? 'avy-caution' : 'avy-go') : ''}`}>{avalancheRelevant ? (overallAvalancheLevel != null ? `${getDangerGlyph(overallAvalancheLevel)} ${getDangerText(overallAvalancheLevel)}` : 'Unknown') : 'N/A'}</div>
                 <div className="card-preview-caption">{safetyData.avalanche.zone || 'Unknown zone'}</div>
               </>}
             >
@@ -9112,6 +9114,7 @@ function App() {
             summarizeText={summarizeText}
             toPlainText={toPlainText}
             objectiveElevationFt={safetyData.weather.elevation ?? null}
+            formatElevationDisplay={formatElevationDisplay}
             />
             </CollapsibleCard>
             );

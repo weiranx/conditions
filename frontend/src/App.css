@@ -18,6 +18,7 @@
   --accent-yellow: #c58d3b;
   --accent-red: #c84444;
   --focus-ring: #2f7a57;
+  --text-secondary: #596459;
 
   --font-main: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
   --font-data: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
@@ -40,6 +41,7 @@
   --bg-glow-a: rgba(61, 104, 130, 0.26);
   --bg-glow-b: rgba(128, 94, 60, 0.2);
   --focus-ring: #5ea0d0;
+  --text-secondary: #8a9ba8;
   --shadow-soft: 0 10px 24px rgba(2, 6, 10, 0.35);
   --shadow-deep: 0 18px 40px rgba(2, 8, 14, 0.48);
   color-scheme: dark;
@@ -2154,8 +2156,8 @@ button.collapsible-card-header:focus-visible {
 /* ── Card Modal Overlay ──────────────────────────────────── */
 
 .collapsible-card.is-modal-open {
-  border-color: var(--focus-ring, #4a90d9);
-  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.25);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 25%, transparent);
 }
 
 .card-modal-backdrop {
@@ -2474,6 +2476,10 @@ button.collapsible-card-header:focus-visible {
 .help-hint:hover .help-tooltip,
 .help-hint:focus-visible .help-tooltip {
   opacity: 1;
+}
+
+.help-tooltip {
+  transition: opacity 0.15s ease;
 }
 
 .decision-card {
@@ -3633,6 +3639,11 @@ button.collapsible-card-header:focus-visible {
   text-transform: uppercase;
   cursor: pointer;
   transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.travel-preset-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .travel-preset-btn.active {
@@ -9636,4 +9647,88 @@ button.collapsible-card-header:focus-visible {
 .route-profile-tooltip-name {
   font-weight: 600;
   margin-bottom: 2px;
+}
+
+/* === Coverage / Partial-Data Warning === */
+.top-freshness-alert.coverage-warning {
+  border-color: #c26a3b;
+  background: linear-gradient(180deg, #fde8d8 0%, #f9dbc8 100%);
+  color: #6e2f10;
+}
+
+:root[data-theme='dark'] .top-freshness-alert.coverage-warning {
+  border-color: #9b5030;
+  background: linear-gradient(180deg, #3a2218 0%, #2e1c14 100%);
+  color: #f1b89a;
+}
+
+/* === Stale Avalanche Warning Banner === */
+.stale-warning-banner {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e2b1b1;
+  background: #fdf1f1;
+  color: #9b2f2f;
+  font-weight: 600;
+}
+
+:root[data-theme='dark'] .stale-warning-banner {
+  border-color: #7a3c3c;
+  background: #2e1a1a;
+  color: #f1b3b3;
+}
+
+/* === Hourly Conditions Dashboard === */
+.hourly-conditions-dashboard {
+  display: grid;
+  gap: 4px;
+}
+
+.hourly-sparkline-row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.hourly-sparkline-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.hourly-sparkline-chart {
+  min-height: 60px;
+}
+
+/* === Score Card Status Badge Classes === */
+.status-badge.is-low-risk { color: var(--accent-green); }
+.status-badge.is-elevated-risk { color: var(--accent-yellow); }
+.status-badge.is-high-risk { color: var(--accent-red); }
+
+/* === Avalanche Preview Hero Colors === */
+.card-preview-hero.avy-go { color: var(--accent-green); }
+.card-preview-hero.avy-caution { color: var(--accent-yellow); }
+.card-preview-hero.avy-nogo { color: var(--accent-red); }
+
+/* === Print Stylesheet === */
+@media print {
+  .header-section,
+  .map-shell,
+  .planner-jump-nav,
+  .map-actions,
+  .report-action-row,
+  .btn-ai-brief,
+  .route-analyze-btn,
+  .travel-preset-row,
+  .travel-threshold-actions,
+  .travel-window-actions,
+  .search-wrapper { display: none !important; }
+
+  body { background: white !important; color: #1d2922 !important; }
+  .data-grid { box-shadow: none; border: none; background: white; }
+  .card, .ai-box, .score-card { box-shadow: none; break-inside: avoid; }
+  .collapsible-card { border: 1px solid #ddd; }
 }

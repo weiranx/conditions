@@ -19,6 +19,7 @@ interface MultiDayRiskArcProps {
     windGustMph: number | null;
   }>;
   getScoreColor: (score: number) => string;
+  theme?: string;
 }
 
 const DECISION_COLORS: Record<string, string> = {
@@ -38,19 +39,21 @@ function CustomDot(props: Record<string, unknown>) {
   return <circle cx={cx} cy={cy} r={5} fill={fill} stroke="#fff" strokeWidth={1.5} />;
 }
 
-function useChartTooltipStyle(): React.CSSProperties {
+function useChartTooltipStyle(theme?: string): React.CSSProperties {
   return useMemo(() => {
-    const isDark =
+    const isDark = theme === 'dark' || (
+      theme !== 'light' &&
       typeof document !== 'undefined' &&
-      document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.getAttribute('data-theme') === 'dark'
+    );
     return isDark
       ? { fontSize: 12, padding: '6px 10px', background: '#1a2731', border: '1px solid #2b3946', color: '#e9f1f8' }
       : { fontSize: 12, padding: '6px 10px' };
-  }, []);
+  }, [theme]);
 }
 
-export function MultiDayRiskArc({ tripDays, getScoreColor }: MultiDayRiskArcProps) {
-  const tooltipStyle = useChartTooltipStyle();
+export function MultiDayRiskArc({ tripDays, getScoreColor, theme }: MultiDayRiskArcProps) {
+  const tooltipStyle = useChartTooltipStyle(theme);
   if (!tripDays || tripDays.length === 0) return null;
 
   const chartData = tripDays.map((d) => ({

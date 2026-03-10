@@ -1,15 +1,17 @@
 import { useMemo } from 'react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 
-function useChartTooltipStyle(): React.CSSProperties {
+function useChartTooltipStyle(theme?: string): React.CSSProperties {
   return useMemo(() => {
-    const isDark =
+    const isDark = theme === 'dark' || (
+      theme !== 'light' &&
       typeof document !== 'undefined' &&
-      document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.getAttribute('data-theme') === 'dark'
+    );
     return isDark
       ? { fontSize: 12, padding: '4px 8px', background: '#1a2731', border: '1px solid #2b3946', color: '#e9f1f8' }
       : { fontSize: 12, padding: '4px 8px' };
-  }, []);
+  }, [theme]);
 }
 
 interface HourlyConditionsDashboardProps {
@@ -23,7 +25,7 @@ interface HourlyConditionsDashboardProps {
   }>;
   formatTempDisplay: (value: number | null | undefined) => string;
   formatWindDisplay: (value: number | null | undefined) => string;
-  timeStyle: 'ampm' | '24h';
+  theme?: string;
 }
 
 interface SparklineConfig {
@@ -37,12 +39,14 @@ function MiniSparkline({
   data,
   config,
   showXAxis,
+  theme,
 }: {
   data: HourlyConditionsDashboardProps['trendData'];
   config: SparklineConfig;
   showXAxis: boolean;
+  theme?: string;
 }) {
-  const tooltipStyle = useChartTooltipStyle();
+  const tooltipStyle = useChartTooltipStyle(theme);
   return (
     <div className="hourly-sparkline-row">
       <span className="hourly-sparkline-label">{config.title}</span>
@@ -87,6 +91,7 @@ export function HourlyConditionsDashboard({
   trendData,
   formatTempDisplay,
   formatWindDisplay,
+  theme,
 }: HourlyConditionsDashboardProps) {
   if (!trendData || trendData.length === 0) return null;
 
@@ -124,6 +129,7 @@ export function HourlyConditionsDashboard({
           data={trendData}
           config={config}
           showXAxis={i === sparklines.length - 1}
+          theme={theme}
         />
       ))}
     </div>

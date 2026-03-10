@@ -18,6 +18,7 @@ interface RouteConditionsProfileProps {
   getScoreColor: (score: number) => string;
   formatTempDisplay: (value: number | null | undefined) => string;
   formatWindDisplay: (value: number | null | undefined) => string;
+  formatElevationDisplay: (value: number | null | undefined) => string;
 }
 
 const HIGH_RISK_THRESHOLD = 40;
@@ -48,19 +49,21 @@ function CustomTooltip({
   payload,
   formatTempDisplay,
   formatWindDisplay,
+  formatElevationDisplay,
 }: {
   active?: boolean;
   payload?: Array<{ payload: RouteConditionsProfileProps['waypoints'][number] }>;
   label?: string;
   formatTempDisplay: (v: number | null | undefined) => string;
   formatWindDisplay: (v: number | null | undefined) => string;
+  formatElevationDisplay: (v: number | null | undefined) => string;
 }) {
   if (!active || !payload?.[0]) return null;
   const wp = payload[0].payload;
   return (
     <div className="route-profile-tooltip">
       <div className="route-profile-tooltip-name">{wp.name}</div>
-      <div>{wp.elev_ft.toLocaleString()} ft</div>
+      <div>{formatElevationDisplay(wp.elev_ft)}</div>
       {wp.score != null && <div>Score: {Math.round(wp.score)}</div>}
       {wp.weather.temp != null && <div>Temp: {formatTempDisplay(wp.weather.temp)}</div>}
       {wp.weather.windSpeed != null && (
@@ -80,6 +83,7 @@ export function RouteConditionsProfile({
   getScoreColor,
   formatTempDisplay,
   formatWindDisplay,
+  formatElevationDisplay,
 }: RouteConditionsProfileProps) {
   if (!waypoints || waypoints.length === 0) return null;
 
@@ -119,6 +123,7 @@ export function RouteConditionsProfile({
               <CustomTooltip
                 formatTempDisplay={formatTempDisplay}
                 formatWindDisplay={formatWindDisplay}
+                formatElevationDisplay={formatElevationDisplay}
               />
             }
           />

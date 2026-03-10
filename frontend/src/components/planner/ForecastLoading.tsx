@@ -13,7 +13,7 @@ export function ForecastLoading() {
       </div>
       <div className="forecast-loading-copy">
         <strong>Building forecast brief...</strong>
-        <span>Syncing weather, avalanche, alerts, and air-quality feeds.</span>
+        <span>Checking 4 data sources for your objective.</span>
       </div>
       <div className="forecast-loading-steps" aria-hidden="true">
         {STEP_LABELS.map((label, index) => (

@@ -158,9 +158,9 @@ export function TravelWindowPlannerCard({
             </article>
           </div>
           <div className="travel-thresholds">
-            <span>Gust &lt;= {windThresholdDisplay}</span>
-            <span>Precip &lt;= {maxPrecipChance}%</span>
-            <span>Feels-like &gt;= {feelsLikeThresholdDisplay}</span>
+            <span>Gust &le; {windThresholdDisplay}</span>
+            <span>Precip &le; {maxPrecipChance}%</span>
+            <span>Feels-like &ge; {feelsLikeThresholdDisplay}</span>
           </div>
           <div className="travel-preset-row" role="group" aria-label="Travel threshold presets">
             {(['conservative', 'standard', 'aggressive', 'runner'] as const).map((presetKey) => (
@@ -200,7 +200,8 @@ export function TravelWindowPlannerCard({
                       max={windThresholdMax}
                       step={windThresholdStep}
                       value={maxWindGustDraft}
-                      onChange={(e) => { handleWindThresholdDisplayChange(e); handleWindThresholdDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>); }}
+                      onChange={handleWindThresholdDisplayChange}
+                      onPointerUp={(e) => handleWindThresholdDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>)}
                     />
                     <input
                       type="number"
@@ -223,7 +224,8 @@ export function TravelWindowPlannerCard({
                       max={100}
                       step={1}
                       value={maxPrecipChanceDraft}
-                      onChange={(e) => { handleMaxPrecipChanceDraftChange(e); handleMaxPrecipChanceDraftBlur(e as unknown as FocusEvent<HTMLInputElement>); }}
+                      onChange={handleMaxPrecipChanceDraftChange}
+                      onPointerUp={(e) => handleMaxPrecipChanceDraftBlur(e as unknown as FocusEvent<HTMLInputElement>)}
                     />
                     <input
                       type="number"
@@ -246,7 +248,8 @@ export function TravelWindowPlannerCard({
                       max={feelsLikeThresholdMax}
                       step={feelsLikeThresholdStep}
                       value={minFeelsLikeDraft}
-                      onChange={(e) => { handleFeelsLikeThresholdDisplayChange(e); handleFeelsLikeThresholdDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>); }}
+                      onChange={handleFeelsLikeThresholdDisplayChange}
+                      onPointerUp={(e) => handleFeelsLikeThresholdDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>)}
                     />
                     <input
                       type="number"
