@@ -24,8 +24,13 @@ const rewriteFile = () => {
 
 const trimOldEntries = () => {
   const before = reportLogs.length;
+  if (before === 0) return;
   const firstRecent = reportLogs.findIndex(isWithinOneWeek);
-  if (firstRecent > 0) reportLogs.splice(0, firstRecent);
+  if (firstRecent === -1) {
+    reportLogs.splice(0);
+  } else if (firstRecent > 0) {
+    reportLogs.splice(0, firstRecent);
+  }
   if (reportLogs.length !== before) rewriteFile();
 };
 
@@ -60,7 +65,7 @@ try {
 setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
 
 const logReportRequest = (entry) => {
-  if (!entry.name) return;
+  if (!entry.name && entry.statusCode === 200) return;
   const record = { ...entry, timestamp: new Date().toISOString() };
   if (reportLogs.length >= MAX_LOG_ENTRIES) reportLogs.shift();
   reportLogs.push(record);

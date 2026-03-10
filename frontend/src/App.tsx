@@ -2221,21 +2221,26 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: LogSortKey; value: string } | null>(null);
 
   const fetchLogs = useCallback(async () => {
-    const { response, payload } = await fetchApi('/api/report-logs', {
-      headers: { Authorization: `Bearer ${secretKey}` },
-    });
-    if (response.status === 401 || response.status === 403) {
-      onUnauthorized();
-      return;
+    try {
+      const { response, payload } = await fetchApi('/api/report-logs', {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      if (response.status === 401 || response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (response.ok && Array.isArray(payload)) {
+        setLogs(payload as ReportLogEntry[]);
+        setError(null);
+      } else {
+        setError('Failed to load report logs.');
+      }
+      setLastRefreshed(new Date());
+    } catch {
+      setError('Network error loading logs.');
+    } finally {
+      setLoading(false);
     }
-    if (response.ok && Array.isArray(payload)) {
-      setLogs(payload as ReportLogEntry[]);
-      setError(null);
-    } else {
-      setError('Failed to load report logs.');
-    }
-    setLoading(false);
-    setLastRefreshed(new Date());
   }, [secretKey, onUnauthorized]);
 
   useEffect(() => {
@@ -2405,7 +2410,7 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
                   {entry.safetyScore != null ? `${entry.safetyScore}%` : '—'}
                 </td>
                 <td onContextMenu={(e) => handleCellContextMenu(e, 'partialData', entry)}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'durationMs', entry)}>{entry.durationMs}ms</td>
+                <td onContextMenu={(e) => handleCellContextMenu(e, 'durationMs', entry)}>{entry.durationMs != null ? `${entry.durationMs}ms` : '—'}</td>
                 <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'ip', entry)}>{entry.ip ?? '—'}</td>
                 <td>
                   {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
@@ -8251,9 +8256,9 @@ function App() {
                     <div className="card-preview-caption">Rain · Snow past 24h</div>
                     <div className="card-preview-row">
                       <span className="card-preview-chip">Rain 12h {rainfall12hDisplay}</span>
-                      <span className="card-preview-chip">Snow 12h {snowfall12hDisplay}</span>
-                      <span className="card-preview-chip">48h {rainfall48hDisplay} · {snowfall48hDisplay}</span>
-                      <span className="card-preview-chip">Expected {expectedRainWindowDisplay} · {expectedSnowWindowDisplay}</span>
+                      {Number.isFinite(snowfall12hIn) && <span className="card-preview-chip">Snow 12h {snowfall12hDisplay}</span>}
+                      <span className="card-preview-chip">48h {rainfall48hDisplay}{Number.isFinite(snowfall48hIn) ? ` · ${snowfall48hDisplay}` : ''}</span>
+                      <span className="card-preview-chip">Expected {expectedRainWindowDisplay}{Number.isFinite(expectedSnowWindowIn) ? ` · ${expectedSnowWindowDisplay}` : ''}</span>
                     </div>
                   </>}
                 >

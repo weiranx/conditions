@@ -91,12 +91,18 @@ const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetc
     if (!peak || !lat || !lon) {
       return res.status(400).json({ error: 'peak, lat, and lon are required' });
     }
+    const safePeak = String(peak).slice(0, 200);
+    const safeLat = Number(lat);
+    const safeLon = Number(lon);
+    if (!Number.isFinite(safeLat) || !Number.isFinite(safeLon)) {
+      return res.status(400).json({ error: 'lat and lon must be valid numbers' });
+    }
 
     try {
-      const suggestCacheKey = `${normalizeTextKey(peak)}|${normalizeCoordKey(lat, lon)}`;
+      const suggestCacheKey = `${normalizeTextKey(safePeak)}|${normalizeCoordKey(safeLat, safeLon)}`;
       const routes = await routeSuggestionsCache.getOrFetch(suggestCacheKey, async () => {
         const text = await askClaude(
-          `List all well-known hiking, climbing, and scrambling routes for ${peak} near coordinates (${lat}, ${lon}) in the United States. Include 3 routes covering a range of difficulty levels.
+          `List all well-known hiking, climbing, and scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
           { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
@@ -117,13 +123,26 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     if (!peak || !route || !lat || !lon || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
+    const safePeak = String(peak).slice(0, 200);
+    const safeRoute = String(route).slice(0, 200);
+    const safeLat = Number(lat);
+    const safeLon = Number(lon);
+    if (!Number.isFinite(safeLat) || !Number.isFinite(safeLon)) {
+      return res.status(400).json({ error: 'lat and lon must be valid numbers' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD format' });
+    }
+    if (start && !/^\d{2}:\d{2}$/.test(start)) {
+      return res.status(400).json({ error: 'start must be HH:MM format' });
+    }
 
     try {
       // Step 1: Get waypoints from Claude (cached 24h per peak+route)
-      const wpCacheKey = `${normalizeTextKey(peak)}|${normalizeTextKey(route)}|${normalizeCoordKey(lat, lon)}`;
+      const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
       const waypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
         const waypointText = await withTimeout(askClaude(
-          `Return 4-5 key waypoints for the "${route}" on ${peak} near (${lat}, ${lon}).
+          `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
@@ -182,8 +201,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 
       // Step 4: Synthesize
       const analysis = await withTimeout(askClaude(
-        `You are analyzing backcountry conditions for a trip on ${peak}.
-Route: ${route}
+        `You are analyzing backcountry conditions for a trip on ${safePeak}.
+Route: ${safeRoute}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
 
 Waypoint conditions from trailhead to summit:
