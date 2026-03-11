@@ -244,10 +244,10 @@ export function parseTerrainFromLocation(location: AvalancheProblemFields['locat
     if (/\bsouthwest\b|\bsw\b/.test(entry)) aspects.add('SW');
     if (/\bsoutheast\b|\bse\b/.test(entry)) aspects.add('SE');
 
-    if ((/\bnorth\b/.test(entry) && !/\bnorthwest\b|\bnortheast\b/.test(entry)) || tokenSet.has('n')) aspects.add('N');
-    if ((/\bsouth\b/.test(entry) && !/\bsouthwest\b|\bsoutheast\b/.test(entry)) || tokenSet.has('s')) aspects.add('S');
-    if ((/\beast\b/.test(entry) && !/\bnortheast\b|\bsoutheast\b/.test(entry)) || tokenSet.has('e')) aspects.add('E');
-    if ((/\bwest\b/.test(entry) && !/\bnorthwest\b|\bsouthwest\b/.test(entry)) || tokenSet.has('w')) aspects.add('W');
+    if (/\bnorth\b/.test(entry) && !/\bnorthwest\b|\bnortheast\b/.test(entry)) aspects.add('N');
+    if (/\bsouth\b/.test(entry) && !/\bsouthwest\b|\bsoutheast\b/.test(entry)) aspects.add('S');
+    if (/\beast\b/.test(entry) && !/\bnortheast\b|\bsoutheast\b/.test(entry)) aspects.add('E');
+    if (/\bwest\b/.test(entry) && !/\bnorthwest\b|\bsouthwest\b/.test(entry)) aspects.add('W');
 
     const hasUpper = /\bupper\b|\babove\b|\balpine\b|\babove\s*treeline\b|\babove\s*tl\b|\batl\b/.test(entry);
     const hasLower = /\blower\b|\bbelow\b|\bbelow\s*treeline\b|\bbelow\s*tl\b|\bbtl\b/.test(entry);

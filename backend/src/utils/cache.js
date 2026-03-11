@@ -64,8 +64,8 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
       if (!inflight.has(key)) {
         const bgPromise = Promise.resolve()
           .then(() => fetchFn())
-          .then((val) => { set(key, val); })
-          .catch(() => {})
+          .then((val) => { set(key, val); return val; })
+          .catch(() => cached.value)
           .finally(() => { inflight.delete(key); });
         inflight.set(key, bgPromise);
       }

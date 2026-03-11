@@ -5,11 +5,11 @@ export function normalizeElevationInput(rawValue: string | null | undefined): st
     return '';
   }
   const cleaned = rawValue.trim().replace(/,/g, '');
-  if (!/^\d{3,5}$/.test(cleaned)) {
+  if (!/^\d{2,5}$/.test(cleaned)) {
     return '';
   }
   const numeric = Number(cleaned);
-  if (!Number.isFinite(numeric) || numeric < 0 || numeric > 20000) {
+  if (!Number.isFinite(numeric) || numeric < 0 || numeric > 30000) {
     return '';
   }
   return String(Math.round(numeric));

@@ -133,8 +133,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD format' });
     }
-    if (start && !/^\d{2}:\d{2}$/.test(start)) {
-      return res.status(400).json({ error: 'start must be HH:MM format' });
+    if (start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) {
+      return res.status(400).json({ error: 'start must be HH:MM format (00:00–23:59)' });
     }
 
     try {

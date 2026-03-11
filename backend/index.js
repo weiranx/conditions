@@ -296,6 +296,13 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
     };
   }
 
+  if (avalancheData?.coverageStatus === 'reported' && avalancheData?.staleWarning === '72h') {
+    return {
+      relevant: true,
+      reason: 'Avalanche bulletin is over 72 hours old and should be treated as expired. Check the avalanche center for a current forecast.',
+    };
+  }
+
   const hasOfficialCoverage = avalancheData?.coverageStatus === 'reported' && avalancheData?.dangerUnknown !== true;
   if (hasOfficialCoverage) {
     return {
@@ -541,7 +548,7 @@ const calculateSafetyScore = ({
       weightedStrongWindHours += w;
     }
     if (Number.isFinite(rowGust)) {
-      weightedTrendPeakGust = Math.max(weightedTrendPeakGust, rowGust * w);
+      weightedTrendPeakGust = Math.max(weightedTrendPeakGust, rowGust);
     }
     const rowPrecip = Number(item?.precipChance);
     if (Number.isFinite(rowPrecip) && rowPrecip >= 60) {
@@ -1445,8 +1452,8 @@ const safetyHandler = async (req, res) => {
   let fireRiskData = createUnavailableFireRiskData("unavailable");
   let heatRiskData = createUnavailableHeatRiskData("unavailable");
 
+  const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
   try {
-    const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
     const avyMapLayerPromise = getAvalancheMapLayer(fetchOptions);
 
     try {
@@ -2001,6 +2008,7 @@ const safetyHandler = async (req, res) => {
 	            !hasGenericBottomLine;
 	          const scrapeLink = normalizeExternalLink(props.link);
 	          const shouldScrape =
+	            !centerNoActiveForecast &&
 	            (hasGenericBottomLine ||
 	              (!avalancheData.problems.length && !hasDetailedBottomLine) ||
 	              (props.center_id === 'CAIC' && (avalancheData.bottomLine || '').length < 180)) &&
@@ -2053,7 +2061,7 @@ const safetyHandler = async (req, res) => {
 
               // Try searching for JSON embedded in the page (common in Drupal/React sites)
               // Look for "bottom_line" or "summary" keys in any script tag or large object
-              const blMatch = pageText.match(/"(bottom_line|bottom_line_summary|overall_summary)"\s*:\s*"([^"]+)"/);
+              const blMatch = pageText.match(/"(bottom_line|bottom_line_summary|overall_summary)"\s*:\s*"((?:[^"\\]|\\.)+)"/);
               
               if (blMatch && blMatch[2]) {
                 bottomLineCandidates.push(blMatch[2].replace(/\\"/g, '"'));
@@ -2062,10 +2070,13 @@ const safetyHandler = async (req, res) => {
                  // CAIC: field--name-field-avalanche-summary, MSAC: field-item
                  const htmlSummary = pageText.match(/class="[^"]*(field--name-field-avalanche-summary|field-bottom-line)[^"]*"[^>]*>([\s\S]*?)<\/div>/);
                  if (htmlSummary && htmlSummary[2]) {
-                    bottomLineCandidates.push(htmlSummary[2]);
+                    const stripped = htmlSummary[2].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (stripped.length > 0 && stripped.length < 5000) {
+                      bottomLineCandidates.push(stripped);
+                    }
                  } else {
                     // Check for large text block with "summary" key in likely JSON
-                    const possibleLargeText = pageText.match(/"summary"\s*:\s*"([^"]{100,})"/);
+                    const possibleLargeText = pageText.match(/"summary"\s*:\s*"((?:[^"\\]|\\.){100,})"/);
                     if (possibleLargeText && possibleLargeText[1]) {
                       bottomLineCandidates.push(possibleLargeText[1].replace(/\\"/g, '"'));
                     }
@@ -2429,6 +2440,7 @@ const safetyHandler = async (req, res) => {
 const SAFETY_HANDLER_TIMEOUT_MS = 30000;
 
 const safetyHandlerWithTimeout = async (req, res) => {
+  const ac = new AbortController();
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       logger.warn({ lat: req.query.lat, lon: req.query.lon, timeoutMs: SAFETY_HANDLER_TIMEOUT_MS }, 'Safety request timed out');
@@ -2437,6 +2449,7 @@ const safetyHandlerWithTimeout = async (req, res) => {
         partialData: true,
       });
     }
+    ac.abort();
   }, SAFETY_HANDLER_TIMEOUT_MS);
   try {
     await safetyHandler(req, res);

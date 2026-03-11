@@ -74,6 +74,11 @@ const parseWindMph = (input, fallback = 0) => {
   if (typeof input !== 'string') {
     return fallback;
   }
+  const rangeMatch = input.match(/(-?\d+)\s*to\s*(-?\d+)/i);
+  if (rangeMatch) {
+    const high = parseInt(rangeMatch[2], 10);
+    return Number.isFinite(high) ? Math.max(0, high) : fallback;
+  }
   const match = input.match(/-?\d+/);
   if (!match) {
     return fallback;

@@ -1539,8 +1539,8 @@ function evaluateBackcountryDecision(
   };
 
   const danger = data.avalanche.dangerLevel || 0;
-  let gust = data.weather.windGust || 0;
-  let precip = data.weather.precipChance || 0;
+  let gust = data.weather.windGust ?? 0;
+  let precip = data.weather.precipChance ?? 0;
   const score = normalizedDecisionScore(data, options);
   let feelsLike = data.weather.feelsLike ?? data.weather.temp;
   const description = data.weather.description || '';
@@ -2010,17 +2010,33 @@ interface RouteAnalysisResult {
 
 function renderSimpleMarkdown(text: string): React.ReactNode[] {
   const elements: React.ReactNode[] = [];
-  let listBuffer: string[] = [];
+  let bulletBuffer: string[] = [];
+  let numberedBuffer: string[] = [];
   let key = 0;
 
-  const flushList = () => {
-    if (listBuffer.length === 0) return;
+  const flushBullets = () => {
+    if (bulletBuffer.length === 0) return;
     elements.push(
       <ul key={key++} className="route-md-list">
-        {listBuffer.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
+        {bulletBuffer.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
       </ul>
     );
-    listBuffer = [];
+    bulletBuffer = [];
+  };
+
+  const flushNumbered = () => {
+    if (numberedBuffer.length === 0) return;
+    elements.push(
+      <ol key={key++} className="route-md-list">
+        {numberedBuffer.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
+      </ol>
+    );
+    numberedBuffer = [];
+  };
+
+  const flushLists = () => {
+    flushBullets();
+    flushNumbered();
   };
 
   const renderInline = (line: string): React.ReactNode[] =>
@@ -2038,7 +2054,7 @@ function renderSimpleMarkdown(text: string): React.ReactNode[] {
 
     // Blank line
     if (!line) {
-      flushList();
+      flushLists();
       i++;
       continue;
     }
@@ -2046,7 +2062,7 @@ function renderSimpleMarkdown(text: string): React.ReactNode[] {
     // Heading
     const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
-      flushList();
+      flushLists();
       const level = headingMatch[1].length;
       if (level === 1) elements.push(<h3 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h3>);
       else if (level === 2) elements.push(<h4 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h4>);
@@ -2057,20 +2073,22 @@ function renderSimpleMarkdown(text: string): React.ReactNode[] {
 
     // Bullet list
     if (/^[-*]\s+/.test(line)) {
-      listBuffer.push(line.replace(/^[-*]\s+/, ''));
+      flushNumbered();
+      bulletBuffer.push(line.replace(/^[-*]\s+/, ''));
       i++;
       continue;
     }
 
     // Numbered list
     if (/^\d+\.\s+/.test(line)) {
-      listBuffer.push(line.replace(/^\d+\.\s+/, ''));
+      flushBullets();
+      numberedBuffer.push(line.replace(/^\d+\.\s+/, ''));
       i++;
       continue;
     }
 
     // Paragraph — collect consecutive non-blank, non-special lines
-    flushList();
+    flushLists();
     const paraLines: string[] = [line];
     i++;
     while (i < lines.length) {
@@ -2082,7 +2100,7 @@ function renderSimpleMarkdown(text: string): React.ReactNode[] {
     elements.push(<p key={key++}>{renderInline(paraLines.join(' '))}</p>);
   }
 
-  flushList();
+  flushLists();
   return elements;
 }
 
@@ -3068,7 +3086,8 @@ function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [todayDate, maxForecastDate, preferences, clearWakeRetry]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayDate, maxForecastDate, preferences.defaultStartTime, clearWakeRetry]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3259,12 +3278,10 @@ function App() {
     }
   }, [getStoredSuggestionsForQuery]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
-    if (activeSuggestionIndex !== -1) {
-      setActiveSuggestionIndex(-1);
-    }
+    setActiveSuggestionIndex(-1);
 
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -3278,7 +3295,7 @@ function App() {
     } else {
       void fetchSuggestions('');
     }
-  };
+  }, [fetchSuggestions]);
 
   const selectSuggestion = useCallback(
     (s: Suggestion) => {
@@ -3364,11 +3381,15 @@ function App() {
       }
 
       setSearchLoading(true);
+      const requestId = ++latestSuggestionRequestId.current;
       try {
         const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
         const { response, payload, requestId: apiRequestId } = await fetchApi(
           `/api/search${queryParam}`,
         );
+        if (requestId !== latestSuggestionRequestId.current) {
+          return false;
+        }
         if (!response.ok) {
           const baseMessage = readApiErrorMessage(payload, `Search request failed (${response.status})`);
           throw new Error(apiRequestId ? `${baseMessage} (request ${apiRequestId})` : baseMessage);
@@ -3387,6 +3408,9 @@ function App() {
         setActiveSuggestionIndex(-1);
         return false;
       } catch (err) {
+        if (requestId !== latestSuggestionRequestId.current) {
+          return false;
+        }
         console.error('Search submit error:', err);
         const fallbackSuggestions = mergeSuggestionBuckets([getStoredSuggestionsForQuery(query), getLocalPopularSuggestions(query)], 8);
         setSuggestions(fallbackSuggestions);
@@ -4181,6 +4205,7 @@ function App() {
     Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
   );
   const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
+  const returnExtendsPastMidnight = returnMinutes !== null && returnMinutes > 1439;
   const returnTimeFormatted = returnMinutes !== null ? minutesToTwentyFourHourClock(Math.min(returnMinutes, 1439)) : null;
   let decision = safetyData
     ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime: returnTimeFormatted ?? undefined })
@@ -7219,7 +7244,7 @@ function App() {
                 {forecastLeadHoursDisplay && <span className="forecast-lead-badge">{forecastLeadHoursDisplay}</span>}
               </div>
               <div className="objective-line">
-                {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}{returnTimeFormatted ? ` • Back by ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ''}
+                {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}{returnTimeFormatted ? ` • Back by ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}${returnExtendsPastMidnight ? ' (+1 day)' : ''}` : ''}
               </div>
               {(loading || error) && (
                 <div className="source-line">
