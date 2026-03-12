@@ -38,7 +38,7 @@ export interface DeepDiveReportCardProps {
   weatherElevation: number | null | undefined;
   weatherElevationSource: string | null | undefined;
   weatherElevationForecastNote: string | null | undefined;
-  elevationForecastBands: Record<string, any>[];
+  elevationForecastBands: Array<{ label: string; elevationFt: number; deltaFromObjectiveFt: number; temp: number; feelsLike: number; windSpeed: number; windGust: number }>;
   avalancheCenter: string | null | undefined;
   avalancheZone: string | null | undefined;
   avalanchePublishedTime: string | null | undefined;
@@ -51,7 +51,7 @@ export interface DeepDiveReportCardProps {
   safeAvalancheLink: string | null;
   alertsActiveCount: number;
   alertsHighestSeverity: string | null | undefined;
-  alerts: Array<{ event?: string; severity?: string; urgency?: string; link?: string | null; [key: string]: any }>;
+  alerts: Array<{ event?: string; severity?: string; urgency?: string; link?: string | null }>;
   usAqi: number | null | undefined;
   aqiCategory: string | null | undefined;
   heatRiskLabel: string;
