@@ -1,115 +1,30 @@
-import React, { useState, useEffect, useCallback, useRef, useTransition, useMemo } from 'react';
-import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import {
-  Search,
-  Wind,
-  CloudRain,
-  Thermometer,
-  AlertTriangle,
-  Mountain,
-  Compass,
-  Map as MapIcon,
-  LocateFixed,
-  Layers,
-  Navigation,
-  Clock,
-  House,
-  Link2,
-  CalendarDays,
-  CheckCircle2,
-  XCircle,
-  Route,
-  ShieldCheck,
-  SlidersHorizontal,
-  Flame,
-  Sun,
-  RefreshCw,
-  BookmarkPlus,
-  BookmarkCheck,
-  Activity,
-  Cpu,
-  Wifi,
-  HardDrive,
-  Zap,
-  Check,
-  ExternalLink,
-  Sparkles,
-  Loader2,
-  Eye,
-} from 'lucide-react';
 import './App.css';
-import { fetchApi, readApiErrorMessage, fetchAiBrief } from './lib/api-client';
 import {
-  getLocalPopularSuggestions,
-  normalizeSuggestionText,
-  rankAndDeduplicateSuggestions,
-  type Suggestion,
-} from './lib/search';
-import { SearchBox } from './components/planner/SearchBox';
-import { ForecastLoading } from './components/planner/ForecastLoading';
-import { HelpHint } from './components/planner/CardHelpHint';
-import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
-import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
-import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
-import { MultiDayRiskArc } from './components/planner/cards/MultiDayRiskArc';
-import { RouteConditionsProfile } from './components/planner/cards/RouteConditionsProfile';
-import { CollapsibleCard } from './components/planner/CollapsibleCard';
-import { ScoreGauge } from './components/planner/ScoreGauge';
-import { WeatherCardContent } from './components/planner/cards/WeatherCardContent';
-import {
-  APP_CREDIT_TEXT,
-  BACKEND_WAKE_RETRY_DELAY_MS,
-  BACKEND_WAKE_RETRY_MAX_ATTEMPTS,
   DATE_FMT,
-  DEFAULT_CENTER,
   GUST_INCREASE_MPH_PER_1000FT,
   MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
-  SEARCH_DEBOUNCE_MS,
   TEMP_LAPSE_F_PER_1000FT,
   WIND_INCREASE_MPH_PER_1000FT,
 } from './app/constants';
 import {
   type ActivityType,
-  type CriticalRiskLevel,
-  type DayOverDayComparison,
-  type DecisionLevel,
-  type ElevationUnit,
-  type BackendMeta,
-  type HealthCheckResult,
-  type LinkState,
   type MapStyle,
   type SafetyData,
-  type SnowpackInsightBadge,
-  type SnowpackInterpretation,
-  type SnowpackSnapshotInsights,
   type SummitDecision,
-  type TemperatureUnit,
-  type ThemeMode,
-  type TimeStyle,
-  type TravelWindowInsights,
-  type TravelWindowRow,
-  type TravelWindowSpan,
   type UserPreferences,
   type WeatherTrendPoint,
-  type WindSpeedUnit,
 } from './app/types';
-import { AppDisclaimer, LocationMarker, MapUpdater } from './app/map-components';
 import {
-  addDaysToIsoDate,
   classifySnowpackFreshness,
   convertDisplayElevationToFeet,
-  convertDisplayTempToF,
-  convertDisplayWindToMph,
   convertElevationFeetToDisplayValue,
-  convertTempFToDisplayValue,
-  convertWindMphToDisplayValue,
   formatAgeFromNow,
   formatClockForStyle,
-  formatCompactAge,
   formatDateInput,
   formatDistanceForElevationUnit,
   formatElevationDeltaForUnit,
@@ -122,12 +37,8 @@ import {
   formatWindForUnit,
   freshnessClass,
   isTravelWindowCoveredByAlertWindow,
-  isValidLatLon,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
-  normalizeTimeOrFallback,
-  parseCoordinates,
-  parseIsoDateToUtcMs,
   parseIsoToMs,
   parseOptionalFiniteNumber,
   parseHourLabelToMinutes,
@@ -139,7 +50,6 @@ import {
 } from './app/core';
 import { currentDateTimeInputs, dateTimeInputsFor } from './app/date-time-inputs';
 import {
-  ASPECT_ROSE_ORDER,
   leewardAspectsFromWind,
   parseTerrainFromLocation,
   secondaryCrossLoadingAspects,
@@ -149,20 +59,62 @@ import {
   computeFeelsLikeF,
   getDangerLevelClass,
   normalizeDangerLevel,
-  normalizeElevationInput,
   parseOptionalElevationInput,
   parsePrecipNumericValue,
 } from './app/planner-helpers';
-import { getDefaultUserPreferences, loadUserPreferences, persistUserPreferences } from './app/preferences';
+import { loadUserPreferences } from './app/preferences';
 import {
   collapseWhitespace,
-  normalizeAlertNarrative,
-  splitAlertNarrativeParagraphs,
   stringifyRawPayload,
   summarizeText,
   toPlainText,
   truncateText,
 } from './app/text-utils';
+import { buildSnowpackInterpretation, buildSnowpackInsights } from './app/snowpack-display';
+import {
+  normalizeWindHintDirection,
+  windDirectionDeltaDegrees,
+  windDirectionFromDegrees,
+  resolveDominantTrendWindDirection,
+} from './app/wind-analysis';
+import { assessCriticalWindowPoint, criticalRiskLevelText } from './app/critical-window';
+import {
+  visibilityRiskPillClass,
+  normalizeVisibilityRiskLevel,
+  estimateVisibilityRiskFromPoint,
+  type VisibilityRiskEstimate,
+} from './app/visibility';
+import {
+  weatherConditionEmoji,
+  inferWeatherSourceLabel,
+  formatDurationMinutes,
+} from './app/weather-display';
+import {
+  buildTravelWindowRows,
+  formatTravelWindowSpan,
+  buildTravelWindowInsights,
+  buildTrendWindowFromStart,
+} from './app/travel-window';
+import { sanitizeExternalUrl, parseLinkState } from './app/url-state';
+import {
+  evaluateBackcountryDecision,
+} from './app/decision';
+import { PlannerView } from './components/planner/PlannerView';
+import { LogsView } from './components/views/LogsView';
+import { StatusView } from './components/views/StatusView';
+import { SettingsView } from './components/views/SettingsView';
+import { TripView } from './components/views/TripView';
+import { HomeView } from './components/views/HomeView';
+import { useHealthChecks } from './hooks/useHealthChecks';
+import { useRouteAnalysis } from './hooks/useRouteAnalysis';
+import { useTripForecast } from './hooks/useTripForecast';
+import { useSafetyData } from './hooks/useSafetyData';
+import { useSearchSuggestions } from './hooks/useSearchSuggestions';
+import { useUrlState, useSyncUrlEffect } from './hooks/useUrlState';
+import type { AppView } from './hooks/useUrlState';
+import { useDayComparisons } from './hooks/useDayComparisons';
+import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePreferenceHandlers';
+import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -170,11 +122,6 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
-const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
-const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
-const MAX_RECENT_SEARCHES = 8;
-const MAX_SAVED_OBJECTIVES = 12;
-type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive' | 'runner';
 type SortableCardKey =
   | 'decisionGate'
   | 'criticalChecks'
@@ -193,598 +140,6 @@ type SortableCardKey =
   | 'sourceFreshness'
   | 'scoreTrace'
   | 'recommendedGear';
-const TRAVEL_THRESHOLD_PRESETS: Record<
-  TravelThresholdPresetKey,
-  { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number }
-> = {
-  conservative: { label: 'Conservative', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 15 },
-  standard: { label: 'Standard', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5 },
-  aggressive: { label: 'Aggressive', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5 },
-  runner: { label: 'Runner / Summer', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25 },
-};
-
-function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'name'>): string {
-  return `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}:${normalizeSuggestionText(item.name || '')}`;
-}
-
-function suggestionCoordinateKey(lat: number | string, lon: number | string): string {
-  return `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`;
-}
-
-function normalizeStoredSuggestion(item: unknown, fallbackClass?: string): Suggestion | null {
-  if (!item || typeof item !== 'object') {
-    return null;
-  }
-  const raw = item as Partial<Suggestion>;
-  const name = String(raw.name || '').trim();
-  const lat = Number(raw.lat);
-  const lon = Number(raw.lon);
-  if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return null;
-  }
-  return {
-    name,
-    lat: Number(lat.toFixed(6)),
-    lon: Number(lon.toFixed(6)),
-    class: String(raw.class || fallbackClass || '').trim() || undefined,
-    type: raw.type,
-  };
-}
-
-function readStoredSuggestions(storageKey: string, fallbackClass?: string): Suggestion[] {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .map((item) => normalizeStoredSuggestion(item, fallbackClass))
-      .filter((item): item is Suggestion => Boolean(item));
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredSuggestions(storageKey: string, items: Suggestion[], maxItems: number): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  const deduped: Suggestion[] = [];
-  const seen = new Set<string>();
-  items.forEach((item) => {
-    const normalized = normalizeStoredSuggestion(item, item.class);
-    if (!normalized) {
-      return;
-    }
-    const key = suggestionIdentityKey(normalized);
-    if (seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    deduped.push(normalized);
-  });
-  try {
-    window.localStorage.setItem(storageKey, JSON.stringify(deduped.slice(0, maxItems)));
-  } catch {
-    // QuotaExceededError or SecurityError — silently ignore
-  }
-}
-
-function mergeSuggestionBuckets(buckets: Suggestion[][], limit: number): Suggestion[] {
-  const output: Suggestion[] = [];
-  const seen = new Set<string>();
-  buckets.forEach((bucket) => {
-    bucket.forEach((item) => {
-      const key = suggestionIdentityKey(item);
-      if (seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      output.push(item);
-    });
-  });
-  return output.slice(0, limit);
-}
-
-function filterSuggestionBucket(items: Suggestion[], query: string): Suggestion[] {
-  const normalizedQuery = normalizeSuggestionText(query);
-  if (!normalizedQuery) {
-    return items;
-  }
-  return items.filter((item) => normalizeSuggestionText(item.name).includes(normalizedQuery));
-}
-
-function buildSnowpackInterpretation(
-  snowpack: SafetyData['snowpack'] | null | undefined,
-  objectiveElevationFt: number | null | undefined,
-  elevationUnit: ElevationUnit = 'ft',
-): SnowpackInterpretation | null {
-  const snotel = snowpack?.snotel || null;
-  const nohrsc = snowpack?.nohrsc || null;
-  const cdec = snowpack?.cdec || null;
-
-  const snotelDepth = Number(snotel?.snowDepthIn);
-  const nohrscDepth = Number(nohrsc?.snowDepthIn);
-  const cdecDepth = Number(cdec?.snowDepthIn);
-  const snotelSwe = Number(snotel?.sweIn);
-  const nohrscSwe = Number(nohrsc?.sweIn);
-  const cdecSwe = Number(cdec?.sweIn);
-  const stationDistanceKm = Number(snotel?.distanceKm);
-  const stationElevationFt = Number(snotel?.elevationFt);
-
-  const hasSnotelDepth = Number.isFinite(snotelDepth);
-  const hasNohrscDepth = Number.isFinite(nohrscDepth);
-  const hasCdecDepth = Number.isFinite(cdecDepth);
-  const hasSnotelSwe = Number.isFinite(snotelSwe);
-  const hasNohrscSwe = Number.isFinite(nohrscSwe);
-  const hasCdecSwe = Number.isFinite(cdecSwe);
-  const hasAnySnowSignal =
-    (hasSnotelDepth && snotelDepth > 0) ||
-    (hasNohrscDepth && nohrscDepth > 0) ||
-    (hasCdecDepth && cdecDepth > 0) ||
-    (hasSnotelSwe && snotelSwe > 0) ||
-    (hasNohrscSwe && nohrscSwe > 0) ||
-    (hasCdecSwe && cdecSwe > 0);
-  const maxDepthIn = Math.max(
-    hasSnotelDepth ? snotelDepth : 0,
-    hasNohrscDepth ? nohrscDepth : 0,
-    hasCdecDepth ? cdecDepth : 0,
-  );
-  const maxSweIn = Math.max(
-    hasSnotelSwe ? snotelSwe : 0,
-    hasNohrscSwe ? nohrscSwe : 0,
-    hasCdecSwe ? cdecSwe : 0,
-  );
-  const lowBroadSnowSignal =
-    (hasSnotelDepth || hasNohrscDepth || hasCdecDepth || hasSnotelSwe || hasNohrscSwe || hasCdecSwe) &&
-    maxDepthIn <= 1 &&
-    maxSweIn <= 0.2;
-
-  if (!hasSnotelDepth && !hasNohrscDepth && !hasCdecDepth && !hasSnotelSwe && !hasNohrscSwe && !hasCdecSwe) {
-    return null;
-  }
-
-  let confidence: SnowpackInterpretation['confidence'] = 'solid';
-  const bullets: string[] = [];
-
-  if (hasSnotelDepth && hasNohrscDepth) {
-    const baseline = Math.max(Math.abs(snotelDepth), Math.abs(nohrscDepth), 1);
-    const depthDeltaPct = (Math.abs(nohrscDepth - snotelDepth) / baseline) * 100;
-    if (depthDeltaPct <= 30) {
-      bullets.push('SNOTEL and NOHRSC depth are broadly aligned, so snow coverage confidence is higher.');
-    } else {
-      confidence = lowBroadSnowSignal ? 'solid' : 'watch';
-      bullets.push('SNOTEL vs NOHRSC depth diverge significantly, indicating patchy or elevation-sensitive snow distribution.');
-    }
-  } else {
-    confidence = lowBroadSnowSignal ? 'solid' : 'watch';
-    bullets.push(
-      lowBroadSnowSignal
-        ? 'Only one depth source is available, but broad snow signal remains minimal.'
-        : 'Only one depth source is available; treat this as directional context, not a full snowpack picture.',
-    );
-  }
-
-  if (Number.isFinite(stationDistanceKm) && !lowBroadSnowSignal) {
-    const stationDistanceDisplay = formatDistanceForElevationUnit(stationDistanceKm, elevationUnit);
-    if (stationDistanceKm <= 10) {
-      bullets.push(`Nearest SNOTEL is close (${stationDistanceDisplay}), improving local representativeness.`);
-    } else if (stationDistanceKm > 25) {
-      confidence = confidence === 'solid' ? 'watch' : confidence;
-      bullets.push(`Nearest SNOTEL is ${stationDistanceDisplay} away, so conditions may differ materially at your objective.`);
-    }
-  }
-
-  if (Number.isFinite(stationElevationFt) && Number.isFinite(Number(objectiveElevationFt)) && !lowBroadSnowSignal) {
-    const elevDelta = Math.abs(stationElevationFt - Number(objectiveElevationFt));
-    if (elevDelta >= 2000) {
-      confidence = confidence === 'solid' ? 'watch' : confidence;
-      const displayDelta = convertElevationFeetToDisplayValue(elevDelta, elevationUnit);
-      bullets.push(
-        `SNOTEL station elevation differs by ~${Math.round(displayDelta).toLocaleString()} ${elevationUnit} from the objective; expect vertical snowpack variability.`,
-      );
-    }
-  }
-
-  const observedDateMs = parseIsoDateToUtcMs(snotel?.observedDate || null);
-  if (observedDateMs !== null) {
-    const ageDays = Math.max(0, Math.floor((Date.now() - observedDateMs) / (24 * 60 * 60 * 1000)));
-    if (ageDays >= 3) {
-      confidence = lowBroadSnowSignal ? 'watch' : 'low';
-      bullets.push(
-        lowBroadSnowSignal
-          ? `SNOTEL observation is ${ageDays} days old; broad no-snow signal is likely still valid, but verify for shaded pockets.`
-          : `SNOTEL observation is ${ageDays} days old; re-verify with latest center/weather products before committing.`,
-      );
-    } else if (ageDays >= 1) {
-      confidence = confidence === 'solid' ? 'watch' : confidence;
-      bullets.push(`SNOTEL observation is ${ageDays} day${ageDays === 1 ? '' : 's'} old; recent weather may have changed conditions.`);
-    }
-  }
-
-  const nohrscIsZeroOrMissing = !hasNohrscDepth || nohrscDepth <= 0;
-  const cdecIsZeroOrMissing = !hasCdecDepth || cdecDepth <= 0;
-  const snotelIsZeroOrMissing = !hasSnotelDepth || snotelDepth <= 0;
-  const highElevation = Number.isFinite(Number(objectiveElevationFt)) && Number(objectiveElevationFt) >= 7500;
-
-  if (
-    highElevation &&
-    !hasAnySnowSignal &&
-    nohrscIsZeroOrMissing &&
-    cdecIsZeroOrMissing &&
-    snotelIsZeroOrMissing
-  ) {
-    bullets.push(
-      'All automated sources show minimal or no snow at this elevation. Gridded models can underrepresent isolated mountain snowpack — verify with local avalanche center, ranger station, or recent trip reports.',
-    );
-  }
-
-  if (hasAnySnowSignal) {
-    const headline =
-      (hasNohrscDepth && nohrscDepth >= 24) || (hasCdecDepth && cdecDepth >= 24) ||
-      (hasSnotelSwe && snotelSwe >= 8) || (hasNohrscSwe && nohrscSwe >= 8) || (hasCdecSwe && cdecSwe >= 8)
-        ? 'Substantial snowpack signal. Treat avalanche terrain as consequential.'
-        : 'Some snowpack signal present. Validate terrain-specific stability as you travel.';
-    return {
-      headline,
-      confidence,
-      bullets: bullets.slice(0, 4),
-    };
-  }
-
-  return {
-    headline: 'Minimal broad snow signal in these sources. Non-snow travel is more likely, but isolated snow/ice pockets can remain.',
-    confidence: confidence === 'low' ? 'watch' : confidence,
-    bullets: bullets.slice(0, 4),
-  };
-}
-
-function buildSnowpackInsights(
-  snowpack: SafetyData['snowpack'] | null | undefined,
-  objectiveElevationFt: number | null | undefined,
-  elevationUnit: ElevationUnit = 'ft',
-): SnowpackSnapshotInsights {
-  const snotel = snowpack?.snotel || null;
-  const nohrsc = snowpack?.nohrsc || null;
-  const cdec = snowpack?.cdec || null;
-
-  const snotelDepth = Number(snotel?.snowDepthIn);
-  const nohrscDepth = Number(nohrsc?.snowDepthIn);
-  const cdecDepth = Number(cdec?.snowDepthIn);
-  const snotelSwe = Number(snotel?.sweIn);
-  const nohrscSwe = Number(nohrsc?.sweIn);
-  const cdecSwe = Number(cdec?.sweIn);
-  const maxDepth = Math.max(
-    Number.isFinite(snotelDepth) ? snotelDepth : 0,
-    Number.isFinite(nohrscDepth) ? nohrscDepth : 0,
-    Number.isFinite(cdecDepth) ? cdecDepth : 0,
-  );
-  const maxSwe = Math.max(
-    Number.isFinite(snotelSwe) ? snotelSwe : 0,
-    Number.isFinite(nohrscSwe) ? nohrscSwe : 0,
-    Number.isFinite(cdecSwe) ? cdecSwe : 0,
-  );
-  const hasObservedSnowpack =
-    Number.isFinite(snotelDepth) ||
-    Number.isFinite(nohrscDepth) ||
-    Number.isFinite(cdecDepth) ||
-    Number.isFinite(snotelSwe) ||
-    Number.isFinite(nohrscSwe) ||
-    Number.isFinite(cdecSwe);
-  const lowBroadSnowSignal = hasObservedSnowpack && maxDepth <= 1 && maxSwe <= 0.2;
-
-  let signal: SnowpackInsightBadge;
-  if (!hasObservedSnowpack) {
-    signal = {
-      label: 'Signal limited',
-      detail: 'No usable SNOTEL/NOHRSC/CDEC snow metrics were returned.',
-      tone: 'watch',
-    };
-  } else if (maxDepth >= 24 || maxSwe >= 8) {
-    signal = {
-      label: 'Strong signal',
-      detail: `Depth up to ${formatSnowDepthForElevationUnit(maxDepth, elevationUnit)} or SWE up to ${formatSweForElevationUnit(maxSwe, elevationUnit)}.`,
-      tone: 'watch',
-    };
-  } else if (maxDepth >= 6 || maxSwe >= 1.5) {
-    signal = {
-      label: 'Measurable signal',
-      detail: `Depth up to ${formatSnowDepthForElevationUnit(maxDepth, elevationUnit)} and SWE up to ${formatSweForElevationUnit(maxSwe, elevationUnit)}.`,
-      tone: 'watch',
-    };
-  } else {
-    signal = {
-      label: 'Minimal broad signal',
-      detail: `Depth/SWE are low (${formatSnowDepthForElevationUnit(maxDepth, elevationUnit)}, ${formatSweForElevationUnit(maxSwe, elevationUnit)}), but isolated snow terrain may still exist.`,
-      tone: 'good',
-    };
-  }
-
-  const snotelDistanceKm = Number(snotel?.distanceKm);
-  const snotelElevationFt = Number(snotel?.elevationFt);
-  const objectiveElevation = Number(objectiveElevationFt);
-  const hasDistance = Number.isFinite(snotelDistanceKm);
-  const hasElevDelta = Number.isFinite(snotelElevationFt) && Number.isFinite(objectiveElevation);
-  const elevDeltaFt = hasElevDelta ? Math.abs(snotelElevationFt - objectiveElevation) : null;
-  const distanceText = hasDistance ? formatDistanceForElevationUnit(snotelDistanceKm, elevationUnit) : 'N/A';
-  const elevDeltaText =
-    elevDeltaFt !== null
-      ? `${Math.round(convertElevationFeetToDisplayValue(elevDeltaFt, elevationUnit)).toLocaleString()} ${elevationUnit}`
-      : 'N/A';
-
-  let representativeness: SnowpackInsightBadge;
-  if (!hasDistance && !hasElevDelta) {
-    representativeness = {
-      label: lowBroadSnowSignal ? 'Context optional' : 'Representativeness unknown',
-      detail: lowBroadSnowSignal
-        ? 'Distance/elevation context is unavailable, but broad no-snow signal is still informative.'
-        : 'Nearest SNOTEL distance/elevation context is unavailable.',
-      tone: lowBroadSnowSignal ? 'good' : 'warn',
-    };
-  } else if ((hasDistance && snotelDistanceKm <= 10) && (elevDeltaFt === null || elevDeltaFt <= 1500)) {
-    representativeness = {
-      label: 'High representativeness',
-      detail: `Nearest station is ${distanceText} away${elevDeltaFt !== null ? ` with ~${elevDeltaText} elevation offset` : ''}.`,
-      tone: 'good',
-    };
-  } else if ((hasDistance && snotelDistanceKm > 30) || (elevDeltaFt !== null && elevDeltaFt > 3000)) {
-    representativeness = {
-      label: lowBroadSnowSignal ? 'Lower representativeness' : 'Low representativeness',
-      detail: `Station context is less local (${distanceText}${elevDeltaFt !== null ? `, ~${elevDeltaText} elevation offset` : ''}); verify with on-route observations.`,
-      tone: lowBroadSnowSignal ? 'watch' : 'warn',
-    };
-  } else {
-    representativeness = {
-      label: 'Moderate representativeness',
-      detail: `Station context is usable but not exact (${distanceText}${elevDeltaFt !== null ? `, ~${elevDeltaText} elevation offset` : ''}).`,
-      tone: 'watch',
-    };
-  }
-
-  const depthPairAvailable = Number.isFinite(snotelDepth) && Number.isFinite(nohrscDepth);
-  const swePairAvailable = Number.isFinite(snotelSwe) && Number.isFinite(nohrscSwe);
-  const depthDeltaIn = depthPairAvailable ? Math.abs((snotelDepth as number) - (nohrscDepth as number)) : null;
-  const sweDeltaIn = swePairAvailable ? Math.abs((snotelSwe as number) - (nohrscSwe as number)) : null;
-  const depthDeltaPct =
-    depthPairAvailable && Math.max(Math.abs(snotelDepth), Math.abs(nohrscDepth), 1) > 0
-      ? (Math.abs((snotelDepth as number) - (nohrscDepth as number)) / Math.max(Math.abs(snotelDepth), Math.abs(nohrscDepth), 1)) * 100
-      : null;
-  const sweDeltaPct =
-    swePairAvailable && Math.max(Math.abs(snotelSwe), Math.abs(nohrscSwe), 0.1) > 0
-      ? (Math.abs((snotelSwe as number) - (nohrscSwe as number)) / Math.max(Math.abs(snotelSwe), Math.abs(nohrscSwe), 0.1)) * 100
-      : null;
-  const maxDeltaPct = Math.max(depthDeltaPct ?? 0, sweDeltaPct ?? 0);
-
-  let agreement: SnowpackInsightBadge;
-  if (!depthPairAvailable && !swePairAvailable) {
-    agreement = {
-      label: 'Single-source view',
-      detail: 'Only one source has usable snow metrics. Treat this as directional context.',
-      tone: lowBroadSnowSignal ? 'good' : 'watch',
-    };
-  } else {
-    const agreementParts = [
-      depthDeltaIn !== null
-        ? `Depth Δ ${formatSnowDepthForElevationUnit(depthDeltaIn, elevationUnit)}${depthDeltaPct !== null ? ` (${Math.round(depthDeltaPct)}%)` : ''}`
-        : null,
-      sweDeltaIn !== null
-        ? `SWE Δ ${formatSweForElevationUnit(sweDeltaIn, elevationUnit)}${sweDeltaPct !== null ? ` (${Math.round(sweDeltaPct)}%)` : ''}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' • ');
-
-    if (maxDeltaPct <= 35) {
-      agreement = {
-        label: 'Sources aligned',
-        detail: agreementParts || 'SNOTEL and NOHRSC broadly agree.',
-        tone: 'good',
-      };
-    } else if (maxDeltaPct <= 70 || lowBroadSnowSignal) {
-      agreement = {
-        label: 'Partial agreement',
-        detail: `${agreementParts || 'Sources diverge somewhat.'} Expect patchy distribution.`,
-        tone: 'watch',
-      };
-    } else {
-      agreement = {
-        label: 'Sources diverge',
-        detail: `${agreementParts || 'Large disagreement between sources.'} Verify snow coverage on route before committing.`,
-        tone: 'warn',
-      };
-    }
-  }
-
-  const snotelObsAgeLabel = formatCompactAge(snotel?.observedDate || null);
-  const nohrscAgeLabel = formatCompactAge(nohrsc?.sampledTime || null);
-  const snotelObsMs = parseIsoToMs(snotel?.observedDate || null);
-  const nohrscObsMs = parseIsoToMs(nohrsc?.sampledTime || null);
-  const snotelAgeHours = snotelObsMs === null ? null : (Date.now() - snotelObsMs) / 3600000;
-  const nohrscAgeHours = nohrscObsMs === null ? null : (Date.now() - nohrscObsMs) / 3600000;
-
-  let freshness: SnowpackInsightBadge;
-  if (snotelAgeHours === null && nohrscAgeHours === null) {
-    freshness = {
-      label: lowBroadSnowSignal ? 'Timestamp limited' : 'Freshness unknown',
-      detail: lowBroadSnowSignal
-        ? 'No timestamps were returned; broad no-snow signal is likely still directionally useful.'
-        : 'No observation timestamps were returned.',
-      tone: lowBroadSnowSignal ? 'watch' : 'warn',
-    };
-  } else if ((nohrscAgeHours === null || nohrscAgeHours <= 8) && (snotelAgeHours === null || snotelAgeHours <= 60)) {
-    freshness = {
-      label: 'Fresh data',
-      detail: [
-        snotelObsAgeLabel ? `SNOTEL ${snotelObsAgeLabel}` : null,
-        nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null,
-      ]
-        .filter(Boolean)
-        .join(' • '),
-      tone: 'good',
-    };
-  } else if ((nohrscAgeHours === null || nohrscAgeHours <= 18) && (snotelAgeHours === null || snotelAgeHours <= 96)) {
-    freshness = {
-      label: 'Aging data',
-      detail: [
-        snotelObsAgeLabel ? `SNOTEL ${snotelObsAgeLabel}` : null,
-        nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null,
-      ]
-        .filter(Boolean)
-        .join(' • '),
-      tone: 'watch',
-    };
-  } else {
-    freshness = {
-      label: lowBroadSnowSignal ? 'Aging data' : 'Stale data',
-      detail: [
-        snotelObsAgeLabel ? `SNOTEL ${snotelObsAgeLabel}` : null,
-        nohrscAgeLabel ? `NOHRSC ${nohrscAgeLabel}` : null,
-      ]
-        .filter(Boolean)
-        .join(' • ') || 'Observation times are outdated.',
-      tone: lowBroadSnowSignal ? 'watch' : 'warn',
-    };
-  }
-
-  return { signal, freshness, representativeness, agreement };
-}
-
-function normalizeWindHintDirection(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  const normalized = String(value).trim().toUpperCase();
-  if (!normalized) {
-    return null;
-  }
-  if (normalized === 'VARIABLE') {
-    return 'VRB';
-  }
-  if (normalized === 'VRB' || normalized === 'CALM') {
-    return normalized;
-  }
-  return windDirectionToDegrees(normalized) === null ? null : normalized;
-}
-
-function windDirectionDeltaDegrees(a: string | null | undefined, b: string | null | undefined): number | null {
-  const aDeg = windDirectionToDegrees(a || null);
-  const bDeg = windDirectionToDegrees(b || null);
-  if (aDeg === null || bDeg === null) {
-    return null;
-  }
-  const diff = Math.abs(aDeg - bDeg) % 360;
-  return diff > 180 ? 360 - diff : diff;
-}
-
-function windDirectionFromDegrees(value: number | null | undefined): string {
-  const degrees = Number(value);
-  if (!Number.isFinite(degrees)) {
-    return 'N/A';
-  }
-  const normalized = ((degrees % 360) + 360) % 360;
-  const index = Math.round(normalized / 45) % ASPECT_ROSE_ORDER.length;
-  return ASPECT_ROSE_ORDER[index];
-}
-
-function resolveDominantTrendWindDirection(trend: WeatherTrendPoint[] | null | undefined): {
-  direction: string | null;
-  count: number;
-  total: number;
-  ratio: number;
-} {
-  const directionalRows = Array.isArray(trend)
-    ? trend
-        .map((row) => normalizeWindHintDirection(row.windDirection))
-        .filter((entry): entry is string => Boolean(entry) && entry !== 'CALM' && entry !== 'VRB')
-    : [];
-  if (directionalRows.length === 0) {
-    return { direction: null, count: 0, total: 0, ratio: 0 };
-  }
-
-  const counts = new Map<string, number>();
-  directionalRows.forEach((direction) => {
-    counts.set(direction, (counts.get(direction) || 0) + 1);
-  });
-  const ranked = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  const top = ranked[0];
-  if (!top) {
-    return { direction: null, count: 0, total: directionalRows.length, ratio: 0 };
-  }
-
-  return {
-    direction: top[0],
-    count: top[1],
-    total: directionalRows.length,
-    ratio: top[1] / directionalRows.length,
-  };
-}
-
-function assessCriticalWindowPoint(point: WeatherTrendPoint): { level: CriticalRiskLevel; reasons: string[]; score: number } {
-  const reasons: string[] = [];
-  let score = 0;
-  const condition = String(point.condition || '').toLowerCase();
-  const gust = Number(point.gust);
-  const wind = Number(point.wind);
-  const temp = Number(point.temp);
-  const precipChance = Number(point.precipChance);
-
-  if (/thunder|storm|lightning|hail|blizzard/.test(condition)) {
-    score += 4;
-    reasons.push('convective storm signal');
-  }
-  if (/snow|sleet|freezing|ice|wintry/.test(condition)) {
-    score += 2;
-    reasons.push('winter precip signal');
-  } else if (/rain|shower/.test(condition)) {
-    score += 1;
-    reasons.push('precipitation signal');
-  }
-  if (Number.isFinite(precipChance) && precipChance >= 70) {
-    score += 2;
-    reasons.push(`precip ${Math.round(precipChance)}%`);
-  } else if (Number.isFinite(precipChance) && precipChance >= 45) {
-    score += 1;
-    reasons.push(`precip ${Math.round(precipChance)}%`);
-  }
-
-  if (Number.isFinite(gust) && gust >= 45) {
-    score += 4;
-    reasons.push(`gusts ${Math.round(gust)} mph`);
-  } else if (Number.isFinite(gust) && gust >= 35) {
-    score += 2;
-    reasons.push(`gusts ${Math.round(gust)} mph`);
-  } else if (Number.isFinite(wind) && wind >= 25) {
-    score += 1;
-    reasons.push(`wind ${Math.round(wind)} mph`);
-  }
-
-  if (Number.isFinite(temp) && temp <= 10) {
-    score += 1;
-    reasons.push(`cold ${Math.round(temp)}F`);
-  }
-
-  if (score >= 6) {
-    return { level: 'high', reasons, score };
-  }
-  if (score >= 3) {
-    return { level: 'watch', reasons, score };
-  }
-  return { level: 'stable', reasons, score };
-}
-
-function criticalRiskLevelText(level: CriticalRiskLevel): string {
-  if (level === 'high') return 'High Risk';
-  if (level === 'watch') return 'Watch';
-  return 'Stable';
-}
-
 type WeatherTrendMetricKey =
   | 'temp'
   | 'feelsLike'
@@ -818,286 +173,6 @@ function airQualityPillClass(aqi: number | null | undefined): 'go' | 'caution' |
   return 'nogo';
 }
 
-function buildTrendWindowFromStart(trend: WeatherTrendPoint[], _startTime: string, windowSize = 12): WeatherTrendPoint[] {
-  if (!Array.isArray(trend) || trend.length === 0) {
-    return [];
-  }
-  // Backend trend is already aligned to the selected start time. Re-slicing by clock labels
-  // can mis-handle midnight rollovers and locale-specific hour labels.
-  return trend.slice(0, windowSize);
-}
-
-function weatherConditionEmoji(description: string | undefined, isDaytime?: boolean | null): string {
-  const text = String(description || '').toLowerCase();
-  if (/thunder|lightning|storm|hail/.test(text)) return '⛈️';
-  if (/snow|blizzard|sleet|wintry|freezing/.test(text)) return '❄️';
-  if (/rain|shower|drizzle/.test(text)) return '🌧️';
-  if (/fog|smoke|haze|mist/.test(text)) return '🌫️';
-  if (/wind|breezy|gust/.test(text)) return '💨';
-  if (/overcast|cloud/.test(text)) return '☁️';
-  if (/clear|sunny/.test(text)) return isDaytime ? '☀️' : '🌙';
-  return '🌤️';
-}
-
-type VisibilityRiskLevel = 'Unknown' | 'Minimal' | 'Low' | 'Moderate' | 'High' | 'Extreme';
-
-type VisibilityRiskEstimate = {
-  score: number | null;
-  level: VisibilityRiskLevel;
-  summary: string;
-  factors: string[];
-  activeHours: number | null;
-  windowHours: number | null;
-  source: string;
-};
-
-function visibilityRiskPillClass(level: VisibilityRiskLevel): 'go' | 'watch' | 'caution' | 'nogo' {
-  if (level === 'Extreme') return 'nogo';
-  if (level === 'High' || level === 'Moderate') return 'caution';
-  if (level === 'Low') return 'watch';
-  if (level === 'Unknown') return 'watch';
-  return 'go';
-}
-
-function normalizeVisibilityRiskLevel(levelValue: string | null | undefined, scoreValue: number | null): VisibilityRiskLevel {
-  const normalized = String(levelValue || '').trim().toLowerCase();
-  if (normalized === 'extreme') return 'Extreme';
-  if (normalized === 'high') return 'High';
-  if (normalized === 'moderate') return 'Moderate';
-  if (normalized === 'low') return 'Low';
-  if (normalized === 'minimal') return 'Minimal';
-  if (normalized === 'unknown') return 'Unknown';
-  if (!Number.isFinite(Number(scoreValue))) return 'Unknown';
-  const score = Number(scoreValue);
-  if (score >= 80) return 'Extreme';
-  if (score >= 60) return 'High';
-  if (score >= 40) return 'Moderate';
-  if (score >= 20) return 'Low';
-  return 'Minimal';
-}
-
-function estimateVisibilityRiskFromPoint(input: {
-  description: string;
-  precipChance: number | null;
-  wind: number | null;
-  gust: number | null;
-  humidity: number | null;
-  cloudCover: number | null;
-  isDaytime: boolean | null | undefined;
-}): VisibilityRiskEstimate {
-  const description = String(input.description || '').toLowerCase();
-  const precipChance = parseOptionalFiniteNumber(input.precipChance);
-  const wind = parseOptionalFiniteNumber(input.wind);
-  const gust = parseOptionalFiniteNumber(input.gust);
-  const humidity = parseOptionalFiniteNumber(input.humidity);
-  const cloudCover = parseOptionalFiniteNumber(input.cloudCover);
-  const isDaytime = typeof input.isDaytime === 'boolean' ? input.isDaytime : null;
-
-  const factors: string[] = [];
-  let score = 0;
-  const addRisk = (points: number, reason: string) => {
-    if (points <= 0 || !reason) return;
-    score += points;
-    factors.push(reason);
-  };
-
-  if (/whiteout|blizzard|snow squall/.test(description)) {
-    addRisk(55, 'blizzard/whiteout signal');
-  } else if (/heavy snow|blowing snow|snow showers/.test(description)) {
-    addRisk(30, 'reduced-visibility weather signal');
-  } else if (/\bsnow\b/.test(description)) {
-    addRisk(10, 'snow signal');
-  } else if (/fog|mist|haze|smoke/.test(description)) {
-    addRisk(30, 'reduced-visibility weather signal');
-  } else if (/rain|drizzle|showers/.test(description)) {
-    addRisk(10, 'precipitation signal');
-  }
-
-  if (precipChance !== null && precipChance >= 80) addRisk(20, `precip ${Math.round(precipChance)}%`);
-  else if (precipChance !== null && precipChance >= 60) addRisk(14, `precip ${Math.round(precipChance)}%`);
-  else if (precipChance !== null && precipChance >= 40) addRisk(8, `precip ${Math.round(precipChance)}%`);
-
-  const effectiveWind = Math.max(wind ?? 0, gust ?? 0);
-  if (effectiveWind >= 45) addRisk(18, `wind/gust ${Math.round(effectiveWind)} mph`);
-  else if (effectiveWind >= 35) addRisk(12, `wind/gust ${Math.round(effectiveWind)} mph`);
-  else if (effectiveWind >= 25) addRisk(7, `wind/gust ${Math.round(effectiveWind)} mph`);
-
-  if (humidity !== null && cloudCover !== null && humidity >= 92 && cloudCover >= 92) {
-    addRisk(16, 'high humidity + overcast');
-  } else if (cloudCover !== null && cloudCover >= 85) {
-    addRisk(5, `cloud cover ${Math.round(cloudCover)}%`);
-  }
-
-  if (isDaytime === false) {
-    addRisk(6, 'nighttime contrast reduction');
-  }
-
-  const bounded = Math.max(0, Math.min(100, Math.round(score)));
-  const level = normalizeVisibilityRiskLevel(null, bounded);
-  const summary =
-    level === 'Extreme'
-      ? 'Whiteout is plausible. Terrain reading can collapse quickly.'
-      : level === 'High'
-        ? 'Poor visibility likely; route-finding will be harder.'
-        : level === 'Moderate'
-          ? 'Intermittent low-contrast conditions are possible.'
-          : level === 'Low'
-            ? 'Mostly workable visibility with occasional reductions.'
-            : level === 'Minimal'
-              ? 'No strong whiteout signal at this hour.'
-              : 'Visibility signal unavailable.';
-
-  return {
-    score: bounded,
-    level,
-    summary,
-    factors: factors.slice(0, 3),
-    activeHours: null,
-    windowHours: null,
-    source: 'Derived from selected weather hour',
-  };
-}
-
-function inferWeatherSourceLabel(weather: SafetyData['weather'] | null | undefined): string {
-  const primary = String(weather?.sourceDetails?.primary || '').trim();
-  if (primary === 'NOAA') return 'NOAA / Weather.gov';
-  if (primary === 'Open-Meteo') return 'Open-Meteo';
-  if (primary) return primary;
-
-  const link = String(weather?.forecastLink || '').toLowerCase();
-  if (link.includes('weather.gov')) return 'NOAA / Weather.gov';
-  if (link.includes('open-meteo.com')) return 'Open-Meteo';
-  return 'Source not provided';
-}
-
-function formatSignedDelta(value: number): string {
-  const rounded = Math.round(value);
-  if (rounded === 0) {
-    return '0';
-  }
-  return `${rounded > 0 ? '+' : ''}${rounded}`;
-}
-
-function formatClockShort(value: string | undefined | null, style: TimeStyle = 'ampm'): string {
-  const minutes = parseSolarClockMinutes(value || undefined);
-  if (minutes === null) {
-    return value || 'N/A';
-  }
-  if (style === '24h') {
-    return minutesToTwentyFourHourClock(minutes);
-  }
-  const hour24 = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const ampm = hour24 >= 12 ? 'PM' : 'AM';
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`;
-}
-
-function formatDurationMinutes(value: number | null | undefined): string {
-  const total = Number(value);
-  if (!Number.isFinite(total)) {
-    return 'N/A';
-  }
-  const rounded = Math.max(0, Math.round(total));
-  const hours = Math.floor(rounded / 60);
-  const minutes = rounded % 60;
-  if (hours <= 0) {
-    return `${minutes}m`;
-  }
-  return `${hours}h ${minutes}m`;
-}
-
-function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPreferences): TravelWindowRow[] {
-  const maxGust = preferences.maxWindGustMph;
-  const maxPrecip = preferences.maxPrecipChance;
-  const minFeelsLike = preferences.minFeelsLikeF;
-
-  return trend.map((point) => {
-    const gust = Number.isFinite(Number(point.gust)) ? Number(point.gust) : 0;
-    const wind = Number.isFinite(Number(point.wind)) ? Number(point.wind) : 0;
-    const temp = Number.isFinite(Number(point.temp)) ? Number(point.temp) : 0;
-    const feelsLike = computeFeelsLikeF(temp, wind);
-    const precipChance = Number.isFinite(Number(point.precipChance)) ? Number(point.precipChance) : 0;
-    const failedRules: string[] = [];
-    const failedRuleLabels: string[] = [];
-    const displayGust = Math.round(convertWindMphToDisplayValue(gust, preferences.windSpeedUnit));
-    const displayMaxGust = Math.round(convertWindMphToDisplayValue(maxGust, preferences.windSpeedUnit));
-    const displayFeelsLike = formatTemperatureForUnit(feelsLike, preferences.temperatureUnit);
-    const displayMinFeelsLike = formatTemperatureForUnit(minFeelsLike, preferences.temperatureUnit);
-
-    if (gust > maxGust) {
-      failedRules.push(`gust ${displayGust}>${displayMaxGust} ${preferences.windSpeedUnit}`);
-      failedRuleLabels.push('Gust above limit');
-    }
-    if (precipChance > maxPrecip) {
-      failedRules.push(`precip ${Math.round(precipChance)}%>${maxPrecip}%`);
-      failedRuleLabels.push('Precip above limit');
-    }
-    if (feelsLike < minFeelsLike) {
-      failedRules.push(`feels ${displayFeelsLike}<${displayMinFeelsLike}`);
-      failedRuleLabels.push('Feels-like below limit');
-    }
-    const condLower = String(point.condition || '').toLowerCase();
-    if (/thunder|lightning|hail|blizzard/.test(condLower)) {
-      failedRules.push(`condition: ${point.condition}`);
-      failedRuleLabels.push('Severe weather risk');
-    }
-
-    return {
-      time: point.time,
-      pass: failedRules.length === 0,
-      condition: String(point.condition || '').trim() || 'Unknown',
-      reasonSummary: failedRules.length === 0 ? 'Meets thresholds' : failedRules.join(' • '),
-      failedRules,
-      failedRuleLabels,
-      temp,
-      feelsLike,
-      wind,
-      gust,
-      precipChance,
-    };
-  });
-}
-
-function deriveTravelWindowSpans(rows: TravelWindowRow[]): TravelWindowSpan[] {
-  const spans: TravelWindowSpan[] = [];
-  let startIndex = -1;
-
-  rows.forEach((row, idx) => {
-    if (row.pass && startIndex === -1) {
-      startIndex = idx;
-    }
-    const spanEnded = startIndex !== -1 && (!row.pass || idx === rows.length - 1);
-    if (!spanEnded) {
-      return;
-    }
-    const endIndex = row.pass ? idx : idx - 1;
-    const length = endIndex - startIndex + 1;
-    if (length > 0) {
-      spans.push({ start: rows[startIndex].time, end: rows[endIndex].time, length });
-    }
-    startIndex = -1;
-  });
-
-  return spans;
-}
-
-function formatTravelWindowSpan(span: TravelWindowSpan, timeStyle: TimeStyle): string {
-  const start = formatClockForStyle(span.start, timeStyle);
-  const end = formatClockForStyle(span.end, timeStyle);
-  if (span.length <= 1) {
-    return `${start} only`;
-  }
-  return `${start} to ${end}`;
-}
-
-function decisionLevelRank(level: DecisionLevel | null | undefined): number {
-  if (level === 'GO') return 3;
-  if (level === 'CAUTION') return 2;
-  if (level === 'NO-GO') return 1;
-  return 0;
-}
-
 function formatIsoDateLabel(isoDate: string): string {
   if (!DATE_FMT.test(isoDate)) {
     return isoDate;
@@ -1109,1344 +184,6 @@ function formatIsoDateLabel(isoDate: string): string {
   return new Date(parsedMs).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
-function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: TimeStyle = 'ampm'): TravelWindowInsights {
-  const computeConditionTrend = () => {
-    if (rows.length === 0) {
-      return {
-        conditionTrendLabel: 'Unavailable',
-        conditionTrendSummary: 'No hourly weather condition labels available in this travel window.',
-      };
-    }
-
-    const startCondition = rows[0].condition;
-    const endCondition = rows[rows.length - 1].condition;
-    const normalizedCounts = new Map<string, { label: string; count: number }>();
-    rows.forEach((row) => {
-      const label = String(row.condition || '').trim() || 'Unknown';
-      const key = label.toLowerCase();
-      const existing = normalizedCounts.get(key);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        normalizedCounts.set(key, { label, count: 1 });
-      }
-    });
-
-    const dominant = Array.from(normalizedCounts.values()).sort((a, b) => (b.count === a.count ? a.label.localeCompare(b.label) : b.count - a.count))[0];
-    const transitioned = startCondition.toLowerCase() !== endCondition.toLowerCase();
-
-    if (!transitioned) {
-      return {
-        conditionTrendLabel: 'Stable conditions',
-        conditionTrendSummary: `${startCondition} remains the primary condition (${dominant.count}/${rows.length}h).`,
-      };
-    }
-
-    return {
-      conditionTrendLabel: `${startCondition} → ${endCondition}`,
-      conditionTrendSummary: `Conditions shift across the window; most frequent: ${dominant.label} (${dominant.count}/${rows.length}h).`,
-    };
-  };
-
-  const computeTravelTrend = () => {
-    if (rows.length < 2) {
-      return {
-        trendDirection: 'steady' as const,
-        trendStrength: 'slight' as const,
-        trendDelta: 0,
-        trendLabel: 'Steady',
-        trendSummary: 'Not enough hourly rows to classify improving vs worsening trend.',
-      };
-    }
-
-    const riskScores = rows.map((row) => {
-      if (row.pass) {
-        return 0;
-      }
-      let score = Math.max(1, row.failedRuleLabels.length);
-      row.failedRuleLabels.forEach((label) => {
-        const normalized = String(label || '').toLowerCase();
-        if (normalized.includes('gust') || normalized.includes('wind')) score += 1.1;
-        if (normalized.includes('precip')) score += 1.0;
-        if (normalized.includes('feels-like') || normalized.includes('cold')) score += 0.8;
-      });
-      return score;
-    });
-
-    const segmentHours = Math.max(2, Math.min(6, Math.floor(rows.length / 3) || 2));
-    const startSlice = riskScores.slice(0, segmentHours);
-    const endSlice = riskScores.slice(-segmentHours);
-    const avg = (values: number[]) => (values.length ? values.reduce((acc, value) => acc + value, 0) / values.length : 0);
-    const startAvg = avg(startSlice);
-    const endAvg = avg(endSlice);
-    const delta = endAvg - startAvg;
-    const absDelta = Math.abs(delta);
-    const strength: TravelWindowInsights['trendStrength'] = absDelta >= 2 ? 'strong' : absDelta >= 1.1 ? 'moderate' : 'slight';
-
-    if (delta >= 0.6) {
-      return {
-        trendDirection: 'worsening' as const,
-        trendStrength: strength,
-        trendDelta: delta,
-        trendLabel: `Worsening (${strength})`,
-        trendSummary: `Risk trend worsens from first ${segmentHours}h to last ${segmentHours}h.`,
-      };
-    }
-    if (delta <= -0.6) {
-      return {
-        trendDirection: 'improving' as const,
-        trendStrength: strength,
-        trendDelta: delta,
-        trendLabel: `Improving (${strength})`,
-        trendSummary: `Risk trend improves from first ${segmentHours}h to last ${segmentHours}h.`,
-      };
-    }
-    return {
-      trendDirection: 'steady' as const,
-      trendStrength: strength,
-      trendDelta: delta,
-      trendLabel: 'Steady',
-      trendSummary: `Risk trend is mostly steady across first/last ${segmentHours}h segments.`,
-    };
-  };
-
-  const trend = computeTravelTrend();
-  const conditionTrend = computeConditionTrend();
-
-  if (rows.length === 0) {
-    return {
-      passHours: 0,
-      failHours: 0,
-      bestWindow: null,
-      nextCleanWindow: null,
-      topFailureLabels: [],
-      trendDirection: trend.trendDirection,
-      trendStrength: trend.trendStrength,
-      trendDelta: trend.trendDelta,
-      trendLabel: trend.trendLabel,
-      trendSummary: trend.trendSummary,
-      conditionTrendLabel: conditionTrend.conditionTrendLabel,
-      conditionTrendSummary: conditionTrend.conditionTrendSummary,
-      summary: 'No hourly trend data available for travel-window analysis.',
-    };
-  }
-
-  const passHours = rows.filter((row) => row.pass).length;
-  const failHours = rows.length - passHours;
-  const spans = deriveTravelWindowSpans(rows);
-  const bestWindow =
-    spans.length > 0
-      ? spans.slice().sort((a, b) => (b.length === a.length ? a.start.localeCompare(b.start) : b.length - a.length))[0]
-      : null;
-  const nextCleanWindow = spans.length > 0 ? spans[0] : null;
-
-  const failureCounts = new Map<string, number>();
-  rows
-    .filter((row) => !row.pass)
-    .forEach((row) => {
-      row.failedRuleLabels.forEach((label) => {
-        failureCounts.set(label, (failureCounts.get(label) || 0) + 1);
-      });
-    });
-
-  const topFailureLabels = Array.from(failureCounts.entries())
-    .sort((a, b) => (b[1] === a[1] ? a[0].localeCompare(b[0]) : b[1] - a[1]))
-    .slice(0, 3)
-    .map(([label, count]) => `${label} (${count}h)`);
-
-  if (passHours === 0) {
-    return {
-      passHours,
-      failHours,
-      bestWindow,
-      nextCleanWindow,
-      topFailureLabels,
-      trendDirection: trend.trendDirection,
-      trendStrength: trend.trendStrength,
-      trendDelta: trend.trendDelta,
-      trendLabel: trend.trendLabel,
-      trendSummary: trend.trendSummary,
-      conditionTrendLabel: conditionTrend.conditionTrendLabel,
-      conditionTrendSummary: conditionTrend.conditionTrendSummary,
-      summary: `No clean travel window in the next ${rows.length} hours under current thresholds. ${trend.trendSummary}`,
-    };
-  }
-
-  if (!bestWindow) {
-    return {
-      passHours,
-      failHours,
-      bestWindow,
-      nextCleanWindow,
-      topFailureLabels,
-      trendDirection: trend.trendDirection,
-      trendStrength: trend.trendStrength,
-      trendDelta: trend.trendDelta,
-      trendLabel: trend.trendLabel,
-      trendSummary: trend.trendSummary,
-      conditionTrendLabel: conditionTrend.conditionTrendLabel,
-      conditionTrendSummary: conditionTrend.conditionTrendSummary,
-      summary: `Passing ${passHours}/${rows.length} hours. ${trend.trendSummary}`,
-    };
-  }
-
-  const spanLabel = formatTravelWindowSpan(bestWindow, timeStyle);
-  const baseSummary = `Passing ${passHours}/${rows.length} hours. Best continuous window: ${spanLabel} (${bestWindow.length}h).`;
-  if (nextCleanWindow && nextCleanWindow.start !== rows[0].time) {
-    return {
-      passHours,
-      failHours,
-      bestWindow,
-      nextCleanWindow,
-      topFailureLabels,
-      trendDirection: trend.trendDirection,
-      trendStrength: trend.trendStrength,
-      trendDelta: trend.trendDelta,
-      trendLabel: trend.trendLabel,
-      trendSummary: trend.trendSummary,
-      conditionTrendLabel: conditionTrend.conditionTrendLabel,
-      conditionTrendSummary: conditionTrend.conditionTrendSummary,
-      summary: `${baseSummary} First clean hour starts at ${formatClockForStyle(nextCleanWindow.start, timeStyle)}. ${trend.trendSummary}`,
-    };
-  }
-
-  return {
-    passHours,
-    failHours,
-    bestWindow,
-    nextCleanWindow,
-    topFailureLabels,
-    trendDirection: trend.trendDirection,
-    trendStrength: trend.trendStrength,
-    trendDelta: trend.trendDelta,
-    trendLabel: trend.trendLabel,
-    trendSummary: trend.trendSummary,
-    conditionTrendLabel: conditionTrend.conditionTrendLabel,
-    conditionTrendSummary: conditionTrend.conditionTrendSummary,
-    summary: `${baseSummary} ${trend.trendSummary}`,
-  };
-}
-
-function buildDayOverDayChanges(current: SafetyData, previous: SafetyData, preferences: UserPreferences): string[] {
-  const changes: string[] = [];
-  const currentScore = Number(current?.safety?.score);
-  const previousScore = Number(previous?.safety?.score);
-  if (Number.isFinite(currentScore) && Number.isFinite(previousScore)) {
-    const scoreDelta = currentScore - previousScore;
-    if (Math.abs(scoreDelta) >= 1) {
-      changes.push(`Safety score ${formatSignedDelta(scoreDelta)} (${Math.round(previousScore)} -> ${Math.round(currentScore)}).`);
-    }
-  }
-
-  const currentDanger = Number(current?.avalanche?.dangerLevel);
-  const previousDanger = Number(previous?.avalanche?.dangerLevel);
-  if (Number.isFinite(currentDanger) && Number.isFinite(previousDanger) && currentDanger !== previousDanger) {
-    changes.push(`Avalanche danger changed ${formatSignedDelta(currentDanger - previousDanger)} level(s).`);
-  }
-
-  const currentGust = Number(current?.weather?.windGust);
-  const previousGust = Number(previous?.weather?.windGust);
-  if (Number.isFinite(currentGust) && Number.isFinite(previousGust) && Math.abs(currentGust - previousGust) >= 3) {
-    changes.push(
-      `Wind gust changed ${formatSignedDelta(convertWindMphToDisplayValue(currentGust - previousGust, preferences.windSpeedUnit))} ${preferences.windSpeedUnit}.`,
-    );
-  }
-
-  const currentFeels = Number(current?.weather?.feelsLike ?? current?.weather?.temp);
-  const previousFeels = Number(previous?.weather?.feelsLike ?? previous?.weather?.temp);
-  if (Number.isFinite(currentFeels) && Number.isFinite(previousFeels) && Math.abs(currentFeels - previousFeels) >= 3) {
-    const feelsDelta = convertTempFToDisplayValue(currentFeels, preferences.temperatureUnit) - convertTempFToDisplayValue(previousFeels, preferences.temperatureUnit);
-    changes.push(`Feels-like changed ${formatSignedDelta(feelsDelta)}°${preferences.temperatureUnit.toUpperCase()}.`);
-  }
-
-  const currentPrecip = Number(current?.weather?.precipChance);
-  const previousPrecip = Number(previous?.weather?.precipChance);
-  if (Number.isFinite(currentPrecip) && Number.isFinite(previousPrecip) && Math.abs(currentPrecip - previousPrecip) >= 10) {
-    changes.push(`Precip chance changed ${formatSignedDelta(currentPrecip - previousPrecip)}%.`);
-  }
-
-  const currentDesc = String(current?.weather?.description || '').trim();
-  const previousDesc = String(previous?.weather?.description || '').trim();
-  if (currentDesc && previousDesc && currentDesc.toLowerCase() !== previousDesc.toLowerCase()) {
-    changes.push(`Weather changed from "${previousDesc}" to "${currentDesc}".`);
-  }
-
-  return changes.slice(0, 6);
-}
-
-function sanitizeExternalUrl(rawUrl?: string): string | null {
-  if (!rawUrl) {
-    return null;
-  }
-  const trimmed = rawUrl.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const httpsNormalized = /^http:\/\//i.test(trimmed) ? trimmed.replace(/^http:\/\//i, 'https://') : trimmed;
-  if (!/^https?:\/\//i.test(httpsNormalized)) {
-    return null;
-  }
-  try {
-    const parsed = new URL(httpsNormalized);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return null;
-    }
-    if (!parsed.hostname) {
-      return null;
-    }
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-function parseLinkState(todayDate: string, maxForecastDate: string, preferences: UserPreferences): LinkState {
-  const defaults: LinkState = {
-    view: 'home',
-    activity: 'backcountry',
-    position: DEFAULT_CENTER,
-    hasObjective: false,
-    objectiveName: '',
-    searchQuery: '',
-    forecastDate: todayDate,
-    alpineStartTime: preferences.defaultStartTime,
-    targetElevationInput: '',
-  };
-
-  if (typeof window === 'undefined') {
-    return defaults;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const lat = parseFloat(params.get('lat') || '');
-  const lon = parseFloat(params.get('lon') || '');
-  const hasCoords = isValidLatLon(lat, lon);
-
-  const objectiveName = (params.get('name') || '').trim();
-  const searchQuery = (params.get('q') || objectiveName).trim();
-  // Support path-based routing (/logs, /settings, etc.) with legacy ?view= fallback
-  const pathSegment = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
-  const viewParam = pathSegment || params.get('view') || '';
-  const hasExplicitSettingsView = viewParam === 'settings';
-  const hasExplicitStatusView = viewParam === 'status';
-  const hasExplicitTripView = viewParam === 'trip';
-  const hasExplicitLogsView = viewParam === 'logs';
-
-  return {
-    view: hasExplicitSettingsView
-      ? 'settings'
-      : hasExplicitStatusView
-        ? 'status'
-        : hasExplicitTripView
-          ? 'trip'
-          : hasExplicitLogsView
-            ? 'logs'
-            : viewParam === 'planner' || hasCoords
-              ? 'planner'
-              : 'home',
-    activity: 'backcountry',
-    position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
-    hasObjective: hasCoords,
-    objectiveName,
-    searchQuery,
-    forecastDate: normalizeForecastDate(params.get('date'), todayDate, maxForecastDate),
-    alpineStartTime: normalizeTimeOrFallback(params.get('start'), preferences.defaultStartTime),
-    targetElevationInput: normalizeElevationInput(params.get('elev')),
-  };
-}
-
-function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs';
-  hasObjective: boolean;
-  position: L.LatLng;
-  objectiveName: string;
-  searchQuery: string;
-  forecastDate: string;
-  alpineStartTime: string;
-  targetElevationInput: string;
-}): string {
-  const params = new URLSearchParams();
-
-  if (state.hasObjective) {
-    params.set('lat', state.position.lat.toFixed(5));
-    params.set('lon', state.position.lng.toFixed(5));
-  }
-
-  if (state.objectiveName.trim()) {
-    params.set('name', state.objectiveName.trim());
-  }
-
-  if (state.searchQuery.trim()) {
-    params.set('q', state.searchQuery.trim());
-  }
-
-  params.set('date', state.forecastDate);
-  params.set('start', state.alpineStartTime);
-  if (state.targetElevationInput.trim()) {
-    params.set('elev', state.targetElevationInput.trim());
-  }
-
-  return params.toString();
-}
-
-function buildSafetyRequestKey(lat: number, lon: number, date: string, startTime: string, travelWindowHours: number): string {
-  return `${lat.toFixed(5)},${lon.toFixed(5)}@${date}@${startTime}@w${travelWindowHours}`;
-}
-
-type DecisionEvaluationOptions = {
-  ignoreAvalancheForDecision?: boolean;
-  turnaroundTime?: string;
-};
-
-function normalizedDecisionScore(data: SafetyData, options: DecisionEvaluationOptions = {}): number {
-  const rawScore = Number(data?.safety?.score);
-  const safeRawScore = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 0;
-  if (!options.ignoreAvalancheForDecision) {
-    return safeRawScore;
-  }
-
-  const avalanchePenalty = (Array.isArray(data?.safety?.factors) ? data.safety.factors : []).reduce((sum, factor) => {
-    const hazard = String(factor?.hazard || '').toLowerCase();
-    const impact = Number(factor?.impact);
-    if (!hazard.includes('avalanche') || !Number.isFinite(impact) || impact <= 0) {
-      return sum;
-    }
-    return sum + impact;
-  }, 0);
-
-  return Math.max(0, Math.min(100, safeRawScore + avalanchePenalty));
-}
-
-function evaluateBackcountryDecision(
-  data: SafetyData,
-  cutoffTime: string,
-  preferences: UserPreferences,
-  options: DecisionEvaluationOptions = {},
-): SummitDecision {
-  const blockers: string[] = [];
-  const cautions: string[] = [];
-  const addBlocker = (message: string) => {
-    if (!blockers.includes(message)) {
-      blockers.push(message);
-    }
-  };
-  const addCaution = (message: string) => {
-    if (!cautions.includes(message)) {
-      cautions.push(message);
-    }
-  };
-
-  const danger = data.avalanche.dangerLevel || 0;
-  let gust = data.weather.windGust ?? 0;
-  let precip = data.weather.precipChance ?? 0;
-  const score = normalizedDecisionScore(data, options);
-  let feelsLike = data.weather.feelsLike ?? data.weather.temp;
-  const description = data.weather.description || '';
-  const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
-  const weatherUnavailable = /weather data unavailable/i.test(description);
-  if (weatherUnavailable) {
-    addBlocker('Weather data is unavailable — wind, precipitation, and temperature are unknown. Do not make go/no-go decisions from this report.');
-  }
-  const startHasStormSignal = /thunder|storm|lightning|hail|blizzard/i.test(description);
-  let hasStormSignal = startHasStormSignal;
-
-  // Scan the full travel window for worst-case conditions
-  let peakGustHour = '';
-  let peakPrecipHour = '';
-  let coldestFeelsLikeHour = '';
-  let stormSignalHour = '';
-  const windowTrend = (data.weather.trend || []).slice(0, preferences.travelWindowHours);
-  for (const wpt of windowTrend) {
-    const wg = Number.isFinite(Number(wpt.gust)) ? Number(wpt.gust) : 0;
-    if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }
-    const wp = Number.isFinite(Number(wpt.precipChance)) ? Number(wpt.precipChance) : 0;
-    if (wp > precip) { precip = wp; peakPrecipHour = wpt.time || ''; }
-    const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
-    const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
-    const wfl = computeFeelsLikeF(wt, ww);
-    if (wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; }
-    if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
-      hasStormSignal = true;
-      stormSignalHour = wpt.time || '';
-    }
-  }
-  const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
-  const avalancheRelevant = !ignoreAvalancheForDecision && data.avalanche.relevant !== false;
-  const avalancheUnknown = avalancheRelevant && Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
-  const avalancheGateRequired = avalancheRelevant;
-  const unknownSnowpackMode = avalancheGateRequired && avalancheUnknown;
-  const avalancheCheckLabel = (safeDangerLabel: string): string => {
-    if (!avalancheRelevant) {
-      return 'Avalanche check not required for this location profile';
-    }
-    if (avalancheUnknown) {
-      return 'Avalanche forecast coverage is unavailable for this location';
-    }
-    return `Avalanche danger is ${safeDangerLabel}`;
-  };
-  const maxGustThreshold = Math.max(10, preferences.maxWindGustMph);
-  const maxPrecipThreshold = Math.max(0, preferences.maxPrecipChance);
-  const minFeelsLikeThreshold = preferences.minFeelsLikeF;
-  const windUnit = preferences.windSpeedUnit;
-  const tempUnit = preferences.temperatureUnit;
-  const formatWind = (valueMph: number) => formatWindForUnit(valueMph, windUnit);
-  const formatTemp = (valueF: number) => formatTemperatureForUnit(valueF, tempUnit);
-  const displayMaxGustThreshold = formatWind(maxGustThreshold);
-  const displayMinFeelsLikeThreshold = formatTemp(minFeelsLikeThreshold);
-  const alertSeverityRank = (severity: string | undefined | null): number => {
-    const normalized = String(severity || '').trim().toLowerCase();
-    if (!normalized) return 1;
-    if (['extreme', 'severe'].includes(normalized)) return 5;
-    if (normalized === 'warning') return 4;
-    if (['advisory', 'watch'].includes(normalized)) return 3;
-    if (normalized === 'moderate') return 2;
-    return 1;
-  };
-
-  const alertsStatus = String(data.alerts?.status || '').toLowerCase();
-  const alertsRelevantForSelectedStart = true;
-  const alertsNoActiveForSelectedStart = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
-  const selectedTravelWindowMs = resolveSelectedTravelWindowMs(data, preferences.travelWindowHours);
-  const alertsWindowCovered = isTravelWindowCoveredByAlertWindow(selectedTravelWindowMs, data.alerts?.alerts || []);
-  const activeAlertCount = Number(data.alerts?.activeCount);
-  const hasActiveAlertCount = Number.isFinite(activeAlertCount);
-  const highestAlertSeverity = String(data.alerts?.highestSeverity || 'Unknown');
-  const highestAlertSeverityRank = alertSeverityRank(highestAlertSeverity);
-
-  const airQualityStatus = String(data.airQuality?.status || '').toLowerCase();
-  const airQualityFutureNotApplicable = airQualityStatus === 'not_applicable_future_date';
-  const aqi = Number(data.airQuality?.usAqi);
-  const hasAqi = Number.isFinite(aqi) && airQualityStatus !== 'unavailable' && !airQualityFutureNotApplicable;
-
-  const fireRiskStatus = String(data.fireRisk?.status || '').toLowerCase();
-  const fireRiskLevel = Number(data.fireRisk?.level);
-  const hasFireRisk = Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
-
-  const heatRiskStatus = String(data.heatRisk?.status || '').toLowerCase();
-  const heatRiskLevel = Number(data.heatRisk?.level);
-  const hasHeatRisk = Number.isFinite(heatRiskLevel) && heatRiskStatus !== 'unavailable';
-
-  const terrainCode = String(data.terrainCondition?.code || '').toLowerCase();
-  const terrainLabel = data.terrainCondition?.label || data.trail || 'Unknown';
-  const terrainConfidence = String(data.terrainCondition?.confidence || '').toLowerCase();
-  const terrainNeedsAttention = ['snow_ice', 'wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode);
-  const terrainCriticalGateFail = terrainCode === 'weather_unavailable';
-
-  const weatherFreshnessState = freshnessClass(
-    pickOldestIsoTimestamp([
-      data.weather.issuedTime || null,
-      data.weather.forecastStartTime || null,
-    ]),
-    12,
-  );
-  const avalancheFreshnessState = avalancheRelevant
-    ? freshnessClass(pickOldestIsoTimestamp([data.avalanche.publishedTime || null]), 24)
-    : null;
-  const alertsFreshnessState = alertsRelevantForSelectedStart
-    ? alertsNoActiveForSelectedStart || alertsWindowCovered
-      ? 'fresh'
-      : freshnessClass(
-          pickNewestIsoTimestamp(
-            (data.alerts?.alerts || []).flatMap((alert) => [alert.sent || null, alert.effective || null, alert.onset || null]),
-          ),
-          6,
-        )
-    : null;
-  const airQualityFreshnessState = airQualityFutureNotApplicable
-    ? 'fresh'
-    : hasAqi
-      ? freshnessClass(pickOldestIsoTimestamp([data.airQuality?.measuredTime || null]), 8)
-      : null;
-  const precipitationFreshnessState = freshnessClass(pickOldestIsoTimestamp([data.rainfall?.anchorTime || null]), 8);
-  const snowpackStatus = String(data.snowpack?.status || '').toLowerCase();
-  const snowpackAvailable = snowpackStatus === 'ok' || snowpackStatus === 'partial';
-  const snowpackFreshness = classifySnowpackFreshness(data.snowpack?.snotel?.observedDate || null, data.snowpack?.nohrsc?.sampledTime || null);
-  const snowpackFreshnessState = snowpackAvailable
-    ? snowpackFreshness.state
-    : null;
-  const freshnessIssues = [
-    weatherFreshnessState === 'stale' || weatherFreshnessState === 'missing' ? 'weather' : null,
-    !ignoreAvalancheForDecision && (avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing') ? 'avalanche' : null,
-    alertsFreshnessState === 'stale' || alertsFreshnessState === 'missing' ? 'alerts' : null,
-    airQualityFreshnessState === 'stale' || airQualityFreshnessState === 'missing' ? 'air quality' : null,
-    precipitationFreshnessState === 'stale' || precipitationFreshnessState === 'missing' ? 'precipitation' : null,
-    snowpackFreshnessState === 'stale' || snowpackFreshnessState === 'missing' ? 'snowpack' : null,
-  ].filter(Boolean) as string[];
-
-  if (unknownSnowpackMode) {
-    addCaution(
-      'Avalanche forecast coverage is unavailable for this location. Do not treat this as low risk; keep terrain conservative and avoid avalanche features.',
-    );
-    addCaution('Limited avalanche coverage: use low-angle terrain, avoid terrain traps, and increase spacing/communication.');
-  }
-
-  if (avalancheGateRequired && !avalancheUnknown && danger >= 4) {
-    addBlocker('Avalanche danger is High/Extreme. Avoid avalanche terrain.');
-  } else if (avalancheGateRequired && !avalancheUnknown && danger === 3) {
-    addBlocker('Avalanche danger is Considerable. Avoid avalanche terrain unless trained in terrain selection and risk management.');
-  }
-  if (hasStormSignal) {
-    addCaution('Storm or thunder signal in forecast. Avoid exposed terrain and keep fallback options ready.');
-  }
-  if (precip >= Math.max(85, maxPrecipThreshold + 25)) {
-    addBlocker(`Precipitation chance at ${precip}% is too high for stable travel conditions.`);
-  } else if (precip >= Math.max(55, maxPrecipThreshold)) {
-    addCaution(`Precipitation chance at ${precip}% can create slick surfaces and slower travel.`);
-  }
-  if (gust >= Math.max(35, maxGustThreshold + 10)) {
-    addBlocker(`Wind gusts around ${formatWind(gust)} exceed conservative backcountry thresholds.`);
-  } else if (gust >= maxGustThreshold) {
-    addCaution(`Wind gusts near ${formatWind(gust)} can affect exposed movement and stability.`);
-  }
-  if (score < 42) {
-    addBlocker(`Overall safety score is low at ${score}%.`);
-  } else if (score < 68) {
-    addCaution(`Safety score at ${score}% suggests tightening route controls.`);
-  }
-  if (feelsLike >= 95) {
-    addBlocker(`Apparent temperature near ${formatTemp(feelsLike)} has high heat-stress risk.`);
-  } else if (feelsLike <= minFeelsLikeThreshold) {
-    addCaution(`Apparent temperature near ${formatTemp(feelsLike)} increases cold-exposure risk.`);
-  }
-
-  if (alertsRelevantForSelectedStart && hasActiveAlertCount && activeAlertCount > 0) {
-    if (highestAlertSeverityRank >= 4) {
-      addBlocker(`${activeAlertCount} active NWS alert(s) include high-severity products (${highestAlertSeverity}).`);
-    } else {
-      addCaution(`${activeAlertCount} active NWS alert(s) are in effect at selected start time.`);
-    }
-  }
-
-  if (hasAqi) {
-    if (aqi >= 151) {
-      addBlocker(`Air quality is unhealthy/hazardous (AQI ${Math.round(aqi)}).`);
-    } else if (aqi >= 101) {
-      addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}).`);
-    } else if (aqi >= 51) {
-      addCaution(`Air quality is moderate (AQI ${Math.round(aqi)}).`);
-    }
-  }
-
-  if (hasFireRisk) {
-    if (fireRiskLevel >= 4) {
-      addBlocker(`Fire danger is extreme (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
-    } else if (fireRiskLevel >= 3) {
-      addCaution(`Fire danger is high (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
-    } else if (fireRiskLevel >= 2) {
-      addCaution(`Fire danger is elevated (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
-    }
-  }
-
-  if (hasHeatRisk) {
-    if (heatRiskLevel >= 4) {
-      addBlocker(`Heat risk is extreme (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
-    } else if (heatRiskLevel >= 3) {
-      addCaution(`Heat risk is high (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
-    } else if (heatRiskLevel >= 2) {
-      addCaution(`Heat risk is elevated (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
-    }
-  }
-
-  if (terrainNeedsAttention) {
-    addCaution(`Terrain/trail condition needs attention (${terrainLabel}).`);
-  }
-
-  if (freshnessIssues.length > 0) {
-    addCaution(`Some feeds are stale or missing timestamps (${freshnessIssues.join(', ')}). Re-verify before committing.`);
-  }
-
-  const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
-  const sunsetMinutes = parseSolarClockMinutes(data.solar.sunset);
-  const daylightBuffer = 30;
-  const turnaroundMinutes = options.turnaroundTime
-    ? parseTimeInputMinutes(options.turnaroundTime)
-    : null;
-  const hasDaylightInputs = cutoffMinutes !== null && sunsetMinutes !== null;
-  const effectiveReturnMinutes = turnaroundMinutes ?? cutoffMinutes;
-  const daylightOkay = hasDaylightInputs && effectiveReturnMinutes !== null
-    ? effectiveReturnMinutes <= sunsetMinutes - daylightBuffer
-    : false;
-  const daylightMarginMinutes = hasDaylightInputs && effectiveReturnMinutes !== null
-    ? sunsetMinutes - effectiveReturnMinutes
-    : null;
-  if (!hasDaylightInputs) {
-    addCaution('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
-  } else if (!daylightOkay) {
-    addCaution(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
-  }
-  if (turnaroundMinutes !== null && sunsetMinutes !== null) {
-    const margin = sunsetMinutes - turnaroundMinutes;
-    if (margin < 0) {
-      addCaution(`Turnaround time is ${Math.abs(margin)} min after sunset (${data.solar.sunset}). Adjust plan or expect darkness.`);
-    } else if (margin < 30) {
-      addCaution(`Turnaround margin is only ${margin} min before sunset — very thin buffer.`);
-    }
-  }
-
-  const checks: SummitDecision['checks'] = [
-    {
-      key: 'avalanche',
-      label: avalancheGateRequired ? 'Avalanche danger is Moderate or lower' : avalancheCheckLabel('Moderate or lower'),
-      ok: avalancheGateRequired ? (!avalancheUnknown && danger <= 2) : true,
-      detail: !avalancheRelevant
-        ? 'Not required by current seasonal and snowpack profile.'
-        : avalancheUnknown
-          ? 'Coverage unavailable for this objective/time.'
-          : `Current danger level ${normalizeDangerLevel(danger)}.`,
-      action:
-        avalancheGateRequired && avalancheUnknown
-          ? 'Use conservative, low-consequence terrain until a current bulletin is available.'
-          : avalancheGateRequired && danger > 2
-            ? 'Choose lower-angle terrain or delay until hazard rating drops.'
-            : undefined,
-    },
-    {
-      key: 'convective-signal',
-      label: 'No convective storm signal (thunder/lightning/hail)',
-      ok: !hasStormSignal,
-      detail: hasStormSignal
-        ? (startHasStormSignal
-          ? `Convective risk keywords in start-time forecast: ${normalizedConditionText}.`
-          : `Convective risk keywords detected at ${stormSignalHour} within travel window.`)
-        : `Forecast text: ${normalizedConditionText}. No convective keywords detected.`,
-      action: hasStormSignal ? 'Avoid exposed ridgelines and move to lower-consequence terrain windows.' : undefined,
-    },
-    {
-      key: 'precipitation',
-      label: `Precipitation chance is at or below ${maxPrecipThreshold}%`,
-      ok: precip <= maxPrecipThreshold,
-      detail: peakPrecipHour ? `Peak ${precip}% at ${peakPrecipHour} in window (limit ${maxPrecipThreshold}%).` : `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
-      action: precip > maxPrecipThreshold ? 'Expect slower travel and reduced traction; tighten route and timing.' : undefined,
-    },
-    {
-      key: 'wind-gust',
-      label: `Wind gusts are at or below ${displayMaxGustThreshold}`,
-      ok: gust <= maxGustThreshold,
-      detail: peakGustHour ? `Peak ${formatWind(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).` : `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
-      action: gust > maxGustThreshold ? 'Reduce ridge exposure and shorten high-wind segments.' : undefined,
-    },
-    {
-      key: 'daylight',
-      label: 'Plan finishes at least 30 min before sunset',
-      ok: daylightOkay,
-      detail: hasDaylightInputs
-        ? `${cutoffTime} start${turnaroundMinutes !== null && options.turnaroundTime ? ` • back by ${options.turnaroundTime}` : ''} • ${data.solar.sunset} sunset • ${
-            daylightMarginMinutes === null
-              ? 'margin unavailable'
-              : daylightMarginMinutes < 0
-                ? `${Math.abs(daylightMarginMinutes)} min after sunset`
-                : `${daylightMarginMinutes} min margin`
-          }`
-        : 'Start or sunset time unavailable.',
-      action:
-        hasDaylightInputs && !daylightOkay
-          ? 'Move start earlier or shorten the plan to preserve at least 30 minutes of daylight margin.'
-          : undefined,
-    },
-    {
-      key: 'feels-like',
-      label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,
-      ok: feelsLike >= minFeelsLikeThreshold,
-      detail: coldestFeelsLikeHour ? `Coldest ${formatTemp(feelsLike)} at ${coldestFeelsLikeHour} in window (limit ${displayMinFeelsLikeThreshold}).` : `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
-      action: feelsLike < minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
-    },
-  ];
-
-  if (alertsRelevantForSelectedStart && hasActiveAlertCount) {
-    checks.push({
-      key: 'nws-alerts',
-      label: 'No active NWS alerts at selected start time',
-      ok: activeAlertCount === 0,
-      detail:
-        activeAlertCount === 0
-          ? 'No active alerts.'
-          : `${activeAlertCount} active • highest severity ${highestAlertSeverity}.`,
-      action: activeAlertCount > 0 ? 'Open alert details and verify your route is outside affected zones/time windows.' : undefined,
-    });
-  }
-
-  if (hasAqi) {
-    checks.push({
-      key: 'air-quality',
-      label: 'Air quality is <= 100 AQI',
-      ok: aqi <= 100,
-      detail: `Current AQI ${Math.round(aqi)} (${data.airQuality?.category || 'Unknown'}).`,
-      action: aqi > 100 ? 'Reduce exertion, carry respiratory protection, or pick a cleaner-air objective.' : undefined,
-    });
-  }
-
-  if (hasFireRisk) {
-    checks.push({
-      key: 'fire-risk',
-      label: 'Fire risk is below High (L3+)',
-      ok: fireRiskLevel < 3,
-      detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})`,
-      action: fireRiskLevel >= 3 ? 'Avoid fire-restricted areas and plan low-spark/no-flame operations.' : undefined,
-    });
-  }
-
-  if (hasHeatRisk) {
-    checks.push({
-      key: 'heat-risk',
-      label: 'Heat risk is below High (L3+)',
-      ok: heatRiskLevel < 3,
-      detail: `${data.heatRisk?.label || 'Unknown'} (${Number.isFinite(heatRiskLevel) ? `L${Math.round(heatRiskLevel)}` : 'L?'})`,
-      action: heatRiskLevel >= 3 ? 'Shift to cooler hours/elevations and increase hydration/cooling controls.' : undefined,
-    });
-  }
-
-  if (terrainCode) {
-    checks.push({
-      key: 'terrain-signal',
-      label: 'Terrain / trail surface signal is available',
-      ok: !terrainCriticalGateFail,
-      detail: terrainCriticalGateFail
-        ? 'Surface/trail classification unavailable from current weather inputs.'
-        : terrainConfidence
-          ? `${terrainLabel} • confidence ${terrainConfidence} • use as advisory context, not a hard gate.`
-          : `${terrainLabel} • use as advisory context, not a hard gate.`,
-      action: terrainCriticalGateFail ? 'Use field observations for traction/surface risk since model signal is unavailable.' : undefined,
-    });
-  }
-
-  checks.push({
-    key: 'source-freshness',
-    label: 'Core source freshness has no stale/missing feeds',
-    ok: freshnessIssues.length === 0,
-    detail: freshnessIssues.length === 0 ? 'Timestamps are current enough for active feeds.' : `Issue: ${freshnessIssues.join(', ')}.`,
-    action: freshnessIssues.length > 0 ? 'Refresh and verify upstream official products before committing.' : undefined,
-  });
-
-  let level: DecisionLevel = 'GO';
-  let headline = 'Proceed with conservative backcountry travel controls.';
-
-  if (blockers.length > 0) {
-    level = 'NO-GO';
-    headline = 'High-likelihood failure modes detected. Delay or change objective.';
-  } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
-    level = 'CAUTION';
-    headline = 'Limited avalanche coverage. Favor conservative terrain and explicit abort triggers.';
-  } else if (cautions.length > 0 || score < 80) {
-    level = 'CAUTION';
-    headline = 'Conditions are workable with conservative timing and route choices.';
-  }
-
-  return { level, headline, blockers, cautions, checks };
-}
-
-function isAvalancheSummaryText(text: string): boolean {
-  return /\bavalanche\b|\bbulletin\b/i.test(String(text || ''));
-}
-
-function summarizeBetterDayWithoutAvalancheText(decision: SummitDecision): string {
-  const nonAvalancheBlockers = decision.blockers.filter((line) => !isAvalancheSummaryText(line));
-  if (nonAvalancheBlockers.length > 0) {
-    return nonAvalancheBlockers[0];
-  }
-
-  const nonAvalancheCautions = decision.cautions.filter((line) => !isAvalancheSummaryText(line));
-  if (nonAvalancheCautions.length > 0) {
-    return nonAvalancheCautions[0];
-  }
-
-  if (!isAvalancheSummaryText(decision.headline || '')) {
-    return decision.headline;
-  }
-
-  return 'Conditions remain mixed; review weather, wind, and timing details for this day.';
-}
-
-type BetterDaySuggestion = {
-  date: string;
-  level: DecisionLevel;
-  score: number | null;
-  weather: string;
-  gustMph: number | null;
-  precipChance: number | null;
-  summary: string;
-  bestWindowStart: string | null;
-};
-
-type MultiDayTripForecastDay = {
-  date: string;
-  decisionLevel: DecisionLevel;
-  decisionHeadline: string;
-  score: number | null;
-  weatherDescription: string;
-  tempF: number | null;
-  feelsLikeF: number | null;
-  windGustMph: number | null;
-  precipChance: number | null;
-  avalancheSummary: string;
-  travelSummary: string;
-  sourceIssuedTime: string | null;
-};
-
-interface RouteOption {
-  name: string;
-  distance_rt_miles: number;
-  elev_gain_ft: number;
-  class: string;
-  description: string;
-}
-
-interface RouteWaypointSummary {
-  name: string;
-  elev_ft: number;
-  score: number | null;
-  weather: { temp?: number; windSpeed?: number; description?: string; precipChance?: number };
-  avalanche: { risk?: string; dangerLevel?: number };
-  activeAlerts: number;
-  snowDepthIn: number | null;
-}
-
-interface RouteAnalysisResult {
-  waypoints: { name: string; lat: number; lon: number; elev_ft: number }[];
-  summaries: RouteWaypointSummary[];
-  analysis: string;
-}
-
-function renderSimpleMarkdown(text: string): React.ReactNode[] {
-  const elements: React.ReactNode[] = [];
-  let bulletBuffer: string[] = [];
-  let numberedBuffer: string[] = [];
-  let key = 0;
-
-  const flushBullets = () => {
-    if (bulletBuffer.length === 0) return;
-    elements.push(
-      <ul key={key++} className="route-md-list">
-        {bulletBuffer.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
-      </ul>
-    );
-    bulletBuffer = [];
-  };
-
-  const flushNumbered = () => {
-    if (numberedBuffer.length === 0) return;
-    elements.push(
-      <ol key={key++} className="route-md-list">
-        {numberedBuffer.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
-      </ol>
-    );
-    numberedBuffer = [];
-  };
-
-  const flushLists = () => {
-    flushBullets();
-    flushNumbered();
-  };
-
-  const renderInline = (line: string): React.ReactNode[] =>
-    line.split(/(\*\*[^*]+\*\*)/).map((seg, j) =>
-      seg.startsWith('**') && seg.endsWith('**')
-        ? <strong key={j}>{seg.slice(2, -2)}</strong>
-        : seg
-    );
-
-  const lines = text.split('\n');
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i].trim();
-
-    // Blank line
-    if (!line) {
-      flushLists();
-      i++;
-      continue;
-    }
-
-    // Heading
-    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
-    if (headingMatch) {
-      flushLists();
-      const level = headingMatch[1].length;
-      if (level === 1) elements.push(<h3 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h3>);
-      else if (level === 2) elements.push(<h4 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h4>);
-      else elements.push(<h5 key={key++} className="route-md-heading">{renderInline(headingMatch[2])}</h5>);
-      i++;
-      continue;
-    }
-
-    // Bullet list
-    if (/^[-*]\s+/.test(line)) {
-      flushNumbered();
-      bulletBuffer.push(line.replace(/^[-*]\s+/, ''));
-      i++;
-      continue;
-    }
-
-    // Numbered list
-    if (/^\d+\.\s+/.test(line)) {
-      flushBullets();
-      numberedBuffer.push(line.replace(/^\d+\.\s+/, ''));
-      i++;
-      continue;
-    }
-
-    // Paragraph — collect consecutive non-blank, non-special lines
-    flushLists();
-    const paraLines: string[] = [line];
-    i++;
-    while (i < lines.length) {
-      const next = lines[i].trim();
-      if (!next || /^(#{1,3}\s|[-*]\s|\d+\.\s)/.test(next)) break;
-      paraLines.push(next);
-      i++;
-    }
-    elements.push(<p key={key++}>{renderInline(paraLines.join(' '))}</p>);
-  }
-
-  flushLists();
-  return elements;
-}
-
-interface ReportLogEntry {
-  timestamp: string;
-  lat: number | null;
-  lon: number | null;
-  date: string | null;
-  startTime: string | null;
-  statusCode: number;
-  safetyScore: number | null;
-  partialData: boolean | null;
-  durationMs: number;
-  name: string | null;
-  ip: string | null;
-  userAgent: string | null;
-}
-
-const LOGS_SESSION_KEY = 'summitsafe:logs-key';
-
-function LogsView({ onHome }: { onHome: () => void }) {
-  const [secretKey, setSecretKey] = useState<string>(() => sessionStorage.getItem(LOGS_SESSION_KEY) ?? '');
-  const [draft, setDraft] = useState('');
-  const [rejected, setRejected] = useState(false);
-
-  const handleUnauthorized = useCallback(() => {
-    sessionStorage.removeItem(LOGS_SESSION_KEY);
-    setSecretKey('');
-    setRejected(true);
-  }, []);
-
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-    sessionStorage.setItem(LOGS_SESSION_KEY, trimmed);
-    setSecretKey(trimmed);
-    setRejected(false);
-    setDraft('');
-  }, [draft]);
-
-  return (
-    <>
-      <div className="settings-head">
-        <div>
-          <div className="home-kicker">Backcountry Conditions</div>
-          <h2>Report Logs</h2>
-          <p>All safety report requests received by the server. Auto-refreshes every 30 seconds.</p>
-        </div>
-        <div className="settings-nav">
-          <button className="settings-btn" onClick={onHome}>
-            <House size={14} /> Homepage
-          </button>
-        </div>
-      </div>
-      {secretKey
-        ? <ReportLogsTable secretKey={secretKey} onUnauthorized={handleUnauthorized} />
-        : (
-          <form onSubmit={handleSubmit} className="logs-unlock-form">
-            {rejected && <p className="logs-unlock-error">Incorrect key — try again.</p>}
-            <label htmlFor="logs-key-input">Access key</label>
-            <input
-              id="logs-key-input"
-              type="password"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Enter access key"
-              autoFocus
-            />
-            <button type="submit" className="primary-btn">Unlock</button>
-          </form>
-        )
-      }
-    </>
-  );
-}
-
-type LogSortKey = 'timestamp' | 'name' | 'coords' | 'date' | 'startTime' | 'statusCode' | 'safetyScore' | 'partialData' | 'durationMs' | 'ip';
-
-const LOG_COLUMNS: { key: LogSortKey; label: string }[] = [
-  { key: 'timestamp', label: 'Time' },
-  { key: 'name', label: 'Name' },
-  { key: 'coords', label: 'Lat / Lon' },
-  { key: 'date', label: 'Date' },
-  { key: 'startTime', label: 'Start' },
-  { key: 'statusCode', label: 'Status' },
-  { key: 'safetyScore', label: 'Score' },
-  { key: 'partialData', label: 'Partial' },
-  { key: 'durationMs', label: 'Duration' },
-  { key: 'ip', label: 'IP' },
-];
-
-function getLogSortValue(entry: ReportLogEntry, key: LogSortKey): string | number {
-  switch (key) {
-    case 'timestamp': return entry.timestamp;
-    case 'name': return entry.name ?? '';
-    case 'coords': return entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)},${entry.lon.toFixed(4)}` : '';
-    case 'date': return entry.date ?? '';
-    case 'startTime': return entry.startTime ?? '';
-    case 'statusCode': return entry.statusCode;
-    case 'safetyScore': return entry.safetyScore ?? -1;
-    case 'partialData': return entry.partialData == null ? -1 : entry.partialData ? 1 : 0;
-    case 'durationMs': return entry.durationMs;
-    case 'ip': return entry.ip ?? '';
-    default: return '';
-  }
-}
-
-function getLogCellText(entry: ReportLogEntry, key: LogSortKey): string {
-  switch (key) {
-    case 'timestamp': return new Date(entry.timestamp).toLocaleString();
-    case 'name': return entry.name ?? '';
-    case 'coords': return entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '';
-    case 'date': return entry.date ?? '';
-    case 'startTime': return entry.startTime ?? '';
-    case 'statusCode': return String(entry.statusCode);
-    case 'safetyScore': return entry.safetyScore != null ? String(entry.safetyScore) : '';
-    case 'partialData': return entry.partialData == null ? '' : entry.partialData ? 'Yes' : 'No';
-    case 'durationMs': return String(entry.durationMs);
-    case 'ip': return entry.ip ?? '';
-    default: return '';
-  }
-}
-
-type LogColumnFilters = Partial<Record<LogSortKey, string>>;
-
-function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
-  const [logs, setLogs] = useState<ReportLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
-  const [sortAsc, setSortAsc] = useState(false);
-  const [columnSearches, setColumnSearches] = useState<LogColumnFilters>({});
-  const [exactFilters, setExactFilters] = useState<LogColumnFilters>({});
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: LogSortKey; value: string } | null>(null);
-
-  const fetchLogs = useCallback(async () => {
-    try {
-      const { response, payload } = await fetchApi('/api/report-logs', {
-        headers: { Authorization: `Bearer ${secretKey}` },
-      });
-      if (response.status === 401 || response.status === 403) {
-        onUnauthorized();
-        return;
-      }
-      if (response.ok && Array.isArray(payload)) {
-        setLogs(payload as ReportLogEntry[]);
-        setError(null);
-      } else {
-        setError('Failed to load report logs.');
-      }
-      setLastRefreshed(new Date());
-    } catch {
-      setError('Network error loading logs.');
-    } finally {
-      setLoading(false);
-    }
-  }, [secretKey, onUnauthorized]);
-
-  useEffect(() => {
-    // fetchLogs is async; all setState calls inside it happen after await, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchLogs();
-    const interval = setInterval(() => void fetchLogs(), 30_000);
-    return () => clearInterval(interval);
-  }, [fetchLogs]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const dismiss = () => setContextMenu(null);
-    document.addEventListener('click', dismiss);
-    return () => document.removeEventListener('click', dismiss);
-  }, [contextMenu]);
-
-  const handleSort = (key: LogSortKey) => {
-    if (key === sortKey) {
-      setSortAsc((prev) => !prev);
-    } else {
-      setSortKey(key);
-      setSortAsc(key === 'name' || key === 'ip' || key === 'date');
-    }
-  };
-
-  const setColumnSearch = (key: LogSortKey, value: string) => {
-    setColumnSearches((prev) => {
-      if (!value) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return { ...prev, [key]: value };
-    });
-  };
-
-  const handleCellContextMenu = (e: React.MouseEvent, key: LogSortKey, entry: ReportLogEntry) => {
-    e.preventDefault();
-    const value = getLogCellText(entry, key);
-    if (!value) return;
-    setContextMenu({ x: e.clientX, y: e.clientY, key, value });
-  };
-
-  const applyExactFilter = (key: LogSortKey, value: string) => {
-    setExactFilters((prev) => ({ ...prev, [key]: value }));
-    setContextMenu(null);
-  };
-
-  const clearExactFilter = (key: LogSortKey) => {
-    setExactFilters((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const activeFilterCount = Object.keys(exactFilters).length;
-
-  const filteredAndSorted = useMemo(() => {
-    let result = logs;
-
-    for (const [key, q] of Object.entries(columnSearches) as [LogSortKey, string][]) {
-      if (!q) continue;
-      const lower = q.toLowerCase();
-      result = result.filter((e) => getLogCellText(e, key).toLowerCase().includes(lower));
-    }
-
-    for (const [key, val] of Object.entries(exactFilters) as [LogSortKey, string][]) {
-      result = result.filter((e) => getLogCellText(e, key) === val);
-    }
-
-    return [...result].sort((a, b) => {
-      const av = getLogSortValue(a, sortKey);
-      const bv = getLogSortValue(b, sortKey);
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortAsc ? cmp : -cmp;
-    });
-  }, [logs, columnSearches, exactFilters, sortKey, sortAsc]);
-
-  if (loading) {
-    return <p className="logs-status-msg">Loading logs…</p>;
-  }
-  if (error) {
-    return <p className="logs-status-msg logs-error-msg">{error}</p>;
-  }
-  if (logs.length === 0) {
-    return (
-      <div className="logs-status-msg">
-        <p>No report requests logged yet. Run a safety report to see entries here.</p>
-        {lastRefreshed && <p className="logs-meta">Last checked: {lastRefreshed.toLocaleTimeString()}</p>}
-      </div>
-    );
-  }
-
-  const uniqueVisitors = new Set(logs.map((l) => l.ip).filter(Boolean)).size;
-
-  return (
-    <div className="logs-table-wrap">
-      <div className="logs-toolbar">
-        {lastRefreshed && (
-          <p className="logs-meta">
-            {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · {uniqueVisitors} unique visitor{uniqueVisitors === 1 ? '' : 's'}
-            {filteredAndSorted.length !== logs.length && ` · ${filteredAndSorted.length} shown`}
-            {' '}· Last refreshed: {lastRefreshed.toLocaleTimeString()}
-          </p>
-        )}
-        {activeFilterCount > 0 && (
-          <div className="logs-active-filters">
-            {(Object.entries(exactFilters) as [LogSortKey, string][]).map(([key, val]) => {
-              const col = LOG_COLUMNS.find((c) => c.key === key);
-              return (
-                <span key={key} className="logs-filter-tag">
-                  {col?.label}: {val}
-                  <button className="logs-filter-tag-x" onClick={() => clearExactFilter(key)}>×</button>
-                </span>
-              );
-            })}
-            <button className="logs-clear-filters" onClick={() => setExactFilters({})}>Clear all</button>
-          </div>
-        )}
-      </div>
-      <table className="logs-table">
-        <thead>
-          <tr>
-            {LOG_COLUMNS.map((col) => (
-              <th key={col.key} className="logs-th-sortable" onClick={() => handleSort(col.key)}>
-                {col.label}
-                {sortKey === col.key && <span className="logs-sort-arrow">{sortAsc ? ' ▲' : ' ▼'}</span>}
-              </th>
-            ))}
-            <th>Link</th>
-          </tr>
-          <tr className="logs-search-row">
-            {LOG_COLUMNS.map((col) => (
-              <th key={col.key} className="logs-search-cell">
-                <input
-                  type="text"
-                  className="logs-col-search"
-                  placeholder="Filter…"
-                  value={columnSearches[col.key] ?? ''}
-                  onChange={(e) => setColumnSearch(col.key, e.target.value)}
-                />
-              </th>
-            ))}
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {filteredAndSorted.map((entry, i) => {
-            const plannerHref = entry.lat != null && entry.lon != null
-              ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
-              : null;
-            return (
-              <tr key={i} className={i % 2 === 0 ? 'logs-row-alt' : ''}>
-                <td className="logs-cell-nowrap" onContextMenu={(e) => handleCellContextMenu(e, 'timestamp', entry)}>{new Date(entry.timestamp).toLocaleString()}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'name', entry)}>{entry.name ?? '—'}</td>
-                <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'coords', entry)}>
-                  {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
-                </td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'date', entry)}>{entry.date ?? '—'}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'startTime', entry)}>{entry.startTime ?? '—'}</td>
-                <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'} onContextMenu={(e) => handleCellContextMenu(e, 'statusCode', entry)}>
-                  {entry.statusCode}
-                </td>
-                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 80 ? 'var(--accent-green)' : entry.safetyScore >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)', fontWeight: 600 } : undefined} onContextMenu={(e) => handleCellContextMenu(e, 'safetyScore', entry)}>
-                  {entry.safetyScore != null ? `${entry.safetyScore}%` : '—'}
-                </td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'partialData', entry)}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'durationMs', entry)}>{entry.durationMs != null ? `${entry.durationMs}ms` : '—'}</td>
-                <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'ip', entry)}>{entry.ip ?? '—'}</td>
-                <td>
-                  {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {contextMenu && (
-        <div className="logs-context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
-          <button className="logs-context-item" onClick={() => applyExactFilter(contextMenu.key, contextMenu.value)}>
-            Filter {LOG_COLUMNS.find((c) => c.key === contextMenu.key)?.label} = "{contextMenu.value.length > 24 ? contextMenu.value.slice(0, 24) + '…' : contextMenu.value}"
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function App() {
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
@@ -2454,7 +191,6 @@ function App() {
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
   const initialLinkState = React.useMemo(() => parseLinkState(todayDate, maxForecastDate, initialPreferences), [todayDate, maxForecastDate, initialPreferences]);
 
-  const [view, setView] = useState<'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs'>(initialLinkState.view);
   const [preferences, setPreferences] = useState<UserPreferences>(initialPreferences);
   const activity: ActivityType = 'backcountry';
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
@@ -2463,59 +199,39 @@ function App() {
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
-  const [safetyData, setSafetyData] = useState<SafetyData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(null);
-  const [aiBriefLoading, setAiBriefLoading] = useState(false);
-  const [aiBriefError, setAiBriefError] = useState<string | null>(null);
+  // --- Extracted hooks ---
+  const {
+    healthChecks, healthLoading, healthCheckedAt, healthError, backendMeta, runHealthChecks,
+  } = useHealthChecks();
 
-  const [searchQuery, setSearchQuery] = useState(initialLinkState.searchQuery);
-  const [committedSearchQuery, setCommittedSearchQuery] = useState(initialLinkState.searchQuery);
+  const {
+    routeSuggestions, setRouteSuggestions, routeAnalysis, routeLoading, routeError, setRouteError,
+    customRouteName, setCustomRouteName,
+    fetchRouteSuggestions, fetchRouteAnalysis, resetRouteState,
+  } = useRouteAnalysis();
+
+  const safetyHook = useSafetyData({
+    todayDate,
+    preferences,
+    isProductionBuild,
+    objectiveNameRef,
+  });
+  const {
+    safetyData, setSafetyData, loading, error, setError,
+    aiBriefNarrative, setAiBriefNarrative, aiBriefLoading, setAiBriefLoading, aiBriefError, setAiBriefError,
+    fetchSafetyData, clearLastLoadedKey, clearWakeRetry,
+    handleRequestAiBrief,
+  } = safetyHook;
+
   const [forecastDate, setForecastDate] = useState(initialLinkState.forecastDate);
   const [alpineStartTime, setAlpineStartTime] = useState(initialLinkState.alpineStartTime);
-  const [isViewPending, startViewChange] = useTransition();
   const [targetElevationInput, setTargetElevationInput] = useState(initialLinkState.targetElevationInput);
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
-  const [dayOverDay, setDayOverDay] = useState<DayOverDayComparison | null>(null);
-  const [tripStartDate, setTripStartDate] = useState(initialLinkState.forecastDate);
-  const [tripStartTime, setTripStartTime] = useState(initialLinkState.alpineStartTime);
-  const [tripDurationDays, setTripDurationDays] = useState(3);
-  const [tripForecastRows, setTripForecastRows] = useState<MultiDayTripForecastDay[]>([]);
-  const [tripForecastLoading, setTripForecastLoading] = useState(false);
-  const [tripForecastError, setTripForecastError] = useState<string | null>(null);
-  const [tripForecastNote, setTripForecastNote] = useState<string | null>(null);
-  const [betterDaySuggestions, setBetterDaySuggestions] = useState<BetterDaySuggestion[]>([]);
-  const [betterDaySuggestionsLoading, setBetterDaySuggestionsLoading] = useState(false);
-  const [betterDaySuggestionsNote, setBetterDaySuggestionsNote] = useState<string | null>(null);
-  const [healthChecks, setHealthChecks] = useState<HealthCheckResult[]>([]);
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
-  const [backendMeta, setBackendMeta] = useState<BackendMeta | null>(null);
-  const [routeSuggestions, setRouteSuggestions] = useState<RouteOption[] | null>(null);
-  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(null);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [routeError, setRouteError] = useState<string | null>(null);
-  const [customRouteName, setCustomRouteName] = useState('');
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
-  const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
   const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
   const [weatherHourPreviewTime, setWeatherHourPreviewTime] = useState<string | null>(null);
-  const [travelWindowHoursDraft, setTravelWindowHoursDraft] = useState(() => String(initialPreferences.travelWindowHours));
-  const [maxPrecipChanceDraft, setMaxPrecipChanceDraft] = useState(() => String(initialPreferences.maxPrecipChance));
-  const [maxWindGustDraft, setMaxWindGustDraft] = useState(() =>
-    convertWindMphToDisplayValue(initialPreferences.maxWindGustMph, initialPreferences.windSpeedUnit).toFixed(
-      initialPreferences.windSpeedUnit === 'kph' ? 1 : 0,
-    ),
-  );
-  const [minFeelsLikeDraft, setMinFeelsLikeDraft] = useState(() =>
-    convertTempFToDisplayValue(initialPreferences.minFeelsLikeF, initialPreferences.temperatureUnit).toFixed(
-      initialPreferences.temperatureUnit === 'c' ? 1 : 0,
-    ),
-  );
   const [mapStyle, setMapStyle] = useState<MapStyle>('topo');
   const [mobileMapControlsExpanded, setMobileMapControlsExpanded] = useState(() => {
     try {
@@ -2527,118 +243,27 @@ function App() {
   });
   const [mapFocusNonce, setMapFocusNonce] = useState(0);
   const [locatingUser, setLocatingUser] = useState(false);
-  const lastLoadedSafetyKeyRef = useRef<string | null>(null);
-  const inFlightSafetyKeyRef = useRef<string | null>(null);
-  const pendingSafetyRequestRef = useRef<{
-    lat: number;
-    lon: number;
-    date: string;
-    startTime: string;
-    force: boolean;
-  } | null>(null);
-  const fetchSafetyDataRef = useRef<
-    ((lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => Promise<void>) | null
-  >(null);
   const hasInitializedHistoryRef = useRef(false);
   const isApplyingPopStateRef = useRef(false);
-  const wakeRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wakeRetryStateRef = useRef<{
-    key: string;
-    lat: number;
-    lon: number;
-    date: string;
-    startTime: string;
-    attempts: number;
-  } | null>(null);
-
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [savedObjectives, setSavedObjectives] = useState<Suggestion[]>(() =>
-    readStoredSuggestions(SAVED_OBJECTIVES_STORAGE_KEY, 'saved'),
-  );
-  const [recentSearches, setRecentSearches] = useState<Suggestion[]>(() =>
-    readStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, 'recent'),
-  );
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const searchWrapperRef = useRef<HTMLDivElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const latestSuggestionRequestId = useRef(0);
-  const suggestionCacheRef = useRef<Map<string, Suggestion[]>>(new Map());
-  const suggestionAbortControllerRef = useRef<AbortController | null>(null);
-  const suggestionsQueryRef = useRef<string>('');
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
 
-  const clearWakeRetry = useCallback(() => {
-    if (wakeRetryTimeoutRef.current) {
-      clearTimeout(wakeRetryTimeoutRef.current);
-      wakeRetryTimeoutRef.current = null;
-    }
-    wakeRetryStateRef.current = null;
-  }, []);
-
-  const isRetriableWakeupError = useCallback((message: string) => {
-    const normalized = String(message || '').toLowerCase();
-    if (!normalized) {
-      return false;
-    }
-    return (
-      normalized.includes('failed to fetch') ||
-      normalized.includes('networkerror') ||
-      normalized.includes('network request failed') ||
-      normalized.includes('timeout') ||
-      /\(\s*5\d\d\s*\)/.test(normalized) ||
-      normalized.includes('unable to reach backend api')
-    );
-  }, []);
-
-  const scheduleWakeRetry = useCallback((payload: { key: string; lat: number; lon: number; date: string; startTime: string }) => {
-    if (!isProductionBuild) {
-      return;
-    }
-
-    const existing = wakeRetryStateRef.current;
-    const attempts = existing && existing.key === payload.key ? existing.attempts + 1 : 1;
-    if (attempts > BACKEND_WAKE_RETRY_MAX_ATTEMPTS) {
-      clearWakeRetry();
-      return;
-    }
-
-    wakeRetryStateRef.current = { ...payload, attempts };
-    if (wakeRetryTimeoutRef.current) {
-      clearTimeout(wakeRetryTimeoutRef.current);
-      wakeRetryTimeoutRef.current = null;
-    }
-
-    wakeRetryTimeoutRef.current = setTimeout(async () => {
-      const state = wakeRetryStateRef.current;
-      if (!state || state.key !== payload.key) {
-        return;
-      }
-
-      let backendHealthy = false;
-      try {
-        const { response, payload: healthPayload } = await fetchApi('/api/healthz');
-        backendHealthy = response.ok && Boolean((healthPayload as { ok?: boolean } | null)?.ok);
-      } catch {
-        backendHealthy = false;
-      }
-
-      if (backendHealthy) {
-        clearWakeRetry();
-        const fetchFn = fetchSafetyDataRef.current;
-        if (fetchFn) {
-          void fetchFn(state.lat, state.lon, state.date, state.startTime, { force: true });
-        }
-        return;
-      }
-
-      scheduleWakeRetry(payload);
-    }, BACKEND_WAKE_RETRY_DELAY_MS);
-  }, [clearWakeRetry, isProductionBuild]);
+  const tripHook = useTripForecast({
+    hasObjective,
+    position,
+    todayDate,
+    maxForecastDate,
+    preferences,
+  });
+  const {
+    tripStartDate, setTripStartDate, tripStartTime, setTripStartTime,
+    tripDurationDays, setTripDurationDays,
+    tripForecastRows, setTripForecastRows: setTripForecastRowsDirect,
+    tripForecastLoading, tripForecastError, setTripForecastError: setTripForecastErrorDirect,
+    tripForecastNote, setTripForecastNote: setTripForecastNoteDirect,
+    runTripForecast,
+  } = tripHook;
 
   const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
     clearWakeRetry();
@@ -2654,303 +279,64 @@ function App() {
     setAiBriefError(null);
     setTargetElevationInput('');
     setTargetElevationManual(false);
-    setTripForecastRows([]);
-    setTripForecastError(null);
-    setTripForecastNote(null);
-    setRouteSuggestions(null);
-    setRouteAnalysis(null);
-    setRouteError(null);
+    setTripForecastRowsDirect([]);
+    setTripForecastErrorDirect(null);
+    setTripForecastNoteDirect(null);
+    resetRouteState();
     if (label) {
       setObjectiveName(label);
     } else {
       setObjectiveName((prev) => prev || 'Dropped pin');
     }
-  }, [clearWakeRetry]);
+  }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
-  const fetchSafetyData = useCallback(
-    async (lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => {
-      const safeDate = DATE_FMT.test(date) ? date : todayDate;
-      const safeStartTime = parseTimeInputMinutes(startTime) === null ? preferences.defaultStartTime : startTime;
-      const safeTravelWindowHours = Math.max(
-        MIN_TRAVEL_WINDOW_HOURS,
-        Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
-      );
-      const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime, safeTravelWindowHours);
-      const forceReload = options?.force === true;
+  const searchHook = useSearchSuggestions({
+    initialSearchQuery: initialLinkState.searchQuery,
+    updateObjectivePosition,
+  });
+  const {
+    searchQuery, setSearchQuery: setSearchInputValue, committedSearchQuery, setCommittedSearchQuery,
+    suggestions, showSuggestions, setShowSuggestions,
+    searchLoading, activeSuggestionIndex, setActiveSuggestionIndex,
+    searchInputRef, searchWrapperRef,
+    selectSuggestion,
+    handleInputChange, handleSearchKeyDown, handleSearchSubmit, handleFocus, handleSearchClear,
+    handleUseTypedCoordinates,
+    handleToggleSaveObjective: handleToggleSaveObjectiveRaw,
+    recordRecentSuggestion,
+    parsedTypedCoordinates,
+  } = searchHook;
 
-      if (wakeRetryStateRef.current?.key && wakeRetryStateRef.current.key !== requestKey) {
-        clearWakeRetry();
-      }
+  const handleToggleSaveObjective = useCallback(() => {
+    handleToggleSaveObjectiveRaw({ hasObjective, objectiveName, position });
+  }, [handleToggleSaveObjectiveRaw, hasObjective, objectiveName, position]);
 
-      if (!forceReload && lastLoadedSafetyKeyRef.current === requestKey) {
-        return;
-      }
-      if (inFlightSafetyKeyRef.current) {
-        pendingSafetyRequestRef.current = {
-          lat,
-          lon,
-          date: safeDate,
-          startTime: safeStartTime,
-          force: forceReload,
-        };
-        return;
-      }
-      if (!forceReload && inFlightSafetyKeyRef.current === requestKey) {
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      inFlightSafetyKeyRef.current = requestKey;
-
-      try {
-        const { response, payload, requestId } = await fetchApi(
-          `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(
-            safeStartTime,
-          )}&travel_window_hours=${safeTravelWindowHours}&name=${encodeURIComponent(objectiveNameRef.current)}`,
-        );
-
-        if (!response.ok) {
-          const baseMessage = readApiErrorMessage(payload, `Safety API request failed (${response.status})`);
-          throw new Error(requestId ? `${baseMessage} (request ${requestId})` : baseMessage);
-        }
-
-        if (!payload || typeof payload !== 'object') {
-          const emptyResponseMsg = 'Safety API returned an empty or invalid response.';
-          throw new Error(requestId ? `${emptyResponseMsg} (request ${requestId})` : emptyResponseMsg);
-        }
-
-        const pending = pendingSafetyRequestRef.current;
-        const pendingRequestKey = pending
-          ? buildSafetyRequestKey(
-              pending.lat,
-              pending.lon,
-              pending.date,
-              pending.startTime,
-              safeTravelWindowHours,
-            )
-          : null;
-        if (!pendingRequestKey || pendingRequestKey === requestKey) {
-          setSafetyData(payload as SafetyData);
-          setAiBriefNarrative(null);
-          setAiBriefLoading(false);
-          setAiBriefError(null);
-          lastLoadedSafetyKeyRef.current = requestKey;
-          if (wakeRetryStateRef.current?.key === requestKey) {
-            clearWakeRetry();
-          }
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'System error';
-        setError(message);
-        if (isRetriableWakeupError(message)) {
-          scheduleWakeRetry({ key: requestKey, lat, lon, date: safeDate, startTime: safeStartTime });
-        }
-      } finally {
-        inFlightSafetyKeyRef.current = null;
-        setLoading(false);
-        const pending = pendingSafetyRequestRef.current;
-        pendingSafetyRequestRef.current = null;
-        if (pending) {
-          const nextFetch = fetchSafetyDataRef.current;
-          if (nextFetch) {
-            void nextFetch(pending.lat, pending.lon, pending.date, pending.startTime, { force: pending.force });
-          }
-        }
-      }
-    },
-    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry],
-  );
-
-  useEffect(() => {
-    fetchSafetyDataRef.current = fetchSafetyData;
-  }, [fetchSafetyData]);
-
-  const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number) => {
-    setRouteSuggestions(null);
-    setRouteAnalysis(null);
-    setRouteError(null);
-    setRouteLoading(true);
-    setCustomRouteName('');
-    try {
-      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
-      if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to load route suggestions'));
-      setRouteSuggestions(payload as RouteOption[]);
-    } catch (err) {
-      setRouteError(err instanceof Error ? err.message : 'Could not load route suggestions. Try again.');
-    } finally {
-      setRouteLoading(false);
-    }
-  }, []);
-
-  const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string, travelWindowHours: number) => {
-    setRouteAnalysis(null);
-    setRouteError(null);
-    setRouteLoading(true);
-    try {
-      const { response, payload } = await fetchApi('/api/route-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ peak, route, lat, lon, date, start, travel_window_hours: travelWindowHours }),
-      });
-      if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
-      setRouteAnalysis(payload as RouteAnalysisResult);
-    } catch (err) {
-      setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');
-    } finally {
-      setRouteLoading(false);
-    }
-  }, []);
-
-  const runHealthChecks = useCallback(async () => {
-    setHealthLoading(true);
-    setHealthError(null);
-    try {
-      const t0 = Date.now();
-      const { response, payload, requestId } = await fetchApi('/api/healthz');
-      const latencyMs = Date.now() - t0;
-
-      if (!response.ok || !payload || typeof payload !== 'object') {
-        const baseMessage = readApiErrorMessage(payload, `Health check failed (${response.status})`);
-        throw new Error(requestId ? `${baseMessage} (request ${requestId})` : baseMessage);
-      }
-
-      const p = payload as {
-        ok?: boolean;
-        service?: string;
-        version?: string;
-        env?: string;
-        uptime?: number;
-        nodeVersion?: string;
-        memory?: { heapUsedMb?: number; rssMb?: number };
-      };
-
-      const backendOk = Boolean(p.ok);
-      const backendService = String(p.service || 'backcountry-conditions-backend');
-      const backendEnv = String(p.env || 'unknown');
-      const backendVersion = String(p.version || '?');
-      const backendUptime = typeof p.uptime === 'number' ? p.uptime : null;
-      const backendNodeVersion = String(p.nodeVersion || '?');
-      const heapUsedMb = p.memory?.heapUsedMb ?? null;
-      const rssMb = p.memory?.rssMb ?? null;
-
-      const nowIso = new Date().toISOString();
-
-      const localStorageAvailable = (() => {
-        try {
-          if (typeof window === 'undefined' || !window.localStorage) return false;
-          const probeKey = '__summitsafe_health_probe__';
-          window.localStorage.setItem(probeKey, '1');
-          window.localStorage.removeItem(probeKey);
-          return true;
-        } catch {
-          return false;
-        }
-      })();
-
-      const cookiesAvailable = typeof navigator !== 'undefined' && navigator.cookieEnabled;
-
-      const webGlAvailable = (() => {
-        try {
-          const canvas = document.createElement('canvas');
-          return Boolean(canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl'));
-        } catch {
-          return false;
-        }
-      })();
-
-      const latencyStatus: HealthCheckResult['status'] = latencyMs < 400 ? 'ok' : latencyMs < 1200 ? 'warn' : 'down';
-
-      const formatUptime = (seconds: number) => {
-        const d = Math.floor(seconds / 86400);
-        const h = Math.floor((seconds % 86400) / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        if (d > 0) return `${d}d ${h}h ${m}m`;
-        if (h > 0) return `${h}h ${m}m`;
-        return `${m}m ${seconds % 60}s`;
-      };
-
-      if (backendUptime !== null && heapUsedMb !== null && rssMb !== null) {
-        setBackendMeta({
-          version: backendVersion,
-          env: backendEnv,
-          uptime: backendUptime,
-          nodeVersion: backendNodeVersion,
-          heapUsedMb,
-          rssMb,
-          latencyMs,
-        });
-      }
-
-      const checks: HealthCheckResult[] = [
-        {
-          label: 'Backend API',
-          status: backendOk ? 'ok' : 'down',
-          detail: backendOk
-            ? `${backendService} responded healthy (${backendEnv}).`
-            : 'Backend health endpoint returned not-ok.',
-          meta: backendOk && backendUptime !== null ? `Up for ${formatUptime(backendUptime)} · Node ${backendNodeVersion}` : undefined,
-        },
-        {
-          label: 'API Latency',
-          status: latencyStatus,
-          detail:
-            latencyStatus === 'ok'
-              ? `Response in ${latencyMs} ms — within normal range.`
-              : latencyStatus === 'warn'
-                ? `Response in ${latencyMs} ms — slower than expected.`
-                : `Response in ${latencyMs} ms — very slow, possible network issue.`,
-          meta: `Measured round-trip to /api/healthz`,
-        },
-        {
-          label: 'Browser Network',
-          status: typeof navigator !== 'undefined' && navigator.onLine ? 'ok' : 'warn',
-          detail:
-            typeof navigator !== 'undefined' && navigator.onLine
-              ? 'Browser reports online.'
-              : 'Browser reports offline mode.',
-        },
-        {
-          label: 'Browser Storage',
-          status: localStorageAvailable ? 'ok' : 'warn',
-          detail: localStorageAvailable
-            ? 'Local preferences storage is available.'
-            : 'Local storage unavailable (private mode or browser policy).',
-        },
-        {
-          label: 'Browser Cookies',
-          status: cookiesAvailable ? 'ok' : 'warn',
-          detail: cookiesAvailable
-            ? 'Cookies are enabled.'
-            : 'Cookies are disabled — some features may not work correctly.',
-        },
-        {
-          label: 'Browser WebGL',
-          status: webGlAvailable ? 'ok' : 'warn',
-          detail: webGlAvailable
-            ? 'WebGL is available for map rendering.'
-            : 'WebGL unavailable — map tile rendering may be degraded.',
-        },
-      ];
-
-      setHealthChecks(checks);
-      setHealthCheckedAt(nowIso);
-    } catch (error) {
-      setHealthChecks([]);
-      setBackendMeta(null);
-      setHealthError(error instanceof Error ? error.message : 'Health check failed.');
-      setHealthCheckedAt(new Date().toISOString());
-    } finally {
-      setHealthLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
+  // URL state: view, isViewPending, navigateToView
+  const urlState = useUrlState({
+    todayDate,
+    maxForecastDate,
+    preferences,
+    initialView: initialLinkState.view as AppView,
+    onPopState: useCallback((linkState: ReturnType<typeof parseLinkState>) => {
       clearWakeRetry();
-    };
-  }, [clearWakeRetry]);
-
+      setSafetyData(null);
+      setAiBriefNarrative(null);
+      setAiBriefLoading(false);
+      setAiBriefError(null);
+      clearLastLoadedKey();
+      setPosition(linkState.position);
+      setHasObjective(linkState.hasObjective);
+      setObjectiveName(linkState.objectiveName);
+      setSearchInputValue(linkState.searchQuery);
+      setCommittedSearchQuery(linkState.searchQuery);
+      setForecastDate(linkState.forecastDate);
+      setAlpineStartTime(linkState.alpineStartTime);
+      setTargetElevationInput(linkState.targetElevationInput);
+      setTargetElevationManual(Boolean(linkState.targetElevationInput));
+      setError(null);
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
+  });
+  const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
   useEffect(() => {
     if (!hasObjective || view !== 'planner') {
@@ -3015,77 +401,18 @@ function App() {
     void runHealthChecks();
   }, [view, runHealthChecks]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const hasSharableState = view === 'planner' || view === 'trip';
-    const query = hasSharableState
-      ? buildShareQuery({
-          view,
-          hasObjective,
-          position,
-          objectiveName,
-          searchQuery: committedSearchQuery,
-          forecastDate,
-          alpineStartTime,
-          targetElevationInput,
-        })
-      : '';
-
-    const viewPath = view === 'home' ? '' : view;
-    const nextUrl = `/${viewPath}${query ? `?${query}` : ''}`;
-    const currentUrl = `${window.location.pathname}${window.location.search}`;
-    if (nextUrl !== currentUrl) {
-      if (isApplyingPopStateRef.current || !hasInitializedHistoryRef.current) {
-        window.history.replaceState(null, '', nextUrl);
-      } else {
-        window.history.pushState(null, '', nextUrl);
-      }
-    }
-
-    isApplyingPopStateRef.current = false;
-    hasInitializedHistoryRef.current = true;
-  }, [view, hasObjective, position, objectiveName, committedSearchQuery, forecastDate, alpineStartTime, targetElevationInput]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const handlePopState = () => {
-      isApplyingPopStateRef.current = true;
-      const linkState = parseLinkState(todayDate, maxForecastDate, preferences);
-      clearWakeRetry();
-      setSafetyData(null);
-      setDayOverDay(null);
-      setAiBriefNarrative(null);
-      setAiBriefLoading(false);
-      setAiBriefError(null);
-      setBetterDaySuggestions([]);
-      setBetterDaySuggestionsLoading(false);
-      setBetterDaySuggestionsNote(null);
-      lastLoadedSafetyKeyRef.current = null;
-      setView(linkState.view);
-      setPosition(linkState.position);
-      setHasObjective(linkState.hasObjective);
-      setObjectiveName(linkState.objectiveName);
-      setSearchQuery(linkState.searchQuery);
-      setCommittedSearchQuery(linkState.searchQuery);
-      setForecastDate(linkState.forecastDate);
-      setAlpineStartTime(linkState.alpineStartTime);
-      setTargetElevationInput(linkState.targetElevationInput);
-      setTargetElevationManual(Boolean(linkState.targetElevationInput));
-      setError(null);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayDate, maxForecastDate, preferences.defaultStartTime, clearWakeRetry]);
+  useSyncUrlEffect({
+    view,
+    hasObjective,
+    position,
+    objectiveName,
+    committedSearchQuery,
+    forecastDate,
+    alpineStartTime,
+    targetElevationInput,
+    isApplyingPopState: isApplyingPopStateRef,
+    hasInitializedHistory: hasInitializedHistoryRef,
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3106,19 +433,7 @@ function App() {
   }, [preferences.themeMode]);
 
   useEffect(() => {
-    suggestionCacheRef.current.clear();
-  }, [savedObjectives, recentSearches]);
-
-  useEffect(() => {
     return () => {
-      latestSuggestionRequestId.current += 1;
-      if (suggestionAbortControllerRef.current) {
-        suggestionAbortControllerRef.current.abort();
-        suggestionAbortControllerRef.current = null;
-      }
-      if (searchTimeout.current) {
-        clearTimeout(searchTimeout.current);
-      }
       if (copyResetTimeout.current) {
         clearTimeout(copyResetTimeout.current);
       }
@@ -3128,455 +443,9 @@ function App() {
     };
   }, []);
 
-  const setSearchInputValue = useCallback((value: string) => {
-    setSearchQuery(value);
-  }, []);
-
-  const persistSavedObjectiveList = useCallback((next: Suggestion[]) => {
-    setSavedObjectives(next);
-    writeStoredSuggestions(SAVED_OBJECTIVES_STORAGE_KEY, next, MAX_SAVED_OBJECTIVES);
-  }, []);
-
-  const persistRecentSearchList = useCallback((next: Suggestion[]) => {
-    setRecentSearches(next);
-    writeStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, next, MAX_RECENT_SEARCHES);
-  }, []);
-
-  const getStoredSuggestionsForQuery = useCallback(
-    (query: string, options?: { includePopular?: boolean }) => {
-      const savedMatches = filterSuggestionBucket(savedObjectives, query).map((item) => ({ ...item, class: 'saved' }));
-      const recentMatches = filterSuggestionBucket(recentSearches, query).map((item) => ({ ...item, class: 'recent' }));
-      const popularMatches = options?.includePopular ? getLocalPopularSuggestions(query) : [];
-      return mergeSuggestionBuckets([savedMatches, recentMatches, popularMatches], 10);
-    },
-    [recentSearches, savedObjectives],
-  );
-
-  const recordRecentSuggestion = useCallback(
-    (item: Suggestion) => {
-      const normalized = normalizeStoredSuggestion({ ...item, class: 'recent' }, 'recent');
-      if (!normalized) {
-        return;
-      }
-      persistRecentSearchList(
-        mergeSuggestionBuckets([[normalized], recentSearches.map((entry) => ({ ...entry, class: 'recent' }))], MAX_RECENT_SEARCHES),
-      );
-    },
-    [persistRecentSearchList, recentSearches],
-  );
-
-  const handleToggleSaveObjective = useCallback(() => {
-    if (!hasObjective) {
-      return;
-    }
-    const fallbackName = (objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`).trim();
-    const normalized = normalizeStoredSuggestion(
-      { name: fallbackName, lat: position.lat, lon: position.lng, class: 'saved', type: 'objective' },
-      'saved',
-    );
-    if (!normalized) {
-      return;
-    }
-    const nextCoordinateKey = suggestionCoordinateKey(normalized.lat, normalized.lon);
-    const exists = savedObjectives.some(
-      (saved) => suggestionCoordinateKey(saved.lat, saved.lon) === nextCoordinateKey,
-    );
-    const nextSaved = exists
-      ? savedObjectives.filter((saved) => suggestionCoordinateKey(saved.lat, saved.lon) !== nextCoordinateKey)
-      : mergeSuggestionBuckets(
-          [[{ ...normalized, class: 'saved' }], savedObjectives.map((item) => ({ ...item, class: 'saved' }))],
-          MAX_SAVED_OBJECTIVES,
-        );
-    persistSavedObjectiveList(nextSaved);
-  }, [hasObjective, objectiveName, persistSavedObjectiveList, position.lat, position.lng, savedObjectives]);
-
-  const fetchSuggestions = useCallback(async (q: string) => {
-    const requestId = ++latestSuggestionRequestId.current;
-    const query = q.trim();
-    const storedMatches = getStoredSuggestionsForQuery(query);
-    if (!query || query.length < 2) {
-      const discoverySuggestions = getStoredSuggestionsForQuery(query, { includePopular: true });
-      suggestionsQueryRef.current = query;
-      setSuggestions(discoverySuggestions);
-      setShowSuggestions(true);
-      setActiveSuggestionIndex(-1);
-      setSearchLoading(false);
-      return;
-    }
-
-    const cacheKey = normalizeSuggestionText(query);
-    const cached = suggestionCacheRef.current.get(cacheKey);
-
-    if (cached) {
-      suggestionsQueryRef.current = query;
-      setSuggestions(cached);
-      setShowSuggestions(true);
-      setActiveSuggestionIndex(-1);
-      setSearchLoading(false);
-      return;
-    }
-
-    if (suggestionAbortControllerRef.current) {
-      suggestionAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    suggestionAbortControllerRef.current = controller;
-
-    setSearchLoading(true);
-    try {
-      const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
-      const { response, payload, requestId: apiRequestId } = await fetchApi(
-        `/api/search${queryParam}`,
-        { signal: controller.signal },
-      );
-      if (!response.ok) {
-        const baseMessage = readApiErrorMessage(payload, `Search request failed (${response.status})`);
-        throw new Error(apiRequestId ? `${baseMessage} (request ${apiRequestId})` : baseMessage);
-      }
-      if (requestId !== latestSuggestionRequestId.current) {
-        return;
-      }
-      const nextSuggestions = Array.isArray(payload) ? payload : [];
-      const resolvedSuggestions = mergeSuggestionBuckets(
-        [storedMatches, rankAndDeduplicateSuggestions(nextSuggestions, query)],
-        8,
-      );
-      suggestionCacheRef.current.set(cacheKey, resolvedSuggestions);
-      if (suggestionCacheRef.current.size > 50) {
-        const oldestKey = suggestionCacheRef.current.keys().next().value;
-        if (typeof oldestKey === 'string') {
-          suggestionCacheRef.current.delete(oldestKey);
-        }
-      }
-      suggestionsQueryRef.current = query;
-      setSuggestions(resolvedSuggestions);
-      setShowSuggestions(true);
-      setActiveSuggestionIndex(-1);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return;
-      }
-      if (requestId !== latestSuggestionRequestId.current) {
-        return;
-      }
-      const fallback = mergeSuggestionBuckets([storedMatches, getLocalPopularSuggestions(query)], 8);
-      suggestionCacheRef.current.set(cacheKey, fallback);
-      suggestionsQueryRef.current = query;
-      setSuggestions(fallback);
-      setShowSuggestions(true);
-      setActiveSuggestionIndex(-1);
-      console.error('Search error:', err);
-    } finally {
-      if (suggestionAbortControllerRef.current === controller) {
-        suggestionAbortControllerRef.current = null;
-      }
-      if (requestId === latestSuggestionRequestId.current) {
-        setSearchLoading(false);
-      }
-    }
-  }, [getStoredSuggestionsForQuery]);
-
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    setActiveSuggestionIndex(-1);
-
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
-    if (value.length > 0) {
-      setShowSuggestions(true);
-      searchTimeout.current = setTimeout(() => {
-        void fetchSuggestions(value);
-      }, SEARCH_DEBOUNCE_MS);
-    } else {
-      void fetchSuggestions('');
-    }
-  }, [fetchSuggestions]);
-
-  const selectSuggestion = useCallback(
-    (s: Suggestion) => {
-      const label = s.name.split(',')[0];
-      const lat = Number(s.lat);
-      const lon = Number(s.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        return;
-      }
-      setSearchInputValue(label);
-      setCommittedSearchQuery(label);
-      setShowSuggestions(false);
-      setActiveSuggestionIndex(-1);
-      updateObjectivePosition(new L.LatLng(lat, lon), label);
-      recordRecentSuggestion({ ...s, name: s.name, lat, lon, class: 'recent' });
-    },
-    [recordRecentSuggestion, setSearchInputValue, updateObjectivePosition],
-  );
-
-  const handleUseTypedCoordinates = useCallback(
-    (value: string) => {
-      const parsed = parseCoordinates(value);
-      if (!parsed) {
-        return;
-      }
-      setSearchInputValue(value);
-      setCommittedSearchQuery(value);
-      updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
-      setShowSuggestions(false);
-      setActiveSuggestionIndex(-1);
-      recordRecentSuggestion({
-        name: `${parsed.lat.toFixed(4)}, ${parsed.lon.toFixed(4)}`,
-        lat: parsed.lat,
-        lon: parsed.lon,
-        class: 'recent',
-        type: 'coordinate',
-      });
-    },
-    [recordRecentSuggestion, setSearchInputValue, updateObjectivePosition],
-  );
-
-  const searchAndSelectFirst = useCallback(
-    async (rawQuery: string) => {
-      const query = rawQuery.trim();
-      if (!query) {
-        return false;
-      }
-
-      const parsed = parseCoordinates(query);
-      if (parsed) {
-        setSearchInputValue(query);
-        setCommittedSearchQuery(query);
-        updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
-        setShowSuggestions(false);
-        setActiveSuggestionIndex(-1);
-        recordRecentSuggestion({
-          name: `${parsed.lat.toFixed(4)}, ${parsed.lon.toFixed(4)}`,
-          lat: parsed.lat,
-          lon: parsed.lon,
-          class: 'recent',
-          type: 'coordinate',
-        });
-        return true;
-      }
-
-      const cached = suggestionCacheRef.current.get(normalizeSuggestionText(query));
-      if (cached && cached[0]) {
-        setSuggestions(cached);
-        selectSuggestion(cached[0]);
-        return true;
-      }
-
-      if (query.length < 2) {
-        const localSuggestions = getStoredSuggestionsForQuery(query, { includePopular: true });
-        setSuggestions(localSuggestions);
-        if (localSuggestions[0]) {
-          selectSuggestion(localSuggestions[0]);
-          return true;
-        }
-        setShowSuggestions(true);
-        setActiveSuggestionIndex(-1);
-        return false;
-      }
-
-      setSearchLoading(true);
-      const requestId = ++latestSuggestionRequestId.current;
-      try {
-        const queryParam = query ? `?q=${encodeURIComponent(query)}` : '';
-        const { response, payload, requestId: apiRequestId } = await fetchApi(
-          `/api/search${queryParam}`,
-        );
-        if (requestId !== latestSuggestionRequestId.current) {
-          return false;
-        }
-        if (!response.ok) {
-          const baseMessage = readApiErrorMessage(payload, `Search request failed (${response.status})`);
-          throw new Error(apiRequestId ? `${baseMessage} (request ${apiRequestId})` : baseMessage);
-        }
-        const nextSuggestions = Array.isArray(payload) ? payload : [];
-        const resolvedSuggestions = mergeSuggestionBuckets(
-          [getStoredSuggestionsForQuery(query), rankAndDeduplicateSuggestions(nextSuggestions, query)],
-          8,
-        );
-        setSuggestions(resolvedSuggestions);
-        if (resolvedSuggestions[0]) {
-          selectSuggestion(resolvedSuggestions[0]);
-          return true;
-        }
-        setShowSuggestions(true);
-        setActiveSuggestionIndex(-1);
-        return false;
-      } catch (err) {
-        if (requestId !== latestSuggestionRequestId.current) {
-          return false;
-        }
-        console.error('Search submit error:', err);
-        const fallbackSuggestions = mergeSuggestionBuckets([getStoredSuggestionsForQuery(query), getLocalPopularSuggestions(query)], 8);
-        setSuggestions(fallbackSuggestions);
-        if (fallbackSuggestions[0]) {
-          selectSuggestion(fallbackSuggestions[0]);
-          return true;
-        }
-        setShowSuggestions(true);
-        setActiveSuggestionIndex(-1);
-        return false;
-      } finally {
-        setSearchLoading(false);
-      }
-    },
-    [getStoredSuggestionsForQuery, recordRecentSuggestion, selectSuggestion, setSearchInputValue, updateObjectivePosition],
-  );
-
-  useEffect(() => {
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      if (!searchWrapperRef.current) {
-        return;
-      }
-      const target = event.target;
-      if (target instanceof Node && searchWrapperRef.current.contains(target)) {
-        return;
-      }
-      setShowSuggestions(false);
-      setActiveSuggestionIndex(-1);
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      event.preventDefault();
-      searchInputRef.current?.focus();
-      setShowSuggestions(true);
-      if (!searchQuery.trim()) {
-        void fetchSuggestions('');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeydown);
-    return () => {
-      window.removeEventListener('keydown', handleKeydown);
-    };
-  }, [fetchSuggestions, searchQuery]);
-
   useEffect(() => {
     setTravelWindowExpanded(false);
   }, [safetyData?.forecast?.selectedDate, safetyData?.forecast?.selectedStartTime]);
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') {
-      setShowSuggestions(false);
-      setActiveSuggestionIndex(-1);
-      return;
-    }
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (!showSuggestions) {
-        setShowSuggestions(true);
-      }
-      if (suggestions.length > 0) {
-        setActiveSuggestionIndex((prev) => (prev < 0 ? 0 : (prev + 1) % suggestions.length));
-      }
-      return;
-    }
-
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (suggestions.length > 0) {
-        setActiveSuggestionIndex((prev) => {
-          if (prev < 0) {
-            return suggestions.length - 1;
-          }
-          return prev === 0 ? suggestions.length - 1 : prev - 1;
-        });
-      }
-      return;
-    }
-
-    if (e.key !== 'Enter') {
-      return;
-    }
-
-    e.preventDefault();
-    const liveQuery = searchQuery;
-    const suggestionsMatchLiveQuery =
-      normalizeSuggestionText(liveQuery) === normalizeSuggestionText(suggestionsQueryRef.current);
-
-    if (suggestionsMatchLiveQuery && activeSuggestionIndex >= 0 && suggestions[activeSuggestionIndex]) {
-      selectSuggestion(suggestions[activeSuggestionIndex]);
-      return;
-    }
-
-    if (suggestionsMatchLiveQuery && suggestions.length > 0) {
-      selectSuggestion(suggestions[0]);
-      return;
-    }
-
-    void searchAndSelectFirst(liveQuery);
-  };
-
-  const handleSearchSubmit = () => {
-    const liveQuery = searchQuery;
-    const suggestionsMatchLiveQuery =
-      normalizeSuggestionText(liveQuery) === normalizeSuggestionText(suggestionsQueryRef.current);
-    if (!liveQuery.trim()) {
-      setShowSuggestions(true);
-      setActiveSuggestionIndex(-1);
-      if (!suggestions.length && !searchLoading) {
-        void fetchSuggestions('');
-      }
-      return;
-    }
-    if (suggestionsMatchLiveQuery && activeSuggestionIndex >= 0 && suggestions[activeSuggestionIndex]) {
-      selectSuggestion(suggestions[activeSuggestionIndex]);
-      return;
-    }
-    if (suggestionsMatchLiveQuery && suggestions.length > 0) {
-      selectSuggestion(suggestions[0]);
-      return;
-    }
-    setCommittedSearchQuery(liveQuery.trim());
-    void searchAndSelectFirst(liveQuery);
-  };
-
-  const handleFocus = () => {
-    setShowSuggestions(true);
-    setActiveSuggestionIndex(-1);
-    const liveQuery = searchQuery;
-    if (!liveQuery) {
-      void fetchSuggestions('');
-      return;
-    }
-
-    if (!suggestions.length && !searchLoading) {
-      void fetchSuggestions(liveQuery);
-    }
-  };
-
-  const handleSearchClear = () => {
-    setSearchInputValue('');
-    setCommittedSearchQuery('');
-    setActiveSuggestionIndex(-1);
-    setShowSuggestions(true);
-    void fetchSuggestions('');
-  };
 
   const handleRecenterMap = () => {
     setMapFocusNonce((prev) => prev + 1);
@@ -3687,33 +556,14 @@ function App() {
     }
   };
 
-  const handleRequestAiBrief = async () => {
+  const handleRequestAiBriefAction = async () => {
     if (!safetyData || !decision || aiBriefLoading) return;
-    setAiBriefLoading(true);
-    setAiBriefError(null);
-    try {
-      const factors = Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors : [];
-      const contextParts = [
-        fieldBriefPrimaryReason,
-        ...fieldBriefTopRisks.slice(0, 3),
-      ].filter(Boolean);
-      const result = await fetchAiBrief({
-        score: safetyData.safety.score,
-        confidence: typeof safetyData.safety.confidence === 'number' ? safetyData.safety.confidence : null,
-        primaryHazard: safetyData.safety.primaryHazard || 'Unknown',
-        decisionLevel: decision.level,
-        factors: factors.slice(0, 5).map((f: Record<string, unknown>) => ({
-          hazard: String(f.hazard || f.name || ''),
-          impact: Number(f.impact || 0),
-        })),
-        context: contextParts.join('. '),
-      });
-      setAiBriefNarrative(result.narrative);
-    } catch (err) {
-      setAiBriefError(err instanceof Error ? err.message : 'AI brief unavailable');
-    } finally {
-      setAiBriefLoading(false);
-    }
+    void handleRequestAiBrief({
+      safetyData,
+      decisionLevel: decision.level,
+      fieldBriefPrimaryReason,
+      fieldBriefTopRisks,
+    });
   };
 
   const handleCopyRawPayload = async () => {
@@ -3739,203 +589,6 @@ function App() {
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
-  const updatePreferences = (patch: Partial<UserPreferences>) => {
-    setPreferences((prev) => {
-      const next = { ...prev, ...patch };
-      persistUserPreferences(next);
-      return next;
-    });
-  };
-
-  const handlePreferenceTimeChange = (field: 'defaultStartTime', value: string) => {
-    if (parseTimeInputMinutes(value) === null) {
-      return;
-    }
-
-    updatePreferences({ [field]: value });
-  };
-
-  const handleThemeModeChange = (themeMode: ThemeMode) => {
-    updatePreferences({ themeMode });
-  };
-
-  const handleTemperatureUnitChange = (temperatureUnit: TemperatureUnit) => {
-    updatePreferences({ temperatureUnit });
-  };
-
-  const handleWindSpeedUnitChange = (windSpeedUnit: WindSpeedUnit) => {
-    updatePreferences({ windSpeedUnit });
-  };
-
-  const handleElevationUnitChange = (elevationUnit: ElevationUnit) => {
-    if (elevationUnit === preferences.elevationUnit) {
-      return;
-    }
-    const parsed = parseOptionalElevationInput(targetElevationInput);
-    if (parsed !== null) {
-      const asFeet = convertDisplayElevationToFeet(parsed, preferences.elevationUnit);
-      const nextDisplay = convertElevationFeetToDisplayValue(asFeet, elevationUnit);
-      setTargetElevationInput(String(Math.max(0, Math.round(nextDisplay))));
-    }
-    updatePreferences({ elevationUnit });
-  };
-
-  const handleTimeStyleChange = (timeStyle: TimeStyle) => {
-    updatePreferences({ timeStyle });
-  };
-
-  const commitRoundedThresholdValue = (
-    rawValue: string,
-    field: 'maxPrecipChance' | 'travelWindowHours',
-    min: number,
-    max: number,
-    fallback: number,
-  ): number => {
-    const trimmed = rawValue.trim();
-    if (!trimmed) {
-      return fallback;
-    }
-    const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed)) {
-      return fallback;
-    }
-    const committed = Math.max(min, Math.min(max, Math.round(parsed)));
-    updatePreferences({ [field]: committed } as Partial<UserPreferences>);
-    return committed;
-  };
-
-  const handleTravelWindowHoursDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setTravelWindowHoursDraft(raw);
-    if (!raw.trim()) {
-      return;
-    }
-    commitRoundedThresholdValue(raw, 'travelWindowHours', MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS, travelWindowHours);
-  };
-
-  const handleTravelWindowHoursDraftBlur = () => {
-    const committed = commitRoundedThresholdValue(
-      travelWindowHoursDraft,
-      'travelWindowHours',
-      MIN_TRAVEL_WINDOW_HOURS,
-      MAX_TRAVEL_WINDOW_HOURS,
-      travelWindowHours,
-    );
-    setTravelWindowHoursDraft(String(committed));
-  };
-
-  const handleMaxPrecipChanceDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setMaxPrecipChanceDraft(raw);
-    if (!raw.trim()) {
-      return;
-    }
-    commitRoundedThresholdValue(raw, 'maxPrecipChance', 0, 100, preferences.maxPrecipChance);
-  };
-
-  const handleMaxPrecipChanceDraftBlur = () => {
-    const committed = commitRoundedThresholdValue(maxPrecipChanceDraft, 'maxPrecipChance', 0, 100, preferences.maxPrecipChance);
-    setMaxPrecipChanceDraft(String(committed));
-  };
-
-  const handleWindThresholdDisplayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setMaxWindGustDraft(raw);
-    if (!raw.trim()) {
-      return;
-    }
-    const displayValue = Number(raw);
-    if (!Number.isFinite(displayValue)) {
-      return;
-    }
-    const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(40, mphValue)).toFixed(2)) });
-  };
-
-  const handleWindThresholdDisplayBlur = () => {
-    const raw = maxWindGustDraft.trim();
-    if (!raw) {
-      setMaxWindGustDraft(
-        convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
-      );
-      return;
-    }
-    const displayValue = Number(raw);
-    if (!Number.isFinite(displayValue)) {
-      setMaxWindGustDraft(
-        convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
-      );
-      return;
-    }
-    const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    const committedMph = Number(Math.max(10, Math.min(40, mphValue)).toFixed(2));
-    updatePreferences({ maxWindGustMph: committedMph });
-    setMaxWindGustDraft(
-      convertWindMphToDisplayValue(committedMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),
-    );
-  };
-
-  const handleFeelsLikeThresholdDisplayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setMinFeelsLikeDraft(raw);
-    if (!raw.trim()) {
-      return;
-    }
-    const displayValue = Number(raw);
-    if (!Number.isFinite(displayValue)) {
-      return;
-    }
-    const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
-    updatePreferences({ minFeelsLikeF: Number(Math.max(-40, Math.min(60, valueF)).toFixed(2)) });
-  };
-
-  const handleFeelsLikeThresholdDisplayBlur = () => {
-    const raw = minFeelsLikeDraft.trim();
-    if (!raw) {
-      setMinFeelsLikeDraft(
-        convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
-      );
-      return;
-    }
-    const displayValue = Number(raw);
-    if (!Number.isFinite(displayValue)) {
-      setMinFeelsLikeDraft(
-        convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
-      );
-      return;
-    }
-    const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
-    const committedF = Number(Math.max(-40, Math.min(60, valueF)).toFixed(2));
-    updatePreferences({ minFeelsLikeF: committedF });
-    setMinFeelsLikeDraft(
-      convertTempFToDisplayValue(committedF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
-    );
-  };
-
-  const handleApplyTravelThresholdPreset = (presetKey: TravelThresholdPresetKey) => {
-    const preset = TRAVEL_THRESHOLD_PRESETS[presetKey];
-    if (!preset) {
-      return;
-    }
-    updatePreferences({
-      maxWindGustMph: preset.maxWindGustMph,
-      maxPrecipChance: preset.maxPrecipChance,
-      minFeelsLikeF: preset.minFeelsLikeF,
-    });
-    setTravelThresholdEditorOpen(true);
-  };
-
-  const applyPreferencesToPlanner = () => {
-    setAlpineStartTime(preferences.defaultStartTime);
-    startViewChange(() => setView('planner'));
-  };
-
-  const resetPreferences = () => {
-    const defaults = getDefaultUserPreferences();
-    setPreferences(defaults);
-    persistUserPreferences(defaults);
-  };
-
   const openPlannerView = () => {
     if (!hasObjective && !searchQuery.trim()) {
       setAlpineStartTime(preferences.defaultStartTime);
@@ -3946,147 +599,11 @@ function App() {
   const openTripToolView = () => {
     setTripStartDate(forecastDate);
     setTripStartTime(alpineStartTime);
-    setTripForecastRows([]);
-    setTripForecastError(null);
-    setTripForecastNote(null);
+    setTripForecastRowsDirect([]);
+    setTripForecastErrorDirect(null);
+    setTripForecastNoteDirect(null);
     startViewChange(() => setView('trip'));
   };
-  const runTripForecast = useCallback(async () => {
-    if (!hasObjective) {
-      setTripForecastRows([]);
-      setTripForecastError('Select an objective first in Planner to run multi-day trip forecasts.');
-      setTripForecastNote(null);
-      return;
-    }
-    const safeStartDate = normalizeForecastDate(tripStartDate, todayDate, maxForecastDate);
-    const safeStartTime = parseTimeInputMinutes(tripStartTime) === null ? preferences.defaultStartTime : tripStartTime;
-    const safeDurationDays = Math.max(2, Math.min(7, Math.round(Number(tripDurationDays) || 3)));
-    if (safeStartDate !== tripStartDate) {
-      setTripStartDate(safeStartDate);
-    }
-    if (safeStartTime !== tripStartTime) {
-      setTripStartTime(safeStartTime);
-    }
-    if (safeDurationDays !== tripDurationDays) {
-      setTripDurationDays(safeDurationDays);
-    }
-
-    const safeTravelWindowHours = Math.max(
-      MIN_TRAVEL_WINDOW_HOURS,
-      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
-    );
-
-    const dates: string[] = [];
-    let cursor = safeStartDate;
-    for (let i = 0; i < safeDurationDays; i += 1) {
-      if (!DATE_FMT.test(cursor) || cursor > maxForecastDate) {
-        break;
-      }
-      dates.push(cursor);
-      cursor = addDaysToIsoDate(cursor, 1);
-    }
-
-    if (dates.length === 0) {
-      setTripForecastRows([]);
-      setTripForecastError('No forecast dates available in this range. Adjust start date/duration.');
-      setTripForecastNote(null);
-      return;
-    }
-
-    setTripForecastLoading(true);
-    setTripForecastError(null);
-    setTripForecastNote(null);
-
-    try {
-      const dailyResults = await Promise.all(
-        dates.map(async (date) => {
-          try {
-            const { response, payload } = await fetchApi(
-              `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(
-                safeStartTime,
-              )}&travel_window_hours=${safeTravelWindowHours}`,
-            );
-            if (!response.ok || !payload || typeof payload !== 'object') {
-              return null;
-            }
-            const dayData = payload as SafetyData;
-            const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences);
-            const trendWindow = buildTrendWindowFromStart(dayData.weather.trend || [], safeStartTime, safeTravelWindowHours);
-            const travelRows = buildTravelWindowRows(trendWindow, preferences);
-            const travelInsights = buildTravelWindowInsights(travelRows, preferences.timeStyle);
-
-            const avalancheRelevant = dayData.avalanche.relevant !== false;
-            const avalancheUnknown = avalancheRelevant && Boolean(dayData.avalanche.dangerUnknown || dayData.avalanche.coverageStatus !== 'reported');
-            const dangerLabel = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(dayData.avalanche.dangerLevel)] || 'N/A';
-            const avalancheSummary = !avalancheRelevant
-              ? 'Not primary'
-              : avalancheUnknown
-                ? 'Coverage limited'
-                : `L${normalizeDangerLevel(dayData.avalanche.dangerLevel)} ${dangerLabel}`;
-
-            const scoreRaw = Number(dayData?.safety?.score);
-            const tempRaw = Number(dayData?.weather?.temp);
-            const feelsRaw = Number(dayData?.weather?.feelsLike ?? dayData?.weather?.temp);
-            const gustRaw = Number(dayData?.weather?.windGust);
-            const precipRaw = Number(dayData?.weather?.precipChance);
-
-            return {
-              date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : date,
-              decisionLevel: dayDecision.level,
-              decisionHeadline: dayDecision.headline,
-              score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
-              weatherDescription: String(dayData?.weather?.description || 'Unknown'),
-              tempF: Number.isFinite(tempRaw) ? tempRaw : null,
-              feelsLikeF: Number.isFinite(feelsRaw) ? feelsRaw : null,
-              windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
-              precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
-              avalancheSummary,
-              travelSummary: `${travelInsights.passHours}/${Math.max(travelRows.length, safeTravelWindowHours)}h passing`,
-              sourceIssuedTime: dayData?.weather?.issuedTime || null,
-            } as MultiDayTripForecastDay;
-          } catch {
-            return null;
-          }
-        }),
-      );
-
-      const rows = dailyResults.filter((entry): entry is MultiDayTripForecastDay => Boolean(entry)).sort((a, b) => a.date.localeCompare(b.date));
-      const failedCount = dates.length - rows.length;
-      if (rows.length === 0) {
-        setTripForecastRows([]);
-        setTripForecastError('Could not load multi-day forecasts right now. Try again in a moment.');
-        setTripForecastNote(null);
-        return;
-      }
-
-      setTripForecastRows(rows);
-      if (failedCount > 0) {
-        setTripForecastNote(`${failedCount} day(s) could not be loaded and were skipped.`);
-      } else if (rows.length < safeDurationDays) {
-        setTripForecastNote(`Only ${rows.length} day(s) are available inside the current forecast range.`);
-      } else {
-        setTripForecastNote(null);
-      }
-    } finally {
-      setTripForecastLoading(false);
-    }
-  }, [
-    hasObjective,
-    tripStartDate,
-    tripStartTime,
-    tripDurationDays,
-    todayDate,
-    maxForecastDate,
-    preferences,
-    position.lat,
-    position.lng,
-  ]);
-  const navigateToView = useCallback(
-    (nextView: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => {
-      startViewChange(() => setView(nextView));
-    },
-    [startViewChange],
-  );
   const jumpToPlannerSection = useCallback((sectionId: string) => {
     if (typeof document === 'undefined') {
       return;
@@ -4100,10 +617,7 @@ function App() {
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
   const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
-  const parsedTypedCoordinates = parseCoordinates(trimmedSearchQuery);
-  const currentObjectiveCoordinateKey = suggestionCoordinateKey(position.lat, position.lng);
-  const objectiveIsSaved =
-    hasObjective && savedObjectives.some((item) => suggestionCoordinateKey(item.lat, item.lon) === currentObjectiveCoordinateKey);
+  const objectiveIsSaved = hasObjective && searchHook.objectiveIsSaved(position.lat, position.lng);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) {
@@ -4202,19 +716,76 @@ function App() {
     MIN_TRAVEL_WINDOW_HOURS,
     Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
   );
+
+  const prefHandlers = usePreferenceHandlers({
+    preferences,
+    setPreferences,
+    travelWindowHours,
+    targetElevationInput,
+    setTargetElevationInput,
+    onApplyToPlanner: useCallback(() => {
+      setAlpineStartTime(preferences.defaultStartTime);
+      startViewChange(() => setView('planner'));
+    }, [preferences.defaultStartTime, startViewChange, setView]),
+  });
+  const {
+    travelWindowHoursDraft,
+    maxPrecipChanceDraft,
+    maxWindGustDraft,
+    minFeelsLikeDraft,
+    windThresholdStep,
+    windThresholdMin,
+    windThresholdMax,
+    feelsLikeThresholdStep,
+    feelsLikeThresholdMin,
+    feelsLikeThresholdMax,
+    handlePreferenceTimeChange,
+    handleThemeModeChange,
+    handleTemperatureUnitChange,
+    handleWindSpeedUnitChange,
+    handleElevationUnitChange,
+    handleTimeStyleChange,
+    handleTravelWindowHoursDraftChange,
+    handleTravelWindowHoursDraftBlur,
+    handleMaxPrecipChanceDraftChange,
+    handleMaxPrecipChanceDraftBlur,
+    handleWindThresholdDisplayChange,
+    handleWindThresholdDisplayBlur,
+    handleFeelsLikeThresholdDisplayChange,
+    handleFeelsLikeThresholdDisplayBlur,
+    handleApplyTravelThresholdPreset,
+    applyPreferencesToPlanner,
+    resetPreferences,
+    travelThresholdEditorOpen,
+    setTravelThresholdEditorOpen,
+  } = prefHandlers;
+
   const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
   const returnExtendsPastMidnight = returnMinutes !== null && returnMinutes > 1439;
   const returnTimeFormatted = returnMinutes !== null ? minutesToTwentyFourHourClock(Math.min(returnMinutes, 1439)) : null;
   let decision = safetyData
     ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime: returnTimeFormatted ?? undefined })
     : null;
+
+  const dayComparisonsHook = useDayComparisons({
+    hasObjective,
+    view,
+    safetyData,
+    decisionLevel: decision?.level,
+    forecastDate,
+    alpineStartTime,
+    position: { lat: position.lat, lng: position.lng },
+    preferences,
+    maxForecastDate,
+  });
+  const { dayOverDay, setDayOverDay, betterDaySuggestions, betterDaySuggestionsLoading, betterDaySuggestionsNote } = dayComparisonsHook;
+
   const failedCriticalChecks = decision ? decision.checks.filter((check) => !check.ok) : [];
   const passedCriticalChecks = decision ? decision.checks.filter((check) => check.ok) : [];
   const orderedCriticalChecks = [...failedCriticalChecks, ...passedCriticalChecks];
   const topCriticalAttentionChecks = failedCriticalChecks.slice(0, 3);
-  const criticalCheckTotal = orderedCriticalChecks.length;
-  const criticalCheckPassCount = passedCriticalChecks.length;
   const criticalCheckFailCount = failedCriticalChecks.length;
+  const criticalCheckTotal = orderedCriticalChecks.length;
   const describeFailedCriticalCheck = (check: SummitDecision['checks'][number]): string => {
     switch (check.key) {
       case 'avalanche':
@@ -4264,9 +835,9 @@ function App() {
     : '';
   const avalancheElevationRows = safetyData && !avalancheUnknown
     ? [
-        { key: 'above', label: 'Above treeline', rating: safetyData.avalanche.elevations?.above },
-        { key: 'at', label: 'Near treeline', rating: safetyData.avalanche.elevations?.at },
-        { key: 'below', label: 'Below treeline', rating: safetyData.avalanche.elevations?.below },
+        { key: 'above', label: 'Above treeline', rating: safetyData.avalanche.elevations?.above?.level ?? null },
+        { key: 'at', label: 'Near treeline', rating: safetyData.avalanche.elevations?.at?.level ?? null },
+        { key: 'below', label: 'Below treeline', rating: safetyData.avalanche.elevations?.below?.level ?? null },
       ]
     : [];
   const elevationForecastBands = safetyData?.weather.elevationForecast || [];
@@ -4529,35 +1100,9 @@ function App() {
     if (temps.length < 2) return null;
     return { low: Math.min(...temps), high: Math.max(...temps) };
   })();
-  const windThresholdPrecision = preferences.windSpeedUnit === 'kph' ? 1 : 0;
-  const windThresholdStep = preferences.windSpeedUnit === 'kph' ? 0.5 : 1;
-  const windThresholdMin = Number(convertWindMphToDisplayValue(10, preferences.windSpeedUnit).toFixed(windThresholdPrecision));
-  const windThresholdMax = Number(convertWindMphToDisplayValue(80, preferences.windSpeedUnit).toFixed(windThresholdPrecision));
-  const windThresholdInputValue = Number(
-    convertWindMphToDisplayValue(preferences.maxWindGustMph, preferences.windSpeedUnit).toFixed(windThresholdPrecision),
-  );
-  const feelsLikeThresholdPrecision = preferences.temperatureUnit === 'c' ? 1 : 0;
-  const feelsLikeThresholdStep = preferences.temperatureUnit === 'c' ? 0.5 : 1;
-  const feelsLikeThresholdMin = Number(convertTempFToDisplayValue(-40, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
-  const feelsLikeThresholdMax = Number(convertTempFToDisplayValue(60, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
-  const feelsLikeThresholdInputValue = Number(
-    convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision),
-  );
-  useEffect(() => {
-    setTravelWindowHoursDraft(String(travelWindowHours));
-  }, [travelWindowHours]);
   useEffect(() => {
     setWeatherHourPreviewTime(null);
   }, [alpineStartTime, forecastDate, objectiveName]);
-  useEffect(() => {
-    setMaxPrecipChanceDraft(String(preferences.maxPrecipChance));
-  }, [preferences.maxPrecipChance]);
-  useEffect(() => {
-    setMaxWindGustDraft(String(windThresholdInputValue));
-  }, [windThresholdInputValue]);
-  useEffect(() => {
-    setMinFeelsLikeDraft(String(feelsLikeThresholdInputValue));
-  }, [feelsLikeThresholdInputValue]);
   const targetElevationForecast =
     safetyData && hasTargetElevation && Number.isFinite(Number(safetyData.weather.elevation))
       ? (() => {
@@ -6023,217 +2568,9 @@ function App() {
   })();
   const shouldRenderRankedCard = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    (_key: SortableCardKey): boolean => true,
+    (_key: string): boolean => true,
     [],
   );
-
-
-  useEffect(() => {
-    if (!hasObjective || !safetyData) {
-      setDayOverDay(null);
-      return;
-    }
-
-    const selectedDate = safetyData.forecast?.selectedDate || forecastDate;
-    if (!DATE_FMT.test(selectedDate)) {
-      setDayOverDay(null);
-      return;
-    }
-
-    const previousDate = addDaysToIsoDate(selectedDate, -1);
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { response, payload } = await fetchApi(
-          `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(previousDate)}`,
-        );
-        if (!response.ok || !payload || typeof payload !== 'object') {
-          if (!cancelled) setDayOverDay(null);
-          return;
-        }
-
-        const previousPayload = payload as SafetyData;
-        const prevScore = Number(previousPayload?.safety?.score);
-        if (!Number.isFinite(prevScore)) {
-          if (!cancelled) setDayOverDay(null);
-          return;
-        }
-
-        if (!cancelled) {
-          setDayOverDay({
-            previousDate,
-            previousScore: prevScore,
-            delta: safetyData.safety.score - prevScore,
-            changes: buildDayOverDayChanges(safetyData, previousPayload, preferences),
-          });
-        }
-      } catch {
-        if (!cancelled) setDayOverDay(null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [hasObjective, safetyData, forecastDate, position.lat, position.lng, preferences]);
-
-  const decisionLevel = decision?.level;
-
-  useEffect(() => {
-    if (!hasObjective || view !== 'planner' || !safetyData || !decisionLevel || decisionLevel === 'GO') {
-      setBetterDaySuggestions([]);
-      setBetterDaySuggestionsLoading(false);
-      setBetterDaySuggestionsNote(null);
-      return;
-    }
-
-    const selectedDate = safetyData.forecast?.selectedDate || forecastDate;
-    if (!DATE_FMT.test(selectedDate)) {
-      setBetterDaySuggestions([]);
-      setBetterDaySuggestionsLoading(false);
-      setBetterDaySuggestionsNote('Upcoming-day scan unavailable because the selected forecast date is invalid.');
-      return;
-    }
-
-    const safeTravelWindowHours = Math.max(
-      MIN_TRAVEL_WINDOW_HOURS,
-      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
-    );
-
-    const candidateDates: string[] = [];
-    let cursor = selectedDate;
-    for (let i = 0; i < 7; i += 1) {
-      cursor = addDaysToIsoDate(cursor, 1);
-      if (!DATE_FMT.test(cursor) || cursor > maxForecastDate) {
-        break;
-      }
-      candidateDates.push(cursor);
-    }
-
-    if (candidateDates.length === 0) {
-      setBetterDaySuggestions([]);
-      setBetterDaySuggestionsLoading(false);
-      setBetterDaySuggestionsNote('No upcoming dates are available inside the current forecast range.');
-      return;
-    }
-
-    let cancelled = false;
-    setBetterDaySuggestionsLoading(true);
-    setBetterDaySuggestionsNote(null);
-
-    (async () => {
-      try {
-        const nextDayPayloads = await Promise.all(
-          candidateDates.map(async (date) => {
-            try {
-              const { response, payload } = await fetchApi(
-                `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(
-                  alpineStartTime,
-                )}&travel_window_hours=${safeTravelWindowHours}`,
-              );
-              if (!response.ok || !payload || typeof payload !== 'object') {
-                return null;
-              }
-              const candidateData = payload as SafetyData;
-              const candidateDecision = evaluateBackcountryDecision(
-                candidateData,
-                alpineStartTime,
-                preferences,
-              );
-              const scoreRaw = normalizedDecisionScore(candidateData);
-              const gustRaw = Number(candidateData?.weather?.windGust);
-              const precipRaw = Number(candidateData?.weather?.precipChance);
-              const riskSummary = summarizeBetterDayWithoutAvalancheText(candidateDecision);
-              const candidateTrend = Array.isArray(candidateData?.weather?.trend) ? candidateData.weather.trend : [];
-              const candidateRows = buildTravelWindowRows(candidateTrend, preferences);
-              const firstPassIdx = candidateRows.findIndex((r) => r.pass);
-              const bestWindowStart = firstPassIdx >= 0 && candidateRows[firstPassIdx].time
-                ? String(candidateRows[firstPassIdx].time).slice(0, 5)
-                : null;
-              return {
-                date: candidateData?.forecast?.selectedDate && DATE_FMT.test(candidateData.forecast.selectedDate) ? candidateData.forecast.selectedDate : date,
-                level: candidateDecision.level,
-                score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
-                weather: String(candidateData?.weather?.description || 'Unknown'),
-                gustMph: Number.isFinite(gustRaw) ? gustRaw : null,
-                precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
-                summary: riskSummary,
-                bestWindowStart,
-              } as BetterDaySuggestion;
-            } catch {
-              return null;
-            }
-          }),
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        const validSuggestions = nextDayPayloads.filter((entry): entry is BetterDaySuggestion => Boolean(entry));
-        if (validSuggestions.length === 0) {
-          setBetterDaySuggestions([]);
-          setBetterDaySuggestionsNote('Could not evaluate upcoming days right now. Try Refresh.');
-          return;
-        }
-
-        const currentComparisonDecision = evaluateBackcountryDecision(
-          safetyData,
-          alpineStartTime,
-          preferences,
-        );
-        const currentLevelRank = decisionLevelRank(currentComparisonDecision.level);
-        const currentScore = normalizedDecisionScore(safetyData);
-        const clearlyBetter = validSuggestions.filter((entry) => {
-          const rank = decisionLevelRank(entry.level);
-          const candidateScore = Number.isFinite(Number(entry.score)) ? Number(entry.score) : -Infinity;
-          return rank > currentLevelRank || (rank === currentLevelRank && candidateScore >= currentScore + 3);
-        });
-        const pool = clearlyBetter.length > 0 ? clearlyBetter : validSuggestions;
-        pool.sort((a, b) => {
-          const rankDelta = decisionLevelRank(b.level) - decisionLevelRank(a.level);
-          if (rankDelta !== 0) return rankDelta;
-          const scoreA = Number.isFinite(Number(a.score)) ? Number(a.score) : -Infinity;
-          const scoreB = Number.isFinite(Number(b.score)) ? Number(b.score) : -Infinity;
-          if (scoreB !== scoreA) return scoreB - scoreA;
-          const precipA = Number.isFinite(Number(a.precipChance)) ? Number(a.precipChance) : 1000;
-          const precipB = Number.isFinite(Number(b.precipChance)) ? Number(b.precipChance) : 1000;
-          if (precipA !== precipB) return precipA - precipB;
-          const gustA = Number.isFinite(Number(a.gustMph)) ? Number(a.gustMph) : 1000;
-          const gustB = Number.isFinite(Number(b.gustMph)) ? Number(b.gustMph) : 1000;
-          if (gustA !== gustB) return gustA - gustB;
-          return a.date.localeCompare(b.date);
-        });
-
-        setBetterDaySuggestions(pool.slice(0, 3));
-        setBetterDaySuggestionsNote(
-          clearlyBetter.length > 0
-            ? null
-            : 'No clearly better day found in the next 7 days. Showing least-risk alternatives from available forecasts.',
-        );
-      } finally {
-        if (!cancelled) {
-          setBetterDaySuggestionsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    hasObjective,
-    view,
-    safetyData,
-    decisionLevel,
-    forecastDate,
-    position.lat,
-    position.lng,
-    alpineStartTime,
-    preferences,
-    maxForecastDate,
-  ]);
 
   useEffect(() => {
     if (view !== 'trip' || !hasObjective || tripForecastLoading || tripForecastRows.length > 0 || Boolean(tripForecastError)) {
@@ -6243,128 +2580,20 @@ function App() {
   }, [view, hasObjective, tripForecastLoading, tripForecastRows.length, tripForecastError, runTripForecast]);
 
   if (view === 'status') {
-    const formatUptime = (seconds: number) => {
-      const d = Math.floor(seconds / 86400);
-      const h = Math.floor((seconds % 86400) / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      if (d > 0) return `${d}d ${h}h ${m}m`;
-      if (h > 0) return `${h}h ${m}m`;
-      return `${m}m ${seconds % 60}s`;
-    };
-
     return (
-      <div key="view-status" className={appShellClassName} aria-busy={isViewPending}>
-        <section className="settings-shell status-shell">
-          <div className="settings-head">
-            <div>
-              <div className="home-kicker">Backcountry Conditions System Health</div>
-              <h2>Status</h2>
-              <p>Live health checks for backend availability and browser capabilities.</p>
-            </div>
-            <div className="settings-nav">
-              <button className="settings-btn" onClick={() => navigateToView('home')}>
-                <House size={14} /> Homepage
-              </button>
-              <button className="settings-btn" onClick={openPlannerView}>
-                <Route size={14} /> Planner
-              </button>
-              <button className="settings-btn" onClick={() => navigateToView('settings')}>
-                <SlidersHorizontal size={14} /> Settings
-              </button>
-              <button className="primary-btn" onClick={() => void runHealthChecks()} disabled={healthLoading}>
-                <RefreshCw size={14} className={healthLoading ? 'spin-icon' : undefined} />
-                {healthLoading ? 'Checking…' : 'Run Checks'}
-              </button>
-            </div>
-          </div>
-
-          {healthError && (
-            <article className="settings-card error-banner">
-              <h3>Health Check Error</h3>
-              <p>{healthError}</p>
-            </article>
-          )}
-
-          {backendMeta && (
-            <article className="settings-card settings-card-full status-meta-bar">
-              <div className="status-meta-bar-inner">
-                <div className="status-meta-stat">
-                  <Activity size={13} />
-                  <span className="status-meta-label">Version</span>
-                  <strong>{backendMeta.version}</strong>
-                </div>
-                <div className="status-meta-stat">
-                  <Clock size={13} />
-                  <span className="status-meta-label">Uptime</span>
-                  <strong>{formatUptime(backendMeta.uptime)}</strong>
-                </div>
-                <div className="status-meta-stat">
-                  <Cpu size={13} />
-                  <span className="status-meta-label">Node</span>
-                  <strong>{backendMeta.nodeVersion}</strong>
-                </div>
-                <div className="status-meta-stat">
-                  <HardDrive size={13} />
-                  <span className="status-meta-label">Heap</span>
-                  <strong>{backendMeta.heapUsedMb} MB</strong>
-                </div>
-                <div className="status-meta-stat">
-                  <HardDrive size={13} />
-                  <span className="status-meta-label">RSS</span>
-                  <strong>{backendMeta.rssMb} MB</strong>
-                </div>
-                <div className="status-meta-stat">
-                  <Wifi size={13} />
-                  <span className="status-meta-label">Latency</span>
-                  <strong>{backendMeta.latencyMs} ms</strong>
-                </div>
-              </div>
-            </article>
-          )}
-
-          <div className="status-grid">
-            {healthChecks.map((check) => {
-              const pillClass = check.status === 'ok' ? 'go' : check.status === 'warn' ? 'caution' : 'nogo';
-              const StatusIcon = check.status === 'ok' ? CheckCircle2 : check.status === 'warn' ? AlertTriangle : XCircle;
-              return (
-                <article key={check.label} className={`settings-card status-card status-card--${check.status}`}>
-                  <div className="status-card-head">
-                    <h3>{check.label}</h3>
-                    <span className={`decision-pill ${pillClass}`}>
-                      <StatusIcon size={11} />
-                      {check.status === 'ok' ? 'OK' : check.status === 'warn' ? 'WARN' : 'DOWN'}
-                    </span>
-                  </div>
-                  <p>{check.detail}</p>
-                  {check.meta && <p className="status-card-meta">{check.meta}</p>}
-                </article>
-              );
-            })}
-            {healthLoading && healthChecks.length === 0 && (
-              <article className="settings-card status-card settings-card-full">
-                <div className="status-empty-state">
-                  <RefreshCw size={24} className="spin-icon status-empty-icon" />
-                  <p>Running checks…</p>
-                </div>
-              </article>
-            )}
-            {!healthLoading && healthChecks.length === 0 && !healthError && (
-              <article className="settings-card status-card settings-card-full">
-                <div className="status-empty-state">
-                  <ShieldCheck size={28} className="status-empty-icon" />
-                  <h3>No checks run yet</h3>
-                  <p>Click <strong>Run Checks</strong> to verify backend connectivity and browser capabilities.</p>
-                </div>
-              </article>
-            )}
-          </div>
-
-          <div className="settings-note">
-            Last checked: {healthCheckedAt ? formatPubTime(healthCheckedAt) : 'Never'}
-          </div>
-          <AppDisclaimer compact />
-        </section>
-      </div>
+      <StatusView
+        appShellClassName={appShellClassName}
+        isViewPending={isViewPending}
+        healthChecks={healthChecks}
+        healthLoading={healthLoading}
+        healthError={healthError}
+        healthCheckedAt={healthCheckedAt}
+        backendMeta={backendMeta}
+        formatPubTime={formatPubTime}
+        runHealthChecks={runHealthChecks}
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+      />
     );
   }
 
@@ -6380,372 +2609,89 @@ function App() {
 
   if (view === 'settings') {
     return (
-      <div key="view-settings" className={appShellClassName} aria-busy={isViewPending}>
-        <section className="settings-shell">
-          <div className="settings-head">
-            <div>
-              <div className="home-kicker">Backcountry Conditions Preferences</div>
-              <h2>Settings</h2>
-              <p>Set default planning values for this device. Shared links can still override these values.</p>
-            </div>
-            <div className="settings-nav">
-              <button className="settings-btn" onClick={() => navigateToView('home')}>
-                <House size={14} /> Homepage
-              </button>
-              <button className="primary-btn" onClick={openPlannerView}>
-                <Route size={14} /> Planner
-              </button>
-            </div>
-          </div>
-
-          <div className="settings-grid">
-            <article className="settings-card">
-              <h3>Default timing</h3>
-              <p>Applied when you start a new objective without shared time values.</p>
-              <div className="settings-time-row">
-                <label className="date-control">
-                  <span>Start time</span>
-                  <input type="time" value={preferences.defaultStartTime} onChange={(e) => handlePreferenceTimeChange('defaultStartTime', e.target.value)} />
-                </label>
-              </div>
-            </article>
-
-            <article className="settings-card">
-              <h3>Appearance</h3>
-              <p>Theme follows your system by default. Override it here if needed.</p>
-              <div className="settings-theme-row">
-                <button type="button" className={`theme-chip ${preferences.themeMode === 'system' ? 'active' : ''}`} onClick={() => handleThemeModeChange('system')}>
-                  System
-                </button>
-                <button type="button" className={`theme-chip ${preferences.themeMode === 'light' ? 'active' : ''}`} onClick={() => handleThemeModeChange('light')}>
-                  Light
-                </button>
-                <button type="button" className={`theme-chip ${preferences.themeMode === 'dark' ? 'active' : ''}`} onClick={() => handleThemeModeChange('dark')}>
-                  Dark
-                </button>
-              </div>
-            </article>
-
-            <article className="settings-card">
-              <h3>Units & time</h3>
-              <p>Controls display units in report cards and exported summaries.</p>
-              <div className="settings-time-row">
-                <label className="settings-number-row">
-                  <span>Temperature</span>
-                  <div className="settings-theme-row">
-                    <button type="button" className={`theme-chip ${preferences.temperatureUnit === 'f' ? 'active' : ''}`} onClick={() => handleTemperatureUnitChange('f')}>
-                      °F
-                    </button>
-                    <button type="button" className={`theme-chip ${preferences.temperatureUnit === 'c' ? 'active' : ''}`} onClick={() => handleTemperatureUnitChange('c')}>
-                      °C
-                    </button>
-                  </div>
-                </label>
-                <label className="settings-number-row">
-                  <span>Elevation</span>
-                  <div className="settings-theme-row">
-                    <button type="button" className={`theme-chip ${preferences.elevationUnit === 'ft' ? 'active' : ''}`} onClick={() => handleElevationUnitChange('ft')}>
-                      ft
-                    </button>
-                    <button type="button" className={`theme-chip ${preferences.elevationUnit === 'm' ? 'active' : ''}`} onClick={() => handleElevationUnitChange('m')}>
-                      m
-                    </button>
-                  </div>
-                </label>
-                <label className="settings-number-row">
-                  <span>Wind speed</span>
-                  <div className="settings-theme-row">
-                    <button type="button" className={`theme-chip ${preferences.windSpeedUnit === 'mph' ? 'active' : ''}`} onClick={() => handleWindSpeedUnitChange('mph')}>
-                      mph
-                    </button>
-                    <button type="button" className={`theme-chip ${preferences.windSpeedUnit === 'kph' ? 'active' : ''}`} onClick={() => handleWindSpeedUnitChange('kph')}>
-                      kph
-                    </button>
-                  </div>
-                </label>
-                <label className="settings-number-row">
-                  <span>Time style</span>
-                  <div className="settings-theme-row">
-                    <button type="button" className={`theme-chip ${preferences.timeStyle === 'ampm' ? 'active' : ''}`} onClick={() => handleTimeStyleChange('ampm')}>
-                      12h (AM/PM)
-                    </button>
-                    <button type="button" className={`theme-chip ${preferences.timeStyle === '24h' ? 'active' : ''}`} onClick={() => handleTimeStyleChange('24h')}>
-                      24h
-                    </button>
-                  </div>
-                </label>
-              </div>
-            </article>
-
-            <article className="settings-card">
-              <h3>Travel window thresholds</h3>
-              <p>Used by the pass/fail timeline in planner view.</p>
-              <div className="settings-time-row">
-                <label className="settings-number-row">
-                  <span>Window length (hours)</span>
-                  <input
-                    type="number"
-                    min={MIN_TRAVEL_WINDOW_HOURS}
-                    max={MAX_TRAVEL_WINDOW_HOURS}
-                    step={1}
-                    value={travelWindowHoursDraft}
-                    onChange={handleTravelWindowHoursDraftChange}
-                    onBlur={handleTravelWindowHoursDraftBlur}
-                  />
-                </label>
-                <label className="settings-number-row">
-                  <span>Max gust ({windUnitLabel})</span>
-                  <input
-                    type="number"
-                    min={windThresholdMin}
-                    max={windThresholdMax}
-                    step={windThresholdStep}
-                    value={maxWindGustDraft}
-                    onChange={handleWindThresholdDisplayChange}
-                    onBlur={handleWindThresholdDisplayBlur}
-                  />
-                </label>
-                <label className="settings-number-row">
-                  <span>Max precip chance (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={maxPrecipChanceDraft}
-                    onChange={handleMaxPrecipChanceDraftChange}
-                    onBlur={handleMaxPrecipChanceDraftBlur}
-                  />
-                </label>
-                <label className="settings-number-row">
-                  <span>Min feels-like ({tempUnitLabel})</span>
-                  <input
-                    type="number"
-                    min={feelsLikeThresholdMin}
-                    max={feelsLikeThresholdMax}
-                    step={feelsLikeThresholdStep}
-                    value={minFeelsLikeDraft}
-                    onChange={handleFeelsLikeThresholdDisplayChange}
-                    onBlur={handleFeelsLikeThresholdDisplayBlur}
-                  />
-                </label>
-              </div>
-            </article>
-
-            <article className="settings-card settings-card-full">
-              <h3>Actions</h3>
-              <p>Preferences are saved in your browser and stay on this device.</p>
-              <div className="settings-actions">
-                <button className="primary-btn" onClick={applyPreferencesToPlanner}>
-                  Open Planner with These Settings
-                </button>
-                <button className="settings-btn settings-reset-btn" onClick={resetPreferences}>
-                  Reset Built-in Defaults
-                </button>
-              </div>
-              <div className="settings-note">
-                Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Window {travelWindowHoursLabel} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay}
-              </div>
-            </article>
-          </div>
-          <AppDisclaimer compact />
-        </section>
-      </div>
+      <SettingsView
+        appShellClassName={appShellClassName}
+        isViewPending={isViewPending}
+        preferences={preferences}
+        displayDefaultStartTime={displayDefaultStartTime}
+        travelWindowHoursLabel={travelWindowHoursLabel}
+        windThresholdDisplay={windThresholdDisplay}
+        feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+        windUnitLabel={windUnitLabel}
+        tempUnitLabel={tempUnitLabel}
+        travelWindowHoursDraft={travelWindowHoursDraft}
+        maxWindGustDraft={maxWindGustDraft}
+        maxPrecipChanceDraft={maxPrecipChanceDraft}
+        minFeelsLikeDraft={minFeelsLikeDraft}
+        windThresholdMin={windThresholdMin}
+        windThresholdMax={windThresholdMax}
+        windThresholdStep={windThresholdStep}
+        feelsLikeThresholdMin={feelsLikeThresholdMin}
+        feelsLikeThresholdMax={feelsLikeThresholdMax}
+        feelsLikeThresholdStep={feelsLikeThresholdStep}
+        handlePreferenceTimeChange={handlePreferenceTimeChange}
+        handleThemeModeChange={handleThemeModeChange}
+        handleTemperatureUnitChange={handleTemperatureUnitChange}
+        handleElevationUnitChange={handleElevationUnitChange}
+        handleWindSpeedUnitChange={handleWindSpeedUnitChange}
+        handleTimeStyleChange={handleTimeStyleChange}
+        handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
+        handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
+        handleWindThresholdDisplayChange={handleWindThresholdDisplayChange}
+        handleWindThresholdDisplayBlur={handleWindThresholdDisplayBlur}
+        handleMaxPrecipChanceDraftChange={handleMaxPrecipChanceDraftChange}
+        handleMaxPrecipChanceDraftBlur={handleMaxPrecipChanceDraftBlur}
+        handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
+        handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+        applyPreferencesToPlanner={applyPreferencesToPlanner}
+        resetPreferences={resetPreferences}
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+      />
     );
   }
 
   if (view === 'trip') {
-    const objectiveSummary = hasObjective ? objectiveName || `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}` : 'No objective selected';
-    const tripStartDisplay = formatClockForStyle(tripStartTime, preferences.timeStyle);
-    const goCount = tripForecastRows.filter((row) => row.decisionLevel === 'GO').length;
-    const cautionCount = tripForecastRows.filter((row) => row.decisionLevel === 'CAUTION').length;
-    const noGoCount = tripForecastRows.filter((row) => row.decisionLevel === 'NO-GO').length;
-    const tripWorstLevel = noGoCount > 0 ? 'NO-GO' : cautionCount > 0 ? 'CAUTION' : tripForecastRows.length > 0 ? 'GO' : 'N/A';
-    const tripWorstLevelClass = tripWorstLevel === 'NO-GO' ? 'nogo' : tripWorstLevel === 'CAUTION' ? 'caution' : tripWorstLevel === 'GO' ? 'go' : 'watch';
-
     return (
-      <div key="view-trip" className={appShellClassName} aria-busy={isViewPending || tripForecastLoading}>
-        <section className="settings-shell trip-shell">
-          <div className="settings-head">
-            <div>
-              <div className="home-kicker">Backcountry Conditions Expedition Tool</div>
-              <h2>Multi-Day Trip Forecast</h2>
-              <p>Evaluate daily decision gates for backpacking or expedition plans across consecutive days.</p>
-            </div>
-            <div className="settings-nav">
-              <button className="settings-btn" onClick={() => navigateToView('home')}>
-                <House size={14} /> Homepage
-              </button>
-              <button className="settings-btn" onClick={openPlannerView}>
-                <Route size={14} /> Planner
-              </button>
-              <button className="settings-btn" onClick={() => navigateToView('settings')}>
-                <SlidersHorizontal size={14} /> Settings
-              </button>
-              <button className="primary-btn" onClick={() => void runTripForecast()} disabled={tripForecastLoading || !hasObjective}>
-                <RefreshCw size={14} /> {tripForecastLoading ? 'Loading…' : 'Run Multi-Day Forecast'}
-              </button>
-            </div>
-          </div>
-
-          {!hasObjective && (
-            <article className="settings-card error-banner">
-              <h3>Objective required</h3>
-              <p>Select an objective in Planner first, then use this tool for multi-day forecasting.</p>
-            </article>
-          )}
-
-          <div className="settings-grid trip-settings-grid">
-            <article className="settings-card">
-              <h3>Trip setup</h3>
-              <p>Start date/time and duration apply to every day in this sequence.</p>
-              <div className="settings-time-row">
-                <label className="date-control">
-                  <span>Trip start date</span>
-                  <input
-                    type="date"
-                    value={tripStartDate}
-                    min={todayDate}
-                    max={maxForecastDate}
-                    onChange={(e) => {
-                      setTripStartDate(e.target.value);
-                      setTripForecastRows([]);
-                      setTripForecastError(null);
-                      setTripForecastNote(null);
-                    }}
-                  />
-                </label>
-                <label className="date-control">
-                  <span>Daily start time</span>
-                  <input
-                    type="time"
-                    value={tripStartTime}
-                    onChange={(e) => {
-                      setTripStartTime(e.target.value);
-                      setTripForecastRows([]);
-                      setTripForecastError(null);
-                      setTripForecastNote(null);
-                    }}
-                  />
-                </label>
-                <label className="date-control">
-                  <span>Trip duration</span>
-                  <select
-                    value={tripDurationDays}
-                    onChange={(e) => {
-                      setTripDurationDays(Math.max(2, Math.min(7, Math.round(Number(e.target.value) || 3))));
-                      setTripForecastRows([]);
-                      setTripForecastError(null);
-                      setTripForecastNote(null);
-                    }}
-                  >
-                    <option value={2}>2 days</option>
-                    <option value={3}>3 days</option>
-                    <option value={4}>4 days</option>
-                    <option value={5}>5 days</option>
-                    <option value={6}>6 days</option>
-                    <option value={7}>7 days</option>
-                  </select>
-                </label>
-              </div>
-            </article>
-
-            <article className="settings-card">
-              <h3>Current context</h3>
-              <p>Objective: {objectiveSummary}</p>
-              <p>Daily start time: {tripStartDisplay}</p>
-              <p>Travel window: {travelWindowHoursLabel}</p>
-              <p>Forecast range limit: through {maxForecastDate}</p>
-            </article>
-          </div>
-
-          {tripForecastError && (
-            <article className="settings-card error-banner">
-              <h3>Multi-day forecast unavailable</h3>
-              <p>{tripForecastError}</p>
-            </article>
-          )}
-
-          {tripForecastRows.length > 0 && (
-            <>
-              <article className="settings-card trip-overview-card">
-                <div className="trip-overview-head">
-                  <h3>Trip risk overview</h3>
-                  <span className={`decision-pill ${tripWorstLevelClass}`}>Worst day {tripWorstLevel}</span>
-                </div>
-                <div className="trip-overview-grid">
-                  <div className="trip-overview-item">
-                    <span>GO</span>
-                    <strong>{goCount}</strong>
-                  </div>
-                  <div className="trip-overview-item">
-                    <span>CAUTION</span>
-                    <strong>{cautionCount}</strong>
-                  </div>
-                  <div className="trip-overview-item">
-                    <span>NO-GO</span>
-                    <strong>{noGoCount}</strong>
-                  </div>
-                </div>
-                {tripForecastNote && <p className="muted-note">{tripForecastNote}</p>}
-              </article>
-
-              <MultiDayRiskArc
-                tripDays={tripForecastRows.map((row) => ({
-                  date: row.date,
-                  dateLabel: formatIsoDateLabel(row.date),
-                  score: row.score,
-                  decisionLevel: row.decisionLevel,
-                  precipChance: row.precipChance,
-                  windGustMph: row.windGustMph,
-                }))}
-                getScoreColor={getScoreColor}
-              />
-
-              <div className="trip-day-grid">
-                {tripForecastRows.map((row) => {
-                  const rowClass = row.decisionLevel.toLowerCase().replace('-', '');
-                  const weatherEmoji = weatherConditionEmoji(row.weatherDescription, null);
-                  return (
-                    <article key={row.date} className="settings-card trip-day-card">
-                      <div className="trip-day-head">
-                        <div className="trip-day-title">
-                          <h3>{formatIsoDateLabel(row.date)}</h3>
-                          <span className={`decision-pill ${rowClass}`}>{row.decisionLevel}</span>
-                          {row.score !== null && <span className="trip-day-score">{row.score}%</span>}
-                        </div>
-                        <button
-                          type="button"
-                          className="settings-btn"
-                          onClick={() => {
-                            setForecastDate(row.date);
-                            setAlpineStartTime(tripStartTime);
-                            setError(null);
-                            startViewChange(() => setView('planner'));
-                          }}
-                        >
-                          Use in Planner
-                        </button>
-                      </div>
-                      <p className="trip-day-weather">
-                        {weatherEmoji} {localizeUnitText(row.weatherDescription)}
-                      </p>
-                      <p className="trip-day-metrics">
-                        Temp {formatTempDisplay(row.tempF)} (feels {formatTempDisplay(row.feelsLikeF)}) • Gust {formatWindDisplay(row.windGustMph)} • Precip{' '}
-                        {row.precipChance !== null ? `${row.precipChance}%` : 'N/A'}
-                      </p>
-                      <p className="trip-day-metrics">Avalanche: {row.avalancheSummary} • Travel: {row.travelSummary}</p>
-                      <p className="muted-note">{localizeUnitText(row.decisionHeadline)}</p>
-                      {row.sourceIssuedTime && <p className="muted-note">Issued {formatPubTime(row.sourceIssuedTime)}</p>}
-                    </article>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          <AppDisclaimer compact />
-        </section>
-      </div>
+      <TripView
+        appShellClassName={appShellClassName}
+        isViewPending={isViewPending}
+        hasObjective={hasObjective}
+        objectiveName={objectiveName}
+        position={position}
+        tripStartDate={tripStartDate}
+        tripStartTime={tripStartTime}
+        tripDurationDays={tripDurationDays}
+        tripForecastRows={tripForecastRows}
+        tripForecastLoading={tripForecastLoading}
+        tripForecastError={tripForecastError}
+        tripForecastNote={tripForecastNote}
+        travelWindowHoursLabel={travelWindowHoursLabel}
+        todayDate={todayDate}
+        maxForecastDate={maxForecastDate}
+        timeStyle={preferences.timeStyle}
+        formatIsoDateLabel={formatIsoDateLabel}
+        formatTempDisplay={formatTempDisplay}
+        formatWindDisplay={formatWindDisplay}
+        formatPubTime={formatPubTime}
+        localizeUnitText={localizeUnitText}
+        getScoreColor={getScoreColor}
+        setTripStartDate={setTripStartDate}
+        setTripStartTime={setTripStartTime}
+        setTripDurationDays={setTripDurationDays}
+        setTripForecastRows={setTripForecastRowsDirect}
+        setTripForecastError={setTripForecastErrorDirect}
+        setTripForecastNote={setTripForecastNoteDirect}
+        runTripForecast={runTripForecast}
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+        onUseDayInPlanner={(date, startTime) => {
+          setForecastDate(date);
+          setAlpineStartTime(startTime);
+          setError(null);
+          startViewChange(() => setView('planner'));
+        }}
+      />
     );
   }
 
@@ -6753,2545 +2699,384 @@ function App() {
     const navigateToPlanner = () => startViewChange(() => setView('planner'));
 
     return (
-      <div key="view-home" className={appShellClassName} aria-busy={isViewPending}>
-        <section className="home-hero">
-          <div className="home-hero-main">
-            <div className="home-kicker">Backcountry Conditions</div>
-            <h1>Plan your next backcountry day.</h1>
-            <p>
-              Weather, avalanche, snowpack, and alert checks — synthesized for your route and timing.
-            </p>
-            <div className="home-search-wrapper">
-              <SearchBox
-                searchWrapperRef={searchWrapperRef}
-                searchInputRef={searchInputRef}
-                searchQuery={searchQuery}
-                trimmedSearchQuery={trimmedSearchQuery}
-                showSuggestions={showSuggestions}
-                searchLoading={searchLoading}
-                suggestions={suggestions}
-                activeSuggestionIndex={activeSuggestionIndex}
-                canUseCoordinates={Boolean(parsedTypedCoordinates)}
-                onInputChange={handleInputChange}
-                onFocus={handleFocus}
-                onKeyDown={(e) => {
-                  handleSearchKeyDown(e);
-                  if (e.key === 'Enter' && searchQuery.trim()) navigateToPlanner();
-                }}
-                onSubmit={() => {
-                  handleSearchSubmit();
-                  if (searchQuery.trim()) navigateToPlanner();
-                }}
-                onClear={handleSearchClear}
-                onUseCoordinates={(v) => {
-                  handleUseTypedCoordinates(v);
-                  navigateToPlanner();
-                }}
-                onSelectSuggestion={(s) => {
-                  selectSuggestion(s);
-                  navigateToPlanner();
-                }}
-                onHoverSuggestion={setActiveSuggestionIndex}
-              />
-            </div>
-            <div className="home-actions">
-              <button className="settings-btn" onClick={openTripToolView}>
-                <CalendarDays size={14} /> Multi-Day Trip Tool
-              </button>
-              <button className="settings-btn" onClick={() => navigateToView('settings')}>
-                <SlidersHorizontal size={14} /> Settings
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="home-grid">
-          <article className="home-card">
-            <div className="home-card-head">
-              <CloudRain size={18} />
-              <h3>Atmospheric Conditions</h3>
-            </div>
-            <p>Evaluate temperature, feels-like, wind, precipitation chance, and period timestamps for your selected start time.</p>
-            <ul className="home-card-points">
-              <li>Displays forecast period used in the report</li>
-              <li>Supports elevation-adjusted weather checks</li>
-            </ul>
-          </article>
-          <article className="home-card">
-            <div className="home-card-head">
-              <Mountain size={18} />
-              <h3>Snowpack & Avalanche</h3>
-            </div>
-            <p>Combines avalanche center products with SNOTEL and NOHRSC signals to show where snow hazards matter and how current data is.</p>
-            <ul className="home-card-points">
-              <li>Keeps avalanche card visible with applicability reason</li>
-              <li>Highlights expired bulletin windows clearly</li>
-            </ul>
-          </article>
-          <article className="home-card">
-            <div className="home-card-head">
-              <AlertTriangle size={18} />
-              <h3>Operational Risk Gates</h3>
-            </div>
-            <p>Decision Gate, Critical Checks, and Travel Window Planner update from your thresholds and start-time window.</p>
-            <ul className="home-card-points">
-              <li>NWS alerts and score trace integrated</li>
-              <li>Cards sorted dynamically by active risk level</li>
-            </ul>
-          </article>
-          <article className="home-card">
-            <div className="home-card-head">
-              <Route size={18} />
-              <h3>Execution Ready Output</h3>
-            </div>
-            <p>Generate printable reports and concise SAT messages for field teams while preserving source links for verification.</p>
-            <ul className="home-card-points">
-              <li>Shareable planner URL for each search</li>
-              <li>One-liner built for satellite messaging limits</li>
-            </ul>
-          </article>
-        </section>
-        <AppDisclaimer />
-      </div>
+      <HomeView
+        appShellClassName={appShellClassName}
+        isViewPending={isViewPending}
+        searchWrapperRef={searchWrapperRef}
+        searchInputRef={searchInputRef}
+        searchQuery={searchQuery}
+        trimmedSearchQuery={trimmedSearchQuery}
+        showSuggestions={showSuggestions}
+        searchLoading={searchLoading}
+        suggestions={suggestions}
+        activeSuggestionIndex={activeSuggestionIndex}
+        canUseCoordinates={Boolean(parsedTypedCoordinates)}
+        handleInputChange={handleInputChange}
+        handleFocus={handleFocus}
+        handleSearchKeyDown={handleSearchKeyDown}
+        handleSearchSubmit={handleSearchSubmit}
+        handleSearchClear={handleSearchClear}
+        handleUseTypedCoordinates={handleUseTypedCoordinates}
+        selectSuggestion={selectSuggestion}
+        setActiveSuggestionIndex={setActiveSuggestionIndex}
+        navigateToPlanner={navigateToPlanner}
+        navigateToView={navigateToView}
+        openTripToolView={openTripToolView}
+      />
     );
   }
 
   return (
-    <div key="view-planner" className={appShellClassName} aria-busy={isViewPending}>
-      <header className="header-section">
-        <div className="brand">
-          <button
-            type="button"
-            className="brand-mark brand-home-btn"
-            onClick={() => navigateToView('home')}
-            aria-label="Go to homepage"
-            title="Homepage"
-          >
-            <img src="/summitsafe-icon.svg" alt="Backcountry Conditions" className="brand-mark-icon" />
-          </button>
-          <div className="brand-copy">
-            <h1>
-              Backcountry Conditions
-            </h1>
-            <p className="brand-subtitle">Backcountry planning dashboard</p>
-          </div>
-        </div>
-
-        <div className="header-controls">
-          <SearchBox
-            searchWrapperRef={searchWrapperRef}
-            searchInputRef={searchInputRef}
-            searchQuery={searchQuery}
-            trimmedSearchQuery={trimmedSearchQuery}
-            showSuggestions={showSuggestions}
-            searchLoading={searchLoading}
-            suggestions={suggestions}
-            activeSuggestionIndex={activeSuggestionIndex}
-            canUseCoordinates={Boolean(parsedTypedCoordinates)}
-            onInputChange={handleInputChange}
-            onFocus={handleFocus}
-            onKeyDown={handleSearchKeyDown}
-            onSubmit={handleSearchSubmit}
-            onClear={handleSearchClear}
-            onUseCoordinates={handleUseTypedCoordinates}
-            onSelectSuggestion={selectSuggestion}
-            onHoverSuggestion={setActiveSuggestionIndex}
-          />
-
-          <nav className="header-nav" aria-label="Planner controls">
-            <button type="button" className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
-              <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
-            </button>
-            {hasObjective && (
-              <button type="button" className="secondary-btn header-nav-btn" onClick={handleToggleSaveObjective}>
-                {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
-                <span className="nav-btn-label">{objectiveIsSaved ? 'Saved' : 'Save'}</span>
-              </button>
-            )}
-            <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
-              {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
-            </button>
-          </nav>
-        </div>
-      </header>
-
-      <section className="map-shell">
-        <div className="map-section">
-          <MapContainer center={position} zoom={hasObjective ? 11 : 4} style={{ height: '100%', width: '100%' }}>
-            <TileLayer attribution={activeBasemap.attribution} url={activeBasemap.url} />
-            <ScaleControl
-              position="bottomleft"
-              imperial={preferences.elevationUnit === 'ft'}
-              metric={preferences.elevationUnit === 'm'}
-            />
-            <LocationMarker position={position} setPosition={updateObjectivePosition} />
-            <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
-          </MapContainer>
-
-          {/* ── Map overlays ── */}
-          <div className="map-overlay map-overlay-tr">
-            <button
-              type="button"
-              className={`map-overlay-btn ${mapStyle === 'street' ? 'is-active' : ''}`}
-              onClick={() => setMapStyle(mapStyle === 'topo' ? 'street' : 'topo')}
-              title={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
-              aria-label={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
-            >
-              <Layers size={16} />
-            </button>
-            <button
-              type="button"
-              className="map-overlay-btn"
-              onClick={handleUseCurrentLocation}
-              disabled={locatingUser}
-              title={locatingUser ? 'Locating...' : 'Use my location'}
-              aria-label="Use my location"
-            >
-              <LocateFixed size={16} />
-            </button>
-            <button
-              type="button"
-              className="map-overlay-btn"
-              onClick={handleRecenterMap}
-              title="Recenter map"
-              aria-label="Recenter map"
-            >
-              <Navigation size={16} />
-            </button>
-          </div>
-
-          <div className="map-overlay map-overlay-bl">
-            <span className="map-overlay-coords">
-              {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
-            </span>
-          </div>
-
-          {hasObjective && (
-            <div className="map-overlay map-overlay-br">
-              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapElevationChipTitle}>
-                <Mountain size={12} aria-hidden="true" />
-                <span className="map-elevation-value">{mapElevationLabel}</span>
-              </span>
-              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
-                <span className="map-weather-chip-emoji" aria-hidden="true">{mapWeatherEmoji}</span>
-                <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
-                <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ── Flat below-map controls ── */}
-        <div className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
-          <button
-            type="button"
-            className="mobile-map-controls-btn"
-            onClick={() => setMobileMapControlsExpanded((prev) => {
-              const next = !prev;
-              try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', String(next)); } catch { /* ignore */ }
-              return next;
-            })}
-            aria-expanded={mobileMapControlsExpanded}
-            aria-controls="map-actions-flat"
-          >
-            <SlidersHorizontal size={14} />
-            {mobileMapControlsExpanded ? 'Hide plan controls' : 'Show plan controls'}
-          </button>
-
-          <div id="map-actions-flat" className="map-actions-flat">
-            <label className="date-control">
-              <span>Date</span>
-              <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
-            </label>
-
-            <label className="date-control compact">
-              <span>{startLabel}</span>
-              <input
-                type="time"
-                aria-label={startLabel}
-                title="When you plan to start moving."
-                value={alpineStartTime}
-                onChange={handlePlannerTimeChange(setAlpineStartTime)}
-              />
-            </label>
-
-            <label className="date-control compact travel-window-control">
-              <span>Trip hours</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                aria-label="Trip duration in hours"
-                title="How many hours to evaluate from the selected start time."
-                min={MIN_TRAVEL_WINDOW_HOURS}
-                max={MAX_TRAVEL_WINDOW_HOURS}
-                step={1}
-                value={travelWindowHoursDraft}
-                onChange={handleTravelWindowHoursDraftChange}
-                onBlur={handleTravelWindowHoursDraftBlur}
-              />
-            </label>
-
-            <button
-              type="button"
-              className="now-control-btn"
-              onClick={handleUseNowConditions}
-              title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
-            >
-              <Clock size={14} /> Now
-            </button>
-          </div>
-
-          <div className="map-actions-utils">
-            <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
-              <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
-            <button type="button" className="settings-btn" onClick={openTripToolView}>
-              <CalendarDays size={14} /> Multi-day
-            </button>
-            <button type="button" className="settings-btn" onClick={() => { if (satelliteConditionLine) { navigator.clipboard.writeText(satelliteConditionLine); } }} disabled={!satelliteConditionLine} title={satelliteConditionLine || 'SAT one-liner (load a report first)'}>
-              <Zap size={14} /> SAT Msg
-            </button>
-
-            <div className="map-ext-links">
-              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
-                <MapIcon size={15} />
-              </a>
-              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Gaia GPS">
-                <Compass size={15} />
-              </a>
-              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Windy">
-                <Wind size={15} />
-              </a>
-            </div>
-          </div>
-
-          {timezoneMismatch && (
-            <p className="map-time-help is-warning">
-              Objective timezone: <strong>{objectiveTimezone}</strong>. Your device timezone is <strong>{deviceTimezone}</strong>. Times in this report are objective-local.
-            </p>
-          )}
-        </div>
-      </section>
-
-      {!hasObjective && (
-        <div className="empty-state">
-          <h3>Select a location to start planning</h3>
-          <p>Search for a peak, trail area, zone, or click the map to place a pin.</p>
-        </div>
-      )}
-
-      {loading && !safetyData && <ForecastLoading />}
-
-      {loading && safetyData && (
-        <div className="loading-state inline-loading-state" role="status" aria-live="polite">
-          <strong>Refreshing conditions…</strong>
-          <span>Existing report remains visible until fresh data arrives.</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="error-banner" role="alert" aria-live="assertive">
-          <h3>System Alert</h3>
-          <p>{error}</p>
-          {hasObjective && (
-            <div className="error-banner-actions">
-              <button className="settings-btn" onClick={handleRetryFetch}>
-                Retry Data Fetch
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-
-      {hasObjective && safetyData && decision && hasFreshnessWarning && (
-        <section className="top-freshness-alert" role="status" aria-live="polite">
-          <strong>Data freshness warning</strong>
-          <span>{freshnessWarningSummary}</span>
-        </section>
-      )}
-
-      {hasObjective && safetyData && (position.lat < 24.5 || position.lat > 49.5 || position.lng < -125 || position.lng > -66.5) && (
-        <section className="top-freshness-alert coverage-warning" role="status">
-          <strong>Limited coverage</strong>
-          <span>Primary data sources (NOAA, NWS, SNOTEL, avalanche centers) are US-focused. Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.</span>
-        </section>
-      )}
-
-      {hasObjective && safetyData && safetyData.partialData && (
-        <section className="top-freshness-alert coverage-warning" role="status" aria-live="assertive">
-          <strong>Incomplete data</strong>
-          <span>{safetyData.apiWarning || 'One or more upstream data providers failed. Some report sections may be missing or degraded.'}</span>
-        </section>
-      )}
-
-      {hasObjective && safetyData && decision && (
-        <nav className="planner-jump-nav" aria-label="Quick report navigation">
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-decision')}>
-            Decision
-          </button>
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-travel')}>
-            Travel
-          </button>
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-weather')}>
-            Weather
-          </button>
-          {avalancheRelevant && (
-            <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-avalanche')}>
-              Avalanche
-            </button>
-          )}
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-alerts')}>
-            Alerts
-          </button>
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-gear')}>
-            Gear
-          </button>
-        </nav>
-      )}
-
-      {hasObjective && safetyData && decision && (
-        <div className="data-grid" role="main" aria-label="Conditions report">
-          <h2 className="sr-only">Conditions Report</h2>
-          <div className="score-card" role="region" aria-label={`Safety score: ${safetyData.safety.score}%, ${safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}`} style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
-            <div className="score-left">
-              <ScoreGauge score={safetyData.safety.score} scoreColor={getScoreColor(safetyData.safety.score)} />
-              {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (
-                <div className="score-top-factors">
-                  {safetyData.safety.factors
-                    .slice()
-                    .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)))
-                    .slice(0, 3)
-                    .map((f, idx) => (
-                      <div key={idx} className="score-top-factor-row">
-                        <span className="score-top-factor-impact">−{Math.abs(Math.round(Number(f.impact || 0)))}</span>
-                        <span className="score-top-factor-label">{f.hazard || 'Factor'}</span>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-            <div className="score-meta">
-              <span className={`status-badge ${safetyData.safety.score >= 80 ? 'is-low-risk' : safetyData.safety.score >= 50 ? 'is-elevated-risk' : 'is-high-risk'}`}>
-                {safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}
-              </span>
-              <div className="hazard-badge">
-                <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
-              </div>
-              <div className="score-confidence-row">
-                <span className="score-confidence-dot" style={{
-                  background: typeof safetyData.safety.confidence === 'number'
-                    ? safetyData.safety.confidence >= 70 ? '#4a9b6a' : safetyData.safety.confidence >= 40 ? '#c8841b' : '#b04040'
-                    : '#aaa'
-                }} />
-                Confidence {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}% (${safetyData.safety.confidence >= 70 ? 'high' : safetyData.safety.confidence >= 40 ? 'moderate' : 'low'})` : 'N/A'}
-                {forecastLeadHoursDisplay && <span className="forecast-lead-badge">{forecastLeadHoursDisplay}</span>}
-              </div>
-              <div className="objective-line">
-                {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}{returnTimeFormatted ? ` • Back by ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}${returnExtendsPastMidnight ? ' (+1 day)' : ''}` : ''}
-              </div>
-              {(loading || error) && (
-                <div className="source-line">
-                  {loading
-                    ? 'Showing last successful report while new data loads.'
-                    : 'Showing last successful report. Latest refresh failed.'}
-                </div>
-              )}
-              <div className="score-ai-brief">
-                {aiBriefNarrative ? (
-                  <p className="score-ai-narrative"><Sparkles size={12} /> {aiBriefNarrative}</p>
-                ) : aiBriefError ? (
-                  <div className="score-ai-error">
-                    <span>{aiBriefError}</span>
-                    <button type="button" className="btn-ai-brief" onClick={handleRequestAiBrief}>Retry</button>
-                  </div>
-                ) : (
-                  <button type="button" className="btn-ai-brief" onClick={handleRequestAiBrief} disabled={aiBriefLoading}>
-                    {aiBriefLoading
-                      ? <><Loader2 size={12} className="spinner" /> Generating...</>
-                      : <><Sparkles size={12} /> AI Analysis</>}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {objectiveName && (
-            <div className="route-analysis-section" style={{ order: reportCardOrder.reportColumns - 1 }}>
-              {!routeSuggestions && !routeAnalysis && !routeLoading && (
-                <button
-                  type="button"
-                  className="route-analyze-btn"
-                  onClick={() => fetchRouteSuggestions(objectiveName, position.lat, position.lng)}
-                >
-                  Analyze Full Route
-                </button>
-              )}
-
-              {routeLoading && (
-                <div className="route-loading">
-                  <div className="route-loading-dots">
-                    <span /><span /><span />
-                  </div>
-                  <div className="route-loading-label">
-                    {routeAnalysis === null && routeSuggestions ? 'Running safety checks along route...' : 'Fetching routes...'}
-                  </div>
-                </div>
-              )}
-
-              {routeError && (
-                <div className="route-error">{routeError}</div>
-              )}
-
-              {routeSuggestions && !routeAnalysis && !routeLoading && (
-                <div className="route-picker-card">
-                  <div className="route-picker-header">Choose a route to analyze</div>
-                  <ul className="route-picker-list">
-                    {routeSuggestions.map((r) => (
-                      <li key={r.name} className="route-picker-item">
-                        <button
-                          type="button"
-                          className="route-picker-option"
-                          onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours)}
-                        >
-                          <span className="route-option-name">{r.name}</span>
-                          <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
-                          <span className="route-option-desc">{r.description}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="route-picker-custom">
-                    <input
-                      type="text"
-                      placeholder="Or type a route name…"
-                      value={customRouteName}
-                      onChange={(e) => setCustomRouteName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && customRouteName.trim()) {
-                          fetchRouteAnalysis(objectiveName, customRouteName.trim(), position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours);
-                          setCustomRouteName('');
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={!customRouteName.trim()}
-                      onClick={() => {
-                        fetchRouteAnalysis(objectiveName, customRouteName.trim(), position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours);
-                        setCustomRouteName('');
-                      }}
-                    >
-                      Go
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="route-picker-cancel"
-                    onClick={() => { setRouteSuggestions(null); setRouteError(null); setCustomRouteName(''); }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {routeAnalysis && (
-                <div className="route-analysis-card">
-                  <div className="route-analysis-header">Route Analysis <span className="route-ai-badge">AI Advisory</span></div>
-                  <p className="route-analysis-disclaimer">Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.</p>
-                  <div className="route-waypoints">
-                    {routeAnalysis.summaries.map((wp, i) => {
-                      const wpCoords = routeAnalysis.waypoints[i];
-                      const wpReportParams = new URLSearchParams({
-                        lat: String(wpCoords?.lat ?? ''),
-                        lon: String(wpCoords?.lon ?? ''),
-                        name: wp.name,
-                        date: forecastDate,
-                        start: alpineStartTime,
-                        travel_window_hours: String(travelWindowHours),
-                      });
-                      return (
-                        <div key={wp.name} className="route-waypoint-row">
-                          <span className="route-wp-name">{wp.name}</span>
-                          <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
-                          {wp.weather.temp != null && (
-                            <span className="route-wp-temp">{formatTempDisplay(wp.weather.temp)}</span>
-                          )}
-                          {wp.score !== null && (
-                            <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
-                          )}
-                          {wp.avalanche?.risk && (
-                            <span className="route-wp-avy">{wp.avalanche.risk}</span>
-                          )}
-                          {wpCoords && (
-                            <a
-                              href={`/?${wpReportParams.toString()}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="route-wp-link"
-                              title={`Open full report for ${wp.name}`}
-                            >
-                              <ExternalLink size={13} />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <RouteConditionsProfile
-                    waypoints={routeAnalysis.summaries}
-                    getScoreColor={getScoreColor}
-                    formatTempDisplay={formatTempDisplay}
-                    formatWindDisplay={formatWindDisplay}
-                    formatElevationDisplay={formatElevationDisplay}
-                  />
-                  <div className="route-analysis-text">
-                    {renderSimpleMarkdown(routeAnalysis.analysis)}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
-            <div className={`visibility-banner visibility-banner-${weatherVisibilityPill}`} style={{ order: reportCardOrder.reportColumns }}>
-              <Eye size={14} /> Visibility risk: <strong>{weatherVisibilityRisk.level}</strong>{weatherVisibilityDetail ? ` — ${weatherVisibilityDetail}` : ''}
-            </div>
-          )}
-
-          <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
-            <div className="report-column">
-              <CollapsibleCard
-                cardKey="decisionGate"
-                domId="planner-section-decision"
-                defaultExpanded={false}
-                order={reportCardOrder.decisionGate}
-                className="decision-card"
-                title={<span className="card-title"><ShieldCheck size={14} /> Decision Gate <HelpHint text="Top-line go/caution/no-go recommendation based on weather, avalanche, alerts, score, and daylight checks." /></span>}
-                headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
-                summary={<>{decision.level}{decision.blockers.length > 0 ? ` · ${decision.blockers[0]}` : decision.cautions.length > 0 ? ` · ${decision.cautions[0]}` : ''}</>}
-                preview={<>
-                  <div className={`card-preview-hero ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</div>
-                  <div className="card-preview-caption">{decision.headline}</div>
-                  <div className="card-preview-row">
-                    <span className="card-preview-chip">{decisionPassingChecksCount}/{decision.checks.length} checks</span>
-                    {decision.blockers.length > 0 && <span className="card-preview-chip">{decision.blockers[0]}</span>}
-                    {decision.blockers.length === 0 && decision.cautions.length > 0 && <span className="card-preview-chip">{decision.cautions[0]}</span>}
-                  </div>
-                </>}
-              >
-                <p className="decision-headline">{decision.headline}</p>
-                <div className={`decision-action ${decision.level.toLowerCase().replace('-', '')}`}>
-                  <span className="decision-action-label">Recommended action</span>
-                  <p>{decisionActionLine}</p>
-                </div>
-                {fieldBriefTopRisks.length > 0 && (
-                  <div className="decision-group decision-departure-brief">
-                    <h4><AlertTriangle size={14} /> Departure Brief</h4>
-                    <p className="departure-brief-primary">{fieldBriefPrimaryReason}</p>
-                    <ul className="signal-list compact">
-                      {fieldBriefTopRisks.map((risk, idx) => (
-                        <li key={`brief-risk-${idx}`}>{localizeUnitText(risk)}</li>
-                      ))}
-                    </ul>
-                    <p className="departure-brief-action">{decisionActionLine}</p>
-                  </div>
-                )}
-                {rainfall24hSeverityClass === 'nogo' && (
-                  <div className="decision-group decision-creek-warning nogo">
-                    <p>{`Creek crossing risk: recent rainfall (${rainfall24hDisplay}) may make stream crossings dangerous. Scout before committing.`}</p>
-                  </div>
-                )}
-                {rainfall24hSeverityClass === 'caution' && (
-                  <div className="decision-group decision-creek-warning caution">
-                    <p>Elevated rainfall: creek levels may be running high. Monitor crossing points.</p>
-                  </div>
-                )}
-                <div className="decision-summary-grid" role="list" aria-label="Decision check summary">
-                  <article className="decision-summary-item" role="listitem">
-                    <span>Passing checks</span>
-                    <strong>
-                      {decisionPassingChecksCount}/{decision.checks.length}
-                    </strong>
-                  </article>
-                  <article className="decision-summary-item" role="listitem">
-                    <span>Attn checks</span>
-                    <strong>{decisionFailingChecks.length}</strong>
-                  </article>
-                  <article className="decision-summary-item" role="listitem">
-                    <span>Dominant risk</span>
-                    <strong>{decision.blockers.length > 0 ? 'Hard blocker' : decision.cautions.length > 0 ? 'Caution signal' : 'No dominant risk'}</strong>
-                  </article>
-                </div>
-                <div className="decision-group">
-                  <h4>
-                    <AlertTriangle size={14} /> Key drivers
-                  </h4>
-                  {decisionKeyDrivers.length > 0 ? (
-                    <div className="decision-driver-chips" role="list" aria-label="Decision key drivers">
-                      {decisionKeyDrivers.map((item, idx) => (
-                        <span key={`${item}-${idx}`} className="decision-driver-chip" role="listitem">
-                          {localizeUnitText(item)}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="muted-note">No dominant risk trigger detected from current model signals.</p>
-                  )}
-                </div>
-                {(decision.level === 'NO-GO' || decision.level === 'CAUTION') && (
-                  <div className="decision-group decision-better-days">
-                    <h4>
-                      <CalendarDays size={14} /> Potential better days (next 7 days)
-                    </h4>
-                    {betterDaySuggestionsLoading ? (
-                      <p className="muted-note">Scanning upcoming forecast days for lower-risk alternatives...</p>
-                    ) : betterDaySuggestions.length > 0 ? (
-                      <>
-                        {betterDaySuggestionsNote && <p className="muted-note">{betterDaySuggestionsNote}</p>}
-                        <ul className="decision-better-days-list">
-                          {betterDaySuggestions.map((suggestion) => {
-                            const levelClass = suggestion.level.toLowerCase().replace('-', '');
-                            return (
-                              <li key={suggestion.date} className="decision-better-day-item">
-                                <div className="decision-better-day-head">
-                                  <div className="decision-better-day-title">
-                                    <strong>{formatIsoDateLabel(suggestion.date)}</strong>
-                                    <span className={`decision-pill ${levelClass}`}>{suggestion.level}</span>
-                                    {Number.isFinite(Number(suggestion.score)) && <span className="decision-better-day-score">{suggestion.score}%</span>}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="settings-btn decision-better-day-btn"
-                                    onClick={() => {
-                                      setForecastDate(suggestion.date);
-                                      setError(null);
-                                    }}
-                                  >
-                                    Use day
-                                  </button>
-                                </div>
-                                <p className="decision-better-day-meta">
-                                  {localizeUnitText(suggestion.summary)}
-                                  {suggestion.bestWindowStart ? ` • best window ${formatClockForStyle(suggestion.bestWindowStart, preferences.timeStyle)}` : ''}
-                                  {suggestion.precipChance !== null ? ` • precip ${suggestion.precipChance}%` : ''}
-                                  {suggestion.gustMph !== null ? ` • gust ${formatWindDisplay(suggestion.gustMph)}` : ''}
-                                </p>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </>
-                    ) : (
-                      <p className="muted-note">{betterDaySuggestionsNote || 'No upcoming alternatives are available in the current forecast range.'}</p>
-                    )}
-                  </div>
-                )}
-                {decision.blockers.length > 0 && (
-                  <div className="decision-group decision-blockers-inline">
-                    <h4>
-                      <XCircle size={14} /> Blockers
-                    </h4>
-                    <ul className="signal-list compact">
-                      {decision.blockers.map((item, idx) => (
-                        <li key={idx}>{localizeUnitText(item)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {decision.cautions.length > 0 && (
-                  <div className="decision-group decision-cautions-inline">
-                    <h4>
-                      <AlertTriangle size={14} /> Cautions
-                    </h4>
-                    <ul className="signal-list compact">
-                      {decision.cautions.map((item, idx) => (
-                        <li key={idx}>{localizeUnitText(item)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <details className="decision-details">
-                  <summary>Show all check outcomes</summary>
-                  <div className="decision-group">
-                    <h4>
-                      <CheckCircle2 size={14} /> Check outcomes
-                    </h4>
-                    <ul className="signal-list compact">
-                      {orderedCriticalChecks.map((check, idx) => (
-                        <li key={`${check.label}-${idx}`}>
-                          <strong>{check.ok ? '✓' : '✗'}</strong> {localizeUnitText(check.label)}
-                          {check.detail ? ` — ${localizeUnitText(check.detail)}` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </details>
-              </CollapsibleCard>
-
-              <CollapsibleCard
-                cardKey="travelWindowPlanner"
-                domId="planner-section-travel"
-                defaultExpanded={false}
-                order={reportCardOrder.travelWindowPlanner}
-                className="projection-card"
-                title={<span className="card-title">Travel Window Planner ({travelWindowHoursLabel}) <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your selected window length, plus wind, precip, and feels-like thresholds." /></span>}
-                summary={travelWindowInsights.bestWindow ? `Best: ${formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)} (${travelWindowInsights.bestWindow.length}h)` : 'No safe window'}
-                preview={<>
-                  <div className="card-preview-hero mono">{travelWindowInsights.bestWindow ? formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle) : 'No safe window'}</div>
-                  <div className="card-preview-caption">{travelWindowInsights.bestWindow ? `${travelWindowInsights.bestWindow.length}h clear window` : 'All hours have threshold violations'}</div>
-                  <div className="card-preview-row">
-                    <span className="card-preview-chip">{travelWindowInsights.passHours} pass / {travelWindowInsights.failHours} fail</span>
-                    {travelWindowInsights.trendLabel !== 'Steady' && <span className="card-preview-chip">{travelWindowInsights.trendLabel}</span>}
-                  </div>
-                </>}
-              >
-              <TravelWindowPlannerCard
-                peakCriticalWindow={peakCriticalWindow}
-                timeStyle={preferences.timeStyle}
-                criticalRiskLevelText={criticalRiskLevelText}
-                localizeUnitText={localizeUnitText}
-                travelWindowInsights={travelWindowInsights}
-                travelWindowRows={travelWindowRows}
-                travelWindowHours={travelWindowHours}
-                formatTravelWindowSpan={formatTravelWindowSpan}
-                windThresholdDisplay={windThresholdDisplay}
-                maxPrecipChance={preferences.maxPrecipChance}
-                feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
-                activeTravelThresholdPreset={activeTravelThresholdPreset}
-                travelThresholdPresets={TRAVEL_THRESHOLD_PRESETS}
-                onApplyTravelThresholdPreset={handleApplyTravelThresholdPreset}
-                travelThresholdEditorOpen={travelThresholdEditorOpen}
-                setTravelThresholdEditorOpen={setTravelThresholdEditorOpen}
-                windUnitLabel={windUnitLabel}
-                windThresholdMin={windThresholdMin}
-                windThresholdMax={windThresholdMax}
-                windThresholdStep={windThresholdStep}
-                maxWindGustDraft={maxWindGustDraft}
-                handleWindThresholdDisplayChange={handleWindThresholdDisplayChange}
-                handleWindThresholdDisplayBlur={handleWindThresholdDisplayBlur}
-                maxPrecipChanceDraft={maxPrecipChanceDraft}
-                handleMaxPrecipChanceDraftChange={handleMaxPrecipChanceDraftChange}
-                handleMaxPrecipChanceDraftBlur={handleMaxPrecipChanceDraftBlur}
-                tempUnitLabel={tempUnitLabel}
-                feelsLikeThresholdMin={feelsLikeThresholdMin}
-                feelsLikeThresholdMax={feelsLikeThresholdMax}
-                feelsLikeThresholdStep={feelsLikeThresholdStep}
-                minFeelsLikeDraft={minFeelsLikeDraft}
-                handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
-                handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
-                travelWindowSummary={travelWindowSummary}
-                criticalWindow={criticalWindow}
-                travelWindowExpanded={travelWindowExpanded}
-                setTravelWindowExpanded={setTravelWindowExpanded}
-                visibleCriticalWindowRows={visibleCriticalWindowRows}
-                formatTempDisplay={formatTempDisplay}
-                formatWindDisplay={formatWindDisplay}
-              />
-              </CollapsibleCard>
-
-              {shouldRenderRankedCard('criticalChecks') && (
-                <CollapsibleCard
-                  cardKey="criticalChecks"
-                  defaultExpanded={false}
-                  order={reportCardOrder.criticalChecks}
-                  className="checks-card"
-                  title={<span className="card-title"><CheckCircle2 size={14} /> Critical Checks <HelpHint text="Must-pass gates before committing. Failed checks are sorted first with live threshold context." /></span>}
-                  headerMeta={<span className={`decision-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>{criticalCheckPassCount}/{criticalCheckTotal} passing</span>}
-                  summary={`${criticalCheckPassCount} passed · ${criticalCheckFailCount} attention`}
-                  preview={<>
-                    <div className={`card-preview-hero mono ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>{criticalCheckPassCount}/{criticalCheckTotal}</div>
-                    <div className="card-preview-caption">{criticalCheckFailCount === 0 ? 'All checks passing' : `${criticalCheckFailCount} need attention`}</div>
-                    {topCriticalAttentionChecks.length > 0 && (
-                      <div className="card-preview-row">
-                        {topCriticalAttentionChecks.slice(0, 2).map((check, idx) => (
-                          <span key={`preview-attn-${idx}`} className="card-preview-chip">{check.label}</span>
-                        ))}
-                      </div>
-                    )}
-                  </>}
-                >
-                {topCriticalAttentionChecks.length > 0 && (
-                  <div className="checks-attention" role="status" aria-live="polite">
-                    <strong className="checks-attention-title">Needs attention now</strong>
-                    <ul className="checks-attention-list">
-                      {topCriticalAttentionChecks.map((check, idx) => (
-                        <li key={`${check.key || check.label}-${idx}`}>
-                          <span className="checks-attention-label">{localizeUnitText(describeFailedCriticalCheck(check))}</span>
-                          <small>
-                            {localizeUnitText(
-                              [check.detail, check.action].filter(Boolean).join(' • ') || 'Review this signal before departure.',
-                            )}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className="checks-summary">
-                  <span className={`checks-summary-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>
-                    {criticalCheckFailCount === 0 ? 'Ready' : `${criticalCheckFailCount} attention`}
-                  </span>
-                  <span className="checks-summary-text">
-                    {criticalCheckFailCount === 0 ? 'All critical checks are currently passing.' : 'Address failing checks before departure.'}
-                  </span>
-                </div>
-                <div className="checks-list">
-                  {orderedCriticalChecks.map((check, idx) => (
-                    <div key={idx} className={`check-item ${check.ok ? 'ok' : 'warn'}`}>
-                      <div className="check-item-main">
-                        <div className="check-item-label">
-                          {check.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                          <span>{check.label}</span>
-                        </div>
-                        {check.detail && <small className="check-item-detail">{localizeUnitText(check.detail)}</small>}
-                        {!check.ok && check.action && <small className="check-item-action">{localizeUnitText(check.action)}</small>}
-                      </div>
-                      <span className={`check-item-status ${check.ok ? 'ok' : 'warn'}`}>{check.ok ? 'PASS' : 'FAIL'}</span>
-                    </div>
-                  ))}
-                </div>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('scoreTrace') && (
-                <CollapsibleCard
-                  cardKey="scoreTrace"
-                  defaultExpanded={false}
-                  order={reportCardOrder.scoreTrace}
-                  className="score-trace-card"
-                  title={<span className="card-title"><ShieldCheck size={14} /> Score Breakdown <HelpHint text="Shows top factors pulling the safety score down or up, plus what changed vs yesterday." /></span>}
-                  headerMeta={dayOverDay ? <span className={`decision-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>{dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}</span> : undefined}
-                  summary={`${Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors.length : 0} factors`}
-                  preview={(() => {
-                    const factors = Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors : [];
-                    const topFactor = factors.slice().sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)))[0];
-                    return <>
-                      <div className="card-preview-hero">{topFactor?.hazard || 'No factors'}</div>
-                      <div className="card-preview-caption">{topFactor ? `${(topFactor.impact || 0) >= 0 ? '-' : '+'}${Math.abs(Math.round(Number(topFactor.impact || 0)))} · ${topFactor.message || 'No detail'}` : 'No factor-level trace available'}</div>
-                      {dayOverDay && <div className="card-preview-row"><span className="card-preview-chip">{dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}</span></div>}
-                    </>;
-                  })()}
-                >
-                {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 ? (
-                  <ul className="score-trace-list">
-                    {(() => {
-                      const sorted = safetyData.safety.factors
-                        .slice()
-                        .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
-                      const dataGapKeywords = /unavailable|unknown|no data|coverage|data gap/i;
-                      const dataGapFactors = sorted.filter((f) => dataGapKeywords.test(f.hazard || '') || dataGapKeywords.test(f.message || ''));
-                      const nonGapFactors = sorted.filter((f) => !dataGapKeywords.test(f.hazard || '') && !dataGapKeywords.test(f.message || ''));
-                      const hasGap = dataGapFactors.length > 0;
-                      const topFactors = hasGap
-                        ? [...nonGapFactors.slice(0, 4), dataGapFactors[0]]
-                        : nonGapFactors.slice(0, 5);
-                      return topFactors;
-                    })().map((factor, idx) => (
-                        <li key={`${factor.hazard || 'factor'}-${idx}`}>
-                          <span className="score-trace-hazard">{factor.hazard || 'Factor'}</span>
-                          <span className={`score-trace-impact ${(factor.impact || 0) >= 0 ? 'down' : 'up'}`}>
-                            {(factor.impact || 0) >= 0 ? '-' : '+'}
-                            {Math.abs(Math.round(Number(factor.impact || 0)))}
-                          </span>
-                          <small>{factor.message || factor.source || 'No detail provided.'}</small>
-                        </li>
-                      ))}
-                  </ul>
-                ) : (
-                  <p className="muted-note">No factor-level trace available for this report.</p>
-                )}
-                {dayOverDay && dayOverDay.changes.length > 0 && (
-                  <div className="score-change-block">
-                    <strong>What changed since {dayOverDay.previousDate}</strong>
-                    <ul className="signal-list compact">
-                      {dayOverDay.changes.map((change, idx) => (
-                        <li key={`${dayOverDay.previousDate}-change-${idx}`}>{change}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                </CollapsibleCard>
-              )}
-            </div>
-
-            <div className="report-column">
-              <CollapsibleCard
-                cardKey="atmosphericData"
-                domId="planner-section-weather"
-                defaultExpanded={false}
-                order={reportCardOrder.atmosphericData}
-                className="weather-card"
-                title={<span className="card-title"><Thermometer size={14} /> Weather <HelpHint text="Weather for your selected start time with optional hour preview, including temperature, wind, pressure, precip, humidity, cloud cover, and source attribution." /></span>}
-                headerMeta={<div className="weather-header-meta"><span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>{safetyData.forecast?.isFuture ? 'Forecast' : 'Current'} • {safetyData.forecast?.selectedDate || forecastDate}</span>{safetyData.weather.issuedTime && <span className="weather-issued">Issued • {formatPubTime(safetyData.weather.issuedTime)}</span>}<span className="weather-source-pill">Source • {weatherSourceDisplay}</span></div>}
-                summary={`${formatTempDisplay(weatherCardTemp)} · Wind ${formatWindDisplay(weatherCardWind)}`}
-                preview={<>
-                  <div className="card-preview-hero mono">{formatTempDisplay(weatherCardTemp)}</div>
-                  <div className="card-preview-caption">{weatherCardWithEmoji}</div>
-                  <div className="card-preview-row">
-                    <span className="card-preview-chip">Wind {formatWindDisplay(weatherCardWind)}</span>
-                    <span className="card-preview-chip">Feels {formatTempDisplay(weatherCardFeelsLike)}</span>
-                    {Number.isFinite(weatherCardPrecip) && <span className="card-preview-chip">Precip {weatherCardPrecip}%</span>}
-                  </div>
-                </>}
-              >
-                <WeatherCardContent
-                  formattedTemp={formatTempDisplay(weatherCardTemp)}
-                  formattedFeelsLike={formatTempDisplay(weatherCardFeelsLike)}
-                  trendTempRange={weatherTrendTempRange}
-                  conditionText={weatherCardWithEmoji}
-                  conditionIsCold={/snow|blizzard|sleet|freezing|ice pellet|wintry/i.test(weatherCardDescription)}
-                  displayTime={weatherCardDisplayTime}
-                  forecastPeriodLabel={weatherForecastPeriodLabel}
-                  previewActive={weatherPreviewActive}
-                  pressureTrendSummary={weatherPressureTrendSummary}
-                  pressureTrendDirection={pressureTrendDirection}
-                  pressureDeltaLabel={pressureDeltaLabel}
-                  pressureRangeLabel={pressureRangeLabel}
-                  hourOptions={weatherHourQuickOptions}
-                  selectedHourIndex={selectedWeatherHourIndex}
-                  onHourSelect={handleWeatherHourSelect}
-                  weatherConditionEmoji={weatherConditionEmoji}
-                  trendChartData={weatherTrendChartData}
-                  trendHasData={weatherTrendHasData}
-                  trendMetric={weatherTrendMetric}
-                  trendMetricLabel={weatherTrendMetricLabel}
-                  trendMetricOptions={weatherTrendMetricOptions}
-                  trendLineColor={weatherTrendLineColor}
-                  trendYAxisDomain={weatherTrendYAxisDomain}
-                  trendTickFormatter={weatherTrendTickFormatter}
-                  formatWeatherTrendValue={formatWeatherTrendValue}
-                  onTrendMetricChange={(key) => setWeatherTrendMetric(key as typeof weatherTrendMetric)}
-                  onTrendChartClick={handleWeatherTrendChartClick}
-                  selectedHourValue={selectedWeatherHour?.value || null}
-                  travelWindowHoursLabel={travelWindowHoursLabel}
-                  formattedWind={formatWindDisplay(weatherCardWind)}
-                  formattedGust={formatWindDisplay(weatherCardGust)}
-                  precipLabel={Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}
-                  humidityLabel={Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}
-                  dewPointLabel={formatTempDisplay(weatherCardDewPoint)}
-                  pressureLabel={weatherCardPressureLabel}
-                  pressureContextLine={weatherPressureContextLine}
-                  windDirection={weatherCardWindDirection}
-                  cloudCoverLabel={weatherCardCloudCoverLabel}
-                  visibilityScoreLabel={weatherVisibilityScoreLabel}
-                  visibilityPill={weatherVisibilityPill}
-                  visibilityRiskLevel={weatherVisibilityRisk.level}
-                  visibilityActiveWindowText={weatherVisibilityActiveWindowText}
-                  visibilityScoreMeaning={weatherVisibilityScoreMeaning}
-                  visibilityDetail={weatherVisibilityDetail}
-                  visibilityContextLine={weatherVisibilityContextLine}
-                  targetElevationInput={targetElevationInput}
-                  onTargetElevationChange={handleTargetElevationChange}
-                  onTargetElevationStep={handleTargetElevationStep}
-                  canDecreaseTargetElevation={canDecreaseTargetElevation}
-                  hasTargetElevation={hasTargetElevation}
-                  targetElevationForecast={targetElevationForecast}
-                  targetElevationFt={targetElevationFt}
-                  targetElevationStepFeet={TARGET_ELEVATION_STEP_FEET}
-                  elevationUnitLabel={elevationUnitLabel}
-                  elevationForecastBands={elevationForecastBands}
-                  objectiveElevationFt={objectiveElevationFt}
-                  objectiveElevationLabel={formatElevationDisplay(safetyData.weather.elevation != null ? safetyData.weather.elevation : null)}
-                  avalancheElevations={safetyData.avalanche.elevations}
-                  elevationForecastNote={safetyData.weather.elevationForecastNote}
-                  isBlended={!!safetyData.weather.sourceDetails?.blended}
-                  safeWeatherLink={safeWeatherLink}
-                  weatherLinkCta={weatherLinkCta}
-                  formatTempDisplay={formatTempDisplay}
-                  formatWindDisplay={formatWindDisplay}
-                  formatElevationDisplay={formatElevationDisplay}
-                  formatElevationDeltaDisplay={formatElevationDeltaDisplay}
-                  localizeUnitText={localizeUnitText}
-                  getDangerLevelClass={getDangerLevelClass}
-                  getDangerText={getDangerText}
-                />
-              </CollapsibleCard>
-
-              {shouldRenderRankedCard('heatRisk') && (
-                <CollapsibleCard
-                  cardKey="heatRisk"
-                  defaultExpanded={false}
-                  order={reportCardOrder.heatRisk}
-                  className="heat-risk-card"
-                  title={<span className="card-title"><Sun size={14} /> Heat Risk <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, near-term trend peaks, and lower-terrain elevation estimates." /></span>}
-                  headerMeta={<span className={`decision-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>}
-                  summary={String(heatRiskLabel || 'Low').toUpperCase()}
-                  preview={<>
-                    <div className={`card-preview-hero ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</div>
-                    <div className="card-preview-caption">Feels {formatTempDisplay(heatRiskMetrics.feelsLikeF ?? safetyData.weather.feelsLike ?? safetyData.weather.temp)} · Humidity {Number.isFinite(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity)) ? `${Math.round(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity))}%` : 'N/A'}</div>
-                  </>}
-                >
-                <p className="muted-note">{heatRiskGuidance}</p>
-                <div className="plan-grid">
-                  <div>
-                    <span className="stat-label">Temp</span>
-                    <strong>{formatTempDisplay(heatRiskMetrics.tempF ?? safetyData.weather.temp)}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">Feels Like</span>
-                    <strong>{formatTempDisplay(heatRiskMetrics.feelsLikeF ?? safetyData.weather.feelsLike ?? safetyData.weather.temp)}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">Humidity</span>
-                    <strong>{Number.isFinite(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity)) ? `${Math.round(Number(heatRiskMetrics.humidity ?? safetyData.weather.humidity))}%` : 'N/A'}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">{travelWindowHours}h Peak Temp</span>
-                    <strong>{formatTempDisplay(heatRiskMetrics.peakTemp12hF ?? null)}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">Lower Terrain Feels</span>
-                    <strong>{formatTempDisplay(heatRiskMetrics.lowerTerrainFeelsLikeF ?? null)}</strong>
-                    {lowerTerrainHeatLabel && <small>{lowerTerrainHeatLabel}</small>}
-                  </div>
-                </div>
-                {heatRiskReasons.length > 0 ? (
-                  <ul className="signal-list compact">
-                    {heatRiskReasons.map((reason, idx) => (
-                      <li key={`heat-risk-reason-${idx}`}>{localizeUnitText(reason)}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted-note">No strong heat-stress signal was detected for this objective/time.</p>
-                )}
-                <p className="muted-note">Source: {safetyData.heatRisk?.source || 'Derived from forecast temperature and humidity signals'}</p>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('terrainTrailCondition') && (
-                <CollapsibleCard
-                  cardKey="terrainTrailCondition"
-                  defaultExpanded={false}
-                  order={reportCardOrder.terrainTrailCondition}
-                  className="terrain-condition-card"
-                  title={<span className="card-title"><Route size={14} /> Terrain / Trail Condition <HelpHint text={terrainConditionDetails.summary} /></span>}
-                  headerMeta={<span className={`decision-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>}
-                  summary={safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}
-                  preview={<>
-                    <div className="card-preview-hero">{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</div>
-                    <div className="card-preview-caption">{terrainConditionDetails.summary}</div>
-                    {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
-                      <div className="card-preview-row">
-                        {terrainConditionDetails.impact && <span className="card-preview-chip">{terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'} impact</span>}
-                        {terrainConditionDetails.confidence && <span className="card-preview-chip">{terrainConditionDetails.confidence} confidence</span>}
-                      </div>
-                    )}
-                  </>}
-                >
-                <p className="muted-note">{terrainConditionDetails.summary}</p>
-                {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
-                  <div className="terrain-meta-row">
-                    {terrainConditionDetails.impact && (
-                      <span className={`terrain-impact-badge ${terrainConditionDetails.impact === 'high' ? 'nogo' : terrainConditionDetails.impact === 'low' ? 'go' : 'caution'}`}>
-                        {terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'} impact
-                      </span>
-                    )}
-                    {terrainConditionDetails.confidence && (
-                      <span className={`terrain-confidence-chip ${terrainConditionDetails.confidence}`}>
-                        {terrainConditionDetails.confidence === 'high' ? 'High' : terrainConditionDetails.confidence === 'medium' ? 'Moderate' : 'Low'} confidence
-                      </span>
-                    )}
-                  </div>
-                )}
-                {terrainConditionDetails.recommendedTravel && (
-                  <div className="decision-action">
-                    <span className="decision-action-label">Recommended travel mode</span>
-                    <p>{terrainConditionDetails.recommendedTravel}</p>
-                  </div>
-                )}
-                {terrainConditionDetails.footwear && (
-                  <div className="decision-action">
-                    <span className="decision-action-label">Footwear / traction</span>
-                    <p>{terrainConditionDetails.footwear}</p>
-                  </div>
-                )}
-                {terrainConditionDetails.snowProfile && (
-                  <div className="terrain-snow-profile-block">
-                    <div className="terrain-snow-profile-header">
-                      <span className="terrain-snow-profile-title">Snow Profile</span>
-                      <strong className="terrain-snow-profile-label">{terrainConditionDetails.snowProfile.label}</strong>
-                    </div>
-                    {terrainConditionDetails.snowProfile.summary ? (
-                      <p className="terrain-snow-profile-summary">{terrainConditionDetails.snowProfile.summary}</p>
-                    ) : null}
-                    {terrainConditionDetails.snowProfile.reasons.length > 0 && (
-                      <ul className="signal-list compact">
-                        {terrainConditionDetails.snowProfile.reasons.map((reason, index) => (
-                          <li key={`snow-profile-reason-${index}`}>{reason}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-                <div className="terrain-precip-grid">
-                  <div className="terrain-precip-row">
-                    <span className="terrain-precip-label">Rain</span>
-                    <span className="terrain-precip-val"><span className="terrain-precip-window">12h</span>{rainfall12hDisplay}</span>
-                    <span className="terrain-precip-val"><span className="terrain-precip-window">24h</span>{rainfall24hDisplay}</span>
-                    <span className="terrain-precip-val"><span className="terrain-precip-window">48h</span>{rainfall48hDisplay}</span>
-                  </div>
-                  <div className="terrain-precip-row">
-                    <span className="terrain-precip-label">Snow</span>
-                    <span className="terrain-precip-val"><span className="terrain-precip-window">12h</span>{snowfall12hDisplay}</span>
-                    <span className="terrain-precip-val"><span className="terrain-precip-window">24h</span>{snowfall24hDisplay}</span>
-                    <span className="terrain-precip-val"><span className="terrain-precip-window">48h</span>{snowfall48hDisplay}</span>
-                  </div>
-                </div>
-                {terrainConditionDetails.reasons.length > 0 ? (
-                  <ul className="signal-list compact">
-                    {terrainConditionDetails.reasons.map((reason, index) => (
-                      <li key={`terrain-condition-reason-${index}`}>{reason}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted-note">No strong surface signal was detected from current upstream data.</p>
-                )}
-                <p className="muted-note">Classification updates when you change location, date, or start time.</p>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('recentRainfall') && (
-                <CollapsibleCard
-                  cardKey="recentRainfall"
-                  defaultExpanded={false}
-                  order={reportCardOrder.recentRainfall}
-                  className="rainfall-card"
-                  title={<span className="card-title"><CloudRain size={14} /> Recent Precipitation Totals <HelpHint text="Observed rolling totals (past 12h/24h/48h) plus expected precipitation for your selected travel-window duration." /></span>}
-                  headerMeta={<span className={`decision-pill ${rainfall24hSeverityClass}`}>24h rain {rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}</span>}
-                  summary={`${rainfall24hDisplay}/24h${Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}`}
-                  preview={<>
-                    <div className="card-preview-hero mono">{rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · ${snowfall24hDisplay}` : ''}</div>
-                    <div className="card-preview-caption">Rain · Snow past 24h</div>
-                    <div className="card-preview-row">
-                      <span className="card-preview-chip">Rain 12h {rainfall12hDisplay}</span>
-                      {Number.isFinite(snowfall12hIn) && <span className="card-preview-chip">Snow 12h {snowfall12hDisplay}</span>}
-                      <span className="card-preview-chip">48h {rainfall48hDisplay}{Number.isFinite(snowfall48hIn) ? ` · ${snowfall48hDisplay}` : ''}</span>
-                      <span className="card-preview-chip">Expected {expectedRainWindowDisplay}{Number.isFinite(expectedSnowWindowIn) ? ` · ${expectedSnowWindowDisplay}` : ''}</span>
-                    </div>
-                  </>}
-                >
-                <p className="precip-insight-line">{precipInsightLine}</p>
-                <p className="precip-insight-line expected">{expectedPrecipSummaryLine}</p>
-                <div className="precip-split-grid">
-                  <section className="precip-column rain">
-                    <div className="precip-column-head">
-                      <CloudRain size={14} />
-                      <span>Rain</span>
-                    </div>
-                    <ul className="precip-metric-list">
-                      <li>
-                        <span className="precip-metric-label">Past 12h</span>
-                        <strong>{rainfall12hDisplay}</strong>
-                      </li>
-                      <li className="precip-metric-highlight">
-                        <span className="precip-metric-label">Past 24h</span>
-                        <strong>{rainfall24hDisplay}</strong>
-                      </li>
-                      <li>
-                        <span className="precip-metric-label">Past 48h</span>
-                        <strong>{rainfall48hDisplay}</strong>
-                      </li>
-                    </ul>
-                  </section>
-                  <section className="precip-column snow">
-                    <div className="precip-column-head">
-                      <Mountain size={14} />
-                      <span>Snow</span>
-                    </div>
-                    <ul className="precip-metric-list">
-                      <li>
-                        <span className="precip-metric-label">Past 12h</span>
-                        <strong>{snowfall12hDisplay}</strong>
-                      </li>
-                      <li className="precip-metric-highlight">
-                        <span className="precip-metric-label">Past 24h</span>
-                        <strong>{snowfall24hDisplay}</strong>
-                      </li>
-                      <li>
-                        <span className="precip-metric-label">Past 48h</span>
-                        <strong>{snowfall48hDisplay}</strong>
-                      </li>
-                    </ul>
-                  </section>
-                </div>
-                <div className="precip-expected-block">
-                  <div className="precip-expected-title">
-                    <span>Expected Precipitation (Travel Window)</span>
-                    <strong>{expectedTravelWindowHours}h</strong>
-                  </div>
-                  <div className="precip-split-grid">
-                    <section className="precip-column rain">
-                      <div className="precip-column-head">
-                        <CloudRain size={14} />
-                        <span>Rain</span>
-                      </div>
-                      <ul className="precip-metric-list">
-                        <li className="precip-metric-highlight">
-                          <span className="precip-metric-label">Next {expectedTravelWindowHours}h</span>
-                          <strong>{expectedRainWindowDisplay}</strong>
-                        </li>
-                      </ul>
-                    </section>
-                    <section className="precip-column snow">
-                      <div className="precip-column-head">
-                        <Mountain size={14} />
-                        <span>Snow</span>
-                      </div>
-                      <ul className="precip-metric-list">
-                        <li className="precip-metric-highlight">
-                          <span className="precip-metric-label">Next {expectedTravelWindowHours}h</span>
-                          <strong>{expectedSnowWindowDisplay}</strong>
-                        </li>
-                      </ul>
-                    </section>
-                  </div>
-                  <div className="precip-meta-grid">
-                    <div>
-                      <span className="stat-label">Forecast start</span>
-                      <strong>
-                        {rainfallExpected?.startTime
-                          ? formatForecastPeriodLabel(rainfallExpected.startTime, precipitationDisplayTimezone)
-                          : 'N/A'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="stat-label">Forecast end</span>
-                      <strong>
-                        {rainfallExpected?.endTime
-                          ? formatForecastPeriodLabel(rainfallExpected.endTime, precipitationDisplayTimezone)
-                          : 'N/A'}
-                      </strong>
-                    </div>
-                  </div>
-                  {precipitationDisplayTimezone && <p className="muted-note">Times shown in objective timezone: {precipitationDisplayTimezone}</p>}
-                  <p className="muted-note">{expectedPrecipNoteLine}</p>
-                </div>
-                <div className="precip-meta-grid">
-                  <div>
-                    <span className="stat-label">Window mode</span>
-                    <strong>{rainfallModeLabel}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">Anchor time</span>
-                    <strong>
-                      {rainfallPayload?.anchorTime
-                        ? formatForecastPeriodLabel(rainfallPayload.anchorTime, precipitationDisplayTimezone)
-                        : 'N/A'}
-                    </strong>
-                  </div>
-                </div>
-                <p className="muted-note">
-                  {rainfallNoteLine}
-                </p>
-                <p className="muted-note">
-                  Source:{' '}
-                  {safeRainfallLink ? (
-                    <a href={safeRainfallLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                      {rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'}
-                    </a>
-                  ) : (
-                    rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'
-                  )}
-                </p>
-                </CollapsibleCard>
-              )}
-
-              {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
-                <CollapsibleCard
-                  cardKey="windLoading"
-                  defaultExpanded={false}
-                  order={reportCardOrder.windLoading}
-                  className="wind-loading-card"
-                  title={<span className="card-title"><Wind size={14} /> Wind Loading <HelpHint text="Compass rose and transport analysis: which aspects are loading based on wind direction, trend agreement, and active transport hours." /></span>}
-                  headerMeta={<span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} · {windLoadingConfidence}</span>}
-                  summary={`${windLoadingLevel} · ${formatWindDisplay(safetyData.weather.windSpeed)} ${safetyData.weather.windDirection || 'Calm'} · Lee: ${leewardAspectHints.length > 0 ? leewardAspectHints.join(', ') : 'N/A'}`}
-                  preview={<>
-                    <div className="card-preview-hero">{windLoadingLevel}</div>
-                    <div className="card-preview-caption">{formatWindDisplay(safetyData.weather.windSpeed)} {safetyData.weather.windDirection || 'Calm'} · {windLoadingConfidence} confidence</div>
-                    <div className="card-preview-row">
-                      {leewardAspectHints.length > 0 && <span className="card-preview-chip">Lee: {leewardAspectHints.join(', ')}</span>}
-                      {Number.isFinite(safetyData.weather.windGust) && <span className="card-preview-chip">Gust {formatWindDisplay(safetyData.weather.windGust)}</span>}
-                    </div>
-                  </>}
-                >
-                  <WindLoadingCard
-                    windDirection={safetyData.weather.windDirection}
-                    windGust={safetyData.weather.windGust}
-                    avalancheProblems={safetyData.avalanche?.problems}
-                  />
-                  {avalancheUnknown && (
-                    <p className="wind-coverage-note">No official forecast available — use wind loading as your primary terrain-selection signal.</p>
-                  )}
-                  <p className="wind-hint-line">{windLoadingSummary}</p>
-                  {windLoadingActionLine && <p className="wind-action-line">{windLoadingActionLine}</p>}
-                  <div className="wind-hint-meta">
-                    <div className="wind-hint-meta-item">
-                      <span className="stat-label">Transport Level</span>
-                      <strong>{windLoadingLevel}</strong>
-                    </div>
-                    <div className="wind-hint-meta-item">
-                      <span className="stat-label">Active Window</span>
-                      <strong>{windLoadingActiveWindowLabel}</strong>
-                    </div>
-                    <div className="wind-hint-meta-item wind-hint-meta-wide">
-                      <span className="stat-label">Active Hours</span>
-                      <strong>{windLoadingActiveHoursDetail}</strong>
-                    </div>
-                    <div className="wind-hint-meta-item">
-                      <span className="stat-label">Direction Source</span>
-                      <strong>{resolvedWindDirectionSource}</strong>
-                    </div>
-                    <div className="wind-hint-meta-item">
-                      <span className="stat-label">Trend Agreement</span>
-                      <strong>
-                        {trendAgreementRatio !== null
-                          ? `${Math.round(trendAgreementRatio * 100)}%`
-                          : 'N/A'}
-                      </strong>
-                    </div>
-                    <div className="wind-hint-meta-item wind-hint-meta-wide">
-                      <span className="stat-label">Elevation Focus</span>
-                      <strong>{windLoadingElevationFocus}</strong>
-                    </div>
-                  </div>
-                  {leewardAspectHints.length > 0 && (
-                    <div className="wind-aspect-block">
-                      <span className="stat-label">Likely Lee Aspects</span>
-                      <div className="wind-aspect-chips">
-                        {leewardAspectHints.map((aspect) => (
-                          <span key={aspect} className="wind-aspect-chip">
-                            {aspect}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
-                    <div className="wind-aspect-block">
-                      <span className="stat-label">Secondary Cross-Loading</span>
-                      <div className="wind-aspect-chips">
-                        {secondaryWindAspects.map((aspect) => (
-                          <span key={`secondary-${aspect}`} className="wind-aspect-chip secondary">
-                            {aspect}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {windLoadingNotes.length > 0 && (
-                    <ul className="signal-list compact">
-                      {windLoadingNotes.map((note, idx) => (
-                        <li key={`wind-loading-note-${idx}`}>{note}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {aspectOverlapProblems.length > 0 && (
-                    <p className="wind-aspect-overlap-alert">
-                      Wind loading aligns with active avalanche problem aspects: {aspectOverlapProblems.join(', ')}.
-                    </p>
-                  )}
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('sourceFreshness') && (
-                <CollapsibleCard
-                  cardKey="sourceFreshness"
-                  defaultExpanded={false}
-                  order={reportCardOrder.sourceFreshness}
-                  className="source-freshness-card"
-                  title={<span className="card-title"><Clock size={14} /> Source Freshness <HelpHint text="How old each feed is based on upstream publish/observation timestamps (not local report generation time)." /></span>}
-                  summary={reportGeneratedAt ? `Updated ${formatAgeFromNow(reportGeneratedAt)}` : 'Freshness data unavailable'}
-                  preview={<>
-                    <div className="card-preview-hero mono">{reportGeneratedAt ? formatAgeFromNow(reportGeneratedAt) : 'N/A'}</div>
-                    <div className="card-preview-caption">{reportGeneratedAt ? `Generated ${formatPubTime(reportGeneratedAt)}` : 'Freshness data unavailable'}</div>
-                  </>}
-                >
-                <ul className="source-freshness-list">
-                  {sourceFreshnessRows.map((row) => {
-                    const state = row.stateOverride || freshnessClass(row.issued, row.staleHours);
-                    return (
-                      <li key={row.label}>
-                        <span>{row.label}</span>
-                        <strong className={`freshness-pill ${state}`}>{row.displayValue || formatAgeFromNow(row.issued)}</strong>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {reportGeneratedAt && <p className="muted-note">Report generated: {formatPubTime(reportGeneratedAt)}</p>}
-                <p className="muted-note">Freshness badges use upstream publish/observation times when available.</p>
-                {avalancheExpiredForSelectedStart && (
-                  <p className="muted-note">
-                    Avalanche bulletin expires before your selected start time. Report is shown as stale guidance; verify the latest update before departure.
-                  </p>
-                )}
-                {objectiveTimezone && (
-                  <p className="muted-note">
-                    Objective timezone: {objectiveTimezone}
-                    {deviceTimezone ? ` • Device: ${deviceTimezone}` : ''}
-                  </p>
-                )}
-                </CollapsibleCard>
-              )}
-
-              <CollapsibleCard
-                cardKey="nwsAlerts"
-                domId="planner-section-alerts"
-                defaultExpanded={false}
-                order={reportCardOrder.nwsAlerts}
-                className="nws-alerts-card"
-                title={<span className="card-title"><AlertTriangle size={14} /> NWS Alerts <HelpHint text="Official National Weather Service alerts active at your selected start time for this location." /></span>}
-                headerMeta={<span className={`decision-pill ${nwsAlertCount > 0 ? 'nogo' : 'go'}`}>{nwsAlertCount} active</span>}
-                summary={nwsAlertCount > 0 ? `${nwsAlertCount} active` : 'None active'}
-                preview={<>
-                  <div className={`card-preview-hero ${nwsAlertCount > 0 ? 'nogo' : 'go'}`}>{nwsAlertCount > 0 ? `${nwsAlertCount} Active` : 'None'}</div>
-                  <div className="card-preview-caption">{nwsTopAlerts.length > 0 ? nwsTopAlerts[0].event || 'Alert' : 'No active NWS alerts'}</div>
-                </>}
-              >
-                  <p className="muted-note">
-                    Source: {safetyData.alerts?.source || 'NWS CAP feed'}
-                    {safetyData.alerts?.highestSeverity ? ` • Highest: ${safetyData.alerts.highestSeverity}` : ''}
-                  </p>
-                  {safetyData.alerts?.status === 'none_for_selected_start' && nwsTotalAlertCount > 0 && (
-                    <p className="muted-note">
-                      {nwsTotalAlertCount} alert(s) exist now, but none are active at your selected start time.
-                    </p>
-                  )}
-                  {nwsTopAlerts.length > 0 ? (
-                    <ul className="score-trace-list nws-alert-list">
-                      {nwsTopAlerts.map((alert, idx) => {
-                        const alertLink = sanitizeExternalUrl(alert.link || undefined);
-                        const headline = normalizeAlertNarrative(alert.headline, 400);
-                        const descriptionParagraphs = splitAlertNarrativeParagraphs(alert.description, 2600);
-                        const instructionParagraphs = splitAlertNarrativeParagraphs(alert.instruction, 1600);
-                        const areaList = Array.isArray(alert.affectedAreas) ? alert.affectedAreas.filter(Boolean).slice(0, 8) : [];
-                        const areaDesc = normalizeAlertNarrative(alert.areaDesc, 1200);
-                        const hasExtendedAlertDetails =
-                          Boolean(headline) ||
-                          descriptionParagraphs.length > 0 ||
-                          instructionParagraphs.length > 0 ||
-                          areaList.length > 0 ||
-                          Boolean(areaDesc) ||
-                          Boolean(alert.senderName) ||
-                          Boolean(alert.response) ||
-                          Boolean(alert.messageType) ||
-                          Boolean(alert.category);
-                        return (
-                        <li key={`${alert.event || 'alert'}-${idx}`}>
-                          <span className="score-trace-hazard">
-                            {alertLink ? (
-                              <a
-                                href={alertLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="raw-link-value"
-                                title={alert.headline || 'Open NWS alert source'}
-                              >
-                                {alert.event || 'Alert'}
-                              </a>
-                            ) : (
-                              <span>{alert.event || 'Alert'}</span>
-                            )}
-                          </span>
-                          <span className="score-trace-impact down">{alert.severity || 'Unknown'}</span>
-                          <small>
-                            {alert.urgency || 'Unknown urgency'}
-                            {alert.certainty ? ` • Certainty ${alert.certainty}` : ''}
-                            {alert.response ? ` • Response ${alert.response}` : ''}
-                            {alert.effective ? ` • Effective ${formatPubTime(alert.effective)}` : ''}
-                            {alert.onset ? ` • Onset ${formatPubTime(alert.onset)}` : ''}
-                            {alert.ends ? ` • Ends ${formatPubTime(alert.ends)}` : ''}
-                            {alert.expires ? ` • Expires ${formatPubTime(alert.expires)}` : ''}
-                          </small>
-                          {hasExtendedAlertDetails && (
-                            <details className="alert-description-details">
-                              <summary title={headline || alert.event || 'Open alert details'}>Details & guidance</summary>
-                              <div className="alert-detail-body">
-                                {headline && <p className="alert-detail-lead">{headline}</p>}
-                                {descriptionParagraphs.length > 0 && (
-                                  <div className="alert-detail-section">
-                                    <strong>Description</strong>
-                                    {descriptionParagraphs.slice(0, 4).map((paragraph, paragraphIdx) => (
-                                      <p key={`alert-desc-${idx}-${paragraphIdx}`}>{paragraph}</p>
-                                    ))}
-                                  </div>
-                                )}
-                                {instructionParagraphs.length > 0 && (
-                                  <div className="alert-detail-section">
-                                    <strong>Recommended Action</strong>
-                                    {instructionParagraphs.slice(0, 3).map((paragraph, paragraphIdx) => (
-                                      <p key={`alert-inst-${idx}-${paragraphIdx}`}>{paragraph}</p>
-                                    ))}
-                                  </div>
-                                )}
-                                {areaList.length > 0 && (
-                                  <div className="alert-detail-section">
-                                    <strong>Affected Areas</strong>
-                                    <p>{areaList.join(', ')}</p>
-                                  </div>
-                                )}
-                                {areaList.length === 0 && areaDesc && (
-                                  <div className="alert-detail-section">
-                                    <strong>Area</strong>
-                                    <p>{areaDesc}</p>
-                                  </div>
-                                )}
-                                {(alert.senderName || alert.messageType || alert.category) && (
-                                  <div className="alert-detail-section">
-                                    <strong>Source Metadata</strong>
-                                    <p>
-                                      {alert.senderName ? `Issued by ${alert.senderName}` : 'Issuer not specified'}
-                                      {alert.messageType ? ` • Type: ${alert.messageType}` : ''}
-                                      {alert.category ? ` • Category: ${alert.category}` : ''}
-                                    </p>
-                                  </div>
-                                )}
-                                {alertLink && (
-                                  <p className="alert-detail-link-line">
-                                    <a href={alertLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                      Open official full alert
-                                    </a>
-                                  </p>
-                                )}
-                              </div>
-                            </details>
-                          )}
-                        </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="muted-note">No active NWS alerts for this objective point.</p>
-                  )}
-              </CollapsibleCard>
-
-              {shouldRenderRankedCard('airQuality') && (
-                <CollapsibleCard
-                  cardKey="airQuality"
-                  defaultExpanded={false}
-                  order={reportCardOrder.airQuality}
-                  className="air-quality-card"
-                  title={<span className="card-title"><Wind size={14} /> Air Quality <HelpHint text="AQI and pollutant values near your objective. Elevated values can reduce performance and increase risk." /></span>}
-                  headerMeta={<span className={`decision-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClass(safetyData.airQuality?.usAqi)}`}>{airQualityFutureNotApplicable ? 'Current-day only' : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}</span>}
-                  summary={`AQI: ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'} (${safetyData.airQuality?.category || 'Unknown'})`}
-                  preview={<>
-                    <div className={`card-preview-hero mono ${airQualityFutureNotApplicable ? '' : airQualityPillClass(safetyData.airQuality?.usAqi)}`}>AQI {Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}</div>
-                    <div className="card-preview-caption">{safetyData.airQuality?.category || 'Unknown'}</div>
-                  </>}
-                >
-                <div className="plan-grid">
-                  <div>
-                    <span className="stat-label">Category</span>
-                    <strong>{safetyData.airQuality?.category || 'Unknown'}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">PM2.5</span>
-                    <strong>{Number.isFinite(Number(safetyData.airQuality?.pm25)) ? Number(safetyData.airQuality?.pm25).toFixed(1) : 'N/A'}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">PM10</span>
-                    <strong>{Number.isFinite(Number(safetyData.airQuality?.pm10)) ? Number(safetyData.airQuality?.pm10).toFixed(1) : 'N/A'}</strong>
-                  </div>
-                  <div>
-                    <span className="stat-label">Ozone</span>
-                    <strong>{Number.isFinite(Number(safetyData.airQuality?.ozone)) ? Number(safetyData.airQuality?.ozone).toFixed(1) : 'N/A'}</strong>
-                  </div>
-                </div>
-                <p className="muted-note">
-                  {airQualityFutureNotApplicable
-                    ? (safetyData.airQuality?.note || 'Air quality is only used for the objective-local current day. It is not applied to future-date forecasts.')
-                    : `Source: ${safetyData.airQuality?.source || 'Open-Meteo Air Quality API'}${
-                        safetyData.airQuality?.measuredTime ? ` • Measured ${formatPubTime(safetyData.airQuality.measuredTime)}` : ''
-                      }`}
-                </p>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('snowpackSnapshot') && (
-                <CollapsibleCard
-                  cardKey="snowpackSnapshot"
-                  defaultExpanded={false}
-                  order={reportCardOrder.snowpackSnapshot}
-                  className="snowpack-card"
-                  title={<span className="card-title"><Mountain size={14} /> Snowpack Snapshot <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC, plus historical average comparison for your selected date." /></span>}
-                  headerMeta={<span className={`decision-pill ${snowpackPillClass}`}>{snowpackStatusLabel}</span>}
-                  summary={snowpackStatusLabel}
-                  preview={<>
-                    <div className="card-preview-hero mono">{snotelDepthDisplay}</div>
-                    <div className="card-preview-caption">SWE {snotelSweDisplay} · {safetyData.snowpack?.snotel?.stationName || 'Nearest SNOTEL'}</div>
-                    <div className="card-preview-row">
-                      <span className="card-preview-chip">{snowpackStatusLabel}</span>
-                      <span className="card-preview-chip">{snowpackHistoricalStatusLabel}</span>
-                    </div>
-                  </>}
-                >
-
-                {snowpackInsights && (
-                  <div className="snowpack-insight-grid snowpack-insight-grid-compact">
-                    <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.signal.tone}`}>
-                      <span className="stat-label">Signal</span>
-                      <strong>{snowpackInsights.signal.label}</strong>
-                      <small>{snowpackInsights.signal.detail}</small>
-                    </div>
-                    <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.freshness.tone}`}>
-                      <span className="stat-label">Freshness</span>
-                      <strong>{snowpackInsights.freshness.label}</strong>
-                      <small>{snowpackInsights.freshness.detail}</small>
-                    </div>
-                  </div>
-                )}
-
-                <div className="snowpack-core-grid">
-                  <div className="snowpack-core-item">
-                    <span className="stat-label stat-label-with-help">
-                      Nearest SNOTEL
-                      <HelpHint text="Closest USDA NRCS snow station to your objective. Station observations are used as local snowpack ground truth." />
-                    </span>
-                    <strong>{safetyData.snowpack?.snotel?.stationName || 'Unavailable'}</strong>
-                    <small>{snotelDistanceDisplay !== 'N/A' ? `${snotelDistanceDisplay} from objective` : 'Distance unavailable'}</small>
-                  </div>
-                  <div className="snowpack-core-item">
-                    <span className="stat-label stat-label-with-help">SNOTEL Station Snow <HelpHint text="SNOTEL (Snow Telemetry): automated USDA stations measuring snow depth and snow water equivalent (SWE) in real time." /></span>
-                    <strong>Depth {snotelDepthDisplay} • SWE {snotelSweDisplay}</strong>
-                    <small>{safetyData.snowpack?.snotel?.observedDate ? `Observed ${safetyData.snowpack.snotel.observedDate}` : 'Observation date unavailable'}</small>
-                  </div>
-                  <div className="snowpack-core-item">
-                    <span className="stat-label stat-label-with-help">NOHRSC Grid Snow <HelpHint text="NOHRSC (National Operational Hydrologic Remote Sensing Center): NOAA-modeled gridded snow estimates for any location." /></span>
-                    <strong>Depth {nohrscDepthDisplay} • SWE {nohrscSweDisplay}</strong>
-                    <small>
-                      {safetyData.snowpack?.nohrsc?.sampledTime
-                        ? `Sampled ${formatForecastPeriodLabel(safetyData.snowpack.nohrsc.sampledTime, safetyData.weather?.timezone || null)}`
-                        : 'Sample time unavailable'}
-                    </small>
-                  </div>
-                  {safetyData.snowpack?.cdec && (
-                    <div className="snowpack-core-item">
-                      <span className="stat-label stat-label-with-help">CDEC Station Snow <HelpHint text="CDEC (California Data Exchange Center): DWR-operated snow monitoring stations, primarily in the Sierra Nevada." /></span>
-                      <strong>Depth {cdecDepthDisplay} • SWE {cdecSweDisplay}</strong>
-                      <small>
-                        {safetyData.snowpack.cdec.stationName || 'CDEC station'}
-                        {cdecDistanceDisplay !== 'N/A' ? ` • ${cdecDistanceDisplay} away` : ''}
-                        {safetyData.snowpack.cdec.observedDate ? ` • Observed ${safetyData.snowpack.cdec.observedDate}` : ''}
-                      </small>
-                    </div>
-                  )}
-                  <div className="snowpack-core-item">
-                    <span className="stat-label">Recent 24h</span>
-                    <strong>Rain {rainfall24hDisplay} • Snow {snowfall24hDisplay}</strong>
-                    <small>Use this for fresh loading context.</small>
-                  </div>
-                  <div className="snowpack-core-item">
-                    <span className="stat-label">Historical Baseline</span>
-                    <strong className={`snowpack-historical-status ${snowpackHistoricalPillClass}`}>{snowpackHistoricalStatusLabel}</strong>
-                    <small>{snowpackHistoricalComparisonLine}</small>
-                  </div>
-                </div>
-
-                <p className="muted-note">
-                  {snowpackInterpretation?.headline
-                    ? localizeUnitText(snowpackInterpretation.headline)
-                    : localizeUnitText(safetyData.snowpack?.summary || 'Snowpack observations unavailable.')}
-                </p>
-
-                <details className="snowpack-details">
-                  <summary>More snowpack details</summary>
-
-                  {snowpackInsights && (
-                    <div className="snowpack-insight-grid">
-                      <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.representativeness.tone}`}>
-                        <span className="stat-label">Representativeness</span>
-                        <strong>{snowpackInsights.representativeness.label}</strong>
-                        <small>{snowpackInsights.representativeness.detail}</small>
-                      </div>
-                      <div className={`snowpack-insight-item snowpack-insight-${snowpackInsights.agreement.tone}`}>
-                        <span className="stat-label">Agreement</span>
-                        <strong>{snowpackInsights.agreement.label}</strong>
-                        <small>{snowpackInsights.agreement.detail}</small>
-                      </div>
-                    </div>
-                  )}
-
-                  {snowpackInterpretation && snowpackInterpretation.bullets.length > 0 && (
-                    <div className={`snowpack-read snowpack-read-${snowpackInterpretation.confidence}`}>
-                      <span className="snowpack-takeaway-title">Interpretation notes</span>
-                      <ul className="signal-list compact">
-                        {snowpackInterpretation.bullets.map((item, idx) => (
-                          <li key={`snowpack-read-${idx}`}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {snowpackTakeaways.length > 0 && (
-                    <div className="snowpack-takeaways">
-                      <span className="snowpack-takeaway-title">How To Use This Snapshot</span>
-                      <ul className="signal-list compact">
-                        {snowpackTakeaways.map((item, idx) => (
-                          <li key={`snowpack-takeaway-${idx}`}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="plan-grid">
-                    <div>
-                      <span className="stat-label">Recent Snowfall (12h/24h/48h)</span>
-                      <strong>{snowfallWindowSummary}</strong>
-                    </div>
-                    <div>
-                      <span className="stat-label">Recent Rainfall (12h/24h/48h)</span>
-                      <strong>{rainfallWindowSummary}</strong>
-                    </div>
-                  </div>
-
-                  <p className="muted-note">
-                    {snowpackObservationContext}
-                  </p>
-                  <p className="muted-note">
-                    Data snapshot: {localizeUnitText(safetyData.snowpack?.summary || 'Snowpack observations unavailable.')}
-                  </p>
-                  <p className="muted-note">
-                    Sources:{' '}
-                    {safeSnotelLink ? (
-                      <>
-                        <a href={safeSnotelLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                          NRCS AWDB / SNOTEL
-                        </a>
-                        {' • '}
-                      </>
-                    ) : (
-                      'NRCS AWDB / SNOTEL • '
-                    )}
-                    {safeNohrscLink ? (
-                      <a href={safeNohrscLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                        NOAA NOHRSC Snow Analysis
-                      </a>
-                    ) : (
-                      'NOAA NOHRSC Snow Analysis'
-                    )}
-                    {safetyData.snowpack?.cdec && (
-                      <>
-                        {' • '}
-                        {safeCdecLink ? (
-                          <a href={safeCdecLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                            CDEC ({safetyData.snowpack.cdec.stationCode})
-                          </a>
-                        ) : (
-                          `CDEC (${safetyData.snowpack.cdec.stationCode || 'N/A'})`
-                        )}
-                      </>
-                    )}
-                  </p>
-                </details>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('fireRisk') && (
-                <CollapsibleCard
-                  cardKey="fireRisk"
-                  defaultExpanded={false}
-                  order={reportCardOrder.fireRisk}
-                  className="fire-risk-card"
-                  title={<span className="card-title"><Flame size={14} /> Fire Risk <HelpHint text="Fire-weather and smoke risk synthesized from forecast heat/dryness/wind, NWS fire-weather alerts, and air-quality context." /></span>}
-                  headerMeta={<span className={`decision-pill ${fireRiskPillClass}`}>{fireRiskLabel.toUpperCase()}</span>}
-                  summary={fireRiskLabel.toUpperCase()}
-                  preview={<>
-                    <div className={`card-preview-hero ${fireRiskPillClass}`}>{fireRiskLabel.toUpperCase()}</div>
-                    <div className="card-preview-caption">{(safetyData.fireRisk?.guidance || 'No fire-risk guidance available.').slice(0, 100)}{(safetyData.fireRisk?.guidance || '').length > 100 ? '…' : ''}</div>
-                  </>}
-                >
-                <p className="muted-note">{safetyData.fireRisk?.guidance || 'No fire-risk guidance available.'}</p>
-                {safetyData.fireRisk?.reasons && safetyData.fireRisk.reasons.length > 0 && (
-                  <ul className="signal-list compact">
-                    {safetyData.fireRisk.reasons.slice(0, 3).map((reason, idx) => (
-                      <li key={`fire-reason-${idx}`}>{reason}</li>
-                    ))}
-                  </ul>
-                )}
-                {fireRiskAlerts.length > 0 && (
-                  <ul className="score-trace-list nws-alert-list">
-                    {fireRiskAlerts.slice(0, 3).map((alert, idx) => {
-                      const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
-                      return (
-                        <li key={`${alert.event || 'fire-alert'}-${idx}`}>
-                          <span className="score-trace-hazard">{alert.event || 'Alert'}</span>
-                          <span className="score-trace-impact down">{alert.severity || 'Unknown'}</span>
-                          <small>{alert.expires ? `Expires ${formatPubTime(alert.expires)}` : 'Expiry not specified'}</small>
-                          {safeAlertLink && (
-                            <small>
-                              <a href={safeAlertLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                Source link
-                              </a>
-                            </small>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <p className="muted-note">Source: {safetyData.fireRisk?.source || 'Not provided'}</p>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('planSnapshot') && (
-                <CollapsibleCard
-                  cardKey="planSnapshot"
-                  defaultExpanded={false}
-                  order={reportCardOrder.planSnapshot}
-                  className="plan-card"
-                  title={<span className="card-title"><Sun size={14} /> Daylight &amp; Timing <HelpHint text="Your start time, daylight window, and sunset margin for this trip." /></span>}
-                  headerMeta={sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null ? <span className="plan-daylight-badge">{Math.floor((sunsetMinutesForPlan - sunriseMinutesForPlan) / 60)}h {(sunsetMinutesForPlan - sunriseMinutesForPlan) % 60}m daylight</span> : undefined}
-                  summary={`Start ${displayStartTime} · ${daylightRemainingFromStartLabel} daylight`}
-                  preview={<>
-                    <div className="card-preview-hero mono">{displayStartTime}</div>
-                    <div className="card-preview-caption">{daylightRemainingFromStartLabel} daylight from start</div>
-                    <div className="card-preview-row">
-                      <span className="card-preview-chip">↑ {formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)}</span>
-                      <span className="card-preview-chip">↓ {formatClockShort(safetyData.solar.sunset, preferences.timeStyle)}</span>
-                    </div>
-                  </>}
-                >
-                {/* Solar day-arc timeline */}
-                {sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
-                  const WING = 90;
-                  const winMin = Math.max(0, sunriseMinutesForPlan - WING);
-                  const winMax = Math.min(1440, sunsetMinutesForPlan + WING);
-                  const span = winMax - winMin;
-                  const p = (m: number) => parseFloat(Math.max(0, Math.min(100, (m - winMin) / span * 100)).toFixed(2));
-                  const srP = p(sunriseMinutesForPlan);
-                  const ssP = p(sunsetMinutesForPlan);
-                  const stP = startMinutesForPlan !== null ? p(startMinutesForPlan) : null;
-                  const ttMin = returnMinutes;
-                  const ttP = ttMin !== null ? p(ttMin) : null;
-                  const ttMargin = ttMin !== null ? sunsetMinutesForPlan - ttMin : null;
-                  const ttPinColor = ttMargin === null ? 'rgba(255,255,255,0.9)' : ttMargin < 0 ? '#f87171' : ttMargin < 30 ? '#fbbf24' : '#4ade80';
-                  const stops = [
-                    `#0f172a 0%`, `#0f172a ${srP}%`,
-                    `#f97316 ${srP}%`, `#fde68a ${Math.min(srP + 8, 50)}%`,
-                    `#7dd3fc ${Math.min(srP + 18, 48)}%`, `#60a5fa 50%`,
-                    `#93c5fd ${Math.max(ssP - 18, 52)}%`, `#fed7aa ${Math.max(ssP - 8, 50)}%`,
-                    `#f97316 ${ssP}%`, `#0f172a ${ssP}%`, `#0f172a 100%`,
-                  ].join(', ');
-                  return (
-                    <div className="solar-timeline">
-                      <div className="solar-timeline-bar" style={{ background: `linear-gradient(to right, ${stops})` }}>
-                        <span className="solar-tick" style={{ left: `${srP}%` }} aria-hidden="true" />
-                        <span className="solar-tick" style={{ left: `${ssP}%` }} aria-hidden="true" />
-                        {stP !== null && (
-                          <span className="solar-pin" style={{ left: `${stP}%`, background: 'rgba(255,255,255,0.95)' }} title={`Start: ${displayStartTime}`} />
-                        )}
-                        {ttP !== null && (
-                          <span className="solar-pin" style={{ left: `${ttP}%`, background: ttPinColor }} title={`Return: ${returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : ''}`} />
-                        )}
-                      </div>
-                      <div className="solar-timeline-footer">
-                        <span>↑ {formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)} sunrise</span>
-                        <span>sunset {formatClockShort(safetyData.solar.sunset, preferences.timeStyle)} ↓</span>
-                      </div>
-                      <div className="solar-timeline-legend">
-                        {stP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: 'rgba(255,255,255,0.95)' }} />Start</span>}
-                        {ttP !== null && <span className="solar-legend-item"><span className="solar-legend-dot" style={{ background: ttPinColor }} />Return</span>}
-                      </div>
-                    </div>
-                  );
-                })()}
-                <div className="plan-summary-grid">
-                  <article className="plan-summary-item">
-                    <span className="plan-label">{startLabel}</span>
-                    <strong className="plan-value">{displayStartTime}</strong>
-                  </article>
-                  <article className="plan-summary-item">
-                    <span className="plan-label">Daylight from start</span>
-                    <strong className="plan-value">{daylightRemainingFromStartLabel}</strong>
-                  </article>
-                  {returnTimeFormatted && (
-                    <article className="plan-summary-item">
-                      <span className="plan-label">Return by</span>
-                      <strong className="plan-value">{formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}</strong>
-                    </article>
-                  )}
-                  {returnMinutes !== null && sunsetMinutesForPlan !== null && (() => {
-                    const margin = sunsetMinutesForPlan - returnMinutes;
-                    const cls = margin < 0 ? 'plan-value danger' : margin < 30 ? 'plan-value caution' : 'plan-value';
-                    const abs = Math.abs(margin);
-                    const timePart = abs >= 60 ? `${Math.floor(abs / 60)} h ${abs % 60} min` : `${abs} min`;
-                    const label = margin < 0
-                      ? `${timePart} after sunset`
-                      : `${timePart} before sunset`;
-                    return (
-                      <article className="plan-summary-item">
-                        <span className="plan-label">Sunset margin</span>
-                        <strong className={cls}>{label}</strong>
-                      </article>
-                    );
-                  })()}
-                </div>
-                </CollapsibleCard>
-              )}
-
-              {shouldRenderRankedCard('recommendedGear') && (
-                <CollapsibleCard
-                  cardKey="recommendedGear"
-                  domId="planner-section-gear"
-                  defaultExpanded={false}
-                  order={reportCardOrder.recommendedGear}
-                  className="gear-card"
-                  title={<span className="card-title">Gear Recommendations <HelpHint text="Prioritized gear suggestions with plain-language reasons based on weather, precipitation, snowpack, avalanche relevance, alerts, air quality, and fire signals." /></span>}
-                  summary={`${gearRecommendations.length} item${gearRecommendations.length !== 1 ? 's' : ''}`}
-                  preview={<>
-                    <div className="card-preview-hero mono">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</div>
-                    <div className="card-preview-caption">{gearRecommendations.slice(0, 2).map(g => g.title).join(', ') || 'Standard backcountry kit'}</div>
-                  </>}
-                >
-                {gearRecommendations.length > 0 ? (
-                  <>
-                    <p className="muted-note">
-                      Prioritized for this objective/time. Handle safety-critical items first, then comfort and efficiency items.
-                    </p>
-                    <ul className="gear-list">
-                      {gearRecommendations.map((item, idx) => (
-                        <li key={`${item.title}-${idx}`} className="gear-item">
-                          <div className="gear-item-head">
-                            <strong className="gear-item-title">{item.title}</strong>
-                            <span className={`decision-pill ${item.tone}`}>{item.category}</span>
-                          </div>
-                          <p className="gear-item-detail">{item.detail}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : (
-                  <p className="muted-note">No special gear flags detected. Use your standard backcountry safety kit and expected seasonal layers.</p>
-                )}
-                </CollapsibleCard>
-              )}
-            </div>
-          </div>
-
-          {avalancheRelevant && (() => {
-            const avyHeaderMeta = (
-              <div className="source-meta">
-                {avalancheRelevant && (
-                  <span className={`avy-header-danger-chip ${avalancheUnknown ? 'danger-level-unknown' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
-                    {avalancheUnknown ? 'Unknown' : `L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
-                  </span>
-                )}
-                <span>Avalanche center: {safetyData.avalanche.center || 'N/A'}</span>
-                {safetyData.avalanche.zone && <span className="source-zone">{safetyData.avalanche.zone}</span>}
-                {safetyData.avalanche.publishedTime && (
-                  <span className="published-chip">
-                    <Clock size={10} /> Issued: {formatPubTime(safetyData.avalanche.publishedTime)}
-                  </span>
-                )}
-                {safetyData.avalanche.expiresTime && (
-                  <span className={`published-chip ${avalancheExpiredForSelectedStart ? 'published-chip-expired' : ''}`}>
-                    <Clock size={10} /> {avalancheExpiredForSelectedStart ? 'Expired:' : 'Expires:'} {formatPubTime(safetyData.avalanche.expiresTime)}
-                  </span>
-                )}
-              </div>
-            );
-            return (
-            <CollapsibleCard
-              cardKey="avalancheForecast"
-              domId="planner-section-avalanche"
-              defaultExpanded={false}
-              order={reportCardOrder.avalancheForecast}
-              className="avy-card"
-              title={<span className="card-title"><Zap size={14} /> Avalanche Forecast <HelpHint text="Center-issued avalanche danger by elevation, bottom line, and published avalanche problems for this zone/date." /></span>}
-              headerMeta={avyHeaderMeta}
-              summary={avalancheRelevant ? (overallAvalancheLevel != null ? `L${overallAvalancheLevel}: ${getDangerText(overallAvalancheLevel)}` : 'Unknown danger level') : 'Not applicable'}
-              preview={<>
-                <div className={`card-preview-hero ${avalancheRelevant && overallAvalancheLevel != null ? (overallAvalancheLevel >= 4 ? 'avy-nogo' : overallAvalancheLevel >= 3 ? 'avy-caution' : 'avy-go') : ''}`}>{avalancheRelevant ? (overallAvalancheLevel != null ? `${getDangerGlyph(overallAvalancheLevel)} ${getDangerText(overallAvalancheLevel)}` : 'Unknown') : 'N/A'}</div>
-                <div className="card-preview-caption">{safetyData.avalanche.zone || 'Unknown zone'}</div>
-              </>}
-            >
-            <AvalancheForecastCard
-            avalanche={safetyData.avalanche}
-            avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
-            avalancheRelevant={avalancheRelevant}
-            avalancheNotApplicableReason={avalancheNotApplicableReason}
-            avalancheUnknown={avalancheUnknown}
-            overallAvalancheLevel={overallAvalancheLevel}
-            avalancheElevationRows={avalancheElevationRows}
-            safeAvalancheLink={safeAvalancheLink}
-            getDangerLevelClass={getDangerLevelClass}
-            getDangerText={getDangerText}
-            normalizeDangerLevel={normalizeDangerLevel}
-            getDangerGlyph={getDangerGlyph}
-            summarizeText={summarizeText}
-            toPlainText={toPlainText}
-            objectiveElevationFt={safetyData.weather.elevation ?? null}
-            formatElevationDisplay={formatElevationDisplay}
-            />
-            </CollapsibleCard>
-            );
-          })()}
-
-          <div className="card raw-report-card" style={{ order: reportCardOrder.deepDiveData }}>
-            <div className="card-header">
-              <span className="card-title">
-                <Search size={14} /> Deep Dive Report Data
-                <HelpHint text="Raw source fields and report payload for validation, troubleshooting, and deeper analysis." />
-              </span>
-              <div className="raw-report-actions">
-                <span className="raw-report-hint">Optional</span>
-                <button type="button" className="raw-copy-btn" onClick={handleCopyRawPayload} disabled={!rawReportPayload}>
-                  {copiedRawPayload ? 'Copied JSON' : 'Copy JSON'}
-                </button>
-              </div>
-            </div>
-
-            <details className="raw-report-details">
-              <summary>Show raw source fields and report payload</summary>
-
-              <div className="raw-grid">
-                <section className="raw-group">
-                  <h4>Planner Input Fields</h4>
-                  <ul className="raw-kv-list">
-                    <li>
-                      <span className="raw-key">Objective</span>
-                      <span className="raw-value">{objectiveName || 'Pinned Objective'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Coordinates</span>
-                      <span className="raw-value">
-                        {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Forecast Date</span>
-                      <span className="raw-value">{safetyData.forecast?.selectedDate || forecastDate}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Start Time</span>
-                      <span className="raw-value">{displayStartTime}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Share Link</span>
-                      <span className="raw-value">
-                        {safeShareLink ? (
-                          <a href={safeShareLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                            Open current plan URL
-                          </a>
-                        ) : (
-                          'N/A'
-                        )}
-                      </span>
-                    </li>
-                  </ul>
-                </section>
-
-                <section className="raw-group">
-                  <h4>Weather Source Fields</h4>
-                  <ul className="raw-kv-list">
-                    <li>
-                      <span className="raw-key">Issued</span>
-                      <span className="raw-value">{safetyData.weather.issuedTime ? formatPubTime(safetyData.weather.issuedTime) : 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Forecast Start</span>
-                      <span className="raw-value">
-                        {safetyData.weather.forecastStartTime
-                          ? formatForecastPeriodLabel(safetyData.weather.forecastStartTime, safetyData.weather.timezone || null)
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Forecast End</span>
-                      <span className="raw-value">
-                        {safetyData.weather.forecastEndTime
-                          ? formatForecastPeriodLabel(safetyData.weather.forecastEndTime, safetyData.weather.timezone || null)
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Humidity</span>
-                      <span className="raw-value">
-                        {Number.isFinite(Number(safetyData.weather.humidity)) ? `${Math.round(Number(safetyData.weather.humidity))}%` : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Dew Point</span>
-                      <span className="raw-value">{formatTempDisplay(safetyData.weather.dewPoint)}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Cloud Cover</span>
-                      <span className="raw-value">{Number.isFinite(weatherCloudCover) ? `${Math.round(weatherCloudCover)}%` : 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Rainfall 12h/24h/48h</span>
-                      <span className="raw-value">
-                        {rainfall12hDisplay} / {rainfall24hDisplay} / {rainfall48hDisplay}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Snowfall 12h/24h/48h</span>
-                      <span className="raw-value">
-                        {snowfall12hDisplay} / {snowfall24hDisplay} / {snowfall48hDisplay}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Forecast URL</span>
-                      <span className="raw-value">
-                        {safeWeatherLink ? (
-                          <a href={safeWeatherLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                            Open source forecast
-                          </a>
-                        ) : (
-                          'N/A'
-                        )}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Primary Weather Source</span>
-                      <span className="raw-value">{weatherSourceDisplay}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Weather Blended</span>
-                      <span className="raw-value">{safetyData.weather.sourceDetails?.blended ? 'true' : 'false'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Field Source Map</span>
-                      <span className={`raw-value ${Object.keys(weatherFieldSources).length > 0 ? 'raw-value-stack' : ''}`}>
-                        {Object.keys(weatherFieldSources).length > 0
-                          ? Object.entries(weatherFieldSources).map(([field, source]) => <span key={field}>{field}: {source}</span>)
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Objective Elevation</span>
-                      <span className="raw-value">
-                        {safetyData.weather.elevation != null
-                          ? formatElevationDisplay(safetyData.weather.elevation)
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Elevation Source</span>
-                      <span className="raw-value">{safetyData.weather.elevationSource || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Elevation Forecast Note</span>
-                      <span className="raw-value">{safetyData.weather.elevationForecastNote ? localizeUnitText(safetyData.weather.elevationForecastNote) : 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Elevation Bands</span>
-                      <span className={`raw-value ${elevationForecastBands.length > 0 ? 'raw-value-stack' : ''}`}>
-                        {elevationForecastBands.length > 0
-                          ? elevationForecastBands.map((band) => (
-                              <span key={`${band.label}-${band.elevationFt}`}>
-                                {band.label}: {formatElevationDisplay(band.elevationFt)} ({formatElevationDeltaDisplay(
-                                  band.deltaFromObjectiveFt,
-                                )}), {formatTempDisplay(band.temp)}, feels {formatTempDisplay(band.feelsLike)}, wind {formatWindDisplay(
-                                  band.windSpeed,
-                                )}, gust {formatWindDisplay(band.windGust)}
-                              </span>
-                            ))
-                          : 'N/A'}
-                      </span>
-                    </li>
-                  </ul>
-                </section>
-
-                <section className="raw-group">
-                  <h4>Avalanche Source Fields</h4>
-                  <ul className="raw-kv-list">
-                    <li>
-                      <span className="raw-key">Avalanche Center</span>
-                      <span className="raw-value">{safetyData.avalanche.center || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Zone</span>
-                      <span className="raw-value">{safetyData.avalanche.zone || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Published</span>
-                      <span className="raw-value">{safetyData.avalanche.publishedTime ? formatPubTime(safetyData.avalanche.publishedTime) : 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Expires</span>
-                      <span className="raw-value">{safetyData.avalanche.expiresTime ? formatPubTime(safetyData.avalanche.expiresTime) : 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Danger Level</span>
-                      <span className="raw-value">
-                        {avalancheUnknown ? 'Unknown (No Coverage)' : `L${normalizeDangerLevel(safetyData.avalanche.dangerLevel)}`}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Coverage Status</span>
-                      <span className="raw-value">{safetyData.avalanche.coverageStatus || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Unknown Risk Flag</span>
-                      <span className="raw-value">{safetyData.avalanche.dangerUnknown ? 'true' : 'false'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Problem Count</span>
-                      <span className="raw-value">{safetyData.avalanche.problems?.length || 0}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Avalanche Center Link</span>
-                      <span className="raw-value">
-                        {safeAvalancheLink ? (
-                          <a href={safeAvalancheLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                            Open center bulletin
-                          </a>
-                        ) : (
-                          'N/A'
-                        )}
-                      </span>
-                    </li>
-                  </ul>
-                </section>
-
-                <section className="raw-group">
-                  <h4>Additional Risk Sources</h4>
-                  <ul className="raw-kv-list">
-                    <li>
-                      <span className="raw-key">NWS Alert Count</span>
-                      <span className="raw-value">{safetyData.alerts?.activeCount ?? 0}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Highest Alert Severity</span>
-                      <span className="raw-value">{safetyData.alerts?.highestSeverity || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Alert Events</span>
-                      <span className={`raw-value ${safetyData.alerts?.alerts && safetyData.alerts.alerts.length > 0 ? 'raw-value-stack' : ''}`}>
-                        {safetyData.alerts?.alerts && safetyData.alerts.alerts.length > 0
-                          ? safetyData.alerts.alerts.map((alert, idx) => {
-                              const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
-                              return (
-                                <span key={`${alert.event || 'alert'}-${idx}`}>
-                                  {(alert.event || 'Alert')} • {alert.severity || 'Unknown'} • {alert.urgency || 'Unknown'}
-                                  {safeAlertLink ? (
-                                    <>
-                                      {' '}
-                                      •{' '}
-                                      <a href={safeAlertLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                        Source link
-                                      </a>
-                                    </>
-                                  ) : null}
-                                </span>
-                              );
-                            })
-                          : 'None'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">US AQI</span>
-                      <span className="raw-value">
-                        {safetyData.airQuality?.usAqi != null ? `${Math.round(safetyData.airQuality.usAqi)} (${safetyData.airQuality.category || 'N/A'})` : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Heat Risk Level</span>
-                      <span className="raw-value">
-                        {safetyData.heatRisk?.label || heatRiskLabel || 'N/A'}
-                        {Number.isFinite(Number(safetyData.heatRisk?.level)) ? ` (L${Number(safetyData.heatRisk?.level)})` : ''}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Heat Risk Guidance</span>
-                      <span className="raw-value">{safetyData.heatRisk?.guidance || heatRiskGuidance || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Fire Risk Level</span>
-                      <span className="raw-value">
-                        {safetyData.fireRisk?.label || 'N/A'}
-                        {Number.isFinite(Number(safetyData.fireRisk?.level)) ? ` (L${Number(safetyData.fireRisk?.level)})` : ''}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Fire Risk Guidance</span>
-                      <span className="raw-value">{safetyData.fireRisk?.guidance || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Fire Alert Signals</span>
-                      <span className={`raw-value ${fireRiskAlerts.length > 0 ? 'raw-value-stack' : ''}`}>
-                        {fireRiskAlerts.length > 0
-                          ? fireRiskAlerts.map((alert, idx) => {
-                              const safeAlertLink = sanitizeExternalUrl(alert.link || undefined);
-                              return (
-                                <span key={`${alert.event || 'fire'}-${idx}`}>
-                                  {alert.event || 'Alert'} • {alert.severity || 'Unknown'}
-                                  {safeAlertLink ? (
-                                    <>
-                                      {' '}
-                                      •{' '}
-                                      <a href={safeAlertLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                        Source link
-                                      </a>
-                                    </>
-                                  ) : null}
-                                </span>
-                              );
-                            })
-                          : 'None'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">PM2.5</span>
-                      <span className="raw-value">
-                        {safetyData.airQuality?.pm25 != null ? `${safetyData.airQuality.pm25} μg/m³` : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">AQI Sample Time (UTC)</span>
-                      <span className="raw-value">
-                        {safetyData.airQuality?.measuredTime
-                          ? formatForecastPeriodLabel(safetyData.airQuality.measuredTime, 'UTC')
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Snowpack Summary</span>
-                      <span className="raw-value">{safetyData.snowpack?.summary ? localizeUnitText(safetyData.snowpack.summary) : 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">SNOTEL Station</span>
-                      <span className="raw-value">
-                        {safetyData.snowpack?.snotel?.stationName
-                          ? `${safetyData.snowpack.snotel.stationName}${snotelDistanceDisplay !== 'N/A' ? ` (${snotelDistanceDisplay})` : ''}`
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">SNOTEL SWE / Depth</span>
-                      <span className="raw-value">
-                        {Number.isFinite(Number(safetyData.snowpack?.snotel?.sweIn)) || Number.isFinite(Number(safetyData.snowpack?.snotel?.snowDepthIn))
-                          ? `${snotelSweDisplay !== 'N/A' ? snotelSweDisplay : 'SWE N/A'} • ${snotelDepthDisplay !== 'N/A' ? `${snotelDepthDisplay} depth` : 'Depth N/A'}`
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">NOHRSC SWE / Depth</span>
-                      <span className="raw-value">
-                        {Number.isFinite(Number(safetyData.snowpack?.nohrsc?.sweIn)) || Number.isFinite(Number(safetyData.snowpack?.nohrsc?.snowDepthIn))
-                          ? `${nohrscSweDisplay !== 'N/A' ? nohrscSweDisplay : 'SWE N/A'} • ${nohrscDepthDisplay !== 'N/A' ? `${nohrscDepthDisplay} depth` : 'Depth N/A'}`
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    {safetyData.snowpack?.cdec && (
-                      <li>
-                        <span className="raw-key">CDEC SWE / Depth</span>
-                        <span className="raw-value">
-                          {Number.isFinite(Number(safetyData.snowpack.cdec.sweIn)) || Number.isFinite(Number(safetyData.snowpack.cdec.snowDepthIn))
-                            ? `${cdecSweDisplay !== 'N/A' ? cdecSweDisplay : 'SWE N/A'} • ${cdecDepthDisplay !== 'N/A' ? `${cdecDepthDisplay} depth` : 'Depth N/A'} (${safetyData.snowpack.cdec.stationName || safetyData.snowpack.cdec.stationCode})`
-                            : 'N/A'}
-                        </span>
-                      </li>
-                    )}
-                    <li>
-                      <span className="raw-key">Snowpack Source Links</span>
-                      <span className={`raw-value ${safeSnotelLink || safeNohrscLink || safeCdecLink ? 'raw-value-stack' : ''}`}>
-                        {safeSnotelLink || safeNohrscLink || safeCdecLink ? (
-                          <>
-                            {safeSnotelLink ? (
-                              <span>
-                                <a href={safeSnotelLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                  NRCS AWDB / SNOTEL
-                                </a>
-                              </span>
-                            ) : null}
-                            {safeNohrscLink ? (
-                              <span>
-                                <a href={safeNohrscLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                  NOAA NOHRSC Snow Analysis
-                                </a>
-                              </span>
-                            ) : null}
-                            {safeCdecLink ? (
-                              <span>
-                                <a href={safeCdecLink} target="_blank" rel="noreferrer" className="raw-link-value">
-                                  CDEC ({safetyData.snowpack?.cdec?.stationCode})
-                                </a>
-                              </span>
-                            ) : null}
-                          </>
-                        ) : (
-                          'N/A'
-                        )}
-                      </span>
-                    </li>
-                  </ul>
-                </section>
-
-                <section className="raw-group">
-                  <h4>Report Output Fields</h4>
-                  <ul className="raw-kv-list">
-                    <li>
-                      <span className="raw-key">Safety Score</span>
-                      <span className="raw-value">{safetyData.safety.score}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Score Confidence</span>
-                      <span className="raw-value">
-                        {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}%` : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Primary Hazard</span>
-                      <span className="raw-value">{safetyData.safety.primaryHazard || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Decision Level</span>
-                      <span className="raw-value">{decision?.level || 'N/A'}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Blocker Count</span>
-                      <span className="raw-value">{decision?.blockers.length || 0}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Caution Count</span>
-                      <span className="raw-value">{decision?.cautions.length || 0}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Applied Risk Factors</span>
-                      <span className="raw-value">{safetyData.safety.factors?.length || 0}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Risk Groups</span>
-                      <span className="raw-value">{Object.keys(safetyData.safety.groupImpacts || {}).length}</span>
-                    </li>
-                    <li>
-                      <span className="raw-key">Safety Sources</span>
-                      <span className={`raw-value ${safetyData.safety.sourcesUsed && safetyData.safety.sourcesUsed.length > 0 ? 'raw-value-stack' : ''}`}>
-                        {safetyData.safety.sourcesUsed && safetyData.safety.sourcesUsed.length > 0
-                          ? safetyData.safety.sourcesUsed.map((source, idx) => <span key={`${source}-${idx}`}>{source}</span>)
-                          : 'N/A'}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="raw-key">SAT One-Liner Length</span>
-                      <span className="raw-value">{satelliteConditionLine.length || 0} chars</span>
-                    </li>
-                  </ul>
-                </section>
-              </div>
-
-              <details className="raw-json-details">
-                <summary>Open full JSON payload used to build this report</summary>
-                <pre className="raw-json-pre">{rawReportPayload}</pre>
-              </details>
-            </details>
-            </div>
-
-        </div>
-      )}
-
-      <div className="planner-footer-stack">
-        <AppDisclaimer compact />
-        {hasObjective && safetyData && !loading && !error && decision && (
-          <div className="footer">
-            Generated by Backcountry Conditions • {formatGeneratedAt()} • {APP_CREDIT_TEXT}
-          </div>
-        )}
-      </div>
-    </div>
+    <PlannerView
+      // Shell / layout
+      appShellClassName={appShellClassName}
+      isViewPending={isViewPending}
+      // Navigation
+      navigateToView={navigateToView}
+      openTripToolView={openTripToolView}
+      jumpToPlannerSection={jumpToPlannerSection}
+      // Search box
+      searchWrapperRef={searchWrapperRef}
+      searchInputRef={searchInputRef}
+      searchQuery={searchQuery}
+      trimmedSearchQuery={trimmedSearchQuery}
+      showSuggestions={showSuggestions}
+      searchLoading={searchLoading}
+      suggestions={suggestions}
+      activeSuggestionIndex={activeSuggestionIndex}
+      parsedTypedCoordinates={parsedTypedCoordinates}
+      handleInputChange={handleInputChange}
+      handleFocus={handleFocus}
+      handleSearchKeyDown={handleSearchKeyDown}
+      handleSearchSubmit={handleSearchSubmit}
+      handleSearchClear={handleSearchClear}
+      handleUseTypedCoordinates={handleUseTypedCoordinates}
+      selectSuggestion={selectSuggestion}
+      setActiveSuggestionIndex={setActiveSuggestionIndex}
+      // Header controls
+      hasObjective={hasObjective}
+      objectiveIsSaved={objectiveIsSaved}
+      handleToggleSaveObjective={handleToggleSaveObjective}
+      copiedLink={copiedLink}
+      handleCopyLink={handleCopyLink}
+      // Map
+      position={position}
+      activeBasemap={activeBasemap}
+      preferences={preferences}
+      updateObjectivePosition={updateObjectivePosition}
+      mapFocusNonce={mapFocusNonce}
+      mapStyle={mapStyle}
+      setMapStyle={setMapStyle}
+      locatingUser={locatingUser}
+      handleUseCurrentLocation={handleUseCurrentLocation}
+      handleRecenterMap={handleRecenterMap}
+      safetyData={safetyData}
+      mapElevationChipTitle={mapElevationChipTitle}
+      mapElevationLabel={mapElevationLabel}
+      mapWeatherEmoji={mapWeatherEmoji}
+      mapWeatherTempLabel={mapWeatherTempLabel}
+      mapWeatherConditionLabel={mapWeatherConditionLabel}
+      mapWeatherChipTitle={mapWeatherChipTitle}
+      // Map actions / plan controls
+      mobileMapControlsExpanded={mobileMapControlsExpanded}
+      setMobileMapControlsExpanded={setMobileMapControlsExpanded}
+      forecastDate={forecastDate}
+      todayDate={todayDate}
+      maxForecastDate={maxForecastDate}
+      handleDateChange={handleDateChange}
+      startLabel={startLabel}
+      alpineStartTime={alpineStartTime}
+      handlePlannerTimeChange={handlePlannerTimeChange}
+      setAlpineStartTime={setAlpineStartTime}
+      travelWindowHoursDraft={travelWindowHoursDraft}
+      handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
+      handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
+      objectiveTimezone={objectiveTimezone}
+      handleUseNowConditions={handleUseNowConditions}
+      loading={loading}
+      handleRetryFetch={handleRetryFetch}
+      satelliteConditionLine={satelliteConditionLine}
+      timezoneMismatch={timezoneMismatch}
+      deviceTimezone={deviceTimezone}
+      // Decision / safety
+      decision={decision}
+      avalancheRelevant={avalancheRelevant}
+      // Freshness warning
+      hasFreshnessWarning={hasFreshnessWarning}
+      freshnessWarningSummary={freshnessWarningSummary}
+      // Score card
+      getScoreColor={getScoreColor}
+      forecastLeadHoursDisplay={forecastLeadHoursDisplay}
+      objectiveName={objectiveName}
+      displayStartTime={displayStartTime}
+      returnTimeFormatted={returnTimeFormatted}
+      returnExtendsPastMidnight={returnExtendsPastMidnight}
+      formatClockForStyle={formatClockForStyle}
+      error={error}
+      aiBriefNarrative={aiBriefNarrative}
+      aiBriefError={aiBriefError}
+      aiBriefLoading={aiBriefLoading}
+      handleRequestAiBriefAction={handleRequestAiBriefAction}
+      // Route analysis
+      routeSuggestions={routeSuggestions}
+      routeAnalysis={routeAnalysis}
+      routeLoading={routeLoading}
+      routeError={routeError}
+      fetchRouteSuggestions={fetchRouteSuggestions}
+      fetchRouteAnalysis={fetchRouteAnalysis}
+      customRouteName={customRouteName}
+      setCustomRouteName={setCustomRouteName}
+      setRouteSuggestions={setRouteSuggestions}
+      setRouteError={setRouteError}
+      reportCardOrder={reportCardOrder}
+      travelWindowHours={travelWindowHours}
+      formatTempDisplay={formatTempDisplay}
+      formatWindDisplay={formatWindDisplay}
+      formatElevationDisplay={formatElevationDisplay}
+      formatElevationDeltaDisplay={formatElevationDeltaDisplay}
+      // Visibility banner
+      weatherVisibilityRisk={weatherVisibilityRisk}
+      weatherVisibilityPill={weatherVisibilityPill}
+      weatherVisibilityDetail={weatherVisibilityDetail}
+      // Decision Gate card
+      decisionActionLine={decisionActionLine}
+      fieldBriefPrimaryReason={fieldBriefPrimaryReason}
+      fieldBriefTopRisks={fieldBriefTopRisks}
+      rainfall24hSeverityClass={rainfall24hSeverityClass}
+      rainfall24hDisplay={rainfall24hDisplay}
+      decisionPassingChecksCount={decisionPassingChecksCount}
+      decisionFailingChecks={decisionFailingChecks}
+      decisionKeyDrivers={decisionKeyDrivers}
+      orderedCriticalChecks={orderedCriticalChecks}
+      betterDaySuggestions={betterDaySuggestions}
+      betterDaySuggestionsLoading={betterDaySuggestionsLoading}
+      betterDaySuggestionsNote={betterDaySuggestionsNote}
+      localizeUnitText={localizeUnitText}
+      formatIsoDateLabel={formatIsoDateLabel}
+      setForecastDate={setForecastDate}
+      setError={setError}
+      // Travel Window card
+      peakCriticalWindow={peakCriticalWindow}
+      travelWindowInsights={travelWindowInsights}
+      travelWindowRows={travelWindowRows}
+      formatTravelWindowSpan={formatTravelWindowSpan}
+      windThresholdDisplay={windThresholdDisplay}
+      feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+      activeTravelThresholdPreset={activeTravelThresholdPreset}
+      onApplyTravelThresholdPreset={handleApplyTravelThresholdPreset}
+      travelThresholdEditorOpen={travelThresholdEditorOpen}
+      setTravelThresholdEditorOpen={setTravelThresholdEditorOpen}
+      windUnitLabel={windUnitLabel}
+      windThresholdMin={windThresholdMin}
+      windThresholdMax={windThresholdMax}
+      windThresholdStep={windThresholdStep}
+      maxWindGustDraft={maxWindGustDraft}
+      handleWindThresholdDisplayChange={handleWindThresholdDisplayChange}
+      handleWindThresholdDisplayBlur={handleWindThresholdDisplayBlur}
+      maxPrecipChanceDraft={maxPrecipChanceDraft}
+      handleMaxPrecipChanceDraftChange={handleMaxPrecipChanceDraftChange}
+      handleMaxPrecipChanceDraftBlur={handleMaxPrecipChanceDraftBlur}
+      tempUnitLabel={tempUnitLabel}
+      feelsLikeThresholdMin={feelsLikeThresholdMin}
+      feelsLikeThresholdMax={feelsLikeThresholdMax}
+      feelsLikeThresholdStep={feelsLikeThresholdStep}
+      minFeelsLikeDraft={minFeelsLikeDraft}
+      handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
+      handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+      travelWindowSummary={travelWindowSummary}
+      criticalWindow={criticalWindow}
+      travelWindowExpanded={travelWindowExpanded}
+      setTravelWindowExpanded={setTravelWindowExpanded}
+      visibleCriticalWindowRows={visibleCriticalWindowRows}
+      travelWindowHoursLabel={travelWindowHoursLabel}
+      // Critical Checks card
+      topCriticalAttentionChecks={topCriticalAttentionChecks}
+      criticalCheckFailCount={criticalCheckFailCount}
+      describeFailedCriticalCheck={describeFailedCriticalCheck}
+      // Score Trace card
+      dayOverDay={dayOverDay}
+      shouldRenderRankedCard={shouldRenderRankedCard}
+      // Weather card
+      weatherCardTemp={weatherCardTemp}
+      weatherCardWind={weatherCardWind}
+      weatherCardFeelsLike={weatherCardFeelsLike}
+      weatherCardWithEmoji={weatherCardWithEmoji}
+      weatherCardPrecip={weatherCardPrecip}
+      weatherCardHumidity={weatherCardHumidity}
+      weatherCardDewPoint={weatherCardDewPoint}
+      weatherCardDescription={weatherCardDescription}
+      weatherCardDisplayTime={weatherCardDisplayTime}
+      weatherForecastPeriodLabel={weatherForecastPeriodLabel}
+      weatherPreviewActive={weatherPreviewActive}
+      weatherPressureTrendSummary={weatherPressureTrendSummary}
+      pressureTrendDirection={pressureTrendDirection}
+      pressureDeltaLabel={pressureDeltaLabel}
+      pressureRangeLabel={pressureRangeLabel}
+      weatherHourQuickOptions={weatherHourQuickOptions}
+      selectedWeatherHourIndex={selectedWeatherHourIndex}
+      handleWeatherHourSelect={handleWeatherHourSelect}
+      weatherConditionEmojiValue={weatherConditionEmoji}
+      weatherTrendChartData={weatherTrendChartData}
+      weatherTrendHasData={weatherTrendHasData}
+      weatherTrendMetric={weatherTrendMetric}
+      weatherTrendMetricLabel={weatherTrendMetricLabel}
+      weatherTrendMetricOptions={weatherTrendMetricOptions}
+      weatherTrendLineColor={weatherTrendLineColor}
+      weatherTrendYAxisDomain={weatherTrendYAxisDomain}
+      weatherTrendTickFormatter={weatherTrendTickFormatter}
+      formatWeatherTrendValue={formatWeatherTrendValue}
+      onTrendMetricChange={(key) => setWeatherTrendMetric(key as typeof weatherTrendMetric)}
+      handleWeatherTrendChartClick={handleWeatherTrendChartClick}
+      selectedWeatherHourValue={selectedWeatherHour?.value || null}
+      formattedWind={formatWindDisplay(weatherCardWind)}
+      formattedGust={formatWindDisplay(weatherCardGust)}
+      weatherCardPressureLabel={weatherCardPressureLabel}
+      weatherPressureContextLine={weatherPressureContextLine}
+      weatherCardWindDirection={weatherCardWindDirection}
+      weatherCardCloudCoverLabel={weatherCardCloudCoverLabel}
+      weatherVisibilityScoreLabel={weatherVisibilityScoreLabel}
+      weatherVisibilityActiveWindowText={weatherVisibilityActiveWindowText}
+      weatherVisibilityScoreMeaning={weatherVisibilityScoreMeaning}
+      weatherVisibilityContextLine={weatherVisibilityContextLine}
+      targetElevationInput={targetElevationInput}
+      handleTargetElevationChange={handleTargetElevationChange}
+      handleTargetElevationStep={handleTargetElevationStep}
+      canDecreaseTargetElevation={canDecreaseTargetElevation}
+      hasTargetElevation={hasTargetElevation}
+      targetElevationForecast={targetElevationForecast}
+      targetElevationFt={targetElevationFt}
+      TARGET_ELEVATION_STEP_FEET={TARGET_ELEVATION_STEP_FEET}
+      elevationUnitLabel={elevationUnitLabel}
+      elevationForecastBands={elevationForecastBands}
+      objectiveElevationFt={objectiveElevationFt}
+      safeWeatherLink={safeWeatherLink}
+      weatherLinkCta={weatherLinkCta}
+      weatherSourceDisplay={weatherSourceDisplay}
+      formatPubTime={formatPubTime}
+      weatherTrendTempRange={weatherTrendTempRange}
+      getDangerLevelClass={getDangerLevelClass}
+      getDangerText={getDangerText}
+      // Heat Risk card
+      heatRiskGuidance={heatRiskGuidance}
+      heatRiskReasons={heatRiskReasons}
+      heatRiskMetrics={heatRiskMetrics}
+      heatRiskPillClass={heatRiskPillClass}
+      heatRiskLabel={heatRiskLabel}
+      lowerTerrainHeatLabel={lowerTerrainHeatLabel}
+      // Terrain card
+      terrainConditionDetails={terrainConditionDetails}
+      terrainConditionPillClass={terrainConditionPillClass}
+      rainfall12hDisplay={rainfall12hDisplay}
+      rainfall48hDisplay={rainfall48hDisplay}
+      snowfall12hDisplay={snowfall12hDisplay}
+      snowfall24hDisplay={snowfall24hDisplay}
+      snowfall48hDisplay={snowfall48hDisplay}
+      snowfall12hIn={snowfall12hIn}
+      snowfall24hIn={snowfall24hIn}
+      snowfall48hIn={snowfall48hIn}
+      // Rainfall card
+      precipInsightLine={precipInsightLine}
+      expectedPrecipSummaryLine={expectedPrecipSummaryLine}
+      expectedTravelWindowHours={expectedTravelWindowHours}
+      expectedRainWindowDisplay={expectedRainWindowDisplay}
+      expectedSnowWindowIn={expectedSnowWindowIn}
+      expectedSnowWindowDisplay={expectedSnowWindowDisplay}
+      rainfallExpected={rainfallExpected}
+      precipitationDisplayTimezone={precipitationDisplayTimezone}
+      expectedPrecipNoteLine={expectedPrecipNoteLine}
+      rainfallModeLabel={rainfallModeLabel}
+      rainfallPayload={rainfallPayload}
+      rainfallNoteLine={rainfallNoteLine}
+      safeRainfallLink={safeRainfallLink}
+      formatForecastPeriodLabel={formatForecastPeriodLabel}
+      // Wind Loading card
+      windLoadingHintsRelevant={windLoadingHintsRelevant}
+      windLoadingLevel={windLoadingLevel}
+      windLoadingConfidence={windLoadingConfidence}
+      windLoadingPillClass={windLoadingPillClass}
+      windLoadingActiveWindowLabel={windLoadingActiveWindowLabel}
+      windLoadingActiveHoursDetail={windLoadingActiveHoursDetail}
+      resolvedWindDirectionSource={resolvedWindDirectionSource}
+      trendAgreementRatio={trendAgreementRatio}
+      windLoadingElevationFocus={windLoadingElevationFocus}
+      leewardAspectHints={leewardAspectHints}
+      secondaryWindAspects={secondaryWindAspects}
+      windGustMph={windGustMph}
+      windLoadingNotes={windLoadingNotes}
+      aspectOverlapProblems={aspectOverlapProblems}
+      windLoadingSummary={windLoadingSummary}
+      windLoadingActionLine={windLoadingActionLine}
+      avalancheUnknown={avalancheUnknown}
+      // Source Freshness card
+      sourceFreshnessRows={sourceFreshnessRows}
+      reportGeneratedAt={reportGeneratedAt}
+      avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
+      formatAgeFromNow={formatAgeFromNow}
+      // NWS Alerts card
+      nwsAlertCount={nwsAlertCount}
+      nwsTotalAlertCount={nwsTotalAlertCount}
+      nwsTopAlerts={nwsTopAlerts}
+      // Air Quality card
+      airQualityPillClassFn={airQualityPillClass}
+      airQualityFutureNotApplicable={airQualityFutureNotApplicable}
+      // Snowpack card
+      snowpackInsights={snowpackInsights}
+      snotelDistanceDisplay={snotelDistanceDisplay}
+      snotelDepthDisplay={snotelDepthDisplay}
+      snotelSweDisplay={snotelSweDisplay}
+      nohrscDepthDisplay={nohrscDepthDisplay}
+      nohrscSweDisplay={nohrscSweDisplay}
+      cdecDepthDisplay={cdecDepthDisplay}
+      cdecSweDisplay={cdecSweDisplay}
+      cdecDistanceDisplay={cdecDistanceDisplay}
+      snowpackPillClass={snowpackPillClass}
+      snowpackStatusLabel={snowpackStatusLabel}
+      snowpackHistoricalStatusLabel={snowpackHistoricalStatusLabel}
+      snowpackHistoricalPillClass={snowpackHistoricalPillClass}
+      snowpackHistoricalComparisonLine={snowpackHistoricalComparisonLine}
+      snowpackInterpretation={snowpackInterpretation}
+      snowpackTakeaways={snowpackTakeaways}
+      snowfallWindowSummary={snowfallWindowSummary}
+      rainfallWindowSummary={rainfallWindowSummary}
+      snowpackObservationContext={snowpackObservationContext}
+      safeSnotelLink={safeSnotelLink}
+      safeNohrscLink={safeNohrscLink}
+      safeCdecLink={safeCdecLink}
+      // Fire Risk card
+      fireRiskLabel={fireRiskLabel}
+      fireRiskPillClass={fireRiskPillClass}
+      fireRiskAlerts={fireRiskAlerts}
+      // Plan Snapshot card
+      sunriseMinutesForPlan={sunriseMinutesForPlan}
+      sunsetMinutesForPlan={sunsetMinutesForPlan}
+      startMinutesForPlan={startMinutesForPlan}
+      returnMinutes={returnMinutes}
+      daylightRemainingFromStartLabel={daylightRemainingFromStartLabel}
+      // Gear card
+      gearRecommendations={gearRecommendations}
+      // Avalanche forecast card
+      overallAvalancheLevel={overallAvalancheLevel}
+      avalancheNotApplicableReason={avalancheNotApplicableReason}
+      avalancheElevationRows={avalancheElevationRows}
+      safeAvalancheLink={safeAvalancheLink}
+      normalizeDangerLevel={normalizeDangerLevel}
+      getDangerGlyph={getDangerGlyph}
+      summarizeText={summarizeText}
+      toPlainText={toPlainText}
+      // Deep Dive card
+      safeShareLink={safeShareLink}
+      weatherFieldSources={weatherFieldSources}
+      weatherCloudCover={weatherCloudCover}
+      weatherBlended={!!safetyData?.weather.sourceDetails?.blended}
+      rawReportPayload={rawReportPayload}
+      copiedRawPayload={copiedRawPayload}
+      handleCopyRawPayload={handleCopyRawPayload}
+      // Footer
+      formatGeneratedAt={formatGeneratedAt}
+    />
   );
+
 }
 
 export default App;
+

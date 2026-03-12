@@ -2,7 +2,7 @@ import type { ChangeEventHandler, Dispatch, FocusEvent, FocusEventHandler, SetSt
 import { formatClockForStyle } from '../../../app/core';
 import type { CriticalRiskLevel, TimeStyle, TravelWindowInsights, TravelWindowRow, TravelWindowSpan } from '../../../app/types';
 
-interface CriticalWindowRow {
+export interface CriticalWindowRow {
   time: string;
   level: CriticalRiskLevel;
   reasons: string[];

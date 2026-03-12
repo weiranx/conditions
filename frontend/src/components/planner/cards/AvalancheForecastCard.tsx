@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import type { AvalancheElevationBand, SafetyData } from '../../../app/types';
+import type { SafetyData } from '../../../app/types';
 import {
   getLocationEntries,
   parseLikelihoodRange,
@@ -25,7 +25,7 @@ const AVY_PROBLEM_DESCRIPTIONS: Record<string, string> = {
 interface AvalancheElevationRow {
   key: string;
   label: string;
-  rating?: AvalancheElevationBand;
+  rating?: number | null;
 }
 
 interface AvalancheForecastCardProps {
@@ -39,7 +39,7 @@ interface AvalancheForecastCardProps {
   safeAvalancheLink: string | null;
   getDangerLevelClass: (level?: number) => string;
   getDangerText: (level: number) => string;
-  normalizeDangerLevel: (level?: number) => number;
+  normalizeDangerLevel: (level: number | undefined) => number;
   getDangerGlyph: (level: number) => string;
   summarizeText: (text: string | undefined, maxLength?: number) => string;
   toPlainText: (value: string) => string;
@@ -116,16 +116,16 @@ export function AvalancheForecastCard({
                   <div className={`avy-danger-pyramid ${getDangerLevelClass(overallAvalancheLevel ?? undefined)}`} aria-hidden="true" />
                   <div className="danger-rows">
                     {avalancheElevationRows.map((row) => {
-                      const rowLevel = normalizeDangerLevel(row.rating?.level);
-                      const rowText = row.rating?.label || getDangerText(rowLevel);
+                      const rowLevel = normalizeDangerLevel(row.rating ?? undefined);
+                      const rowText = getDangerText(rowLevel ?? 0);
                       return (
-                        <div key={row.key} className={`danger-row ${getDangerLevelClass(rowLevel)}`}>
+                        <div key={row.key} className={`danger-row ${getDangerLevelClass(rowLevel ?? undefined)}`}>
                           <span className="danger-row-band">{row.label}</span>
                           <strong className="danger-row-text">
-                            {rowLevel} - {rowText}
+                            {rowLevel ?? 0} - {rowText}
                           </strong>
-                          <span className={`danger-level-diamond ${getDangerLevelClass(rowLevel)}`}>
-                            <span>{getDangerGlyph(rowLevel)}</span>
+                          <span className={`danger-level-diamond ${getDangerLevelClass(rowLevel ?? undefined)}`}>
+                            <span>{getDangerGlyph(rowLevel ?? 0)}</span>
                           </span>
                         </div>
                       );

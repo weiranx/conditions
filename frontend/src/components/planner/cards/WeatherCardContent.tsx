@@ -16,7 +16,7 @@ interface TrendMetricOption {
   label: string;
 }
 
-interface TargetElevationForecast {
+export interface TargetElevationForecast {
   deltaFt: number;
   temp: number;
   feelsLike: number;

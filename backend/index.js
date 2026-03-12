@@ -1,5 +1,3 @@
-const { point } = require('@turf/helpers');
-const booleanPointInPolygon = require('@turf/boolean-point-in-polygon').default;
 const { createApp } = require('./src/server/create-app');
 const { startServer: startBackendServer } = require('./src/server/start-server');
 const {
@@ -16,62 +14,40 @@ const {
 const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout } = require('./src/utils/http-client');
 const {
   parseWindMph,
-  estimateWindGustFromWindSpeed,
   inferWindGustFromPeriods,
   normalizeWindDirection,
   findNearestWindDirection,
-  findNearestCardinalFromDegreeSeries,
 } = require('./src/utils/wind');
 const {
   parseIsoTimeToMs,
   parseIsoTimeToMsWithReference,
   parseStartClock,
   buildPlannedStartIso,
-  findClosestTimeIndex,
   parseClockToMinutes,
   formatMinutesToClock,
-  parseIsoClockMinutes,
   clampTravelWindowHours,
-  normalizeUtcIsoTimestamp,
 } = require('./src/utils/time');
 const {
   computeFeelsLikeF,
-  celsiusToF,
   normalizeNoaaDewPointF,
-  normalizePressureHpa,
   normalizeNoaaPressureHpa,
-  clampPercent,
-  inferNoaaCloudCoverFromIcon,
-  inferNoaaCloudCoverFromForecastText,
   resolveNoaaCloudCover,
-  toFiniteNumberOrNull,
 } = require('./src/utils/weather-normalizers');
 const { buildVisibilityRisk, buildElevationForecastBands } = require('./src/utils/visibility-risk');
 const {
-  isWeatherFieldMissing,
   blendNoaaWeatherWithFallback,
   dateKeyInTimeZone,
   buildTemperatureContext24h,
   hourLabelFromIso,
   createWeatherDataService,
 } = require('./src/utils/weather-data');
-const { normalizeHttpUrl } = require('./src/utils/url-utils');
 const {
-  ALERT_SEVERITY_RANK,
-  normalizeAlertSeverity,
-  formatAlertSeverity,
-  getHigherSeverity,
-  normalizeNwsAlertText,
-  normalizeNwsAreaList,
-  classifyUsAqi,
   createUnavailableAirQualityData,
   createUnavailableAlertsData,
   resolveNwsAlertSourceLink,
   createAlertsService,
 } = require('./src/utils/alerts');
 const {
-  mmToInches,
-  cmToInches,
   createUnavailableRainfallData,
   createPrecipitationService,
 } = require('./src/utils/precipitation');
@@ -103,11 +79,37 @@ const { createCache, normalizeCoordKey, normalizeCoordDateKey } = require('./src
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
+// Extracted modules
+const { calculateSafetyScore } = require('./src/utils/safety-score');
+const {
+  AVALANCHE_UNKNOWN_MESSAGE,
+  AVALANCHE_OFF_SEASON_MESSAGE,
+  AVALANCHE_LEVEL_LABELS,
+  createUnknownAvalancheData,
+  evaluateSnowpackSignal,
+  evaluateAvalancheRelevance,
+  cleanForecastText,
+  pickBestBottomLine,
+  normalizeExternalLink,
+  resolveAvalancheCenterLink,
+  applyDerivedOverallAvalancheDanger,
+  deriveOverallDangerLevelFromElevations,
+} = require('./src/utils/avalanche-orchestration');
+const {
+  FT_PER_METER,
+  haversineKm,
+  formatIsoDateUtc,
+  shiftIsoDateUtc,
+  findMatchingAvalancheZone,
+  createElevationService,
+} = require('./src/utils/geo');
+
 const avyLog = (...args) => {
   if (DEBUG_AVY) {
     logger.debug(args.length === 1 ? { msg: args[0] } : { data: args }, 'avy-debug');
   }
 };
+
 const app = createApp({
   isProduction: IS_PRODUCTION,
   corsAllowlist: CORS_ALLOWLIST,
@@ -115,1135 +117,39 @@ const app = createApp({
   rateLimitMaxRequests: RATE_LIMIT_MAX_REQUESTS,
 });
 
-const AVALANCHE_UNKNOWN_MESSAGE =
-  "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.";
-const AVALANCHE_OFF_SEASON_MESSAGE =
-  "Local avalanche center is not currently issuing forecasts for this zone (likely off-season). This does not imply zero risk; assess snow and terrain conditions directly.";
-const AVALANCHE_LEVEL_LABELS = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'];
-const FT_PER_METER = 3.28084;
-const MAX_REASONABLE_ELEVATION_FT = 20000;
-
-const createUnknownAvalancheData = (coverageStatus = "no_center_coverage") => {
-  const isTemporarilyUnavailable = coverageStatus === "temporarily_unavailable";
-  const isOffSeason = coverageStatus === "no_active_forecast";
-  return {
-    center: isTemporarilyUnavailable
-      ? "Avalanche Data Unavailable"
-      : isOffSeason
-        ? "Avalanche Forecast Off-Season"
-        : "No Avalanche Center Coverage",
-    center_id: null,
-    zone: null,
-    risk: "Unknown",
-    dangerLevel: 0,
-    dangerUnknown: true,
-    coverageStatus,
-    link: null,
-    bottomLine: isTemporarilyUnavailable
-      ? "Avalanche center data could not be retrieved right now. Avalanche terrain can still be dangerous. Treat risk as unknown and use conservative terrain choices."
-      : isOffSeason
-        ? AVALANCHE_OFF_SEASON_MESSAGE
-      : AVALANCHE_UNKNOWN_MESSAGE,
-    problems: [],
-    publishedTime: null,
-    expiresTime: null,
-    generatedTime: null,
-    elevations: null,
-    relevant: true,
-    relevanceReason: null,
-  };
-};
-
-
+const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 
 const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
-
-
-const AVALANCHE_WINTER_MONTHS = new Set([10, 11, 0, 1, 2, 3]); // Nov-Apr
-const AVALANCHE_SHOULDER_MONTHS = new Set([4, 9]); // May, Oct
-const AVALANCHE_MATERIAL_SNOW_DEPTH_IN = 6;
-const AVALANCHE_MATERIAL_SWE_IN = 1.5;
-const AVALANCHE_MEASURABLE_SNOW_DEPTH_IN = 2;
-const AVALANCHE_MEASURABLE_SWE_IN = 0.5;
-
-const parseForecastMonth = (dateValue) => {
-  if (typeof dateValue !== 'string' || !dateValue.trim()) {
-    return null;
-  }
-
-  const match = dateValue.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    return null;
-  }
-
-  const month = parseInt(match[2], 10) - 1;
-  return Number.isFinite(month) && month >= 0 && month <= 11 ? month : null;
-};
-
-const parseFiniteNumber = (value) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
-
-const evaluateSnowpackSignal = (snowpackData) => {
-  if (!snowpackData || typeof snowpackData !== 'object') {
-    return { hasSignal: false, hasNoSignal: false, hasObservedPresence: false, reason: null };
-  }
-
-  const snotel = snowpackData?.snotel || null;
-  const nohrsc = snowpackData?.nohrsc || null;
-  const cdec = snowpackData?.cdec || null;
-  const snotelDistanceKm = parseFiniteNumber(snotel?.distanceKm);
-  const snotelNearObjective = snotelDistanceKm === null || snotelDistanceKm <= 120;
-
-  const depthSamples = [];
-  const sweSamples = [];
-
-  const snotelDepthIn = parseFiniteNumber(snotel?.snowDepthIn);
-  const snotelSweIn = parseFiniteNumber(snotel?.sweIn);
-  if (snotelNearObjective && snotelDepthIn !== null) depthSamples.push(snotelDepthIn);
-  if (snotelNearObjective && snotelSweIn !== null) sweSamples.push(snotelSweIn);
-
-  const nohrscDepthIn = parseFiniteNumber(nohrsc?.snowDepthIn);
-  const nohrscSweIn = parseFiniteNumber(nohrsc?.sweIn);
-  if (nohrscDepthIn !== null) depthSamples.push(nohrscDepthIn);
-  if (nohrscSweIn !== null) sweSamples.push(nohrscSweIn);
-
-  const cdecDistanceKm = parseFiniteNumber(cdec?.distanceKm);
-  const cdecNearObjective = cdecDistanceKm === null || cdecDistanceKm <= 120;
-  const cdecDepthIn = parseFiniteNumber(cdec?.snowDepthIn);
-  const cdecSweIn = parseFiniteNumber(cdec?.sweIn);
-  if (cdecNearObjective && cdecDepthIn !== null) depthSamples.push(cdecDepthIn);
-  if (cdecNearObjective && cdecSweIn !== null) sweSamples.push(cdecSweIn);
-
-  const hasObservations = depthSamples.length > 0 || sweSamples.length > 0;
-  if (!hasObservations) {
-    return { hasSignal: false, hasNoSignal: false, hasObservedPresence: false, reason: null };
-  }
-
-  const maxDepthIn = depthSamples.length ? Math.max(...depthSamples) : null;
-  const maxSweIn = sweSamples.length ? Math.max(...sweSamples) : null;
-
-  const hasMaterialSnowpackSignal =
-    (maxDepthIn !== null && maxDepthIn >= AVALANCHE_MATERIAL_SNOW_DEPTH_IN) ||
-    (maxSweIn !== null && maxSweIn >= AVALANCHE_MATERIAL_SWE_IN);
-  const hasModerateSnowpackPresence =
-    (maxDepthIn !== null && maxDepthIn >= AVALANCHE_MEASURABLE_SNOW_DEPTH_IN) ||
-    (maxSweIn !== null && maxSweIn >= AVALANCHE_MEASURABLE_SWE_IN);
-
-  const hasLowSnowpackSignal =
-    (maxDepthIn !== null && maxDepthIn <= 1) &&
-    (maxSweIn === null || maxSweIn <= 0.25);
-
-  if (hasMaterialSnowpackSignal) {
-    const parts = [];
-    if (maxDepthIn !== null) parts.push(`depth ~${maxDepthIn.toFixed(1)} in`);
-    if (maxSweIn !== null) parts.push(`SWE ~${maxSweIn.toFixed(1)} in`);
-    return {
-      hasSignal: true,
-      hasMaterialSignal: true,
-      hasMeasurablePresence: true,
-      hasNoSignal: false,
-      hasObservedPresence: true,
-      reason: `Snowpack Snapshot shows material snowpack (${parts.join(', ')}).`,
-    };
-  }
-
-  if (hasModerateSnowpackPresence) {
-    const parts = [];
-    if (maxDepthIn !== null) parts.push(`depth ~${maxDepthIn.toFixed(1)} in`);
-    if (maxSweIn !== null) parts.push(`SWE ~${maxSweIn.toFixed(1)} in`);
-    return {
-      hasSignal: false,
-      hasMaterialSignal: false,
-      hasMeasurablePresence: true,
-      hasNoSignal: false,
-      hasObservedPresence: true,
-      reason: `Snowpack Snapshot shows measurable snowpack (${parts.join(', ')}), below material avalanche relevance threshold.`,
-    };
-  }
-
-  if (hasLowSnowpackSignal) {
-    const parts = [];
-    if (maxDepthIn !== null) parts.push(`depth ~${maxDepthIn.toFixed(1)} in`);
-    if (maxSweIn !== null) parts.push(`SWE ~${maxSweIn.toFixed(2)} in`);
-    return {
-      hasSignal: false,
-      hasMaterialSignal: false,
-      hasMeasurablePresence: false,
-      hasNoSignal: true,
-      hasObservedPresence: false,
-      reason: `Snowpack Snapshot shows very low snow signal (${parts.join(', ')}).`,
-    };
-  }
-
-  return {
-    hasSignal: false,
-    hasMaterialSignal: false,
-    hasMeasurablePresence: false,
-    hasNoSignal: false,
-    hasObservedPresence: true,
-    reason: 'Snowpack Snapshot is mixed/patchy and below material avalanche threshold; use weather and season context.',
-  };
-};
-
-const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheData, snowpackData, rainfallData }) => {
-  if (avalancheData?.coverageStatus === 'expired_for_selected_start') {
-    return {
-      relevant: true,
-      reason: 'Avalanche product expired before the selected start time; shown as stale guidance only.',
-    };
-  }
-
-  if (avalancheData?.coverageStatus === 'reported' && avalancheData?.staleWarning === '72h') {
-    return {
-      relevant: true,
-      reason: 'Avalanche bulletin is over 72 hours old and should be treated as expired. Check the avalanche center for a current forecast.',
-    };
-  }
-
-  const hasOfficialCoverage = avalancheData?.coverageStatus === 'reported' && avalancheData?.dangerUnknown !== true;
-  if (hasOfficialCoverage) {
-    return {
-      relevant: true,
-      reason: 'Official avalanche center forecast covers this objective.',
-    };
-  }
-
-  const expectedSnowWindowIn = Number(rainfallData?.expected?.snowWindowIn);
-  if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= 6) {
-    return { relevant: true, reason: 'Significant snow accumulation (≥6 in) expected during the travel window — active loading increases avalanche cycle risk.' };
-  }
-
-  const objectiveElevationFt = parseFloat(weatherData?.elevation);
-  const tempF = parseFloat(weatherData?.temp);
-  const feelsLikeF = parseFloat(weatherData?.feelsLike);
-  const precipChance = parseFloat(weatherData?.precipChance);
-  const description = String(weatherData?.description || '').toLowerCase();
-  const month = parseForecastMonth(selectedDate || weatherData?.forecastDate || '');
-  const highLatitude = Math.abs(Number(lat)) >= 42;
-  const highElevation = Number.isFinite(objectiveElevationFt) && objectiveElevationFt >= 8500;
-  const midElevation = Number.isFinite(objectiveElevationFt) && objectiveElevationFt >= 6500;
-  const isWinterWindow = month !== null && (AVALANCHE_WINTER_MONTHS.has(month) || (highElevation && month === 4));
-  const isShoulderWindow = month !== null && !isWinterWindow && AVALANCHE_SHOULDER_MONTHS.has(month);
-  const seasonUnknown = month === null;
-  const snowpackSignal = evaluateSnowpackSignal(snowpackData);
-
-  const hasWintrySignal =
-    /snow|sleet|blizzard|ice|freezing|wintry|graupel|flurr|rime/.test(description) ||
-    (Number.isFinite(tempF) && tempF <= 34) ||
-    (Number.isFinite(feelsLikeF) && feelsLikeF <= 30) ||
-    (Number.isFinite(precipChance) && precipChance >= 50 && Number.isFinite(tempF) && tempF <= 38);
-
-  if (hasWintrySignal) {
-    return {
-      relevant: true,
-      reason: 'Forecast includes wintry signals (snow/ice/freezing conditions).',
-    };
-  }
-
-  if (snowpackSignal.hasMaterialSignal || snowpackSignal.hasSignal) {
-    return {
-      relevant: true,
-      reason: snowpackSignal.reason || 'Snowpack Snapshot indicates meaningful snowpack.',
-    };
-  }
-
-  if (snowpackSignal.hasMeasurablePresence) {
-    if (highElevation && (isWinterWindow || isShoulderWindow || seasonUnknown)) {
-      return {
-        relevant: true,
-        reason: `${snowpackSignal.reason || 'Snowpack Snapshot shows measurable snowpack.'} Elevation/season context keeps avalanche relevance on.`,
-      };
-    }
-    if (midElevation && highLatitude && (isWinterWindow || seasonUnknown)) {
-      return {
-        relevant: true,
-        reason: `${snowpackSignal.reason || 'Snowpack Snapshot shows measurable snowpack.'} Winter latitude/elevation context keeps avalanche relevance on.`,
-      };
-    }
-    return {
-      relevant: false,
-      reason: `${snowpackSignal.reason || 'Snowpack Snapshot shows measurable snowpack.'} Keep monitoring, but avalanche forecasting is de-emphasized until snowpack reaches material levels or wintry signals increase.`,
-    };
-  }
-
-  if (snowpackSignal.hasNoSignal && (
-    avalancheData?.coverageStatus === 'no_active_forecast' ||
-    avalancheData?.coverageStatus === 'no_center_coverage'
-  )) {
-    return {
-      relevant: false,
-      reason:
-        avalancheData?.coverageStatus === 'no_active_forecast'
-          ? `${snowpackSignal.reason || 'Snowpack Snapshot shows low snow signal.'} Local avalanche center is out of forecast season.`
-          : `${snowpackSignal.reason || 'Snowpack Snapshot shows low snow signal.'} No local avalanche center coverage for this objective.`,
-    };
-  }
-
-  if (avalancheData?.coverageStatus === 'no_active_forecast' && !isWinterWindow && !isShoulderWindow) {
-    return {
-      relevant: false,
-      reason: 'Local avalanche center is out of forecast season for this objective/date.',
-    };
-  }
-
-  if (highElevation && (isWinterWindow || isShoulderWindow || seasonUnknown)) {
-    return {
-      relevant: true,
-      reason: 'High-elevation objective has meaningful seasonal snow potential.',
-    };
-  }
-
-  if (midElevation && highLatitude && (isWinterWindow || seasonUnknown)) {
-    return {
-      relevant: true,
-      reason: 'Mid-elevation objective in winter window at snow-prone latitude.',
-    };
-  }
-
-  if (snowpackSignal.hasNoSignal && !isWinterWindow && !isShoulderWindow) {
-    return {
-      relevant: false,
-      reason: snowpackSignal.reason || 'Snowpack Snapshot shows low snow signal for this objective window.',
-    };
-  }
-
-  return {
-    relevant: false,
-    reason: 'Objective appears typically low-snow for the selected season and forecast.',
-  };
-};
-
-
-const calculateSafetyScore = ({
-  weatherData,
-  avalancheData,
-  alertsData,
-  airQualityData,
-  fireRiskData,
-  heatRiskData,
-  rainfallData,
-  selectedDate,
-  solarData,
-  selectedStartClock,
-  selectedTravelWindowHours = null,
-}) => {
-  const explanations = [];
-  const factors = [];
-  const groupCaps = {
-    avalanche: 55,
-    weather: 42,
-    alerts: 24,
-    airQuality: 20,
-    fire: 18,
-  };
-
-  const mapHazardToGroup = (hazard) => {
-    const normalized = String(hazard || '').toLowerCase();
-    if (normalized.includes('avalanche')) return 'avalanche';
-    if (normalized.includes('alert')) return 'alerts';
-    if (normalized.includes('air quality')) return 'airQuality';
-    if (normalized.includes('fire')) return 'fire';
-    return 'weather';
-  };
-
-  const applyFactor = (hazard, impact, message, source) => {
-    if (!Number.isFinite(impact) || impact <= 0) {
-      return;
-    }
-    factors.push({ hazard, impact, source, message, group: mapHazardToGroup(hazard) });
-    explanations.push(message);
-  };
-
-  const weatherDescription = String(weatherData?.description || '').toLowerCase();
-  const wind = parseFloat(weatherData?.windSpeed);
-  const gust = parseFloat(weatherData?.windGust);
-  const precipChance = parseFloat(weatherData?.precipChance);
-  const humidity = parseFloat(weatherData?.humidity);
-  const tempF = parseFloat(weatherData?.temp);
-  const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
-  const isDaytime = weatherData?.isDaytime;
-  const visibilityRiskScoreRaw = Number(weatherData?.visibilityRisk?.score);
-  const visibilityRiskScore = Number.isFinite(visibilityRiskScoreRaw) ? visibilityRiskScoreRaw : null;
-  const visibilityRiskLevel = String(weatherData?.visibilityRisk?.level || '').trim();
-  const visibilityActiveHoursRaw = Number(weatherData?.visibilityRisk?.activeHours);
-  const visibilityActiveHours = Number.isFinite(visibilityActiveHoursRaw) ? visibilityActiveHoursRaw : null;
-
-  const normalizedRisk = String(avalancheData?.risk || '').toLowerCase();
-  const avalancheRelevant = avalancheData?.relevant !== false;
-  const avalancheUnknown = avalancheRelevant
-    && Boolean(avalancheData?.dangerUnknown || normalizedRisk.includes('unknown') || normalizedRisk.includes('no forecast'));
-  const avalancheDangerLevel = Number(avalancheData?.dangerLevel);
-  const avalancheProblemCount = Array.isArray(avalancheData?.problems) ? avalancheData.problems.length : 0;
-
-  const alertsStatus = String(alertsData?.status || '');
-  const alertsCount = Number(alertsData?.activeCount);
-  const highestAlertSeverity = normalizeAlertSeverity(alertsData?.highestSeverity);
-  const alertEvents =
-    Array.isArray(alertsData?.alerts) && alertsData.alerts.length
-      ? [...new Set(alertsData.alerts.map((alert) => alert.event).filter(Boolean))].slice(0, 3)
-      : [];
-
-  const usAqi = Number(airQualityData?.usAqi);
-  const airQualityStatus = String(airQualityData?.status || '').toLowerCase();
-  const airQualityRelevantForScoring = airQualityStatus !== 'not_applicable_future_date';
-  const aqiCategory = String(airQualityData?.category || 'Unknown');
-
-  const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
-  const requestedWindowHours = clampTravelWindowHours(selectedTravelWindowHours, 12);
-  const effectiveTrendWindowHours = Math.max(1, trend.length || requestedWindowHours);
-  const trendTemps = trend.map((item) => Number(item?.temp)).filter(Number.isFinite);
-  const trendGusts = trend.map((item) => Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind)).filter(Number.isFinite);
-  const trendPrecips = trend.map((item) => Number(item?.precipChance)).filter(Number.isFinite);
-  const trendFeelsLike = trend
-    .map((item) => {
-      const rowTemp = Number(item?.temp);
-      const rowWind = Number.isFinite(Number(item?.wind)) ? Number(item.wind) : Number.isFinite(Number(item?.gust)) ? Number(item.gust) : 0;
-      if (!Number.isFinite(rowTemp)) return Number.NaN;
-      return computeFeelsLikeF(rowTemp, Number.isFinite(rowWind) ? rowWind : 0);
-    })
-    .filter(Number.isFinite);
-  const tempRange = trendTemps.length ? Math.max(...trendTemps) - Math.min(...trendTemps) : 0;
-  const trendMinFeelsLike = trendFeelsLike.length ? Math.min(...trendFeelsLike) : feelsLikeF;
-  const trendMaxFeelsLike = trendFeelsLike.length ? Math.max(...trendFeelsLike) : feelsLikeF;
-  const trendPeakPrecip = trendPrecips.length ? Math.max(...trendPrecips) : precipChance;
-  const trendPeakGust = trendGusts.length ? Math.max(...trendGusts) : Number.isFinite(gust) ? gust : 0;
-  const severeWindHours = trend.filter((item) => {
-    const rowWind = Number(item?.wind);
-    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
-    return (Number.isFinite(rowWind) && rowWind >= 30) || (Number.isFinite(rowGust) && rowGust >= 45);
-  }).length;
-  const strongWindHours = trend.filter((item) => {
-    const rowWind = Number(item?.wind);
-    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
-    return (Number.isFinite(rowWind) && rowWind >= 20) || (Number.isFinite(rowGust) && rowGust >= 30);
-  }).length;
-  const highPrecipHours = trendPrecips.filter((value) => value >= 60).length;
-  const moderatePrecipHours = trendPrecips.filter((value) => value >= 40).length;
-  const coldExposureHours = trendFeelsLike.filter((value) => value <= 15).length;
-  const extremeColdHours = trendFeelsLike.filter((value) => value <= 0).length;
-  const heatExposureHours = trendFeelsLike.filter((value) => value >= 85).length;
-
-  // Temporal weighting: early-window hazards penalize more than late-window
-  const trendLen = trend.length;
-  const temporalWeight = (i) => {
-    if (trendLen <= 1) return 1.0;
-    return 1.0 - 0.7 * (i / (trendLen - 1));
-  };
-  let weightedSevereWindHours = 0;
-  let weightedStrongWindHours = 0;
-  let weightedHighPrecipHours = 0;
-  let weightedModeratePrecipHours = 0;
-  let weightedTrendPeakGust = 0;
-  trend.forEach((item, i) => {
-    const w = temporalWeight(i);
-    const rowWind = Number(item?.wind);
-    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
-    if ((Number.isFinite(rowWind) && rowWind >= 30) || (Number.isFinite(rowGust) && rowGust >= 45)) {
-      weightedSevereWindHours += w;
-    }
-    if ((Number.isFinite(rowWind) && rowWind >= 20) || (Number.isFinite(rowGust) && rowGust >= 30)) {
-      weightedStrongWindHours += w;
-    }
-    if (Number.isFinite(rowGust)) {
-      weightedTrendPeakGust = Math.max(weightedTrendPeakGust, rowGust);
-    }
-    const rowPrecip = Number(item?.precipChance);
-    if (Number.isFinite(rowPrecip) && rowPrecip >= 60) {
-      weightedHighPrecipHours += w;
-    }
-    if (Number.isFinite(rowPrecip) && rowPrecip >= 40) {
-      weightedModeratePrecipHours += w;
-    }
-  });
-
-  const rainfallTotals = rainfallData?.totals || {};
-  const rainfallExpected = rainfallData?.expected || {};
-  const rainPast24hIn = Number(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
-  const snowPast24hIn = Number(rainfallTotals?.snowPast24hIn);
-  const expectedRainWindowIn = Number(rainfallExpected?.rainWindowIn);
-  const expectedSnowWindowIn = Number(rainfallExpected?.snowWindowIn);
-  const sunriseMinutes = parseClockToMinutes(solarData?.sunrise);
-  const selectedStartMinutes = parseClockToMinutes(selectedStartClock) ?? parseIsoClockMinutes(weatherData?.forecastStartTime);
-  const isNightBeforeSunrise =
-    isDaytime === false
-    && Number.isFinite(selectedStartMinutes)
-    && Number.isFinite(sunriseMinutes)
-    && selectedStartMinutes < sunriseMinutes;
-  const forecastStartMs = parseIsoTimeToMs(weatherData?.forecastStartTime);
-  const selectedDateMs =
-    typeof selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)
-      ? Date.parse(`${selectedDate}T00:00:00Z`)
-      : null;
-  const forecastLeadHoursRaw =
-    forecastStartMs !== null
-      ? (forecastStartMs - Date.now()) / (1000 * 60 * 60)
-      : Number.isFinite(selectedDateMs)
-        ? (selectedDateMs - Date.now()) / (1000 * 60 * 60)
-        : null;
-  const forecastLeadHours = Number.isFinite(forecastLeadHoursRaw) ? Number(forecastLeadHoursRaw) : null;
-  const alertsRelevantForSelectedTime = forecastLeadHours === null || forecastLeadHours <= 48;
-
-  if (avalancheRelevant) {
-    if (avalancheUnknown) {
-      applyFactor('Avalanche Uncertainty', 16, AVALANCHE_UNKNOWN_MESSAGE, 'Avalanche center coverage');
-    } else if (Number.isFinite(avalancheDangerLevel)) {
-      if (avalancheDangerLevel >= 4 || normalizedRisk.includes('high') || normalizedRisk.includes('extreme')) {
-        applyFactor('Avalanche', 52, 'High avalanche danger reported. Avoid avalanche terrain and steep loaded slopes.', 'Avalanche center forecast');
-      } else if (avalancheDangerLevel === 3 || normalizedRisk.includes('considerable')) {
-        applyFactor('Avalanche', 34, 'Considerable avalanche danger. Conservative terrain selection and strict spacing are required.', 'Avalanche center forecast');
-      } else if (avalancheDangerLevel === 2 || normalizedRisk.includes('moderate')) {
-        applyFactor('Avalanche', 15, 'Moderate avalanche danger. Evaluate snowpack and avoid connected terrain traps.', 'Avalanche center forecast');
-      } else if (avalancheDangerLevel === 1) {
-        applyFactor('Avalanche', 4, 'Low avalanche danger still requires basic avalanche precautions in suspect terrain.', 'Avalanche center forecast');
-      }
-    }
-
-    if (avalancheProblemCount >= 3) {
-      applyFactor(
-        'Avalanche',
-        6,
-        `${avalancheProblemCount} avalanche problems are listed by the center, increasing snowpack complexity.`,
-        'Avalanche problem list',
-      );
-    }
-  }
-
-  const effectiveWind = Math.max(
-    Number.isFinite(wind) ? wind : 0,
-    Number.isFinite(gust) ? gust : 0,
-    weightedTrendPeakGust,
-  );
-  if (effectiveWind >= 50 || (Number.isFinite(wind) && wind >= 35)) {
-    applyFactor(
-      'Wind',
-      20,
-      `Severe wind exposure expected (start wind ${Math.round(Number.isFinite(wind) ? wind : 0)} mph, gust ${Math.round(Number.isFinite(gust) ? gust : effectiveWind)} mph, trend peak ${Math.round(effectiveWind)} mph).`,
-      'NOAA hourly forecast',
-    );
-  } else if (effectiveWind >= 40 || (Number.isFinite(wind) && wind >= 25)) {
-    applyFactor(
-      'Wind',
-      12,
-      `Strong winds expected (start wind ${Math.round(Number.isFinite(wind) ? wind : 0)} mph, gust ${Math.round(Number.isFinite(gust) ? gust : effectiveWind)} mph, trend peak ${Math.round(effectiveWind)} mph).`,
-      'NOAA hourly forecast',
-    );
-  } else if (effectiveWind >= 30 || (Number.isFinite(wind) && wind >= 18)) {
-    applyFactor('Wind', 6, `Moderate wind signal (trend peak ${Math.round(effectiveWind)} mph) may affect exposed movement.`, 'NOAA hourly forecast');
-  }
-
-  if (weightedSevereWindHours >= 2.8) {
-    applyFactor('Wind', 8, `${severeWindHours}/${trend.length} trend hours are severe wind windows (>=30 mph sustained or >=45 mph gust).`, 'NOAA hourly trend');
-  } else if (weightedSevereWindHours >= 1.5) {
-    applyFactor('Wind', 5, `${severeWindHours}/${trend.length} trend hours show severe wind windows.`, 'NOAA hourly trend');
-  } else if (weightedStrongWindHours >= 4.0) {
-    applyFactor('Wind', 4, `${strongWindHours}/${trend.length} trend hours are windy (>=20 mph sustained or >=30 mph gust).`, 'NOAA hourly trend');
-  } else if (weightedStrongWindHours >= 2.0) {
-    applyFactor('Wind', 2, `${strongWindHours}/${trend.length} trend hours are windy and may reduce margin on exposed terrain.`, 'NOAA hourly trend');
-  }
-
-  if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= 80) {
-    applyFactor('Storm', 12, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= 60) {
-    applyFactor('Storm', 8, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= 40) {
-    applyFactor('Storm', 4, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
-  }
-
-  if (weightedHighPrecipHours >= 2.8) {
-    applyFactor('Storm', 7, `${highPrecipHours}/${trend.length} trend hours are high precip windows (>=60%).`, 'NOAA hourly trend');
-  } else if (weightedHighPrecipHours >= 1.5) {
-    applyFactor('Storm', 4, `${highPrecipHours}/${trend.length} trend hours are high precip windows.`, 'NOAA hourly trend');
-  } else if (weightedModeratePrecipHours >= 4.0) {
-    applyFactor('Storm', 3, `${moderatePrecipHours}/${trend.length} trend hours are moderate precip windows (>=40%).`, 'NOAA hourly trend');
-  }
-
-  if (/thunderstorm|lightning|blizzard/.test(weatherDescription)) {
-    applyFactor('Storm', 18, `Convective or severe weather signal in forecast: "${weatherData.description}".`, 'NOAA short forecast');
-  } else if (/snow|sleet|freezing rain|ice/.test(weatherDescription)) {
-    applyFactor('Winter Weather', 10, `Frozen precipitation in forecast ("${weatherData.description}") increases travel hazard.`, 'NOAA short forecast');
-  }
-
-  if (visibilityRiskScore !== null) {
-    let visibilityImpact = 0;
-    if (visibilityRiskScore >= 80) {
-      visibilityImpact = 12;
-    } else if (visibilityRiskScore >= 60) {
-      visibilityImpact = 9;
-    } else if (visibilityRiskScore >= 40) {
-      visibilityImpact = 6;
-    } else if (visibilityRiskScore >= 20) {
-      visibilityImpact = 3;
-    }
-    if (visibilityImpact > 0) {
-      const activeHoursNote =
-        visibilityActiveHours !== null && trend.length > 0
-          ? ` ${Math.round(visibilityActiveHours)}/${trend.length} trend hours show reduced-visibility signal.`
-          : '';
-      applyFactor(
-        'Visibility',
-        visibilityImpact,
-        `Whiteout/visibility risk is ${visibilityRiskLevel || 'elevated'} (${Math.round(visibilityRiskScore)}/100).${activeHoursNote}`,
-        weatherData?.visibilityRisk?.source || 'Derived weather visibility model',
-      );
-    }
-  } else if (/fog|smoke|haze/.test(weatherDescription)) {
-    applyFactor('Visibility', 6, `Reduced-visibility weather in forecast ("${weatherData.description}").`, 'NOAA short forecast');
-  }
-
-  if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= -10) {
-    applyFactor('Cold', 15, `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`, 'NOAA temp + windchill');
-  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= 0) {
-    applyFactor('Cold', 10, `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
-  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= 15) {
-    applyFactor('Cold', 6, `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
-  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= 25) {
-    applyFactor('Cold', 3, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
-  }
-
-  const coldOnlyHours = coldExposureHours - extremeColdHours;
-  const coldDurationImpact = Math.min(12, Math.round(extremeColdHours * 1.5 + coldOnlyHours * 0.8));
-  if (coldDurationImpact > 0) {
-    const coldLabel = extremeColdHours > 0
-      ? `${extremeColdHours}/${trend.length} trend hours are at or below 0F and ${coldOnlyHours} additional hours are below 15F apparent temperature.`
-      : `${coldExposureHours}/${trend.length} trend hours are at or below 15F apparent temperature.`;
-    applyFactor('Cold', coldDurationImpact, coldLabel, 'NOAA hourly trend');
-  }
-
-  const heatRiskLevel = Number(heatRiskData?.level);
-  if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 4) {
-    applyFactor('Heat', 14, `Heat risk is ${heatRiskData?.label || 'Extreme'} with significant heat-stress potential in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
-  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 3) {
-    applyFactor('Heat', 10, `Heat risk is ${heatRiskData?.label || 'High'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
-  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 2) {
-    applyFactor('Heat', 6, `Heat risk is ${heatRiskData?.label || 'Elevated'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
-  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 1) {
-    applyFactor('Heat', 2, `Heat risk is ${heatRiskData?.label || 'Guarded'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
-  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 90) {
-    applyFactor('Heat', 6, `Peak apparent temperature in the window reaches ${Math.round(trendMaxFeelsLike)}F.`, 'NOAA temp + humidity');
-  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 82 && heatExposureHours >= 4) {
-    applyFactor('Heat', 3, `${heatExposureHours}/${trend.length} trend hours are warm (>=85F apparent).`, 'NOAA hourly trend');
-  }
-
-  if (rainfallData?.fallbackMode === 'zeroed_totals') {
-    applyFactor('Surface Conditions', 4, 'Precipitation data unavailable (upstream outage) — surface conditions are unknown; treat as potentially hazardous.', rainfallData?.source || 'Open-Meteo precipitation history');
-  } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.75) {
-    applyFactor('Surface Conditions', 7, `Recent rainfall is heavy (${rainPast24hIn.toFixed(2)} in in 24h), increasing slick/trail-softening risk.`, rainfallData?.source || 'Open-Meteo precipitation history');
-  } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= 0.3) {
-    applyFactor('Surface Conditions', 4, `Recent rainfall (${rainPast24hIn.toFixed(2)} in in 24h) can create slippery or muddy travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
-  }
-
-  if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= 6) {
-    applyFactor('Surface Conditions', 8, `Recent snowfall is substantial (${snowPast24hIn.toFixed(1)} in in 24h), increasing trail and route uncertainty.`, rainfallData?.source || 'Open-Meteo precipitation history');
-  } else if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= 2) {
-    applyFactor('Surface Conditions', 4, `Recent snowfall (${snowPast24hIn.toFixed(1)} in in 24h) can hide surface hazards and slow travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
-  }
-
-  if (Number.isFinite(expectedRainWindowIn) && expectedRainWindowIn >= 0.5) {
-    applyFactor('Storm', 6, `Expected rain in selected travel window is ${expectedRainWindowIn.toFixed(2)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
-  } else if (Number.isFinite(expectedRainWindowIn) && expectedRainWindowIn >= 0.2) {
-    applyFactor('Storm', 3, `Expected rain in selected travel window is ${expectedRainWindowIn.toFixed(2)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
-  }
-
-  if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= 4) {
-    applyFactor('Winter Weather', 7, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
-  } else if (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn >= 1.5) {
-    applyFactor('Winter Weather', 3, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
-  }
-
-  if (isDaytime === false && !isNightBeforeSunrise) {
-    applyFactor('Darkness', 5, 'Selected forecast period is nighttime, reducing navigation margin and terrain visibility.', 'NOAA isDaytime flag');
-  }
-
-  if (Number.isFinite(tempRange) && tempRange >= 18) {
-    applyFactor(
-      'Weather Volatility',
-      6,
-      `Large ${effectiveTrendWindowHours}-hour temperature swing (${Math.round(tempRange)}F) suggests unstable conditions.`,
-      'NOAA hourly trend',
-    );
-  }
-  if (Number.isFinite(trendPeakGust) && trendPeakGust >= 45 && (!Number.isFinite(gust) || gust < 45)) {
-    applyFactor('Wind', 6, `Peak gusts in the next ${effectiveTrendWindowHours} hours reach ${Math.round(trendPeakGust)} mph.`, 'NOAA hourly trend');
-  }
-
-  // Combined hazard escalation: co-occurring weather hazards compound risk
-  const weatherCats = {
-    wind: factors.some((f) => f.group === 'weather' && /^wind$/i.test(f.hazard)),
-    coldHeat: factors.some((f) => f.group === 'weather' && /^(cold|heat)$/i.test(f.hazard)),
-    precipStorm: factors.some((f) => f.group === 'weather' && /^(storm|winter weather)$/i.test(f.hazard)),
-    visibility: factors.some((f) => f.group === 'weather' && /^visibility$/i.test(f.hazard)),
-  };
-  const activeWeatherCategories = Object.values(weatherCats).filter(Boolean).length;
-  if (activeWeatherCategories >= 3) {
-    applyFactor('Combined Exposure', 10, `${activeWeatherCategories} weather hazard categories are active simultaneously, compounding exposure risk.`, 'Safety score synthesis');
-  } else if (activeWeatherCategories >= 2) {
-    const hasDangerousPair =
-      (weatherCats.wind && weatherCats.coldHeat) ||
-      (weatherCats.wind && weatherCats.precipStorm) ||
-      (weatherCats.coldHeat && weatherCats.precipStorm);
-    if (hasDangerousPair) {
-      applyFactor('Combined Exposure', 5, 'Co-occurring weather hazards increase exposure risk.', 'Safety score synthesis');
-    }
-  }
-
-  // Condition trajectory: deteriorating conditions are riskier than improving
-  if (trend.length >= 4) {
-    const halfLen = Math.floor(trend.length / 2);
-    const firstHalfGusts = trend.slice(0, halfLen).map((item) => {
-      const g = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind);
-      return Number.isFinite(g) ? g : 0;
-    });
-    const secondHalfGusts = trend.slice(halfLen).map((item) => {
-      const g = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind);
-      return Number.isFinite(g) ? g : 0;
-    });
-    const firstHalfPrecips = trend.slice(0, halfLen).map((item) => {
-      const p = Number(item?.precipChance);
-      return Number.isFinite(p) ? p : 0;
-    });
-    const secondHalfPrecips = trend.slice(halfLen).map((item) => {
-      const p = Number(item?.precipChance);
-      return Number.isFinite(p) ? p : 0;
-    });
-    const avgArr = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    const firstAvgGust = avgArr(firstHalfGusts);
-    const secondAvgGust = avgArr(secondHalfGusts);
-    const firstAvgPrecip = avgArr(firstHalfPrecips);
-    const secondAvgPrecip = avgArr(secondHalfPrecips);
-    const windDeteriorating = secondAvgGust >= firstAvgGust + 8 && secondAvgGust >= 20;
-    const precipDeteriorating = secondAvgPrecip >= firstAvgPrecip + 15 && secondAvgPrecip >= 40;
-    if (windDeteriorating && precipDeteriorating) {
-      applyFactor('Condition Trajectory', 7, 'Both wind and precipitation are deteriorating through the travel window.', 'NOAA hourly trend');
-    } else if (windDeteriorating) {
-      applyFactor('Condition Trajectory', 4, 'Wind conditions are deteriorating through the travel window.', 'NOAA hourly trend');
-    } else if (precipDeteriorating) {
-      applyFactor('Condition Trajectory', 4, 'Precipitation is increasing through the travel window.', 'NOAA hourly trend');
-    }
-  }
-
-  if (forecastLeadHours !== null && forecastLeadHours > 6) {
-    let uncertaintyImpact = 2;
-    if (forecastLeadHours >= 96) {
-      uncertaintyImpact = 10;
-    } else if (forecastLeadHours >= 72) {
-      uncertaintyImpact = 8;
-    } else if (forecastLeadHours >= 48) {
-      uncertaintyImpact = 6;
-    } else if (forecastLeadHours >= 24) {
-      uncertaintyImpact = 4;
-    }
-    if (!alertsRelevantForSelectedTime) {
-      uncertaintyImpact += 2;
-    }
-    applyFactor(
-      'Forecast Uncertainty',
-      Math.min(14, uncertaintyImpact),
-      `Selected start is ${Math.round(forecastLeadHours)}h ahead; confidence is lower because fewer real-time feeds can be projected.`,
-      'Forecast lead time',
-    );
-  }
-
-  if (alertsRelevantForSelectedTime && Number.isFinite(alertsCount) && alertsCount > 0) {
-    const listedEvents = alertEvents.length ? ` (${alertEvents.join(', ')})` : '';
-    if (highestAlertSeverity === 'extreme') {
-      applyFactor('Official Alert', 24, `${alertsCount} active NWS alert(s)${listedEvents} with EXTREME severity.`, 'NOAA/NWS Active Alerts');
-    } else if (highestAlertSeverity === 'severe') {
-      applyFactor('Official Alert', 16, `${alertsCount} active NWS alert(s)${listedEvents} with severe impacts possible.`, 'NOAA/NWS Active Alerts');
-    } else if (highestAlertSeverity === 'moderate') {
-      applyFactor('Official Alert', 10, `${alertsCount} active NWS alert(s)${listedEvents} indicate moderate hazard.`, 'NOAA/NWS Active Alerts');
-    } else {
-      applyFactor('Official Alert', 5, `${alertsCount} active NWS alert(s)${listedEvents} are in effect.`, 'NOAA/NWS Active Alerts');
-    }
-  }
-
-  if (airQualityRelevantForScoring && Number.isFinite(usAqi)) {
-    if (usAqi >= 201) {
-      applyFactor('Air Quality', 20, `Air quality is hazardous (US AQI ${Math.round(usAqi)}).`, 'Open-Meteo Air Quality');
-    } else if (usAqi >= 151) {
-      applyFactor('Air Quality', 14, `Air quality is unhealthy (US AQI ${Math.round(usAqi)}).`, 'Open-Meteo Air Quality');
-    } else if (usAqi >= 101) {
-      applyFactor(
-        'Air Quality',
-        8,
-        `Air quality is unhealthy for sensitive groups (US AQI ${Math.round(usAqi)}).`,
-        'Open-Meteo Air Quality',
-      );
-    } else if (usAqi >= 51) {
-      applyFactor('Air Quality', 3, `Air quality is moderate (US AQI ${Math.round(usAqi)}). Consider reducing intensity for sustained exertion.`, 'Open-Meteo Air Quality');
-    }
-  }
-
-  const fireLevel = fireRiskData?.level != null ? Number(fireRiskData.level) : null;
-  if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
-    applyFactor('Fire Danger', 16, 'Extreme fire-weather/alert signal for this objective window.', fireRiskData?.source || 'Fire risk synthesis');
-  } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
-    applyFactor('Fire Danger', 10, 'High fire-weather signal: elevated spread potential or fire-weather alerts.', fireRiskData?.source || 'Fire risk synthesis');
-  } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 2) {
-    applyFactor('Fire Danger', 5, 'Elevated fire risk signal from weather, smoke, or alert context.', fireRiskData?.source || 'Fire risk synthesis');
-  }
-
-  const rawGroupImpacts = factors.reduce((acc, factor) => {
-    const group = factor.group || 'weather';
-    acc[group] = (acc[group] || 0) + Number(factor.impact || 0);
-    return acc;
-  }, {});
-  const groupImpacts = Object.entries(rawGroupImpacts).reduce((acc, [group, rawImpact]) => {
-    const cap = Number(groupCaps[group] || 100);
-    const raw = Number.isFinite(rawImpact) ? Math.round(rawImpact) : 0;
-    const capped = Math.min(raw, cap);
-    acc[group] = { raw, capped, cap };
-    return acc;
-  }, {});
-  const totalCappedImpact = Object.values(groupImpacts).reduce((sum, entry) => sum + Number(entry.capped || 0), 0);
-  const score = Math.max(0, Math.round(100 - totalCappedImpact));
-
-  let confidence = 100;
-  const confidenceReasons = [];
-  const applyConfidencePenalty = (points, reason) => {
-    if (!Number.isFinite(points) || points <= 0) {
-      return;
-    }
-    confidence -= points;
-    if (reason) {
-      confidenceReasons.push(reason);
-    }
-  };
-
-  const weatherDataUnavailable = weatherDescription.includes('weather data unavailable');
-  if (weatherDataUnavailable) {
-    applyFactor('Weather Unavailable', 20, 'All weather data is unavailable — wind, precipitation, and temperature conditions are unknown.', 'System');
-    applyConfidencePenalty(30, 'Complete weather data unavailable — do not rely on this report for go/no-go decisions.');
-  }
-
-  const nowMs = Date.now();
-  const weatherIssuedMs = parseIsoTimeToMs(weatherData?.issuedTime);
-  if (!weatherDataUnavailable && weatherIssuedMs === null) {
-    applyConfidencePenalty(8, 'Weather issue time unavailable.');
-  } else if (!weatherDataUnavailable && weatherIssuedMs !== null) {
-    const weatherAgeHours = (nowMs - weatherIssuedMs) / (1000 * 60 * 60);
-    if (weatherAgeHours > 18) {
-      applyConfidencePenalty(12, `Weather issuance is ${Math.round(weatherAgeHours)}h old.`);
-    } else if (weatherAgeHours > 10) {
-      applyConfidencePenalty(7, `Weather issuance is ${Math.round(weatherAgeHours)}h old.`);
-    } else if (weatherAgeHours > 6) {
-      applyConfidencePenalty(4, `Weather issuance is ${Math.round(weatherAgeHours)}h old.`);
-    }
-  }
-
-  if (trend.length < 6) {
-    applyConfidencePenalty(6, 'Limited hourly trend depth (<6 points).');
-  }
-
-  if (avalancheRelevant) {
-    if (avalancheUnknown) {
-      applyConfidencePenalty(20, 'Avalanche danger is unknown for this objective.');
-    } else {
-      const avalanchePublishedMs = parseIsoTimeToMs(avalancheData?.publishedTime);
-      if (avalanchePublishedMs === null) {
-        applyConfidencePenalty(8, 'Avalanche bulletin publish time unavailable.');
-      } else {
-        const avalancheAgeHours = (nowMs - avalanchePublishedMs) / (1000 * 60 * 60);
-        if (avalancheAgeHours > 72) {
-          applyConfidencePenalty(12, `Avalanche bulletin is ${Math.round(avalancheAgeHours)}h old.`);
-        } else if (avalancheAgeHours > 48) {
-          applyConfidencePenalty(8, `Avalanche bulletin is ${Math.round(avalancheAgeHours)}h old.`);
-        } else if (avalancheAgeHours > 24) {
-          applyConfidencePenalty(4, `Avalanche bulletin is ${Math.round(avalancheAgeHours)}h old.`);
-        }
-      }
-    }
-  }
-
-  if (alertsRelevantForSelectedTime && alertsData?.status === 'unavailable') {
-    applyConfidencePenalty(8, 'NWS alerts feed unavailable.');
-  } else if (!alertsRelevantForSelectedTime) {
-    applyConfidencePenalty(4, 'NWS alerts are current-state only and not forecast-valid for the selected start time.');
-  }
-  if (airQualityRelevantForScoring && airQualityData?.status === 'unavailable') {
-    applyConfidencePenalty(6, 'Air quality feed unavailable.');
-  } else if (airQualityRelevantForScoring && airQualityData?.status === 'no_data') {
-    applyConfidencePenalty(3, 'Air quality point data unavailable.');
-  }
-  const rainfallAnchorMs = parseIsoTimeToMs(rainfallData?.anchorTime);
-  if (rainfallData?.status === 'unavailable') {
-    applyConfidencePenalty(5, 'Precipitation history feed unavailable.');
-  } else if (rainfallData?.status === 'no_data') {
-    applyConfidencePenalty(3, 'Precipitation history has no usable anchor/sample data.');
-  } else if (rainfallData?.fallbackMode === 'zeroed_totals') {
-    applyConfidencePenalty(8, 'Precipitation totals are fallback estimates due upstream feed outage.');
-  } else if (rainfallAnchorMs === null) {
-    applyConfidencePenalty(3, 'Precipitation anchor time unavailable.');
-  } else {
-    const rainfallAgeHours = (nowMs - rainfallAnchorMs) / (1000 * 60 * 60);
-    if (rainfallAgeHours > 36) {
-      applyConfidencePenalty(7, `Precipitation anchor is ${Math.round(rainfallAgeHours)}h old.`);
-    } else if (rainfallAgeHours > 18) {
-      applyConfidencePenalty(4, `Precipitation anchor is ${Math.round(rainfallAgeHours)}h old.`);
-    } else if (rainfallAgeHours > 10) {
-      applyConfidencePenalty(2, `Precipitation anchor is ${Math.round(rainfallAgeHours)}h old.`);
-    }
-  }
-  if (forecastLeadHours !== null && forecastLeadHours >= 72) {
-    applyConfidencePenalty(8, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
-  } else if (forecastLeadHours !== null && forecastLeadHours >= 48) {
-    applyConfidencePenalty(6, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
-  } else if (forecastLeadHours !== null && forecastLeadHours >= 24) {
-    applyConfidencePenalty(4, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
-  }
-  if (!fireRiskData || fireRiskData.status === 'unavailable') {
-    applyConfidencePenalty(3, 'Fire risk synthesis unavailable.');
-  }
-
-  confidence = Math.max(20, Math.min(100, Math.round(confidence)));
-
-  const factorsSorted = [...factors].sort((a, b) => b.impact - a.impact);
-  const primaryHazard = factorsSorted[0]?.hazard || 'None';
-  const sourcesUsed = [
-    'NOAA/NWS hourly forecast',
-    avalancheRelevant ? 'Avalanche center forecast' : null,
-    alertsRelevantForSelectedTime && (alertsData?.status === 'ok' || alertsData?.status === 'none' || alertsData?.status === 'none_for_selected_start')
-      ? 'NOAA/NWS active alerts'
-      : null,
-    airQualityRelevantForScoring && (airQualityData?.status === 'ok' || airQualityData?.status === 'no_data')
-      ? 'Open-Meteo air quality'
-      : null,
-    (rainfallData?.status === 'ok' || rainfallData?.status === 'partial' || rainfallData?.status === 'no_data') && rainfallData?.fallbackMode !== 'zeroed_totals'
-      ? 'Open-Meteo precipitation history/forecast'
-      : null,
-    heatRiskData?.status === 'ok' ? 'Heat risk synthesis (forecast + lower-terrain adjustment)' : null,
-    fireRiskData?.status === 'ok' ? 'Fire risk synthesis (NOAA + NWS + AQI)' : null,
-  ].filter(Boolean);
-
-  return {
-    score,
-    confidence,
-    primaryHazard,
-    explanations: explanations.length > 0 ? explanations : ['Conditions appear stable for the selected plan window.'],
-    factors: factorsSorted,
-    groupImpacts,
-    confidenceReasons,
-    sourcesUsed,
-    airQualityCategory: aqiCategory,
-  };
-};
-
-const decodeHtmlEntities = (input = "") => {
-  return input
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-};
-
-const cleanForecastText = (input = "") => {
-  return decodeHtmlEntities(input)
-    .replace(/<[^>]*>?/gm, " ")
-    .replace(/\\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
-const scoreBottomLineCandidate = (text = "") => {
-  let score = text.length;
-  if (/avalanche|danger|snow|terrain|slab|trigger|wind/i.test(text)) score += 200;
-  if (text.length > 1500) score -= 250;
-  return score;
-};
-
-const pickBestBottomLine = (candidates = []) => {
-  const cleaned = candidates.map(cleanForecastText).filter(Boolean).filter(t => t.length >= 40);
-  if (!cleaned.length) return null;
-  return cleaned.sort((a, b) => scoreBottomLineCandidate(b) - scoreBottomLineCandidate(a))[0];
-};
-
-const normalizeExternalLink = (value) => {
-  const normalized = normalizeHttpUrl(value);
-  if (!normalized) {
-    return null;
-  }
-  try {
-    const parsed = new URL(normalized);
-    const host = parsed.hostname.toLowerCase();
-    if (host === 'www.nwac.us') {
-      parsed.hostname = 'nwac.us';
-    } else if (host === 'mountwashingtonavalanchecenter.org') {
-      parsed.hostname = 'www.mountwashingtonavalanchecenter.org';
-    } else if (host === 'avalanche.state.co.us' && parsed.pathname.toLowerCase() === '/home') {
-      parsed.pathname = '/';
-    }
-    return parsed.toString();
-  } catch {
-    return normalized;
-  }
-};
-
-const isAvalancheApiLink = (value) =>
-  typeof value === 'string' && /^https?:\/\/api\.avalanche\.(org|state\.co\.us)\b/i.test(value.trim());
-
-const isCaicHomepageLink = (value) =>
-  typeof value === 'string' && /^https?:\/\/(?:www\.)?avalanche\.state\.co\.us\/?(?:[?#].*)?$/i.test(value.trim());
-
-const formatCoordinateForLink = (value) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return null;
-  }
-  return numeric.toFixed(5);
-};
-
-const buildCaicForecastLink = (lat, lon) => {
-  const latParam = formatCoordinateForLink(lat);
-  const lonParam = formatCoordinateForLink(lon);
-  if (!latParam || !lonParam) {
-    return 'https://avalanche.state.co.us/';
-  }
-  return `https://avalanche.state.co.us/?lat=${encodeURIComponent(latParam)}&lng=${encodeURIComponent(lonParam)}`;
-};
-
-const resolveAvalancheCenterLink = ({ centerId, link, centerLink, lat, lon }) => {
-  const primaryLink = normalizeExternalLink(link);
-  const fallbackLink = normalizeExternalLink(centerLink);
-  const nonApiLink = [primaryLink, fallbackLink].find((candidate) => candidate && !isAvalancheApiLink(candidate));
-
-  if (centerId === 'CAIC') {
-    if (nonApiLink) {
-      try {
-        const parsed = new URL(nonApiLink);
-        const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-        const hasCoordinateParams = Boolean(parsed.searchParams.get('lat')) && Boolean(parsed.searchParams.get('lng') || parsed.searchParams.get('lon'));
-        if (host === 'avalanche.state.co.us' && hasCoordinateParams) {
-          return nonApiLink;
-        }
-      } catch {
-        // Fall through to existing CAIC handling.
-      }
-    }
-    if (nonApiLink && !isCaicHomepageLink(nonApiLink)) {
-      return nonApiLink;
-    }
-    return buildCaicForecastLink(lat, lon);
-  }
-
-  return nonApiLink || primaryLink || fallbackLink || null;
-};
-
-const normalizeAvalancheLevel = (value) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return 0;
-  }
-  return Math.min(5, Math.max(0, Math.round(numeric)));
-};
-
-const deriveOverallDangerLevelFromElevations = (elevations, fallbackLevel = 0) => {
-  const fallback = normalizeAvalancheLevel(fallbackLevel);
-  if (!elevations || typeof elevations !== 'object') {
-    return fallback;
-  }
-
-  const levels = [elevations.above, elevations.at, elevations.below]
-    .map((band) => normalizeAvalancheLevel(band?.level))
-    .filter((level) => Number.isFinite(level) && level > 0);
-
-  if (levels.length === 0) {
-    return fallback;
-  }
-
-  return Math.max(...levels);
-};
-
-const applyDerivedOverallAvalancheDanger = (avalancheData) => {
-  if (!avalancheData || typeof avalancheData !== 'object') {
-    return avalancheData;
-  }
-  if (avalancheData.dangerUnknown || avalancheData.coverageStatus !== 'reported') {
-    return avalancheData;
-  }
-
-  const derivedLevel = deriveOverallDangerLevelFromElevations(avalancheData.elevations, avalancheData.dangerLevel);
-  return {
-    ...avalancheData,
-    dangerLevel: derivedLevel,
-    risk: AVALANCHE_LEVEL_LABELS[derivedLevel] || avalancheData.risk || 'Unknown',
-  };
-};
-
-const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 let avalancheMapLayerCache = {
   fetchedAt: 0,
   data: null,
 };
 
 const noaaPointsCache = createCache({ name: 'noaa-points', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 48 * 60 * 60 * 1000, maxEntries: 200 });
-const elevationCache = createCache({ name: 'elevation', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 500 });
+const { elevationCache, fetchObjectiveElevationFt } = createElevationService({ fetchWithTimeout, requestTimeoutMs: REQUEST_TIMEOUT_MS });
 const solarCache = createCache({ name: 'solar', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 300 });
 const noaaForecastCache = createCache({ name: 'noaa-forecast', ttlMs: 20 * 60 * 1000, staleTtlMs: 25 * 60 * 1000, maxEntries: 100 });
 
-const formatIsoDateUtc = (date) => {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toISOString().slice(0, 10);
-};
+const { createUnavailableSnowpackData, fetchSnowpackData } = createSnowpackService({
+  fetchWithTimeout,
+  formatIsoDateUtc,
+  shiftIsoDateUtc,
+  haversineKm,
+  stationCacheTtlMs: SNOTEL_STATION_CACHE_TTL_MS,
+});
 
-const shiftIsoDateUtc = (isoDate, deltaDays) => {
-  if (typeof isoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
-    return null;
-  }
-  const base = new Date(`${isoDate}T00:00:00Z`);
-  if (Number.isNaN(base.getTime())) {
-    return null;
-  }
-  base.setUTCDate(base.getUTCDate() + deltaDays);
-  return formatIsoDateUtc(base);
-};
+const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback } = createWeatherDataService({
+  fetchWithTimeout,
+  requestTimeoutMs: REQUEST_TIMEOUT_MS,
+});
 
-const _fetchObjectiveElevationFtUncached = async (lat, lon, fetchOptions) => {
-  try {
-    const usgsRes = await fetchWithTimeout(
-      `https://epqs.nationalmap.gov/v1/json?x=${lon}&y=${lat}&units=Feet&wkid=4326`,
-      fetchOptions,
-    );
-    if (usgsRes.ok) {
-      const usgsData = await usgsRes.json();
-      const usgsElevationFt = Number(usgsData?.value);
-      if (Number.isFinite(usgsElevationFt) && usgsElevationFt > -1000 && usgsElevationFt <= MAX_REASONABLE_ELEVATION_FT) {
-        return { elevationFt: Math.round(usgsElevationFt), source: 'USGS 3DEP elevation service' };
-      }
-    }
-  } catch (error) {
-    logger.warn({ err: error }, 'Elevation USGS lookup failed');
-  }
+const { fetchWeatherAlertsData, fetchAirQualityData } = createAlertsService({ fetchWithTimeout });
 
-  try {
-    const openMeteoRes = await fetchWithTimeout(
-      `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`,
-      fetchOptions,
-    );
-    if (openMeteoRes.ok) {
-      const openMeteoData = await openMeteoRes.json();
-      const elevationMeters = Number(openMeteoData?.elevation?.[0]);
-      const elevationFt = Number.isFinite(elevationMeters) ? Math.round(elevationMeters * FT_PER_METER) : null;
-      if (Number.isFinite(elevationFt) && elevationFt > -1000 && elevationFt <= MAX_REASONABLE_ELEVATION_FT) {
-        return { elevationFt, source: 'Open-Meteo elevation API' };
-      }
-    }
-  } catch (error) {
-    logger.warn({ err: error }, 'Elevation Open-Meteo lookup failed');
-  }
-
-  return { elevationFt: null, source: null };
-};
-
-const fetchObjectiveElevationFt = (lat, lon, fetchOptions) => {
-  const key = normalizeCoordKey(lat, lon);
-  return elevationCache.getOrFetch(key, () => _fetchObjectiveElevationFtUncached(lat, lon, fetchOptions));
-};
+const { fetchRecentRainfallData } = createPrecipitationService({
+  fetchWithTimeout,
+  requestTimeoutMs: REQUEST_TIMEOUT_MS,
+});
 
 const getAvalancheMapLayer = async (fetchOptions) => {
   const now = Date.now();
@@ -1273,135 +179,6 @@ const getAvalancheMapLayer = async (fetchOptions) => {
     }
     throw error;
   }
-};
-
-const toRadians = (value) => (value * Math.PI) / 180;
-
-const haversineKm = (latA, lonA, latB, lonB) => {
-  const earthRadiusKm = 6371;
-  const dLat = toRadians(latB - latA);
-  const dLon = toRadians(lonB - lonA);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(latA)) * Math.cos(toRadians(latB)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return 2 * earthRadiusKm * Math.asin(Math.sqrt(a));
-};
-
-const { createUnavailableSnowpackData, fetchSnowpackData } = createSnowpackService({
-  fetchWithTimeout,
-  formatIsoDateUtc,
-  shiftIsoDateUtc,
-  haversineKm,
-  stationCacheTtlMs: SNOTEL_STATION_CACHE_TTL_MS,
-});
-
-const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback } = createWeatherDataService({
-  fetchWithTimeout,
-  requestTimeoutMs: REQUEST_TIMEOUT_MS,
-});
-
-const { fetchWeatherAlertsData, fetchAirQualityData } = createAlertsService({ fetchWithTimeout });
-
-const { fetchRecentRainfallData } = createPrecipitationService({
-  fetchWithTimeout,
-  requestTimeoutMs: REQUEST_TIMEOUT_MS,
-});
-
-const collectGeometryPositions = (geometry, output = []) => {
-  if (!geometry || !geometry.coordinates) {
-    return output;
-  }
-  const walk = (node) => {
-    if (!Array.isArray(node)) {
-      return;
-    }
-    if (node.length >= 2 && typeof node[0] === 'number' && typeof node[1] === 'number') {
-      output.push(node);
-      return;
-    }
-    for (const child of node) {
-      walk(child);
-    }
-  };
-  walk(geometry.coordinates);
-  return output;
-};
-
-const minDistanceKmToFeatureVertices = (feature, lat, lon) => {
-  const positions = collectGeometryPositions(feature?.geometry);
-  if (!positions.length) {
-    return Number.POSITIVE_INFINITY;
-  }
-  let minDistance = Number.POSITIVE_INFINITY;
-  for (const [featureLon, featureLat] of positions) {
-    const distanceKm = haversineKm(lat, lon, featureLat, featureLon);
-    if (distanceKm < minDistance) {
-      minDistance = distanceKm;
-    }
-  }
-  return minDistance;
-};
-
-const isWithinUtahBounds = (lat, lon) =>
-  Number.isFinite(lat) &&
-  Number.isFinite(lon) &&
-  lat >= 36.8 &&
-  lat <= 42.3 &&
-  lon >= -114.2 &&
-  lon <= -108.8;
-
-const findMatchingAvalancheZone = (features, lat, lon, maxFallbackDistanceKm = 40) => {
-  if (!Array.isArray(features) || !features.length || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return { feature: null, mode: 'none', fallbackDistanceKm: null };
-  }
-
-  const pt = point([lon, lat]);
-  for (const feature of features) {
-    try {
-      if (booleanPointInPolygon(pt, feature)) {
-        return { feature, mode: 'polygon', fallbackDistanceKm: 0 };
-      }
-    } catch {
-      // Ignore invalid polygon payloads and continue.
-    }
-  }
-
-  let nearestFeature = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const feature of features) {
-    const distanceKm = minDistanceKmToFeatureVertices(feature, lat, lon);
-    if (distanceKm < nearestDistance) {
-      nearestDistance = distanceKm;
-      nearestFeature = feature;
-    }
-  }
-
-  if (nearestFeature && nearestDistance <= maxFallbackDistanceKm) {
-    return { feature: nearestFeature, mode: 'nearest', fallbackDistanceKm: nearestDistance };
-  }
-
-  // Utah polygons in the map layer can miss high-Uinta objective points by a wide margin.
-  // If a point is clearly in Utah and standard fallback fails, allow a larger UAC-only nearest-zone fallback.
-  if (isWithinUtahBounds(lat, lon)) {
-    let nearestUacFeature = null;
-    let nearestUacDistance = Number.POSITIVE_INFINITY;
-    for (const feature of features) {
-      if (String(feature?.properties?.center_id || '').toUpperCase() !== 'UAC') {
-        continue;
-      }
-      const distanceKm = minDistanceKmToFeatureVertices(feature, lat, lon);
-      if (distanceKm < nearestUacDistance) {
-        nearestUacDistance = distanceKm;
-        nearestUacFeature = feature;
-      }
-    }
-    const utahFallbackDistanceKm = Math.max(maxFallbackDistanceKm, 90);
-    if (nearestUacFeature && nearestUacDistance <= utahFallbackDistanceKm) {
-      return { feature: nearestUacFeature, mode: 'nearest', fallbackDistanceKm: nearestUacDistance };
-    }
-  }
-
-  return { feature: null, mode: 'none', fallbackDistanceKm: nearestDistance };
 };
 
 const safetyHandler = async (req, res) => {
@@ -1793,8 +570,8 @@ const safetyHandler = async (req, res) => {
               );
             }
 	          const props = matchingZone.properties;
-	          const zoneId = matchingZone.id; // Use the feature ID (e.g. 1648 for West Slopes South)
-	          const levelMap = ["None", "Low", "Moderate", "Considerable", "High", "Extreme"];
+	          const zoneId = matchingZone.id;
+	          const levelMap = AVALANCHE_LEVEL_LABELS;
 	          const mainLvl = parseInt(props.danger_level) || 0;
           const reportedRisk = String(props.danger || "").trim();
           const normalizedRisk = reportedRisk.toLowerCase();
@@ -1811,7 +588,7 @@ const safetyHandler = async (req, res) => {
             offSeasonFlag
             || hasNoForecastLanguage
             || (!hasIssuedWindow && noRatingForecast);
-          
+
 			          avalancheData = {
 			            center: props.center,
 			            center_id: props.center_id,
@@ -1831,7 +608,7 @@ const safetyHandler = async (req, res) => {
                   }),
 			            bottomLine: centerNoActiveForecast
                     ? (cleanForecastText(travelAdviceText) || AVALANCHE_OFF_SEASON_MESSAGE)
-                    : props.travel_advice, // Primary Fallback
+                    : props.travel_advice,
 			            problems: [],
 			            publishedTime: centerNoActiveForecast ? null : (props.start_date || props.published_time || null),
                   expiresTime: centerNoActiveForecast ? null : firstNonEmptyString(props.end_date, props.expires, props.expire_time),
@@ -1944,16 +721,15 @@ const safetyHandler = async (req, res) => {
 
 	            if (detailDet) {
 	              let det = detailDet;
-	              if (det && Object.keys(det).length > 5) { // Ensure it's not an empty shell
-	                // Try all known summary field names used by different centers
-	                const finalBL = det.bottom_line || 
-	                                det.bottom_line_summary || 
-                                det.bottom_line_summary_text || 
-                                det.overall_summary || 
+	              if (det && Object.keys(det).length > 5) {
+	                const finalBL = det.bottom_line ||
+	                                det.bottom_line_summary ||
+                                det.bottom_line_summary_text ||
+                                det.overall_summary ||
                                 det.summary;
-                
+
 	                avyLog(`[Avy] Data retrieved for ${props.center_id}. BL length: ${finalBL?.length || 0}`);
-                
+
                 if (det.published_time || det.updated_at) {
                   avalancheData.publishedTime = det.published_time || det.updated_at;
                 }
@@ -1965,7 +741,7 @@ const safetyHandler = async (req, res) => {
                 if (finalBL && finalBL.length > 20) {
                   avalancheData.bottomLine = cleanForecastText(finalBL);
                 }
-                
+
 	                const fetchedProblems = detailProblems.length > 0
                     ? detailProblems
                     : getAvalancheProblemsFromDetail(det);
@@ -1973,7 +749,6 @@ const safetyHandler = async (req, res) => {
 	                  avalancheData.problems = fetchedProblems;
 	                }
 
-                // Update elevations if the product has more specific data
                 const safeLevel = (val) => { const n = parseInt(val, 10); return Number.isFinite(n) ? n : 0; };
                 if (det.danger && det.danger.length > 0) {
                    const currentDay = det.danger.find(d => d.valid_day === 'current') || det.danger[0];
@@ -2058,15 +833,11 @@ const safetyHandler = async (req, res) => {
                   const pageText = await pageRes.text();
                   const bottomLineCandidates = [];
 
-              // Try searching for JSON embedded in the page (common in Drupal/React sites)
-              // Look for "bottom_line" or "summary" keys in any script tag or large object
               const blMatch = pageText.match(/"(bottom_line|bottom_line_summary|overall_summary)"\s*:\s*"((?:[^"\\]|\\.)+)"/);
-              
+
               if (blMatch && blMatch[2]) {
                 bottomLineCandidates.push(blMatch[2].replace(/\\"/g, '"'));
               } else {
-                 // Final desperate check: Look for known HTML classes or IDs used by these centers
-                 // CAIC: field--name-field-avalanche-summary, MSAC: field-item
                  const htmlSummary = pageText.match(/class="[^"]*(field--name-field-avalanche-summary|field-bottom-line)[^"]*"[^>]*>([\s\S]*?)<\/div>/);
                  if (htmlSummary && htmlSummary[2]) {
                     const stripped = htmlSummary[2].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -2074,7 +845,6 @@ const safetyHandler = async (req, res) => {
                       bottomLineCandidates.push(stripped);
                     }
                  } else {
-                    // Check for large text block with "summary" key in likely JSON
                     const possibleLargeText = pageText.match(/"summary"\s*:\s*"((?:[^"\\]|\\.){100,})"/);
                     if (possibleLargeText && possibleLargeText[1]) {
                       bottomLineCandidates.push(possibleLargeText[1].replace(/\\"/g, '"'));
@@ -2082,7 +852,6 @@ const safetyHandler = async (req, res) => {
                  }
               }
 
-              // CAIC pages often embed forecast text in hydrated JSON.
               if (props.center_id === 'CAIC') {
                 const nextDataMatch = pageText.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
                 if (nextDataMatch && nextDataMatch[1]) {
@@ -2102,8 +871,6 @@ const safetyHandler = async (req, res) => {
                   if (bestBottomLine) {
                     avalancheData.bottomLine = bestBottomLine;
                   }
-	              
-                  // If we still only have the travel advice, keep it as-is (no prefix needed)
 
                   const problemMatches = [...pageText.matchAll(/"avalanche_problem_id":\s*\d+,\s*"name"\s*:\s*"([^"]+)"/g)];
                   if (problemMatches.length > 0) {
@@ -2130,7 +897,6 @@ const safetyHandler = async (req, res) => {
                 }
 		            } catch (scrapeErr) {
 		              avyLog("[Avy] Scrape failed:", scrapeErr.message);
-		              // Ensure we fallback gracefully — keep travel advice as-is
 	            }
 	          }
 
