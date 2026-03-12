@@ -2000,8 +2000,7 @@ const safetyHandler = async (req, res) => {
           // Scraper Fallback for Detail
 	          const hasGenericBottomLine =
 	            !avalancheData.bottomLine ||
-	            avalancheData.bottomLine === props.travel_advice ||
-	            avalancheData.bottomLine.startsWith("OFFICIAL SUMMARY:");
+	            avalancheData.bottomLine === props.travel_advice;
 	          const hasDetailedBottomLine =
 	            typeof avalancheData.bottomLine === 'string' &&
 	            avalancheData.bottomLine.length >= 120 &&
@@ -2104,10 +2103,7 @@ const safetyHandler = async (req, res) => {
                     avalancheData.bottomLine = bestBottomLine;
                   }
 	              
-                  // If we still only have the travel advice, label it clearly as Official Summary
-                  if (avalancheData.bottomLine === props.travel_advice) {
-                     avalancheData.bottomLine = `OFFICIAL SUMMARY: ${props.travel_advice}`;
-                  }
+                  // If we still only have the travel advice, keep it as-is (no prefix needed)
 
                   const problemMatches = [...pageText.matchAll(/"avalanche_problem_id":\s*\d+,\s*"name"\s*:\s*"([^"]+)"/g)];
                   if (problemMatches.length > 0) {
@@ -2134,10 +2130,7 @@ const safetyHandler = async (req, res) => {
                 }
 		            } catch (scrapeErr) {
 		              avyLog("[Avy] Scrape failed:", scrapeErr.message);
-		              // Ensure we fallback gracefully
-              if (avalancheData.bottomLine === props.travel_advice) {
-                 avalancheData.bottomLine = `OFFICIAL SUMMARY: ${props.travel_advice}`;
-              }
+		              // Ensure we fallback gracefully — keep travel advice as-is
 	            }
 	          }
 
