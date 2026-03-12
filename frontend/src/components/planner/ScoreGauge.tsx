@@ -9,7 +9,7 @@ interface ScoreGaugeProps {
 const ARC_DEGREES = 270;
 const START_ANGLE = 135;
 
-export function ScoreGauge({ score, size = 110, scoreColor }: ScoreGaugeProps) {
+function ScoreGaugeInner({ score, size = 110, scoreColor }: ScoreGaugeProps) {
   const [animated, setAnimated] = useState(false);
   const filterId = useId();
 
@@ -27,10 +27,9 @@ export function ScoreGauge({ score, size = 110, scoreColor }: ScoreGaugeProps) {
   const emptyLength = arcLength - filledLength;
 
   useEffect(() => {
-    setAnimated(false);
     const id = requestAnimationFrame(() => setAnimated(true));
     return () => cancelAnimationFrame(id);
-  }, [safeScore]);
+  }, []);
 
   return (
     <div
@@ -101,4 +100,9 @@ export function ScoreGauge({ score, size = 110, scoreColor }: ScoreGaugeProps) {
       </svg>
     </div>
   );
+}
+
+export function ScoreGauge(props: ScoreGaugeProps) {
+  // Key on score to remount and replay the arc animation when score changes
+  return <ScoreGaugeInner key={props.score} {...props} />;
 }

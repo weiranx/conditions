@@ -31,7 +31,7 @@ export function useUrlState({
   const [view, setView] = useState<AppView>(initialView);
   const [isViewPending, startViewChange] = useTransition();
 
-  const isApplyingPopStateRef = useRef(false);
+  const isApplyingPopStateRefRef = useRef(false);
 
   const navigateToView = useCallback(
     (nextView: AppView) => {
@@ -47,7 +47,7 @@ export function useUrlState({
     }
 
     const handlePopState = () => {
-      isApplyingPopStateRef.current = true;
+      isApplyingPopStateRefRef.current = true;
       const linkState = parseLinkState(todayDate, maxForecastDate, preferences);
       onPopState(linkState);
       setView(linkState.view);
@@ -82,51 +82,57 @@ export function useSyncUrlEffect(params: {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
-  isApplyingPopState: React.MutableRefObject<boolean>;
-  hasInitializedHistory: React.MutableRefObject<boolean>;
+  isApplyingPopStateRef: React.MutableRefObject<boolean>;
+  hasInitializedHistoryRef: React.MutableRefObject<boolean>;
 }) {
+  const {
+    view, hasObjective, position, objectiveName, committedSearchQuery,
+    forecastDate, alpineStartTime, targetElevationInput,
+    isApplyingPopStateRef, hasInitializedHistoryRef,
+  } = params;
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    const hasSharableState = params.view === 'planner' || params.view === 'trip';
+    const hasSharableState = view === 'planner' || view === 'trip';
     const query = hasSharableState
       ? buildShareQuery({
-          view: params.view,
-          hasObjective: params.hasObjective,
-          position: params.position,
-          objectiveName: params.objectiveName,
-          searchQuery: params.committedSearchQuery,
-          forecastDate: params.forecastDate,
-          alpineStartTime: params.alpineStartTime,
-          targetElevationInput: params.targetElevationInput,
+          view,
+          hasObjective,
+          position,
+          objectiveName,
+          searchQuery: committedSearchQuery,
+          forecastDate,
+          alpineStartTime,
+          targetElevationInput,
         })
       : '';
 
-    const viewPath = params.view === 'home' ? '' : params.view;
+    const viewPath = view === 'home' ? '' : view;
     const nextUrl = `/${viewPath}${query ? `?${query}` : ''}`;
     const currentUrl = `${window.location.pathname}${window.location.search}`;
     if (nextUrl !== currentUrl) {
-      if (params.isApplyingPopState.current || !params.hasInitializedHistory.current) {
+      if (isApplyingPopStateRef.current || !hasInitializedHistoryRef.current) {
         window.history.replaceState(null, '', nextUrl);
       } else {
         window.history.pushState(null, '', nextUrl);
       }
     }
 
-    params.isApplyingPopState.current = false;
-    params.hasInitializedHistory.current = true;
+    isApplyingPopStateRef.current = false;
+    hasInitializedHistoryRef.current = true;
   }, [
-    params.view,
-    params.hasObjective,
-    params.position,
-    params.objectiveName,
-    params.committedSearchQuery,
-    params.forecastDate,
-    params.alpineStartTime,
-    params.targetElevationInput,
-    params.isApplyingPopState,
-    params.hasInitializedHistory,
+    view,
+    hasObjective,
+    position,
+    objectiveName,
+    committedSearchQuery,
+    forecastDate,
+    alpineStartTime,
+    targetElevationInput,
+    isApplyingPopStateRef,
+    hasInitializedHistoryRef,
   ]);
 }

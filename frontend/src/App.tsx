@@ -288,6 +288,7 @@ function App() {
     } else {
       setObjectiveName((prev) => prev || 'Dropped pin');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- setDayOverDay is a stable setter from useDayComparisons, declared later in hook order
   }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
   const searchHook = useSearchSuggestions({
@@ -410,8 +411,8 @@ function App() {
     forecastDate,
     alpineStartTime,
     targetElevationInput,
-    isApplyingPopState: isApplyingPopStateRef,
-    hasInitializedHistory: hasInitializedHistoryRef,
+    isApplyingPopStateRef,
+    hasInitializedHistoryRef,
   });
 
   useEffect(() => {
