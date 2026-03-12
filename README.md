@@ -47,29 +47,34 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 
 ```
 summitsafe/
-├── frontend/          # React + Vite SPA
+├── frontend/                # React + Vite SPA
 │   ├── src/
-│   │   ├── App.tsx          # Main orchestration layer
-│   │   ├── app/             # Types, constants, core utilities, preferences
-│   │   ├── components/      # Extracted UI components (cards, search, loading)
-│   │   └── lib/             # API client and search helpers
+│   │   ├── App.tsx                # Main orchestration layer
+│   │   ├── app/                   # Types, constants, core utilities, preferences
+│   │   ├── components/            # Extracted UI components (cards, search, loading)
+│   │   ├── lib/                   # API client and search helpers
+│   │   └── utils/                 # Domain-specific utilities (avalanche)
 │   └── ...
-├── backend/           # Express API + risk-synthesis logic
-│   ├── index.js             # Core safety pipeline
+├── backend/                 # Express API + risk-synthesis logic
+│   ├── index.js                   # Core safety pipeline
 │   ├── src/
-│   │   ├── routes/          # Route handlers (safety, search, route-analysis, ai-brief, report-logs, etc.)
-│   │   ├── server/          # Middleware, CORS, app bootstrap
-│   │   └── utils/           # Domain helpers (weather, avalanche, cache, AI client, etc.)
-│   └── ...
-├── docs/              # Project documentation
-│   ├── architecture.md
-│   ├── api.md
-│   ├── development.md
-│   ├── operations.md
-│   └── vps-setup.md
-├── scripts/           # Deployment scripts (deploy.sh, setup-nginx.sh)
+│   │   ├── routes/                # Route handlers (safety, search, route-analysis, ai-brief, report-logs, etc.)
+│   │   ├── server/                # Middleware, CORS, app bootstrap
+│   │   ├── utils/                 # Domain helpers (weather, avalanche, cache, AI client, logger, etc.)
+│   │   └── data/                  # Static reference data (CDEC snow stations)
+│   └── test/                      # Jest test suites (unit, utils, integration)
+├── BackcountryConditions/   # Native iOS app (SwiftUI, iOS 17+)
+│   ├── BackcountryConditions/
+│   │   ├── ViewModels/            # PlannerViewModel, SearchViewModel, SettingsViewModel, StatusViewModel
+│   │   ├── Models/                # SafetyData, RouteAnalysis, AiBrief, SearchResult, UserPreferences
+│   │   ├── App/                   # App entry point, AppState, Configuration
+│   │   ├── Extensions/            # Color+Theme, View+Conditional
+│   │   └── Utilities/             # Constants, TravelWindowEngine, WindLoadingEngine
+│   └── BackcountryConditionsTests/
+├── docs/                    # Project documentation
+├── scripts/                 # Deployment scripts (deploy.sh, setup-nginx.sh)
 ├── docker-compose.yml
-└── .github/workflows/ # CI and deploy pipelines
+└── .github/workflows/       # CI and deploy pipelines
 ```
 
 ## Requirements
@@ -134,8 +139,12 @@ See full parameter and response documentation in [`docs/api.md`](docs/api.md).
 **Backend:**
 ```bash
 cd backend
+npm run test             # All tests
 npm run test:unit        # Wind parsing, scoring, relevance rules
 npm run test:integration # Route registration, request validation
+
+# Run a single test file
+npx jest test/unit.utils.test.js
 ```
 
 **Frontend:**
@@ -180,6 +189,18 @@ See [`docs/operations.md`](docs/operations.md) for full production guidance and 
 | [`docs/development.md`](docs/development.md) | Local workflow, conventions, and testing |
 | [`docs/operations.md`](docs/operations.md) | Deployment, health checks, and troubleshooting |
 | [`docs/vps-setup.md`](docs/vps-setup.md) | DigitalOcean droplet setup guide |
+
+## iOS App
+
+A native iOS companion app lives in `BackcountryConditions/`. Built with SwiftUI targeting iOS 17+, it consumes the same backend API and provides:
+
+- Objective search and planner with the same date/time/travel-window controls
+- Full safety report rendering with collapsible cards
+- Route analysis and AI field brief integration
+- User preferences (units, thresholds, theme)
+- App status and health checks
+
+The iOS app uses XcodeGen (`project.yml`) for project configuration. Open `BackcountryConditions.xcodeproj` in Xcode to build and run.
 
 ## Disclaimer
 

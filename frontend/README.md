@@ -1,6 +1,6 @@
-# Backcountry Conditions Frontend
+# SummitSafe Frontend
 
-React + Vite client for Backcountry Conditions planner UI.
+React + Vite client for the SummitSafe planner UI.
 
 Primary views:
 

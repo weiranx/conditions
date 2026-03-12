@@ -118,9 +118,10 @@ Center-specific avalanche handling exists as explicit hotfix logic in `backend/i
 ### Backend
 
 - **Unit tests** (`test/unit.helpers.test.js`): cover utility-level logic — wind parsing, avalanche relevance rules, safety score calculation, and similar helpers.
+- **Utility tests** (`test/unit.utils.test.js`): cover extracted utility modules — HTTP client, weather normalizers, precipitation, alerts, fire/heat risk, gear suggestions, terrain conditions, visibility, cache, and time helpers.
 - **Integration tests** (`test/integration.api.test.js`): cover route registration, input validation behavior, and response shape contracts.
 
-The unit test file is large. During development, run targeted tests to keep feedback loops fast:
+The unit test files are large. During development, run targeted tests to keep feedback loops fast:
 
 ```bash
 # Run only tests matching a pattern

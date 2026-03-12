@@ -84,7 +84,16 @@ Browser
 | `frontend/src/components/planner/CollapsibleCard.tsx` | Card container with collapse/expand modal |
 | `frontend/src/components/planner/ForecastLoading.tsx` | Loading state component |
 | `frontend/src/components/planner/CardHelpHint.tsx` | Contextual help hints for cards |
-| `frontend/src/components/planner/cards/` | Domain-specific cards (avalanche forecast, wind loading, travel window, aspect rose) |
+| `frontend/src/components/planner/cards/AvalancheForecastCard.tsx` | Avalanche forecast display with danger ratings and problems |
+| `frontend/src/components/planner/cards/WindLoadingCard.tsx` | Wind loading aspect/elevation rose |
+| `frontend/src/components/planner/cards/TravelWindowPlannerCard.tsx` | Travel window timeline and scoring |
+| `frontend/src/components/planner/cards/AspectElevationRose.tsx` | Aspect/elevation rose visualization |
+| `frontend/src/components/planner/cards/ElevationDangerGradient.tsx` | Elevation-based danger gradient display |
+| `frontend/src/components/planner/cards/HourlyConditionsDashboard.tsx` | Hourly conditions overview |
+| `frontend/src/components/planner/cards/MultiDayRiskArc.tsx` | Multi-day risk arc visualization |
+| `frontend/src/components/planner/cards/RouteConditionsProfile.tsx` | Route conditions profile display |
+| `frontend/src/components/ErrorBoundary.tsx` | React error boundary wrapper |
+| `frontend/src/utils/avalanche.ts` | Avalanche-specific utility functions |
 
 **User preferences** are persisted under `summitsafe:user-preferences:v1` in browser `localStorage`. Unit conversions (temperature, elevation, wind, time) are display-side only — the backend always returns SI-adjacent values.
 
@@ -148,6 +157,13 @@ Browser
 | `visibility-risk.js` | Visibility risk signal synthesis |
 | `url-utils.js` | URL construction helpers |
 | `sat-oneliner.js` | SAT one-liner text generation logic |
+| `logger.js` | Pino-based structured logging |
+
+**Static data files** (`backend/src/data/`):
+
+| File | Purpose |
+|---|---|
+| `cdec-snow-stations.json` | CDEC snow station reference data for California |
 
 Core domain and orchestration logic remains in `backend/index.js`.
 
