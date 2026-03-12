@@ -2109,6 +2109,148 @@ input {
   outline-offset: 1.5px;
 }
 
+/* ── Score Gauge ────────────────────────────────────────── */
+
+.score-gauge {
+  flex-shrink: 0;
+}
+
+.score-gauge svg {
+  display: block;
+}
+
+.score-gauge-arc {
+  will-change: stroke-dasharray;
+}
+
+.score-gauge-number {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-data);
+  letter-spacing: -0.02em;
+}
+
+.score-gauge-label {
+  font-size: 9px;
+  font-weight: 500;
+  fill: var(--text-muted);
+  font-family: var(--font-data);
+}
+
+:root[data-theme='dark'] .score-gauge {
+  --score-gauge-track: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Weather Hour Pill Strip ───────────────────────────── */
+
+.weather-hour-pill-strip-wrap {
+  margin: 4px 0 2px;
+}
+
+.weather-hour-pill-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.weather-hour-pill-strip-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.weather-hour-pill-strip-selected {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--focus-ring);
+  font-family: var(--font-data);
+}
+
+.weather-hour-pill-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 0 4px;
+}
+
+.weather-hour-pill-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.weather-hour-pill {
+  appearance: none;
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  background: rgba(246, 241, 230, 0.55);
+  border-radius: 10px;
+  padding: 6px 4px;
+  min-width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.weather-hour-pill:hover {
+  border-color: rgba(180, 175, 160, 0.5);
+  background: rgba(246, 241, 230, 0.8);
+}
+
+.weather-hour-pill.selected {
+  background: var(--focus-ring);
+  border-color: var(--focus-ring);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(47, 122, 87, 0.3);
+}
+
+.weather-hour-pill-time {
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.weather-hour-pill-temp {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--font-data);
+  line-height: 1.1;
+}
+
+.weather-hour-pill-icon {
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.weather-hour-pill.selected .weather-hour-pill-time,
+.weather-hour-pill.selected .weather-hour-pill-icon {
+  opacity: 0.9;
+}
+
+:root[data-theme='dark'] .weather-hour-pill {
+  background: rgba(26, 39, 49, 0.6);
+  border-color: rgba(43, 57, 70, 0.5);
+}
+
+:root[data-theme='dark'] .weather-hour-pill:hover {
+  background: rgba(26, 39, 49, 0.9);
+  border-color: rgba(43, 57, 70, 0.8);
+}
+
+:root[data-theme='dark'] .weather-hour-pill.selected {
+  background: var(--focus-ring);
+  border-color: var(--focus-ring);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(94, 160, 208, 0.3);
+}
+
 .sat-line-preview {
   margin: 0;
   padding: 8px 10px;

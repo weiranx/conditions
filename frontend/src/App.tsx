@@ -26,8 +26,6 @@ import {
   Flame,
   Sun,
   RefreshCw,
-  Minus,
-  Plus,
   BookmarkPlus,
   BookmarkCheck,
   Activity,
@@ -41,7 +39,6 @@ import {
   Loader2,
   Eye,
 } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './App.css';
 import { fetchApi, readApiErrorMessage, fetchAiBrief } from './lib/api-client';
 import {
@@ -56,10 +53,11 @@ import { HelpHint } from './components/planner/CardHelpHint';
 import { AvalancheForecastCard } from './components/planner/cards/AvalancheForecastCard';
 import { TravelWindowPlannerCard } from './components/planner/cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './components/planner/cards/WindLoadingCard';
-import { ElevationDangerGradient } from './components/planner/cards/ElevationDangerGradient';
 import { MultiDayRiskArc } from './components/planner/cards/MultiDayRiskArc';
 import { RouteConditionsProfile } from './components/planner/cards/RouteConditionsProfile';
 import { CollapsibleCard } from './components/planner/CollapsibleCard';
+import { ScoreGauge } from './components/planner/ScoreGauge';
+import { WeatherCardContent } from './components/planner/cards/WeatherCardContent';
 import {
   APP_CREDIT_TEXT,
   BACKEND_WAKE_RETRY_DELAY_MS,
@@ -5043,35 +5041,6 @@ function App() {
         safetyData.weather.timezone || null,
       )
     : 'Not available';
-  const activeWeatherHourInputValue = selectedWeatherHour?.value || activeWeatherHourValue;
-  const selectNearestWeatherHourFromInput = (rawValue: string) => {
-    if (!weatherHourQuickOptions.length) {
-      return;
-    }
-    const typedMinutes = parseTimeInputMinutes(rawValue);
-    if (typedMinutes === null) {
-      return;
-    }
-    let bestOption = weatherHourQuickOptions[0];
-    let bestDiff = Number.POSITIVE_INFINITY;
-    for (const option of weatherHourQuickOptions) {
-      const optionMinutes = parseTimeInputMinutes(option.value);
-      if (optionMinutes === null) {
-        continue;
-      }
-      let diff = Math.abs(optionMinutes - typedMinutes);
-      if (diff > 720) {
-        diff = 1440 - diff;
-      }
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestOption = option;
-      }
-    }
-    if (bestOption?.value) {
-      handleWeatherHourSelect(bestOption.value);
-    }
-  };
   const weatherCardTemp = Number.isFinite(Number(weatherPreviewPoint?.temp)) ? Number(weatherPreviewPoint?.temp) : Number(safetyData?.weather.temp);
   const weatherCardWind = Number.isFinite(Number(weatherPreviewPoint?.wind)) ? Number(weatherPreviewPoint?.wind) : Number(safetyData?.weather.windSpeed);
   const weatherCardGust = Number.isFinite(Number(weatherPreviewPoint?.gust))
@@ -5179,9 +5148,6 @@ function App() {
       ? `${Math.round(Number(weatherVisibilityRisk.activeHours))}/${Math.round(Number(weatherVisibilityRisk.windowHours))}h low-vis signal`
       : null;
   const weatherCardDisplayTime = selectedWeatherHour?.label || formatClockForStyle(alpineStartTime, preferences.timeStyle);
-  const weatherHourStepDisabled = weatherHourQuickOptions.length <= 1;
-  const weatherHourCanDecrease = !weatherHourStepDisabled && selectedWeatherHourIndex > 0;
-  const weatherHourCanIncrease = !weatherHourStepDisabled && selectedWeatherHourIndex >= 0 && selectedWeatherHourIndex < weatherHourQuickOptions.length - 1;
   const handleWeatherTrendChartClick = (chartState: unknown) => {
     const parsedState = chartState as { activePayload?: Array<{ payload?: { hourValue?: string | null } }>; activeLabel?: string | number } | null;
     if (!parsedState) {
@@ -5200,23 +5166,6 @@ function App() {
     if (matchedRow?.hourValue) {
       handleWeatherHourSelect(matchedRow.hourValue);
     }
-  };
-  const handleWeatherHourStep = (direction: 'decrease' | 'increase') => {
-    if (!weatherHourQuickOptions.length) {
-      return;
-    }
-    const currentIndex = selectedWeatherHourIndex >= 0 ? selectedWeatherHourIndex : 0;
-    const nextIndex =
-      direction === 'decrease'
-        ? Math.max(0, currentIndex - 1)
-        : Math.min(weatherHourQuickOptions.length - 1, currentIndex + 1);
-    const nextOption = weatherHourQuickOptions[nextIndex];
-    if (nextOption) {
-      handleWeatherHourSelect(nextOption.value);
-    }
-  };
-  const handleWeatherHourInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    selectNearestWeatherHourFromInput(event.target.value);
   };
   const satObjectiveLabel = truncateText((objectiveName || 'Objective').split(',')[0].trim(), 22);
   const satAvalancheSnippet =
@@ -7206,18 +7155,13 @@ function App() {
           <h2 className="sr-only">Conditions Report</h2>
           <div className="score-card" role="region" aria-label={`Safety score: ${safetyData.safety.score}%, ${safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}`} style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
             <div className="score-left">
-              <div className="score-value" style={{ color: getScoreColor(safetyData.safety.score) }}>
-                {safetyData.safety.score}%
-              </div>
-              <div className="score-bar-track">
-                <div className="score-bar-fill" style={{ width: `${safetyData.safety.score}%`, background: getScoreColor(safetyData.safety.score) }} />
-              </div>
+              <ScoreGauge score={safetyData.safety.score} scoreColor={getScoreColor(safetyData.safety.score)} />
               {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (
                 <div className="score-top-factors">
                   {safetyData.safety.factors
                     .slice()
                     .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)))
-                    .slice(0, 2)
+                    .slice(0, 3)
                     .map((f, idx) => (
                       <div key={idx} className="score-top-factor-row">
                         <span className="score-top-factor-impact">−{Math.abs(Math.round(Number(f.impact || 0)))}</span>
@@ -7791,321 +7735,77 @@ function App() {
                   </div>
                 </>}
               >
-                <div className="weather-row">
-                  <div>
-                    <div className="big-stat">{formatTempDisplay(weatherCardTemp)}</div>
-                    <div className="stat-label">Feels like {formatTempDisplay(weatherCardFeelsLike)}</div>
-                    {weatherTrendTempRange && (
-                      <div className="weather-temp-range">
-                        Low {formatTempDisplay(weatherTrendTempRange.low)} / High {formatTempDisplay(weatherTrendTempRange.high)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="weather-condition">
-                    <div className={`big-stat condition-text ${weatherCardDescription.toLowerCase().includes('snow') ? 'is-cold' : ''}`}>
-                      {weatherCardWithEmoji}
-                    </div>
-                    <div className="stat-label">Conditions at {weatherCardDisplayTime}</div>
-                  </div>
-                </div>
-                <p className="weather-period-line">Using forecast period: {weatherForecastPeriodLabel}</p>
-                {weatherPressureTrendSummary && (
-                  <div className="weather-pressure-chip-row" title={weatherPressureTrendSummary}>
-                    <span className={`weather-pressure-chip ${pressureTrendDirection === 'Falling' ? 'pressure-falling' : pressureTrendDirection === 'Rising' ? 'pressure-rising' : 'pressure-steady'}`}>
-                      {pressureTrendDirection} {pressureDeltaLabel}
-                    </span>
-                    <small className="weather-pressure-range">{pressureRangeLabel}</small>
-                  </div>
-                )}
-                {weatherPreviewActive && <p className="weather-preview-note">Hour preview only updates this Weather card.</p>}
-                {weatherHourQuickOptions.length > 0 && (
-                  <div className="weather-hour-picker" role="group" aria-label="Weather hour preview selector">
-                    <span className="weather-hour-picker-label">Jump to hour</span>
-                    <div className="weather-hour-stepper">
-                      <button
-                        type="button"
-                        className="weather-hour-step-btn"
-                        onClick={() => handleWeatherHourStep('decrease')}
-                        disabled={!weatherHourCanDecrease}
-                        aria-label="Previous forecast hour"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <div className="weather-hour-input-wrap">
-                        <input
-                          type="time"
-                          step={3600}
-                          className="weather-hour-input"
-                          aria-label="Type hour for weather preview"
-                          value={activeWeatherHourInputValue}
-                          onChange={handleWeatherHourInputChange}
-                          list="weather-hour-options"
-                        />
-                        <small>{selectedWeatherHour?.label || formatClockForStyle(alpineStartTime, preferences.timeStyle)}</small>
-                      </div>
-                      <button
-                        type="button"
-                        className="weather-hour-step-btn"
-                        onClick={() => handleWeatherHourStep('increase')}
-                        disabled={!weatherHourCanIncrease}
-                        aria-label="Next forecast hour"
-                      >
-                        <Plus size={14} />
-                      </button>
-                      <span className="weather-hour-temp-pill" aria-live="polite">
-                        {selectedWeatherHour?.tempLabel || '—'}
-                      </span>
-                    </div>
-                    <datalist id="weather-hour-options">
-                      {weatherHourQuickOptions.map((option) => (
-                        <option key={`weather-hour-option-${option.value}`} value={option.value} />
-                      ))}
-                    </datalist>
-                  </div>
-                )}
-                <div className="weather-trend-panel" aria-label={`${travelWindowHoursLabel} weather trend`}>
-                  <div className="weather-trend-head">
-                    <span className="weather-trend-title">Trend ({travelWindowHoursLabel})</span>
-                    <span className="weather-trend-meta">{weatherTrendMetricLabel}</span>
-                  </div>
-                  <div className="weather-trend-selector" role="group" aria-label="Weather trend metric selector">
-                    {weatherTrendMetricOptions.map((option) => (
-                      <button
-                        key={`weather-trend-metric-${option.key}`}
-                        type="button"
-                        className={`weather-trend-btn ${weatherTrendMetric === option.key ? 'active' : ''}`}
-                        onClick={() => setWeatherTrendMetric(option.key)}
-                        aria-pressed={weatherTrendMetric === option.key}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  {weatherTrendHasData ? (
-                    <div className="chart-wrap weather-trend-chart-wrap">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={weatherTrendChartData}
-                          margin={{ top: 10, right: 12, left: 4, bottom: 2 }}
-                          onClick={handleWeatherTrendChartClick}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.35} />
-                          <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={14} />
-                          <YAxis
-                            domain={weatherTrendYAxisDomain}
-                            tickLine={false}
-                            axisLine={false}
-                            width={48}
-                            tickFormatter={weatherTrendTickFormatter}
-                          />
-                          <Tooltip
-                            formatter={(value, _name, item) => {
-                              const payload = (item?.payload || {}) as { windDirectionLabel?: string | null };
-                              const numeric = Number.isFinite(Number(value)) ? Number(value) : Number.NaN;
-                              return [formatWeatherTrendValue(numeric, payload.windDirectionLabel), weatherTrendMetricLabel];
-                            }}
-                            labelFormatter={(label) => `${label}`}
-                          />
-                          {selectedWeatherHour?.value && weatherTrendChartData.some((row) => row.hourValue === selectedWeatherHour.value) && (
-                            <ReferenceLine
-                              x={weatherTrendChartData.find((row) => row.hourValue === selectedWeatherHour.value)?.label}
-                              stroke="rgba(31, 73, 56, 0.45)"
-                              strokeDasharray="4 4"
-                            />
-                          )}
-                          <Line
-                            type="monotone"
-                            dataKey="value"
-                            stroke={weatherTrendLineColor}
-                            strokeWidth={2.4}
-                            dot={(props) => {
-                              const { cx, cy, payload } = props as {
-                                cx?: number;
-                                cy?: number;
-                                payload?: { hourValue?: string | null; value?: number | null };
-                              };
-                              if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
-                                return null;
-                              }
-                              const pointValue = Number(payload?.value);
-                              if (!Number.isFinite(pointValue)) {
-                                return null;
-                              }
-                              const isSelectedHour = Boolean(selectedWeatherHour?.value && payload?.hourValue === selectedWeatherHour.value);
-                              return (
-                                <circle
-                                  cx={cx}
-                                  cy={cy}
-                                  r={isSelectedHour ? 4.8 : 1.9}
-                                  fill={isSelectedHour ? '#fefaf0' : weatherTrendLineColor}
-                                  stroke={weatherTrendLineColor}
-                                  strokeWidth={isSelectedHour ? 2.2 : 1.2}
-                                  style={{ cursor: payload?.hourValue ? 'pointer' : 'default' }}
-                                  onClick={() => {
-                                    if (payload?.hourValue) {
-                                      handleWeatherHourSelect(payload.hourValue);
-                                    }
-                                  }}
-                                />
-                              );
-                            }}
-                            activeDot={{ r: 3.8 }}
-                            connectNulls={false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="muted-note">No {weatherTrendMetricLabel.toLowerCase()} trend data is available for this selected window.</p>
-                  )}
-                </div>
-
-                <div className="weather-metrics">
-                  <div className="metric-chip">
-                    <span className="stat-label">Wind</span>
-                    <strong>{formatWindDisplay(weatherCardWind)}</strong>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Gusts</span>
-                    <strong className="gust-value">{formatWindDisplay(weatherCardGust)}</strong>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Precip</span>
-                    <strong>{Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}</strong>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Humidity</span>
-                    <strong>{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</strong>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Dew Point</span>
-                    <strong>{formatTempDisplay(weatherCardDewPoint)}</strong>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Pressure (station)</span>
-                    <strong>{weatherCardPressureLabel}</strong>
-                    <p className="metric-chip-detail pressure-detail">{weatherPressureContextLine}</p>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Wind Dir</span>
-                    <strong>{weatherCardWindDirection}</strong>
-                  </div>
-                  <div className="metric-chip">
-                    <span className="stat-label">Cloud Cover</span>
-                    <strong>{weatherCardCloudCoverLabel}</strong>
-                  </div>
-                  <div className="metric-chip metric-chip-wide">
-                    <span className="stat-label">Whiteout Risk</span>
-                    <strong>{weatherVisibilityScoreLabel}</strong>
-                    <div className="metric-chip-pill-row">
-                      <span className={`decision-pill ${weatherVisibilityPill}`}>{weatherVisibilityRisk.level}</span>
-                      {weatherVisibilityActiveWindowText && <span className="metric-chip-window">{weatherVisibilityActiveWindowText}</span>}
-                    </div>
-                    <p className="metric-chip-detail metric-chip-helper">{weatherVisibilityScoreMeaning}</p>
-                    <p className="metric-chip-detail">{localizeUnitText(weatherVisibilityDetail)}</p>
-                    {weatherVisibilityContextLine && <p className="metric-chip-detail">{weatherVisibilityContextLine}</p>}
-                  </div>
-                </div>
-
-                <section className="elevation-forecast" aria-label="Target elevation forecast">
-                  <div className="elevation-forecast-head">
-                    <h4>Target Elevation Forecast</h4>
-                    <label className="target-elev-inline-control">
-                      <span>Target ({elevationUnitLabel})</span>
-                      <div className="target-elev-input-row">
-                        <button
-                          type="button"
-                          className="target-elev-step-btn"
-                          onClick={() => handleTargetElevationStep(-TARGET_ELEVATION_STEP_FEET)}
-                          aria-label="Decrease target elevation by 1000 feet"
-                          title="Decrease by 1000 ft"
-                          disabled={!canDecreaseTargetElevation}
-                        >
-                          -
-                        </button>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          aria-label={`Target elevation in ${elevationUnitLabel}`}
-                          title={`Optional elevation to estimate weather at that altitude (${elevationUnitLabel}).`}
-                          placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
-                          value={targetElevationInput}
-                          onChange={handleTargetElevationChange}
-                        />
-                        <button
-                          type="button"
-                          className="target-elev-step-btn"
-                          onClick={() => handleTargetElevationStep(TARGET_ELEVATION_STEP_FEET)}
-                          aria-label="Increase target elevation by 1000 feet"
-                          title="Increase by 1000 ft"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </label>
-                  </div>
-                  {hasTargetElevation ? (
-                    targetElevationForecast ? (
-                      <article className="elevation-row">
-                        <div className="elevation-row-main">
-                          <strong>Estimated at target elevation</strong>
-                          <span>{formatElevationDisplay(targetElevationFt)} • {formatElevationDeltaDisplay(targetElevationForecast.deltaFt)} vs objective</span>
-                        </div>
-                        <div className="elevation-row-metrics">
-                          <span>{formatTempDisplay(targetElevationForecast.temp)}</span>
-                          <span>Feels {formatTempDisplay(targetElevationForecast.feelsLike)}</span>
-                          <span>Wind {formatWindDisplay(targetElevationForecast.windSpeed)}</span>
-                          <span>Gust {formatWindDisplay(targetElevationForecast.windGust)}</span>
-                        </div>
-                      </article>
-                    ) : (
-                      <p className="muted-note">Objective elevation is unavailable, so target elevation estimate cannot be generated.</p>
-                    )
-                  ) : (
-                    <p className="muted-note">Set a target elevation to estimate temperature, wind, and feels-like conditions at that altitude.</p>
-                  )}
-                </section>
-
-                {safetyData.weather.sourceDetails?.blended && (
-                  <p className="muted-note">
-                    Weather is blended. NOAA is primary; Open-Meteo filled missing fields.
-                  </p>
-                )}
-                {safeWeatherLink && (
-                  <a href={safeWeatherLink} target="_blank" rel="noreferrer" className="avy-external-link weather-external-link">
-                    {weatherLinkCta}
-                  </a>
-                )}
-
-                <section className="elevation-forecast" aria-label="Forecast by elevation">
-                  <div className="elevation-forecast-head">
-                    <h4>Elevation Forecast</h4>
-                    <span>
-                      Objective{' '}
-                      {formatElevationDisplay(
-                        safetyData.weather.elevation != null ? safetyData.weather.elevation : null,
-                      )}
-                    </span>
-                  </div>
-                  {elevationForecastBands.length > 0 ? (
-                  <ElevationDangerGradient
-                    elevationBands={elevationForecastBands}
-                    avalancheElevations={safetyData.avalanche.elevations}
-                    objectiveElevationFt={Number.isFinite(objectiveElevationFt) ? objectiveElevationFt : null}
-                    formatTempDisplay={formatTempDisplay}
-                    formatWindDisplay={formatWindDisplay}
-                    formatElevationDisplay={formatElevationDisplay}
-                    getDangerLevelClass={getDangerLevelClass}
-                    getDangerText={getDangerText}
-                  />
-                  ) : (
-                    <p className="muted-note">Elevation-adjusted forecast is unavailable for this point.</p>
-                  )}
-                  {safetyData.weather.elevationForecastNote && (
-                    <p className="elevation-note">{localizeUnitText(safetyData.weather.elevationForecastNote)}</p>
-                  )}
-                </section>
+                <WeatherCardContent
+                  formattedTemp={formatTempDisplay(weatherCardTemp)}
+                  formattedFeelsLike={formatTempDisplay(weatherCardFeelsLike)}
+                  trendTempRange={weatherTrendTempRange}
+                  conditionText={weatherCardWithEmoji}
+                  conditionIsCold={/snow|blizzard|sleet|freezing|ice pellet|wintry/i.test(weatherCardDescription)}
+                  displayTime={weatherCardDisplayTime}
+                  forecastPeriodLabel={weatherForecastPeriodLabel}
+                  previewActive={weatherPreviewActive}
+                  pressureTrendSummary={weatherPressureTrendSummary}
+                  pressureTrendDirection={pressureTrendDirection}
+                  pressureDeltaLabel={pressureDeltaLabel}
+                  pressureRangeLabel={pressureRangeLabel}
+                  hourOptions={weatherHourQuickOptions}
+                  selectedHourIndex={selectedWeatherHourIndex}
+                  onHourSelect={handleWeatherHourSelect}
+                  weatherConditionEmoji={weatherConditionEmoji}
+                  trendChartData={weatherTrendChartData}
+                  trendHasData={weatherTrendHasData}
+                  trendMetric={weatherTrendMetric}
+                  trendMetricLabel={weatherTrendMetricLabel}
+                  trendMetricOptions={weatherTrendMetricOptions}
+                  trendLineColor={weatherTrendLineColor}
+                  trendYAxisDomain={weatherTrendYAxisDomain}
+                  trendTickFormatter={weatherTrendTickFormatter}
+                  formatWeatherTrendValue={formatWeatherTrendValue}
+                  onTrendMetricChange={(key) => setWeatherTrendMetric(key as typeof weatherTrendMetric)}
+                  onTrendChartClick={handleWeatherTrendChartClick}
+                  selectedHourValue={selectedWeatherHour?.value || null}
+                  travelWindowHoursLabel={travelWindowHoursLabel}
+                  formattedWind={formatWindDisplay(weatherCardWind)}
+                  formattedGust={formatWindDisplay(weatherCardGust)}
+                  precipLabel={Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}
+                  humidityLabel={Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}
+                  dewPointLabel={formatTempDisplay(weatherCardDewPoint)}
+                  pressureLabel={weatherCardPressureLabel}
+                  pressureContextLine={weatherPressureContextLine}
+                  windDirection={weatherCardWindDirection}
+                  cloudCoverLabel={weatherCardCloudCoverLabel}
+                  visibilityScoreLabel={weatherVisibilityScoreLabel}
+                  visibilityPill={weatherVisibilityPill}
+                  visibilityRiskLevel={weatherVisibilityRisk.level}
+                  visibilityActiveWindowText={weatherVisibilityActiveWindowText}
+                  visibilityScoreMeaning={weatherVisibilityScoreMeaning}
+                  visibilityDetail={weatherVisibilityDetail}
+                  visibilityContextLine={weatherVisibilityContextLine}
+                  targetElevationInput={targetElevationInput}
+                  onTargetElevationChange={handleTargetElevationChange}
+                  onTargetElevationStep={handleTargetElevationStep}
+                  canDecreaseTargetElevation={canDecreaseTargetElevation}
+                  hasTargetElevation={hasTargetElevation}
+                  targetElevationForecast={targetElevationForecast}
+                  targetElevationFt={targetElevationFt}
+                  targetElevationStepFeet={TARGET_ELEVATION_STEP_FEET}
+                  elevationUnitLabel={elevationUnitLabel}
+                  elevationForecastBands={elevationForecastBands}
+                  objectiveElevationFt={objectiveElevationFt}
+                  objectiveElevationLabel={formatElevationDisplay(safetyData.weather.elevation != null ? safetyData.weather.elevation : null)}
+                  avalancheElevations={safetyData.avalanche.elevations}
+                  elevationForecastNote={safetyData.weather.elevationForecastNote}
+                  isBlended={!!safetyData.weather.sourceDetails?.blended}
+                  safeWeatherLink={safeWeatherLink}
+                  weatherLinkCta={weatherLinkCta}
+                  formatTempDisplay={formatTempDisplay}
+                  formatWindDisplay={formatWindDisplay}
+                  formatElevationDisplay={formatElevationDisplay}
+                  formatElevationDeltaDisplay={formatElevationDeltaDisplay}
+                  localizeUnitText={localizeUnitText}
+                  getDangerLevelClass={getDangerLevelClass}
+                  getDangerText={getDangerText}
+                />
               </CollapsibleCard>
 
               {shouldRenderRankedCard('heatRisk') && (
