@@ -6,6 +6,7 @@ import {
 import { AppDisclaimer } from '../../app/map-components';
 import type {
   ElevationUnit,
+  ReportLayout,
   TemperatureUnit,
   ThemeMode,
   TimeStyle,
@@ -51,6 +52,7 @@ export interface SettingsViewProps {
   handleElevationUnitChange: (elevationUnit: ElevationUnit) => void;
   handleWindSpeedUnitChange: (windSpeedUnit: WindSpeedUnit) => void;
   handleTimeStyleChange: (timeStyle: TimeStyle) => void;
+  handleReportLayoutChange: (reportLayout: ReportLayout) => void;
 
   // Threshold draft handlers
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -95,6 +97,7 @@ export function SettingsView({
   handleElevationUnitChange,
   handleWindSpeedUnitChange,
   handleTimeStyleChange,
+  handleReportLayoutChange,
   handleTravelWindowHoursDraftChange,
   handleTravelWindowHoursDraftBlur,
   handleWindThresholdDisplayChange,
@@ -152,6 +155,19 @@ export function SettingsView({
               <button type="button" className={`theme-chip ${preferences.themeMode === 'dark' ? 'active' : ''}`} onClick={() => handleThemeModeChange('dark')}>
                 Dark
               </button>
+            </div>
+            <div style={{ marginTop: '16px' }}>
+              <label className="settings-number-row">
+                <span>Report layout</span>
+                <div className="settings-theme-row">
+                  <button type="button" className={`theme-chip ${preferences.reportLayout === 'cards' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('cards')}>
+                    Cards
+                  </button>
+                  <button type="button" className={`theme-chip ${preferences.reportLayout === 'briefing' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('briefing')}>
+                    Briefing
+                  </button>
+                </div>
+              </label>
             </div>
           </article>
 

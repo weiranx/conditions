@@ -10,6 +10,7 @@ import {
   normalizeTemperatureUnit,
   normalizeThemeMode,
   normalizeTimeOrFallback,
+  normalizeReportLayout,
   normalizeTimeStyle,
   normalizeWindSpeedUnit,
 } from './core';
@@ -46,6 +47,7 @@ export function getDefaultUserPreferences(): UserPreferences {
     maxPrecipChance: 60,
     minFeelsLikeF: 5,
     travelWindowHours: 12,
+    reportLayout: 'cards',
   };
 }
 
@@ -85,6 +87,7 @@ export function loadUserPreferences(): UserPreferences {
         MIN_TRAVEL_WINDOW_HOURS,
         MAX_TRAVEL_WINDOW_HOURS,
       ),
+      reportLayout: normalizeReportLayout(parsed.reportLayout),
     };
   } catch {
     return defaults;

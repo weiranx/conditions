@@ -727,6 +727,7 @@ function App() {
     feelsLikeThresholdMax,
     handlePreferenceTimeChange,
     handleThemeModeChange,
+    handleReportLayoutChange,
     handleTemperatureUnitChange,
     handleWindSpeedUnitChange,
     handleElevationUnitChange,
@@ -1971,6 +1972,7 @@ function App() {
         feelsLikeThresholdStep={feelsLikeThresholdStep}
         handlePreferenceTimeChange={handlePreferenceTimeChange}
         handleThemeModeChange={handleThemeModeChange}
+        handleReportLayoutChange={handleReportLayoutChange}
         handleTemperatureUnitChange={handleTemperatureUnitChange}
         handleElevationUnitChange={handleElevationUnitChange}
         handleWindSpeedUnitChange={handleWindSpeedUnitChange}

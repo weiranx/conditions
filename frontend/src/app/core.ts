@@ -15,6 +15,7 @@ import type {
   SafetyData,
   TemperatureUnit,
   ThemeMode,
+  ReportLayout,
   TimeStyle,
   WindSpeedUnit,
 } from './types';
@@ -643,6 +644,10 @@ export function normalizeWindSpeedUnit(rawUnit: string | null | undefined): Wind
 
 export function normalizeTimeStyle(rawStyle: string | null | undefined): TimeStyle {
   return rawStyle === '24h' ? '24h' : 'ampm';
+}
+
+export function normalizeReportLayout(raw: string | null | undefined): ReportLayout {
+  return raw === 'briefing' ? 'briefing' : 'cards';
 }
 
 export function parseIsoDateToUtcMs(value: string | null | undefined): number | null {

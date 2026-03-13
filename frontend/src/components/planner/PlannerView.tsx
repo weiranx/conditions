@@ -55,6 +55,7 @@ import { FireRiskCard } from './cards/FireRiskCard';
 import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
 import { GearCard } from './cards/GearCard';
 import { DeepDiveReportCard } from './cards/DeepDiveReportCard';
+import { BriefingView } from './BriefingView';
 import { AppDisclaimer, LocationMarker, MapUpdater } from '../../app/map-components';
 import { renderSimpleMarkdown } from '../../app/markdown';
 import {
@@ -1338,6 +1339,9 @@ export function PlannerView(props: PlannerViewProps) {
             </div>
           )}
 
+          {preferences.reportLayout === 'briefing' ? (
+            <BriefingView {...props} />
+          ) : (<>
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
             <div className="report-column">
               <CollapsibleCard
@@ -2091,6 +2095,7 @@ export function PlannerView(props: PlannerViewProps) {
             localizeUnitText={localizeUnitText}
             normalizeDangerLevel={normalizeDangerLevel}
           />
+          </>)}
 
         </div>
       )}
