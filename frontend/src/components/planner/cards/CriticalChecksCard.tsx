@@ -37,10 +37,7 @@ export function CriticalChecksCard({
       )}
       <div className="checks-summary">
         <span className={`checks-summary-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>
-          {criticalCheckFailCount === 0 ? 'Ready' : `${criticalCheckFailCount} attention`}
-        </span>
-        <span className="checks-summary-text">
-          {criticalCheckFailCount === 0 ? 'All critical checks are currently passing.' : 'Address failing checks before departure.'}
+          {criticalCheckFailCount === 0 ? 'All clear' : `${criticalCheckFailCount} need attention`}
         </span>
       </div>
       <div className="checks-list">

@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { SearchBox } from './SearchBox';
 import { ForecastLoading } from './ForecastLoading';
-import { HelpHint } from './CardHelpHint';
+// HelpHint available but removed from card titles for cleaner UI
 import { AvalancheForecastCard } from './cards/AvalancheForecastCard';
 import { TravelWindowPlannerCard } from './cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './cards/WindLoadingCard';
@@ -88,7 +88,7 @@ import type { TerrainConditionDetails } from './cards/TerrainCard';
 import type { TargetElevationForecast } from './cards/WeatherCardContent';
 import type { SourceFreshnessRow } from './cards/SourceFreshnessCard';
 import type { BetterDaySuggestion } from '../../hooks/useDayComparisons';
-import { formatClockShort } from '../../app/weather-display';
+// formatClockShort available if needed
 import { criticalRiskLevelText } from '../../app/critical-window';
 
 // ─── Props interface ────────────────────────────────────────────────────────
@@ -560,11 +560,11 @@ export function PlannerView(props: PlannerViewProps) {
 
     // Score card
     getScoreColor,
-    forecastLeadHoursDisplay,
+    forecastLeadHoursDisplay: _forecastLeadHoursDisplay,
     objectiveName,
     displayStartTime,
     returnTimeFormatted,
-    returnExtendsPastMidnight,
+    returnExtendsPastMidnight: _returnExtendsPastMidnight,
     formatClockForStyle,
     error,
     aiBriefNarrative,
@@ -733,16 +733,16 @@ export function PlannerView(props: PlannerViewProps) {
     snowfall12hDisplay,
     snowfall24hDisplay,
     snowfall48hDisplay,
-    snowfall12hIn,
+    snowfall12hIn: _snowfall12hIn,
     snowfall24hIn,
-    snowfall48hIn,
+    snowfall48hIn: _snowfall48hIn,
 
     // Rainfall card
     precipInsightLine,
     expectedPrecipSummaryLine,
     expectedTravelWindowHours,
     expectedRainWindowDisplay,
-    expectedSnowWindowIn,
+    expectedSnowWindowIn: _expectedSnowWindowIn,
     expectedSnowWindowDisplay,
     rainfallExpected,
     precipitationDisplayTimezone,
@@ -756,7 +756,7 @@ export function PlannerView(props: PlannerViewProps) {
     // Wind Loading card
     windLoadingHintsRelevant,
     windLoadingLevel,
-    windLoadingConfidence,
+    windLoadingConfidence: _windLoadingConfidence,
     windLoadingPillClass,
     windLoadingActiveWindowLabel,
     windLoadingActiveHoursDetail,
@@ -1159,7 +1159,7 @@ export function PlannerView(props: PlannerViewProps) {
                   {safetyData.safety.factors
                     .slice()
                     .sort((a, b) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)))
-                    .slice(0, 3)
+                    .slice(0, 2)
                     .map((f, idx) => (
                       <div key={idx} className="score-top-factor-row">
                         <span className="score-top-factor-impact">−{Math.abs(Math.round(Number(f.impact || 0)))}</span>
@@ -1176,23 +1176,12 @@ export function PlannerView(props: PlannerViewProps) {
               <div className="hazard-badge">
                 <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
               </div>
-              <div className="score-confidence-row">
-                <span className="score-confidence-dot" style={{
-                  background: typeof safetyData.safety.confidence === 'number'
-                    ? safetyData.safety.confidence >= 70 ? '#4a9b6a' : safetyData.safety.confidence >= 40 ? '#c8841b' : '#b04040'
-                    : '#aaa'
-                }} />
-                Confidence {typeof safetyData.safety.confidence === 'number' ? `${safetyData.safety.confidence}% (${safetyData.safety.confidence >= 70 ? 'high' : safetyData.safety.confidence >= 40 ? 'moderate' : 'low'})` : 'N/A'}
-                {forecastLeadHoursDisplay && <span className="forecast-lead-badge">{forecastLeadHoursDisplay}</span>}
-              </div>
               <div className="objective-line">
-                {objectiveName || 'Pinned Objective'} • {startLabel} {displayStartTime}{returnTimeFormatted ? ` • Back by ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}${returnExtendsPastMidnight ? ' (+1 day)' : ''}` : ''}
+                {objectiveName || 'Objective'} · {displayStartTime}{returnTimeFormatted ? ` – ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ''}
               </div>
               {(loading || error) && (
                 <div className="source-line">
-                  {loading
-                    ? 'Showing last successful report while new data loads.'
-                    : 'Showing last successful report. Latest refresh failed.'}
+                  {loading ? 'Loading new data…' : 'Using last successful report.'}
                 </div>
               )}
               <div className="score-ai-brief">
@@ -1365,17 +1354,12 @@ export function PlannerView(props: PlannerViewProps) {
                 defaultExpanded={false}
                 order={reportCardOrder.decisionGate}
                 className="decision-card"
-                title={<span className="card-title"><ShieldCheck size={14} /> Decision Gate <HelpHint text="Top-line go/caution/no-go recommendation based on weather, avalanche, alerts, score, and daylight checks." /></span>}
+                title={<span className="card-title"><ShieldCheck size={14} /> Decision</span>}
                 headerMeta={<span className={`decision-pill ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</span>}
                 summary={<>{decision.level}{decision.blockers.length > 0 ? ` · ${decision.blockers[0]}` : decision.cautions.length > 0 ? ` · ${decision.cautions[0]}` : ''}</>}
                 preview={<>
                   <div className={`card-preview-hero ${decision.level.toLowerCase().replace('-', '')}`}>{decision.level}</div>
                   <div className="card-preview-caption">{decision.headline}</div>
-                  <div className="card-preview-row">
-                    <span className="card-preview-chip">{decisionPassingChecksCount}/{decision.checks.length} checks</span>
-                    {decision.blockers.length > 0 && <span className="card-preview-chip">{decision.blockers[0]}</span>}
-                    {decision.blockers.length === 0 && decision.cautions.length > 0 && <span className="card-preview-chip">{decision.cautions[0]}</span>}
-                  </div>
                 </>}
               >
                 <DecisionGateCard
@@ -1407,15 +1391,11 @@ export function PlannerView(props: PlannerViewProps) {
                 defaultExpanded={false}
                 order={reportCardOrder.travelWindowPlanner}
                 className="projection-card"
-                title={<span className="card-title">Travel Window Planner ({travelWindowHoursLabel}) <HelpHint text="Hourly pass/fail timeline starting at your selected start time using your selected window length, plus wind, precip, and feels-like thresholds." /></span>}
+                title={<span className="card-title">Travel Window ({travelWindowHoursLabel})</span>}
                 summary={travelWindowInsights.bestWindow ? `Best: ${formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)} (${travelWindowInsights.bestWindow.length}h)` : 'No safe window'}
                 preview={<>
                   <div className="card-preview-hero mono">{travelWindowInsights.bestWindow ? formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle) : 'No safe window'}</div>
-                  <div className="card-preview-caption">{travelWindowInsights.bestWindow ? `${travelWindowInsights.bestWindow.length}h clear window` : 'All hours have threshold violations'}</div>
-                  <div className="card-preview-row">
-                    <span className="card-preview-chip">{travelWindowInsights.passHours} pass / {travelWindowInsights.failHours} fail</span>
-                    {travelWindowInsights.trendLabel !== 'Steady' && <span className="card-preview-chip">{travelWindowInsights.trendLabel}</span>}
-                  </div>
+                  <div className="card-preview-caption">{travelWindowInsights.bestWindow ? `${travelWindowInsights.bestWindow.length}h clear` : 'All hours have violations'}</div>
                 </>}
               >
               <TravelWindowPlannerCard
@@ -1468,19 +1448,12 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.criticalChecks}
                   className="checks-card"
-                  title={<span className="card-title"><CheckCircle2 size={14} /> Critical Checks <HelpHint text="Must-pass gates before committing. Failed checks are sorted first with live threshold context." /></span>}
+                  title={<span className="card-title"><CheckCircle2 size={14} /> Critical Checks</span>}
                   headerMeta={<span className={`decision-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>{criticalCheckPassCount}/{criticalCheckTotal} passing</span>}
                   summary={`${criticalCheckPassCount} passed · ${criticalCheckFailCount} attention`}
                   preview={<>
                     <div className={`card-preview-hero mono ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>{criticalCheckPassCount}/{criticalCheckTotal}</div>
-                    <div className="card-preview-caption">{criticalCheckFailCount === 0 ? 'All checks passing' : `${criticalCheckFailCount} need attention`}</div>
-                    {topCriticalAttentionChecks.length > 0 && (
-                      <div className="card-preview-row">
-                        {topCriticalAttentionChecks.slice(0, 2).map((check, idx) => (
-                          <span key={`preview-attn-${idx}`} className="card-preview-chip">{check.label}</span>
-                        ))}
-                      </div>
-                    )}
+                    <div className="card-preview-caption">{criticalCheckFailCount === 0 ? 'All passing' : `${criticalCheckFailCount} need attention`}</div>
                   </>}
                 >
                 <CriticalChecksCard
@@ -1499,7 +1472,7 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.scoreTrace}
                   className="score-trace-card"
-                  title={<span className="card-title"><ShieldCheck size={14} /> Score Breakdown <HelpHint text="Shows top factors pulling the safety score down or up, plus what changed vs yesterday." /></span>}
+                  title={<span className="card-title"><ShieldCheck size={14} /> Score Breakdown</span>}
                   headerMeta={dayOverDay ? <span className={`decision-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>{dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}</span> : undefined}
                   summary={`${Array.isArray(safetyData.safety.factors) ? safetyData.safety.factors.length : 0} factors`}
                   preview={(() => {
@@ -1527,17 +1500,12 @@ export function PlannerView(props: PlannerViewProps) {
                 defaultExpanded={false}
                 order={reportCardOrder.atmosphericData}
                 className="weather-card"
-                title={<span className="card-title"><Thermometer size={14} /> Weather <HelpHint text="Weather for your selected start time with optional hour preview, including temperature, wind, pressure, precip, humidity, cloud cover, and source attribution." /></span>}
-                headerMeta={<div className="weather-header-meta"><span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>{safetyData.forecast?.isFuture ? 'Forecast' : 'Current'} • {safetyData.forecast?.selectedDate || forecastDate}</span>{safetyData.weather.issuedTime && <span className="weather-issued">Issued • {formatPubTime(safetyData.weather.issuedTime)}</span>}<span className="weather-source-pill">Source • {weatherSourceDisplay}</span></div>}
+                title={<span className="card-title"><Thermometer size={14} /> Weather</span>}
+                headerMeta={<span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>{safetyData.forecast?.isFuture ? 'Forecast' : 'Current'}</span>}
                 summary={`${formatTempDisplay(weatherCardTemp)} · Wind ${formatWindDisplay(weatherCardWind)}`}
                 preview={<>
                   <div className="card-preview-hero mono">{formatTempDisplay(weatherCardTemp)}</div>
-                  <div className="card-preview-caption">{weatherCardWithEmoji}</div>
-                  <div className="card-preview-row">
-                    <span className="card-preview-chip">Wind {formatWindDisplay(weatherCardWind)}</span>
-                    <span className="card-preview-chip">Feels {formatTempDisplay(weatherCardFeelsLike)}</span>
-                    {Number.isFinite(weatherCardPrecip) && <span className="card-preview-chip">Precip {weatherCardPrecip}%</span>}
-                  </div>
+                  <div className="card-preview-caption">{weatherCardWithEmoji} · Wind {formatWindDisplay(weatherCardWind)}</div>
                 </>}
               >
                 <WeatherCardContent
@@ -1619,7 +1587,7 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.heatRisk}
                   className="heat-risk-card"
-                  title={<span className="card-title"><Sun size={14} /> Heat Risk <HelpHint text="Heat-stress signal synthesized from selected-period apparent temperature, humidity, near-term trend peaks, and lower-terrain elevation estimates." /></span>}
+                  title={<span className="card-title"><Sun size={14} /> Heat Risk</span>}
                   headerMeta={<span className={`decision-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>}
                   summary={String(heatRiskLabel || 'Low').toUpperCase()}
                   preview={<>
@@ -1649,18 +1617,12 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.terrainTrailCondition}
                   className="terrain-condition-card"
-                  title={<span className="card-title"><Route size={14} /> Terrain / Trail Condition <HelpHint text={terrainConditionDetails.summary} /></span>}
+                  title={<span className="card-title"><Route size={14} /> Terrain</span>}
                   headerMeta={<span className={`decision-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>}
                   summary={safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}
                   preview={<>
                     <div className="card-preview-hero">{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</div>
                     <div className="card-preview-caption">{terrainConditionDetails.summary}</div>
-                    {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
-                      <div className="card-preview-row">
-                        {terrainConditionDetails.impact && <span className="card-preview-chip">{terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'} impact</span>}
-                        {terrainConditionDetails.confidence && <span className="card-preview-chip">{terrainConditionDetails.confidence} confidence</span>}
-                      </div>
-                    )}
                   </>}
                 >
                 <TerrainCard
@@ -1681,18 +1643,12 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.recentRainfall}
                   className="rainfall-card"
-                  title={<span className="card-title"><CloudRain size={14} /> Recent Precipitation Totals <HelpHint text="Observed rolling totals (past 12h/24h/48h) plus expected precipitation for your selected travel-window duration." /></span>}
+                  title={<span className="card-title"><CloudRain size={14} /> Precipitation</span>}
                   headerMeta={<span className={`decision-pill ${rainfall24hSeverityClass}`}>24h rain {rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}</span>}
                   summary={`${rainfall24hDisplay}/24h${Number.isFinite(snowfall24hIn) ? ` · snow ${snowfall24hDisplay}` : ''}`}
                   preview={<>
                     <div className="card-preview-hero mono">{rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · ${snowfall24hDisplay}` : ''}</div>
-                    <div className="card-preview-caption">Rain · Snow past 24h</div>
-                    <div className="card-preview-row">
-                      <span className="card-preview-chip">Rain 12h {rainfall12hDisplay}</span>
-                      {Number.isFinite(snowfall12hIn) && <span className="card-preview-chip">Snow 12h {snowfall12hDisplay}</span>}
-                      <span className="card-preview-chip">48h {rainfall48hDisplay}{Number.isFinite(snowfall48hIn) ? ` · ${snowfall48hDisplay}` : ''}</span>
-                      <span className="card-preview-chip">Expected {expectedRainWindowDisplay}{Number.isFinite(expectedSnowWindowIn) ? ` · ${expectedSnowWindowDisplay}` : ''}</span>
-                    </div>
+                    <div className="card-preview-caption">Past 24h</div>
                   </>}
                 >
                 <RainfallCard
@@ -1727,16 +1683,12 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.windLoading}
                   className="wind-loading-card"
-                  title={<span className="card-title"><Wind size={14} /> Wind Loading <HelpHint text="Compass rose and transport analysis: which aspects are loading based on wind direction, trend agreement, and active transport hours." /></span>}
-                  headerMeta={<span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel} · {windLoadingConfidence}</span>}
-                  summary={`${windLoadingLevel} · ${formatWindDisplay(safetyData.weather.windSpeed)} ${safetyData.weather.windDirection || 'Calm'} · Lee: ${leewardAspectHints.length > 0 ? leewardAspectHints.join(', ') : 'N/A'}`}
+                  title={<span className="card-title"><Wind size={14} /> Wind Loading</span>}
+                  headerMeta={<span className={`decision-pill ${windLoadingPillClass}`}>{windLoadingLevel}</span>}
+                  summary={`${windLoadingLevel} · ${formatWindDisplay(safetyData.weather.windSpeed)} ${safetyData.weather.windDirection || 'Calm'}`}
                   preview={<>
                     <div className="card-preview-hero">{windLoadingLevel}</div>
-                    <div className="card-preview-caption">{formatWindDisplay(safetyData.weather.windSpeed)} {safetyData.weather.windDirection || 'Calm'} · {windLoadingConfidence} confidence</div>
-                    <div className="card-preview-row">
-                      {leewardAspectHints.length > 0 && <span className="card-preview-chip">Lee: {leewardAspectHints.join(', ')}</span>}
-                      {Number.isFinite(safetyData.weather.windGust) && <span className="card-preview-chip">Gust {formatWindDisplay(safetyData.weather.windGust)}</span>}
-                    </div>
+                    <div className="card-preview-caption">{formatWindDisplay(safetyData.weather.windSpeed)} {safetyData.weather.windDirection || 'Calm'}</div>
                   </>}
                 >
                   <WindLoadingCard
@@ -1824,7 +1776,7 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.sourceFreshness}
                   className="source-freshness-card"
-                  title={<span className="card-title"><Clock size={14} /> Source Freshness <HelpHint text="How old each feed is based on upstream publish/observation timestamps (not local report generation time)." /></span>}
+                  title={<span className="card-title"><Clock size={14} /> Source Freshness</span>}
                   summary={reportGeneratedAt ? `Updated ${formatAgeFromNow(reportGeneratedAt)}` : 'Freshness data unavailable'}
                   preview={<>
                     <div className="card-preview-hero mono">{reportGeneratedAt ? formatAgeFromNow(reportGeneratedAt) : 'N/A'}</div>
@@ -1848,7 +1800,7 @@ export function PlannerView(props: PlannerViewProps) {
                 defaultExpanded={false}
                 order={reportCardOrder.nwsAlerts}
                 className="nws-alerts-card"
-                title={<span className="card-title"><AlertTriangle size={14} /> NWS Alerts <HelpHint text="Official National Weather Service alerts active at your selected start time for this location." /></span>}
+                title={<span className="card-title"><AlertTriangle size={14} /> Alerts</span>}
                 headerMeta={<span className={`decision-pill ${nwsAlertCount > 0 ? 'nogo' : 'go'}`}>{nwsAlertCount} active</span>}
                 summary={nwsAlertCount > 0 ? `${nwsAlertCount} active` : 'None active'}
                 preview={<>
@@ -1872,7 +1824,7 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.airQuality}
                   className="air-quality-card"
-                  title={<span className="card-title"><Wind size={14} /> Air Quality <HelpHint text="AQI and pollutant values near your objective. Elevated values can reduce performance and increase risk." /></span>}
+                  title={<span className="card-title"><Wind size={14} /> Air Quality</span>}
                   headerMeta={<span className={`decision-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClassFn(safetyData.airQuality?.usAqi)}`}>{airQualityFutureNotApplicable ? 'Current-day only' : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}</span>}
                   summary={`AQI: ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'} (${safetyData.airQuality?.category || 'Unknown'})`}
                   preview={<>
@@ -1900,16 +1852,12 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.snowpackSnapshot}
                   className="snowpack-card"
-                  title={<span className="card-title"><Mountain size={14} /> Snowpack Snapshot <HelpHint text="Observed and modeled snowpack context with practical takeaways from nearest SNOTEL and NOAA NOHRSC, plus historical average comparison for your selected date." /></span>}
+                  title={<span className="card-title"><Mountain size={14} /> Snowpack</span>}
                   headerMeta={<span className={`decision-pill ${snowpackPillClass}`}>{snowpackStatusLabel}</span>}
                   summary={snowpackStatusLabel}
                   preview={<>
                     <div className="card-preview-hero mono">{snotelDepthDisplay}</div>
-                    <div className="card-preview-caption">SWE {snotelSweDisplay} · {safetyData.snowpack?.snotel?.stationName || 'Nearest SNOTEL'}</div>
-                    <div className="card-preview-row">
-                      <span className="card-preview-chip">{snowpackStatusLabel}</span>
-                      <span className="card-preview-chip">{snowpackHistoricalStatusLabel}</span>
-                    </div>
+                    <div className="card-preview-caption">{snowpackStatusLabel}</div>
                   </>}
                 >
                 <SnowpackCard
@@ -1953,7 +1901,7 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.fireRisk}
                   className="fire-risk-card"
-                  title={<span className="card-title"><Flame size={14} /> Fire Risk <HelpHint text="Fire-weather and smoke risk synthesized from forecast heat/dryness/wind, NWS fire-weather alerts, and air-quality context." /></span>}
+                  title={<span className="card-title"><Flame size={14} /> Fire Risk</span>}
                   headerMeta={<span className={`decision-pill ${fireRiskPillClass}`}>{fireRiskLabel.toUpperCase()}</span>}
                   summary={fireRiskLabel.toUpperCase()}
                   preview={<>
@@ -1977,16 +1925,12 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.planSnapshot}
                   className="plan-card"
-                  title={<span className="card-title"><Sun size={14} /> Daylight &amp; Timing <HelpHint text="Your start time, daylight window, and sunset margin for this trip." /></span>}
+                  title={<span className="card-title"><Sun size={14} /> Daylight</span>}
                   headerMeta={sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null ? <span className="plan-daylight-badge">{Math.floor((sunsetMinutesForPlan - sunriseMinutesForPlan) / 60)}h {(sunsetMinutesForPlan - sunriseMinutesForPlan) % 60}m daylight</span> : undefined}
                   summary={`Start ${displayStartTime} · ${daylightRemainingFromStartLabel} daylight`}
                   preview={<>
                     <div className="card-preview-hero mono">{displayStartTime}</div>
-                    <div className="card-preview-caption">{daylightRemainingFromStartLabel} daylight from start</div>
-                    <div className="card-preview-row">
-                      <span className="card-preview-chip">↑ {formatClockShort(safetyData.solar.sunrise, preferences.timeStyle)}</span>
-                      <span className="card-preview-chip">↓ {formatClockShort(safetyData.solar.sunset, preferences.timeStyle)}</span>
-                    </div>
+                    <div className="card-preview-caption">{daylightRemainingFromStartLabel} daylight</div>
                   </>}
                 >
                 <PlanSnapshotCard
@@ -2012,7 +1956,7 @@ export function PlannerView(props: PlannerViewProps) {
                   defaultExpanded={false}
                   order={reportCardOrder.recommendedGear}
                   className="gear-card"
-                  title={<span className="card-title">Gear Recommendations <HelpHint text="Prioritized gear suggestions with plain-language reasons based on weather, precipitation, snowpack, avalanche relevance, alerts, air quality, and fire signals." /></span>}
+                  title={<span className="card-title">Gear</span>}
                   summary={`${gearRecommendations.length} item${gearRecommendations.length !== 1 ? 's' : ''}`}
                   preview={<>
                     <div className="card-preview-hero mono">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</div>
@@ -2027,25 +1971,9 @@ export function PlannerView(props: PlannerViewProps) {
 
           {avalancheRelevant && (() => {
             const avyHeaderMeta = (
-              <div className="source-meta">
-                {avalancheRelevant && (
-                  <span className={`avy-header-danger-chip ${avalancheUnknown ? 'danger-level-unknown' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
-                    {avalancheUnknown ? 'Unknown' : `L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
-                  </span>
-                )}
-                <span>Avalanche center: {safetyData.avalanche.center || 'N/A'}</span>
-                {safetyData.avalanche.zone && <span className="source-zone">{safetyData.avalanche.zone}</span>}
-                {safetyData.avalanche.publishedTime && (
-                  <span className="published-chip">
-                    <Clock size={10} /> Issued: {formatPubTime(safetyData.avalanche.publishedTime)}
-                  </span>
-                )}
-                {safetyData.avalanche.expiresTime && (
-                  <span className={`published-chip ${avalancheExpiredForSelectedStart ? 'published-chip-expired' : ''}`}>
-                    <Clock size={10} /> {avalancheExpiredForSelectedStart ? 'Expired:' : 'Expires:'} {formatPubTime(safetyData.avalanche.expiresTime)}
-                  </span>
-                )}
-              </div>
+              <span className={`decision-pill ${avalancheUnknown ? 'watch' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
+                {avalancheUnknown ? 'Unknown' : `L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
+              </span>
             );
             return (
             <CollapsibleCard
@@ -2054,7 +1982,7 @@ export function PlannerView(props: PlannerViewProps) {
               defaultExpanded={false}
               order={reportCardOrder.avalancheForecast}
               className="avy-card"
-              title={<span className="card-title"><Zap size={14} /> Avalanche Forecast <HelpHint text="Center-issued avalanche danger by elevation, bottom line, and published avalanche problems for this zone/date." /></span>}
+              title={<span className="card-title"><Zap size={14} /> Avalanche</span>}
               headerMeta={avyHeaderMeta}
               summary={avalancheRelevant ? (overallAvalancheLevel != null ? `L${overallAvalancheLevel}: ${getDangerText(overallAvalancheLevel)}` : 'Unknown danger level') : 'Not applicable'}
               preview={<>

@@ -72,9 +72,7 @@ export function HomeView({
         <div className="home-hero-main">
           <div className="home-kicker">Backcountry Conditions</div>
           <h1>Plan your next backcountry day.</h1>
-          <p>
-            Weather, avalanche, snowpack, and alert checks — synthesized for your route and timing.
-          </p>
+          <p>All conditions in one place.</p>
           <div className="home-search-wrapper">
             <SearchBox
               searchWrapperRef={searchWrapperRef}
@@ -123,46 +121,30 @@ export function HomeView({
         <article className="home-card">
           <div className="home-card-head">
             <CloudRain size={18} />
-            <h3>Atmospheric Conditions</h3>
+            <h3>Weather</h3>
           </div>
-          <p>Evaluate temperature, feels-like, wind, precipitation chance, and period timestamps for your selected start time.</p>
-          <ul className="home-card-points">
-            <li>Displays forecast period used in the report</li>
-            <li>Supports elevation-adjusted weather checks</li>
-          </ul>
+          <p>Temperature, wind, precipitation, and feels-like for your start time with elevation adjustments.</p>
         </article>
         <article className="home-card">
           <div className="home-card-head">
             <Mountain size={18} />
-            <h3>Snowpack & Avalanche</h3>
+            <h3>Snow & Avalanche</h3>
           </div>
-          <p>Combines avalanche center products with SNOTEL and NOHRSC signals to show where snow hazards matter and how current data is.</p>
-          <ul className="home-card-points">
-            <li>Keeps avalanche card visible with applicability reason</li>
-            <li>Highlights expired bulletin windows clearly</li>
-          </ul>
+          <p>Avalanche forecasts combined with SNOTEL and NOHRSC snowpack signals.</p>
         </article>
         <article className="home-card">
           <div className="home-card-head">
             <AlertTriangle size={18} />
-            <h3>Operational Risk Gates</h3>
+            <h3>Risk Assessment</h3>
           </div>
-          <p>Decision Gate, Critical Checks, and Travel Window Planner update from your thresholds and start-time window.</p>
-          <ul className="home-card-points">
-            <li>NWS alerts and score trace integrated</li>
-            <li>Cards sorted dynamically by active risk level</li>
-          </ul>
+          <p>Go/no-go decision, critical checks, and travel window based on your thresholds.</p>
         </article>
         <article className="home-card">
           <div className="home-card-head">
             <Route size={18} />
-            <h3>Execution Ready Output</h3>
+            <h3>Field Ready</h3>
           </div>
-          <p>Generate printable reports and concise SAT messages for field teams while preserving source links for verification.</p>
-          <ul className="home-card-points">
-            <li>Shareable planner URL for each search</li>
-            <li>One-liner built for satellite messaging limits</li>
-          </ul>
+          <p>Printable reports, shareable links, and SAT-ready one-liners.</p>
         </article>
       </section>
       <AppDisclaimer />

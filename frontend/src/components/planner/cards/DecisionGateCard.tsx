@@ -38,12 +38,12 @@ export interface DecisionGateCardProps {
 export function DecisionGateCard({
   decision,
   decisionActionLine,
-  fieldBriefPrimaryReason,
-  fieldBriefTopRisks,
+  fieldBriefPrimaryReason: _fieldBriefPrimaryReason,
+  fieldBriefTopRisks: _fieldBriefTopRisks,
   rainfall24hSeverityClass,
   rainfall24hDisplay,
-  decisionPassingChecksCount,
-  decisionFailingChecks,
+  decisionPassingChecksCount: _decisionPassingChecksCount,
+  decisionFailingChecks: _decisionFailingChecks,
   decisionKeyDrivers,
   orderedCriticalChecks,
   betterDaySuggestions,
@@ -60,63 +60,22 @@ export function DecisionGateCard({
     <>
       <p className="decision-headline">{decision.headline}</p>
       <div className={`decision-action ${decision.level.toLowerCase().replace('-', '')}`}>
-        <span className="decision-action-label">Recommended action</span>
         <p>{decisionActionLine}</p>
       </div>
-      {fieldBriefTopRisks.length > 0 && (
-        <div className="decision-group decision-departure-brief">
-          <h4><AlertTriangle size={14} /> Departure Brief</h4>
-          <p className="departure-brief-primary">{fieldBriefPrimaryReason}</p>
-          <ul className="signal-list compact">
-            {fieldBriefTopRisks.map((risk, idx) => (
-              <li key={`brief-risk-${idx}`}>{localizeUnitText(risk)}</li>
-            ))}
-          </ul>
-          <p className="departure-brief-action">{decisionActionLine}</p>
-        </div>
-      )}
       {rainfall24hSeverityClass === 'nogo' && (
         <div className="decision-group decision-creek-warning nogo">
-          <p>{`Creek crossing risk: recent rainfall (${rainfall24hDisplay}) may make stream crossings dangerous. Scout before committing.`}</p>
+          <p>Creek crossing risk: {rainfall24hDisplay} recent rainfall. Scout before committing.</p>
         </div>
       )}
-      {rainfall24hSeverityClass === 'caution' && (
-        <div className="decision-group decision-creek-warning caution">
-          <p>Elevated rainfall: creek levels may be running high. Monitor crossing points.</p>
+      {decisionKeyDrivers.length > 0 && (
+        <div className="decision-driver-chips" role="list" aria-label="Key drivers">
+          {decisionKeyDrivers.map((item, idx) => (
+            <span key={`${item}-${idx}`} className="decision-driver-chip" role="listitem">
+              {localizeUnitText(item)}
+            </span>
+          ))}
         </div>
       )}
-      <div className="decision-summary-grid" role="list" aria-label="Decision check summary">
-        <article className="decision-summary-item" role="listitem">
-          <span>Passing checks</span>
-          <strong>
-            {decisionPassingChecksCount}/{decision.checks.length}
-          </strong>
-        </article>
-        <article className="decision-summary-item" role="listitem">
-          <span>Attn checks</span>
-          <strong>{decisionFailingChecks.length}</strong>
-        </article>
-        <article className="decision-summary-item" role="listitem">
-          <span>Dominant risk</span>
-          <strong>{decision.blockers.length > 0 ? 'Hard blocker' : decision.cautions.length > 0 ? 'Caution signal' : 'No dominant risk'}</strong>
-        </article>
-      </div>
-      <div className="decision-group">
-        <h4>
-          <AlertTriangle size={14} /> Key drivers
-        </h4>
-        {decisionKeyDrivers.length > 0 ? (
-          <div className="decision-driver-chips" role="list" aria-label="Decision key drivers">
-            {decisionKeyDrivers.map((item, idx) => (
-              <span key={`${item}-${idx}`} className="decision-driver-chip" role="listitem">
-                {localizeUnitText(item)}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="muted-note">No dominant risk trigger detected from current model signals.</p>
-        )}
-      </div>
       {(decision.level === 'NO-GO' || decision.level === 'CAUTION') && (
         <div className="decision-group decision-better-days">
           <h4>
