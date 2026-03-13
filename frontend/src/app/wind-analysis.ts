@@ -1,5 +1,5 @@
 import type { WeatherTrendPoint } from './types';
-import { windDirectionToDegrees, ASPECT_ROSE_ORDER } from '../utils/avalanche';
+import { windDirectionToDegrees } from '../utils/avalanche';
 
 export function normalizeWindHintDirection(value: string | null | undefined): string | null {
   if (!value) {

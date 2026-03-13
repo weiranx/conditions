@@ -429,6 +429,7 @@ export interface LinkState {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
+  travelWindowHours?: number | null;
 }
 
 export interface UserPreferences {

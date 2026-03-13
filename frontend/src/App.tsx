@@ -392,7 +392,10 @@ function App() {
     forecastDate,
     alpineStartTime,
     targetElevationInput,
-    travelWindowHours,
+    travelWindowHours: Math.max(
+      MIN_TRAVEL_WINDOW_HOURS,
+      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+    ),
     isApplyingPopStateRef,
     hasInitializedHistoryRef,
   });
