@@ -12,61 +12,29 @@ import {
   Sun,
   Zap,
   CheckCircle2,
+  Backpack,
+  Radio,
 } from 'lucide-react';
 import { ScoreGauge } from './ScoreGauge';
-import { DecisionGateCard } from './cards/DecisionGateCard';
-import { WeatherCardContent } from './cards/WeatherCardContent';
-import { TravelWindowPlannerCard } from './cards/TravelWindowPlannerCard';
-import { CriticalChecksCard } from './cards/CriticalChecksCard';
-import { ScoreTraceCard } from './cards/ScoreTraceCard';
-import { HeatRiskCard } from './cards/HeatRiskCard';
-import { TerrainCard } from './cards/TerrainCard';
-import { RainfallCard } from './cards/RainfallCard';
-import { WindLoadingCard } from './cards/WindLoadingCard';
-import { SourceFreshnessCard } from './cards/SourceFreshnessCard';
-import { NwsAlertsCard } from './cards/NwsAlertsCard';
-import { AirQualityCard } from './cards/AirQualityCard';
-import { SnowpackCard } from './cards/SnowpackCard';
-import { FireRiskCard } from './cards/FireRiskCard';
-import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
-import { GearCard } from './cards/GearCard';
-import { AvalancheForecastCard } from './cards/AvalancheForecastCard';
+import { freshnessClass, formatAgeFromNow as computeAge } from '../../app/core';
 import type { PlannerViewProps } from './PlannerView';
-import { criticalRiskLevelText } from '../../app/critical-window';
-import { TRAVEL_THRESHOLD_PRESETS } from '../../hooks/usePreferenceHandlers';
 
-type BriefingViewProps = Omit<PlannerViewProps,
-  | 'appShellClassName' | 'isViewPending'
-  | 'navigateToView' | 'openTripToolView' | 'jumpToPlannerSection'
-  | 'searchWrapperRef' | 'searchInputRef' | 'searchQuery' | 'trimmedSearchQuery'
-  | 'showSuggestions' | 'searchLoading' | 'suggestions' | 'activeSuggestionIndex'
-  | 'parsedTypedCoordinates' | 'handleInputChange' | 'handleFocus'
-  | 'handleSearchKeyDown' | 'handleSearchSubmit' | 'handleSearchClear'
-  | 'handleUseTypedCoordinates' | 'selectSuggestion' | 'setActiveSuggestionIndex'
-  | 'hasObjective' | 'objectiveIsSaved' | 'handleToggleSaveObjective'
-  | 'copiedLink' | 'handleCopyLink'
-  | 'activeBasemap' | 'updateObjectivePosition' | 'mapFocusNonce'
-  | 'mapStyle' | 'setMapStyle' | 'locatingUser' | 'handleUseCurrentLocation'
-  | 'handleRecenterMap' | 'mapElevationChipTitle' | 'mapElevationLabel'
-  | 'mapWeatherEmoji' | 'mapWeatherTempLabel' | 'mapWeatherConditionLabel'
-  | 'mapWeatherChipTitle'
-  | 'mobileMapControlsExpanded' | 'setMobileMapControlsExpanded'
-  | 'handleDateChange' | 'handlePlannerTimeChange' | 'setAlpineStartTime'
-  | 'handleTravelWindowHoursDraftChange' | 'handleTravelWindowHoursDraftBlur'
-  | 'handleUseNowConditions' | 'loading' | 'handleRetryFetch'
-  | 'satelliteConditionLine' | 'timezoneMismatch'
-  | 'hasFreshnessWarning' | 'freshnessWarningSummary'
-  | 'formatClockForStyle'
-  | 'aiBriefNarrative' | 'aiBriefError' | 'aiBriefLoading' | 'handleRequestAiBriefAction'
-  | 'routeSuggestions' | 'routeAnalysis' | 'routeLoading' | 'routeError'
-  | 'fetchRouteSuggestions' | 'fetchRouteAnalysis' | 'customRouteName'
-  | 'setCustomRouteName' | 'setRouteSuggestions' | 'setRouteError'
-  | 'safeShareLink' | 'weatherFieldSources' | 'weatherBlended'
-  | 'rawReportPayload' | 'copiedRawPayload' | 'handleCopyRawPayload'
-  | 'formatGeneratedAt'
->;
+/* ── Helpers ── */
 
-function BriefingSection({
+function Pill({ text, cls }: { text: string; cls?: string }) {
+  return <span className={`briefing-pill ${cls || ''}`}>{text}</span>;
+}
+
+function Kv({ label, value, cls }: { label: string; value: React.ReactNode; cls?: string }) {
+  return (
+    <div className="briefing-kv">
+      <span className="briefing-kv-label">{label}</span>
+      <span className={`briefing-kv-value ${cls || ''}`}>{value}</span>
+    </div>
+  );
+}
+
+function Section({
   icon,
   title,
   pill,
@@ -83,291 +51,122 @@ function BriefingSection({
     <section className="briefing-section">
       <div className="briefing-section-header">
         <span className="briefing-section-title">{icon} {title}</span>
-        {pill && <span className={`decision-pill ${pillClass || ''}`}>{pill}</span>}
+        {pill && <Pill text={pill} cls={pillClass} />}
       </div>
-      <div className="briefing-section-body">
-        {children}
-      </div>
+      <div className="briefing-section-body">{children}</div>
     </section>
   );
 }
 
-export function BriefingView(props: BriefingViewProps) {
+/* ── Main Component ── */
+
+export function BriefingView(props: PlannerViewProps) {
   const {
     safetyData,
     decision,
     preferences,
     avalancheRelevant,
     getScoreColor,
-    displayStartTime,
-    returnTimeFormatted,
-    travelWindowHours,
     formatTempDisplay,
     formatWindDisplay,
-    formatElevationDisplay,
-    formatElevationDeltaDisplay,
-    weatherVisibilityRisk,
-    weatherVisibilityPill,
-    weatherVisibilityDetail,
-    shouldRenderRankedCard,
 
-    // Decision gate
     decisionActionLine,
-    fieldBriefPrimaryReason,
-    fieldBriefTopRisks,
-    rainfall24hSeverityClass,
-    rainfall24hDisplay,
-    decisionPassingChecksCount,
-    decisionFailingChecks,
     decisionKeyDrivers,
-    orderedCriticalChecks,
-    betterDaySuggestions,
-    betterDaySuggestionsLoading,
-    betterDaySuggestionsNote,
-    localizeUnitText,
-    formatIsoDateLabel,
-    setForecastDate,
-    setError,
 
-    // Travel window
-    peakCriticalWindow,
-    travelWindowInsights,
-    travelWindowRows,
-    formatTravelWindowSpan,
-    windThresholdDisplay,
-    feelsLikeThresholdDisplay,
-    heatCeilingDisplay,
-    activeTravelThresholdPreset,
-    onApplyTravelThresholdPreset,
-    travelThresholdEditorOpen,
-    setTravelThresholdEditorOpen,
-    windUnitLabel,
-    windThresholdMin,
-    windThresholdMax,
-    windThresholdStep,
-    maxWindGustDraft,
-    handleWindThresholdDisplayChange,
-    handleWindThresholdDisplayBlur,
-    maxPrecipChanceDraft,
-    handleMaxPrecipChanceDraftChange,
-    handleMaxPrecipChanceDraftBlur,
-    tempUnitLabel,
-    feelsLikeThresholdMin,
-    feelsLikeThresholdMax,
-    feelsLikeThresholdStep,
-    minFeelsLikeDraft,
-    handleFeelsLikeThresholdDisplayChange,
-    handleFeelsLikeThresholdDisplayBlur,
-    heatCeilingMin,
-    heatCeilingMax,
-    maxFeelsLikeDraft,
-    handleHeatCeilingDisplayChange,
-    handleHeatCeilingDisplayBlur,
-    formatPresetWindDisplay,
-    travelWindowSummary,
-    criticalWindow,
-    travelWindowExpanded,
-    setTravelWindowExpanded,
-    visibleCriticalWindowRows,
-    travelWindowHoursLabel,
-
-    // Critical checks
-    topCriticalAttentionChecks,
-    criticalCheckFailCount,
-    describeFailedCriticalCheck,
-
-    // Score trace
-    dayOverDay,
-
-    // Weather
     weatherCardTemp,
-    weatherCardWind,
     weatherCardFeelsLike,
-    weatherCardWithEmoji,
+    weatherCardWind,
+    weatherCardWindDirection,
     weatherCardPrecip,
-    weatherCardHumidity,
-    weatherCardDewPoint,
-    weatherCardDescription,
-    weatherCardDisplayTime,
-    weatherForecastPeriodLabel,
-    weatherPreviewActive,
+    weatherCardWithEmoji,
+    formattedGust,
     weatherPressureTrendSummary,
     pressureTrendDirection,
-    pressureDeltaLabel,
-    pressureRangeLabel,
-    weatherHourQuickOptions,
-    selectedWeatherHourIndex,
-    handleWeatherHourSelect,
-    weatherConditionEmojiValue,
-    weatherTrendChartData,
-    weatherTrendHasData,
-    weatherTrendMetric,
-    weatherTrendMetricLabel,
-    weatherTrendMetricOptions,
-    weatherTrendLineColor,
-    weatherTrendYAxisDomain,
-    weatherTrendTickFormatter,
-    formatWeatherTrendValue,
-    onTrendMetricChange,
-    handleWeatherTrendChartClick,
-    selectedWeatherHourValue,
-    formattedWind,
-    formattedGust,
-    weatherCardPressureLabel,
-    weatherPressureContextLine,
-    weatherCardWindDirection,
-    weatherCardCloudCoverLabel,
-    weatherVisibilityScoreLabel,
-    weatherVisibilityActiveWindowText,
-    weatherVisibilityScoreMeaning,
-    weatherVisibilityContextLine,
-    targetElevationInput,
-    handleTargetElevationChange,
-    handleTargetElevationStep,
-    canDecreaseTargetElevation,
-    hasTargetElevation,
-    targetElevationForecast,
-    targetElevationFt,
-    TARGET_ELEVATION_STEP_FEET,
-    elevationUnitLabel,
-    elevationForecastBands,
-    objectiveElevationFt,
-    safeWeatherLink,
-    weatherLinkCta,
-    formatPubTime,
-    weatherTrendTempRange,
+
+    travelWindowInsights,
+    travelWindowHoursLabel,
+    formatTravelWindowSpan,
+    travelWindowSummary,
+
+    overallAvalancheLevel,
+    avalancheUnknown,
+    avalancheElevationRows,
     getDangerLevelClass,
     getDangerText,
+    getDangerGlyph,
+    safeAvalancheLink,
 
-    // Heat risk
+    orderedCriticalChecks,
+    shouldRenderRankedCard,
+
+    dayOverDay,
+
+    nwsAlertCount,
+    nwsTopAlerts,
+
     heatRiskGuidance,
     heatRiskReasons,
-    heatRiskMetrics,
-    heatRiskPillClass,
     heatRiskLabel,
-    lowerTerrainHeatLabel,
+    heatRiskPillClass,
 
-    // Terrain
     terrainConditionDetails,
     terrainConditionPillClass,
-    rainfall12hDisplay,
-    rainfall48hDisplay,
-    snowfall12hDisplay,
-    snowfall24hDisplay,
-    snowfall48hDisplay,
 
-    // Rainfall
     precipInsightLine,
-    expectedPrecipSummaryLine,
-    expectedTravelWindowHours,
-    expectedRainWindowDisplay,
-    expectedSnowWindowDisplay,
-    rainfallExpected,
-    precipitationDisplayTimezone,
-    expectedPrecipNoteLine,
-    rainfallModeLabel,
-    rainfallPayload,
-    rainfallNoteLine,
-    safeRainfallLink,
-    formatForecastPeriodLabel,
+    rainfall24hDisplay,
+    rainfall24hSeverityClass,
+    snowfall24hDisplay,
 
-    // Wind loading
     windLoadingHintsRelevant,
     windLoadingLevel,
     windLoadingPillClass,
-    windLoadingActiveWindowLabel,
-    windLoadingActiveHoursDetail,
-    resolvedWindDirectionSource,
-    trendAgreementRatio,
-    windLoadingElevationFocus,
-    leewardAspectHints,
-    secondaryWindAspects,
-    windGustMph,
-    windLoadingNotes,
-    aspectOverlapProblems,
     windLoadingSummary,
     windLoadingActionLine,
-    avalancheUnknown,
+    leewardAspectHints,
 
-    // Source freshness
-    sourceFreshnessRows,
-    reportGeneratedAt,
-    avalancheExpiredForSelectedStart,
-    formatAgeFromNow,
-
-    // NWS alerts
-    nwsAlertCount,
-    nwsTotalAlertCount,
-    nwsTopAlerts,
-
-    // Air quality
     airQualityPillClassFn,
     airQualityFutureNotApplicable,
 
-    // Snowpack
-    snowpackInsights,
-    snotelDistanceDisplay,
+    snowpackInterpretation,
+    snowpackStatusLabel,
+    snowpackPillClass,
     snotelDepthDisplay,
     snotelSweDisplay,
-    nohrscDepthDisplay,
-    nohrscSweDisplay,
-    cdecDepthDisplay,
-    cdecSweDisplay,
-    cdecDistanceDisplay,
-    snowpackPillClass,
-    snowpackStatusLabel,
-    snowpackHistoricalStatusLabel,
-    snowpackHistoricalPillClass,
-    snowpackHistoricalComparisonLine,
-    snowpackInterpretation,
     snowpackTakeaways,
-    snowfallWindowSummary,
-    rainfallWindowSummary,
-    snowpackObservationContext,
-    safeSnotelLink,
-    safeNohrscLink,
-    safeCdecLink,
 
-    // Fire risk
     fireRiskLabel,
     fireRiskPillClass,
-    fireRiskAlerts,
 
-    // Plan snapshot
-    sunriseMinutesForPlan,
-    sunsetMinutesForPlan,
-    startMinutesForPlan,
-    returnMinutes,
-    startLabel,
+    displayStartTime,
+    returnTimeFormatted,
     daylightRemainingFromStartLabel,
 
-    // Gear
     gearRecommendations,
 
-    // Avalanche
-    overallAvalancheLevel,
-    avalancheNotApplicableReason,
-    avalancheElevationRows,
-    safeAvalancheLink,
-    normalizeDangerLevel,
-    getDangerGlyph,
-    summarizeText,
-    toPlainText,
+    sourceFreshnessRows,
+    reportGeneratedAt,
+    formatAgeFromNow,
 
-    // Misc
-    objectiveTimezone,
-    deviceTimezone,
+    weatherVisibilityRisk,
+    weatherVisibilityPill,
+    weatherVisibilityDetail,
   } = props;
 
   if (!safetyData || !decision) return null;
 
   const score = safetyData.safety.score;
+  const decisionColorClass = decision.level.toLowerCase().replace('-', '');
   const criticalCheckPassCount = orderedCriticalChecks.filter((c) => c.ok).length;
   const criticalCheckTotal = orderedCriticalChecks.length;
-  const decisionColorClass = decision.level.toLowerCase().replace('-', '');
+  const criticalCheckFailCount = criticalCheckTotal - criticalCheckPassCount;
+  const topFactors = (safetyData.safety.factors || [])
+    .filter((f) => f.impact && Math.abs(f.impact) >= 1)
+    .sort((a, b) => Math.abs(b.impact!) - Math.abs(a.impact!))
+    .slice(0, 4);
 
   return (
     <div className="briefing-layout">
+
       {/* ── Decision Banner ── */}
       <div className={`briefing-banner briefing-banner-${decisionColorClass}`}>
         <div className="briefing-banner-decision">
@@ -427,443 +226,273 @@ export function BriefingView(props: BriefingViewProps) {
       {/* ── Sections ── */}
       <div className="briefing-sections">
 
-        <BriefingSection icon={<ShieldCheck size={14} />} title="Decision" pill={decision.level} pillClass={decisionColorClass}>
-          <DecisionGateCard
-            decision={decision}
-            decisionActionLine={decisionActionLine}
-            fieldBriefPrimaryReason={fieldBriefPrimaryReason}
-            fieldBriefTopRisks={fieldBriefTopRisks}
-            rainfall24hSeverityClass={rainfall24hSeverityClass}
-            rainfall24hDisplay={rainfall24hDisplay}
-            decisionPassingChecksCount={decisionPassingChecksCount}
-            decisionFailingChecks={decisionFailingChecks}
-            decisionKeyDrivers={decisionKeyDrivers}
-            orderedCriticalChecks={orderedCriticalChecks}
-            betterDaySuggestions={betterDaySuggestions ?? []}
-            betterDaySuggestionsLoading={betterDaySuggestionsLoading}
-            betterDaySuggestionsNote={betterDaySuggestionsNote}
-            timeStyle={preferences.timeStyle}
-            localizeUnitText={localizeUnitText}
-            formatIsoDateLabel={formatIsoDateLabel}
-            formatWindDisplay={formatWindDisplay}
-            setForecastDate={setForecastDate}
-            setError={setError}
-          />
-        </BriefingSection>
+        {/* Decision — action line + driver chips */}
+        <Section icon={<ShieldCheck size={14} />} title="Decision" pill={decision.level} pillClass={decisionColorClass}>
+          <p className="briefing-body-line">{decisionActionLine}</p>
+          {decisionKeyDrivers.length > 0 && (
+            <div className="briefing-chip-row">
+              {decisionKeyDrivers.map((d, i) => (
+                <span key={i} className="briefing-chip briefing-chip-caution">{d}</span>
+              ))}
+            </div>
+          )}
+        </Section>
 
-        <BriefingSection icon={<Thermometer size={14} />} title="Weather" pill={safetyData.forecast?.isFuture ? 'Forecast' : 'Current'} pillClass={safetyData.forecast?.isFuture ? 'watch' : ''}>
-          <WeatherCardContent
-            formattedTemp={formatTempDisplay(weatherCardTemp)}
-            formattedFeelsLike={formatTempDisplay(weatherCardFeelsLike)}
-            trendTempRange={weatherTrendTempRange}
-            conditionText={weatherCardWithEmoji}
-            conditionIsCold={/snow|blizzard|sleet|freezing|ice pellet|wintry/i.test(weatherCardDescription)}
-            displayTime={weatherCardDisplayTime}
-            forecastPeriodLabel={weatherForecastPeriodLabel}
-            previewActive={weatherPreviewActive}
-            pressureTrendSummary={weatherPressureTrendSummary}
-            pressureTrendDirection={pressureTrendDirection}
-            pressureDeltaLabel={pressureDeltaLabel}
-            pressureRangeLabel={pressureRangeLabel}
-            hourOptions={weatherHourQuickOptions}
-            selectedHourIndex={selectedWeatherHourIndex}
-            onHourSelect={handleWeatherHourSelect}
-            weatherConditionEmoji={weatherConditionEmojiValue}
-            trendChartData={weatherTrendChartData}
-            trendHasData={weatherTrendHasData}
-            trendMetric={weatherTrendMetric}
-            trendMetricLabel={weatherTrendMetricLabel}
-            trendMetricOptions={weatherTrendMetricOptions}
-            trendLineColor={weatherTrendLineColor}
-            trendYAxisDomain={weatherTrendYAxisDomain}
-            trendTickFormatter={weatherTrendTickFormatter}
-            formatWeatherTrendValue={formatWeatherTrendValue}
-            onTrendMetricChange={onTrendMetricChange}
-            onTrendChartClick={handleWeatherTrendChartClick}
-            selectedHourValue={selectedWeatherHourValue}
-            travelWindowHoursLabel={travelWindowHoursLabel}
-            formattedWind={formattedWind}
-            formattedGust={formattedGust}
-            precipLabel={Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}
-            humidityLabel={Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}
-            dewPointLabel={formatTempDisplay(weatherCardDewPoint)}
-            pressureLabel={weatherCardPressureLabel}
-            pressureContextLine={weatherPressureContextLine}
-            windDirection={weatherCardWindDirection}
-            cloudCoverLabel={weatherCardCloudCoverLabel}
-            visibilityScoreLabel={weatherVisibilityScoreLabel}
-            visibilityPill={weatherVisibilityPill}
-            visibilityRiskLevel={weatherVisibilityRisk.level}
-            visibilityActiveWindowText={weatherVisibilityActiveWindowText}
-            visibilityScoreMeaning={weatherVisibilityScoreMeaning}
-            visibilityDetail={weatherVisibilityDetail}
-            visibilityContextLine={weatherVisibilityContextLine}
-            targetElevationInput={targetElevationInput}
-            onTargetElevationChange={handleTargetElevationChange}
-            onTargetElevationStep={handleTargetElevationStep}
-            canDecreaseTargetElevation={canDecreaseTargetElevation}
-            hasTargetElevation={hasTargetElevation}
-            targetElevationForecast={targetElevationForecast}
-            targetElevationFt={targetElevationFt}
-            targetElevationStepFeet={TARGET_ELEVATION_STEP_FEET}
-            elevationUnitLabel={elevationUnitLabel}
-            elevationForecastBands={elevationForecastBands}
-            objectiveElevationFt={objectiveElevationFt}
-            objectiveElevationLabel={formatElevationDisplay(safetyData.weather.elevation != null ? safetyData.weather.elevation : null)}
-            avalancheElevations={safetyData.avalanche.elevations}
-            elevationForecastNote={safetyData.weather.elevationForecastNote}
-            isBlended={!!safetyData.weather.sourceDetails?.blended}
-            safeWeatherLink={safeWeatherLink}
-            weatherLinkCta={weatherLinkCta}
-            formatTempDisplay={formatTempDisplay}
-            formatWindDisplay={formatWindDisplay}
-            formatElevationDisplay={formatElevationDisplay}
-            formatElevationDeltaDisplay={formatElevationDeltaDisplay}
-            localizeUnitText={localizeUnitText}
-            getDangerLevelClass={getDangerLevelClass}
-            getDangerText={getDangerText}
-          />
-        </BriefingSection>
+        {/* Weather — condition + pressure trend */}
+        <Section
+          icon={<Thermometer size={14} />}
+          title="Weather"
+          pill={safetyData.forecast?.isFuture ? 'Forecast' : 'Current'}
+          pillClass={safetyData.forecast?.isFuture ? 'watch' : ''}
+        >
+          <p className="briefing-body-line">{weatherCardWithEmoji}</p>
+          {weatherPressureTrendSummary && pressureTrendDirection && (
+            <p className="briefing-body-sub">
+              Pressure {pressureTrendDirection.toLowerCase()} — {weatherPressureTrendSummary}
+            </p>
+          )}
+        </Section>
 
-        <BriefingSection icon={<Clock size={14} />} title={`Travel Window (${travelWindowHoursLabel})`} pill={travelWindowInsights.bestWindow ? `${travelWindowInsights.bestWindow.length}h clear` : 'No window'} pillClass={travelWindowInsights.bestWindow ? 'go' : 'nogo'}>
-          <TravelWindowPlannerCard
-            peakCriticalWindow={peakCriticalWindow}
-            timeStyle={preferences.timeStyle}
-            criticalRiskLevelText={criticalRiskLevelText}
-            localizeUnitText={localizeUnitText}
-            travelWindowInsights={travelWindowInsights}
-            travelWindowRows={travelWindowRows}
-            travelWindowHours={travelWindowHours}
-            formatTravelWindowSpan={formatTravelWindowSpan}
-            windThresholdDisplay={windThresholdDisplay}
-            maxPrecipChance={preferences.maxPrecipChance}
-            feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
-            heatCeilingDisplay={heatCeilingDisplay}
-            activeTravelThresholdPreset={activeTravelThresholdPreset}
-            travelThresholdPresets={TRAVEL_THRESHOLD_PRESETS}
-            onApplyTravelThresholdPreset={onApplyTravelThresholdPreset}
-            travelThresholdEditorOpen={travelThresholdEditorOpen}
-            setTravelThresholdEditorOpen={setTravelThresholdEditorOpen}
-            windUnitLabel={windUnitLabel}
-            windThresholdMin={windThresholdMin}
-            windThresholdMax={windThresholdMax}
-            windThresholdStep={windThresholdStep}
-            maxWindGustDraft={maxWindGustDraft}
-            handleWindThresholdDisplayChange={handleWindThresholdDisplayChange}
-            handleWindThresholdDisplayBlur={handleWindThresholdDisplayBlur}
-            maxPrecipChanceDraft={maxPrecipChanceDraft}
-            handleMaxPrecipChanceDraftChange={handleMaxPrecipChanceDraftChange}
-            handleMaxPrecipChanceDraftBlur={handleMaxPrecipChanceDraftBlur}
-            tempUnitLabel={tempUnitLabel}
-            feelsLikeThresholdMin={feelsLikeThresholdMin}
-            feelsLikeThresholdMax={feelsLikeThresholdMax}
-            feelsLikeThresholdStep={feelsLikeThresholdStep}
-            minFeelsLikeDraft={minFeelsLikeDraft}
-            handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
-            handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
-            heatCeilingMin={heatCeilingMin}
-            heatCeilingMax={heatCeilingMax}
-            heatCeilingStep={feelsLikeThresholdStep}
-            maxFeelsLikeDraft={maxFeelsLikeDraft}
-            handleHeatCeilingDisplayChange={handleHeatCeilingDisplayChange}
-            handleHeatCeilingDisplayBlur={handleHeatCeilingDisplayBlur}
-            formatPresetWindDisplay={formatPresetWindDisplay}
-            travelWindowSummary={travelWindowSummary}
-            criticalWindow={criticalWindow}
-            travelWindowExpanded={travelWindowExpanded}
-            setTravelWindowExpanded={setTravelWindowExpanded}
-            visibleCriticalWindowRows={visibleCriticalWindowRows}
-            formatTempDisplay={formatTempDisplay}
-            formatWindDisplay={formatWindDisplay}
-          />
-        </BriefingSection>
+        {/* Travel Window — best window + summary */}
+        <Section
+          icon={<Clock size={14} />}
+          title={`Travel Window (${travelWindowHoursLabel})`}
+          pill={travelWindowInsights.bestWindow ? `${travelWindowInsights.bestWindow.length}h clear` : 'No window'}
+          pillClass={travelWindowInsights.bestWindow ? 'go' : 'nogo'}
+        >
+          {travelWindowInsights.bestWindow && (
+            <p className="briefing-body-line">
+              Best: <strong>{formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)}</strong>
+            </p>
+          )}
+          <p className="briefing-body-sub">{travelWindowSummary}</p>
+        </Section>
 
+        {/* Avalanche — elevation bands + bottom line */}
         {avalancheRelevant && (
-          <BriefingSection
+          <Section
             icon={<Zap size={14} />}
             title="Avalanche"
             pill={avalancheUnknown ? 'Unknown' : overallAvalancheLevel != null ? getDangerText(overallAvalancheLevel) : 'Unknown'}
             pillClass={avalancheUnknown ? 'watch' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}
           >
-            <AvalancheForecastCard
-              avalanche={safetyData.avalanche}
-              avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
-              avalancheRelevant={avalancheRelevant}
-              avalancheNotApplicableReason={avalancheNotApplicableReason}
-              avalancheUnknown={avalancheUnknown}
-              overallAvalancheLevel={overallAvalancheLevel}
-              avalancheElevationRows={avalancheElevationRows}
-              safeAvalancheLink={safeAvalancheLink}
-              getDangerLevelClass={getDangerLevelClass}
-              getDangerText={getDangerText}
-              normalizeDangerLevel={normalizeDangerLevel}
-              getDangerGlyph={getDangerGlyph}
-              summarizeText={summarizeText}
-              toPlainText={toPlainText}
-              objectiveElevationFt={safetyData.weather.elevation ?? null}
-              formatElevationDisplay={formatElevationDisplay}
-            />
-          </BriefingSection>
+            {avalancheElevationRows.length > 0 && (
+              <div className="briefing-elev-bands">
+                {avalancheElevationRows.map((row, i) => (
+                  <div key={i} className="briefing-elev-band">
+                    <span className="briefing-elev-band-label">{row.label}</span>
+                    <span className={`briefing-elev-band-danger ${getDangerLevelClass(row.rating ?? undefined)}`}>
+                      {row.rating != null ? `${getDangerGlyph(row.rating)} ${getDangerText(row.rating)}` : 'N/A'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {safetyData.avalanche?.bottomLine && (
+              <p className="briefing-body-sub">{safetyData.avalanche.bottomLine}</p>
+            )}
+            {safetyData.avalanche?.problems && safetyData.avalanche.problems.length > 0 && (
+              <div className="briefing-chip-row">
+                {safetyData.avalanche.problems.slice(0, 3).map((p, i) => (
+                  <span key={i} className="briefing-chip briefing-chip-caution">{p.name || `Problem ${i + 1}`}</span>
+                ))}
+              </div>
+            )}
+            {safeAvalancheLink && (
+              <a href={safeAvalancheLink} target="_blank" rel="noopener noreferrer" className="briefing-link">Full forecast →</a>
+            )}
+          </Section>
         )}
 
+        {/* Critical Checks — pass/fail list */}
         {shouldRenderRankedCard('criticalChecks') && (
-          <BriefingSection icon={<CheckCircle2 size={14} />} title="Critical Checks" pill={`${criticalCheckPassCount}/${criticalCheckTotal} passing`} pillClass={criticalCheckFailCount === 0 ? 'go' : 'caution'}>
-            <CriticalChecksCard
-              orderedCriticalChecks={orderedCriticalChecks}
-              topCriticalAttentionChecks={topCriticalAttentionChecks}
-              criticalCheckFailCount={criticalCheckFailCount}
-              localizeUnitText={localizeUnitText}
-              describeFailedCriticalCheck={describeFailedCriticalCheck}
-            />
-          </BriefingSection>
-        )}
-
-        {shouldRenderRankedCard('scoreTrace') && (
-          <BriefingSection icon={<ShieldCheck size={14} />} title="Score Breakdown" pill={dayOverDay ? `${dayOverDay.delta > 0 ? '+' : ''}${dayOverDay.delta} vs ${dayOverDay.previousDate}` : undefined} pillClass={dayOverDay ? (dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution') : undefined}>
-            <ScoreTraceCard
-              factors={safetyData.safety.factors}
-              dayOverDay={dayOverDay}
-            />
-          </BriefingSection>
-        )}
-
-        {nwsAlertCount > 0 && (
-          <BriefingSection icon={<AlertTriangle size={14} />} title="Alerts" pill={`${nwsAlertCount} active`} pillClass="nogo">
-            <NwsAlertsCard
-              alertsSource={safetyData.alerts?.source || 'NWS CAP feed'}
-              highestSeverity={safetyData.alerts?.highestSeverity}
-              alertsStatus={safetyData.alerts?.status}
-              nwsTotalAlertCount={nwsTotalAlertCount}
-              nwsTopAlerts={nwsTopAlerts}
-              formatPubTime={formatPubTime}
-            />
-          </BriefingSection>
-        )}
-
-        {shouldRenderRankedCard('heatRisk') && (
-          <BriefingSection icon={<Sun size={14} />} title="Heat Risk" pill={String(heatRiskLabel || 'Low').toUpperCase()} pillClass={heatRiskPillClass}>
-            <HeatRiskCard
-              heatRiskGuidance={heatRiskGuidance}
-              heatRiskReasons={heatRiskReasons}
-              heatRiskMetrics={heatRiskMetrics}
-              safetyWeatherTemp={safetyData.weather.temp}
-              safetyWeatherFeelsLike={safetyData.weather.feelsLike}
-              safetyWeatherHumidity={safetyData.weather.humidity}
-              heatRiskSource={safetyData.heatRisk?.source || 'Derived from forecast temperature and humidity signals'}
-              travelWindowHours={travelWindowHours}
-              lowerTerrainHeatLabel={lowerTerrainHeatLabel}
-              localizeUnitText={localizeUnitText}
-              formatTempDisplay={formatTempDisplay}
-            />
-          </BriefingSection>
-        )}
-
-        {shouldRenderRankedCard('terrainTrailCondition') && (
-          <BriefingSection icon={<Route size={14} />} title="Terrain" pill={safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'} pillClass={terrainConditionPillClass}>
-            <TerrainCard
-              terrainConditionDetails={terrainConditionDetails}
-              rainfall12hDisplay={rainfall12hDisplay}
-              rainfall24hDisplay={rainfall24hDisplay}
-              rainfall48hDisplay={rainfall48hDisplay}
-              snowfall12hDisplay={snowfall12hDisplay}
-              snowfall24hDisplay={snowfall24hDisplay}
-              snowfall48hDisplay={snowfall48hDisplay}
-            />
-          </BriefingSection>
-        )}
-
-        {shouldRenderRankedCard('recentRainfall') && (
-          <BriefingSection icon={<CloudRain size={14} />} title="Precipitation" pill={`24h: ${rainfall24hDisplay}`} pillClass={rainfall24hSeverityClass}>
-            <RainfallCard
-              precipInsightLine={precipInsightLine}
-              expectedPrecipSummaryLine={expectedPrecipSummaryLine}
-              rainfall12hDisplay={rainfall12hDisplay}
-              rainfall24hDisplay={rainfall24hDisplay}
-              rainfall48hDisplay={rainfall48hDisplay}
-              snowfall12hDisplay={snowfall12hDisplay}
-              snowfall24hDisplay={snowfall24hDisplay}
-              snowfall48hDisplay={snowfall48hDisplay}
-              expectedTravelWindowHours={expectedTravelWindowHours}
-              expectedRainWindowDisplay={expectedRainWindowDisplay}
-              expectedSnowWindowDisplay={expectedSnowWindowDisplay}
-              rainfallExpectedStartTime={rainfallExpected?.startTime}
-              rainfallExpectedEndTime={rainfallExpected?.endTime}
-              precipitationDisplayTimezone={precipitationDisplayTimezone}
-              expectedPrecipNoteLine={expectedPrecipNoteLine}
-              rainfallModeLabel={rainfallModeLabel}
-              rainfallAnchorTime={rainfallPayload?.anchorTime}
-              rainfallNoteLine={rainfallNoteLine}
-              safeRainfallLink={safeRainfallLink}
-              rainfallSourceLabel={rainfallPayload?.source || 'Open-Meteo precipitation history (rain + snowfall)'}
-              formatForecastPeriodLabel={formatForecastPeriodLabel}
-            />
-          </BriefingSection>
-        )}
-
-        {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
-          <BriefingSection icon={<Wind size={14} />} title="Wind Loading" pill={windLoadingLevel} pillClass={windLoadingPillClass}>
-            <WindLoadingCard
-              windDirection={safetyData.weather.windDirection}
-              windGust={safetyData.weather.windGust}
-              avalancheProblems={safetyData.avalanche?.problems}
-            />
-            {avalancheUnknown && (
-              <p className="wind-coverage-note">No official forecast available — use wind loading as your primary terrain-selection signal.</p>
-            )}
-            <p className="wind-hint-line">{windLoadingSummary}</p>
-            {windLoadingActionLine && <p className="wind-action-line">{windLoadingActionLine}</p>}
-            <div className="wind-hint-meta">
-              <div className="wind-hint-meta-item">
-                <span className="stat-label">Transport Level</span>
-                <strong>{windLoadingLevel}</strong>
-              </div>
-              <div className="wind-hint-meta-item">
-                <span className="stat-label">Active Window</span>
-                <strong>{windLoadingActiveWindowLabel}</strong>
-              </div>
-              <div className="wind-hint-meta-item wind-hint-meta-wide">
-                <span className="stat-label">Active Hours</span>
-                <strong>{windLoadingActiveHoursDetail}</strong>
-              </div>
-              <div className="wind-hint-meta-item">
-                <span className="stat-label">Direction Source</span>
-                <strong>{resolvedWindDirectionSource}</strong>
-              </div>
-              <div className="wind-hint-meta-item">
-                <span className="stat-label">Trend Agreement</span>
-                <strong>{trendAgreementRatio !== null ? `${Math.round(trendAgreementRatio * 100)}%` : 'N/A'}</strong>
-              </div>
-              <div className="wind-hint-meta-item wind-hint-meta-wide">
-                <span className="stat-label">Elevation Focus</span>
-                <strong>{windLoadingElevationFocus}</strong>
-              </div>
+          <Section
+            icon={<CheckCircle2 size={14} />}
+            title="Critical Checks"
+            pill={`${criticalCheckPassCount}/${criticalCheckTotal}`}
+            pillClass={criticalCheckFailCount === 0 ? 'go' : 'caution'}
+          >
+            <div className="briefing-checks">
+              {orderedCriticalChecks.map((c, i) => (
+                <div key={i} className={`briefing-check ${c.ok ? 'briefing-check-pass' : 'briefing-check-fail'}`}>
+                  <span className="briefing-check-icon">{c.ok ? '✓' : '✗'}</span>
+                  <span>{c.label}</span>
+                </div>
+              ))}
             </div>
-            {leewardAspectHints.length > 0 && (
-              <div className="wind-aspect-block">
-                <span className="stat-label">Likely Lee Aspects</span>
-                <div className="wind-aspect-chips">{leewardAspectHints.map((a) => <span key={a} className="wind-aspect-chip">{a}</span>)}</div>
-              </div>
-            )}
-            {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
-              <div className="wind-aspect-block">
-                <span className="stat-label">Secondary Cross-Loading</span>
-                <div className="wind-aspect-chips">{secondaryWindAspects.map((a) => <span key={`s-${a}`} className="wind-aspect-chip secondary">{a}</span>)}</div>
-              </div>
-            )}
-            {windLoadingNotes.length > 0 && (
-              <ul className="signal-list compact">{windLoadingNotes.map((n, i) => <li key={`wn-${i}`}>{n}</li>)}</ul>
-            )}
-            {aspectOverlapProblems.length > 0 && (
-              <p className="wind-aspect-overlap-alert">Wind loading aligns with active avalanche problem aspects: {aspectOverlapProblems.join(', ')}.</p>
-            )}
-          </BriefingSection>
+          </Section>
         )}
 
+        {/* Score Breakdown — top factors */}
+        {shouldRenderRankedCard('scoreTrace') && topFactors.length > 0 && (
+          <Section
+            icon={<ShieldCheck size={14} />}
+            title="Score Breakdown"
+            pill={dayOverDay ? `${dayOverDay.delta > 0 ? '+' : ''}${dayOverDay.delta} vs ${dayOverDay.previousDate}` : undefined}
+            pillClass={dayOverDay ? (dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution') : undefined}
+          >
+            <div className="briefing-factors">
+              {topFactors.map((f, i) => (
+                <div key={i} className="briefing-factor">
+                  <span className="briefing-factor-name">{f.hazard || f.source || 'Unknown'}</span>
+                  <span className={`briefing-factor-impact ${(f.impact ?? 0) < 0 ? 'neg' : 'pos'}`}>
+                    {(f.impact ?? 0) > 0 ? '+' : ''}{f.impact}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* Alerts — event + severity */}
+        {nwsAlertCount > 0 && (
+          <Section icon={<AlertTriangle size={14} />} title="Alerts" pill={`${nwsAlertCount} active`} pillClass="nogo">
+            <div className="briefing-alerts">
+              {nwsTopAlerts.slice(0, 3).map((a, i) => (
+                <div key={i} className="briefing-alert">
+                  <strong>{a.event}</strong>
+                  {a.severity && <Pill text={a.severity} cls={a.severity === 'Extreme' || a.severity === 'Severe' ? 'nogo' : 'caution'} />}
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* Heat Risk — guidance + reasons */}
+        {shouldRenderRankedCard('heatRisk') && (
+          <Section icon={<Sun size={14} />} title="Heat Risk" pill={(heatRiskLabel || 'Low').toUpperCase()} pillClass={heatRiskPillClass}>
+            <p className="briefing-body-line">{heatRiskGuidance}</p>
+            {heatRiskReasons.length > 0 && (
+              <ul className="briefing-short-list">
+                {heatRiskReasons.slice(0, 2).map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            )}
+          </Section>
+        )}
+
+        {/* Terrain — summary + mode + footwear */}
+        {shouldRenderRankedCard('terrainTrailCondition') && terrainConditionDetails && (
+          <Section
+            icon={<Route size={14} />}
+            title="Terrain"
+            pill={safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}
+            pillClass={terrainConditionPillClass}
+          >
+            {terrainConditionDetails.summary && <p className="briefing-body-line">{terrainConditionDetails.summary}</p>}
+            <div className="briefing-kv-row">
+              {terrainConditionDetails.recommendedTravel && <Kv label="Travel" value={terrainConditionDetails.recommendedTravel} />}
+              {terrainConditionDetails.footwear && <Kv label="Footwear" value={terrainConditionDetails.footwear} />}
+            </div>
+          </Section>
+        )}
+
+        {/* Precipitation — insight + 24h totals */}
+        {shouldRenderRankedCard('recentRainfall') && (
+          <Section icon={<CloudRain size={14} />} title="Precipitation" pill={`24h: ${rainfall24hDisplay}`} pillClass={rainfall24hSeverityClass}>
+            {precipInsightLine && <p className="briefing-body-line">{precipInsightLine}</p>}
+            <div className="briefing-kv-row">
+              <Kv label="Rain 24h" value={rainfall24hDisplay} />
+              <Kv label="Snow 24h" value={snowfall24hDisplay} />
+            </div>
+          </Section>
+        )}
+
+        {/* Wind Loading — summary + action + lee aspects */}
+        {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
+          <Section icon={<Wind size={14} />} title="Wind Loading" pill={windLoadingLevel} pillClass={windLoadingPillClass}>
+            <p className="briefing-body-line">{windLoadingSummary}</p>
+            {windLoadingActionLine && <p className="briefing-body-sub">{windLoadingActionLine}</p>}
+            {leewardAspectHints.length > 0 && (
+              <div className="briefing-chip-row">
+                <span className="briefing-chip-label">Lee aspects:</span>
+                {leewardAspectHints.map((a) => <span key={a} className="briefing-chip">{a}</span>)}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {/* Air Quality — category + AQI */}
         {shouldRenderRankedCard('airQuality') && (
-          <BriefingSection
+          <Section
             icon={<Wind size={14} />}
             title="Air Quality"
             pill={`AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}
             pillClass={airQualityFutureNotApplicable ? 'go' : airQualityPillClassFn(safetyData.airQuality?.usAqi)}
           >
-            <AirQualityCard
-              category={safetyData.airQuality?.category || 'Unknown'}
-              pm25={safetyData.airQuality?.pm25}
-              pm10={safetyData.airQuality?.pm10}
-              ozone={safetyData.airQuality?.ozone}
-              airQualityFutureNotApplicable={airQualityFutureNotApplicable}
-              note={safetyData.airQuality?.note}
-              source={safetyData.airQuality?.source}
-              measuredTime={safetyData.airQuality?.measuredTime}
-              formatPubTime={formatPubTime}
-            />
-          </BriefingSection>
+            <div className="briefing-kv-row">
+              <Kv label="Category" value={safetyData.airQuality?.category || 'Unknown'} />
+              {safetyData.airQuality?.pm25 != null && <Kv label="PM2.5" value={`${Math.round(safetyData.airQuality.pm25)} µg/m³`} />}
+            </div>
+            {safetyData.airQuality?.note && <p className="briefing-body-sub">{safetyData.airQuality.note}</p>}
+          </Section>
         )}
 
+        {/* Snowpack — interpretation + depth + takeaways */}
         {shouldRenderRankedCard('snowpackSnapshot') && (
-          <BriefingSection icon={<Mountain size={14} />} title="Snowpack" pill={snowpackStatusLabel} pillClass={snowpackPillClass}>
-            <SnowpackCard
-              snowpackInsights={snowpackInsights}
-              snotelStationName={safetyData.snowpack?.snotel?.stationName}
-              snotelDistanceDisplay={snotelDistanceDisplay}
-              snotelDepthDisplay={snotelDepthDisplay}
-              snotelSweDisplay={snotelSweDisplay}
-              snotelObservedDate={safetyData.snowpack?.snotel?.observedDate}
-              nohrscDepthDisplay={nohrscDepthDisplay}
-              nohrscSweDisplay={nohrscSweDisplay}
-              nohrscSampledTime={safetyData.snowpack?.nohrsc?.sampledTime}
-              cdec={safetyData.snowpack?.cdec ? { stationName: safetyData.snowpack.cdec.stationName, stationCode: safetyData.snowpack.cdec.stationCode, observedDate: safetyData.snowpack.cdec.observedDate } : null}
-              cdecDepthDisplay={cdecDepthDisplay}
-              cdecSweDisplay={cdecSweDisplay}
-              cdecDistanceDisplay={cdecDistanceDisplay}
-              rainfall24hDisplay={rainfall24hDisplay}
-              snowfall24hDisplay={snowfall24hDisplay}
-              snowpackHistoricalStatusLabel={snowpackHistoricalStatusLabel}
-              snowpackHistoricalPillClass={snowpackHistoricalPillClass}
-              snowpackHistoricalComparisonLine={snowpackHistoricalComparisonLine}
-              snowpackInterpretation={snowpackInterpretation}
-              snowpackSummary={safetyData.snowpack?.summary}
-              snowpackTakeaways={snowpackTakeaways}
-              snowfallWindowSummary={snowfallWindowSummary}
-              rainfallWindowSummary={rainfallWindowSummary}
-              snowpackObservationContext={snowpackObservationContext}
-              safeSnotelLink={safeSnotelLink}
-              safeNohrscLink={safeNohrscLink}
-              safeCdecLink={safeCdecLink}
-              weatherTimezone={safetyData.weather?.timezone || null}
-              localizeUnitText={localizeUnitText}
-              formatForecastPeriodLabel={formatForecastPeriodLabel}
-            />
-          </BriefingSection>
+          <Section icon={<Mountain size={14} />} title="Snowpack" pill={snowpackStatusLabel} pillClass={snowpackPillClass}>
+            {snowpackInterpretation?.headline && <p className="briefing-body-line">{snowpackInterpretation.headline}</p>}
+            <div className="briefing-kv-row">
+              {snotelDepthDisplay && <Kv label="Depth" value={snotelDepthDisplay} />}
+              {snotelSweDisplay && <Kv label="SWE" value={snotelSweDisplay} />}
+            </div>
+            {snowpackTakeaways.length > 0 && (
+              <ul className="briefing-short-list">
+                {snowpackTakeaways.slice(0, 2).map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            )}
+          </Section>
         )}
 
+        {/* Fire Risk — guidance + reasons */}
         {shouldRenderRankedCard('fireRisk') && (
-          <BriefingSection icon={<Flame size={14} />} title="Fire Risk" pill={fireRiskLabel.toUpperCase()} pillClass={fireRiskPillClass}>
-            <FireRiskCard
-              guidance={safetyData.fireRisk?.guidance || 'No fire-risk guidance available.'}
-              reasons={safetyData.fireRisk?.reasons || []}
-              fireRiskAlerts={fireRiskAlerts}
-              source={safetyData.fireRisk?.source || 'Not provided'}
-              formatPubTime={formatPubTime}
-            />
-          </BriefingSection>
+          <Section icon={<Flame size={14} />} title="Fire Risk" pill={fireRiskLabel.toUpperCase()} pillClass={fireRiskPillClass}>
+            <p className="briefing-body-line">{safetyData.fireRisk?.guidance || 'No fire-risk guidance available.'}</p>
+            {(safetyData.fireRisk?.reasons || []).length > 0 && (
+              <ul className="briefing-short-list">
+                {(safetyData.fireRisk?.reasons || []).slice(0, 2).map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            )}
+          </Section>
         )}
 
+        {/* Daylight — start / return / remaining */}
         {shouldRenderRankedCard('planSnapshot') && (
-          <BriefingSection icon={<Sun size={14} />} title="Daylight" pill={`${daylightRemainingFromStartLabel} daylight`}>
-            <PlanSnapshotCard
-              sunriseMinutesForPlan={sunriseMinutesForPlan}
-              sunsetMinutesForPlan={sunsetMinutesForPlan}
-              startMinutesForPlan={startMinutesForPlan}
-              returnMinutes={returnMinutes}
-              displayStartTime={displayStartTime}
-              startLabel={startLabel}
-              daylightRemainingFromStartLabel={daylightRemainingFromStartLabel}
-              returnTimeFormatted={returnTimeFormatted}
-              sunriseValue={safetyData.solar.sunrise}
-              sunsetValue={safetyData.solar.sunset}
-              timeStyle={preferences.timeStyle}
-            />
-          </BriefingSection>
+          <Section icon={<Sun size={14} />} title="Daylight" pill={`${daylightRemainingFromStartLabel} daylight`}>
+            <div className="briefing-kv-row">
+              <Kv label="Start" value={displayStartTime} />
+              <Kv label="Return" value={returnTimeFormatted || '—'} />
+              <Kv label="Daylight left" value={daylightRemainingFromStartLabel} />
+            </div>
+          </Section>
         )}
 
-        {shouldRenderRankedCard('recommendedGear') && (
-          <BriefingSection icon={<CheckCircle2 size={14} />} title="Gear" pill={`${gearRecommendations.length} items`}>
-            <GearCard gearRecommendations={gearRecommendations} />
-          </BriefingSection>
+        {/* Gear — category pills */}
+        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (
+          <Section icon={<Backpack size={14} />} title="Gear" pill={`${gearRecommendations.length} items`}>
+            <div className="briefing-chip-row briefing-chip-row-wrap">
+              {gearRecommendations.map((g, i) => (
+                <span key={i} className="briefing-chip" title={g.detail || undefined}>{g.title}</span>
+              ))}
+            </div>
+          </Section>
         )}
 
+        {/* Source Freshness — compact list */}
         {shouldRenderRankedCard('sourceFreshness') && (
-          <BriefingSection icon={<Clock size={14} />} title="Source Freshness" pill={reportGeneratedAt ? formatAgeFromNow(reportGeneratedAt) : 'N/A'}>
-            <SourceFreshnessCard
-              sourceFreshnessRows={sourceFreshnessRows}
-              reportGeneratedAt={reportGeneratedAt}
-              avalancheExpiredForSelectedStart={avalancheExpiredForSelectedStart}
-              objectiveTimezone={objectiveTimezone}
-              deviceTimezone={deviceTimezone}
-              formatPubTime={formatPubTime}
-            />
-          </BriefingSection>
+          <Section icon={<Radio size={14} />} title="Sources" pill={reportGeneratedAt ? formatAgeFromNow(reportGeneratedAt) : 'N/A'}>
+            <div className="briefing-freshness">
+              {sourceFreshnessRows.map((r, i) => {
+                const age = r.issued ? computeAge(r.issued) : 'N/A';
+                const cls = r.stateOverride || (r.issued ? freshnessClass(r.issued, r.staleHours) : 'missing');
+                return (
+                  <div key={i} className="briefing-freshness-row">
+                    <span className="briefing-freshness-label">{r.label}</span>
+                    <Pill text={r.displayValue || age} cls={cls} />
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
         )}
 
       </div>
