@@ -270,9 +270,18 @@ export function useSafetyData({
     setAiBriefError(null);
     try {
       const factors = Array.isArray(params.safetyData.safety.factors) ? params.safetyData.safety.factors : [];
+      // Include key weather values so the AI can reason about severity
+      const weatherContext: string[] = [];
+      const w = params.safetyData.weather;
+      if (w) {
+        if (w.windGust > 0) weatherContext.push(`Wind gusts: ${Math.round(w.windGust)} mph`);
+        if (w.windSpeed > 0) weatherContext.push(`Sustained wind: ${Math.round(w.windSpeed)} mph`);
+        if (w.temp != null) weatherContext.push(`Temp: ${Math.round(w.temp)}°F`);
+      }
       const contextParts = [
         params.fieldBriefPrimaryReason,
         ...params.fieldBriefTopRisks.slice(0, 3),
+        ...weatherContext,
       ].filter(Boolean);
       const result = await fetchAiBrief({
         score: params.safetyData.safety.score,

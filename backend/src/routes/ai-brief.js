@@ -1,7 +1,7 @@
 const { createCache } = require('../utils/cache');
 
 const SYSTEM_PROMPT =
-  'You are a backcountry conditions analyst. Write a 2-3 sentence actionable field brief. Be direct, specific, and focus on the most important decision factors. Do not use markdown formatting.';
+  'You are a backcountry conditions analyst. Write a 2-3 sentence actionable field brief. Be direct, specific, and focus on the most important decision factors. Do not use markdown formatting. IMPORTANT: Your recommendation MUST be consistent with the provided decision level — if the decision is NO-GO, do not suggest proceeding with caution; instead recommend postponing or choosing a safer objective. Only suggest proceeding when the decision level supports it.';
 
 const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, staleTtlMs: 60 * 60 * 1000, maxEntries: 200 });
 
