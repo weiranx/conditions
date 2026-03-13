@@ -28,6 +28,8 @@ const HEAT_GUIDANCE = [
   'Extreme heat-stress risk. Avoid committing to long, exposed objectives in this window.',
 ];
 
+const { computeFeelsLikeF } = require('./weather-normalizers');
+
 const buildHeatRiskData = ({ weatherData }) => {
   const tempF = parseFloat(weatherData?.temp);
   const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
@@ -39,9 +41,16 @@ const buildHeatRiskData = ({ weatherData }) => {
     .map((point) => parseFloat(point?.temp))
     .filter((value) => Number.isFinite(value));
   const peakTemp12hF = Number.isFinite(tempF) ? Math.max(tempF, ...trendTemps) : trendTemps.length > 0 ? Math.max(...trendTemps) : null;
+  const trendFeelsLikes = trend
+    .map((point) => {
+      const t = parseFloat(point?.temp);
+      const w = parseFloat(point?.wind);
+      return Number.isFinite(t) ? computeFeelsLikeF(t, Number.isFinite(w) ? w : 0) : null;
+    })
+    .filter((v) => v !== null);
   const peakFeelsLike12hF = Number.isFinite(feelsLikeF)
-    ? Math.max(feelsLikeF, Number.isFinite(peakTemp12hF) ? peakTemp12hF : Number.NEGATIVE_INFINITY)
-    : peakTemp12hF;
+    ? Math.max(feelsLikeF, ...trendFeelsLikes)
+    : trendFeelsLikes.length > 0 ? Math.max(...trendFeelsLikes) : null;
   const elevationBands = Array.isArray(weatherData?.elevationForecast) ? weatherData.elevationForecast : [];
   const lowerTerrainBands = elevationBands.filter((band) => parseFloat(band?.deltaFromObjectiveFt) < 0);
   const lowerTerrainWarmestBand = lowerTerrainBands.reduce((warmest, band) => {

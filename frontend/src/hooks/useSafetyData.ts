@@ -272,8 +272,8 @@ export function useSafetyData({
       const weatherContext: string[] = [];
       const w = params.safetyData.weather;
       if (w) {
-        if (w.windGust > 0) weatherContext.push(`Wind gusts: ${Math.round(w.windGust)} mph`);
-        if (w.windSpeed > 0) weatherContext.push(`Sustained wind: ${Math.round(w.windSpeed)} mph`);
+        if (Number.isFinite(w.windGust) && w.windGust > 0) weatherContext.push(`Wind gusts: ${Math.round(w.windGust)} mph`);
+        if (Number.isFinite(w.windSpeed) && w.windSpeed > 0) weatherContext.push(`Sustained wind: ${Math.round(w.windSpeed)} mph`);
         if (w.temp != null) weatherContext.push(`Temp: ${Math.round(w.temp)}°F`);
       }
       const contextParts = [

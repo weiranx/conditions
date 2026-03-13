@@ -4,6 +4,7 @@ import type {
   SummitDecision,
   UserPreferences,
 } from './types';
+import { alertSeverityRank } from './alert-utils';
 import {
   classifySnowpackFreshness,
   formatTemperatureForUnit,
@@ -72,7 +73,7 @@ export function evaluateBackcountryDecision(
   let gust = data.weather.windGust ?? 0;
   let precip = data.weather.precipChance ?? 0;
   const score = normalizedDecisionScore(data, options);
-  let feelsLike = data.weather.feelsLike ?? data.weather.temp;
+  let feelsLike: number | null = data.weather.feelsLike ?? data.weather.temp ?? null;
   const description = data.weather.description || '';
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
@@ -96,7 +97,7 @@ export function evaluateBackcountryDecision(
     const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
     const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
     const wfl = computeFeelsLikeF(wt, ww);
-    if (wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; }
+    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; }
     if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
       hasStormSignal = true;
       stormSignalHour = wpt.time || '';
@@ -125,15 +126,6 @@ export function evaluateBackcountryDecision(
   const formatTemp = (valueF: number) => formatTemperatureForUnit(valueF, tempUnit);
   const displayMaxGustThreshold = formatWind(maxGustThreshold);
   const displayMinFeelsLikeThreshold = formatTemp(minFeelsLikeThreshold);
-  const alertSeverityRank = (severity: string | undefined | null): number => {
-    const normalized = String(severity || '').trim().toLowerCase();
-    if (!normalized) return 1;
-    if (['extreme', 'severe'].includes(normalized)) return 5;
-    if (normalized === 'warning') return 4;
-    if (['advisory', 'watch'].includes(normalized)) return 3;
-    if (normalized === 'moderate') return 2;
-    return 1;
-  };
 
   const alertsStatus = String(data.alerts?.status || '').toLowerCase();
   const alertsRelevantForSelectedStart = true;
@@ -235,9 +227,9 @@ export function evaluateBackcountryDecision(
   } else if (score < 68) {
     addCaution(`Safety score at ${score}% suggests tightening route controls.`);
   }
-  if (feelsLike >= 95) {
+  if (feelsLike !== null && feelsLike >= 95) {
     addBlocker(`Apparent temperature near ${formatTemp(feelsLike)} has high heat-stress risk.`);
-  } else if (feelsLike <= minFeelsLikeThreshold) {
+  } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
     addCaution(`Apparent temperature near ${formatTemp(feelsLike)} increases cold-exposure risk.`);
   }
 

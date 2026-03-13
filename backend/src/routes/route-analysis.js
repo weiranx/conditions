@@ -179,7 +179,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const safetySettled = await withTimeout(
         Promise.allSettled(
           waypointsCopy.map((wp) =>
-            invokeSafetyHandler({ lat: String(wp.lat), lon: String(wp.lon), date, start: start || '06:00', travel_window_hours: String(travel_window_hours || 12) })
+            invokeSafetyHandler({ lat: String(wp.lat), lon: String(wp.lon), date, start: start || '06:00', travel_window_hours: String(travel_window_hours || 12), name: `Route waypoint: ${wp.name || 'unnamed'}` })
           )
         ),
         60000, 'Safety checks'

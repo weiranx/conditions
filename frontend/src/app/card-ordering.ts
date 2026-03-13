@@ -1,4 +1,5 @@
 import type { FreshnessState, SafetyData, SummitDecision, UserPreferences } from './types';
+import { alertSeverityRank } from './alert-utils';
 import { freshnessClass } from './core';
 
 export type SortableCardKey =
@@ -103,15 +104,6 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
   } = inputs;
 
   const clampRiskLevel = (value: number): number => Math.max(0, Math.min(5, Math.round(value)));
-  const alertSeverityRank = (severity: string | undefined | null): number => {
-    const normalized = String(severity || '').trim().toLowerCase();
-    if (!normalized) return 1;
-    if (['extreme', 'severe'].includes(normalized)) return 5;
-    if (['warning'].includes(normalized)) return 4;
-    if (['advisory', 'watch'].includes(normalized)) return 3;
-    if (['moderate'].includes(normalized)) return 2;
-    return 1;
-  };
 
   const trailText = String(safetyData?.terrainCondition?.label || safetyData?.trail || '').toLowerCase();
   const weatherDescription = String(safetyData?.weather.description || '').toLowerCase();

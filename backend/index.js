@@ -540,7 +540,7 @@ const safetyHandlerWithTimeout = async (req, res) => {
 };
 
 registerSafetyRoute({ app, safetyHandler: safetyHandlerWithTimeout });
-const invokeSafetyHandler = createSafetyInvoker({ safetyHandler });
+const invokeSafetyHandler = createSafetyInvoker({ safetyHandler: safetyHandlerWithTimeout });
 
 registerSatOneLinerRoute({
   app,

@@ -123,13 +123,13 @@ export function useTripForecast({
             }
             const dayData = payload as SafetyData;
             const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences);
-            const trendWindow = buildTrendWindowFromStart(dayData.weather.trend || [], safeStartTime, safeTravelWindowHours);
+            const trendWindow = buildTrendWindowFromStart(dayData.weather?.trend || [], safeStartTime, safeTravelWindowHours);
             const travelRows = buildTravelWindowRows(trendWindow, preferences);
             const travelInsights = buildTravelWindowInsights(travelRows, preferences.timeStyle);
 
-            const avalancheRelevant = dayData.avalanche.relevant !== false;
-            const avalancheUnknown = avalancheRelevant && Boolean(dayData.avalanche.dangerUnknown || dayData.avalanche.coverageStatus !== 'reported');
-            const dangerLabel = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(dayData.avalanche.dangerLevel)] || 'N/A';
+            const avalancheRelevant = dayData.avalanche?.relevant !== false;
+            const avalancheUnknown = avalancheRelevant && Boolean(dayData.avalanche?.dangerUnknown || dayData.avalanche?.coverageStatus !== 'reported');
+            const dangerLabel = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(dayData.avalanche?.dangerLevel)] || 'N/A';
             const avalancheSummary = !avalancheRelevant
               ? 'Not primary'
               : avalancheUnknown
@@ -153,7 +153,7 @@ export function useTripForecast({
               windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
               precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
               avalancheSummary,
-              travelSummary: `${travelInsights.passHours}/${Math.max(travelRows.length, safeTravelWindowHours)}h passing`,
+              travelSummary: `${travelInsights.passHours}/${travelRows.length}h passing`,
               sourceIssuedTime: dayData?.weather?.issuedTime || null,
             } as MultiDayTripForecastDay;
           } catch {

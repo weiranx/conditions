@@ -1,4 +1,5 @@
 const { parseIsoTimeToMs, findClosestTimeIndex, clampTravelWindowHours, normalizeUtcIsoTimestamp } = require('./time');
+const { createCache } = require('./cache');
 
 const INCHES_PER_MM = 0.0393701;
 const INCHES_PER_CM = 0.393701;
@@ -239,7 +240,7 @@ const buildRainfallZeroFallback = ({ lat, lon, targetForecastTimeIso, travelWind
 };
 
 const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
-  const rainfallPayloadCache = new Map();
+  const rainfallPayloadCache = createCache({ name: 'rainfall-payload', ttlMs: RAINFALL_CACHE_TTL_MS, staleTtlMs: RAINFALL_CACHE_TTL_MS * 2, maxEntries: 300 });
 
   const fetchRecentRainfallData = async (lat, lon, targetForecastTimeIso, travelWindowHours, fetchOptions) => {
     const rainfallCacheKey = `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
@@ -262,10 +263,7 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
             throw new Error(`Open-Meteo rainfall request failed with status ${response.status}`);
           }
           rainfallJson = await response.json();
-          rainfallPayloadCache.set(rainfallCacheKey, {
-            fetchedAt: Date.now(),
-            payload: rainfallJson,
-          });
+          rainfallPayloadCache.set(rainfallCacheKey, rainfallJson);
           lastError = null;
           break;
         } catch (error) {
@@ -279,13 +277,11 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
 
     if (!rainfallJson) {
       const cachedEntry = rainfallPayloadCache.get(rainfallCacheKey);
-      const hasCachedPayload = Boolean(cachedEntry && cachedEntry.payload);
-      const cachedFresh = hasCachedPayload && Date.now() - Number(cachedEntry.fetchedAt || 0) <= RAINFALL_CACHE_TTL_MS;
-      if (cachedFresh) {
-        rainfallJson = cachedEntry.payload;
+      if (cachedEntry && !cachedEntry.stale) {
+        rainfallJson = cachedEntry.value;
         usingCachedPayload = true;
       } else {
-        const staleCachedPayload = hasCachedPayload ? cachedEntry.payload : null;
+        const staleCachedPayload = cachedEntry ? cachedEntry.value : null;
         const archiveEndDate = new Date().toISOString().slice(0, 10);
         const archiveStartDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
         const archiveApiUrl = buildOpenMeteoRainfallArchiveApiUrl('archive-api.open-meteo.com', lat, lon, archiveStartDate, archiveEndDate);
@@ -296,7 +292,7 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
               throw new Error(`Open-Meteo rainfall archive request failed with status ${archiveResponse.status}`);
             }
             rainfallJson = await archiveResponse.json();
-            rainfallPayloadCache.set(rainfallCacheKey, { fetchedAt: Date.now(), payload: rainfallJson });
+            rainfallPayloadCache.set(rainfallCacheKey, rainfallJson);
             usingArchivePayload = true;
             lastError = null;
             break;

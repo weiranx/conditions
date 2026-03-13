@@ -5,13 +5,14 @@ const SYSTEM_PROMPT =
 
 const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, staleTtlMs: 60 * 60 * 1000, maxEntries: 200 });
 
-function buildCacheKey({ score, primaryHazard, decisionLevel, factors }) {
+function buildCacheKey({ score, primaryHazard, decisionLevel, factors, context }) {
   const topFactorNames = (factors || [])
     .slice(0, 3)
     .map((f) => f.hazard || f.name || '')
     .filter(Boolean)
     .join(',');
-  return `${score}|${primaryHazard}|${decisionLevel}|${topFactorNames}`;
+  const contextKey = typeof context === 'string' ? context.slice(0, 120) : '';
+  return `${score}|${primaryHazard}|${decisionLevel}|${topFactorNames}|${contextKey}`;
 }
 
 const registerAiBriefRoute = ({ app, askClaude }) => {
@@ -22,7 +23,7 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
       return res.status(400).json({ error: 'Missing required fields: score, primaryHazard, decisionLevel' });
     }
 
-    const cacheKey = buildCacheKey({ score, primaryHazard, decisionLevel, factors });
+    const cacheKey = buildCacheKey({ score, primaryHazard, decisionLevel, factors, context });
 
     const cached = aiBriefCache.get(cacheKey);
     if (cached) {
