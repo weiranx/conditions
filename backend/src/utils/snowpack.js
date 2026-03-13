@@ -171,7 +171,7 @@ const createSnowpackService = ({
   const compareCurrentToHistoricalAverage = (currentValue, averageValue) => {
     const currentNumeric = Number(currentValue);
     const averageNumeric = Number(averageValue);
-    if (!Number.isFinite(currentNumeric) || !Number.isFinite(averageNumeric) || averageNumeric <= 0) {
+    if (!Number.isFinite(currentNumeric) || !Number.isFinite(averageNumeric) || averageNumeric < 0.5) {
       return {
         status: 'unknown',
         percentOfAverage: null,

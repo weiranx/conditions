@@ -82,12 +82,13 @@ export function useSyncUrlEffect(params: {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
+  travelWindowHours?: number;
   isApplyingPopStateRef: React.MutableRefObject<boolean>;
   hasInitializedHistoryRef: React.MutableRefObject<boolean>;
 }) {
   const {
     view, hasObjective, position, objectiveName, committedSearchQuery,
-    forecastDate, alpineStartTime, targetElevationInput,
+    forecastDate, alpineStartTime, targetElevationInput, travelWindowHours,
     isApplyingPopStateRef, hasInitializedHistoryRef,
   } = params;
 
@@ -107,6 +108,7 @@ export function useSyncUrlEffect(params: {
           forecastDate,
           alpineStartTime,
           targetElevationInput,
+          travelWindowHours,
         })
       : '';
 
@@ -132,6 +134,7 @@ export function useSyncUrlEffect(params: {
     forecastDate,
     alpineStartTime,
     targetElevationInput,
+    travelWindowHours,
     isApplyingPopStateRef,
     hasInitializedHistoryRef,
   ]);

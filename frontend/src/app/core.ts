@@ -40,12 +40,12 @@ export function formatDateInput(date: Date): string {
 }
 
 export function addDaysToIsoDate(dateStr: string, days: number): string {
-  const parsed = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) {
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((p) => !Number.isFinite(p))) {
     return dateStr;
   }
-  parsed.setDate(parsed.getDate() + days);
-  return formatDateInput(parsed);
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + days));
+  return d.toISOString().slice(0, 10);
 }
 
 export function parseIsoToMs(value: string | null | undefined): number | null {

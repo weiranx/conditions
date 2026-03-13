@@ -104,7 +104,9 @@ export function evaluateBackcountryDecision(
   }
   const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
   const avalancheRelevant = !ignoreAvalancheForDecision && data.avalanche.relevant !== false;
-  const avalancheUnknown = avalancheRelevant && Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
+  const avalancheExpired = avalancheRelevant && data.avalanche.coverageStatus === 'expired_for_selected_start';
+  const avalancheUnknown = avalancheRelevant && !avalancheExpired &&
+    Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
   const avalancheGateRequired = avalancheRelevant;
   const unknownSnowpackMode = avalancheGateRequired && avalancheUnknown;
   const avalancheCheckLabel = (safeDangerLabel: string): string => {
@@ -127,7 +129,10 @@ export function evaluateBackcountryDecision(
   const displayMinFeelsLikeThreshold = formatTemp(minFeelsLikeThreshold);
 
   const alertsStatus = String(data.alerts?.status || '').toLowerCase();
-  const alertsRelevantForSelectedStart = true;
+  const forecastLeadHoursRaw = data.forecast?.selectedStartTime
+    ? (new Date(data.forecast.selectedStartTime).getTime() - Date.now()) / 3_600_000
+    : null;
+  const alertsRelevantForSelectedStart = forecastLeadHoursRaw === null || forecastLeadHoursRaw <= 48;
   const alertsNoActiveForSelectedStart = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
   const selectedTravelWindowMs = resolveSelectedTravelWindowMs(data, preferences.travelWindowHours);
   const alertsWindowCovered = isTravelWindowCoveredByAlertWindow(selectedTravelWindowMs, data.alerts?.alerts || []);
@@ -202,6 +207,9 @@ export function evaluateBackcountryDecision(
     );
     addCaution('Limited avalanche coverage: use low-angle terrain, avoid terrain traps, and increase spacing/communication.');
   }
+  if (avalancheExpired) {
+    addCaution('Avalanche bulletin has expired for the selected start time. Danger rating shown is the last-known value; treat conditions as potentially worse.');
+  }
 
   if (avalancheGateRequired && !avalancheUnknown && danger >= 4) {
     addBlocker('Avalanche danger is High/Extreme. Avoid avalanche terrain.');
@@ -275,7 +283,7 @@ export function evaluateBackcountryDecision(
   }
 
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
-  const sunsetMinutes = parseSolarClockMinutes(data.solar.sunset);
+  const sunsetMinutes = data.solar?.sunset ? parseSolarClockMinutes(data.solar.sunset) : null;
   const daylightBuffer = 30;
   const turnaroundMinutes = options.turnaroundTime
     ? parseTimeInputMinutes(options.turnaroundTime)
@@ -365,9 +373,9 @@ export function evaluateBackcountryDecision(
     {
       key: 'feels-like',
       label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,
-      ok: feelsLike >= minFeelsLikeThreshold,
-      detail: coldestFeelsLikeHour ? `Coldest ${formatTemp(feelsLike)} at ${coldestFeelsLikeHour} in window (limit ${displayMinFeelsLikeThreshold}).` : `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
-      action: feelsLike < minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
+      ok: feelsLike !== null && feelsLike >= minFeelsLikeThreshold,
+      detail: feelsLike === null ? 'Feels-like data unavailable.' : coldestFeelsLikeHour ? `Coldest ${formatTemp(feelsLike)} at ${coldestFeelsLikeHour} in window (limit ${displayMinFeelsLikeThreshold}).` : `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
+      action: feelsLike !== null && feelsLike < minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
     },
   ];
 

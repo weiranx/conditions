@@ -408,7 +408,7 @@ const deriveOverallDangerLevelFromElevations = (elevations, fallbackLevel = 0) =
 
   const levels = [elevations.above, elevations.at, elevations.below]
     .map((band) => normalizeAvalancheLevel(band?.level))
-    .filter((level) => Number.isFinite(level) && level > 0);
+    .filter((level) => Number.isFinite(level));
 
   if (levels.length === 0) {
     return fallback;

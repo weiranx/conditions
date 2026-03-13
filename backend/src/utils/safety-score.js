@@ -85,12 +85,12 @@ const calculateSafetyScore = ({
   const requestedWindowHours = clampTravelWindowHours(selectedTravelWindowHours, 12);
   const effectiveTrendWindowHours = Math.max(1, trend.length || requestedWindowHours);
   const trendTemps = trend.map((item) => Number(item?.temp)).filter(Number.isFinite);
-  const trendGusts = trend.map((item) => Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind)).filter(Number.isFinite);
+  const trendGusts = trend.map((item) => Number(item?.gust)).filter(Number.isFinite);
   const trendPrecips = trend.map((item) => Number(item?.precipChance)).filter(Number.isFinite);
   const trendFeelsLike = trend
     .map((item) => {
       const rowTemp = Number(item?.temp);
-      const rowWind = Number.isFinite(Number(item?.wind)) ? Number(item.wind) : Number.isFinite(Number(item?.gust)) ? Number(item.gust) : 0;
+      const rowWind = Number.isFinite(Number(item?.wind)) ? Number(item.wind) : 0;
       if (!Number.isFinite(rowTemp)) return Number.NaN;
       return computeFeelsLikeF(rowTemp, Number.isFinite(rowWind) ? rowWind : 0);
     })
@@ -165,7 +165,7 @@ const calculateSafetyScore = ({
   const forecastStartMs = parseIsoTimeToMs(weatherData?.forecastStartTime);
   const selectedDateMs =
     typeof selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)
-      ? Date.parse(`${selectedDate}T00:00:00Z`)
+      ? Date.parse(`${selectedDate}T12:00:00Z`)
       : null;
   const forecastLeadHoursRaw =
     forecastStartMs !== null

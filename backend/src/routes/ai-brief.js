@@ -25,33 +25,29 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
 
     const cacheKey = buildCacheKey({ score, primaryHazard, decisionLevel, factors, context });
 
-    const cached = aiBriefCache.get(cacheKey);
-    if (cached) {
-      return res.json({ narrative: cached.value, cached: true });
-    }
-
-    const topFactorsText = (factors || [])
-      .slice(0, 3)
-      .map((f) => `${f.hazard || f.name}: ${f.impact > 0 ? '+' : ''}${f.impact} pts`)
-      .join('; ');
-
-    const userPrompt = [
-      context || '',
-      `Score: ${score}/100 (${confidence ?? '?'}% confidence). Primary hazard: ${primaryHazard}. Decision: ${decisionLevel}.`,
-      topFactorsText ? `Top factors: ${topFactorsText}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
     try {
-      const narrative = await askClaude(userPrompt, {
-        model: 'claude-haiku-4-5-20251001',
-        maxTokens: 200,
-        system: SYSTEM_PROMPT,
+      const topFactorsText = (factors || [])
+        .slice(0, 3)
+        .map((f) => `${f.hazard || f.name}: ${f.impact > 0 ? '+' : ''}${f.impact} pts`)
+        .join('; ');
+
+      const userPrompt = [
+        context || '',
+        `Score: ${score}/100 (${confidence ?? '?'}% confidence). Primary hazard: ${primaryHazard}. Decision: ${decisionLevel}.`,
+        topFactorsText ? `Top factors: ${topFactorsText}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const narrative = await aiBriefCache.getOrFetch(cacheKey, async () => {
+        return askClaude(userPrompt, {
+          model: 'claude-haiku-4-5-20251001',
+          maxTokens: 200,
+          system: SYSTEM_PROMPT,
+        });
       });
 
-      aiBriefCache.set(cacheKey, narrative);
-      return res.json({ narrative, cached: false });
+      return res.json({ narrative });
     } catch (err) {
       const msg = err.message || 'AI service unavailable';
       return res.status(503).json({ error: msg });

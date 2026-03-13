@@ -330,9 +330,9 @@ async function fetchWeatherPipeline({
           `https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`,
           fetchOptions,
         );
-        if (!solarRes.ok) return null;
+        if (!solarRes.ok) throw new Error(`Solar API returned ${solarRes.status}`);
         const solarJson = await solarRes.json();
-        if (solarJson.status !== 'OK') return null;
+        if (solarJson.status !== 'OK') throw new Error('Solar API status not OK');
         return {
           sunrise: solarJson.results.sunrise,
           sunset: solarJson.results.sunset,

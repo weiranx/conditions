@@ -268,6 +268,7 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
           break;
         } catch (error) {
           lastError = error;
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 500 * attempt));
         }
       }
       if (rainfallJson) {
@@ -298,6 +299,7 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
             break;
           } catch (archiveError) {
             lastError = archiveError;
+            if (attempt < 2) await new Promise((r) => setTimeout(r, 1000));
           }
         }
 

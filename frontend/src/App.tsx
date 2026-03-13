@@ -163,7 +163,12 @@ function App() {
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
   const initialLinkState = React.useMemo(() => parseLinkState(todayDate, maxForecastDate, initialPreferences), [todayDate, maxForecastDate, initialPreferences]);
 
-  const [preferences, setPreferences] = useState<UserPreferences>(initialPreferences);
+  const [preferences, setPreferences] = useState<UserPreferences>(() => {
+    if (initialLinkState.travelWindowHours) {
+      return { ...initialPreferences, travelWindowHours: initialLinkState.travelWindowHours };
+    }
+    return initialPreferences;
+  });
   const activity: ActivityType = 'backcountry';
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
@@ -307,6 +312,9 @@ function App() {
       setAlpineStartTime(linkState.alpineStartTime);
       setTargetElevationInput(linkState.targetElevationInput);
       setTargetElevationManual(Boolean(linkState.targetElevationInput));
+      if (linkState.travelWindowHours) {
+        setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
+      }
       setError(null);
     }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
   });
@@ -384,6 +392,7 @@ function App() {
     forecastDate,
     alpineStartTime,
     targetElevationInput,
+    travelWindowHours,
     isApplyingPopStateRef,
     hasInitializedHistoryRef,
   });

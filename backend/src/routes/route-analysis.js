@@ -171,6 +171,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           if (geo) {
             wp.lat = geo.lat;
             wp.lon = geo.lon;
+            wp.geocodingVerified = true;
+          } else {
+            wp.geocodingVerified = false;
           }
         })
       );
