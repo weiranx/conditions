@@ -6,20 +6,6 @@ enum DecisionEngine {
         var cautions: [String] = []
         var checks: [SummitDecision.Check] = []
 
-        // Safety score
-        let score = data.safety.score
-        if score < 40 {
-            blockers.append("Safety score critically low (\(Int(score))/100)")
-        } else if score < 60 {
-            cautions.append("Safety score below average (\(Int(score))/100)")
-        }
-        checks.append(.init(
-            key: "safety-score",
-            label: "Safety Score",
-            ok: score >= 60,
-            detail: "\(Int(score))/100"
-        ))
-
         // Avalanche danger
         let avyLevel = data.avalanche.dangerLevel
         let avyRelevant = data.avalanche.relevant ?? true

@@ -41,18 +41,12 @@ final class DecisionEngineTests: XCTestCase {
         XCTAssertTrue(decision.blockers.isEmpty)
     }
 
-    func testCautionFromLowScore() {
+    func testGoWithLowScoreButNoHazards() {
         let data = makeSafetyData(score: 55)
         let decision = DecisionEngine.evaluate(data: data, preferences: .init())
-        XCTAssertEqual(decision.level, .caution)
-        XCTAssertTrue(decision.cautions.contains { $0.contains("Safety score") })
-    }
-
-    func testNoGoFromVeryLowScore() {
-        let data = makeSafetyData(score: 30)
-        let decision = DecisionEngine.evaluate(data: data, preferences: .init())
-        XCTAssertEqual(decision.level, .noGo)
-        XCTAssertTrue(decision.blockers.contains { $0.contains("critically low") })
+        XCTAssertEqual(decision.level, .go, "Score alone should not drive decision level")
+        XCTAssertTrue(decision.blockers.isEmpty)
+        XCTAssertTrue(decision.cautions.isEmpty)
     }
 
     func testNoGoFromHighAvalanche() {
@@ -95,7 +89,6 @@ final class DecisionEngineTests: XCTestCase {
         let data = makeSafetyData()
         let decision = DecisionEngine.evaluate(data: data, preferences: .init())
         XCTAssertFalse(decision.checks.isEmpty)
-        XCTAssertTrue(decision.checks.contains { $0.key == "safety-score" })
         XCTAssertTrue(decision.checks.contains { $0.key == "wind" })
     }
 }
