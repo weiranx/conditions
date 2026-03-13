@@ -7,6 +7,7 @@ struct RouteAnalysisCard: View {
     let objectiveName: String
     let forecastDate: String
     let startTime: String?
+    var onRouteAnalysisLoaded: ((RouteAnalysisResult) -> Void)?
 
     @State private var suggestions: [RouteSuggestion] = []
     @State private var selectedRoute: String?
@@ -170,7 +171,7 @@ struct RouteAnalysisCard: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                Text(LocalizedStringKey(text))
+                Text(LocalizedStringKey(MarkdownStrip.inlineOnly(text)))
                     .font(.subheadline)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -308,6 +309,7 @@ struct RouteAnalysisCard: View {
                 )
                 guard !Task.isCancelled else { return }
                 analysis = result
+                onRouteAnalysisLoaded?(result)
             } catch {
                 guard !Task.isCancelled else { return }
                 self.error = "Analysis failed: \(error.localizedDescription)"

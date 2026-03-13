@@ -113,7 +113,7 @@ struct SavedReportDetailView: View {
                     data: data,
                     decision: decision,
                     preferences: prefs,
-                    aiBrief: nil,
+                    aiBrief: report.aiBrief,
                     isLoadingBrief: false,
                     onRequestBrief: {},
                     objectiveName: report.objectiveName,
@@ -121,6 +121,11 @@ struct SavedReportDetailView: View {
                     startTime: report.startTime
                 )
                 .id(cardType)
+            }
+
+            // Saved route analysis (offline)
+            if let routeResult = report.routeAnalysis {
+                savedRouteAnalysisCard(routeResult)
             }
         }
         .padding(.horizontal)
@@ -139,6 +144,81 @@ struct SavedReportDetailView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(.quaternary.opacity(0.2), in: Capsule())
+    }
+
+    // MARK: - Saved Route Analysis
+
+    private func savedRouteAnalysisCard(_ result: RouteAnalysisResult) -> some View {
+        CollapsibleSection(title: "Route Analysis", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill", headerColor: .purple, initiallyExpanded: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                if let text = result.analysis {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                                .foregroundStyle(.purple)
+                            Text("Route Analysis")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(LocalizedStringKey(MarkdownStrip.inlineOnly(text)))
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(12)
+                    .background(.purple.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(.purple.opacity(0.12), lineWidth: 0.5)
+                    )
+                }
+
+                if let waypoints = result.waypoints, !waypoints.isEmpty {
+                    let summaries = result.summaries ?? []
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Waypoints")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(waypoints.enumerated()), id: \.offset) { index, wp in
+                                let summary = summaries.count > index ? summaries[index] : nil
+                                HStack {
+                                    HStack(spacing: 6) {
+                                        Text("\(index + 1)")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 18, height: 18)
+                                            .background(Color.scoreColor(summary?.score ?? 50).opacity(0.7), in: Circle())
+                                        Text(wp.name ?? "—")
+                                            .font(.caption.weight(.medium))
+                                    }
+                                    Spacer()
+                                    if let score = summary?.score {
+                                        Text("\(Int(score))")
+                                            .font(.caption2.weight(.bold).monospacedDigit())
+                                            .foregroundStyle(Color.scoreColor(score))
+                                    }
+                                    if let elev = wp.elevation {
+                                        Text("\(Int(elev)) ft")
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 10)
+
+                                if index < waypoints.count - 1 {
+                                    Divider().padding(.horizontal, 10)
+                                }
+                            }
+                        }
+                        .background(.quaternary.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Helpers

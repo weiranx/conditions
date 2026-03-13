@@ -61,6 +61,22 @@ actor ReportStore {
         return try decoder.decode(SavedReport.self, from: data)
     }
 
+    // MARK: - Update AI Brief
+
+    func updateAiBrief(id: String, narrative: String) throws {
+        guard var report = try load(id: id) else { return }
+        report.aiBrief = narrative
+        try save(report)
+    }
+
+    // MARK: - Update Route Analysis
+
+    func updateRouteAnalysis(id: String, result: RouteAnalysisResult) throws {
+        guard var report = try load(id: id) else { return }
+        report.routeAnalysis = result
+        try save(report)
+    }
+
     // MARK: - Delete
 
     func delete(id: String) throws {

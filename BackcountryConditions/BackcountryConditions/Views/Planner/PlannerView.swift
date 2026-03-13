@@ -5,6 +5,7 @@ struct PlannerView: View {
     @State private var plannerVM = PlannerViewModel()
     @State private var searchVM = SearchViewModel()
     @State private var isSearchActive = false
+    @State private var recentReports: [SavedReport] = []
 
     var body: some View {
         NavigationStack {
@@ -14,6 +15,7 @@ struct PlannerView: View {
                         searchBar
                         savedObjectivesSection
                         recentSearches
+                        recentReportsSection
                         controls
                         mapView
                         status
@@ -26,6 +28,9 @@ struct PlannerView: View {
             }
             .navigationTitle("Planner")
             .navigationBarTitleDisplayMode(.large)
+            .task {
+                recentReports = (try? await ReportStore.shared.loadAll()) ?? []
+            }
             .refreshable {
                 if plannerVM.hasObjective {
                     await plannerVM.loadReport(preferences: appState.preferences)
@@ -72,7 +77,7 @@ struct PlannerView: View {
 
     @ViewBuilder
     private var recentSearches: some View {
-        if isSearchActive && !plannerVM.isLoading && !searchVM.recentSearches.isEmpty && searchVM.suggestions.isEmpty {
+        if (isSearchActive || !plannerVM.hasReport) && !plannerVM.isLoading && !searchVM.recentSearches.isEmpty && searchVM.suggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Label("Recent", systemImage: "clock")
@@ -139,6 +144,99 @@ struct PlannerView: View {
             )
             .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
             .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var recentReportsSection: some View {
+        if !plannerVM.hasReport && !plannerVM.isLoading && !recentReports.isEmpty && searchVM.suggestions.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Recent Reports", systemImage: "clock.arrow.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+
+                let items = Array(recentReports.prefix(5))
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, report in
+                    Button {
+                        isSearchActive = false
+                        let result = SearchResult(
+                            name: report.objectiveName,
+                            lat: report.lat,
+                            lon: report.lon,
+                            resultClass: nil,
+                            type: nil
+                        )
+                        plannerVM.setObjective(result: result)
+                        Task {
+                            await plannerVM.loadReport(preferences: appState.preferences)
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            decisionDot(report.decisionLevel)
+                                .frame(width: 26, height: 26)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(report.objectiveName)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                HStack(spacing: 6) {
+                                    Text(report.forecastDate)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                    Text("Score: \(Int(report.safetyScore))")
+                                        .font(.caption2)
+                                        .foregroundStyle(Color.scoreColor(report.safetyScore))
+                                }
+                            }
+
+                            Spacer()
+
+                            Text(report.decisionLevel)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(decisionBadgeColor(report.decisionLevel), in: Capsule())
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                    }
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .padding(.leading, 50)
+                    }
+                }
+            }
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+            .padding(.horizontal)
+        }
+    }
+
+    private func decisionDot(_ level: String) -> some View {
+        Circle()
+            .fill(decisionBadgeColor(level).opacity(0.15))
+            .overlay(
+                Image(systemName: level == "GO" ? "checkmark" : level == "CAUTION" ? "exclamationmark" : "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(decisionBadgeColor(level))
+            )
+    }
+
+    private func decisionBadgeColor(_ level: String) -> Color {
+        switch level {
+        case "GO": return .green
+        case "CAUTION": return .orange
+        case "NO-GO": return .red
+        default: return .gray
         }
     }
 
@@ -234,6 +332,9 @@ struct PlannerView: View {
                             withAnimation {
                                 proxy.scrollTo(target, anchor: .top)
                             }
+                        },
+                        onRouteAnalysisLoaded: { result in
+                            plannerVM.saveRouteAnalysis(result)
                         }
                     )
                     .id(cardType)
@@ -248,7 +349,7 @@ struct PlannerView: View {
 
     @ViewBuilder
     private var savedObjectivesSection: some View {
-        if isSearchActive && !searchVM.savedObjectives.isEmpty && searchVM.suggestions.isEmpty {
+        if (isSearchActive || !plannerVM.hasReport) && !searchVM.savedObjectives.isEmpty && searchVM.suggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Saved Objectives", systemImage: "bookmark.fill")
                     .font(.caption.weight(.semibold))
@@ -431,7 +532,8 @@ enum PlannerCardFactory {
         objectiveName: String = "",
         forecastDate: String = "",
         startTime: String? = nil,
-        onScrollToCard: ((PlannerCardType) -> Void)? = nil
+        onScrollToCard: ((PlannerCardType) -> Void)? = nil,
+        onRouteAnalysisLoaded: ((RouteAnalysisResult) -> Void)? = nil
     ) -> AnyView {
         switch card {
         case .decision:
@@ -478,7 +580,8 @@ enum PlannerCardFactory {
                 lon: data.location.lon,
                 objectiveName: objectiveName,
                 forecastDate: forecastDate,
-                startTime: startTime
+                startTime: startTime,
+                onRouteAnalysisLoaded: onRouteAnalysisLoaded
             ).id(objectiveName))
         case .usefulLinks:
             AnyView(UsefulLinksCard(lat: data.location.lat, lon: data.location.lon))

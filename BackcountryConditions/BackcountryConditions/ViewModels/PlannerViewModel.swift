@@ -38,6 +38,9 @@ final class PlannerViewModel {
     var aiBrief: String?
     var isLoadingBrief = false
 
+    // Current saved report ID (for updating with AI brief / route analysis)
+    var currentReportId: String?
+
     private let safetyService = SafetyService()
     private let briefService = BriefService()
 
@@ -98,6 +101,7 @@ final class PlannerViewModel {
                     decisionLevel: decision.level,
                     headline: decision.headline
                 )
+                currentReportId = report.id
                 Task.detached {
                     try? await ReportStore.shared.save(report)
                 }
@@ -128,10 +132,26 @@ final class PlannerViewModel {
             )
             let response = try await briefService.fetchAiBrief(request: request)
             aiBrief = response.narrative
+
+            // Persist to saved report
+            if let narrative = aiBrief, let reportId = currentReportId {
+                Task.detached {
+                    try? await ReportStore.shared.updateAiBrief(id: reportId, narrative: narrative)
+                }
+            }
         } catch {
             aiBrief = nil
         }
         isLoadingBrief = false
+    }
+
+    // MARK: - Route Analysis Persistence
+
+    func saveRouteAnalysis(_ result: RouteAnalysisResult) {
+        guard let reportId = currentReportId else { return }
+        Task.detached {
+            try? await ReportStore.shared.updateRouteAnalysis(id: reportId, result: result)
+        }
     }
 
     // MARK: - Set Objective
@@ -150,5 +170,6 @@ final class PlannerViewModel {
         decision = nil
         error = nil
         aiBrief = nil
+        currentReportId = nil
     }
 }

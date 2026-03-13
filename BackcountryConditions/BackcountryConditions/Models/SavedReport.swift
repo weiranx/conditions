@@ -12,6 +12,8 @@ struct SavedReport: Codable, Sendable, Identifiable {
     var decisionLevel: String
     var headline: String
     var data: SafetyData
+    var aiBrief: String?
+    var routeAnalysis: RouteAnalysisResult?
 
     init(
         objectiveName: String,
