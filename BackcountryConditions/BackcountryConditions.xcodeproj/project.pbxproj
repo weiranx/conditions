@@ -14,6 +14,7 @@
 		03DBBC0595FF635C941C2C4B /* View+Conditional.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB868C3ACBFAF6395249FA97 /* View+Conditional.swift */; };
 		04288C38BFE33F0BEA405425 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B44C5B39C856938B4323451 /* Constants.swift */; };
 		07A45C2E5B7E29906FAA50B2 /* DateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BECEF48B390E4429BFB05164 /* DateFormatting.swift */; };
+		07B3D1A2C4E8F5906DAA61B3 /* MarkdownStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA1B7E8D9F24A1B8E5C0D72 /* MarkdownStrip.swift */; };
 		07BE9E3776A52BA142B1A0A2 /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B7E770D0AA8EA858D3FF0C /* Configuration.swift */; };
 		07FAF761177773FB633F5600 /* SafetyScoreCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 089ABDB89A68153F6902595B /* SafetyScoreCard.swift */; };
 		089CAFC41DBD0F808E618D5B /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEEE754F3151F5EBB346D60 /* LocationService.swift */; };
@@ -50,7 +51,7 @@
 		7B4EC2CC61F39340CB34E20C /* HeatRiskCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F8DC753294D6CEA8F3A992 /* HeatRiskCard.swift */; };
 		8474F2F9EFA5C98F0CD8DE64 /* WindLoadingCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F831E025032B756C8B7934C /* WindLoadingCard.swift */; };
 		8C23DA94569914899AA8269A /* AirQualityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA91E0C508F739CD5EE07CAF /* AirQualityCard.swift */; };
-		8C81B3803B38C144F4ECA2C6 /* ElevationDangerGradient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C10086E65A25FE6344A3E6 /* ElevationDangerGradient.swift */; };
+
 		8CFD45FDF1EE0D5AC7E54999 /* SearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7AC23DA8EE5075B85BB468A /* SearchService.swift */; };
 		8DF80EA741741BA36343CA31 /* ErrorBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7F8D4C9A72780EC386474 /* ErrorBannerView.swift */; };
 		8FE3B6BE2D4E69810A4A2FAE /* RouteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E04F413167F605D92D4204E /* RouteService.swift */; };
@@ -73,6 +74,7 @@
 		DE3FE9C2C91EC0FC3AF88A97 /* BackcountryConditionsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AE83558C9FB23978C2AD56 /* BackcountryConditionsApp.swift */; };
 		DE825E64652BB7CD99652F84 /* ReportHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F111B473A9CCAA7EE1CE97C /* ReportHistoryView.swift */; };
 		DFDBA6393C94E5E85A4FFE96 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40A59FFEBB63AAFED7C617F /* TripPlannerView.swift */; };
+		A1B2C3D4E5F60718A9B0C1D2 /* TripDayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A9B0C1D3 /* TripDayDetailView.swift */; };
 		E81354A46D6669BD6596DE20 /* AspectElevationRose.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF0955425D6ED23E22F119B /* AspectElevationRose.swift */; };
 		EE926BF79B864C3E2C4A2464 /* SafetyData.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB9C9DF4A01815162F13F3E /* SafetyData.swift */; };
 		F06A369E89DF54CA77CF7440 /* TravelWindowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F346EFC6448DE1473B537E1 /* TravelWindowCard.swift */; };
@@ -141,7 +143,7 @@
 		9B44C5B39C856938B4323451 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		9DC1A743B9EC698F261DD83F /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 		9EF16F1B462488AC0F5D2947 /* VisibilityRiskCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisibilityRiskCard.swift; sourceTree = "<group>"; };
-		A1C10086E65A25FE6344A3E6 /* ElevationDangerGradient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevationDangerGradient.swift; sourceTree = "<group>"; };
+
 		A629E66513D8B703084BEE06 /* SearchBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBarView.swift; sourceTree = "<group>"; };
 		A62F486F15C935C0CD0DC64F /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
 		A7A69A41B1049AD0C7AA78FD /* ReportHistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportHistoryViewModel.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 		BA636415954D0354494BCF39 /* DecisionGateCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecisionGateCard.swift; sourceTree = "<group>"; };
 		BB868C3ACBFAF6395249FA97 /* View+Conditional.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Conditional.swift"; sourceTree = "<group>"; };
 		BDAF9BC5E238B713E54E0B0F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3CA1B7E8D9F24A1B8E5C0D72 /* MarkdownStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownStrip.swift; sourceTree = "<group>"; };
 		BECEF48B390E4429BFB05164 /* DateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatting.swift; sourceTree = "<group>"; };
 		BFD5DF16D4C5D72BC05C3E58 /* BriefService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefService.swift; sourceTree = "<group>"; };
 		C4AE83558C9FB23978C2AD56 /* BackcountryConditionsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackcountryConditionsApp.swift; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 		E95AFC2D33635BD2805B66CB /* SafetyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyService.swift; sourceTree = "<group>"; };
 		EDF498B2B5D1ADE01F8C294F /* UnitConversionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitConversionTests.swift; sourceTree = "<group>"; };
 		F40A59FFEBB63AAFED7C617F /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A9B0C1D3 /* TripDayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripDayDetailView.swift; sourceTree = "<group>"; };
 		F741CB1D784D02EFD4DDFCC8 /* FireRiskCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FireRiskCard.swift; sourceTree = "<group>"; };
 		F9E1517CCFF0F46D1451C06D /* BackcountryConditionsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BackcountryConditionsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBB9F034E1979D405D4EC409 /* SearchResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResult.swift; sourceTree = "<group>"; };
@@ -212,7 +216,7 @@
 				DDF0955425D6ED23E22F119B /* AspectElevationRose.swift */,
 				9771D41528B17B61CAB92F96 /* CollapsibleSection.swift */,
 				029D27205FCDF63BC43520AC /* DangerLevelBadge.swift */,
-				A1C10086E65A25FE6344A3E6 /* ElevationDangerGradient.swift */,
+
 				6DC28D599B2A73536FB54ED7 /* RouteConditionsProfile.swift */,
 				081FB27E9F246EFDC4364767 /* ScoreGauge.swift */,
 			);
@@ -308,6 +312,7 @@
 				BECEF48B390E4429BFB05164 /* DateFormatting.swift */,
 				25DD646B67E7372050CCEE1E /* DecisionEngine.swift */,
 				4D366C1F31E6542EEBAA0034 /* Haptics.swift */,
+				3CA1B7E8D9F24A1B8E5C0D72 /* MarkdownStrip.swift */,
 				D772530171E09A3CD006D5D9 /* TravelWindowEngine.swift */,
 				20DD6CD5B4E55984DEE4957C /* UnitConversions.swift */,
 				B5BF2DECD25EBAD640595BEB /* WindLoadingEngine.swift */,
@@ -370,6 +375,7 @@
 			isa = PBXGroup;
 			children = (
 				8D59EE476C68ACD8A2ADA268 /* MultiDayRiskArc.swift */,
+				A1B2C3D4E5F60718A9B0C1D3 /* TripDayDetailView.swift */,
 				F40A59FFEBB63AAFED7C617F /* TripPlannerView.swift */,
 			);
 			path = Trip;
@@ -526,9 +532,10 @@
 				2E75E822F2BB402B29115F81 /* ContentView.swift in Sources */,
 				6554062DEE0D60927613AF59 /* DangerLevelBadge.swift in Sources */,
 				07A45C2E5B7E29906FAA50B2 /* DateFormatting.swift in Sources */,
+				07B3D1A2C4E8F5906DAA61B3 /* MarkdownStrip.swift in Sources */,
 				0C17E1BD48727821394B54C0 /* DecisionEngine.swift in Sources */,
 				ACB3854FE28E661B971ADF29 /* DecisionGateCard.swift in Sources */,
-				8C81B3803B38C144F4ECA2C6 /* ElevationDangerGradient.swift in Sources */,
+
 				8DF80EA741741BA36343CA31 /* ErrorBannerView.swift in Sources */,
 				1A35EEBAFE60AC8B57615388 /* FireRiskCard.swift in Sources */,
 				46D86C9127BBCFF29F92430D /* ForecastLoadingView.swift in Sources */,
@@ -571,6 +578,7 @@
 				F06A369E89DF54CA77CF7440 /* TravelWindowCard.swift in Sources */,
 				B249BFD71602DF108BE168DB /* TravelWindowEngine.swift in Sources */,
 				DFDBA6393C94E5E85A4FFE96 /* TripPlannerView.swift in Sources */,
+				A1B2C3D4E5F60718A9B0C1D2 /* TripDayDetailView.swift in Sources */,
 				990EA7C191F0FB3B8DEF361C /* UnitConversions.swift in Sources */,
 				9F340E7F39F6250FDC3DD189 /* UsefulLinksCard.swift in Sources */,
 				47929FB491002F5E2AE21036 /* UserPreferences.swift in Sources */,

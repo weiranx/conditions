@@ -62,63 +62,6 @@ struct AvalancheCard: View {
                     }
                 }
 
-                // Elevation Danger Gradient
-                if let bands = data.weather.elevationForecast, !bands.isEmpty {
-                    ElevationDangerGradient(
-                        elevationBands: bands,
-                        avalancheElevations: data.avalanche.elevations,
-                        objectiveElevationFt: data.weather.elevation,
-                        preferences: UserPreferences.load()
-                    )
-                }
-
-                // Aspect-Elevation Rose
-                if let problems = data.avalanche.problems, !problems.isEmpty {
-                    let parsed = AspectElevationRose.parseFromProblems(problems)
-                    if !parsed.aspects.isEmpty || !parsed.elevations.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Affected Terrain")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                            HStack {
-                                AspectElevationRose(aspects: parsed.aspects, elevations: parsed.elevations)
-                                    .frame(width: 150, height: 150)
-                                Spacer()
-                                VStack(alignment: .leading, spacing: 4) {
-                                    if !parsed.aspects.isEmpty {
-                                        Text("Aspects")
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                        HStack(spacing: 3) {
-                                            ForEach(Array(parsed.aspects).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { aspect in
-                                                Text(aspect.rawValue)
-                                                    .font(.caption2.weight(.semibold))
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(.orange.opacity(0.15), in: Capsule())
-                                            }
-                                        }
-                                    }
-                                    if !parsed.elevations.isEmpty {
-                                        Text("Elevations")
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                        HStack(spacing: 3) {
-                                            ForEach(Array(parsed.elevations).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { elev in
-                                                Text(elev.abbreviation)
-                                                    .font(.caption2.weight(.semibold))
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(.orange.opacity(0.15), in: Capsule())
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
                 // Problems
                 if let problems = data.avalanche.problems, !problems.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -151,8 +94,11 @@ struct AvalancheCard: View {
                                     Text(text.strippingHTML)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .lineLimit(nil)
                                 }
+
+                                // Affected terrain for this problem
+                                problemTerrainView(problem)
                             }
                             .padding(8)
                             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
@@ -179,6 +125,52 @@ struct AvalancheCard: View {
                     }
                 }
                 } // end else (relevant)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func problemTerrainView(_ problem: AvalancheProblem) -> some View {
+        let parsed = AspectElevationRose.parseFromProblems([problem])
+        if !parsed.aspects.isEmpty || !parsed.elevations.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Affected Terrain")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                HStack(spacing: 8) {
+                    AspectElevationRose(aspects: parsed.aspects, elevations: parsed.elevations)
+                        .frame(width: 120, height: 120)
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !parsed.aspects.isEmpty {
+                            Text("Aspects")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                            HStack(spacing: 3) {
+                                ForEach(Array(parsed.aspects).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { aspect in
+                                    Text(aspect.rawValue)
+                                        .font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(.orange.opacity(0.15), in: Capsule())
+                                }
+                            }
+                        }
+                        if !parsed.elevations.isEmpty {
+                            Text("Elevations")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                            HStack(spacing: 3) {
+                                ForEach(Array(parsed.elevations).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { elev in
+                                    Text(elev.abbreviation)
+                                        .font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(.orange.opacity(0.15), in: Capsule())
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
