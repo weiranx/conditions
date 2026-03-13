@@ -20,7 +20,6 @@ import {
   type WeatherTrendPoint,
 } from './app/types';
 import {
-  classifySnowpackFreshness,
   convertDisplayElevationToFeet,
   convertElevationFeetToDisplayValue,
   formatAgeFromNow,
@@ -29,14 +28,10 @@ import {
   formatDistanceForElevationUnit,
   formatElevationDeltaForUnit,
   formatElevationForUnit,
-  formatRainAmountForElevationUnit,
   formatSnowDepthForElevationUnit,
-  formatSnowfallAmountForElevationUnit,
   formatSweForElevationUnit,
   formatTemperatureForUnit,
   formatWindForUnit,
-  freshnessClass,
-  isTravelWindowCoveredByAlertWindow,
   minutesToTwentyFourHourClock,
   normalizeForecastDate,
   parseIsoToMs,
@@ -44,15 +39,9 @@ import {
   parseHourLabelToMinutes,
   parseSolarClockMinutes,
   parseTimeInputMinutes,
-  pickNewestIsoTimestamp,
-  pickOldestIsoTimestamp,
-  resolveSelectedTravelWindowMs,
 } from './app/core';
 import { currentDateTimeInputs, dateTimeInputsFor } from './app/date-time-inputs';
 import {
-  leewardAspectsFromWind,
-  parseTerrainFromLocation,
-  secondaryCrossLoadingAspects,
   windDirectionToDegrees,
 } from './utils/avalanche';
 import {
@@ -60,7 +49,6 @@ import {
   getDangerLevelClass,
   normalizeDangerLevel,
   parseOptionalElevationInput,
-  parsePrecipNumericValue,
 } from './app/planner-helpers';
 import { loadUserPreferences } from './app/preferences';
 import {
@@ -73,9 +61,7 @@ import {
 import { buildSnowpackInterpretation, buildSnowpackInsights } from './app/snowpack-display';
 import {
   normalizeWindHintDirection,
-  windDirectionDeltaDegrees,
   windDirectionFromDegrees,
-  resolveDominantTrendWindDirection,
 } from './app/wind-analysis';
 import { assessCriticalWindowPoint, criticalRiskLevelText } from './app/critical-window';
 import {
@@ -100,6 +86,10 @@ import {
   evaluateBackcountryDecision,
 } from './app/decision';
 import { PlannerView } from './components/planner/PlannerView';
+import { buildReportCardOrder } from './app/card-ordering';
+import { buildWindLoadingDisplay } from './app/wind-loading-display';
+import { buildRainfallDisplay } from './app/rainfall-display';
+import { buildSourceFreshnessDisplay } from './app/source-freshness-display';
 import { LogsView } from './components/views/LogsView';
 import { StatusView } from './components/views/StatusView';
 import { SettingsView } from './components/views/SettingsView';
@@ -122,24 +112,6 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
-type SortableCardKey =
-  | 'decisionGate'
-  | 'criticalChecks'
-  | 'atmosphericData'
-  | 'heatRisk'
-  | 'nwsAlerts'
-  | 'travelWindowPlanner'
-  | 'planSnapshot'
-  | 'terrainTrailCondition'
-  | 'snowpackSnapshot'
-  | 'windLoading'
-  | 'windLoadingHints'
-  | 'recentRainfall'
-  | 'fireRisk'
-  | 'airQuality'
-  | 'sourceFreshness'
-  | 'scoreTrace'
-  | 'recommendedGear';
 type WeatherTrendMetricKey =
   | 'temp'
   | 'feelsLike'
@@ -1194,109 +1166,18 @@ function App() {
   const safeSnotelLink = sanitizeExternalUrl(safetyData?.snowpack?.snotel?.link || undefined);
   const safeNohrscLink = sanitizeExternalUrl(safetyData?.snowpack?.nohrsc?.link || undefined);
   const safeCdecLink = sanitizeExternalUrl(safetyData?.snowpack?.cdec?.link || undefined);
-  const rainfallTotals = rainfallPayload?.totals || null;
-  const rainfall12hIn = parsePrecipNumericValue(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
-  const rainfall24hIn = parsePrecipNumericValue(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
-  const rainfall48hIn = parsePrecipNumericValue(rainfallTotals?.rainPast48hIn ?? rainfallTotals?.past48hIn);
-  const rainfall12hMm = parsePrecipNumericValue(rainfallTotals?.rainPast12hMm ?? rainfallTotals?.past12hMm);
-  const rainfall24hMm = parsePrecipNumericValue(rainfallTotals?.rainPast24hMm ?? rainfallTotals?.past24hMm);
-  const rainfall48hMm = parsePrecipNumericValue(rainfallTotals?.rainPast48hMm ?? rainfallTotals?.past48hMm);
-  const snowfall12hIn = parsePrecipNumericValue(rainfallTotals?.snowPast12hIn);
-  const snowfall24hIn = parsePrecipNumericValue(rainfallTotals?.snowPast24hIn);
-  const snowfall48hIn = parsePrecipNumericValue(rainfallTotals?.snowPast48hIn);
-  const snowfall12hCm = parsePrecipNumericValue(rainfallTotals?.snowPast12hCm);
-  const snowfall24hCm = parsePrecipNumericValue(rainfallTotals?.snowPast24hCm);
-  const snowfall48hCm = parsePrecipNumericValue(rainfallTotals?.snowPast48hCm);
-  const rainfall24hSeverityClass =
-    Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.6
-      ? 'nogo'
-      : Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.25
-        ? 'caution'
-        : Number.isFinite(rainfall24hIn)
-          ? 'go'
-          : 'watch';
-  const rainfallWindowSummary = [
-    formatRainAmountForElevationUnit(rainfall12hIn, rainfall12hMm, preferences.elevationUnit),
-    formatRainAmountForElevationUnit(rainfall24hIn, rainfall24hMm, preferences.elevationUnit),
-    formatRainAmountForElevationUnit(rainfall48hIn, rainfall48hMm, preferences.elevationUnit),
-  ].join(' / ');
-  const snowfallWindowSummary = [
-    formatSnowfallAmountForElevationUnit(snowfall12hIn, snowfall12hCm, preferences.elevationUnit),
-    formatSnowfallAmountForElevationUnit(snowfall24hIn, snowfall24hCm, preferences.elevationUnit),
-    formatSnowfallAmountForElevationUnit(snowfall48hIn, snowfall48hCm, preferences.elevationUnit),
-  ].join(' / ');
-  const rainfall12hDisplay =formatRainAmountForElevationUnit(rainfall12hIn, rainfall12hMm, preferences.elevationUnit);
-  const rainfall24hDisplay = formatRainAmountForElevationUnit(rainfall24hIn, rainfall24hMm, preferences.elevationUnit);
-  const rainfall48hDisplay = formatRainAmountForElevationUnit(rainfall48hIn, rainfall48hMm, preferences.elevationUnit);
-  const snowfall12hDisplay = formatSnowfallAmountForElevationUnit(snowfall12hIn, snowfall12hCm, preferences.elevationUnit);
-  const snowfall24hDisplay = formatSnowfallAmountForElevationUnit(snowfall24hIn, snowfall24hCm, preferences.elevationUnit);
-  const snowfall48hDisplay = formatSnowfallAmountForElevationUnit(snowfall48hIn, snowfall48hCm, preferences.elevationUnit);
-  const rainfallExpected = rainfallPayload?.expected || null;
-  const expectedTravelWindowHoursRaw = Number(rainfallExpected?.travelWindowHours);
-  const expectedTravelWindowHours = Number.isFinite(expectedTravelWindowHoursRaw) ? Math.max(1, Math.round(expectedTravelWindowHoursRaw)) : travelWindowHours;
-  const expectedRainWindowIn = parsePrecipNumericValue(rainfallExpected?.rainWindowIn);
-  const expectedRainWindowMm = parsePrecipNumericValue(rainfallExpected?.rainWindowMm);
-  const expectedSnowWindowIn = parsePrecipNumericValue(rainfallExpected?.snowWindowIn);
-  const expectedSnowWindowCm = parsePrecipNumericValue(rainfallExpected?.snowWindowCm);
-  const expectedRainWindowDisplay = formatRainAmountForElevationUnit(expectedRainWindowIn, expectedRainWindowMm, preferences.elevationUnit);
-  const expectedSnowWindowDisplay = formatSnowfallAmountForElevationUnit(expectedSnowWindowIn, expectedSnowWindowCm, preferences.elevationUnit);
-  const expectedPrecipDataAvailable =
-    Number.isFinite(expectedRainWindowIn) ||
-    Number.isFinite(expectedRainWindowMm) ||
-    Number.isFinite(expectedSnowWindowIn) ||
-    Number.isFinite(expectedSnowWindowCm);
-  const expectedPrecipSummaryLine = expectedPrecipDataAvailable
-    ? `Expected in next ${expectedTravelWindowHours}h: rain ${expectedRainWindowDisplay} • snow ${expectedSnowWindowDisplay}.`
-    : `Expected precipitation totals are unavailable for the next ${expectedTravelWindowHours}h window.`;
-  const rainfallModeLabel =
-    rainfallPayload?.mode === 'projected_for_selected_start'
-      ? 'Projected around selected start'
-      : rainfallPayload?.mode === 'observed_recent'
-        ? 'Observed recent accumulation'
-        : 'Mode unavailable';
-  const rainfallStatus = String(rainfallPayload?.status || '').toLowerCase();
-  const rainfallDataAvailable = rainfallStatus === 'ok' || rainfallStatus === 'partial';
-  const rainfallNoteLine =
-    (typeof rainfallPayload?.note === 'string' && rainfallPayload.note.trim()) ||
-    (rainfallDataAvailable
-      ? rainfallPayload?.mode === 'projected_for_selected_start'
-        ? 'Rolling rain and snowfall totals are anchored to selected start time and can include forecast hours.'
-        : 'Rolling rain and snowfall totals are based on recent hours prior to the selected period.'
-      : 'Rolling rain/snow totals unavailable for this objective/time.');
-  const expectedPrecipNoteLine =
-    (typeof rainfallExpected?.note === 'string' && rainfallExpected.note.trim()) ||
-    `Expected precipitation totals for the next ${expectedTravelWindowHours}h from selected start time.`;
-  const precipInsightLine = (() => {
-    const rain24 = Number.isFinite(rainfall24hIn) ? rainfall24hIn : null;
-    const snow24 = Number.isFinite(snowfall24hIn) ? snowfall24hIn : null;
-    const hasAny24hSignal = rain24 !== null || snow24 !== null;
-    const no24hPrecipSignal =
-      hasAny24hSignal &&
-      (rain24 === null || rain24 <= 0.01) &&
-      (snow24 === null || snow24 <= 0.01);
-    if (rain24 !== null && rain24 >= 0.6 && snow24 !== null && snow24 >= 2) {
-      return `Mixed precip signal: 24h rain ${rainfall24hDisplay} plus 24h snow ${snowfall24hDisplay}.`;
-    }
-    if (rain24 !== null && rain24 >= 0.6) {
-      return `Strong rain signal: 24h rain ${rainfall24hDisplay}. Expect wetter, softer footing.`;
-    }
-    if (snow24 !== null && snow24 >= 4) {
-      return `Strong snow signal: 24h snow ${snowfall24hDisplay}. Fresh coverage likely.`;
-    }
-    if (rain24 !== null && rain24 >= 0.25) {
-      return `Moderate rain signal: 24h rain ${rainfall24hDisplay}. Slick/muddy sections are likely.`;
-    }
-    if (snow24 !== null && snow24 >= 1.5) {
-      return `Moderate snow signal: 24h snow ${snowfall24hDisplay}. Patchy fresh snow likely.`;
-    }
-    if (no24hPrecipSignal) {
-      return `No recent precip signal: 24h rain ${rainfall24hDisplay} • 24h snow ${snowfall24hDisplay}.`;
-    }
-    if (rain24 !== null || snow24 !== null) {
-      return `Light recent precip: 24h rain ${rainfall24hDisplay} • 24h snow ${snowfall24hDisplay}.`;
-    }
-    return 'Recent rain/snow totals are unavailable for this objective/time.';
-  })();
+  const rainfallDisplay = buildRainfallDisplay(rainfallPayload, preferences, travelWindowHours);
+  const {
+    rainfall12hIn, rainfall24hIn, rainfall48hIn,
+    snowfall12hIn, snowfall24hIn, snowfall48hIn,
+    rainfall24hSeverityClass, rainfallWindowSummary, snowfallWindowSummary,
+    rainfall12hDisplay, rainfall24hDisplay, rainfall48hDisplay,
+    snowfall12hDisplay, snowfall24hDisplay, snowfall48hDisplay,
+    expectedTravelWindowHours, expectedRainWindowDisplay, expectedSnowWindowDisplay,
+    expectedPrecipSummaryLine,
+    rainfallModeLabel, rainfallNoteLine, expectedPrecipNoteLine, precipInsightLine,
+    rainfallExpected, expectedSnowWindowIn,
+  } = rainfallDisplay;
   const snotelSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.snotel?.sweIn), preferences.elevationUnit);
   const snotelDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.snotel?.snowDepthIn), preferences.elevationUnit);
   const nohrscSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.sweIn), preferences.elevationUnit);
@@ -1851,102 +1732,11 @@ function App() {
       void fetchSafetyData(position.lat, position.lng, nextDate, nextTime, { force: true });
     }
   };
-  const alertsStatus = safetyData?.alerts?.status || null;
-  const alertsNoActiveForSelectedTime = alertsStatus === 'none' || alertsStatus === 'none_for_selected_start';
-  const selectedTravelWindowMs = resolveSelectedTravelWindowMs(safetyData, travelWindowHours);
-  const alertsWindowCovered = isTravelWindowCoveredByAlertWindow(selectedTravelWindowMs, safetyData?.alerts?.alerts || []);
-  const reportGeneratedAt = safetyData?.generatedAt || null;
-  const weatherFreshnessTimestamp = safetyData
-    ? pickOldestIsoTimestamp([
-        safetyData.weather.issuedTime || null,
-        safetyData.weather.forecastStartTime || null,
-      ])
-    : null;
-  const avalancheFreshnessTimestamp = safetyData
-    ? pickOldestIsoTimestamp([
-        safetyData.avalanche.publishedTime || null,
-      ])
-    : null;
-  const alertsFreshnessTimestamp = safetyData
-    ? pickNewestIsoTimestamp(
-        (safetyData.alerts?.alerts || []).flatMap((alert) => [
-          alert.sent || null,
-          alert.effective || null,
-          alert.onset || null,
-        ]),
-      )
-    : null;
-  const airQualityFreshnessTimestamp = safetyData
-    ? pickOldestIsoTimestamp([
-        safetyData.airQuality?.measuredTime || null,
-      ])
-    : null;
-  const airQualityStatus = String(safetyData?.airQuality?.status || '').toLowerCase();
-  const airQualityFutureNotApplicable = airQualityStatus === 'not_applicable_future_date';
-  const precipitationFreshnessTimestamp = safetyData
-    ? pickOldestIsoTimestamp([
-        rainfallPayload?.anchorTime || null,
-      ])
-    : null;
-  const snowpackFreshness = classifySnowpackFreshness(
-    safetyData?.snowpack?.snotel?.observedDate || null,
-    safetyData?.snowpack?.nohrsc?.sampledTime || null,
-  );
-  const snowpackFreshnessTimestamp = snowpackFreshness.referenceTimestamp;
-  const sourceFreshnessRows = safetyData
-    ? [
-        { label: 'Weather', issued: weatherFreshnessTimestamp, staleHours: 12 },
-        ...(avalancheRelevant
-          ? [
-              {
-                label: 'Avalanche',
-                issued: avalancheFreshnessTimestamp,
-                staleHours: 24,
-              },
-            ]
-          : []),
-        {
-          label: 'Alerts',
-          issued: alertsFreshnessTimestamp,
-          staleHours: 6,
-          displayValue: alertsNoActiveForSelectedTime ? 'No active' : alertsWindowCovered ? 'Window covered' : undefined,
-          stateOverride: alertsNoActiveForSelectedTime || alertsWindowCovered ? ('fresh' as const) : undefined,
-        },
-        {
-          label: 'Air Quality',
-          issued: airQualityFreshnessTimestamp,
-          staleHours: 8,
-          displayValue: airQualityFutureNotApplicable ? 'Current-day only' : undefined,
-          stateOverride: airQualityFutureNotApplicable ? ('fresh' as const) : undefined,
-        },
-        {
-          label: 'Precipitation',
-          issued: precipitationFreshnessTimestamp,
-          staleHours: 8,
-        },
-        {
-          label: 'Snowpack',
-          issued: snowpackFreshnessTimestamp,
-          staleHours: 30,
-          displayValue: snowpackFreshness.displayValue,
-          stateOverride: snowpackFreshness.state,
-        },
-      ]
-    : [];
-  const staleOrMissingFreshnessRows = sourceFreshnessRows
-    .map((row) => ({
-      ...row,
-      state: row.stateOverride || freshnessClass(row.issued, row.staleHours),
-    }))
-    .filter((row) => row.state === 'stale' || row.state === 'missing');
-  const hasFreshnessWarning = staleOrMissingFreshnessRows.length > 0;
-  const freshnessWarningSummary = staleOrMissingFreshnessRows
-    .slice(0, 3)
-    .map((row) => {
-      const ageLabel = row.displayValue || (row.state === 'missing' ? 'missing' : formatAgeFromNow(row.issued));
-      return `${row.label}: ${ageLabel}`;
-    })
-    .join(' • ');
+  const freshness = buildSourceFreshnessDisplay(safetyData, rainfallPayload, avalancheRelevant, travelWindowHours);
+  const {
+    sourceFreshnessRows, hasFreshnessWarning, freshnessWarningSummary,
+    reportGeneratedAt, airQualityFutureNotApplicable,
+  } = freshness;
   const nwsAlerts = safetyData?.alerts?.alerts || [];
   const nwsAlertCount = safetyData?.alerts?.activeCount ?? nwsAlerts.length;
   const nwsTotalAlertCount = safetyData?.alerts?.totalActiveCount ?? nwsAlertCount;
@@ -1957,236 +1747,25 @@ function App() {
     safetyData?.weather.sourceDetails?.blended && weatherSourceLabel === 'NOAA / Weather.gov'
       ? 'NOAA / Weather.gov + Open-Meteo'
       : weatherSourceLabel;
-  const primaryWindDirection = normalizeWindHintDirection(safetyData?.weather.windDirection || null);
-  const windTrendRows = Array.isArray(trendWindow) ? trendWindow : [];
-  const trendWindDirections = Array.isArray(windTrendRows)
-    ? windTrendRows
-        .map((point) => normalizeWindHintDirection(point?.windDirection || null))
-        .filter((entry): entry is string => Boolean(entry))
-    : [];
-  const directionalTrendWindDirections = trendWindDirections.filter((entry) => entry !== 'CALM' && entry !== 'VRB');
-  const dominantTrendDirection = resolveDominantTrendWindDirection(windTrendRows || []);
-  const resolvedWindDirection =
-    primaryWindDirection && primaryWindDirection !== 'CALM' && primaryWindDirection !== 'VRB'
-      ? primaryWindDirection
-      : dominantTrendDirection.direction;
-  const resolvedWindDirectionSource =
-    primaryWindDirection && primaryWindDirection !== 'CALM' && primaryWindDirection !== 'VRB'
-      ? 'Selected start hour'
-      : dominantTrendDirection.direction
-        ? `Trend consensus (${dominantTrendDirection.count}/${dominantTrendDirection.total}h)`
-        : 'Unavailable';
-  const leewardAspectHints = resolvedWindDirection ? leewardAspectsFromWind(resolvedWindDirection) : [];
-  const secondaryWindAspects = resolvedWindDirection ? secondaryCrossLoadingAspects(resolvedWindDirection) : [];
-  const leewardAspectSet = new Set(leewardAspectHints);
-  const aspectOverlapProblems = (safetyData?.avalanche?.problems ?? [])
-    .filter(p => {
-      if (!p.location) return false;
-      const { aspects } = parseTerrainFromLocation(p.location);
-      return [...aspects].some(a => leewardAspectSet.has(a));
-    })
-    .map(p => p.name ?? 'Unknown Problem');
+  const windLoading = buildWindLoadingDisplay(
+    safetyData, trendWindow, avalancheRelevant, formatWindDisplay, preferences.timeStyle,
+  );
+  const {
+    resolvedWindDirection, resolvedWindDirectionSource, trendWindDirections,
+    leewardAspectHints, secondaryWindAspects, aspectOverlapProblems,
+    windGustMph, calmOrVariableSignal, lightWindSignal,
+    trendAgreementRatio,
+    windLoadingLevel, windLoadingConfidence, windLoadingPillClass,
+    windLoadingActiveWindowLabel, windLoadingActiveHoursDetail,
+    windLoadingElevationFocus, windLoadingActionLine, windLoadingSummary, windLoadingNotes,
+    windLoadingHintsRelevant,
+  } = windLoading;
   if (decision && aspectOverlapProblems.length > 0) {
     const overlapCaution = `Wind loading aligns with active avalanche problem aspects (${aspectOverlapProblems.join(', ')}). Current winds may be actively building slabs on these aspects.`;
     if (!decision.cautions.includes(overlapCaution)) {
       decision = { ...decision, cautions: [...decision.cautions, overlapCaution] };
     }
   }
-  const windSpeedMph = Number(safetyData?.weather.windSpeed);
-  const windGustMph = Number(safetyData?.weather.windGust);
-  const calmOrVariableSignal = primaryWindDirection === 'CALM' || primaryWindDirection === 'VRB';
-  const lightWindSignal =
-    Number.isFinite(windSpeedMph) &&
-    Number.isFinite(windGustMph) &&
-    windSpeedMph <= 5 &&
-    windGustMph <= 10;
-  const windTransportHours = windTrendRows.filter((point) => {
-    const trendWind = Number(point?.wind);
-    const trendGust = Number(point?.gust);
-    return (Number.isFinite(trendWind) && trendWind >= 12) || (Number.isFinite(trendGust) && trendGust >= 18);
-  }).length;
-  const activeTransportHours = windTrendRows.filter((point) => {
-    const trendWind = Number(point?.wind);
-    const trendGust = Number(point?.gust);
-    return (Number.isFinite(trendWind) && trendWind >= 18) || (Number.isFinite(trendGust) && trendGust >= 28);
-  }).length;
-  const activeTransportSpans = (() => {
-    if (windTrendRows.length === 0) {
-      return [] as Array<{ startIdx: number; endIdx: number; length: number }>;
-    }
-    const spans: Array<{ startIdx: number; endIdx: number; length: number }> = [];
-    let startIdx: number | null = null;
-    windTrendRows.forEach((point, idx) => {
-      const trendWind = Number(point?.wind);
-      const trendGust = Number(point?.gust);
-      const isActive =
-        (Number.isFinite(trendWind) && trendWind >= 18) ||
-        (Number.isFinite(trendGust) && trendGust >= 28);
-      if (isActive && startIdx === null) {
-        startIdx = idx;
-      }
-      const isEnd = idx === windTrendRows.length - 1;
-      if (startIdx !== null && (!isActive || isEnd)) {
-        const endIdx = isActive && isEnd ? idx : idx - 1;
-        if (endIdx >= startIdx) {
-          spans.push({ startIdx, endIdx, length: endIdx - startIdx + 1 });
-        }
-        startIdx = null;
-      }
-    });
-    return spans;
-  })();
-  const activeTransportHourLabels = activeTransportSpans.map((span) => {
-    const startLabel = formatClockForStyle(windTrendRows[span.startIdx]?.time || '', preferences.timeStyle);
-    const endLabel = formatClockForStyle(windTrendRows[span.endIdx]?.time || '', preferences.timeStyle);
-    return span.length <= 1 || span.startIdx === span.endIdx ? startLabel : `${startLabel}–${endLabel}`;
-  });
-  const windLoadingActiveHoursDetail =
-    windTrendRows.length === 0
-      ? 'No trend hours available'
-      : activeTransportHourLabels.length > 0
-        ? activeTransportHourLabels.join(' • ')
-        : 'No active hours in selected window';
-  const severeTransportHours = windTrendRows.filter((point) => {
-    const trendWind = Number(point?.wind);
-    const trendGust = Number(point?.gust);
-    return (Number.isFinite(trendWind) && trendWind >= 25) || (Number.isFinite(trendGust) && trendGust >= 38);
-  }).length;
-  const trendDirectionalCoverageRatio =
-    trendWindDirections.length > 0 ? directionalTrendWindDirections.length / trendWindDirections.length : null;
-  const trendAgreementRatio =
-    resolvedWindDirection && directionalTrendWindDirections.length > 0
-      ? directionalTrendWindDirections.filter((direction) => {
-          const delta = windDirectionDeltaDegrees(direction, resolvedWindDirection);
-          return delta !== null && delta <= 45;
-        }).length / directionalTrendWindDirections.length
-      : null;
-  const windLoadingLevel: 'Minimal' | 'Localized' | 'Active' | 'Severe' = (() => {
-    if (!safetyData || calmOrVariableSignal || lightWindSignal) {
-      return 'Minimal';
-    }
-    if (
-      (Number.isFinite(windSpeedMph) && windSpeedMph >= 28) ||
-      (Number.isFinite(windGustMph) && windGustMph >= 40) ||
-      severeTransportHours >= 2
-    ) {
-      return 'Severe';
-    }
-    if (
-      (Number.isFinite(windSpeedMph) && windSpeedMph >= 20) ||
-      (Number.isFinite(windGustMph) && windGustMph >= 30) ||
-      activeTransportHours >= 2
-    ) {
-      return 'Active';
-    }
-    if (
-      (Number.isFinite(windSpeedMph) && windSpeedMph >= 12) ||
-      (Number.isFinite(windGustMph) && windGustMph >= 18) ||
-      windTransportHours >= 1
-    ) {
-      return 'Localized';
-    }
-    return 'Minimal';
-  })();
-  const windLoadingConfidence: 'High' | 'Moderate' | 'Low' = (() => {
-    if (!safetyData || windLoadingLevel === 'Minimal' || !resolvedWindDirection) {
-      return 'Low';
-    }
-    if (
-      trendAgreementRatio !== null &&
-      trendAgreementRatio >= 0.7 &&
-      trendDirectionalCoverageRatio !== null &&
-      trendDirectionalCoverageRatio >= 0.5 &&
-      ((Number.isFinite(windSpeedMph) && windSpeedMph >= 14) || (Number.isFinite(windGustMph) && windGustMph >= 22))
-    ) {
-      return 'High';
-    }
-    if (
-      (trendAgreementRatio !== null && trendAgreementRatio >= 0.45) ||
-      (dominantTrendDirection.ratio >= 0.35 && dominantTrendDirection.total >= 3) ||
-      (Number.isFinite(windSpeedMph) && windSpeedMph >= 10) ||
-      (Number.isFinite(windGustMph) && windGustMph >= 16)
-    ) {
-      return 'Moderate';
-    }
-    return 'Low';
-  })();
-  const windLoadingPillClass =
-    !safetyData
-      ? 'caution'
-      : windLoadingLevel === 'Minimal'
-        ? 'go'
-        : windLoadingLevel === 'Severe'
-          ? 'nogo'
-          : windLoadingLevel === 'Active'
-            ? windLoadingConfidence === 'High'
-              ? 'nogo'
-              : 'caution'
-            : 'watch';
-  const windLoadingActiveWindowLabel =
-    windTrendRows.length > 0
-      ? `${activeTransportHours}/${windTrendRows.length} h active`
-      : 'N/A';
-  const windLoadingElevationFocus =
-    !safetyData
-      ? 'Load forecast to see terrain focus.'
-      : windLoadingLevel === 'Severe'
-        ? 'Above and near treeline are primary hazard zones. Expect rapid slab growth on lee ridges, rollovers, and gully walls.'
-        : windLoadingLevel === 'Active'
-          ? 'Focus near and above treeline, plus connected terrain below loaded start zones.'
-          : windLoadingLevel === 'Localized'
-            ? 'Loading likely stays localized around exposed ridges, terrain breaks, and cross-loaded gully features.'
-            : 'Wind transport is limited; drift pockets can still form near ridgelines.';
-  const windLoadingActionLine =
-    !safetyData
-      ? ''
-      : windLoadingLevel === 'Severe'
-        ? 'Route action: avoid lee convexities and cross-loaded start zones; use sheltered, lower-angle terrain.'
-        : windLoadingLevel === 'Active'
-          ? 'Route action: keep ridgeline exposure short and avoid terrain traps beneath lee start zones.'
-          : windLoadingLevel === 'Localized'
-            ? 'Route action: probe small test slopes and watch for drifted pillows before committing to steeper terrain.'
-            : 'Route action: wind loading is a secondary hazard, but still check for isolated drifts near ridges.';
-  const windLoadingSummary =
-    !safetyData
-      ? 'Wind loading hints unavailable until a forecast is loaded.'
-      : calmOrVariableSignal
-        ? `Winds are ${primaryWindDirection === 'CALM' ? 'calm' : 'variable'}. Broad loading is unlikely, but localized drifts can still form around terrain breaks.`
-        : lightWindSignal
-          ? 'Winds are light at the selected start window. Broad loading is less likely, but small drift pockets can still form.'
-          : resolvedWindDirection
-            ? `${windLoadingLevel} transport signal: wind from ${resolvedWindDirection} at ${formatWindDisplay(
-                safetyData.weather.windSpeed,
-              )} (gust ${formatWindDisplay(safetyData.weather.windGust)}). Primary lee aspects: ${leewardAspectHints.join(', ') || 'unknown'}.`
-            : `${windLoadingLevel} transport signal, but direction is uncertain. Infer loading from field clues (fresh cornices, drift pillows, textured snow).`;
-  const windLoadingNotes = safetyData
-    ? [
-        `Direction source: ${resolvedWindDirectionSource}.`,
-        trendWindDirections.length > 0 && trendDirectionalCoverageRatio !== null
-          ? `Directional coverage: ${Math.round(trendDirectionalCoverageRatio * 100)}% of trend hours reported usable direction.`
-          : 'Directional coverage: not enough trend direction data.',
-        directionalTrendWindDirections.length > 0 && trendAgreementRatio !== null
-          ? `Trend agreement: ${Math.round(trendAgreementRatio * 100)}% of ${directionalTrendWindDirections.length} nearby hour(s) align within 45 degrees.`
-          : 'Trend agreement: not enough directional trend data.',
-        windTrendRows.length > 0
-          ? `Active loading window: ${activeTransportHours}/${windTrendRows.length} hour(s) show active wind-transport signal (${windLoadingActiveHoursDetail}).`
-          : null,
-        secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20
-          ? `Secondary cross-loading possible on ${secondaryWindAspects.join(', ')} aspects.`
-          : null,
-        !resolvedWindDirection && Number.isFinite(windSpeedMph) && windSpeedMph >= 10
-          ? 'Stronger winds with missing direction: treat all lee start zones as suspect until confirmed in the field.'
-          : null,
-        windLoadingLevel === 'Severe'
-          ? 'Field cues: rapid cornice growth, hollow slab feel, and fresh drifts extending farther below ridges.'
-          : windLoadingLevel === 'Active'
-            ? 'Field cues: fresh drift pillows, shooting cracks, and wind-textured snow near lee features.'
-            : windLoadingLevel === 'Localized'
-              ? 'Field cues: isolated drift pockets near gully walls, sub-ridges, and convex terrain breaks.'
-              : null,
-      ].filter((entry): entry is string => Boolean(entry))
-    : [];
-  const windLoadingHintsRelevant = avalancheRelevant || Boolean(resolvedWindDirection);
   const terrainConditionDetails = safetyData
     ? (() => {
         const upstreamTerrain = safetyData.terrainCondition;
@@ -2298,275 +1877,19 @@ function App() {
         })
         .filter((item): item is { title: string; detail: string; category: string; tone: string } => item !== null)
     : [];
-  const reportCardOrder = (() => {
-    const clampRiskLevel = (value: number): number => Math.max(0, Math.min(5, Math.round(value)));
-    const alertSeverityRank = (severity: string | undefined | null): number => {
-      const normalized = String(severity || '').trim().toLowerCase();
-      if (!normalized) return 1;
-      if (['extreme', 'severe'].includes(normalized)) return 5;
-      if (['warning'].includes(normalized)) return 4;
-      if (['advisory', 'watch'].includes(normalized)) return 3;
-      if (['moderate'].includes(normalized)) return 2;
-      return 1;
-    };
-
-    const trailText = String(safetyData?.terrainCondition?.label || safetyData?.trail || '').toLowerCase();
-    const weatherDescription = String(safetyData?.weather.description || '').toLowerCase();
-    const windGustNumeric = Number(safetyData?.weather.windGust);
-    const windSpeedNumeric = Number(safetyData?.weather.windSpeed);
-    const feelsLikeNumeric = Number(safetyData?.weather.feelsLike ?? safetyData?.weather.temp);
-    const precipChanceNumeric = Number(safetyData?.weather.precipChance);
-    const aqiNumeric = Number(safetyData?.airQuality?.usAqi);
-    const scoreFactors = Array.isArray(safetyData?.safety?.factors) ? safetyData.safety.factors : [];
-    const safetyScoreNumeric = Number(safetyData?.safety?.score);
-    const weatherAvailable =
-      Number.isFinite(Number(safetyData?.weather.temp)) ||
-      (weatherDescription.length > 0 && weatherDescription !== 'unknown');
-    const travelAvailable = travelWindowRows.length > 0;
-    const terrainAvailable = trailText.length > 0 && !/weather unavailable/.test(trailText);
-    const rainfallAvailable =
-      Number.isFinite(rainfall12hIn) ||
-      Number.isFinite(rainfall24hIn) ||
-      Number.isFinite(rainfall48hIn) ||
-      Number.isFinite(snowfall12hIn) ||
-      Number.isFinite(snowfall24hIn) ||
-      Number.isFinite(snowfall48hIn);
-    const snowpackAvailable = ['ok', 'partial'].includes(String(safetyData?.snowpack?.status || '').toLowerCase());
-    const windHintsAvailable =
-      windLoadingHintsRelevant &&
-      (Boolean(resolvedWindDirection) || calmOrVariableSignal || lightWindSignal || trendWindDirections.length > 0);
-    const fireRiskAvailable = String(safetyData?.fireRisk?.status || '').toLowerCase() !== 'unavailable';
-    const heatRiskAvailable =
-      String(safetyData?.heatRisk?.status || '').toLowerCase() !== 'unavailable' ||
-      Number.isFinite(Number(safetyData?.weather.temp)) ||
-      Number.isFinite(Number(safetyData?.weather.feelsLike));
-    const airQualityAvailable =
-      Number.isFinite(aqiNumeric) ||
-      Number.isFinite(Number(safetyData?.airQuality?.pm25)) ||
-      Number.isFinite(Number(safetyData?.airQuality?.pm10));
-    const sourceFreshnessAvailable = sourceFreshnessRows.length > 0;
-    const scoreTraceAvailable = scoreFactors.length > 0 || Boolean(dayOverDay);
-    const gearAvailable = gearRecommendations.length > 0;
-    const planAvailable = Boolean(safetyData?.solar?.sunrise || safetyData?.solar?.sunset || safetyData?.forecast?.selectedDate);
-    const alertsCardRelevant = true;
-    const alertsList = safetyData?.alerts?.alerts || [];
-    const alertsActive = alertsCardRelevant && nwsAlertCount > 0;
-    const highestAlertSeverity = Math.max(
-      alertSeverityRank(safetyData?.alerts?.highestSeverity),
-      alertsList.reduce((maxSeverity, alert) => Math.max(maxSeverity, alertSeverityRank(alert.severity)), 0),
-    );
-    const staleSourceCount = sourceFreshnessRows.filter((row) => (row.stateOverride || freshnessClass(row.issued, row.staleHours)) === 'stale').length;
-    const missingSourceCount = sourceFreshnessRows.filter((row) => (row.stateOverride || freshnessClass(row.issued, row.staleHours)) === 'missing').length;
-    const decisionLevel = decision?.level || 'CAUTION';
-    const stormSignal = /thunder|storm|lightning|hail|blizzard/.test(weatherDescription);
-    const travelFailHours = travelWindowRows.filter((row) => !row.pass).length;
-    const travelFailRatio = travelWindowRows.length > 0 ? travelFailHours / travelWindowRows.length : 0;
-    const criticalHighHours = criticalWindow.filter((row) => row.level === 'high').length;
-    const criticalWatchHours = criticalWindow.filter((row) => row.level === 'watch').length;
-    const daylightCheckFailed = Boolean(
-      decision?.checks?.find((check) => /30 min before sunset/i.test(check.label || '') && check.ok === false),
-    );
-    const maxSnowpackDepth = Math.max(0, ...snowpackDepthSignalValues);
-    const maxSnowpackSwe = Math.max(0, ...snowpackSweSignalValues);
-    const terrainCode = String(safetyData?.terrainCondition?.code || '').toLowerCase();
-    const gustThresholdDelta = Number.isFinite(windGustNumeric) ? windGustNumeric - preferences.maxWindGustMph : 0;
-    const precipThresholdDelta = Number.isFinite(precipChanceNumeric) ? precipChanceNumeric - preferences.maxPrecipChance : 0;
-    const coldThresholdDelta = Number.isFinite(feelsLikeNumeric) ? preferences.minFeelsLikeF - feelsLikeNumeric : 0;
-    const windThresholdDelta = Number.isFinite(windSpeedNumeric) ? windSpeedNumeric - preferences.maxWindGustMph * 0.6 : 0;
-
-    const decisionRiskLevel = decisionLevel === 'NO-GO' ? 5 : decisionLevel === 'CAUTION' ? 3 : 1;
-    const criticalChecksRiskLevel =
-      criticalCheckFailCount >= 3 ? 5 : criticalCheckFailCount >= 1 ? 4 : decisionLevel === 'NO-GO' ? 4 : 2;
-    const atmosphericRiskLevel = (() => {
-      if (stormSignal || gustThresholdDelta >= 15 || precipThresholdDelta >= 25) return 5;
-      if (gustThresholdDelta >= 8 || precipThresholdDelta >= 10 || coldThresholdDelta >= 10) return 4;
-      if (gustThresholdDelta > 0 || precipThresholdDelta > 0 || coldThresholdDelta > 0 || windThresholdDelta > 0) return 3;
-      return 2;
-    })();
-    const heatRiskCardLevel = (() => {
-      if (!heatRiskAvailable) return 0;
-      if (!Number.isFinite(heatRiskLevel)) return 1;
-      if (heatRiskLevel >= 4) return 5;
-      if (heatRiskLevel >= 3) return 4;
-      if (heatRiskLevel >= 2) return 3;
-      if (heatRiskLevel >= 1) return 2;
-      return 1;
-    })();
-    const alertsRiskLevel = (() => {
-      if (!alertsCardRelevant) return 0;
-      if (alertsActive && highestAlertSeverity >= 4) return 5;
-      if (alertsActive && highestAlertSeverity >= 3) return 4;
-      if (alertsActive) return 3;
-      if (Number(safetyData?.alerts?.totalActiveCount) > 0) return 2;
-      return 1;
-    })();
-    const travelRiskLevel = (() => {
-      if (!travelAvailable) return 0;
-      if (travelFailRatio >= 0.6 || criticalHighHours >= 3) return 5;
-      if (travelFailRatio >= 0.35 || criticalHighHours >= 1) return 4;
-      if (travelFailRatio > 0 || criticalWatchHours >= 3) return 3;
-      return 2;
-    })();
-    const terrainRiskLevel = (() => {
-      if (!terrainAvailable) return 0;
-      if (terrainCode === 'snow_ice') return 4;
-      if (['wet_muddy', 'cold_slick', 'dry_loose'].includes(terrainCode)) return 3;
-      if (/snow|icy|wet|muddy|slick|loose/.test(trailText)) return 3;
-      return 2;
-    })();
-    const snowpackRiskLevel = (() => {
-      if (!snowpackAvailable) return 0;
-      if (!avalancheRelevant) return 1;
-      if (avalancheUnknown) return 4;
-      if (maxSnowpackDepth >= 24 || maxSnowpackSwe >= 8) return 4;
-      if (hasSnowpackSignal) return 3;
-      return 2;
-    })();
-    const windLoadingRiskLevel = (() => {
-      if (!windHintsAvailable) return 0;
-      if (windLoadingConfidence === 'High') return 4;
-      if (windLoadingConfidence === 'Moderate') return 3;
-      return 2;
-    })();
-    const rainfallRiskLevel = (() => {
-      if (!rainfallAvailable) return 0;
-      if ((Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.75) || (Number.isFinite(snowfall24hIn) && snowfall24hIn >= 8)) return 4;
-      if ((Number.isFinite(rainfall24hIn) && rainfall24hIn >= 0.25) || (Number.isFinite(snowfall24hIn) && snowfall24hIn >= 2)) return 3;
-      if ((Number.isFinite(rainfall12hIn) && rainfall12hIn > 0) || (Number.isFinite(snowfall12hIn) && snowfall12hIn > 0)) return 2;
-      return 1;
-    })();
-    const sourceFreshnessRiskLevel = (() => {
-      if (!sourceFreshnessAvailable) return 0;
-      if (missingSourceCount >= 2 || staleSourceCount >= 3) return 4;
-      if (missingSourceCount >= 1 || staleSourceCount >= 1) return 3;
-      return 1;
-    })();
-    const fireRiskCardLevel = (() => {
-      if (!fireRiskAvailable) return 0;
-      if (!Number.isFinite(fireRiskLevel)) return 1;
-      if (fireRiskLevel >= 4) return 5;
-      if (fireRiskLevel >= 3) return 4;
-      if (fireRiskLevel >= 2) return 3;
-      return 2;
-    })();
-    const airQualityRiskLevel = (() => {
-      if (!airQualityAvailable) return 0;
-      if (!Number.isFinite(aqiNumeric)) return 1;
-      if (aqiNumeric > 150) return 5;
-      if (aqiNumeric > 100) return 4;
-      if (aqiNumeric > 50) return 3;
-      return 2;
-    })();
-    const planRiskLevel = !planAvailable ? 0 : daylightCheckFailed ? 4 : 2;
-    const scoreTraceRiskLevel = (() => {
-      if (!scoreTraceAvailable) return 0;
-      if (!Number.isFinite(safetyScoreNumeric)) return decisionRiskLevel;
-      if (safetyScoreNumeric < 42) return 5;
-      if (safetyScoreNumeric < 60) return 4;
-      if (safetyScoreNumeric < 75) return 3;
-      return 2;
-    })();
-    const recommendedGearRiskLevel = !gearAvailable ? 0 : Math.max(1, decisionRiskLevel - 1);
-
-    const cards: Array<{ key: SortableCardKey; base: number; available: boolean; relevant: boolean; riskLevel: number }> = [
-      { key: 'decisionGate', base: 100, available: true, relevant: true, riskLevel: decisionRiskLevel },
-      { key: 'criticalChecks', base: 96, available: criticalCheckTotal > 0, relevant: true, riskLevel: criticalChecksRiskLevel },
-      { key: 'atmosphericData', base: 94, available: weatherAvailable, relevant: true, riskLevel: atmosphericRiskLevel },
-      { key: 'heatRisk', base: 93, available: heatRiskAvailable, relevant: true, riskLevel: heatRiskCardLevel },
-      { key: 'nwsAlerts', base: 92, available: alertsCardRelevant, relevant: alertsCardRelevant, riskLevel: alertsRiskLevel },
-      { key: 'travelWindowPlanner', base: 90, available: travelAvailable, relevant: true, riskLevel: travelRiskLevel },
-      { key: 'terrainTrailCondition', base: 84, available: terrainAvailable, relevant: true, riskLevel: terrainRiskLevel },
-      { key: 'snowpackSnapshot', base: 82, available: snowpackAvailable, relevant: true, riskLevel: snowpackRiskLevel },
-      {
-        key: 'windLoading',
-        base: 81,
-        available: windHintsAvailable,
-        relevant: windLoadingHintsRelevant,
-        riskLevel: windLoadingRiskLevel,
-      },
-      {
-        key: 'windLoadingHints',
-        base: 80,
-        available: windHintsAvailable,
-        relevant: windLoadingHintsRelevant,
-        riskLevel: windLoadingRiskLevel,
-      },
-      { key: 'recentRainfall', base: 78, available: rainfallAvailable, relevant: true, riskLevel: rainfallRiskLevel },
-      { key: 'sourceFreshness', base: 76, available: sourceFreshnessAvailable, relevant: true, riskLevel: sourceFreshnessRiskLevel },
-      { key: 'fireRisk', base: 74, available: fireRiskAvailable, relevant: true, riskLevel: fireRiskCardLevel },
-      { key: 'airQuality', base: 72, available: airQualityAvailable, relevant: true, riskLevel: airQualityRiskLevel },
-      { key: 'planSnapshot', base: 70, available: planAvailable, relevant: true, riskLevel: planRiskLevel },
-      { key: 'scoreTrace', base: 68, available: scoreTraceAvailable, relevant: true, riskLevel: scoreTraceRiskLevel },
-      { key: 'recommendedGear', base: 64, available: gearAvailable, relevant: true, riskLevel: recommendedGearRiskLevel },
-    ];
-
-    const scored = cards.map((card) => {
-      const relevancePenalty = card.relevant ? 0 : 60;
-      const availabilityPenalty = card.available ? 0 : 35;
-      const normalizedRisk = card.relevant && card.available ? clampRiskLevel(card.riskLevel) : 0;
-      const score = card.base + normalizedRisk * 12 - relevancePenalty - availabilityPenalty + (card.available ? 0.25 : 0);
-      return { ...card, riskLevel: normalizedRisk, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score || b.riskLevel - a.riskLevel || b.base - a.base);
-    const sortedKeys = scored.map((entry) => entry.key);
-    const innerOrder = new Map<SortableCardKey, number>();
-    sortedKeys.forEach((key, idx) => innerOrder.set(key, idx + 10));
-    const cardMeta = sortedKeys.reduce<Record<SortableCardKey, {
-      available: boolean;
-      relevant: boolean;
-      riskLevel: number;
-      score: number;
-      rank: number;
-      defaultVisible: boolean;
-    }>>((acc, key, idx) => {
-      const entry = scored.find((item) => item.key === key);
-      if (!entry) {
-        return acc;
-      }
-      acc[key] = {
-        available: entry.available,
-        relevant: entry.relevant,
-        riskLevel: entry.riskLevel,
-        score: entry.score,
-        rank: idx + 1,
-        defaultVisible: idx < 10 || entry.riskLevel >= 3,
-      };
-      return acc;
-    }, {} as Record<SortableCardKey, {
-      available: boolean;
-      relevant: boolean;
-      riskLevel: number;
-      score: number;
-      rank: number;
-      defaultVisible: boolean;
-    }>);
-
-    return {
-      decisionGate: 0,
-      scoreCard: 1,
-      avalancheForecast: avalancheRelevant ? 2 : 130,
-      reportColumns: 3,
-      criticalChecks: innerOrder.get('criticalChecks') ?? 11,
-      atmosphericData: innerOrder.get('atmosphericData') ?? 12,
-      heatRisk: innerOrder.get('heatRisk') ?? 13,
-      nwsAlerts: innerOrder.get('nwsAlerts') ?? 14,
-      travelWindowPlanner: innerOrder.get('travelWindowPlanner') ?? 15,
-      planSnapshot: innerOrder.get('planSnapshot') ?? 16,
-      terrainTrailCondition: innerOrder.get('terrainTrailCondition') ?? 17,
-      snowpackSnapshot: innerOrder.get('snowpackSnapshot') ?? 18,
-      windLoading: innerOrder.get('windLoading') ?? 19,
-      windLoadingHints: innerOrder.get('windLoadingHints') ?? 20,
-      recentRainfall: innerOrder.get('recentRainfall') ?? 21,
-      fireRisk: innerOrder.get('fireRisk') ?? 22,
-      airQuality: innerOrder.get('airQuality') ?? 23,
-      sourceFreshness: innerOrder.get('sourceFreshness') ?? 24,
-      scoreTrace: innerOrder.get('scoreTrace') ?? 25,
-      recommendedGear: innerOrder.get('recommendedGear') ?? 26,
-      deepDiveData: 140,
-      cardMeta,
-    };
-  })();
+  const reportCardOrder = buildReportCardOrder({
+    safetyData, decision, preferences,
+    travelWindowRows, criticalWindow,
+    criticalCheckTotal, criticalCheckFailCount,
+    avalancheRelevant, avalancheUnknown,
+    windLoadingHintsRelevant, windLoadingLevel, windLoadingConfidence,
+    resolvedWindDirection, calmOrVariableSignal, lightWindSignal, trendWindDirections,
+    rainfall12hIn, rainfall24hIn, rainfall48hIn,
+    snowfall12hIn, snowfall24hIn, snowfall48hIn,
+    snowpackDepthSignalValues, snowpackSweSignalValues, hasSnowpackSignal,
+    sourceFreshnessRows, gearRecommendations, dayOverDay,
+    fireRiskLevel, heatRiskLevel,
+  });
   const shouldRenderRankedCard = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     (_key: string): boolean => true,
