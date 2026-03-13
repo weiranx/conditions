@@ -25,8 +25,8 @@
   --font-main: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
   --font-data: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
 
-  --shadow-soft: 0 4px 12px rgba(25, 33, 28, 0.06);
-  --shadow-deep: 0 12px 32px rgba(16, 35, 26, 0.14);
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(25, 33, 28, 0.04);
+  --shadow-deep: 0 4px 16px rgba(16, 35, 26, 0.08);
   --radius-card: 16px;
   --radius-pill: 999px;
 }
@@ -1970,7 +1970,7 @@ input {
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
   page-break-inside: avoid;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   overflow: hidden;
 }
 
@@ -1984,13 +1984,11 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 18px 20px;
+  padding: 16px 18px;
   border-radius: 16px;
-  border: 2px solid;
+  border: 1px solid;
   background: rgba(255, 253, 248, 0.97);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.03),
-    0 4px 16px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.04);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   animation: fade-up 0.3s ease both;
   contain: layout style;
@@ -2388,8 +2386,8 @@ button.collapsible-card-header {
   appearance: none;
   background: none;
   border: none;
-  padding: 0 0 10px;
-  margin: 0 0 12px;
+  padding: 0 0 8px;
+  margin: 0 0 10px;
   width: 100%;
   cursor: pointer;
   text-align: left;
@@ -2463,12 +2461,12 @@ button.collapsible-card-header:focus-visible {
 }
 
 .card-modal {
-  background: rgba(255, 253, 248, 0.95);
+  background: rgba(255, 253, 248, 0.96);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(215, 210, 194, 0.5);
+  border: 0.5px solid rgba(215, 210, 194, 0.4);
   border-radius: 20px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
   max-width: 720px;
   width: 100%;
   max-height: 88vh;
@@ -2482,8 +2480,8 @@ button.collapsible-card-header:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid #ddd7c8;
+  padding: 16px 20px 14px;
+  border-bottom: 0.5px solid rgba(221, 215, 200, 0.5);
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -2505,10 +2503,10 @@ button.collapsible-card-header:focus-visible {
 
 .card-modal-close {
   appearance: none;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(0, 0, 0, 0.06);
-  width: 36px;
-  height: 36px;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   display: flex;
   align-items: center;
@@ -2520,8 +2518,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 .card-modal-close:hover {
-  background: rgba(0, 0, 0, 0.12);
-  border-color: rgba(0, 0, 0, 0.14);
+  background: rgba(0, 0, 0, 0.1);
   color: #1d2922;
   transform: scale(1.05);
 }
@@ -2631,9 +2628,9 @@ button.collapsible-card-header:focus-visible {
   animation: fade-up 0.3s ease;
 }
 
-.briefing-banner-go      { background: rgba(22, 163, 74, 0.10); border: 1px solid rgba(22, 163, 74, 0.25); }
-.briefing-banner-caution { background: rgba(217, 119, 6, 0.10); border: 1px solid rgba(217, 119, 6, 0.25); }
-.briefing-banner-nogo    { background: rgba(220, 38, 38, 0.10); border: 1px solid rgba(220, 38, 38, 0.25); }
+.briefing-banner-go      { background: rgba(22, 163, 74, 0.08); border: 0.5px solid rgba(22, 163, 74, 0.15); }
+.briefing-banner-caution { background: rgba(217, 119, 6, 0.08); border: 0.5px solid rgba(217, 119, 6, 0.15); }
+.briefing-banner-nogo    { background: rgba(220, 38, 38, 0.08); border: 0.5px solid rgba(220, 38, 38, 0.15); }
 
 .briefing-banner-decision {
   flex: 1;
@@ -2685,8 +2682,8 @@ button.collapsible-card-header:focus-visible {
 
 .briefing-metric {
   background: var(--card-bg, rgba(255, 253, 248, 0.94));
-  border: 1px solid var(--line-color, rgba(215, 210, 194, 0.22));
-  border-radius: 10px;
+  border: 0.5px solid var(--line-color, rgba(215, 210, 194, 0.18));
+  border-radius: 12px;
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
@@ -2735,8 +2732,8 @@ button.collapsible-card-header:focus-visible {
 }
 
 .briefing-section {
-  border-top: 1px solid var(--line-color, rgba(200, 194, 178, 0.25));
-  padding: 12px 0;
+  border-top: 0.5px solid var(--line-color, rgba(200, 194, 178, 0.2));
+  padding: 14px 0;
 }
 
 .briefing-section:first-child {
@@ -2761,18 +2758,67 @@ button.collapsible-card-header:focus-visible {
 
 .briefing-section-body {
   font-size: 0.8rem;
+  line-height: 1.45;
 }
 
-/* Reduce verbosity inside briefing sections */
+/* ── Reduce verbosity inside briefing sections ── */
+
+/* Decision: hide duplicated headline + better-day suggestions */
 .briefing-section-body .decision-headline { display: none; }
 .briefing-section-body .decision-better-days { display: none; }
-.briefing-section-body .wind-hint-meta { display: none; }
-.briefing-section-body .wind-aspect-block { display: none; }
-.briefing-section-body .score-change-block { display: none; }
+
+/* Weather: hide metrics grid, hour picker, target elevation, elevation forecast, period line, pressure chip, external links */
+.briefing-section-body .weather-metrics { display: none; }
+.briefing-section-body .weather-hour-pill-strip { display: none; }
+.briefing-section-body .elevation-forecast { display: none; }
+.briefing-section-body .elevation-forecast-bands { display: none; }
+.briefing-section-body .weather-period-line { display: none; }
+.briefing-section-body .weather-pressure-chip-row { display: none; }
+.briefing-section-body .weather-preview-note { display: none; }
+.briefing-section-body .weather-external-link { display: none; }
+
+/* Travel window: hide threshold editor, presets, hourly expand, threshold actions */
+.briefing-section-body .travel-threshold-editor { display: none; }
+.briefing-section-body .travel-preset-row { display: none; }
+.briefing-section-body .travel-threshold-actions { display: none; }
+.briefing-section-body .travel-window-actions { display: none; }
+.briefing-section-body .critical-list { display: none; }
+
+/* Critical checks: hide per-item detail/action text */
 .briefing-section-body .checks-list .check-item-detail { display: none; }
 .briefing-section-body .checks-list .check-item-action { display: none; }
+
+/* Score: hide day-over-day change block */
+.briefing-section-body .score-change-block { display: none; }
+
+/* Wind loading: hide meta grid + aspect blocks */
+.briefing-section-body .wind-hint-meta { display: none; }
+.briefing-section-body .wind-aspect-block { display: none; }
+
+/* Precipitation: hide meta grids, expected block forecast times */
+.briefing-section-body .precip-meta-grid { display: none; }
+.briefing-section-body .precip-expected-block .precip-meta-grid { display: none; }
+
+/* Snowpack: hide details accordion, core grid help hints, source links */
+.briefing-section-body .snowpack-details { display: none; }
+
+/* Hide all muted notes, source attribution, external links globally in briefing */
 .briefing-section-body .muted-note { display: none; }
-.briefing-section-body .weather-metrics { display: none; }
+.briefing-section-body .avy-external-link { display: none; }
+.briefing-section-body .raw-link-value { pointer-events: none; color: inherit; text-decoration: none; }
+
+/* Weather trend chart: compact in briefing */
+.briefing-section-body .weather-trend-panel { margin-top: 8px; padding: 8px; }
+.briefing-section-body .weather-trend-selector { display: none; }
+.briefing-section-body .weather-trend-chart-wrap { height: 120px; }
+
+/* Tighten spacing for sub-grids inside briefing */
+.briefing-section-body .precip-split-grid { gap: 6px; }
+.briefing-section-body .snowpack-core-grid { gap: 6px; }
+.briefing-section-body .plan-grid { gap: 6px; }
+.briefing-section-body .signal-list { margin: 4px 0; padding-left: 16px; }
+.briefing-section-body .signal-list li { margin-bottom: 2px; }
+.briefing-section-body .source-freshness-list { gap: 4px; }
 
 /* ── Dark mode ── */
 
@@ -3010,9 +3056,9 @@ button.collapsible-card-header:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 700;
@@ -3062,11 +3108,11 @@ button.collapsible-card-header:focus-visible {
 }
 
 .decision-action {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid #d3dccf;
-  background: #f6f9f3;
+  border: 0.5px solid rgba(211, 220, 207, 0.5);
+  background: rgba(246, 249, 243, 0.6);
 }
 
 .decision-action-label {
@@ -3087,13 +3133,13 @@ button.collapsible-card-header:focus-visible {
 }
 
 .decision-action.caution {
-  border-color: #dfcda8;
-  background: #fcf6ea;
+  border-color: rgba(223, 205, 168, 0.5);
+  background: rgba(252, 246, 234, 0.6);
 }
 
 .decision-action.nogo {
-  border-color: #e2b9b9;
-  background: #fcf1f1;
+  border-color: rgba(226, 185, 185, 0.5);
+  background: rgba(252, 241, 241, 0.6);
 }
 
 .decision-summary-grid {
@@ -3219,18 +3265,18 @@ button.collapsible-card-header:focus-visible {
 .decision-driver-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .decision-driver-chip {
   display: inline-flex;
   align-items: center;
-  padding: 6px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid #d6ddce;
-  background: #f7faf4;
+  border: 0.5px solid rgba(214, 221, 206, 0.5);
+  background: rgba(247, 250, 244, 0.6);
   color: #35463d;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   line-height: 1.35;
 }
 
@@ -3592,9 +3638,9 @@ button.collapsible-card-header:focus-visible {
 
 .stat-label {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   font-weight: 600;
 }
 
@@ -3640,11 +3686,11 @@ button.collapsible-card-header:focus-visible {
 }
 
 .weather-trend-panel {
-  margin-top: 12px;
-  padding: 10px 11px;
-  border-radius: 13px;
-  border: 1px solid #ddd7c7;
-  background: #f8f4ea;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0.5px solid rgba(221, 215, 199, 0.5);
+  background: rgba(248, 244, 234, 0.5);
   display: grid;
   gap: 8px;
 }
@@ -3845,10 +3891,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 .metric-chip {
-  padding: 12px 13px;
-  border-radius: 14px;
-  border: 1px solid rgba(215, 210, 194, 0.28);
-  background: rgba(246, 241, 230, 0.6);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0.5px solid rgba(215, 210, 194, 0.22);
+  background: rgba(246, 241, 230, 0.45);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   transition: background 0.18s ease, border-color 0.18s ease;
@@ -4152,10 +4198,10 @@ button.collapsible-card-header:focus-visible {
 .travel-thresholds span {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: 3px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(246, 241, 230, 0.65);
+  border: 0.5px solid rgba(215, 210, 194, 0.3);
+  background: rgba(246, 241, 230, 0.45);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   color: #4b5a52;
@@ -4276,26 +4322,26 @@ button.collapsible-card-header:focus-visible {
 
 .travel-overview-item {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   padding: 8px 10px;
-  border-radius: 11px;
-  border: 1px solid #d8d1bf;
-  background: #faf6ea;
+  border-radius: 12px;
+  border: 0.5px solid rgba(216, 209, 191, 0.4);
+  background: rgba(250, 246, 234, 0.5);
 }
 
 .travel-overview-item.is-good {
-  border-color: #bfd7c2;
-  background: #edf7ee;
+  border-color: rgba(191, 215, 194, 0.5);
+  background: rgba(237, 247, 238, 0.5);
 }
 
 .travel-overview-item.is-watch {
-  border-color: #dcc69a;
-  background: #f9f1e1;
+  border-color: rgba(220, 198, 154, 0.5);
+  background: rgba(249, 241, 225, 0.5);
 }
 
 .travel-overview-item.is-bad {
-  border-color: #ddb0b0;
-  background: #fbeaea;
+  border-color: rgba(221, 176, 176, 0.5);
+  background: rgba(251, 234, 234, 0.5);
 }
 
 .travel-overview-label {
@@ -4330,20 +4376,20 @@ button.collapsible-card-header:focus-visible {
   display: grid;
   gap: 3px;
   justify-items: center;
-  padding: 7px 6px;
+  padding: 6px 5px;
   border-radius: 10px;
-  border: 1px solid #d7cfbd;
-  background: #f8f3e7;
+  border: 0.5px solid rgba(215, 207, 189, 0.4);
+  background: rgba(248, 243, 231, 0.5);
 }
 
 .travel-timeline-cell.pass {
-  border-color: #bfd7c2;
-  background: #ecf7ee;
+  border-color: rgba(191, 215, 194, 0.5);
+  background: rgba(236, 247, 238, 0.5);
 }
 
 .travel-timeline-cell.fail {
-  border-color: #e0bbbb;
-  background: #fbecec;
+  border-color: rgba(224, 187, 187, 0.5);
+  background: rgba(251, 236, 236, 0.5);
 }
 
 .travel-timeline-cell.watch {
@@ -5025,7 +5071,7 @@ button.collapsible-card-header:focus-visible {
 
 .checks-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .checks-summary {
@@ -5039,9 +5085,9 @@ button.collapsible-card-header:focus-visible {
 .checks-attention {
   margin-bottom: 10px;
   padding: 9px 10px;
-  border-radius: 10px;
-  border: 1px solid #e2c2c2;
-  background: #fbefef;
+  border-radius: 12px;
+  border: 0.5px solid rgba(226, 194, 194, 0.5);
+  background: rgba(251, 239, 239, 0.6);
   display: grid;
   gap: 7px;
 }
@@ -5510,10 +5556,10 @@ button.collapsible-card-header:focus-visible {
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
-  padding: 7px 9px;
-  border-radius: 8px;
-  border: 1px solid rgba(215, 210, 194, 0.25);
-  background: rgba(246, 241, 230, 0.6);
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(215, 210, 194, 0.2);
+  background: rgba(246, 241, 230, 0.4);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   color: #3d4b44;
@@ -5572,14 +5618,14 @@ button.collapsible-card-header:focus-visible {
 }
 
 .check-item.ok {
-  border-color: #c8ddcb;
-  background: #eef7ef;
+  border-color: rgba(200, 221, 203, 0.5);
+  background: rgba(238, 247, 239, 0.5);
   color: #2f5e3f;
 }
 
 .check-item.warn {
-  border-color: #e2c2c2;
-  background: #fbefef;
+  border-color: rgba(226, 194, 194, 0.5);
+  background: rgba(251, 239, 239, 0.5);
   color: #8a3737;
 }
 
