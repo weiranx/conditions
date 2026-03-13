@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -857,14 +857,12 @@ export function PlannerView(props: PlannerViewProps) {
   } = props;
 
   // On mobile (<640px), default to cards layout for better UX
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)');
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    setIsMobile(mq.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  const mobileQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)') : null;
+  const isMobile = useSyncExternalStore(
+    (cb) => { mobileQuery?.addEventListener('change', cb); return () => mobileQuery?.removeEventListener('change', cb); },
+    () => mobileQuery?.matches ?? false,
+    () => false,
+  );
   const effectiveLayout = isMobile ? 'cards' : preferences.reportLayout;
 
   // Derived values used inline

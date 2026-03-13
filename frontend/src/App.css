@@ -2686,11 +2686,11 @@ button.collapsible-card-header:focus-visible {
 .briefing-metric {
   background: var(--card-bg, rgba(255, 253, 248, 0.94));
   border: 1px solid var(--line-color, rgba(215, 210, 194, 0.22));
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-radius: 10px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   text-align: center;
 }
 
