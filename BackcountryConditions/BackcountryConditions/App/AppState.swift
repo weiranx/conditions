@@ -7,6 +7,6 @@ final class AppState {
     var preferences: UserPreferences = .load()
 
     enum AppTab: Int, CaseIterable {
-        case planner, trip, history, settings, status
+        case planner, trip, history, settings
     }
 }

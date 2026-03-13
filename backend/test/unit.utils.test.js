@@ -284,10 +284,10 @@ describe('computeFeelsLikeF', () => {
     expect(computeFeelsLikeF(30, 2)).toBe(30);
   });
 
-  test('returns input unchanged when tempF is non-finite', () => {
+  test('returns null when tempF is non-finite', () => {
     expect(computeFeelsLikeF(null, 20)).toBe(null);
-    expect(computeFeelsLikeF(undefined, 20)).toBe(undefined);
-    expect(computeFeelsLikeF(NaN, 20)).toBeNaN();
+    expect(computeFeelsLikeF(undefined, 20)).toBe(null);
+    expect(computeFeelsLikeF(NaN, 20)).toBe(null);
   });
 });
 

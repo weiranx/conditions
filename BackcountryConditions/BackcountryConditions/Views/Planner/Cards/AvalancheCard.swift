@@ -69,7 +69,7 @@ struct AvalancheCard: View {
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
 
-                        ForEach(problems, id: \.stableId) { problem in
+                        ForEach(Array(problems.enumerated()), id: \.offset) { _, problem in
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     Text(problem.name ?? "Unknown Problem")

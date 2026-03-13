@@ -276,7 +276,7 @@ struct WeatherCard: View {
         let baseWind = point.wind
         return bands.map { band in
             let deltaKft = band.deltaFromObjectiveFt / 1000.0
-            let adjTemp = baseTemp + deltaKft * Self.tempLapseFPerKft
+            let adjTemp = baseTemp - deltaKft * Self.tempLapseFPerKft
             let adjWind = max(0, baseWind + deltaKft * Self.windIncreasePerKft)
             return (label: band.label, temp: adjTemp, windSpeed: adjWind, delta: band.deltaFromObjectiveFt)
         }

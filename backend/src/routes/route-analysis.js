@@ -176,8 +176,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       );
 
       // Step 2: Run safety checks for each waypoint in parallel
-      const safetyResults = await withTimeout(
-        Promise.all(
+      const safetySettled = await withTimeout(
+        Promise.allSettled(
           waypointsCopy.map((wp) =>
             invokeSafetyHandler({ lat: String(wp.lat), lon: String(wp.lon), date, start: start || '06:00', travel_window_hours: String(travel_window_hours || 12) })
           )
@@ -187,7 +187,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 
       // Step 3: Strip each payload to key fields to keep synthesis prompt small
       const summaries = waypointsCopy.map((wp, i) => {
-        const p = safetyResults[i]?.payload || {};
+        const settled = safetySettled[i];
+        const p = (settled.status === 'fulfilled' ? settled.value?.payload : null) || {};
         const avyRelevant = p.avalanche?.relevant !== false;
         const snowDepthIn = p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null;
         const hasSnow = snowDepthIn != null && snowDepthIn > 0;

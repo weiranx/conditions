@@ -248,7 +248,7 @@ export function usePreferenceHandlers({
       return;
     }
     const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(40, mphValue)).toFixed(2)) });
+    updatePreferences({ maxWindGustMph: Number(Math.max(10, Math.min(80, mphValue)).toFixed(2)) });
   }, [preferences.windSpeedUnit, updatePreferences]);
 
   const handleWindThresholdDisplayBlur = useCallback(() => {
@@ -267,7 +267,7 @@ export function usePreferenceHandlers({
       return;
     }
     const mphValue = convertDisplayWindToMph(displayValue, preferences.windSpeedUnit);
-    const committedMph = Number(Math.max(10, Math.min(40, mphValue)).toFixed(2));
+    const committedMph = Number(Math.max(10, Math.min(80, mphValue)).toFixed(2));
     updatePreferences({ maxWindGustMph: committedMph });
     setMaxWindGustDraft(
       convertWindMphToDisplayValue(committedMph, preferences.windSpeedUnit).toFixed(preferences.windSpeedUnit === 'kph' ? 1 : 0),

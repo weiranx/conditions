@@ -290,6 +290,7 @@ function App() {
     maxForecastDate,
     preferences,
     initialView: initialLinkState.view as AppView,
+    isApplyingPopStateRef,
     onPopState: useCallback((linkState: ReturnType<typeof parseLinkState>) => {
       clearWakeRetry();
       setSafetyData(null);
@@ -1651,9 +1652,12 @@ function App() {
       : '';
   const forecastLeadHoursDisplay = (() => {
     if (!safetyData?.forecast?.selectedDate) return null;
-    const selectedDateStr = safetyData.forecast.selectedDate;
-    const startTimeStr = safetyData.forecast.selectedStartTime || '00:00';
-    const forecastMs = Date.parse(`${selectedDateStr}T${startTimeStr.length === 5 ? startTimeStr : '00:00'}:00`);
+    // Prefer the ISO 8601 forecastStartTime (includes timezone) to avoid
+    // device-timezone-dependent parsing of bare date + time strings.
+    const isoStart = safetyData.weather?.forecastStartTime;
+    const forecastMs = isoStart
+      ? Date.parse(isoStart)
+      : Date.parse(`${safetyData.forecast.selectedDate}T${(safetyData.forecast.selectedStartTime || '00:00').slice(0, 5)}:00Z`);
     if (!Number.isFinite(forecastMs)) return null;
     const leadHours = (forecastMs - Date.now()) / (1000 * 60 * 60);
     if (leadHours <= 24) return null;

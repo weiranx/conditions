@@ -11,6 +11,7 @@ export interface UseUrlStateParams {
   preferences: UserPreferences;
   initialView: AppView;
   onPopState: (linkState: ReturnType<typeof parseLinkState>) => void;
+  isApplyingPopStateRef?: React.MutableRefObject<boolean>;
 }
 
 export interface UseUrlStateReturn {
@@ -27,11 +28,10 @@ export function useUrlState({
   preferences,
   initialView,
   onPopState,
+  isApplyingPopStateRef,
 }: UseUrlStateParams): UseUrlStateReturn {
   const [view, setView] = useState<AppView>(initialView);
   const [isViewPending, startViewChange] = useTransition();
-
-  const isApplyingPopStateRefRef = useRef(false);
 
   const navigateToView = useCallback(
     (nextView: AppView) => {
@@ -47,7 +47,7 @@ export function useUrlState({
     }
 
     const handlePopState = () => {
-      isApplyingPopStateRefRef.current = true;
+      if (isApplyingPopStateRef) isApplyingPopStateRef.current = true;
       const linkState = parseLinkState(todayDate, maxForecastDate, preferences);
       onPopState(linkState);
       setView(linkState.view);

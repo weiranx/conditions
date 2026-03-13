@@ -365,7 +365,7 @@ struct NwsAlertItem: Codable, Sendable, Identifiable {
     var expires: String?
     var link: String?
 
-    var id: String { (headline ?? "") + (event ?? "") + (onset ?? sent ?? expires ?? "") }
+    var id: String { "\(event ?? "")|\(areaDesc ?? "")|\(onset ?? sent ?? expires ?? "")|\(headline ?? "")" }
 }
 
 // MARK: - Air Quality

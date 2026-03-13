@@ -101,10 +101,10 @@ final class PlannerViewModel {
                     decisionLevel: decision.level,
                     headline: decision.headline
                 )
+                // Await save before setting currentReportId so that subsequent
+                // updateRouteAnalysis / updateAiBrief calls find the file on disk.
+                try? await ReportStore.shared.save(report)
                 currentReportId = report.id
-                Task.detached {
-                    try? await ReportStore.shared.save(report)
-                }
             }
         } catch {
             self.error = error.localizedDescription
@@ -162,7 +162,7 @@ final class PlannerViewModel {
         lon = result.lon
     }
 
-    func clear() {
+    @MainActor func clear() {
         objectiveName = ""
         lat = nil
         lon = nil

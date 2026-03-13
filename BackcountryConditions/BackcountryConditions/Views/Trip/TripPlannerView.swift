@@ -58,6 +58,13 @@ struct TripPlannerView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Trip Planner")
             .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(for: UUID.self) { dayId in
+                if let day = dayResults.first(where: { $0.id == dayId }) {
+                    TripDayDetailView(dayResult: day, objectiveName: objectiveName)
+                } else {
+                    ContentUnavailableView("Trip data unavailable", systemImage: "exclamationmark.triangle", description: Text("This day's forecast is no longer loaded."))
+                }
+            }
         }
     }
 
@@ -204,7 +211,10 @@ struct TripPlannerView: View {
     private var dayResultsList: some View {
         VStack(spacing: 10) {
             ForEach(dayResults) { day in
-                dayCard(day)
+                NavigationLink(value: day.id) {
+                    dayCard(day)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)
@@ -239,6 +249,10 @@ struct TripPlannerView: View {
                         )
                         .shadow(color: decisionColor(decision.level).opacity(0.3), radius: 3, y: 1)
                 }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.quaternary)
             }
 
             if let data = day.data {

@@ -91,7 +91,13 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
   }
 
   function has(key) {
-    return get(key) !== null;
+    const entry = store.get(key);
+    if (!entry) return false;
+    if (_isDead(entry, Date.now())) {
+      store.delete(key);
+      return false;
+    }
+    return true;
   }
 
   function del(key) {

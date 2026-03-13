@@ -4,7 +4,6 @@ struct StatusView: View {
     @State private var statusVM = StatusViewModel()
 
     var body: some View {
-        NavigationStack {
             List {
                 if statusVM.isLoading {
                     Section {
@@ -139,7 +138,6 @@ struct StatusView: View {
             .task {
                 await statusVM.loadHealth()
             }
-        }
     }
 
     private func formatUptime(_ seconds: Double) -> String {
@@ -175,5 +173,7 @@ struct StatusView: View {
 }
 
 #Preview {
-    StatusView()
+    NavigationStack {
+        StatusView()
+    }
 }

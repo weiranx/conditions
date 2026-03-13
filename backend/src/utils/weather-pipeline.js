@@ -226,11 +226,11 @@ async function fetchWeatherPipeline({
       pressure: currentPressure,
       humidity: Number.isFinite(selectedForecastPeriod?.relativeHumidity?.value)
         ? selectedForecastPeriod.relativeHumidity.value
-        : 0,
+        : null,
       cloudCover: currentCloudCover.value,
       precipChance: Number.isFinite(selectedForecastPeriod?.probabilityOfPrecipitation?.value)
         ? selectedForecastPeriod.probabilityOfPrecipitation.value
-        : 0,
+        : null,
       isDaytime: selectedForecastPeriod?.isDaytime ?? null,
       issuedTime:
         hourlyData?.properties?.updateTime || hourlyData?.properties?.generatedAt || null,

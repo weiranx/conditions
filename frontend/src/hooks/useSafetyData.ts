@@ -67,6 +67,7 @@ export function useSafetyData({
     lon: number;
     date: string;
     startTime: string;
+    travelWindowHours: number;
     force: boolean;
   } | null>(null);
   const fetchSafetyDataRef = useRef<
@@ -174,14 +175,11 @@ export function useSafetyData({
           lon,
           date: safeDate,
           startTime: safeStartTime,
+          travelWindowHours: safeTravelWindowHours,
           force: forceReload,
         };
         return;
       }
-      if (!forceReload && inFlightSafetyKeyRef.current === requestKey) {
-        return;
-      }
-
       setLoading(true);
       setError(null);
       inFlightSafetyKeyRef.current = requestKey;
@@ -210,7 +208,7 @@ export function useSafetyData({
               pending.lon,
               pending.date,
               pending.startTime,
-              safeTravelWindowHours,
+              pending.travelWindowHours,
             )
           : null;
         if (!pendingRequestKey || pendingRequestKey === requestKey) {

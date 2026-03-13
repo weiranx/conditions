@@ -19,6 +19,9 @@ const askClaude = async (prompt, { maxTokens = 1024, model = 'claude-sonnet-4-6'
   };
   if (system) params.system = system;
   const msg = await getClient().messages.create(params);
+  if (!msg.content?.length || msg.content[0]?.type !== 'text') {
+    throw new Error('Unexpected response format from AI API');
+  }
   return msg.content[0].text;
 };
 

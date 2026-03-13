@@ -1,6 +1,6 @@
 const computeFeelsLikeF = (tempF, windMph) => {
   if (!Number.isFinite(tempF)) {
-    return tempF;
+    return null;
   }
   if (tempF <= 50 && windMph >= 3) {
     const feelsLike = 35.74 + (0.6215 * tempF) - (35.75 * Math.pow(windMph, 0.16)) + (0.4275 * tempF * Math.pow(windMph, 0.16));

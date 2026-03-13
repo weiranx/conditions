@@ -31,6 +31,11 @@ struct PlannerView: View {
             .task {
                 recentReports = (try? await ReportStore.shared.loadAll()) ?? []
             }
+            .onChange(of: plannerVM.currentReportId) { _, _ in
+                Task {
+                    recentReports = (try? await ReportStore.shared.loadAll()) ?? []
+                }
+            }
             .refreshable {
                 if plannerVM.hasObjective {
                     await plannerVM.loadReport(preferences: appState.preferences)

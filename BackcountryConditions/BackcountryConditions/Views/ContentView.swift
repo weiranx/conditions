@@ -22,12 +22,16 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppState.AppTab.settings)
-
-            StatusView()
-                .tabItem { Label("Status", systemImage: "server.rack") }
-                .tag(AppState.AppTab.status)
         }
         .preferredColorScheme(appState.preferences.themeMode.colorScheme)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+            }
+        }
     }
 }
 

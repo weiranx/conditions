@@ -80,7 +80,7 @@ struct SafetyScoreCard: View {
             if let idx = seen[key] {
                 let existing = result[idx].impact ?? 0
                 let additional = factor.impact ?? 0
-                result[idx] = SafetyFactor(hazard: key, impact: existing + additional)
+                result[idx] = SafetyFactor(hazard: key, impact: existing + additional, message: result[idx].message ?? factor.message)
             } else {
                 seen[key] = result.count
                 result.append(factor)
@@ -157,7 +157,7 @@ struct SafetyScoreCard: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                Text(LocalizedStringKey(brief))
+                Text(LocalizedStringKey(MarkdownStrip.inlineOnly(brief)))
                     .font(.subheadline)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -499,7 +499,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       issuedTime: payloadIssuedTime || null,
       timezone: payload?.timezone || null,
       forecastStartTime: selectedHourIso,
-      forecastEndTime: selectedHourIso,
+      forecastEndTime: hourlyTimes[selectedHourIndex + 1] || selectedHourIso,
       forecastDate: resolvedDate,
       trend,
       temperatureContext24h,

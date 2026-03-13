@@ -128,6 +128,13 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Status
+                    Section {
+                        NavigationLink("Backend Status") {
+                            StatusView()
+                        }
+                    }
+
                     // About
                     Section("About") {
                         Text(Configuration.appDisclaimer)
@@ -143,14 +150,6 @@ struct SettingsView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    }
-                }
-            }
             .onAppear {
                 if settingsVM == nil {
                     settingsVM = SettingsViewModel(preferences: appState.preferences)
