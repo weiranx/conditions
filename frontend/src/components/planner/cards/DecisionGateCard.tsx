@@ -38,12 +38,8 @@ export interface DecisionGateCardProps {
 export function DecisionGateCard({
   decision,
   decisionActionLine,
-  fieldBriefPrimaryReason: _fieldBriefPrimaryReason,
-  fieldBriefTopRisks: _fieldBriefTopRisks,
   rainfall24hSeverityClass,
   rainfall24hDisplay,
-  decisionPassingChecksCount: _decisionPassingChecksCount,
-  decisionFailingChecks: _decisionFailingChecks,
   decisionKeyDrivers,
   orderedCriticalChecks,
   betterDaySuggestions,

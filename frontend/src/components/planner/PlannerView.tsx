@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import { SearchBox } from './SearchBox';
 import { ForecastLoading } from './ForecastLoading';
-// HelpHint available but removed from card titles for cleaner UI
 import { AvalancheForecastCard } from './cards/AvalancheForecastCard';
 import { TravelWindowPlannerCard } from './cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './cards/WindLoadingCard';
@@ -88,7 +87,6 @@ import type { TerrainConditionDetails } from './cards/TerrainCard';
 import type { TargetElevationForecast } from './cards/WeatherCardContent';
 import type { SourceFreshnessRow } from './cards/SourceFreshnessCard';
 import type { BetterDaySuggestion } from '../../hooks/useDayComparisons';
-// formatClockShort available if needed
 import { criticalRiskLevelText } from '../../app/critical-window';
 
 // ─── Props interface ────────────────────────────────────────────────────────
@@ -560,11 +558,9 @@ export function PlannerView(props: PlannerViewProps) {
 
     // Score card
     getScoreColor,
-    forecastLeadHoursDisplay: _forecastLeadHoursDisplay,
     objectiveName,
     displayStartTime,
     returnTimeFormatted,
-    returnExtendsPastMidnight: _returnExtendsPastMidnight,
     formatClockForStyle,
     error,
     aiBriefNarrative,
@@ -733,16 +729,13 @@ export function PlannerView(props: PlannerViewProps) {
     snowfall12hDisplay,
     snowfall24hDisplay,
     snowfall48hDisplay,
-    snowfall12hIn: _snowfall12hIn,
     snowfall24hIn,
-    snowfall48hIn: _snowfall48hIn,
 
     // Rainfall card
     precipInsightLine,
     expectedPrecipSummaryLine,
     expectedTravelWindowHours,
     expectedRainWindowDisplay,
-    expectedSnowWindowIn: _expectedSnowWindowIn,
     expectedSnowWindowDisplay,
     rainfallExpected,
     precipitationDisplayTimezone,
@@ -756,7 +749,6 @@ export function PlannerView(props: PlannerViewProps) {
     // Wind Loading card
     windLoadingHintsRelevant,
     windLoadingLevel,
-    windLoadingConfidence: _windLoadingConfidence,
     windLoadingPillClass,
     windLoadingActiveWindowLabel,
     windLoadingActiveHoursDetail,
