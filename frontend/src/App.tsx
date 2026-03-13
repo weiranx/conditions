@@ -742,6 +742,11 @@ function App() {
     handleWindThresholdDisplayBlur,
     handleFeelsLikeThresholdDisplayChange,
     handleFeelsLikeThresholdDisplayBlur,
+    maxFeelsLikeDraft,
+    heatCeilingMin,
+    heatCeilingMax,
+    handleHeatCeilingDisplayChange,
+    handleHeatCeilingDisplayBlur,
     handleApplyTravelThresholdPreset,
     applyPreferencesToPlanner,
     resetPreferences,
@@ -895,11 +900,14 @@ function App() {
   const canDecreaseTargetElevation = baseTargetElevationFeet > 0;
   const windThresholdDisplay = formatWindDisplay(preferences.maxWindGustMph);
   const feelsLikeThresholdDisplay = formatTempDisplay(preferences.minFeelsLikeF);
+  const heatCeilingDisplay = formatTempDisplay(preferences.maxFeelsLikeF);
+  const formatPresetWindDisplay = (valueMph: number) => formatWindDisplay(valueMph);
   const activeTravelThresholdPreset = (Object.entries(TRAVEL_THRESHOLD_PRESETS).find(([, preset]) => {
     return (
       Math.abs(preferences.maxWindGustMph - preset.maxWindGustMph) <= 0.01 &&
       preferences.maxPrecipChance === preset.maxPrecipChance &&
-      Math.abs(preferences.minFeelsLikeF - preset.minFeelsLikeF) <= 0.01
+      Math.abs(preferences.minFeelsLikeF - preset.minFeelsLikeF) <= 0.01 &&
+      Math.abs(preferences.maxFeelsLikeF - preset.maxFeelsLikeF) <= 0.01
     );
   })?.[0] || null) as TravelThresholdPresetKey | null;
   const travelWindowHoursLabel = `${travelWindowHours}h`;
@@ -1968,18 +1976,22 @@ function App() {
         travelWindowHoursLabel={travelWindowHoursLabel}
         windThresholdDisplay={windThresholdDisplay}
         feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+        heatCeilingDisplay={heatCeilingDisplay}
         windUnitLabel={windUnitLabel}
         tempUnitLabel={tempUnitLabel}
         travelWindowHoursDraft={travelWindowHoursDraft}
         maxWindGustDraft={maxWindGustDraft}
         maxPrecipChanceDraft={maxPrecipChanceDraft}
         minFeelsLikeDraft={minFeelsLikeDraft}
+        maxFeelsLikeDraft={maxFeelsLikeDraft}
         windThresholdMin={windThresholdMin}
         windThresholdMax={windThresholdMax}
         windThresholdStep={windThresholdStep}
         feelsLikeThresholdMin={feelsLikeThresholdMin}
         feelsLikeThresholdMax={feelsLikeThresholdMax}
         feelsLikeThresholdStep={feelsLikeThresholdStep}
+        heatCeilingMin={heatCeilingMin}
+        heatCeilingMax={heatCeilingMax}
         handlePreferenceTimeChange={handlePreferenceTimeChange}
         handleThemeModeChange={handleThemeModeChange}
         handleReportLayoutChange={handleReportLayoutChange}
@@ -1995,6 +2007,8 @@ function App() {
         handleMaxPrecipChanceDraftBlur={handleMaxPrecipChanceDraftBlur}
         handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
         handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+        handleHeatCeilingDisplayChange={handleHeatCeilingDisplayChange}
+        handleHeatCeilingDisplayBlur={handleHeatCeilingDisplayBlur}
         applyPreferencesToPlanner={applyPreferencesToPlanner}
         resetPreferences={resetPreferences}
         navigateToView={navigateToView}
@@ -2214,6 +2228,7 @@ function App() {
       formatTravelWindowSpan={formatTravelWindowSpan}
       windThresholdDisplay={windThresholdDisplay}
       feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+      heatCeilingDisplay={heatCeilingDisplay}
       activeTravelThresholdPreset={activeTravelThresholdPreset}
       onApplyTravelThresholdPreset={handleApplyTravelThresholdPreset}
       travelThresholdEditorOpen={travelThresholdEditorOpen}
@@ -2235,6 +2250,12 @@ function App() {
       minFeelsLikeDraft={minFeelsLikeDraft}
       handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
       handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+      heatCeilingMin={heatCeilingMin}
+      heatCeilingMax={heatCeilingMax}
+      maxFeelsLikeDraft={maxFeelsLikeDraft}
+      handleHeatCeilingDisplayChange={handleHeatCeilingDisplayChange}
+      handleHeatCeilingDisplayBlur={handleHeatCeilingDisplayBlur}
+      formatPresetWindDisplay={formatPresetWindDisplay}
       travelWindowSummary={travelWindowSummary}
       criticalWindow={criticalWindow}
       travelWindowExpanded={travelWindowExpanded}

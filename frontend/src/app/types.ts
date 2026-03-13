@@ -381,11 +381,13 @@ export interface SafetyData {
   safety: {
     score: number;
     confidence?: number;
+    tier?: string;
+    tierClass?: string;
     primaryHazard: string;
     explanations: string[];
     sourcesUsed?: string[];
     factors?: Array<{ hazard?: string; impact?: number; source?: string; message?: string }>;
-    groupImpacts?: Record<string, { raw?: number; capped?: number; cap?: number }>;
+    groupImpacts?: Record<string, { raw?: number; capped?: number; cap?: number; effective?: number; scale?: number }>;
     confidenceReasons?: string[];
     airQualityCategory?: string;
   };
@@ -444,6 +446,7 @@ export interface UserPreferences {
   maxWindGustMph: number;
   maxPrecipChance: number;
   minFeelsLikeF: number;
+  maxFeelsLikeF: number;
   travelWindowHours: number;
   reportLayout: ReportLayout;
 }
@@ -488,6 +491,7 @@ export interface TravelWindowRow {
   wind: number;
   gust: number;
   precipChance: number;
+  lightningRisk?: boolean;
 }
 
 export interface TravelWindowSpan {

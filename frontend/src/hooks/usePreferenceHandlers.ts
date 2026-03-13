@@ -25,12 +25,12 @@ type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive' | 'ru
 
 const TRAVEL_THRESHOLD_PRESETS: Record<
   TravelThresholdPresetKey,
-  { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number }
+  { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number; maxFeelsLikeF: number }
 > = {
-  conservative: { label: 'Conservative', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 15 },
-  standard: { label: 'Standard', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5 },
-  aggressive: { label: 'Aggressive', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5 },
-  runner: { label: 'Runner / Summer', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25 },
+  conservative: { label: 'Conservative', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 15, maxFeelsLikeF: 90 },
+  standard: { label: 'Standard', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5, maxFeelsLikeF: 95 },
+  aggressive: { label: 'Aggressive', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5, maxFeelsLikeF: 105 },
+  runner: { label: 'Runner / Summer', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25, maxFeelsLikeF: 85 },
 };
 
 export { TRAVEL_THRESHOLD_PRESETS };
@@ -51,6 +51,7 @@ export interface UsePreferenceHandlersReturn {
   maxPrecipChanceDraft: string;
   maxWindGustDraft: string;
   minFeelsLikeDraft: string;
+  maxFeelsLikeDraft: string;
   // Threshold display values
   windThresholdPrecision: number;
   windThresholdStep: number;
@@ -62,6 +63,9 @@ export interface UsePreferenceHandlersReturn {
   feelsLikeThresholdMin: number;
   feelsLikeThresholdMax: number;
   feelsLikeThresholdInputValue: number;
+  heatCeilingMin: number;
+  heatCeilingMax: number;
+  heatCeilingInputValue: number;
   // Handlers
   updatePreferences: (patch: Partial<UserPreferences>) => void;
   handlePreferenceTimeChange: (field: 'defaultStartTime', value: string) => void;
@@ -78,6 +82,8 @@ export interface UsePreferenceHandlersReturn {
   handleWindThresholdDisplayBlur: () => void;
   handleFeelsLikeThresholdDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFeelsLikeThresholdDisplayBlur: () => void;
+  handleHeatCeilingDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleHeatCeilingDisplayBlur: () => void;
   handleReportLayoutChange: (reportLayout: ReportLayout) => void;
   handleApplyTravelThresholdPreset: (presetKey: TravelThresholdPresetKey) => void;
   applyPreferencesToPlanner: () => void;
@@ -106,6 +112,11 @@ export function usePreferenceHandlers({
       preferences.temperatureUnit === 'c' ? 1 : 0,
     ),
   );
+  const [maxFeelsLikeDraft, setMaxFeelsLikeDraft] = useState(() =>
+    convertTempFToDisplayValue(preferences.maxFeelsLikeF, preferences.temperatureUnit).toFixed(
+      preferences.temperatureUnit === 'c' ? 1 : 0,
+    ),
+  );
   const [travelThresholdEditorOpen, setTravelThresholdEditorOpen] = useState(false);
 
   // Computed threshold display values
@@ -122,6 +133,11 @@ export function usePreferenceHandlers({
   const feelsLikeThresholdMax = Number(convertTempFToDisplayValue(60, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
   const feelsLikeThresholdInputValue = Number(
     convertTempFToDisplayValue(preferences.minFeelsLikeF, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision),
+  );
+  const heatCeilingMin = Number(convertTempFToDisplayValue(70, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
+  const heatCeilingMax = Number(convertTempFToDisplayValue(120, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision));
+  const heatCeilingInputValue = Number(
+    convertTempFToDisplayValue(preferences.maxFeelsLikeF, preferences.temperatureUnit).toFixed(feelsLikeThresholdPrecision),
   );
 
   // Sync effects
@@ -140,6 +156,10 @@ export function usePreferenceHandlers({
   useEffect(() => {
     setMinFeelsLikeDraft(String(feelsLikeThresholdInputValue));
   }, [feelsLikeThresholdInputValue]);
+
+  useEffect(() => {
+    setMaxFeelsLikeDraft(String(heatCeilingInputValue));
+  }, [heatCeilingInputValue]);
 
   const updatePreferences = useCallback((patch: Partial<UserPreferences>) => {
     setPreferences((prev) => {
@@ -317,6 +337,43 @@ export function usePreferenceHandlers({
     );
   }, [minFeelsLikeDraft, preferences.minFeelsLikeF, preferences.temperatureUnit, updatePreferences]);
 
+  const handleHeatCeilingDisplayChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setMaxFeelsLikeDraft(raw);
+    if (!raw.trim()) {
+      return;
+    }
+    const displayValue = Number(raw);
+    if (!Number.isFinite(displayValue)) {
+      return;
+    }
+    const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
+    updatePreferences({ maxFeelsLikeF: Number(Math.max(70, Math.min(120, valueF)).toFixed(2)) });
+  }, [preferences.temperatureUnit, updatePreferences]);
+
+  const handleHeatCeilingDisplayBlur = useCallback(() => {
+    const raw = maxFeelsLikeDraft.trim();
+    if (!raw) {
+      setMaxFeelsLikeDraft(
+        convertTempFToDisplayValue(preferences.maxFeelsLikeF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
+      );
+      return;
+    }
+    const displayValue = Number(raw);
+    if (!Number.isFinite(displayValue)) {
+      setMaxFeelsLikeDraft(
+        convertTempFToDisplayValue(preferences.maxFeelsLikeF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
+      );
+      return;
+    }
+    const valueF = convertDisplayTempToF(displayValue, preferences.temperatureUnit);
+    const committedF = Number(Math.max(70, Math.min(120, valueF)).toFixed(2));
+    updatePreferences({ maxFeelsLikeF: committedF });
+    setMaxFeelsLikeDraft(
+      convertTempFToDisplayValue(committedF, preferences.temperatureUnit).toFixed(preferences.temperatureUnit === 'c' ? 1 : 0),
+    );
+  }, [maxFeelsLikeDraft, preferences.maxFeelsLikeF, preferences.temperatureUnit, updatePreferences]);
+
   const handleApplyTravelThresholdPreset = useCallback((presetKey: TravelThresholdPresetKey) => {
     const preset = TRAVEL_THRESHOLD_PRESETS[presetKey];
     if (!preset) {
@@ -326,6 +383,7 @@ export function usePreferenceHandlers({
       maxWindGustMph: preset.maxWindGustMph,
       maxPrecipChance: preset.maxPrecipChance,
       minFeelsLikeF: preset.minFeelsLikeF,
+      maxFeelsLikeF: preset.maxFeelsLikeF,
     });
     setTravelThresholdEditorOpen(true);
   }, [updatePreferences]);
@@ -345,6 +403,7 @@ export function usePreferenceHandlers({
     maxPrecipChanceDraft,
     maxWindGustDraft,
     minFeelsLikeDraft,
+    maxFeelsLikeDraft,
     windThresholdPrecision,
     windThresholdStep,
     windThresholdMin,
@@ -355,6 +414,9 @@ export function usePreferenceHandlers({
     feelsLikeThresholdMin,
     feelsLikeThresholdMax,
     feelsLikeThresholdInputValue,
+    heatCeilingMin,
+    heatCeilingMax,
+    heatCeilingInputValue,
     updatePreferences,
     handlePreferenceTimeChange,
     handleThemeModeChange,
@@ -370,6 +432,8 @@ export function usePreferenceHandlers({
     handleWindThresholdDisplayBlur,
     handleFeelsLikeThresholdDisplayChange,
     handleFeelsLikeThresholdDisplayBlur,
+    handleHeatCeilingDisplayChange,
+    handleHeatCeilingDisplayBlur,
     handleReportLayoutChange,
     handleApplyTravelThresholdPreset,
     applyPreferencesToPlanner,

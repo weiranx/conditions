@@ -15,7 +15,9 @@
   --bg-glow-b: rgba(188, 149, 93, 0.2);
 
   --accent-green: #3f9e66;
+  --accent-teal: #2a8a7a;
   --accent-yellow: #c58d3b;
+  --accent-orange: #d4742c;
   --accent-red: #c84444;
   --focus-ring: #2f7a57;
   --text-secondary: #596459;
@@ -2622,10 +2624,10 @@ button.collapsible-card-header:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 14px 20px;
   border-radius: var(--radius-card, 16px);
-  margin-bottom: 12px;
-  gap: 16px;
+  margin-bottom: 8px;
+  gap: 12px;
   animation: fade-up 0.3s ease;
 }
 
@@ -2639,7 +2641,7 @@ button.collapsible-card-header:focus-visible {
 }
 
 .briefing-banner-level {
-  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-size: clamp(1.2rem, 3.5vw, 1.6rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -2734,7 +2736,7 @@ button.collapsible-card-header:focus-visible {
 
 .briefing-section {
   border-top: 1px solid var(--line-color, rgba(200, 194, 178, 0.25));
-  padding: 16px 0;
+  padding: 12px 0;
 }
 
 .briefing-section:first-child {
@@ -2745,21 +2747,31 @@ button.collapsible-card-header:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .briefing-section-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--text-main);
 }
 
 .briefing-section-body {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
 }
+
+/* Reduce verbosity inside briefing sections */
+.briefing-section-body .decision-headline { display: none; }
+.briefing-section-body .decision-better-days { display: none; }
+.briefing-section-body .wind-hint-meta { display: none; }
+.briefing-section-body .wind-aspect-block { display: none; }
+.briefing-section-body .score-change-block { display: none; }
+.briefing-section-body .checks-list .check-item-detail { display: none; }
+.briefing-section-body .checks-list .check-item-action { display: none; }
+.briefing-section-body .muted-note { display: none; }
 
 /* ── Dark mode ── */
 
@@ -4089,6 +4101,24 @@ button.collapsible-card-header:focus-visible {
   font-size: 0.87rem;
   font-weight: 500;
   line-height: 1.45;
+}
+
+.lightning-window-banner {
+  margin: 6px 0 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 230, 130, 0.25);
+  border: 1px solid rgba(210, 170, 50, 0.35);
+  color: #6b5900;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+:root[data-theme='dark'] .lightning-window-banner {
+  background: rgba(120, 100, 30, 0.25);
+  border-color: rgba(180, 150, 50, 0.35);
+  color: #e0c860;
 }
 
 .critical-list {
@@ -10274,10 +10304,20 @@ button.collapsible-card-header:focus-visible {
   background: rgba(150, 99, 14, 0.10);
   border-color: rgba(150, 99, 14, 0.25);
 }
+.status-badge.is-guarded-risk {
+  color: #1a7a6e;
+  background: rgba(42, 138, 122, 0.10);
+  border-color: rgba(42, 138, 122, 0.25);
+}
 .status-badge.is-high-risk {
-  color: #b52e2e;
-  background: rgba(181, 46, 46, 0.10);
-  border-color: rgba(181, 46, 46, 0.25);
+  color: #b5612e;
+  background: rgba(212, 116, 44, 0.10);
+  border-color: rgba(212, 116, 44, 0.25);
+}
+.status-badge.is-extreme-risk {
+  color: #8b1a1a;
+  background: rgba(139, 26, 26, 0.10);
+  border-color: rgba(139, 26, 26, 0.25);
 }
 
 :root[data-theme='dark'] .status-badge.is-low-risk {
@@ -10290,10 +10330,20 @@ button.collapsible-card-header:focus-visible {
   background: rgba(224, 184, 94, 0.12);
   border-color: rgba(224, 184, 94, 0.3);
 }
+:root[data-theme='dark'] .status-badge.is-guarded-risk {
+  color: #5ec7b8;
+  background: rgba(94, 199, 184, 0.12);
+  border-color: rgba(94, 199, 184, 0.3);
+}
 :root[data-theme='dark'] .status-badge.is-high-risk {
-  color: #f08080;
-  background: rgba(240, 128, 128, 0.12);
-  border-color: rgba(240, 128, 128, 0.3);
+  color: #e8a060;
+  background: rgba(232, 160, 96, 0.12);
+  border-color: rgba(232, 160, 96, 0.3);
+}
+:root[data-theme='dark'] .status-badge.is-extreme-risk {
+  color: #f06060;
+  background: rgba(240, 96, 96, 0.12);
+  border-color: rgba(240, 96, 96, 0.3);
 }
 
 /* === Avalanche Preview Hero Colors === */

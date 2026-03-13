@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -178,7 +178,7 @@ export interface PlannerViewProps {
   freshnessWarningSummary: string;
 
   // Score card
-  getScoreColor: (score: number) => string;
+  getScoreColor: (score: number, tier?: string) => string;
   forecastLeadHoursDisplay: string | null;
   objectiveName: string;
   displayStartTime: string;
@@ -239,6 +239,7 @@ export interface PlannerViewProps {
   formatTravelWindowSpan: (span: TravelWindowSpan, timeStyle: UserPreferences['timeStyle']) => string;
   windThresholdDisplay: string;
   feelsLikeThresholdDisplay: string;
+  heatCeilingDisplay: string;
   activeTravelThresholdPreset: TravelThresholdPresetKey | null;
   onApplyTravelThresholdPreset: (key: TravelThresholdPresetKey) => void;
   travelThresholdEditorOpen: boolean;
@@ -260,6 +261,12 @@ export interface PlannerViewProps {
   minFeelsLikeDraft: string;
   handleFeelsLikeThresholdDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFeelsLikeThresholdDisplayBlur: () => void;
+  heatCeilingMin: number;
+  heatCeilingMax: number;
+  maxFeelsLikeDraft: string;
+  handleHeatCeilingDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleHeatCeilingDisplayBlur: () => void;
+  formatPresetWindDisplay: (valueMph: number) => string;
   travelWindowSummary: string;
   criticalWindow: CriticalWindowRow[];
   travelWindowExpanded: boolean;
@@ -616,6 +623,7 @@ export function PlannerView(props: PlannerViewProps) {
     formatTravelWindowSpan,
     windThresholdDisplay,
     feelsLikeThresholdDisplay,
+    heatCeilingDisplay,
     activeTravelThresholdPreset,
     onApplyTravelThresholdPreset,
     travelThresholdEditorOpen,
@@ -637,6 +645,12 @@ export function PlannerView(props: PlannerViewProps) {
     minFeelsLikeDraft,
     handleFeelsLikeThresholdDisplayChange,
     handleFeelsLikeThresholdDisplayBlur,
+    heatCeilingMin,
+    heatCeilingMax,
+    maxFeelsLikeDraft,
+    handleHeatCeilingDisplayChange,
+    handleHeatCeilingDisplayBlur,
+    formatPresetWindDisplay,
     travelWindowSummary,
     criticalWindow,
     travelWindowExpanded,
@@ -841,6 +855,17 @@ export function PlannerView(props: PlannerViewProps) {
     // Footer
     formatGeneratedAt,
   } = props;
+
+  // On mobile (<640px), default to cards layout for better UX
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  const effectiveLayout = isMobile ? 'cards' : preferences.reportLayout;
 
   // Derived values used inline
   const criticalCheckTotal = orderedCriticalChecks.length;
@@ -1339,7 +1364,7 @@ export function PlannerView(props: PlannerViewProps) {
             </div>
           )}
 
-          {preferences.reportLayout === 'briefing' ? (
+          {effectiveLayout === 'briefing' ? (
             <BriefingView {...props} />
           ) : (<>
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
@@ -1406,6 +1431,7 @@ export function PlannerView(props: PlannerViewProps) {
                 windThresholdDisplay={windThresholdDisplay}
                 maxPrecipChance={preferences.maxPrecipChance}
                 feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+                heatCeilingDisplay={heatCeilingDisplay}
                 activeTravelThresholdPreset={activeTravelThresholdPreset}
                 travelThresholdPresets={TRAVEL_THRESHOLD_PRESETS}
                 onApplyTravelThresholdPreset={onApplyTravelThresholdPreset}
@@ -1428,6 +1454,13 @@ export function PlannerView(props: PlannerViewProps) {
                 minFeelsLikeDraft={minFeelsLikeDraft}
                 handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
                 handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+                heatCeilingMin={heatCeilingMin}
+                heatCeilingMax={heatCeilingMax}
+                heatCeilingStep={feelsLikeThresholdStep}
+                maxFeelsLikeDraft={maxFeelsLikeDraft}
+                handleHeatCeilingDisplayChange={handleHeatCeilingDisplayChange}
+                handleHeatCeilingDisplayBlur={handleHeatCeilingDisplayBlur}
+                formatPresetWindDisplay={formatPresetWindDisplay}
                 travelWindowSummary={travelWindowSummary}
                 criticalWindow={criticalWindow}
                 travelWindowExpanded={travelWindowExpanded}

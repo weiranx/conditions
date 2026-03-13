@@ -27,10 +27,11 @@ interface TravelWindowPlannerCardProps {
   windThresholdDisplay: string;
   maxPrecipChance: number;
   feelsLikeThresholdDisplay: string;
+  heatCeilingDisplay: string;
   activeTravelThresholdPreset: TravelThresholdPresetKey | null;
   travelThresholdPresets: Record<
     TravelThresholdPresetKey,
-    { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number }
+    { label: string; maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number; maxFeelsLikeF: number }
   >;
   onApplyTravelThresholdPreset: (preset: TravelThresholdPresetKey) => void;
   travelThresholdEditorOpen: boolean;
@@ -52,6 +53,12 @@ interface TravelWindowPlannerCardProps {
   minFeelsLikeDraft: string;
   handleFeelsLikeThresholdDisplayChange: ChangeEventHandler<HTMLInputElement>;
   handleFeelsLikeThresholdDisplayBlur: FocusEventHandler<HTMLInputElement>;
+  heatCeilingMin: number;
+  heatCeilingMax: number;
+  heatCeilingStep: number;
+  maxFeelsLikeDraft: string;
+  handleHeatCeilingDisplayChange: ChangeEventHandler<HTMLInputElement>;
+  handleHeatCeilingDisplayBlur: FocusEventHandler<HTMLInputElement>;
   travelWindowSummary: string;
   criticalWindow: CriticalWindowRow[];
   travelWindowExpanded: boolean;
@@ -59,6 +66,7 @@ interface TravelWindowPlannerCardProps {
   visibleCriticalWindowRows: CriticalWindowRow[];
   formatTempDisplay: (value: number | null | undefined) => string;
   formatWindDisplay: (value: number | null | undefined) => string;
+  formatPresetWindDisplay: (valueMph: number) => string;
 }
 
 export function TravelWindowPlannerCard({
@@ -73,6 +81,7 @@ export function TravelWindowPlannerCard({
   windThresholdDisplay,
   maxPrecipChance,
   feelsLikeThresholdDisplay,
+  heatCeilingDisplay,
   activeTravelThresholdPreset,
   travelThresholdPresets,
   onApplyTravelThresholdPreset,
@@ -95,6 +104,12 @@ export function TravelWindowPlannerCard({
   minFeelsLikeDraft,
   handleFeelsLikeThresholdDisplayChange,
   handleFeelsLikeThresholdDisplayBlur,
+  heatCeilingMin,
+  heatCeilingMax,
+  heatCeilingStep,
+  maxFeelsLikeDraft,
+  handleHeatCeilingDisplayChange,
+  handleHeatCeilingDisplayBlur,
   travelWindowSummary,
   criticalWindow,
   travelWindowExpanded,
@@ -102,6 +117,7 @@ export function TravelWindowPlannerCard({
   visibleCriticalWindowRows,
   formatTempDisplay,
   formatWindDisplay,
+  formatPresetWindDisplay,
 }: TravelWindowPlannerCardProps) {
   const trendToneClass =
     travelWindowInsights.trendDirection === 'improving'
@@ -109,6 +125,16 @@ export function TravelWindowPlannerCard({
       : travelWindowInsights.trendDirection === 'worsening'
         ? 'is-bad'
         : 'is-watch';
+
+  // Lightning risk window projection (#8)
+  const lightningRows = travelWindowRows.filter((r) => r.lightningRisk);
+  const lightningWindow = lightningRows.length > 0
+    ? {
+        start: formatClockForStyle(lightningRows[0].time, timeStyle),
+        end: formatClockForStyle(lightningRows[lightningRows.length - 1].time, timeStyle),
+        hours: lightningRows.length,
+      }
+    : null;
 
   return (
     <>
@@ -118,6 +144,11 @@ export function TravelWindowPlannerCard({
             Peak risk near <strong>{formatClockForStyle(peakCriticalWindow.time, timeStyle)}</strong>: {criticalRiskLevelText(peakCriticalWindow.level)}
             {peakCriticalWindow.reasons.length > 0 ? ` (${localizeUnitText(peakCriticalWindow.reasons.join(', '))})` : ''}.
           </p>
+          {lightningWindow && (
+            <p className="lightning-window-banner">
+              Lightning risk {lightningWindow.start}{lightningWindow.hours > 1 ? ` to ${lightningWindow.end}` : ''} ({lightningWindow.hours}h) — be off exposed terrain before this window.
+            </p>
+          )}
           <div className="travel-overview-grid" role="list" aria-label="Travel window summary">
             <article
               className={`travel-overview-item ${
@@ -161,6 +192,7 @@ export function TravelWindowPlannerCard({
             <span>Gust &le; {windThresholdDisplay}</span>
             <span>Precip &le; {maxPrecipChance}%</span>
             <span>Feels-like &ge; {feelsLikeThresholdDisplay}</span>
+            <span>Heat &le; {heatCeilingDisplay}</span>
           </div>
           <div className="travel-preset-row" role="group" aria-label="Travel threshold presets">
             {(['conservative', 'standard', 'aggressive', 'runner'] as const).map((presetKey) => (
@@ -172,7 +204,7 @@ export function TravelWindowPlannerCard({
                 aria-pressed={activeTravelThresholdPreset === presetKey}
               >
                 <span className="preset-label-main">{travelThresholdPresets[presetKey].label}</span>
-                <span className="preset-label-sub">&le;{travelThresholdPresets[presetKey].maxWindGustMph}mph gust &middot; &le;{travelThresholdPresets[presetKey].maxPrecipChance}% precip</span>
+                <span className="preset-label-sub">&le;{formatPresetWindDisplay(travelThresholdPresets[presetKey].maxWindGustMph)} gust &middot; &le;{travelThresholdPresets[presetKey].maxPrecipChance}% precip</span>
               </button>
             ))}
           </div>
@@ -259,6 +291,30 @@ export function TravelWindowPlannerCard({
                       value={minFeelsLikeDraft}
                       onChange={handleFeelsLikeThresholdDisplayChange}
                       onBlur={handleFeelsLikeThresholdDisplayBlur}
+                    />
+                  </div>
+                </label>
+                <label className="travel-threshold-row">
+                  <span>Max heat ({tempUnitLabel})</span>
+                  <div className="threshold-input-group">
+                    <input
+                      type="range"
+                      className="threshold-range"
+                      min={heatCeilingMin}
+                      max={heatCeilingMax}
+                      step={heatCeilingStep}
+                      value={maxFeelsLikeDraft}
+                      onChange={handleHeatCeilingDisplayChange}
+                      onPointerUp={(e) => handleHeatCeilingDisplayBlur(e as unknown as FocusEvent<HTMLInputElement>)}
+                    />
+                    <input
+                      type="number"
+                      min={heatCeilingMin}
+                      max={heatCeilingMax}
+                      step={heatCeilingStep}
+                      value={maxFeelsLikeDraft}
+                      onChange={handleHeatCeilingDisplayChange}
+                      onBlur={handleHeatCeilingDisplayBlur}
                     />
                   </div>
                 </label>

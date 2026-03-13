@@ -46,8 +46,9 @@ export function getDefaultUserPreferences(): UserPreferences {
     maxWindGustMph: 25,
     maxPrecipChance: 60,
     minFeelsLikeF: 5,
+    maxFeelsLikeF: 95,
     travelWindowHours: 12,
-    reportLayout: 'cards',
+    reportLayout: 'briefing',
   };
 }
 
@@ -81,6 +82,7 @@ export function loadUserPreferences(): UserPreferences {
       maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
       maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
       minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
+      maxFeelsLikeF: normalizeDecimalPreference(parsed.maxFeelsLikeF, defaults.maxFeelsLikeF, 70, 120, 2),
       travelWindowHours: normalizeNumberPreference(
         parsed.travelWindowHours,
         defaults.travelWindowHours,

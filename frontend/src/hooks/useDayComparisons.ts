@@ -180,7 +180,13 @@ export function useDayComparisons({
               const precipRaw = Number(candidateData?.weather?.precipChance);
               const riskSummary = summarizeBetterDayWithoutAvalancheText(candidateDecision);
               const candidateTrend = Array.isArray(candidateData?.weather?.trend) ? candidateData.weather.trend : [];
-              const candidateRows = buildTravelWindowRows(candidateTrend, preferences);
+              const candidateSnowCtx = {
+                snowDepthIn: candidateData.terrainCondition?.signals?.maxSnowDepthIn
+                  ?? candidateData.snowpack?.snotel?.snowDepthIn
+                  ?? candidateData.snowpack?.nohrsc?.snowDepthIn
+                  ?? null,
+              };
+              const candidateRows = buildTravelWindowRows(candidateTrend, preferences, candidateSnowCtx);
               const firstPassIdx = candidateRows.findIndex((r) => r.pass);
               const bestWindowStart = firstPassIdx >= 0 && candidateRows[firstPassIdx].time
                 ? String(candidateRows[firstPassIdx].time).slice(0, 5)

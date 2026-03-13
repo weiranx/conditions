@@ -13,10 +13,15 @@ import {
 } from './core';
 import { computeFeelsLikeF } from './planner-helpers';
 
-export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPreferences): TravelWindowRow[] {
+export interface TravelWindowContext {
+  snowDepthIn?: number | null;
+}
+
+export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: UserPreferences, context?: TravelWindowContext): TravelWindowRow[] {
   const maxGust = preferences.maxWindGustMph;
   const maxPrecip = preferences.maxPrecipChance;
   const minFeelsLike = preferences.minFeelsLikeF;
+  const maxFeelsLike = preferences.maxFeelsLikeF;
 
   return trend.map((point) => {
     const gust = Number.isFinite(Number(point.gust)) ? Number(point.gust) : 0;
@@ -30,6 +35,7 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
     const displayMaxGust = Math.round(convertWindMphToDisplayValue(maxGust, preferences.windSpeedUnit));
     const displayFeelsLike = formatTemperatureForUnit(feelsLike, preferences.temperatureUnit);
     const displayMinFeelsLike = formatTemperatureForUnit(minFeelsLike, preferences.temperatureUnit);
+    const displayMaxFeelsLike = formatTemperatureForUnit(maxFeelsLike, preferences.temperatureUnit);
 
     if (gust > maxGust) {
       failedRules.push(`gust ${displayGust}>${displayMaxGust} ${preferences.windSpeedUnit}`);
@@ -43,10 +49,21 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
       failedRules.push(`feels ${displayFeelsLike}<${displayMinFeelsLike}`);
       failedRuleLabels.push('Feels-like below limit');
     }
+    if (feelsLike > maxFeelsLike) {
+      failedRules.push(`feels ${displayFeelsLike}>${displayMaxFeelsLike}`);
+      failedRuleLabels.push('Heat above limit');
+    }
     const condLower = String(point.condition || '').toLowerCase();
+    const lightningRisk = /thunder|lightning/.test(condLower);
     if (/thunder|lightning|hail|blizzard/.test(condLower)) {
       failedRules.push(`condition: ${point.condition}`);
       failedRuleLabels.push('Severe weather risk');
+    }
+
+    const snowDepth = context?.snowDepthIn;
+    if (Number.isFinite(snowDepth) && (snowDepth as number) >= 12) {
+      failedRules.push(`snow depth ${Math.round(snowDepth as number)}in`);
+      failedRuleLabels.push('Deep snow / postholing risk');
     }
 
     return {
@@ -61,6 +78,7 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
       wind,
       gust,
       precipChance,
+      lightningRisk,
     };
   });
 }
@@ -157,6 +175,9 @@ export function buildTravelWindowInsights(rows: TravelWindowRow[], timeStyle: Ti
         if (normalized.includes('gust') || normalized.includes('wind')) score += 1.1;
         if (normalized.includes('precip')) score += 1.0;
         if (normalized.includes('feels-like') || normalized.includes('cold')) score += 0.8;
+        if (normalized.includes('heat')) score += 1.0;
+        if (normalized.includes('snow') || normalized.includes('posthol')) score += 0.8;
+        if (normalized.includes('lightning') || normalized.includes('severe')) score += 1.5;
       });
       return score;
     });

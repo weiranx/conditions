@@ -136,6 +136,7 @@ export function BriefingView(props: BriefingViewProps) {
     formatTravelWindowSpan,
     windThresholdDisplay,
     feelsLikeThresholdDisplay,
+    heatCeilingDisplay,
     activeTravelThresholdPreset,
     onApplyTravelThresholdPreset,
     travelThresholdEditorOpen,
@@ -157,6 +158,12 @@ export function BriefingView(props: BriefingViewProps) {
     minFeelsLikeDraft,
     handleFeelsLikeThresholdDisplayChange,
     handleFeelsLikeThresholdDisplayBlur,
+    heatCeilingMin,
+    heatCeilingMax,
+    maxFeelsLikeDraft,
+    handleHeatCeilingDisplayChange,
+    handleHeatCeilingDisplayBlur,
+    formatPresetWindDisplay,
     travelWindowSummary,
     criticalWindow,
     travelWindowExpanded,
@@ -531,6 +538,7 @@ export function BriefingView(props: BriefingViewProps) {
             windThresholdDisplay={windThresholdDisplay}
             maxPrecipChance={preferences.maxPrecipChance}
             feelsLikeThresholdDisplay={feelsLikeThresholdDisplay}
+            heatCeilingDisplay={heatCeilingDisplay}
             activeTravelThresholdPreset={activeTravelThresholdPreset}
             travelThresholdPresets={TRAVEL_THRESHOLD_PRESETS}
             onApplyTravelThresholdPreset={onApplyTravelThresholdPreset}
@@ -553,6 +561,13 @@ export function BriefingView(props: BriefingViewProps) {
             minFeelsLikeDraft={minFeelsLikeDraft}
             handleFeelsLikeThresholdDisplayChange={handleFeelsLikeThresholdDisplayChange}
             handleFeelsLikeThresholdDisplayBlur={handleFeelsLikeThresholdDisplayBlur}
+            heatCeilingMin={heatCeilingMin}
+            heatCeilingMax={heatCeilingMax}
+            heatCeilingStep={feelsLikeThresholdStep}
+            maxFeelsLikeDraft={maxFeelsLikeDraft}
+            handleHeatCeilingDisplayChange={handleHeatCeilingDisplayChange}
+            handleHeatCeilingDisplayBlur={handleHeatCeilingDisplayBlur}
+            formatPresetWindDisplay={formatPresetWindDisplay}
             travelWindowSummary={travelWindowSummary}
             criticalWindow={criticalWindow}
             travelWindowExpanded={travelWindowExpanded}
@@ -622,11 +637,6 @@ export function BriefingView(props: BriefingViewProps) {
               nwsTopAlerts={nwsTopAlerts}
               formatPubTime={formatPubTime}
             />
-          </BriefingSection>
-        )}
-        {nwsAlertCount === 0 && (
-          <BriefingSection icon={<AlertTriangle size={14} />} title="Alerts" pill="None" pillClass="go">
-            <p className="muted-note">No active NWS alerts for this area.</p>
           </BriefingSection>
         )}
 

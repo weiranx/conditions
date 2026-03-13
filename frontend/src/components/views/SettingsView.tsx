@@ -28,6 +28,7 @@ export interface SettingsViewProps {
   travelWindowHoursLabel: string;
   windThresholdDisplay: string;
   feelsLikeThresholdDisplay: string;
+  heatCeilingDisplay: string;
   windUnitLabel: string;
   tempUnitLabel: string;
 
@@ -36,6 +37,7 @@ export interface SettingsViewProps {
   maxWindGustDraft: string;
   maxPrecipChanceDraft: string;
   minFeelsLikeDraft: string;
+  maxFeelsLikeDraft: string;
 
   // Threshold input limits
   windThresholdMin: number;
@@ -44,6 +46,8 @@ export interface SettingsViewProps {
   feelsLikeThresholdMin: number;
   feelsLikeThresholdMax: number;
   feelsLikeThresholdStep: number;
+  heatCeilingMin: number;
+  heatCeilingMax: number;
 
   // Preference change handlers
   handlePreferenceTimeChange: (field: 'defaultStartTime', value: string) => void;
@@ -63,6 +67,8 @@ export interface SettingsViewProps {
   handleMaxPrecipChanceDraftBlur: () => void;
   handleFeelsLikeThresholdDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFeelsLikeThresholdDisplayBlur: () => void;
+  handleHeatCeilingDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleHeatCeilingDisplayBlur: () => void;
 
   // Actions
   applyPreferencesToPlanner: () => void;
@@ -79,18 +85,22 @@ export function SettingsView({
   travelWindowHoursLabel,
   windThresholdDisplay,
   feelsLikeThresholdDisplay,
+  heatCeilingDisplay,
   windUnitLabel,
   tempUnitLabel,
   travelWindowHoursDraft,
   maxWindGustDraft,
   maxPrecipChanceDraft,
   minFeelsLikeDraft,
+  maxFeelsLikeDraft,
   windThresholdMin,
   windThresholdMax,
   windThresholdStep,
   feelsLikeThresholdMin,
   feelsLikeThresholdMax,
   feelsLikeThresholdStep,
+  heatCeilingMin,
+  heatCeilingMax,
   handlePreferenceTimeChange,
   handleThemeModeChange,
   handleTemperatureUnitChange,
@@ -106,6 +116,8 @@ export function SettingsView({
   handleMaxPrecipChanceDraftBlur,
   handleFeelsLikeThresholdDisplayChange,
   handleFeelsLikeThresholdDisplayBlur,
+  handleHeatCeilingDisplayChange,
+  handleHeatCeilingDisplayBlur,
   applyPreferencesToPlanner,
   resetPreferences,
   navigateToView,
@@ -274,6 +286,18 @@ export function SettingsView({
                   onBlur={handleFeelsLikeThresholdDisplayBlur}
                 />
               </label>
+              <label className="settings-number-row">
+                <span>Max heat ({tempUnitLabel})</span>
+                <input
+                  type="number"
+                  min={heatCeilingMin}
+                  max={heatCeilingMax}
+                  step={feelsLikeThresholdStep}
+                  value={maxFeelsLikeDraft}
+                  onChange={handleHeatCeilingDisplayChange}
+                  onBlur={handleHeatCeilingDisplayBlur}
+                />
+              </label>
             </div>
           </article>
 
@@ -289,7 +313,7 @@ export function SettingsView({
               </button>
             </div>
             <div className="settings-note">
-              Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Window {travelWindowHoursLabel} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay}
+              Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Window {travelWindowHoursLabel} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay} • Heat {heatCeilingDisplay}
             </div>
           </article>
         </div>

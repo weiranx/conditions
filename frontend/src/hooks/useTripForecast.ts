@@ -124,7 +124,13 @@ export function useTripForecast({
             const dayData = payload as SafetyData;
             const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences);
             const trendWindow = buildTrendWindowFromStart(dayData.weather?.trend || [], safeStartTime, safeTravelWindowHours);
-            const travelRows = buildTravelWindowRows(trendWindow, preferences);
+            const tripSnowContext = {
+              snowDepthIn: dayData.terrainCondition?.signals?.maxSnowDepthIn
+                ?? dayData.snowpack?.snotel?.snowDepthIn
+                ?? dayData.snowpack?.nohrsc?.snowDepthIn
+                ?? null,
+            };
+            const travelRows = buildTravelWindowRows(trendWindow, preferences, tripSnowContext);
             const travelInsights = buildTravelWindowInsights(travelRows, preferences.timeStyle);
 
             const avalancheRelevant = dayData.avalanche?.relevant !== false;
