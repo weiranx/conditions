@@ -2754,7 +2754,7 @@ button.collapsible-card-header:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.82rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-main);
 }
@@ -2772,6 +2772,7 @@ button.collapsible-card-header:focus-visible {
 .briefing-section-body .checks-list .check-item-detail { display: none; }
 .briefing-section-body .checks-list .check-item-action { display: none; }
 .briefing-section-body .muted-note { display: none; }
+.briefing-section-body .weather-metrics { display: none; }
 
 /* ── Dark mode ── */
 
