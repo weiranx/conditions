@@ -23,9 +23,9 @@
   --font-main: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
   --font-data: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
 
-  --shadow-soft: 0 10px 24px rgba(25, 33, 28, 0.08);
-  --shadow-deep: 0 18px 40px rgba(16, 35, 26, 0.2);
-  --radius-card: 20px;
+  --shadow-soft: 0 4px 12px rgba(25, 33, 28, 0.06);
+  --shadow-deep: 0 12px 32px rgba(16, 35, 26, 0.14);
+  --radius-card: 16px;
   --radius-pill: 999px;
 }
 
@@ -61,7 +61,7 @@ body {
     linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-main) 60%);
   color: var(--text-dark);
   font-family: var(--font-main);
-  line-height: 1.45;
+  line-height: 1.4;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -100,9 +100,9 @@ input {
 }
 
 .app-container {
-  max-width: 1280px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: clamp(14px, 3vw, 32px) clamp(14px, 2.5vw, 32px) 42px;
+  padding: clamp(12px, 2.5vw, 24px) clamp(12px, 2vw, 24px) 32px;
   overflow-x: hidden;
 }
 
@@ -132,18 +132,15 @@ input {
 .home-hero {
   position: relative;
   z-index: 10;
-  margin-top: 14px;
-  padding: clamp(28px, 5vw, 48px) clamp(22px, 4vw, 38px);
-  border-radius: 24px;
-  border: 1px solid rgba(130, 167, 145, 0.3);
+  margin-top: 12px;
+  padding: clamp(22px, 4vw, 36px) clamp(18px, 3vw, 30px);
+  border-radius: 20px;
+  border: 1px solid rgba(130, 167, 145, 0.25);
   background: linear-gradient(145deg, #0c1f17 0%, #1a3a2b 35%, #2a5240 65%, #1e4433 100%);
-  box-shadow:
-    var(--shadow-deep),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-deep);
   color: #e8f6ef;
   overflow: visible;
-  animation: fade-up 0.5s ease both;
+  animation: fade-up 0.4s ease both;
   text-align: center;
 }
 
@@ -233,31 +230,31 @@ input {
 }
 
 .home-grid {
-  margin-top: 20px;
+  margin-top: 16px;
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .home-card {
-  padding: 20px 18px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.88);
+  padding: 16px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(215, 210, 194, 0.28);
+  background: rgba(255, 253, 248, 0.9);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 8px rgba(0,0,0,0.04);
   color: #32443a;
-  transition: transform 0.22s cubic-bezier(0.22, 0.68, 0, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  transition: transform 0.2s cubic-bezier(0.22, 0.68, 0, 1), box-shadow 0.2s ease, border-color 0.2s ease;
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .home-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.04);
-  border-color: rgba(180, 200, 190, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  border-color: rgba(180, 200, 190, 0.45);
 }
 
 .home-card-head {
@@ -307,15 +304,15 @@ input {
 }
 
 .settings-shell {
-  margin-top: 14px;
-  padding: clamp(22px, 3vw, 32px);
-  border-radius: 22px;
-  border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 253, 248, 0.88);
+  margin-top: 12px;
+  padding: clamp(16px, 2.5vw, 24px);
+  border-radius: 18px;
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(255, 253, 248, 0.9);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02), 0 8px 28px rgba(0,0,0,0.06);
-  animation: fade-up 0.5s ease both;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 16px rgba(0,0,0,0.04);
+  animation: fade-up 0.4s ease both;
 }
 
 .settings-head {
@@ -562,26 +559,26 @@ input {
 }
 
 .settings-card {
-  padding: 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 253, 248, 0.88);
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(255, 253, 248, 0.9);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02), 0 4px 20px rgba(0,0,0,0.05);
-  transition: transform 0.22s cubic-bezier(0.22, 0.68, 0, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 2px 10px rgba(0,0,0,0.04);
+  transition: transform 0.2s cubic-bezier(0.22, 0.68, 0, 1), box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .settings-card:hover {
-  border-color: rgba(200, 195, 180, 0.45);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0,0,0,0.08);
+  border-color: rgba(200, 195, 180, 0.38);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0,0,0,0.06);
 }
 
 .settings-card h3 {
   margin: 0 0 4px;
-  font-size: 0.96rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.92rem;
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 
 .settings-card p {
@@ -934,46 +931,46 @@ input {
 .secondary-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 38px;
+  gap: 6px;
+  min-height: 34px;
   border-radius: 999px;
   border: 1px solid transparent;
   font-family: var(--font-main);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .primary-btn {
-  padding: 10px 18px;
+  padding: 8px 16px;
   background: linear-gradient(180deg, #3da66a 0%, #358f5c 100%);
   border: 1px solid rgba(45, 120, 72, 0.3);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(53, 143, 92, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 1px 4px rgba(53, 143, 92, 0.2);
 }
 
 .primary-btn:hover {
   transform: translateY(-1px);
   background: linear-gradient(180deg, #45b074 0%, #3a9a64 100%);
-  box-shadow: 0 8px 24px rgba(53, 143, 92, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(53, 143, 92, 0.25);
 }
 
 .secondary-btn {
-  padding: 9px 14px;
-  background: rgba(255, 253, 248, 0.78);
+  padding: 7px 12px;
+  background: rgba(255, 253, 248, 0.82);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   color: #2f4236;
-  border-color: rgba(215, 210, 194, 0.35);
-  font-size: 0.82rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-color: rgba(215, 210, 194, 0.3);
+  font-size: 0.8rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .secondary-btn:hover {
   transform: translateY(-1px);
   border-color: #bcc6b6;
   background: rgba(255, 253, 248, 0.92);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .settings-btn {
@@ -1026,18 +1023,15 @@ input {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 18px;
+  gap: 12px;
   justify-content: space-between;
-  padding: 22px clamp(16px, 2.2vw, 28px);
+  padding: 14px clamp(14px, 2vw, 20px);
   border-radius: var(--radius-card);
-  border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(255, 253, 248, 0.88);
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(255, 253, 248, 0.92);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.03),
-    0 4px 24px rgba(0,0,0,0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   overflow: visible;
   z-index: 40;
   animation: fade-up 0.5s ease both;
@@ -1052,16 +1046,13 @@ input {
 }
 
 .brand-mark {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border-radius: 13px;
-  border: 1px solid rgba(180, 200, 190, 0.45);
-  background: linear-gradient(145deg, rgba(45, 80, 60, 0.14) 0%, rgba(45, 80, 60, 0.04) 100%);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255,255,255,0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(180, 200, 190, 0.4);
+  background: linear-gradient(145deg, rgba(45, 80, 60, 0.1) 0%, rgba(45, 80, 60, 0.03) 100%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   display: grid;
   place-items: center;
   color: var(--text-dark);
@@ -1086,18 +1077,18 @@ input {
 }
 
 .brand-mark-icon {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: block;
-  border-radius: 7px;
+  border-radius: 5px;
 }
 
 .brand-copy h1 {
   margin: 0;
   color: var(--text-dark);
-  font-size: clamp(1.2rem, 2vw, 1.5rem);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: clamp(1.1rem, 1.8vw, 1.35rem);
+  text-transform: none;
+  letter-spacing: 0.02em;
   font-weight: 700;
 }
 
@@ -1184,19 +1175,19 @@ input {
 
 
 .map-shell {
-  margin-top: 18px;
+  margin-top: 12px;
   position: relative;
   z-index: 1;
-  border-radius: 22px;
-  border: 1px solid rgba(148, 154, 140, 0.26);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 154, 140, 0.22);
   overflow: hidden;
   box-shadow: var(--shadow-soft);
-  animation: fade-up 0.35s ease both;
+  animation: fade-up 0.3s ease both;
 }
 
 .map-section {
   position: relative;
-  height: min(54vh, 500px);
+  height: min(46vh, 420px);
   min-height: 280px;
   background: #d4dacd;
 }
@@ -1399,9 +1390,9 @@ input {
 
 .map-actions {
   display: grid;
-  gap: 10px;
-  padding: 13px 14px;
-  border-top: 1px solid rgba(146, 154, 130, 0.22);
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(146, 154, 130, 0.18);
   background: linear-gradient(180deg, #f8f5ec 0%, #f4eee3 100%);
 }
 
@@ -1743,16 +1734,16 @@ input {
 
 .mission-brief {
   position: static;
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.82);
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(255, 253, 248, 0.8);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mission-brief-head {
@@ -1807,10 +1798,10 @@ input {
   border-radius: 999px;
   min-height: 28px;
   padding: 5px 10px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
   cursor: pointer;
 }
 
@@ -1826,10 +1817,10 @@ input {
 
 .mission-brief-label {
   color: #45564d;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 
 .mission-brief-chip-row {
@@ -1890,12 +1881,12 @@ input {
   background: #f6f1e5;
   color: #32443a;
   border-radius: 999px;
-  min-height: 32px;
-  padding: 6px 12px;
+  min-height: 30px;
+  padding: 5px 11px;
   font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
   cursor: pointer;
   transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1937,18 +1928,18 @@ input {
 }
 
 .data-grid {
-  margin-top: 18px;
+  margin-top: 14px;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 12px;
   align-items: start;
-  padding: 16px;
-  border-radius: 22px;
-  border: 1px solid rgba(215, 210, 194, 0.35);
-  background: rgba(255, 253, 248, 0.82);
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(255, 253, 248, 0.8);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
   overflow: hidden;
 }
 
@@ -1965,7 +1956,7 @@ input {
 
 .report-columns {
   column-count: 1;
-  column-gap: 18px;
+  column-gap: 12px;
   column-fill: balance;
 }
 
@@ -1977,7 +1968,7 @@ input {
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
   page-break-inside: avoid;
-  margin: 0 0 18px;
+  margin: 0 0 12px;
   overflow: hidden;
 }
 
@@ -1990,16 +1981,15 @@ input {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 22px 24px;
-  border-radius: 22px;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 16px;
   border: 2px solid;
   background: rgba(255, 253, 248, 0.97);
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.03),
-    0 8px 32px rgba(0, 0, 0, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+    0 1px 3px rgba(0, 0, 0, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   animation: fade-up 0.3s ease both;
   contain: layout style;
 }
@@ -2020,10 +2010,10 @@ input {
 }
 
 .score-value {
-  font-size: clamp(2.4rem, 6vw, 3.4rem);
+  font-size: clamp(2rem, 5vw, 2.8rem);
   line-height: 1;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   font-family: var(--font-data);
 }
 
@@ -2049,19 +2039,16 @@ input {
 .hazard-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: 5px;
+  padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.7);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(246, 241, 230, 0.6);
   color: #4a524b;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.76rem;
+  text-transform: none;
+  letter-spacing: 0.01em;
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .objective-line {
@@ -2368,30 +2355,29 @@ input {
 .card,
 .ai-box {
   background: rgba(255, 253, 248, 0.94);
-  border: 1px solid rgba(215, 210, 194, 0.3);
+  border: 1px solid rgba(215, 210, 194, 0.22);
   border-radius: var(--radius-card);
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02), 0 8px 24px rgba(0,0,0,0.06);
-  animation: fade-up 0.35s ease both;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0,0,0,0.04);
+  animation: fade-up 0.3s ease both;
   contain: layout style;
-  transition: box-shadow 0.22s ease, border-color 0.22s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover,
 .ai-box:hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03), 0 12px 32px rgba(0, 0, 0, 0.09);
-  border-color: rgba(200, 195, 180, 0.45);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.07);
+  border-color: rgba(200, 195, 180, 0.38);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  padding-bottom: 14px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgba(200, 194, 178, 0.5) 0%, rgba(200, 194, 178, 0.15) 100%) 1;
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(200, 194, 178, 0.25);
 }
 
 /* ── Collapsible Card ────────────────────────────────────── */
@@ -2400,8 +2386,8 @@ button.collapsible-card-header {
   appearance: none;
   background: none;
   border: none;
-  padding: 0 0 14px;
-  margin: 0 0 16px;
+  padding: 0 0 10px;
+  margin: 0 0 12px;
   width: 100%;
   cursor: pointer;
   text-align: left;
@@ -2410,9 +2396,8 @@ button.collapsible-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  border-bottom: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgba(200, 194, 178, 0.5) 0%, rgba(200, 194, 178, 0.15) 100%) 1;
+  gap: 10px;
+  border-bottom: 1px solid rgba(200, 194, 178, 0.25);
 }
 
 button.collapsible-card-header:focus-visible {
@@ -2447,11 +2432,11 @@ button.collapsible-card-header:focus-visible {
 }
 
 :root[data-theme='dark'] button.collapsible-card-header {
-  border-image: linear-gradient(90deg, rgba(43, 57, 70, 0.5) 0%, rgba(43, 57, 70, 0.15) 100%) 1;
+  border-bottom-color: rgba(43, 57, 70, 0.35);
 }
 
 :root[data-theme='dark'] .card-header {
-  border-image: linear-gradient(90deg, rgba(43, 57, 70, 0.5) 0%, rgba(43, 57, 70, 0.15) 100%) 1;
+  border-bottom-color: rgba(43, 57, 70, 0.35);
 }
 
 /* ── Card Modal Overlay ──────────────────────────────────── */
@@ -2736,11 +2721,11 @@ button.collapsible-card-header:focus-visible {
 .card-title {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-weight: 700;
+  gap: 7px;
+  font-size: 0.88rem;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 600;
 }
 
 .help-hint {
@@ -2878,11 +2863,11 @@ button.collapsible-card-header:focus-visible {
 .decision-action-label {
   display: inline-block;
   margin-bottom: 4px;
-  font-size: 0.69rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  font-size: 0.72rem;
+  text-transform: none;
+  letter-spacing: 0.02em;
   color: #56665a;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .decision-action p {
@@ -2940,10 +2925,10 @@ button.collapsible-card-header:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #546258;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 
 .decision-departure-brief {
@@ -3102,10 +3087,10 @@ button.collapsible-card-header:focus-visible {
 }
 
 .gear-item {
-  padding: 10px 11px;
-  border-radius: 12px;
-  border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.68);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(246, 241, 230, 0.6);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -5297,11 +5282,11 @@ button.collapsible-card-header:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(215, 210, 194, 0.3);
-  background: rgba(246, 241, 230, 0.68);
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(215, 210, 194, 0.25);
+  background: rgba(246, 241, 230, 0.6);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   color: #3d4b44;
@@ -8744,7 +8729,7 @@ button.collapsible-card-header:focus-visible {
 @media (min-width: 980px) {
   .report-columns {
     column-count: 2;
-    column-gap: 18px;
+    column-gap: 12px;
   }
 
   .ai-box {
@@ -8766,7 +8751,7 @@ button.collapsible-card-header:focus-visible {
 
 @media (min-width: 1280px) {
   .data-grid {
-    gap: 18px;
+    gap: 14px;
   }
 
   .ai-box {
@@ -8799,12 +8784,12 @@ button.collapsible-card-header:focus-visible {
 
 @media (max-width: 980px) {
   .app-container {
-    padding: 12px 10px calc(28px + env(safe-area-inset-bottom));
+    padding: 10px 8px calc(24px + env(safe-area-inset-bottom));
   }
 
   .header-section {
-    gap: 12px;
-    padding: 16px;
+    gap: 10px;
+    padding: 12px;
   }
 
   .brand {
@@ -8975,19 +8960,19 @@ button.collapsible-card-header:focus-visible {
   }
 
   .data-grid {
-    margin-top: 14px;
-    padding: 12px;
-    gap: 12px;
-    border-radius: 16px;
-  }
-
-  .mission-brief {
+    margin-top: 10px;
+    padding: 8px;
+    gap: 10px;
     border-radius: 14px;
   }
 
+  .mission-brief {
+    border-radius: 12px;
+  }
+
   .score-card {
-    padding: 14px;
-    gap: 12px;
+    padding: 12px;
+    gap: 10px;
   }
 
   .score-meta {
@@ -9006,13 +8991,13 @@ button.collapsible-card-header:focus-visible {
 
   .card,
   .ai-box {
-    padding: 14px;
-    border-radius: 16px;
+    padding: 12px;
+    border-radius: 14px;
   }
 
   .card-header {
-    padding-bottom: 10px;
-    margin-bottom: 12px;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
   }
 
@@ -9450,12 +9435,12 @@ button.collapsible-card-header:focus-visible {
   }
 
   .brand-mark-icon {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
   }
 
   .brand-copy h1 {
-    letter-spacing: 0.05em;
+    letter-spacing: 0.01em;
   }
 
   .header-nav > .secondary-btn {
@@ -9497,7 +9482,7 @@ button.collapsible-card-header:focus-visible {
   }
 
   .score-value {
-    font-size: clamp(1.8rem, 13vw, 2.5rem);
+    font-size: clamp(1.6rem, 11vw, 2.2rem);
   }
 
   .condition-text {
