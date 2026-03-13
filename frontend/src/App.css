@@ -2767,7 +2767,7 @@ button.collapsible-card-header:focus-visible {
 .briefing-section-body .decision-headline { display: none; }
 .briefing-section-body .decision-better-days { display: none; }
 
-/* Weather: hide metrics grid, hour picker, target elevation, elevation forecast, period line, pressure chip, external links */
+/* Weather: keep only temp/condition hero row + trend chart */
 .briefing-section-body .weather-metrics { display: none; }
 .briefing-section-body .weather-hour-pill-strip { display: none; }
 .briefing-section-body .elevation-forecast { display: none; }
@@ -2776,31 +2776,42 @@ button.collapsible-card-header:focus-visible {
 .briefing-section-body .weather-pressure-chip-row { display: none; }
 .briefing-section-body .weather-preview-note { display: none; }
 .briefing-section-body .weather-external-link { display: none; }
+.briefing-section-body .weather-temp-range { display: none; }
 
-/* Travel window: hide threshold editor, presets, hourly expand, threshold actions */
+/* Travel window: keep only overview grid + timeline strip */
 .briefing-section-body .travel-threshold-editor { display: none; }
 .briefing-section-body .travel-preset-row { display: none; }
 .briefing-section-body .travel-threshold-actions { display: none; }
 .briefing-section-body .travel-window-actions { display: none; }
 .briefing-section-body .critical-list { display: none; }
+.briefing-section-body .travel-thresholds { display: none; }
+.briefing-section-body .critical-summary { display: none; }
+.briefing-section-body .lightning-window-banner { display: none; }
 
-/* Critical checks: hide per-item detail/action text */
+/* Critical checks: compact — hide detail text + attention block */
 .briefing-section-body .checks-list .check-item-detail { display: none; }
 .briefing-section-body .checks-list .check-item-action { display: none; }
+.briefing-section-body .checks-attention { display: none; }
 
 /* Score: hide day-over-day change block */
 .briefing-section-body .score-change-block { display: none; }
 
-/* Wind loading: hide meta grid + aspect blocks */
+/* Wind loading: keep only rose + summary line */
 .briefing-section-body .wind-hint-meta { display: none; }
 .briefing-section-body .wind-aspect-block { display: none; }
+.briefing-section-body .wind-action-line { display: none; }
+.briefing-section-body .wind-coverage-note { display: none; }
+.briefing-section-body .wind-aspect-overlap-alert { display: none; }
+.briefing-section-body .signal-list.compact { display: none; }
 
-/* Precipitation: hide meta grids, expected block forecast times */
+/* Precipitation: hide expected block entirely, keep only past rain/snow grid */
 .briefing-section-body .precip-meta-grid { display: none; }
-.briefing-section-body .precip-expected-block .precip-meta-grid { display: none; }
+.briefing-section-body .precip-expected-block { display: none; }
+.briefing-section-body .precip-insight-line.expected { display: none; }
 
-/* Snowpack: hide details accordion, core grid help hints, source links */
+/* Snowpack: keep only insight grid, hide core grid + details */
 .briefing-section-body .snowpack-details { display: none; }
+.briefing-section-body .snowpack-core-grid { display: none; }
 
 /* Hide all muted notes, source attribution, external links globally in briefing */
 .briefing-section-body .muted-note { display: none; }
@@ -2814,10 +2825,7 @@ button.collapsible-card-header:focus-visible {
 
 /* Tighten spacing for sub-grids inside briefing */
 .briefing-section-body .precip-split-grid { gap: 6px; }
-.briefing-section-body .snowpack-core-grid { gap: 6px; }
 .briefing-section-body .plan-grid { gap: 6px; }
-.briefing-section-body .signal-list { margin: 4px 0; padding-left: 16px; }
-.briefing-section-body .signal-list li { margin-bottom: 2px; }
 .briefing-section-body .source-freshness-list { gap: 4px; }
 
 /* ── Dark mode ── */

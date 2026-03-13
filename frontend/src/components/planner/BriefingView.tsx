@@ -375,7 +375,7 @@ export function BriefingView(props: BriefingViewProps) {
           <div className="briefing-banner-headline">{decision.headline}</div>
         </div>
         <div className="briefing-banner-score">
-          <ScoreGauge score={score} scoreColor={getScoreColor(score)} size={64} />
+          <ScoreGauge score={score} scoreColor={getScoreColor(score)} size={80} />
           <span className="briefing-banner-score-label">Safety {score}</span>
         </div>
       </div>
