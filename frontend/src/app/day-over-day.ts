@@ -16,7 +16,7 @@ export function buildDayOverDayChanges(current: SafetyData, previous: SafetyData
   const currentDanger = Number(current?.avalanche?.dangerLevel);
   const previousDanger = Number(previous?.avalanche?.dangerLevel);
   if (Number.isFinite(currentDanger) && Number.isFinite(previousDanger) && currentDanger !== previousDanger) {
-    changes.push(`Avalanche danger changed ${formatSignedDelta(currentDanger - previousDanger)} level(s).`);
+    changes.push(`Avalanche danger changed ${formatSignedDelta(currentDanger - previousDanger)} step(s).`);
   }
 
   const currentGust = Number(current?.weather?.windGust);

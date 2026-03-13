@@ -134,7 +134,7 @@ export function useTripForecast({
               ? 'Not primary'
               : avalancheUnknown
                 ? 'Coverage limited'
-                : `L${normalizeDangerLevel(dayData.avalanche.dangerLevel)} ${dangerLabel}`;
+                : dangerLabel;
 
             const scoreRaw = Number(dayData?.safety?.score);
             const tempRaw = Number(dayData?.weather?.temp);

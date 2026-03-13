@@ -398,8 +398,7 @@ export function BriefingView(props: BriefingViewProps) {
         {avalancheRelevant && overallAvalancheLevel != null && (
           <div className="briefing-metric">
             <span className="briefing-metric-label">Avalanche</span>
-            <span className={`briefing-metric-value ${getDangerLevelClass(overallAvalancheLevel)}`}>L{overallAvalancheLevel}</span>
-            <span className="briefing-metric-sub">{getDangerText(overallAvalancheLevel)}</span>
+            <span className={`briefing-metric-value ${getDangerLevelClass(overallAvalancheLevel)}`}>{getDangerText(overallAvalancheLevel)}</span>
           </div>
         )}
         {nwsAlertCount > 0 && (
@@ -568,7 +567,7 @@ export function BriefingView(props: BriefingViewProps) {
           <BriefingSection
             icon={<Zap size={14} />}
             title="Avalanche"
-            pill={avalancheUnknown ? 'Unknown' : overallAvalancheLevel != null ? `L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel)}` : 'Unknown'}
+            pill={avalancheUnknown ? 'Unknown' : overallAvalancheLevel != null ? getDangerText(overallAvalancheLevel) : 'Unknown'}
             pillClass={avalancheUnknown ? 'watch' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}
           >
             <AvalancheForecastCard

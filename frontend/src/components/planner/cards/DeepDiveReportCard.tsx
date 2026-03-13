@@ -371,9 +371,9 @@ export function DeepDiveReportCard({
                 <span className="raw-value">{avalancheExpiresTime ? formatPubTime(avalancheExpiresTime) : 'N/A'}</span>
               </li>
               <li>
-                <span className="raw-key">Danger Level</span>
+                <span className="raw-key">Danger</span>
                 <span className="raw-value">
-                  {avalancheUnknown ? 'Unknown (No Coverage)' : `L${normalizeDangerLevel(avalancheDangerLevel ?? undefined)}`}
+                  {avalancheUnknown ? 'Unknown (No Coverage)' : ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(avalancheDangerLevel ?? undefined)] || 'Unknown'}
                 </span>
               </li>
               <li>

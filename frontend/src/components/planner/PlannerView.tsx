@@ -1144,9 +1144,9 @@ export function PlannerView(props: PlannerViewProps) {
       {hasObjective && safetyData && decision && (
         <div className="data-grid" role="main" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
-          <div className="score-card" role="region" aria-label={`Safety score: ${safetyData.safety.score}%, ${safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}`} style={{ borderColor: getScoreColor(safetyData.safety.score), order: reportCardOrder.scoreCard }}>
+          <div className="score-card" role="region" aria-label={`Safety score: ${safetyData.safety.score}%, ${safetyData.safety.tier || 'Elevated'} Risk`} style={{ borderColor: getScoreColor(safetyData.safety.score, safetyData.safety.tier), order: reportCardOrder.scoreCard }}>
             <div className="score-left">
-              <ScoreGauge score={safetyData.safety.score} scoreColor={getScoreColor(safetyData.safety.score)} />
+              <ScoreGauge score={safetyData.safety.score} scoreColor={getScoreColor(safetyData.safety.score, safetyData.safety.tier)} />
               {Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (
                 <div className="score-top-factors">
                   {safetyData.safety.factors
@@ -1163,8 +1163,8 @@ export function PlannerView(props: PlannerViewProps) {
               )}
             </div>
             <div className="score-meta">
-              <span className={`status-badge ${safetyData.safety.score >= 80 ? 'is-low-risk' : safetyData.safety.score >= 50 ? 'is-elevated-risk' : 'is-high-risk'}`}>
-                {safetyData.safety.score >= 80 ? 'Low Risk' : safetyData.safety.score >= 50 ? 'Elevated Risk' : 'High Risk'}
+              <span className={`status-badge ${safetyData.safety.tierClass || 'is-elevated-risk'}`}>
+                {safetyData.safety.tier ? `${safetyData.safety.tier} Risk` : 'Elevated Risk'}
               </span>
               <div className="hazard-badge">
                 <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
@@ -1968,7 +1968,7 @@ export function PlannerView(props: PlannerViewProps) {
           {avalancheRelevant && (() => {
             const avyHeaderMeta = (
               <span className={`decision-pill ${avalancheUnknown ? 'watch' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
-                {avalancheUnknown ? 'Unknown' : `L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
+                {avalancheUnknown ? 'Unknown' : getDangerText(overallAvalancheLevel ?? 0)}
               </span>
             );
             return (
@@ -1980,7 +1980,7 @@ export function PlannerView(props: PlannerViewProps) {
               className="avy-card"
               title={<span className="card-title"><Zap size={14} /> Avalanche</span>}
               headerMeta={avyHeaderMeta}
-              summary={avalancheRelevant ? (overallAvalancheLevel != null ? `L${overallAvalancheLevel}: ${getDangerText(overallAvalancheLevel)}` : 'Unknown danger level') : 'Not applicable'}
+              summary={avalancheRelevant ? (overallAvalancheLevel != null ? getDangerText(overallAvalancheLevel) : 'Unknown') : 'Not applicable'}
               preview={<>
                 <div className={`card-preview-hero ${avalancheRelevant && overallAvalancheLevel != null ? (overallAvalancheLevel >= 4 ? 'avy-nogo' : overallAvalancheLevel >= 3 ? 'avy-caution' : 'avy-go') : ''}`}>{avalancheRelevant ? (overallAvalancheLevel != null ? `${getDangerGlyph(overallAvalancheLevel)} ${getDangerText(overallAvalancheLevel)}` : 'Unknown') : 'N/A'}</div>
                 <div className="card-preview-caption">{safetyData.avalanche.zone || 'Unknown zone'}</div>

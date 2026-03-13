@@ -93,7 +93,7 @@ export function AvalancheForecastCard({
             <div className="danger-summary-header">
               <span className="section-label">{avalancheUnknown ? 'Avalanche Coverage Status' : 'Danger Rating By Elevation'}</span>
               <span className={`overall-danger-chip ${avalancheUnknown ? 'danger-level-unknown' : getDangerLevelClass(overallAvalancheLevel ?? undefined)}`}>
-                {avalancheUnknown ? 'Overall: Unknown' : `Overall: L${overallAvalancheLevel} ${getDangerText(overallAvalancheLevel ?? 0)}`}
+                {avalancheUnknown ? 'Overall: Unknown' : `Overall: ${getDangerText(overallAvalancheLevel ?? 0)}`}
               </span>
             </div>
             {!avalancheUnknown && Number.isFinite(objectiveElevationFt) && objectiveElevationFt != null && (

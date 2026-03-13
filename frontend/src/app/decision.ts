@@ -319,7 +319,7 @@ export function evaluateBackcountryDecision(
         ? 'Not required by current seasonal and snowpack profile.'
         : avalancheUnknown
           ? 'Coverage unavailable for this objective/time.'
-          : `Current danger level ${normalizeDangerLevel(danger)}.`,
+          : `Current danger: ${['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(danger)] || 'Unknown'}.`,
       action:
         avalancheGateRequired && avalancheUnknown
           ? 'Use conservative, low-consequence terrain until a current bulletin is available.'

@@ -605,14 +605,16 @@ function App() {
   const trimmedSearchQuery = liveSearchQuery.trim();
   const objectiveIsSaved = hasObjective && searchHook.objectiveIsSaved(position.lat, position.lng);
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) {
-      return 'var(--accent-green)';
+  const getScoreColor = (score: number, tier?: string) => {
+    const effectiveTier = tier || (score >= 85 ? 'Low' : score >= 70 ? 'Guarded' : score >= 55 ? 'Elevated' : score >= 40 ? 'High' : 'Extreme');
+    switch (effectiveTier) {
+      case 'Low': return 'var(--accent-green)';
+      case 'Guarded': return 'var(--accent-teal)';
+      case 'Elevated': return 'var(--accent-yellow)';
+      case 'High': return 'var(--accent-orange)';
+      case 'Extreme': return 'var(--accent-red)';
+      default: return 'var(--accent-yellow)';
     }
-    if (score >= 50) {
-      return 'var(--accent-yellow)';
-    }
-    return 'var(--accent-red)';
   };
 
   const getDangerText = (lvl: number) => {
@@ -838,7 +840,13 @@ function App() {
         };
       })
     : [];
-  const travelWindowRows = safetyData ? buildTravelWindowRows(trendWindow, preferences) : [];
+  const travelWindowContext = safetyData ? {
+    snowDepthIn: safetyData.terrainCondition?.signals?.maxSnowDepthIn
+      ?? safetyData.snowpack?.snotel?.snowDepthIn
+      ?? safetyData.snowpack?.nohrsc?.snowDepthIn
+      ?? null,
+  } : undefined;
+  const travelWindowRows = safetyData ? buildTravelWindowRows(trendWindow, preferences, travelWindowContext) : [];
   const travelWindowInsights = buildTravelWindowInsights(travelWindowRows, preferences.timeStyle);
   const travelWindowSummary = travelWindowInsights.summary;
   const worstTravelWindowIndex = travelWindowRows.length
@@ -847,16 +855,18 @@ function App() {
         const gustOver = Math.max(0, row.gust - preferences.maxWindGustMph);
         const precipOver = Math.max(0, row.precipChance - preferences.maxPrecipChance);
         const coldOver = Math.max(0, preferences.minFeelsLikeF - row.feelsLike);
+        const heatOver = Math.max(0, row.feelsLike - preferences.maxFeelsLikeF);
         const failCount = row.failedRuleLabels.length;
-        const rowSeverity = failCount * 100 + gustOver * 2 + precipOver + coldOver * 1.5 + criticalScore;
+        const rowSeverity = failCount * 100 + gustOver * 2 + precipOver + coldOver * 1.5 + heatOver * 1.5 + criticalScore;
 
         const currentWorst = travelWindowRows[worstIdx];
         const currentCriticalScore = criticalWindow[worstIdx]?.score || 0;
         const currentGustOver = Math.max(0, currentWorst.gust - preferences.maxWindGustMph);
         const currentPrecipOver = Math.max(0, currentWorst.precipChance - preferences.maxPrecipChance);
         const currentColdOver = Math.max(0, preferences.minFeelsLikeF - currentWorst.feelsLike);
+        const currentHeatOver = Math.max(0, currentWorst.feelsLike - preferences.maxFeelsLikeF);
         const currentFailCount = currentWorst.failedRuleLabels.length;
-        const worstSeverity = currentFailCount * 100 + currentGustOver * 2 + currentPrecipOver + currentColdOver * 1.5 + currentCriticalScore;
+        const worstSeverity = currentFailCount * 100 + currentGustOver * 2 + currentPrecipOver + currentColdOver * 1.5 + currentHeatOver * 1.5 + currentCriticalScore;
 
         if (rowSeverity === worstSeverity && criticalScore > currentCriticalScore) {
           return idx;
@@ -1616,7 +1626,7 @@ function App() {
         ? 'avy n/a'
         : avalancheUnknown
           ? 'avy unk'
-          : `avy L${normalizeDangerLevel(safetyData.avalanche.dangerLevel)}`;
+          : `avy ${['nr', 'low', 'mod', 'csd', 'high', 'ext'][normalizeDangerLevel(safetyData.avalanche.dangerLevel)] || 'unk'}`;
   const satWorstWindowSnippet = (() => {
     const satWindowLabel = `worst${travelWindowHours}h`;
     if (!worstTravelWindowRow) {
