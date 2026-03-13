@@ -72,7 +72,6 @@ export function evaluateBackcountryDecision(
   const danger = data.avalanche.dangerLevel || 0;
   let gust = data.weather.windGust ?? 0;
   let precip = data.weather.precipChance ?? 0;
-  const score = normalizedDecisionScore(data, options);
   let feelsLike: number | null = data.weather.feelsLike ?? data.weather.temp ?? null;
   const description = data.weather.description || '';
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
@@ -222,11 +221,7 @@ export function evaluateBackcountryDecision(
   } else if (gust >= maxGustThreshold) {
     addCaution(`Wind gusts near ${formatWind(gust)} can affect exposed movement and stability.`);
   }
-  if (score < 42) {
-    addBlocker(`Overall safety score is low at ${score}%.`);
-  } else if (score < 68) {
-    addCaution(`Safety score at ${score}% suggests tightening route controls.`);
-  }
+
   if (feelsLike !== null && feelsLike >= 95) {
     addBlocker(`Apparent temperature near ${formatTemp(feelsLike)} has high heat-stress risk.`);
   } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
@@ -450,7 +445,7 @@ export function evaluateBackcountryDecision(
   } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
     headline = 'Limited avalanche coverage. Favor conservative terrain and explicit abort triggers.';
-  } else if (cautions.length > 0 || score < 80) {
+  } else if (cautions.length > 0) {
     level = 'CAUTION';
     headline = 'Conditions are workable with conservative timing and route choices.';
   }
