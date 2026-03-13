@@ -71,8 +71,31 @@ input {
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline: 2.5px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* ── Skip Navigation ───────────────────────────── */
+
+.skip-nav {
+  position: absolute;
+  top: -100%;
+  left: 16px;
+  z-index: 9999;
+  padding: 10px 18px;
+  border-radius: 0 0 10px 10px;
+  background: var(--accent-green);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.2s ease;
+}
+
+.skip-nav:focus {
+  top: 0;
+  outline: 2.5px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .app-container {
@@ -2169,6 +2192,43 @@ input {
   font-family: var(--font-data);
 }
 
+/* ── Scroll Fade Wrapper (reusable) ───────────────────── */
+
+.scroll-fade-wrapper {
+  position: relative;
+}
+
+.scroll-fade-wrapper::before,
+.scroll-fade-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.scroll-fade-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, var(--surface-base, #fffdf8), transparent);
+}
+
+.scroll-fade-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, var(--surface-base, #fffdf8), transparent);
+}
+
+.scroll-fade-wrapper.fade-left::before {
+  opacity: 1;
+}
+
+.scroll-fade-wrapper.fade-right::after {
+  opacity: 1;
+}
+
 .weather-hour-pill-strip {
   display: flex;
   gap: 6px;
@@ -2176,6 +2236,7 @@ input {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   padding: 2px 0 4px;
+  scroll-snap-type: x proximity;
 }
 
 .weather-hour-pill-strip::-webkit-scrollbar {
@@ -2196,6 +2257,7 @@ input {
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   flex-shrink: 0;
+  scroll-snap-align: start;
 }
 
 .weather-hour-pill:hover {
@@ -2409,23 +2471,25 @@ button.collapsible-card-header:focus-visible {
 
 .card-modal-close {
   appearance: none;
-  border: none;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.06);
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #596459;
+  color: #4a5a50;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .card-modal-close:hover {
   background: rgba(0, 0, 0, 0.12);
-  color: #2e4639;
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #1d2922;
+  transform: scale(1.05);
 }
 
 .card-modal-close:focus-visible {
@@ -2487,12 +2551,15 @@ button.collapsible-card-header:focus-visible {
 
 :root[data-theme='dark'] .card-modal-close {
   background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
   color: #a0b0a8;
 }
 
 :root[data-theme='dark'] .card-modal-close:hover {
   background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.16);
   color: #d0ddd6;
+  transform: scale(1.05);
 }
 
 :root[data-theme='dark'] .collapsible-card.is-modal-open {
@@ -2634,18 +2701,26 @@ button.collapsible-card-header:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   border: 1px solid #cfd3c6;
   background: #f5f3ea;
   color: #44544a;
   cursor: help;
+  padding: 0;
+  font: inherit;
+  vertical-align: middle;
 }
 
 .help-hint svg {
   width: 12px;
   height: 12px;
+}
+
+.help-hint:focus-visible {
+  outline: 2.5px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .help-tooltip {
@@ -3372,7 +3447,9 @@ button.collapsible-card-header:focus-visible {
 }
 
 .weather-trend-btn:hover {
-  border-color: #c2baa8;
+  border-color: #b0a890;
+  background: rgba(246, 241, 230, 0.85);
+  color: #3a4d42;
 }
 
 .weather-trend-btn:focus-visible {
@@ -8689,6 +8766,23 @@ button.collapsible-card-header:focus-visible {
     font-size: 0.92rem;
   }
 
+  .search-go-btn {
+    min-height: 38px;
+    min-width: 44px;
+    padding: 7px 14px;
+    font-size: 0.78rem;
+  }
+
+  .search-clear-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .suggestion-item {
+    padding: 13px 14px;
+    min-height: 44px;
+  }
+
   .header-nav > .secondary-btn {
     flex: 1 1 calc(33.333% - 6px);
     min-width: 0;
@@ -8740,7 +8834,7 @@ button.collapsible-card-header:focus-visible {
 
   .planner-jump-btn {
     flex: 0 0 auto;
-    min-height: 36px;
+    min-height: 40px;
   }
 
   .map-section {

@@ -855,6 +855,7 @@ export function PlannerView(props: PlannerViewProps) {
 
   return (
     <div key="view-planner" className={appShellClassName} aria-busy={isViewPending}>
+      <a href="#planner-main-content" className="skip-nav">Skip to main content</a>
       <header className="header-section">
         <div className="brand">
           <button
@@ -912,7 +913,7 @@ export function PlannerView(props: PlannerViewProps) {
         </div>
       </header>
 
-      <section className="map-shell">
+      <section className="map-shell" id="planner-main-content">
         <div className="map-section">
           <MapContainer center={position} zoom={hasObjective ? 11 : 4} style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution={activeBasemap.attribution} url={activeBasemap.url} />

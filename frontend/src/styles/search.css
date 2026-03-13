@@ -48,8 +48,9 @@
 
 .search-go-btn {
   flex-shrink: 0;
-  min-height: 28px;
-  padding: 5px 10px;
+  min-height: 34px;
+  min-width: 40px;
+  padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid rgba(215, 210, 194, 0.5);
   background: rgba(45, 80, 60, 0.08);
@@ -79,8 +80,8 @@
 
 .search-clear-btn {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
   border: 1px solid rgba(215, 210, 194, 0.45);
   background: rgba(45, 80, 60, 0.06);
@@ -114,16 +115,28 @@
   box-shadow: 0 16px 36px rgba(15, 24, 20, 0.22);
   color: var(--text-dark);
   overflow: auto;
-  max-height: 280px;
+  max-height: 340px;
   z-index: 120;
   backdrop-filter: blur(5px);
+  overscroll-behavior: contain;
+}
+
+/* Scroll indicator: subtle top shadow when scrolled */
+.suggestions-list {
+  background:
+    linear-gradient(to bottom, rgba(255, 253, 248, 0.96) 30%, transparent) top / 100% 12px no-repeat,
+    linear-gradient(to top, rgba(255, 253, 248, 0.96) 30%, transparent) bottom / 100% 12px no-repeat,
+    linear-gradient(to bottom, rgba(140, 140, 130, 0.15), transparent) top / 100% 8px no-repeat,
+    linear-gradient(to top, rgba(140, 140, 130, 0.15), transparent) bottom / 100% 8px no-repeat,
+    rgba(255, 253, 248, 0.96);
+  background-attachment: local, local, scroll, scroll, local;
 }
 
 .suggestion-item {
   width: 100%;
   display: grid;
   gap: 3px;
-  padding: 9px 11px;
+  padding: 11px 13px;
   border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
@@ -242,6 +255,16 @@
   background: #13202a;
   border-color: #324452;
   color: var(--text-dark);
+}
+
+:root[data-theme='dark'] .suggestions-list {
+  background:
+    linear-gradient(to bottom, #13202a 30%, transparent) top / 100% 12px no-repeat,
+    linear-gradient(to top, #13202a 30%, transparent) bottom / 100% 12px no-repeat,
+    linear-gradient(to bottom, rgba(200, 210, 220, 0.1), transparent) top / 100% 8px no-repeat,
+    linear-gradient(to top, rgba(200, 210, 220, 0.1), transparent) bottom / 100% 8px no-repeat,
+    #13202a;
+  background-attachment: local, local, scroll, scroll, local;
 }
 
 :root[data-theme='dark'] .suggestions-list::-webkit-scrollbar-thumb {

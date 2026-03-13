@@ -2,9 +2,14 @@ import { Info } from 'lucide-react';
 
 export function HelpHint({ text }: { text: string }) {
   return (
-    <span className="help-hint" tabIndex={0} role="note" aria-label="More information">
-      <Info size={13} />
-      <span className="help-tooltip">{text}</span>
-    </span>
+    <button
+      type="button"
+      className="help-hint"
+      aria-label="More information"
+      aria-describedby={undefined}
+    >
+      <Info size={13} aria-hidden="true" />
+      <span className="help-tooltip" role="tooltip">{text}</span>
+    </button>
   );
 }

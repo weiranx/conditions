@@ -120,9 +120,10 @@ export function CollapsibleCard({
                 type="button"
                 className="card-modal-close"
                 onClick={closeModal}
-                aria-label="Close"
+                aria-label="Close dialog"
+                title="Close"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
             <div className="card-modal-body">
