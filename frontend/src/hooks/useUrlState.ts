@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useTransition } from 'react';
+import { useState, useCallback, useEffect, useTransition } from 'react';
 import L from 'leaflet';
 import type { UserPreferences } from '../app/types';
 import { parseLinkState, buildShareQuery } from '../app/url-state';
