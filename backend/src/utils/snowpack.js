@@ -243,27 +243,26 @@ const createSnowpackService = ({
     return numeric;
   };
 
-  const sampleNohrscSnowAnalysis = async (lat, lon, fetchOptions) => {
-    const extentPaddingDeg = 0.6;
-    const mapExtent = `${(lon - extentPaddingDeg).toFixed(4)},${(lat - extentPaddingDeg).toFixed(4)},${(
-      lon + extentPaddingDeg
-    ).toFixed(4)},${(lat + extentPaddingDeg).toFixed(4)}`;
+  const _sampleNohrscPoint = async (sampleLat, sampleLon, extentPaddingDeg, fetchOptions) => {
+    const mapExtent = `${(sampleLon - extentPaddingDeg).toFixed(4)},${(sampleLat - extentPaddingDeg).toFixed(4)},${(
+      sampleLon + extentPaddingDeg
+    ).toFixed(4)},${(sampleLat + extentPaddingDeg).toFixed(4)}`;
     const identifyUrl =
       `https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/identify` +
-      `?f=pjson&geometry=${encodeURIComponent(`${lon},${lat}`)}` +
+      `?f=pjson&geometry=${encodeURIComponent(`${sampleLon},${sampleLat}`)}` +
       `&geometryType=esriGeometryPoint&sr=4326&tolerance=2` +
       `&mapExtent=${encodeURIComponent(mapExtent)}` +
       `&imageDisplay=800,600,96&returnGeometry=false&layers=all:3,7`;
-    const nohrscRes = await fetchWithTimeout(identifyUrl, fetchOptions);
-    if (!nohrscRes.ok) {
-      throw new Error(`NOHRSC snow analysis request failed with status ${nohrscRes.status}`);
+    const res = await fetchWithTimeout(identifyUrl, fetchOptions);
+    if (!res.ok) {
+      return null;
     }
-    const sampledHeader = nohrscRes.headers?.get?.('date') || null;
+    const sampledHeader = res.headers?.get?.('date') || null;
     const sampledDate = sampledHeader ? new Date(sampledHeader) : null;
     const sampledTime =
       sampledDate && Number.isFinite(sampledDate.getTime()) ? sampledDate.toISOString() : null;
-    const nohrscJson = await nohrscRes.json();
-    const results = Array.isArray(nohrscJson?.results) ? nohrscJson.results : [];
+    const json = await res.json();
+    const results = Array.isArray(json?.results) ? json.results : [];
     const snowDepthResult = results.find((entry) => Number(entry?.layerId) === 3) || null;
     const sweResult = results.find((entry) => Number(entry?.layerId) === 7) || null;
     const rawDepthMeters = parseNohrscPixelValue(snowDepthResult);
@@ -280,6 +279,40 @@ const createSnowpackService = ({
       rawSweMillimeters <= MAX_REASONABLE_NOHRSC_SWE_MM
         ? rawSweMillimeters
         : null;
+    return { depthMeters, sweMillimeters, rawDepthMeters, rawSweMillimeters, sampledTime, snowDepthResult, sweResult };
+  };
+
+  const sampleNohrscSnowAnalysis = async (lat, lon, fetchOptions) => {
+    const extentPaddingDeg = 0.6;
+
+    // Try the target point first; if pixel values are implausible (common near glaciated peaks),
+    // try a ring of offsets in parallel (~3–5 km away)
+    let best = await _sampleNohrscPoint(lat, lon, extentPaddingDeg, fetchOptions);
+
+    if (best && !Number.isFinite(best.depthMeters) && !Number.isFinite(best.sweMillimeters)) {
+      // Primary pixel was implausible — fan out to nearby offsets in parallel
+      const FALLBACK_OFFSETS = [
+        [0.03, 0], [-0.03, 0], [0, 0.03], [0, -0.03],
+        [0.05, 0], [-0.05, 0], [0, 0.05], [0, -0.05],
+      ];
+      const fallbackResults = await Promise.allSettled(
+        FALLBACK_OFFSETS.map(([dlat, dlon]) =>
+          _sampleNohrscPoint(lat + dlat, lon + dlon, extentPaddingDeg, fetchOptions),
+        ),
+      );
+      for (const result of fallbackResults) {
+        if (result.status !== 'fulfilled' || !result.value) continue;
+        const sample = result.value;
+        if (Number.isFinite(sample.depthMeters) || Number.isFinite(sample.sweMillimeters)) {
+          best = sample;
+          break;
+        }
+      }
+    }
+
+    if (!best) return null;
+    const { depthMeters, sweMillimeters, rawDepthMeters, rawSweMillimeters, sampledTime, snowDepthResult, sweResult } = best;
+
     if (!Number.isFinite(depthMeters) && !Number.isFinite(sweMillimeters)) {
       return null;
     }
@@ -554,7 +587,9 @@ const createSnowpackService = ({
     }
 
     const sourcesOk = [snotelData, nohrscData, cdecData].filter(Boolean).length;
-    const totalSources = 3;
+    // CDEC is California-only; count it as an expected source only when stations are loaded
+    const cdecApplicable = Array.isArray(CDEC_STATIONS) && CDEC_STATIONS.length > 0;
+    const totalSources = 2 + (cdecApplicable ? 1 : 0);
     return {
       source: 'NRCS AWDB / SNOTEL, NOAA NOHRSC Snow Analysis, CDEC',
       status: sourcesOk === totalSources ? 'ok' : 'partial',
