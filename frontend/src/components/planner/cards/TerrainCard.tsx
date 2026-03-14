@@ -4,7 +4,6 @@ export interface TerrainConditionDetails {
   confidence: 'high' | 'medium' | 'low' | null;
   impact: string | null;
   recommendedTravel: string | null;
-  footwear: string | null;
   snowProfile: { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null;
 }
 
@@ -48,12 +47,6 @@ export function TerrainCard({
         <div className="decision-action">
           <span className="decision-action-label">Recommended travel mode</span>
           <p>{terrainConditionDetails.recommendedTravel}</p>
-        </div>
-      )}
-      {terrainConditionDetails.footwear && (
-        <div className="decision-action">
-          <span className="decision-action-label">Footwear / traction</span>
-          <p>{terrainConditionDetails.footwear}</p>
         </div>
       )}
       {terrainConditionDetails.snowProfile && (

@@ -1821,7 +1821,6 @@ function App() {
             confidence: upstreamTerrain.confidence || null,
             impact: upstreamTerrain.impact || null,
             recommendedTravel: upstreamTerrain.recommendedTravel || null,
-            footwear: upstreamTerrain.footwear || null,
             snowProfile,
           };
         }
@@ -1832,7 +1831,6 @@ function App() {
           confidence: null as 'high' | 'medium' | 'low' | null,
           impact: null as string | null,
           recommendedTravel: null as string | null,
-          footwear: null as string | null,
           snowProfile,
         };
       })()
@@ -1842,7 +1840,6 @@ function App() {
         confidence: null as 'high' | 'medium' | 'low' | null,
         impact: null as string | null,
         recommendedTravel: null as string | null,
-        footwear: null as string | null,
         snowProfile: null as { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null,
       };
   const terrainConditionPillClass = (() => {
@@ -2097,6 +2094,7 @@ function App() {
       // Shell / layout
       appShellClassName={appShellClassName}
       isViewPending={isViewPending}
+      handleReportLayoutChange={handleReportLayoutChange}
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}

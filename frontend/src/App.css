@@ -1905,6 +1905,43 @@ input {
   box-shadow: none;
 }
 
+.report-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.report-layout-toggle {
+  display: flex;
+  border: 1px solid #d0cbbb;
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.report-layout-toggle-btn {
+  border: none;
+  background: #f6f1e5;
+  color: #6b7c6e;
+  padding: 5px 14px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.report-layout-toggle-btn.active {
+  background: #32443a;
+  color: #f6f1e5;
+}
+
+.report-layout-toggle-btn:not(.active):hover {
+  background: #ede8d8;
+  color: #32443a;
+}
+
 #planner-section-decision,
 #planner-section-travel,
 #planner-section-weather,
@@ -9314,8 +9351,12 @@ button.collapsible-card-header:focus-visible {
     display: none;
   }
 
+  .report-nav-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .planner-jump-nav {
-    margin-top: 10px;
     display: flex;
     flex-wrap: nowrap;
     gap: 8px;
@@ -9332,6 +9373,10 @@ button.collapsible-card-header:focus-visible {
   .planner-jump-btn {
     flex: 0 0 auto;
     min-height: 40px;
+  }
+
+  .report-layout-toggle {
+    align-self: flex-end;
   }
 
   .map-section {
@@ -10560,6 +10605,7 @@ button.collapsible-card-header:focus-visible {
   .header-section,
   .map-shell,
   .planner-jump-nav,
+  .report-layout-toggle,
   .map-actions,
   .report-action-row,
   .btn-ai-brief,

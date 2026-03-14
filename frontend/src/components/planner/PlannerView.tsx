@@ -76,6 +76,7 @@ import type {
   TravelWindowRow,
   TravelWindowSpan,
   WeatherTrendPoint,
+  ReportLayout,
 } from '../../app/types';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import { TRAVEL_THRESHOLD_PRESETS } from '../../hooks/usePreferenceHandlers';
@@ -96,6 +97,7 @@ export interface PlannerViewProps {
   // Shell / layout
   appShellClassName: string;
   isViewPending: boolean;
+  handleReportLayoutChange: (layout: ReportLayout) => void;
 
   // Navigation
   navigateToView: (view: AppView) => void;
@@ -483,6 +485,7 @@ export function PlannerView(props: PlannerViewProps) {
     // Shell
     appShellClassName,
     isViewPending,
+    handleReportLayoutChange,
 
     // Navigation
     navigateToView,
@@ -1133,28 +1136,52 @@ export function PlannerView(props: PlannerViewProps) {
       )}
 
       {hasObjective && safetyData && decision && (
-        <nav className="planner-jump-nav" aria-label="Quick report navigation">
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-decision')}>
-            Decision
-          </button>
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-travel')}>
-            Travel
-          </button>
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-weather')}>
-            Weather
-          </button>
-          {avalancheRelevant && (
-            <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-avalanche')}>
-              Avalanche
-            </button>
+        <div className="report-nav-bar">
+          {effectiveLayout === 'cards' && (
+            <nav className="planner-jump-nav" aria-label="Quick report navigation">
+              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-decision')}>
+                Decision
+              </button>
+              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-travel')}>
+                Travel
+              </button>
+              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-weather')}>
+                Weather
+              </button>
+              {avalancheRelevant && (
+                <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-avalanche')}>
+                  Avalanche
+                </button>
+              )}
+              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-alerts')}>
+                Alerts
+              </button>
+              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-gear')}>
+                Gear
+              </button>
+            </nav>
           )}
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-alerts')}>
-            Alerts
-          </button>
-          <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-gear')}>
-            Gear
-          </button>
-        </nav>
+          <div className="report-layout-toggle" role="radiogroup" aria-label="Report layout">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={effectiveLayout === 'briefing'}
+              className={`report-layout-toggle-btn ${effectiveLayout === 'briefing' ? 'active' : ''}`}
+              onClick={() => handleReportLayoutChange('briefing')}
+            >
+              Briefing
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={effectiveLayout === 'cards'}
+              className={`report-layout-toggle-btn ${effectiveLayout === 'cards' ? 'active' : ''}`}
+              onClick={() => handleReportLayoutChange('cards')}
+            >
+              Full Report
+            </button>
+          </div>
+        </div>
       )}
 
       {hasObjective && safetyData && decision && (

@@ -703,7 +703,6 @@ describe('deriveTerrainCondition — cold_slick', () => {
     expect(condition.code).toBe('cold_slick');
     expect(condition.label).toContain('Slick');
     expect(condition.impact).toBe('moderate');
-    expect(condition.footwear).toMatch(/microspikes/i);
   });
 
   test('cold_slick triggered by near-freezing temp (30-36F) with moderate precip chance', () => {
@@ -750,7 +749,6 @@ describe('deriveTerrainCondition — dry_loose', () => {
 
     expect(condition.code).toBe('dry_loose');
     expect(condition.label).toContain('Dry');
-    expect(condition.footwear).toMatch(/trekking poles/i);
   });
 
   test('dry_loose triggered by low humidity fallback when dry_firm fails on temp', () => {

@@ -370,7 +370,7 @@ export function BriefingView(props: PlannerViewProps) {
           </Section>
         )}
 
-        {/* Terrain — summary + mode + footwear */}
+        {/* Terrain — summary + mode */}
         {shouldRenderRankedCard('terrainTrailCondition') && terrainConditionDetails && (
           <Section
             icon={<Route size={14} />}
@@ -379,10 +379,11 @@ export function BriefingView(props: PlannerViewProps) {
             pillClass={terrainConditionPillClass}
           >
             {terrainConditionDetails.summary && <p className="briefing-body-line">{terrainConditionDetails.summary}</p>}
-            <div className="briefing-kv-row">
-              {terrainConditionDetails.recommendedTravel && <Kv label="Travel" value={terrainConditionDetails.recommendedTravel} />}
-              {terrainConditionDetails.footwear && <Kv label="Footwear" value={terrainConditionDetails.footwear} />}
-            </div>
+            {terrainConditionDetails.recommendedTravel && (
+              <div className="briefing-kv-row">
+                <Kv label="Travel" value={terrainConditionDetails.recommendedTravel} />
+              </div>
+            )}
           </Section>
         )}
 
