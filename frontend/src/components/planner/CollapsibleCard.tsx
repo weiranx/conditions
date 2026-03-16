@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useId } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, ChevronRight } from 'lucide-react';
 
 interface CollapsibleCardProps {
   cardKey: string;
@@ -86,21 +86,21 @@ export function CollapsibleCard({
           type="button"
           className="collapsible-card-header card-header"
           onClick={openModal}
+          aria-label="Expand card"
         >
           <span className="collapsible-title-wrap">{title}</span>
-          {headerMeta && (
-            <span className="collapsible-header-right">
-              <span className="collapsible-header-meta">{headerMeta}</span>
-            </span>
-          )}
+          <span className="collapsible-header-right">
+            {headerMeta && <span className="collapsible-header-meta">{headerMeta}</span>}
+            <ChevronRight size={16} className="collapsible-chevron" aria-hidden="true" />
+          </span>
         </button>
         {preview ? (
           <>
             <span className="sr-only">{summary}</span>
-            <div className="card-preview">{preview}</div>
+            <div className="card-preview" onClick={openModal} role="button" tabIndex={-1}>{preview}</div>
           </>
         ) : (
-          <div className="collapsible-summary">{summary}</div>
+          <div className="collapsible-summary" onClick={openModal} role="button" tabIndex={-1}>{summary}</div>
         )}
       </div>
 
