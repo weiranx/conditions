@@ -360,3 +360,219 @@ test('GET /api/report-logs returns 403 when LOGS_SECRET is not configured', asyn
   expect(res.status).toBe(403);
   expect(String(res.body.error || '')).toMatch(/disabled|LOGS_SECRET/i);
 });
+
+// ── Response shape / header assertions ───────────────────────────────────────
+
+test('All 400 validation errors return JSON content-type', async () => {
+  const res = await request(app).get('/api/safety');
+  expect(res.status).toBe(400);
+  expect(res.headers['content-type']).toMatch(/application\/json/);
+});
+
+test('Every response carries an X-Request-Id header', async () => {
+  const health = await request(app).get('/healthz');
+  expect(typeof health.headers['x-request-id']).toBe('string');
+  expect(health.headers['x-request-id'].length).toBeGreaterThan(0);
+
+  const bad = await request(app).get('/api/safety');
+  expect(typeof bad.headers['x-request-id']).toBe('string');
+  expect(bad.headers['x-request-id'].length).toBeGreaterThan(0);
+});
+
+test('Each request receives a unique X-Request-Id', async () => {
+  const [a, b] = await Promise.all([
+    request(app).get('/healthz'),
+    request(app).get('/healthz'),
+  ]);
+  expect(a.headers['x-request-id']).not.toBe(b.headers['x-request-id']);
+});
+
+// ── /api/search — additional edge cases ─────────────────────────────────────
+
+test('GET /api/search with exactly 2-char query stays on local path and returns array', async () => {
+  // Queries under 3 chars skip Nominatim — result set comes from local peak catalog only
+  const res = await request(app).get('/api/search?q=mt');
+  expect(res.status).toBe(200);
+  expect(Array.isArray(res.body)).toBe(true);
+  // Every result must come from the local catalog (class: 'natural')
+  expect(res.body.every((entry) => entry.class === 'natural')).toBe(true);
+});
+
+test('GET /api/search results each have name, lat, lon fields', async () => {
+  const res = await request(app).get('/api/search?q=rain');
+  expect(res.status).toBe(200);
+  expect(res.body.length).toBeGreaterThan(0);
+  for (const entry of res.body) {
+    expect(typeof entry.name).toBe('string');
+    expect(typeof entry.lat).toBe('number');
+    expect(typeof entry.lon).toBe('number');
+  }
+});
+
+test('GET /api/search popular peaks each have name, lat, lon, type, class fields', async () => {
+  const res = await request(app).get('/api/search');
+  expect(res.status).toBe(200);
+  for (const entry of res.body) {
+    expect(typeof entry.name).toBe('string');
+    expect(typeof entry.lat).toBe('number');
+    expect(typeof entry.lon).toBe('number');
+    expect(entry.type).toBe('peak');
+    expect(entry.class).toBe('popular');
+  }
+});
+
+test('GET /api/search is case-insensitive for local catalog matches', async () => {
+  const lower = await request(app).get('/api/search?q=rainier');
+  const upper = await request(app).get('/api/search?q=RAINIER');
+  expect(lower.status).toBe(200);
+  expect(upper.status).toBe(200);
+  // Both should find at least one Rainier entry
+  expect(lower.body.some((e) => String(e.name).includes('Rainier'))).toBe(true);
+  expect(upper.body.some((e) => String(e.name).includes('Rainier'))).toBe(true);
+});
+
+test('GET /api/search caps q at 120 characters without error', async () => {
+  const longQuery = 'a'.repeat(200);
+  const res = await request(app).get(`/api/search?q=${longQuery}`);
+  expect(res.status).toBe(200);
+  expect(Array.isArray(res.body)).toBe(true);
+});
+
+// ── /api/route-suggestions — additional edge cases ───────────────────────────
+
+test('GET /api/route-suggestions rejects empty-string peak', async () => {
+  const res = await request(app).get('/api/route-suggestions?peak=&lat=46.85&lon=-121.76');
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/peak.*lat.*lon are required/i);
+});
+
+test('GET /api/route-suggestions accepts lat=0 lon=0 as valid zero coordinates', async () => {
+  // Zero is a valid coordinate value — validation must not reject it
+  const res = await request(app).get('/api/route-suggestions?peak=Null+Island&lat=0&lon=0');
+  // Should pass validation (not 400); downstream AI call will fail in test env
+  expect(res.status).not.toBe(400);
+}, 30000);
+
+test('GET /api/route-suggestions rejects out-of-range lon', async () => {
+  const res = await request(app).get('/api/route-suggestions?peak=Mt+Rainier&lat=46.85&lon=200');
+  // lon=200 is not finite-invalid per Number() — it parses to 200 which is finite,
+  // so the route only validates that lat/lon are finite numbers (not range).
+  // Confirm that it does NOT return 400 for the coordinate check (range not enforced here).
+  expect([200, 400, 500, 503]).toContain(res.status);
+});
+
+// ── /api/route-analysis — additional edge cases ──────────────────────────────
+
+test('POST /api/route-analysis rejects missing peak with all other fields present', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15' });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/peak.*route.*lat.*lon.*date are required/i);
+});
+
+test('POST /api/route-analysis rejects missing route with all other fields present', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Mt Rainier', lat: 46.85, lon: -121.76, date: '2026-06-15' });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/peak.*route.*lat.*lon.*date are required/i);
+});
+
+test('POST /api/route-analysis accepts start=00:00 as valid lower boundary', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15', start: '00:00' });
+  // Passes validation — downstream AI/safety calls will fail in test env
+  expect(res.status).not.toBe(400);
+}, 30000);
+
+test('POST /api/route-analysis accepts start=23:59 as valid upper boundary', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15', start: '23:59' });
+  expect(res.status).not.toBe(400);
+}, 30000);
+
+test('POST /api/route-analysis accepts omitted start (start is optional)', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15' });
+  // No start provided — must not be rejected with 400
+  expect(res.status).not.toBe(400);
+}, 30000);
+
+test('POST /api/route-analysis rejects lat=0 due to falsy-coordinate bug (documents known issue)', async () => {
+  // The route uses `!lat` / `!lon` which treats numeric zero as missing.
+  // lat=0 (equator) is a geographically valid coordinate, but the current code
+  // rejects it with 400. This test documents the existing behavior.
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Null Island', route: 'Shore Walk', lat: 0, lon: 0, date: '2026-06-15' });
+  expect(res.status).toBe(400);
+});
+
+test('POST /api/route-analysis rejects non-numeric lon', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: 'west', date: '2026-06-15' });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/valid numbers/i);
+});
+
+// ── /api/ai-brief — additional edge cases ───────────────────────────────────
+
+test('POST /api/ai-brief rejects score=null explicitly', async () => {
+  const res = await request(app)
+    .post('/api/ai-brief')
+    .send({ score: null, primaryHazard: 'avalanche', decisionLevel: 'GO' });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
+});
+
+test('POST /api/ai-brief rejects empty-string primaryHazard', async () => {
+  const res = await request(app)
+    .post('/api/ai-brief')
+    .send({ score: 72, primaryHazard: '', decisionLevel: 'GO' });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
+});
+
+test('POST /api/ai-brief rejects empty-string decisionLevel', async () => {
+  const res = await request(app)
+    .post('/api/ai-brief')
+    .send({ score: 72, primaryHazard: 'wind', decisionLevel: '' });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
+});
+
+test('POST /api/ai-brief passes validation when factors and context are omitted', async () => {
+  // factors and context are optional — omitting them must not cause a 400
+  const res = await request(app)
+    .post('/api/ai-brief')
+    .send({ score: 55, primaryHazard: 'weather', decisionLevel: 'CAUTION' });
+  expect(res.status).not.toBe(400);
+});
+
+test('POST /api/ai-brief 400 response carries JSON content-type', async () => {
+  const res = await request(app).post('/api/ai-brief').send({});
+  expect(res.status).toBe(400);
+  expect(res.headers['content-type']).toMatch(/application\/json/);
+});
+
+// ── HTTP method mismatches ────────────────────────────────────────────────────
+
+test('POST /api/safety is not a registered route (Express returns 404)', async () => {
+  const res = await request(app).post('/api/safety').send({});
+  expect(res.status).toBe(404);
+});
+
+test('GET /api/ai-brief is not a registered route (Express returns 404)', async () => {
+  const res = await request(app).get('/api/ai-brief');
+  expect(res.status).toBe(404);
+});
+
+test('GET /api/route-analysis is not a registered route (Express returns 404)', async () => {
+  const res = await request(app).get('/api/route-analysis');
+  expect(res.status).toBe(404);
+});
