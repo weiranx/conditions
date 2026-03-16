@@ -21,8 +21,52 @@ const {
   extractUtahAvalancheAdvisory,
   buildSatOneLiner,
 } = require('../index');
-const { findNearestCardinalFromDegreeSeries, estimateWindGustFromWindSpeed, inferWindGustFromPeriods } = require('../src/utils/wind');
-const { parseIsoTimeToMsWithReference } = require('../src/utils/time');
+const {
+  findNearestCardinalFromDegreeSeries,
+  estimateWindGustFromWindSpeed,
+  inferWindGustFromPeriods,
+  parseWindMph,
+  windDegreesToCardinal,
+  findNearestWindDirection,
+} = require('../src/utils/wind');
+const {
+  parseIsoTimeToMsWithReference,
+  clampTravelWindowHours,
+  parseClockToMinutes,
+  formatMinutesToClock,
+  withExplicitTimezone,
+  normalizeUtcIsoTimestamp,
+  findClosestTimeIndex,
+  parseIsoTimeToMs,
+} = require('../src/utils/time');
+const {
+  classifyUsAqi,
+  normalizeAlertSeverity,
+  formatAlertSeverity,
+  getHigherSeverity,
+  normalizeNwsAlertText,
+  normalizeNwsAreaList,
+  isGenericNwsLink,
+  isIndividualNwsAlertLink,
+  buildNwsAlertUrlFromId,
+} = require('../src/utils/alerts');
+const {
+  computeFeelsLikeF,
+  celsiusToF,
+  inferNoaaCloudCoverFromIcon,
+  inferNoaaCloudCoverFromForecastText,
+  resolveNoaaCloudCover,
+  normalizeNoaaDewPointF,
+  normalizeNoaaPressureHpa,
+  clampPercent,
+} = require('../src/utils/weather-normalizers');
+const {
+  mmToInches,
+  cmToInches,
+  buildPrecipitationSummaryForAi,
+} = require('../src/utils/precipitation');
+const { buildVisibilityRisk, buildElevationForecastBands } = require('../src/utils/visibility-risk');
+const { computeTier, SCORING_CONFIG } = require('../src/utils/safety-score');
 
 test('normalizeWindDirection handles cardinal abbreviations and words', () => {
   expect(normalizeWindDirection('NW')).toBe('NW');
@@ -1084,7 +1128,7 @@ test('evaluateAvalancheRelevance still uses winter/elevation fallback when snowp
   expect(String(result.reason)).toMatch(/High-elevation objective/i);
 });
 
-test('calculateSafetyScore applies lower score for future start due forecast uncertainty', () => {
+test('calculateSafetyScore applies lower confidence for future start (forecast uncertainty moved to confidence only)', () => {
   const now = Date.now();
   const nearStartIso = new Date(now + 30 * 60 * 1000).toISOString();
   const futureStartIso = new Date(now + 48 * 60 * 60 * 1000).toISOString();
@@ -1126,8 +1170,11 @@ test('calculateSafetyScore applies lower score for future start due forecast unc
     selectedDate: inTwoDaysIso,
   });
 
-  expect(futureResult.score).toBeLessThan(nearResult.score);
-  expect(futureResult.explanations.some((line) => /fewer real-time feeds can be projected/i.test(String(line)))).toBe(true);
+  // Forecast uncertainty is now confidence-only, not a score factor
+  expect(futureResult.score).toBe(nearResult.score);
+  expect(futureResult.confidence).toBeLessThan(nearResult.confidence);
+  // No forecast uncertainty factor in factors list
+  expect(futureResult.factors.some((f) => f.hazard === 'Forecast Uncertainty')).toBe(false);
 });
 
 test('calculateSafetyScore ignores AQI when air quality is not applicable for future dates', () => {
@@ -1548,14 +1595,16 @@ test('proportional cold duration: scales with exposure hours', () => {
   expect(cold1h.length).toBe(1);
   expect(cold1h[0].impact).toBe(2);
 
-  // 8h at extreme cold → max penalty
+  // 8h at extreme cold → high penalty (temporally weighted: early hours count more)
   const result8h = calculateSafetyScore({
     ...safetyScoreBaseInput(),
     weatherData: makeWeather(8, -10),
   });
   const cold8h = result8h.factors.filter((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
   expect(cold8h.length).toBe(1);
-  expect(cold8h[0].impact).toBe(12);
+  // Temporal weighting reduces effective hours: sum of weights for 8 items ≈ 5.2
+  // round(5.2 * 1.5) = 8, capped at 12
+  expect(cold8h[0].impact).toBe(8);
 });
 
 test('temporal weighting: single-hour trend always gets weight 1.0', () => {
@@ -1747,4 +1796,1011 @@ test('combined hazard escalation: all 4 categories active shows count in message
   expect(combinedFactor).toBeDefined();
   expect(combinedFactor.impact).toBe(10);
   expect(combinedFactor.message).toMatch(/4 weather hazard categories/);
+});
+
+// --- parseWindMph ---
+
+test('parseWindMph parses numeric input directly', () => {
+  expect(parseWindMph(15)).toBe(15);
+  expect(parseWindMph(0)).toBe(0);
+  expect(parseWindMph(25.7)).toBe(26);
+});
+
+test('parseWindMph clamps negative numeric input to 0', () => {
+  expect(parseWindMph(-5)).toBe(0);
+});
+
+test('parseWindMph extracts high end of a range string', () => {
+  expect(parseWindMph('10 to 20 mph')).toBe(20);
+  expect(parseWindMph('5 to 15')).toBe(15);
+});
+
+test('parseWindMph extracts single number from string', () => {
+  expect(parseWindMph('12 mph')).toBe(12);
+  expect(parseWindMph('  8  ')).toBe(8);
+});
+
+test('parseWindMph returns fallback for unparseable input', () => {
+  expect(parseWindMph('calm')).toBe(0);
+  expect(parseWindMph(null)).toBe(0);
+  expect(parseWindMph(undefined)).toBe(0);
+  expect(parseWindMph('gusty', 5)).toBe(5);
+});
+
+test('parseWindMph clamps negative string value to 0', () => {
+  expect(parseWindMph('-10 mph')).toBe(0);
+});
+
+// --- windDegreesToCardinal ---
+
+test('windDegreesToCardinal maps cardinal degree boundaries correctly', () => {
+  expect(windDegreesToCardinal(0)).toBe('N');
+  expect(windDegreesToCardinal(90)).toBe('E');
+  expect(windDegreesToCardinal(180)).toBe('S');
+  expect(windDegreesToCardinal(270)).toBe('W');
+  expect(windDegreesToCardinal(360)).toBe('N');
+});
+
+test('windDegreesToCardinal handles intermediate directions', () => {
+  expect(windDegreesToCardinal(45)).toBe('NE');
+  expect(windDegreesToCardinal(315)).toBe('NW');
+  expect(windDegreesToCardinal(135)).toBe('SE');
+  expect(windDegreesToCardinal(225)).toBe('SW');
+});
+
+test('windDegreesToCardinal normalizes values beyond 360', () => {
+  expect(windDegreesToCardinal(450)).toBe('E');
+  expect(windDegreesToCardinal(-90)).toBe('W');
+});
+
+test('windDegreesToCardinal returns null for non-numeric input', () => {
+  expect(windDegreesToCardinal(null)).toBeNull();
+  expect(windDegreesToCardinal(undefined)).toBeNull();
+  expect(windDegreesToCardinal('north')).toBeNull();
+  expect(windDegreesToCardinal('')).toBeNull();
+});
+
+// --- findNearestWindDirection ---
+
+test('findNearestWindDirection returns direct match at anchor index', () => {
+  const periods = [
+    { windDirection: 'N' },
+    { windDirection: 'NW' },
+    { windDirection: 'W' },
+  ];
+  expect(findNearestWindDirection(periods, 1)).toBe('NW');
+});
+
+test('findNearestWindDirection searches forward then backward when anchor is null', () => {
+  const periods = [
+    { windDirection: null },
+    { windDirection: null },
+    { windDirection: 'SW' },
+  ];
+  expect(findNearestWindDirection(periods, 0)).toBe('SW');
+});
+
+test('findNearestWindDirection returns null for empty or invalid input', () => {
+  expect(findNearestWindDirection([], 0)).toBeNull();
+  expect(findNearestWindDirection(null, 0)).toBeNull();
+  expect(findNearestWindDirection([{ windDirection: null }], 0)).toBeNull();
+});
+
+// --- findNearestCardinalFromDegreeSeries ---
+
+test('findNearestCardinalFromDegreeSeries returns cardinal for direct index', () => {
+  expect(findNearestCardinalFromDegreeSeries([0, 90, 180], 1)).toBe('E');
+});
+
+test('findNearestCardinalFromDegreeSeries skips nulls and finds nearest valid entry', () => {
+  expect(findNearestCardinalFromDegreeSeries([null, null, 270], 0)).toBe('W');
+});
+
+test('findNearestCardinalFromDegreeSeries returns null for empty series', () => {
+  expect(findNearestCardinalFromDegreeSeries([], 0)).toBeNull();
+  expect(findNearestCardinalFromDegreeSeries(null, 0)).toBeNull();
+});
+
+// --- estimateWindGustFromWindSpeed ---
+
+test('estimateWindGustFromWindSpeed applies tiered multipliers', () => {
+  // <= 5 mph: wind + 2
+  expect(estimateWindGustFromWindSpeed(4)).toBe(6);
+  // <= 15 mph: wind * 1.25
+  expect(estimateWindGustFromWindSpeed(12)).toBe(15);
+  // <= 30 mph: wind * 1.35
+  expect(estimateWindGustFromWindSpeed(20)).toBe(27);
+  // > 30 mph: wind * 1.45
+  expect(estimateWindGustFromWindSpeed(40)).toBe(58);
+});
+
+test('estimateWindGustFromWindSpeed returns 0 for zero or non-finite input', () => {
+  expect(estimateWindGustFromWindSpeed(0)).toBe(0);
+  expect(estimateWindGustFromWindSpeed(-5)).toBe(0);
+  expect(estimateWindGustFromWindSpeed(null)).toBe(0);
+  expect(estimateWindGustFromWindSpeed('fast')).toBe(0);
+});
+
+// --- inferWindGustFromPeriods ---
+
+test('inferWindGustFromPeriods returns reported gust directly from anchor period', () => {
+  const periods = [
+    { windSpeed: '15 mph', windGust: '28 mph' },
+    { windSpeed: '20 mph', windGust: '35 mph' },
+  ];
+  const result = inferWindGustFromPeriods(periods, 0, 15);
+  expect(result.gustMph).toBe(28);
+  expect(result.source).toBe('reported');
+});
+
+test('inferWindGustFromPeriods falls back to estimation when no gust data anywhere', () => {
+  const periods = [
+    { windSpeed: '10 mph', windGust: null },
+    { windSpeed: '12 mph', windGust: null },
+  ];
+  const result = inferWindGustFromPeriods(periods, 0, 10);
+  expect(result.gustMph).toBeGreaterThan(10);
+  expect(result.source).toBe('estimated_from_wind');
+});
+
+test('inferWindGustFromPeriods infers gust ratio from nearby period', () => {
+  const periods = [
+    { windSpeed: '10 mph', windGust: null },
+    { windSpeed: '20 mph', windGust: '30 mph' },
+  ];
+  const result = inferWindGustFromPeriods(periods, 0, 10);
+  // Ratio from nearby: 30/20 = 1.5, so 10 * 1.5 = 15
+  expect(result.gustMph).toBe(15);
+  expect(result.source).toBe('inferred_nearby');
+});
+
+test('inferWindGustFromPeriods returns estimation for empty periods array', () => {
+  const result = inferWindGustFromPeriods([], 0, 20);
+  expect(result.source).toBe('estimated_from_wind');
+  expect(result.gustMph).toBeGreaterThan(0);
+});
+
+// --- clampTravelWindowHours ---
+
+test('clampTravelWindowHours clamps to [1, 24] range', () => {
+  expect(clampTravelWindowHours(6)).toBe(6);
+  expect(clampTravelWindowHours(0)).toBe(1);
+  expect(clampTravelWindowHours(-3)).toBe(1);
+  expect(clampTravelWindowHours(30)).toBe(24);
+});
+
+test('clampTravelWindowHours uses fallback for non-numeric input', () => {
+  // null coerces to 0 via Number(), then clamps to minimum 1 — not the fallback path
+  expect(clampTravelWindowHours(null)).toBe(1);
+  expect(clampTravelWindowHours(undefined)).toBe(12);
+  expect(clampTravelWindowHours('eight')).toBe(12);
+  expect(clampTravelWindowHours(undefined, 8)).toBe(8);
+});
+
+test('clampTravelWindowHours rounds decimal values', () => {
+  expect(clampTravelWindowHours(4.7)).toBe(5);
+  expect(clampTravelWindowHours(1.2)).toBe(1);
+});
+
+// --- parseClockToMinutes ---
+
+test('parseClockToMinutes parses 24-hour format', () => {
+  expect(parseClockToMinutes('00:00')).toBe(0);
+  expect(parseClockToMinutes('06:30')).toBe(390);
+  expect(parseClockToMinutes('23:59')).toBe(1439);
+});
+
+test('parseClockToMinutes parses 12-hour AM/PM format', () => {
+  expect(parseClockToMinutes('12:00 AM')).toBe(0);
+  expect(parseClockToMinutes('12:00 PM')).toBe(720);
+  expect(parseClockToMinutes('6:30 AM')).toBe(390);
+  expect(parseClockToMinutes('11:45 PM')).toBe(1425);
+});
+
+test('parseClockToMinutes returns null for invalid input', () => {
+  expect(parseClockToMinutes(null)).toBeNull();
+  expect(parseClockToMinutes('')).toBeNull();
+  expect(parseClockToMinutes('25:00')).toBeNull();
+  expect(parseClockToMinutes('not-a-time')).toBeNull();
+});
+
+// --- formatMinutesToClock ---
+
+test('formatMinutesToClock converts minutes back to HH:MM string', () => {
+  expect(formatMinutesToClock(0)).toBe('00:00');
+  expect(formatMinutesToClock(390)).toBe('06:30');
+  expect(formatMinutesToClock(1439)).toBe('23:59');
+  expect(formatMinutesToClock(720)).toBe('12:00');
+});
+
+test('formatMinutesToClock wraps at 24 hours', () => {
+  expect(formatMinutesToClock(1440)).toBe('00:00');
+  expect(formatMinutesToClock(1500)).toBe('01:00');
+});
+
+// --- withExplicitTimezone ---
+
+test('withExplicitTimezone appends Z to naive UTC ISO strings', () => {
+  expect(withExplicitTimezone('2026-03-15T08:00:00', 'UTC')).toBe('2026-03-15T08:00:00Z');
+  expect(withExplicitTimezone('2026-03-15T08:00', 'UTC')).toBe('2026-03-15T08:00Z');
+});
+
+test('withExplicitTimezone leaves already-zoned strings unchanged', () => {
+  expect(withExplicitTimezone('2026-03-15T08:00:00Z', 'UTC')).toBe('2026-03-15T08:00:00Z');
+  expect(withExplicitTimezone('2026-03-15T08:00:00-07:00', 'UTC')).toBe('2026-03-15T08:00:00-07:00');
+});
+
+test('withExplicitTimezone returns null for non-string input', () => {
+  expect(withExplicitTimezone(null)).toBeNull();
+  expect(withExplicitTimezone(undefined)).toBeNull();
+  expect(withExplicitTimezone(12345)).toBeNull();
+});
+
+test('withExplicitTimezone passes through non-ISO strings unchanged', () => {
+  // The function only appends Z for ISO datetime patterns; other strings pass through
+  expect(withExplicitTimezone('not-a-date', 'UTC')).toBe('not-a-date');
+});
+
+// --- normalizeUtcIsoTimestamp ---
+
+test('normalizeUtcIsoTimestamp round-trips a valid ISO string', () => {
+  // Date.toISOString() always includes milliseconds, so the result gains .000
+  const iso = '2026-03-15T12:00:00Z';
+  expect(normalizeUtcIsoTimestamp(iso)).toBe('2026-03-15T12:00:00.000Z');
+});
+
+test('normalizeUtcIsoTimestamp normalizes offset timestamps to Z', () => {
+  const result = normalizeUtcIsoTimestamp('2026-03-15T05:00:00-07:00');
+  expect(result).toBe('2026-03-15T12:00:00.000Z');
+});
+
+test('normalizeUtcIsoTimestamp returns null for empty or non-string input', () => {
+  expect(normalizeUtcIsoTimestamp('')).toBeNull();
+  expect(normalizeUtcIsoTimestamp(null)).toBeNull();
+  expect(normalizeUtcIsoTimestamp(undefined)).toBeNull();
+});
+
+// --- findClosestTimeIndex ---
+
+test('findClosestTimeIndex returns index of exact match', () => {
+  const times = ['2026-03-15T08:00:00Z', '2026-03-15T09:00:00Z', '2026-03-15T10:00:00Z'];
+  const targetMs = Date.parse('2026-03-15T09:00:00Z');
+  expect(findClosestTimeIndex(times, targetMs)).toBe(1);
+});
+
+test('findClosestTimeIndex returns nearest index for between-sample target', () => {
+  const times = ['2026-03-15T08:00:00Z', '2026-03-15T10:00:00Z', '2026-03-15T12:00:00Z'];
+  const targetMs = Date.parse('2026-03-15T09:30:00Z');
+  // 9:30 is closer to 10:00 (30min away) than 8:00 (90min away)
+  expect(findClosestTimeIndex(times, targetMs)).toBe(1);
+});
+
+test('findClosestTimeIndex returns -1 for empty array', () => {
+  expect(findClosestTimeIndex([], Date.now())).toBe(-1);
+  expect(findClosestTimeIndex(null, Date.now())).toBe(-1);
+});
+
+test('findClosestTimeIndex skips unparseable timestamps', () => {
+  const times = ['garbage', '2026-03-15T10:00:00Z'];
+  const targetMs = Date.parse('2026-03-15T10:00:00Z');
+  expect(findClosestTimeIndex(times, targetMs)).toBe(1);
+});
+
+// --- classifyUsAqi ---
+
+test('classifyUsAqi maps AQI ranges to correct category strings', () => {
+  expect(classifyUsAqi(25)).toBe('Good');
+  expect(classifyUsAqi(75)).toBe('Moderate');
+  expect(classifyUsAqi(130)).toBe('Unhealthy for Sensitive Groups');
+  expect(classifyUsAqi(175)).toBe('Unhealthy');
+  expect(classifyUsAqi(250)).toBe('Very Unhealthy');
+  expect(classifyUsAqi(350)).toBe('Hazardous');
+});
+
+test('classifyUsAqi returns Unknown for non-finite input', () => {
+  expect(classifyUsAqi(null)).toBe('Unknown');
+  expect(classifyUsAqi(NaN)).toBe('Unknown');
+  expect(classifyUsAqi(undefined)).toBe('Unknown');
+});
+
+test('classifyUsAqi handles AQI boundary values correctly', () => {
+  expect(classifyUsAqi(50)).toBe('Good');
+  expect(classifyUsAqi(51)).toBe('Moderate');
+  expect(classifyUsAqi(100)).toBe('Moderate');
+  expect(classifyUsAqi(101)).toBe('Unhealthy for Sensitive Groups');
+  expect(classifyUsAqi(150)).toBe('Unhealthy for Sensitive Groups');
+  expect(classifyUsAqi(151)).toBe('Unhealthy');
+  expect(classifyUsAqi(200)).toBe('Unhealthy');
+  expect(classifyUsAqi(201)).toBe('Very Unhealthy');
+  expect(classifyUsAqi(300)).toBe('Very Unhealthy');
+  expect(classifyUsAqi(301)).toBe('Hazardous');
+});
+
+// --- normalizeAlertSeverity / formatAlertSeverity / getHigherSeverity ---
+
+test('normalizeAlertSeverity normalizes known severity values', () => {
+  expect(normalizeAlertSeverity('Extreme')).toBe('extreme');
+  expect(normalizeAlertSeverity('SEVERE')).toBe('severe');
+  expect(normalizeAlertSeverity('moderate')).toBe('moderate');
+  expect(normalizeAlertSeverity('Minor')).toBe('minor');
+});
+
+test('normalizeAlertSeverity returns unknown for unrecognized values', () => {
+  expect(normalizeAlertSeverity(null)).toBe('unknown');
+  expect(normalizeAlertSeverity('')).toBe('unknown');
+  expect(normalizeAlertSeverity('critical')).toBe('unknown');
+});
+
+test('formatAlertSeverity capitalizes the first letter', () => {
+  expect(formatAlertSeverity('extreme')).toBe('Extreme');
+  expect(formatAlertSeverity('minor')).toBe('Minor');
+  expect(formatAlertSeverity(null)).toBe('Unknown');
+});
+
+test('getHigherSeverity returns the higher severity between two values', () => {
+  expect(getHigherSeverity('minor', 'severe')).toBe('severe');
+  expect(getHigherSeverity('extreme', 'moderate')).toBe('extreme');
+  expect(getHigherSeverity('moderate', 'moderate')).toBe('moderate');
+  expect(getHigherSeverity('unknown', 'minor')).toBe('minor');
+});
+
+// --- normalizeNwsAlertText ---
+
+test('normalizeNwsAlertText normalizes whitespace and line endings', () => {
+  const input = 'Heavy   snow expected.\r\nHigher  elevations.';
+  const result = normalizeNwsAlertText(input);
+  expect(result).toBe('Heavy snow expected.\nHigher elevations.');
+});
+
+test('normalizeNwsAlertText truncates to maxLength and appends ellipsis', () => {
+  const longText = 'A'.repeat(4010);
+  const result = normalizeNwsAlertText(longText);
+  expect(result).toHaveLength(4000);
+  expect(result.endsWith('…')).toBe(true);
+});
+
+test('normalizeNwsAlertText returns null for non-string and blank input', () => {
+  expect(normalizeNwsAlertText(null)).toBeNull();
+  expect(normalizeNwsAlertText(42)).toBeNull();
+  expect(normalizeNwsAlertText('   ')).toBeNull();
+});
+
+// --- normalizeNwsAreaList ---
+
+test('normalizeNwsAreaList splits on semicolons and commas', () => {
+  const result = normalizeNwsAreaList('Front Range; Denver Metro, Boulder County');
+  expect(result).toEqual(['Front Range', 'Denver Metro', 'Boulder County']);
+});
+
+test('normalizeNwsAreaList caps at 12 entries', () => {
+  const areas = Array.from({ length: 20 }, (_, i) => `Area ${i}`).join(';');
+  expect(normalizeNwsAreaList(areas)).toHaveLength(12);
+});
+
+test('normalizeNwsAreaList returns empty array for non-string input', () => {
+  expect(normalizeNwsAreaList(null)).toEqual([]);
+  expect(normalizeNwsAreaList(42)).toEqual([]);
+});
+
+// --- isGenericNwsLink / isIndividualNwsAlertLink / buildNwsAlertUrlFromId ---
+
+test('isGenericNwsLink identifies generic weather.gov and api.weather.gov root URLs', () => {
+  expect(isGenericNwsLink('https://www.weather.gov')).toBe(true);
+  expect(isGenericNwsLink('https://api.weather.gov/alerts')).toBe(true);
+  expect(isGenericNwsLink('https://api.weather.gov/alerts/active')).toBe(true);
+});
+
+test('isGenericNwsLink returns false for specific alert links', () => {
+  expect(isGenericNwsLink('https://api.weather.gov/alerts/urn:oid:2.49.0.1.840')).toBe(false);
+  expect(isGenericNwsLink('https://alerts.weather.gov/cap/some-alert')).toBe(false);
+  expect(isGenericNwsLink(null)).toBe(false);
+});
+
+test('isIndividualNwsAlertLink identifies specific alert URLs', () => {
+  expect(isIndividualNwsAlertLink('https://api.weather.gov/alerts/urn:oid:2.49.0.1.840')).toBe(true);
+});
+
+test('isIndividualNwsAlertLink rejects generic and non-NWS URLs', () => {
+  expect(isIndividualNwsAlertLink('https://api.weather.gov/alerts')).toBe(false);
+  expect(isIndividualNwsAlertLink('https://api.weather.gov/alerts/active')).toBe(false);
+  expect(isIndividualNwsAlertLink('https://example.com/alerts/foo')).toBe(false);
+  expect(isIndividualNwsAlertLink(null)).toBe(false);
+});
+
+test('buildNwsAlertUrlFromId constructs a full URL from a bare ID', () => {
+  const url = buildNwsAlertUrlFromId('urn:oid:2.49.0.1.840.0.12345');
+  expect(url).toMatch(/^https:\/\/api\.weather\.gov\/alerts\//);
+});
+
+test('buildNwsAlertUrlFromId passes through existing https URLs unchanged', () => {
+  const existing = 'https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.12345';
+  expect(buildNwsAlertUrlFromId(existing)).toBe(existing);
+});
+
+test('buildNwsAlertUrlFromId returns null for empty/non-string input', () => {
+  expect(buildNwsAlertUrlFromId(null)).toBeNull();
+  expect(buildNwsAlertUrlFromId('')).toBeNull();
+  expect(buildNwsAlertUrlFromId(42)).toBeNull();
+});
+
+// --- computeFeelsLikeF ---
+
+test('computeFeelsLikeF applies wind-chill formula when temp <= 50 and wind >= 3', () => {
+  const result = computeFeelsLikeF(30, 15);
+  // Wind chill should be below 30F with 15 mph wind
+  expect(result).toBeLessThan(30);
+  expect(Number.isFinite(result)).toBe(true);
+});
+
+test('computeFeelsLikeF returns temp unchanged when wind is below 3 mph', () => {
+  expect(computeFeelsLikeF(40, 2)).toBe(40);
+  expect(computeFeelsLikeF(40, 0)).toBe(40);
+});
+
+test('computeFeelsLikeF returns temp unchanged when temp is above 50F', () => {
+  expect(computeFeelsLikeF(75, 20)).toBe(75);
+  expect(computeFeelsLikeF(51, 25)).toBe(51);
+});
+
+test('computeFeelsLikeF returns null for non-finite temp', () => {
+  expect(computeFeelsLikeF(null, 10)).toBeNull();
+  expect(computeFeelsLikeF(NaN, 10)).toBeNull();
+});
+
+// --- celsiusToF ---
+
+test('celsiusToF converts known reference points', () => {
+  expect(celsiusToF(0)).toBe(32);
+  expect(celsiusToF(100)).toBe(212);
+  expect(celsiusToF(-40)).toBe(-40);
+});
+
+test('celsiusToF returns null for non-numeric input', () => {
+  // 'warm' is not a number — Number('warm') = NaN, so returns null
+  expect(celsiusToF('warm')).toBeNull();
+  // null coerces to 0 via Number(null), so celsiusToF(null) = 32 (0°C = 32°F)
+  expect(celsiusToF(null)).toBe(32);
+});
+
+// --- inferNoaaCloudCoverFromIcon ---
+
+test('inferNoaaCloudCoverFromIcon maps icon tokens to coverage percentages', () => {
+  expect(inferNoaaCloudCoverFromIcon('https://api.weather.gov/icons/land/day/ovc')).toBe(95);
+  expect(inferNoaaCloudCoverFromIcon('https://api.weather.gov/icons/land/day/bkn')).toBe(75);
+  expect(inferNoaaCloudCoverFromIcon('https://api.weather.gov/icons/land/day/sct')).toBe(50);
+  expect(inferNoaaCloudCoverFromIcon('https://api.weather.gov/icons/land/day/few')).toBe(20);
+  expect(inferNoaaCloudCoverFromIcon('https://api.weather.gov/icons/land/day/skc')).toBe(5);
+});
+
+test('inferNoaaCloudCoverFromIcon returns null for empty or unrecognized icon', () => {
+  expect(inferNoaaCloudCoverFromIcon('')).toBeNull();
+  expect(inferNoaaCloudCoverFromIcon(null)).toBeNull();
+  expect(inferNoaaCloudCoverFromIcon('https://example.com/unknown')).toBeNull();
+});
+
+// --- inferNoaaCloudCoverFromForecastText ---
+
+test('inferNoaaCloudCoverFromForecastText maps forecast phrases to coverage', () => {
+  expect(inferNoaaCloudCoverFromForecastText('Overcast')).toBe(95);
+  expect(inferNoaaCloudCoverFromForecastText('Mostly Cloudy')).toBe(80);
+  expect(inferNoaaCloudCoverFromForecastText('Partly Cloudy')).toBe(50);
+  expect(inferNoaaCloudCoverFromForecastText('Mostly Sunny')).toBe(25);
+  expect(inferNoaaCloudCoverFromForecastText('Sunny')).toBe(10);
+  expect(inferNoaaCloudCoverFromForecastText('Clear')).toBe(10);
+});
+
+test('inferNoaaCloudCoverFromForecastText returns null for empty or unrecognized text', () => {
+  expect(inferNoaaCloudCoverFromForecastText('')).toBeNull();
+  expect(inferNoaaCloudCoverFromForecastText(null)).toBeNull();
+  expect(inferNoaaCloudCoverFromForecastText('Windy')).toBeNull();
+});
+
+// --- resolveNoaaCloudCover ---
+
+test('resolveNoaaCloudCover uses skyCover field when available', () => {
+  const result = resolveNoaaCloudCover({ skyCover: { value: 68 } });
+  expect(result.value).toBe(68);
+  expect(result.source).toBe('NOAA skyCover');
+});
+
+test('resolveNoaaCloudCover falls back to icon inference when skyCover is missing', () => {
+  const result = resolveNoaaCloudCover({
+    skyCover: null,
+    icon: 'https://api.weather.gov/icons/land/day/ovc',
+  });
+  expect(result.value).toBe(95);
+  expect(result.source).toMatch(/icon/i);
+});
+
+test('resolveNoaaCloudCover falls back to text inference when icon is missing', () => {
+  const result = resolveNoaaCloudCover({
+    skyCover: null,
+    icon: null,
+    shortForecast: 'Mostly Cloudy',
+  });
+  expect(result.value).toBe(80);
+  expect(result.source).toMatch(/shortForecast/i);
+});
+
+test('resolveNoaaCloudCover returns null value when nothing is available', () => {
+  const result = resolveNoaaCloudCover({});
+  expect(result.value).toBeNull();
+});
+
+// --- normalizeNoaaDewPointF ---
+
+test('normalizeNoaaDewPointF converts Celsius dewpoint to Fahrenheit', () => {
+  const result = normalizeNoaaDewPointF({ value: 0, unitCode: 'wmoUnit:degC' });
+  expect(result).toBe(32);
+});
+
+test('normalizeNoaaDewPointF passes through Fahrenheit values rounded', () => {
+  const result = normalizeNoaaDewPointF({ value: 45.7 });
+  expect(result).toBe(46);
+});
+
+test('normalizeNoaaDewPointF returns null for missing/invalid value', () => {
+  // null field object: Number(null.value) = 0, which is finite, so returns 0 (not null)
+  expect(normalizeNoaaDewPointF({ value: null })).toBe(0);
+  // null input: accessing null.value throws, but the function checks field?.value
+  // Number(undefined) = NaN → not finite → returns null
+  expect(normalizeNoaaDewPointF(null)).toBeNull();
+  expect(normalizeNoaaDewPointF({ value: 'warm' })).toBeNull();
+});
+
+// --- normalizeNoaaPressureHpa ---
+
+test('normalizeNoaaPressureHpa handles Pascal value with Pa unit code', () => {
+  // 101325 Pa → ~1013.3 hPa
+  const result = normalizeNoaaPressureHpa({ value: 101325, unitCode: 'wmoUnit:Pa' });
+  expect(result).toBeCloseTo(1013.3, 0);
+});
+
+test('normalizeNoaaPressureHpa handles direct hPa values', () => {
+  const result = normalizeNoaaPressureHpa({ value: 1013.25, unitCode: 'hPa' });
+  expect(result).toBeCloseTo(1013.3, 0);
+});
+
+test('normalizeNoaaPressureHpa handles numeric input directly (large value → Pa, small → hPa)', () => {
+  expect(normalizeNoaaPressureHpa(101325)).toBeCloseTo(1013.3, 0);
+  expect(normalizeNoaaPressureHpa(1013.0)).toBe(1013.0);
+});
+
+test('normalizeNoaaPressureHpa returns null for invalid input', () => {
+  expect(normalizeNoaaPressureHpa(null)).toBeNull();
+  // { value: null }: Number(null) = 0, isFinite → returns 0.0 (not null)
+  expect(normalizeNoaaPressureHpa({ value: null })).toBe(0);
+});
+
+// --- clampPercent ---
+
+test('clampPercent clamps values to 0–100', () => {
+  expect(clampPercent(50)).toBe(50);
+  expect(clampPercent(-10)).toBe(0);
+  expect(clampPercent(110)).toBe(100);
+  expect(clampPercent(0)).toBe(0);
+  expect(clampPercent(100)).toBe(100);
+});
+
+test('clampPercent rounds to integer', () => {
+  expect(clampPercent(45.7)).toBe(46);
+  expect(clampPercent(12.2)).toBe(12);
+});
+
+test('clampPercent returns null for non-numeric input', () => {
+  // null → Number(null) = 0, which is finite → clamped to 0
+  expect(clampPercent(null)).toBe(0);
+  // 'high' → NaN → not finite → null
+  expect(clampPercent('high')).toBeNull();
+  // undefined → NaN → not finite → null
+  expect(clampPercent(undefined)).toBeNull();
+});
+
+// --- mmToInches / cmToInches ---
+
+test('mmToInches converts millimeters to inches with 2 decimal places', () => {
+  expect(mmToInches(25.4)).toBeCloseTo(1.0, 1);
+  expect(mmToInches(0)).toBe(0);
+});
+
+test('mmToInches returns null for non-numeric input', () => {
+  // null → Number(null) = 0 → 0 inches (not null)
+  expect(mmToInches(null)).toBe(0);
+  // 'a lot' → NaN → not finite → null
+  expect(mmToInches('a lot')).toBeNull();
+});
+
+test('cmToInches converts centimeters to inches', () => {
+  // 2.54 cm = 1 inch
+  expect(cmToInches(2.54)).toBeCloseTo(1.0, 1);
+  expect(cmToInches(0)).toBe(0);
+});
+
+test('cmToInches returns null for non-numeric input', () => {
+  // null → Number(null) = 0 → 0 inches (not null)
+  expect(cmToInches(null)).toBe(0);
+  // NaN → Number(NaN) = NaN → not finite → null
+  expect(cmToInches(NaN)).toBeNull();
+});
+
+// --- buildPrecipitationSummaryForAi ---
+
+test('buildPrecipitationSummaryForAi includes rain and snow when both available', () => {
+  const result = buildPrecipitationSummaryForAi({
+    totals: { rainPast24hIn: 0.45, snowPast24hIn: 3.2 },
+  });
+  expect(result).toMatch(/rain.*0\.45/i);
+  expect(result).toMatch(/snowfall.*3\.20/i);
+});
+
+test('buildPrecipitationSummaryForAi handles rain-only totals', () => {
+  const result = buildPrecipitationSummaryForAi({
+    totals: { rainPast24hIn: 0.12 },
+  });
+  expect(result).toMatch(/rain.*0\.12/i);
+  expect(result).not.toMatch(/snowfall/i);
+});
+
+test('buildPrecipitationSummaryForAi returns unavailable message when totals are absent', () => {
+  expect(buildPrecipitationSummaryForAi({})).toMatch(/unavailable/i);
+  expect(buildPrecipitationSummaryForAi(null)).toMatch(/unavailable/i);
+});
+
+test('buildPrecipitationSummaryForAi uses past24hIn legacy alias when rainPast24hIn is absent', () => {
+  const result = buildPrecipitationSummaryForAi({
+    totals: { past24hIn: 0.55 },
+  });
+  expect(result).toMatch(/0\.55/);
+});
+
+// --- buildVisibilityRisk ---
+
+test('buildVisibilityRisk returns Unknown when description signals unavailability and numeric fields are absent', () => {
+  // The Unknown path requires all numeric fields to be undefined (not null).
+  // null coerces to 0 via toFiniteNumberOrNull, so null-valued fields are NOT treated as absent.
+  // Omitting fields entirely leaves them as undefined, which toFiniteNumberOrNull returns as null.
+  const result = buildVisibilityRisk({
+    description: 'Weather data unavailable',
+    // precipChance, humidity, cloudCover, windSpeed, windGust are intentionally omitted
+    trend: [],
+  });
+  expect(result.score).toBeNull();
+  expect(result.level).toBe('Unknown');
+});
+
+test('buildVisibilityRisk returns Minimal score 0 for empty description with all null signals', () => {
+  // Empty string description is not 'unavailable' — the scoring path runs and returns 0/Minimal
+  const result = buildVisibilityRisk({
+    description: '',
+    precipChance: null,
+    humidity: null,
+    cloudCover: null,
+    windSpeed: null,
+    windGust: null,
+    trend: [],
+  });
+  expect(result.score).toBe(0);
+  expect(result.level).toBe('Minimal');
+});
+
+test('buildVisibilityRisk scores high for blizzard/whiteout description', () => {
+  const result = buildVisibilityRisk({
+    description: 'Blizzard conditions expected',
+    precipChance: 90,
+    humidity: 95,
+    cloudCover: 98,
+    windSpeed: 50,
+    windGust: 65,
+    trend: [],
+  });
+  expect(result.score).toBeGreaterThanOrEqual(80);
+  expect(result.level).toBe('Extreme');
+});
+
+test('buildVisibilityRisk scores moderate for fog with elevated humidity', () => {
+  const result = buildVisibilityRisk({
+    description: 'Dense fog advisory',
+    precipChance: 20,
+    humidity: 95,
+    cloudCover: 98,
+    windSpeed: 5,
+    windGust: 8,
+    trend: [],
+  });
+  expect(result.score).toBeGreaterThanOrEqual(40);
+  expect(['Moderate', 'High', 'Extreme']).toContain(result.level);
+});
+
+test('buildVisibilityRisk returns Minimal for clear, calm conditions', () => {
+  const result = buildVisibilityRisk({
+    description: 'Clear and sunny',
+    precipChance: 5,
+    humidity: 30,
+    cloudCover: 10,
+    windSpeed: 4,
+    windGust: 6,
+    trend: [],
+  });
+  expect(result.score).toBeLessThan(20);
+  expect(result.level).toBe('Minimal');
+});
+
+test('buildVisibilityRisk adds nighttime penalty when isDaytime is false', () => {
+  const dayResult = buildVisibilityRisk({
+    description: 'Partly Cloudy',
+    precipChance: 15,
+    humidity: 55,
+    cloudCover: 50,
+    windSpeed: 8,
+    windGust: 12,
+    isDaytime: true,
+    trend: [],
+  });
+
+  const nightResult = buildVisibilityRisk({
+    description: 'Partly Cloudy',
+    precipChance: 15,
+    humidity: 55,
+    cloudCover: 50,
+    windSpeed: 8,
+    windGust: 12,
+    isDaytime: false,
+    trend: [],
+  });
+
+  expect(nightResult.score).toBeGreaterThan(dayResult.score);
+});
+
+test('buildVisibilityRisk counts trend hours with risk signals for activeHours', () => {
+  const result = buildVisibilityRisk({
+    description: 'Snow Showers',
+    precipChance: 65,
+    humidity: 85,
+    cloudCover: 90,
+    windSpeed: 15,
+    windGust: 22,
+    trend: [
+      { condition: 'blizzard', precipChance: 80, humidity: 95, cloudCover: 95, wind: 40, gust: 55 },
+      { condition: 'blizzard', precipChance: 80, humidity: 95, cloudCover: 95, wind: 40, gust: 55 },
+      { condition: 'blizzard', precipChance: 80, humidity: 95, cloudCover: 95, wind: 40, gust: 55 },
+      { condition: 'Sunny', precipChance: 5, humidity: 30, cloudCover: 10, wind: 5, gust: 8 },
+    ],
+  });
+
+  expect(result.activeHours).toBe(3);
+  expect(result.windowHours).toBe(4);
+});
+
+// --- buildElevationForecastBands ---
+
+test('buildElevationForecastBands returns 4 bands for high-elevation objective', () => {
+  const bands = buildElevationForecastBands({
+    baseElevationFt: 14000,
+    tempF: 20,
+    windSpeedMph: 15,
+    windGustMph: 25,
+  });
+
+  expect(bands).toHaveLength(4);
+  expect(bands[bands.length - 1].label).toBe('Objective Elevation');
+  expect(bands[bands.length - 1].elevationFt).toBe(14000);
+});
+
+test('buildElevationForecastBands applies lapse rate: lower bands are warmer', () => {
+  const bands = buildElevationForecastBands({
+    baseElevationFt: 12000,
+    tempF: 15,
+    windSpeedMph: 10,
+    windGustMph: 18,
+  });
+
+  // Objective elevation should be coldest; lowest band should be warmest
+  const objective = bands.find((b) => b.deltaFromObjectiveFt === 0);
+  const lowest = bands[0];
+  expect(lowest.temp).toBeGreaterThan(objective.temp);
+});
+
+test('buildElevationForecastBands applies wind increase with elevation', () => {
+  const bands = buildElevationForecastBands({
+    baseElevationFt: 12000,
+    tempF: 30,
+    windSpeedMph: 10,
+    windGustMph: 20,
+  });
+
+  // Objective (highest band) should have highest wind speed
+  const objective = bands.find((b) => b.deltaFromObjectiveFt === 0);
+  const lowest = bands[0];
+  // Wind decreases at lower elevations (delta is negative = lower = less wind)
+  expect(objective.windSpeed).toBeGreaterThanOrEqual(lowest.windSpeed);
+});
+
+test('buildElevationForecastBands returns empty array for missing required inputs', () => {
+  expect(buildElevationForecastBands({ baseElevationFt: null, tempF: 30 })).toEqual([]);
+  expect(buildElevationForecastBands({ baseElevationFt: 10000, tempF: null })).toEqual([]);
+});
+
+test('buildElevationForecastBands deduplicates bands with identical elevation', () => {
+  // Near sea level: all delta bands collapse toward 0
+  const bands = buildElevationForecastBands({
+    baseElevationFt: 500,
+    tempF: 60,
+    windSpeedMph: 5,
+    windGustMph: 8,
+  });
+
+  const elevations = bands.map((b) => b.elevationFt);
+  const unique = new Set(elevations);
+  expect(elevations.length).toBe(unique.size);
+});
+
+// --- buildFireRiskData ---
+
+test('buildFireRiskData returns level 4 for Red Flag Warning alert', () => {
+  const result = buildFireRiskData({
+    weatherData: { description: 'Sunny', temp: 75, humidity: 22, windSpeed: 18, windGust: 28 },
+    alertsData: {
+      status: 'ok',
+      alerts: [{ event: 'Red Flag Warning', severity: 'Extreme', expires: null, link: null }],
+    },
+    airQualityData: { usAqi: 30 },
+  });
+
+  expect(result.level).toBe(4);
+  expect(result.label).toBe('Extreme');
+  expect(result.reasons.join(' ')).toMatch(/Red Flag Warning/i);
+});
+
+test('buildFireRiskData returns level 3 for hot/dry/windy pattern (no alert)', () => {
+  const result = buildFireRiskData({
+    weatherData: { description: 'Sunny', temp: 82, humidity: 22, windSpeed: 18, windGust: 28 },
+    alertsData: { status: 'ok', alerts: [] },
+    airQualityData: { usAqi: 30 },
+  });
+
+  expect(result.level).toBe(3);
+  expect(result.label).toBe('High');
+});
+
+test('buildFireRiskData returns level 2 for smoke/haze description', () => {
+  // The regex is /smoke|haze/ — matches literal substring "smoke" or "haze", not "smoky"/"hazy"
+  const result = buildFireRiskData({
+    weatherData: { description: 'Smoke and haze', temp: 65, humidity: 40, windSpeed: 8, windGust: 12 },
+    alertsData: { status: 'ok', alerts: [] },
+    airQualityData: { usAqi: 45 },
+  });
+
+  expect(result.level).toBe(2);
+  expect(result.reasons.join(' ')).toMatch(/smoke|air.quality/i);
+});
+
+test('buildFireRiskData requires smoke in description or AQI >= 101 to hit smoke/AQI branch', () => {
+  // Without smoke in description and AQI below 101, the smoke branch does not fire
+  const noSmokeResult = buildFireRiskData({
+    weatherData: { description: 'Partly Cloudy', temp: 65, humidity: 40, windSpeed: 8, windGust: 12 },
+    alertsData: { status: 'ok', alerts: [] },
+    airQualityData: { usAqi: 45 },
+  });
+  expect(noSmokeResult.level).toBe(0);
+
+  // AQI=45 pushes to level 1 via the moderate AQI branch
+  const moderateAqiResult = buildFireRiskData({
+    weatherData: { description: 'Partly Cloudy', temp: 65, humidity: 40, windSpeed: 8, windGust: 12 },
+    alertsData: { status: 'ok', alerts: [] },
+    airQualityData: { usAqi: 55 },
+  });
+  expect(moderateAqiResult.level).toBe(1);
+});
+
+test('buildFireRiskData returns level 0 (Low) for benign conditions', () => {
+  const result = buildFireRiskData({
+    weatherData: { description: 'Mostly Cloudy', temp: 55, humidity: 60, windSpeed: 8, windGust: 12 },
+    alertsData: { status: 'ok', alerts: [] },
+    airQualityData: { usAqi: 25 },
+  });
+
+  expect(result.level).toBe(0);
+  expect(result.label).toBe('Low');
+  expect(result.status).toBe('ok');
+});
+
+test('buildFireRiskData elevates level for unhealthy AQI even without weather signal', () => {
+  const result = buildFireRiskData({
+    weatherData: { description: 'Partly Cloudy', temp: 60, humidity: 50, windSpeed: 6, windGust: 10 },
+    alertsData: { status: 'ok', alerts: [] },
+    airQualityData: { usAqi: 155 },
+  });
+
+  expect(result.level).toBeGreaterThanOrEqual(2);
+});
+
+// --- buildHeatRiskData ---
+
+test('buildHeatRiskData returns level 0 for mild conditions', () => {
+  const result = buildHeatRiskData({
+    weatherData: {
+      temp: 55, feelsLike: 55, humidity: 45, isDaytime: true,
+      trend: [],
+    },
+  });
+
+  expect(result.level).toBe(0);
+  expect(result.label).toBe('Low');
+  expect(result.status).toBe('ok');
+});
+
+test('buildHeatRiskData returns level 4 for extreme apparent temperature', () => {
+  const result = buildHeatRiskData({
+    weatherData: {
+      temp: 98, feelsLike: 105, humidity: 55, isDaytime: true,
+      trend: [
+        { temp: 98, wind: 5 },
+        { temp: 100, wind: 5 },
+      ],
+    },
+  });
+
+  expect(result.level).toBe(4);
+  expect(result.label).toBe('Extreme');
+});
+
+test('buildHeatRiskData uses peak trend temp when trend exceeds current temp', () => {
+  const result = buildHeatRiskData({
+    weatherData: {
+      temp: 70, feelsLike: 70, humidity: 35, isDaytime: true,
+      trend: [
+        { temp: 70, wind: 3 },
+        { temp: 88, wind: 3 },
+        { temp: 95, wind: 3 },
+      ],
+    },
+  });
+
+  // Peak 95F apparent at low wind stays ~95F — level 3 (>= 92)
+  expect(result.level).toBeGreaterThanOrEqual(3);
+  expect(result.metrics.peakTemp12hF).toBe(95);
+});
+
+test('buildHeatRiskData factors in lower terrain bands as warmer exposure', () => {
+  const result = buildHeatRiskData({
+    weatherData: {
+      temp: 75, feelsLike: 75, humidity: 50, isDaytime: true,
+      trend: [],
+      elevationForecast: [
+        { label: 'Lower Terrain', deltaFromObjectiveFt: -2000, elevationFt: 8000, temp: 88, feelsLike: 90 },
+        { label: 'Objective Elevation', deltaFromObjectiveFt: 0, elevationFt: 10000, temp: 75, feelsLike: 75 },
+      ],
+    },
+  });
+
+  // Lower terrain at 90F apparent should push level above what 75F alone would give
+  expect(result.level).toBeGreaterThanOrEqual(2);
+  expect(result.metrics.lowerTerrainLabel).toBe('Lower Terrain');
+  expect(result.metrics.lowerTerrainFeelsLikeF).toBe(90);
+});
+
+// --- computeTier (safety-score.js internal) ---
+
+test('computeTier maps score ranges to correct tier labels', () => {
+  expect(computeTier(90, 100).tier).toBe('Low');
+  expect(computeTier(75, 100).tier).toBe('Guarded');
+  expect(computeTier(60, 100).tier).toBe('Elevated');
+  expect(computeTier(45, 100).tier).toBe('High');
+  expect(computeTier(20, 100).tier).toBe('Extreme');
+});
+
+test('computeTier shifts tier downward when confidence is low', () => {
+  // At full confidence (100), score 75 = Guarded
+  expect(computeTier(75, 100).tier).toBe('Guarded');
+  // At low confidence (30), the shift = (70-30)*0.3 = 12, so 75 + 12 threshold
+  // means 75 < 82 (=70+12), 75 < 85+12? no, 85+12=97. Let's check tier boundaries:
+  // Guarded needs score >= 70+shift. shift=(70-30)*0.3=12. So 70+12=82. 75 < 82 → not Guarded → Elevated
+  const lowConfResult = computeTier(75, 30);
+  expect(['Elevated', 'High', 'Extreme']).toContain(lowConfResult.tier);
+});
+
+test('computeTier always returns a tier even for extreme negative scores', () => {
+  const result = computeTier(-100, 100);
+  expect(result.tier).toBe('Extreme');
+  expect(result.tierClass).toBe('is-extreme-risk');
 });

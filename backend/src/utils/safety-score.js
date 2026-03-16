@@ -4,6 +4,53 @@ const { parseWindMph } = require('./wind');
 const { clampTravelWindowHours, parseClockToMinutes, parseIsoClockMinutes } = require('./time');
 const { normalizeAlertSeverity } = require('./alerts');
 
+// --- Scoring Config: all thresholds, group scales, tier definitions ---
+const SCORING_CONFIG = {
+  maxScore: 95,
+
+  groupScales: {
+    avalanche: 55,
+    weather: 42,
+    alerts: 24,
+    airQuality: 20,
+    fire: 18,
+  },
+
+  tiers: [
+    { min: 85, label: 'Low', tierClass: 'is-low-risk', color: 'green' },
+    { min: 70, label: 'Guarded', tierClass: 'is-guarded-risk', color: 'teal' },
+    { min: 55, label: 'Elevated', tierClass: 'is-elevated-risk', color: 'yellow' },
+    { min: 40, label: 'High', tierClass: 'is-high-risk', color: 'orange' },
+    { min: -Infinity, label: 'Extreme', tierClass: 'is-extreme-risk', color: 'red' },
+  ],
+
+  confidenceTierShift: {
+    threshold: 70,
+    rate: 0.3,
+  },
+
+  messages: {
+    avalancheUnknown: "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.",
+    stableConditions: 'Conditions appear stable for the selected plan window.',
+  },
+};
+
+const computeTier = (score, confidence) => {
+  const { tiers, confidenceTierShift } = SCORING_CONFIG;
+  const shift = Math.max(0, (confidenceTierShift.threshold - Math.min(confidence, confidenceTierShift.threshold)) * confidenceTierShift.rate);
+  for (const tier of tiers) {
+    if (score >= tier.min + shift) {
+      return { tier: tier.label, tierClass: tier.tierClass };
+    }
+  }
+  const last = tiers[tiers.length - 1];
+  return { tier: last.label, tierClass: last.tierClass };
+};
+
+const diminishingReturn = (raw, scale) => {
+  return scale * (1 - Math.exp(-raw / scale));
+};
+
 const calculateSafetyScore = ({
   weatherData,
   avalancheData,
@@ -19,16 +66,6 @@ const calculateSafetyScore = ({
 }) => {
   const explanations = [];
   const factors = [];
-  const groupCaps = {
-    avalanche: 55,
-    weather: 42,
-    alerts: 24,
-    airQuality: 20,
-    fire: 18,
-  };
-
-  const AVALANCHE_UNKNOWN_MESSAGE =
-    "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.";
 
   const mapHazardToGroup = (hazard) => {
     const normalized = String(hazard || '').toLowerCase();
@@ -127,6 +164,9 @@ const calculateSafetyScore = ({
   let weightedHighPrecipHours = 0;
   let weightedModeratePrecipHours = 0;
   let weightedTrendPeakGust = 0;
+  let weightedColdExposureHours = 0;
+  let weightedExtremeColdHours = 0;
+  let weightedHeatExposureHours = 0;
   trend.forEach((item, i) => {
     const w = temporalWeight(i);
     const rowWind = Number(item?.wind);
@@ -146,6 +186,17 @@ const calculateSafetyScore = ({
     }
     if (Number.isFinite(rowPrecip) && rowPrecip >= 40) {
       weightedModeratePrecipHours += w;
+    }
+    // Temporal weighting for cold/heat exposure
+    const rowTemp = Number(item?.temp);
+    const rowWindForFeels = Number.isFinite(rowWind) ? rowWind : 0;
+    if (Number.isFinite(rowTemp)) {
+      const fl = computeFeelsLikeF(rowTemp, rowWindForFeels);
+      if (Number.isFinite(fl)) {
+        if (fl <= 0) weightedExtremeColdHours += w;
+        if (fl <= 15) weightedColdExposureHours += w;
+        if (fl >= 85) weightedHeatExposureHours += w;
+      }
     }
   });
 
@@ -178,7 +229,7 @@ const calculateSafetyScore = ({
 
   if (avalancheRelevant) {
     if (avalancheUnknown) {
-      applyFactor('Avalanche Uncertainty', 16, AVALANCHE_UNKNOWN_MESSAGE, 'Avalanche center coverage');
+      applyFactor('Avalanche Uncertainty', 16, SCORING_CONFIG.messages.avalancheUnknown, 'Avalanche center coverage');
     } else if (Number.isFinite(avalancheDangerLevel)) {
       if (avalancheDangerLevel >= 4 || normalizedRisk.includes('high') || normalizedRisk.includes('extreme')) {
         applyFactor('Avalanche', 52, 'High avalanche danger reported. Avoid avalanche terrain and steep loaded slopes.', 'Avalanche center forecast');
@@ -293,11 +344,12 @@ const calculateSafetyScore = ({
     applyFactor('Cold', 3, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
   }
 
-  const coldOnlyHours = coldExposureHours - extremeColdHours;
-  const coldDurationImpact = Math.min(12, Math.round(extremeColdHours * 1.5 + coldOnlyHours * 0.8));
+  // Use temporally-weighted cold duration values
+  const weightedColdOnlyHours = weightedColdExposureHours - weightedExtremeColdHours;
+  const coldDurationImpact = Math.min(12, Math.round(weightedExtremeColdHours * 1.5 + weightedColdOnlyHours * 0.8));
   if (coldDurationImpact > 0) {
     const coldLabel = extremeColdHours > 0
-      ? `${extremeColdHours}/${trend.length} trend hours are at or below 0F and ${coldOnlyHours} additional hours are below 15F apparent temperature.`
+      ? `${extremeColdHours}/${trend.length} trend hours are at or below 0F and ${coldExposureHours - extremeColdHours} additional hours are below 15F apparent temperature.`
       : `${coldExposureHours}/${trend.length} trend hours are at or below 15F apparent temperature.`;
     applyFactor('Cold', coldDurationImpact, coldLabel, 'NOAA hourly trend');
   }
@@ -313,7 +365,7 @@ const calculateSafetyScore = ({
     applyFactor('Heat', 2, `Heat risk is ${heatRiskData?.label || 'Guarded'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 90) {
     applyFactor('Heat', 6, `Peak apparent temperature in the window reaches ${Math.round(trendMaxFeelsLike)}F.`, 'NOAA temp + humidity');
-  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 82 && heatExposureHours >= 4) {
+  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= 82 && weightedHeatExposureHours >= 4) {
     applyFactor('Heat', 3, `${heatExposureHours}/${trend.length} trend hours are warm (>=85F apparent).`, 'NOAA hourly trend');
   }
 
@@ -414,27 +466,7 @@ const calculateSafetyScore = ({
     }
   }
 
-  if (forecastLeadHours !== null && forecastLeadHours > 6) {
-    let uncertaintyImpact = 2;
-    if (forecastLeadHours >= 96) {
-      uncertaintyImpact = 10;
-    } else if (forecastLeadHours >= 72) {
-      uncertaintyImpact = 8;
-    } else if (forecastLeadHours >= 48) {
-      uncertaintyImpact = 6;
-    } else if (forecastLeadHours >= 24) {
-      uncertaintyImpact = 4;
-    }
-    if (!alertsRelevantForSelectedTime) {
-      uncertaintyImpact += 2;
-    }
-    applyFactor(
-      'Forecast Uncertainty',
-      Math.min(14, uncertaintyImpact),
-      `Selected start is ${Math.round(forecastLeadHours)}h ahead; confidence is lower because fewer real-time feeds can be projected.`,
-      'Forecast lead time',
-    );
-  }
+  // Forecast uncertainty removed from score — kept only in confidence penalties below
 
   if (alertsRelevantForSelectedTime && Number.isFinite(alertsCount) && alertsCount > 0) {
     const listedEvents = alertEvents.length ? ` (${alertEvents.join(', ')})` : '';
@@ -475,20 +507,49 @@ const calculateSafetyScore = ({
     applyFactor('Fire Danger', 5, 'Elevated fire risk signal from weather, smoke, or alert context.', fireRiskData?.source || 'Fire risk synthesis');
   }
 
+  // --- Cross-group interaction penalties ---
+  // Compute preliminary raw group impacts to check thresholds
+  const prelimGroupRaw = factors.reduce((acc, factor) => {
+    const group = factor.group || 'weather';
+    acc[group] = (acc[group] || 0) + Number(factor.impact || 0);
+    return acc;
+  }, {});
+
+  const hasWindFactor = factors.some((f) => /^wind$/i.test(f.hazard));
+  const hasStormOrWinterWeather = factors.some((f) => /^(storm|winter weather)$/i.test(f.hazard));
+  const hasVisibilityFactor = factors.some((f) => /^visibility$/i.test(f.hazard));
+  const avalancheConsiderable = avalancheRelevant && Number.isFinite(avalancheDangerLevel) && avalancheDangerLevel >= 3;
+  const avalancheModerate = avalancheRelevant && Number.isFinite(avalancheDangerLevel) && avalancheDangerLevel >= 2;
+
+  if (avalancheConsiderable && hasWindFactor) {
+    applyFactor('Avalanche Wind Loading', 8, 'Wind loading compounds avalanche hazard at considerable or higher danger.', 'Cross-group interaction');
+  }
+  if (avalancheModerate && hasStormOrWinterWeather) {
+    applyFactor('Avalanche Storm Loading', 5, 'Active storm snow increases avalanche hazard at moderate or higher danger.', 'Cross-group interaction');
+  }
+  if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 2 && Number.isFinite(heatRiskLevel) && heatRiskLevel >= 2) {
+    applyFactor('Fire-Heat Compound', 4, 'Co-occurring fire danger and heat risk compound outdoor exposure hazard.', 'Cross-group interaction');
+  }
+  if (avalancheConsiderable && hasVisibilityFactor) {
+    applyFactor('Avalanche Visibility', 4, 'Low visibility in avalanche terrain reduces ability to identify hazards.', 'Cross-group interaction');
+  }
+
+  // --- Group impacts with diminishing returns ---
   const rawGroupImpacts = factors.reduce((acc, factor) => {
     const group = factor.group || 'weather';
     acc[group] = (acc[group] || 0) + Number(factor.impact || 0);
     return acc;
   }, {});
   const groupImpacts = Object.entries(rawGroupImpacts).reduce((acc, [group, rawImpact]) => {
-    const cap = Number(groupCaps[group] || 100);
+    const scale = Number(SCORING_CONFIG.groupScales[group] || 100);
     const raw = Number.isFinite(rawImpact) ? Math.round(rawImpact) : 0;
-    const capped = Math.min(raw, cap);
-    acc[group] = { raw, capped, cap };
+    const effective = Math.round(diminishingReturn(raw, scale));
+    // Keep capped/cap as aliases for backward compatibility
+    acc[group] = { raw, effective, scale, capped: effective, cap: scale };
     return acc;
   }, {});
-  const totalCappedImpact = Object.values(groupImpacts).reduce((sum, entry) => sum + Number(entry.capped || 0), 0);
-  const score = Math.max(0, Math.round(100 - totalCappedImpact));
+  const totalEffectiveImpact = Object.values(groupImpacts).reduce((sum, entry) => sum + Number(entry.effective || 0), 0);
+  const score = Math.max(0, Math.round(SCORING_CONFIG.maxScore - totalEffectiveImpact));
 
   let confidence = 100;
   const confidenceReasons = [];
@@ -607,11 +668,16 @@ const calculateSafetyScore = ({
     fireRiskData?.status === 'ok' ? 'Fire risk synthesis (NOAA + NWS + AQI)' : null,
   ].filter(Boolean);
 
+  // 5-tier display with confidence-modulated tier selection
+  const { tier, tierClass } = computeTier(score, confidence);
+
   return {
     score,
     confidence,
+    tier,
+    tierClass,
     primaryHazard,
-    explanations: explanations.length > 0 ? explanations : ['Conditions appear stable for the selected plan window.'],
+    explanations: explanations.length > 0 ? explanations : [SCORING_CONFIG.messages.stableConditions],
     factors: factorsSorted,
     groupImpacts,
     confidenceReasons,
@@ -620,4 +686,4 @@ const calculateSafetyScore = ({
   };
 };
 
-module.exports = { calculateSafetyScore };
+module.exports = { calculateSafetyScore, SCORING_CONFIG, computeTier };
