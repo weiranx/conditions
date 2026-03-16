@@ -83,7 +83,7 @@ export function DecisionGateCard({
             <>
               {betterDaySuggestionsNote && <p className="muted-note">{betterDaySuggestionsNote}</p>}
               <ul className="decision-better-days-list">
-                {betterDaySuggestions.map((suggestion) => {
+                {betterDaySuggestions.slice(0, 3).map((suggestion) => {
                   const levelClass = suggestion.level.toLowerCase().replace('-', '');
                   return (
                     <li key={suggestion.date} className="decision-better-day-item">

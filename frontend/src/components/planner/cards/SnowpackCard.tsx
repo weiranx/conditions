@@ -89,38 +89,10 @@ export function SnowpackCard({
 
       <div className="snowpack-core-grid">
         <div className="snowpack-core-item">
-          <span className="stat-label stat-label-with-help">
-            Nearest SNOTEL
-            <HelpHint text="Closest USDA NRCS snow station to your objective. Station observations are used as local snowpack ground truth." />
-          </span>
-          <strong>{snotelStationName || 'Unavailable'}</strong>
-          <small>{snotelDistanceDisplay !== 'N/A' ? `${snotelDistanceDisplay} from objective` : 'Distance unavailable'}</small>
-        </div>
-        <div className="snowpack-core-item">
           <span className="stat-label stat-label-with-help">SNOTEL Station Snow <HelpHint text="SNOTEL (Snow Telemetry): automated USDA stations measuring snow depth and snow water equivalent (SWE) in real time." /></span>
           <strong>Depth {snotelDepthDisplay} &bull; SWE {snotelSweDisplay}</strong>
-          <small>{snotelObservedDate ? `Observed ${snotelObservedDate}` : 'Observation date unavailable'}</small>
+          <small>{snotelStationName || 'Unavailable'}{snotelDistanceDisplay !== 'N/A' ? ` \u2022 ${snotelDistanceDisplay}` : ''}{snotelObservedDate ? ` \u2022 ${snotelObservedDate}` : ''}</small>
         </div>
-        <div className="snowpack-core-item">
-          <span className="stat-label stat-label-with-help">NOHRSC Grid Snow <HelpHint text="NOHRSC (National Operational Hydrologic Remote Sensing Center): NOAA-modeled gridded snow estimates for any location." /></span>
-          <strong>Depth {nohrscDepthDisplay} &bull; SWE {nohrscSweDisplay}</strong>
-          <small>
-            {nohrscSampledTime
-              ? `Sampled ${formatForecastPeriodLabel(nohrscSampledTime, weatherTimezone)}`
-              : 'Sample time unavailable'}
-          </small>
-        </div>
-        {cdec && (
-          <div className="snowpack-core-item">
-            <span className="stat-label stat-label-with-help">CDEC Station Snow <HelpHint text="CDEC (California Data Exchange Center): DWR-operated snow monitoring stations, primarily in the Sierra Nevada." /></span>
-            <strong>Depth {cdecDepthDisplay} &bull; SWE {cdecSweDisplay}</strong>
-            <small>
-              {cdec.stationName || 'CDEC station'}
-              {cdecDistanceDisplay !== 'N/A' ? ` \u2022 ${cdecDistanceDisplay} away` : ''}
-              {cdec.observedDate ? ` \u2022 Observed ${cdec.observedDate}` : ''}
-            </small>
-          </div>
-        )}
         <div className="snowpack-core-item">
           <span className="stat-label">Recent 24h</span>
           <strong>Rain {rainfall24hDisplay} &bull; Snow {snowfall24hDisplay}</strong>
@@ -141,6 +113,29 @@ export function SnowpackCard({
 
       <details className="snowpack-details">
         <summary>More snowpack details</summary>
+
+        <div className="snowpack-core-grid" style={{ marginTop: '10px' }}>
+          <div className="snowpack-core-item">
+            <span className="stat-label stat-label-with-help">NOHRSC Grid Snow <HelpHint text="NOHRSC (National Operational Hydrologic Remote Sensing Center): NOAA-modeled gridded snow estimates for any location." /></span>
+            <strong>Depth {nohrscDepthDisplay} &bull; SWE {nohrscSweDisplay}</strong>
+            <small>
+              {nohrscSampledTime
+                ? `Sampled ${formatForecastPeriodLabel(nohrscSampledTime, weatherTimezone)}`
+                : 'Sample time unavailable'}
+            </small>
+          </div>
+          {cdec && (
+            <div className="snowpack-core-item">
+              <span className="stat-label stat-label-with-help">CDEC Station Snow <HelpHint text="CDEC (California Data Exchange Center): DWR-operated snow monitoring stations, primarily in the Sierra Nevada." /></span>
+              <strong>Depth {cdecDepthDisplay} &bull; SWE {cdecSweDisplay}</strong>
+              <small>
+                {cdec.stationName || 'CDEC station'}
+                {cdecDistanceDisplay !== 'N/A' ? ` \u2022 ${cdecDistanceDisplay} away` : ''}
+                {cdec.observedDate ? ` \u2022 Observed ${cdec.observedDate}` : ''}
+              </small>
+            </div>
+          )}
+        </div>
 
         {snowpackInsights && (
           <div className="snowpack-insight-grid">

@@ -151,35 +151,41 @@ export function WeatherCardContent(props: WeatherCardContentProps) {
         </div>
       )}
 
-      {props.previewActive && <p className="weather-preview-note">Hour preview only updates this Weather card.</p>}
-
-      {props.hourOptions.length > 1 && (
-        <WeatherHourPillStrip
-          options={props.hourOptions}
-          selectedIndex={props.selectedHourIndex}
-          onSelect={props.onHourSelect}
-          weatherConditionEmoji={props.weatherConditionEmoji}
-        />
-      )}
-
       <WeatherTrendPanel {...props} />
 
-      <WeatherMetrics {...props} />
+      <WeatherMetricsCompact {...props} />
 
-      <TargetElevationSection {...props} />
+      <details className="weather-more-details">
+        <summary>More Details</summary>
 
-      {props.isBlended && (
-        <p className="muted-note">
-          Weather is blended. NOAA is primary; Open-Meteo filled missing fields.
-        </p>
-      )}
+        {props.previewActive && <p className="weather-preview-note">Hour preview only updates this Weather card.</p>}
+
+        {props.hourOptions.length > 1 && (
+          <WeatherHourPillStrip
+            options={props.hourOptions}
+            selectedIndex={props.selectedHourIndex}
+            onSelect={props.onHourSelect}
+            weatherConditionEmoji={props.weatherConditionEmoji}
+          />
+        )}
+
+        <WeatherMetricsAll {...props} />
+
+        <TargetElevationSection {...props} />
+
+        <ElevationForecastSection {...props} />
+
+        {props.isBlended && (
+          <p className="muted-note">
+            Weather is blended. NOAA is primary; Open-Meteo filled missing fields.
+          </p>
+        )}
+      </details>
       {props.safeWeatherLink && (
         <a href={props.safeWeatherLink} target="_blank" rel="noreferrer" className="avy-external-link weather-external-link">
           {props.weatherLinkCta}
         </a>
       )}
-
-      <ElevationForecastSection {...props} />
     </>
   );
 }
@@ -281,9 +287,9 @@ function WeatherTrendPanel(props: WeatherCardContentProps) {
   );
 }
 
-// ── Metrics Grid ────────────────────────────────────────
+// ── Compact Metrics (top 5) ─────────────────────────────
 
-function WeatherMetrics(props: WeatherCardContentProps) {
+function WeatherMetricsCompact(props: WeatherCardContentProps) {
   return (
     <div className="weather-metrics">
       <div className="metric-chip">
@@ -303,6 +309,19 @@ function WeatherMetrics(props: WeatherCardContentProps) {
         <strong>{props.humidityLabel}</strong>
       </div>
       <div className="metric-chip">
+        <span className="stat-label">Cloud Cover</span>
+        <strong>{props.cloudCoverLabel}</strong>
+      </div>
+    </div>
+  );
+}
+
+// ── All Metrics ─────────────────────────────────────────
+
+function WeatherMetricsAll(props: WeatherCardContentProps) {
+  return (
+    <div className="weather-metrics">
+      <div className="metric-chip">
         <span className="stat-label">Dew Point</span>
         <strong>{props.dewPointLabel}</strong>
       </div>
@@ -314,10 +333,6 @@ function WeatherMetrics(props: WeatherCardContentProps) {
       <div className="metric-chip">
         <span className="stat-label">Wind Dir</span>
         <strong>{props.windDirection}</strong>
-      </div>
-      <div className="metric-chip">
-        <span className="stat-label">Cloud Cover</span>
-        <strong>{props.cloudCoverLabel}</strong>
       </div>
       <div className="metric-chip metric-chip-wide">
         <span className="stat-label">Whiteout Risk</span>
