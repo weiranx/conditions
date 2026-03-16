@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
-import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import {
   Wind,
@@ -8,36 +7,24 @@ import {
   Thermometer,
   AlertTriangle,
   Mountain,
-  Compass,
-  Map as MapIcon,
-  LocateFixed,
-  Layers,
-  Navigation,
-  Clock,
-  Link2,
-  CalendarDays,
   CheckCircle2,
   Route,
   ShieldCheck,
-  SlidersHorizontal,
   Flame,
   Sun,
-  RefreshCw,
-  BookmarkPlus,
-  BookmarkCheck,
+  Clock,
   Zap,
-  Check,
-  ExternalLink,
   Sparkles,
   Loader2,
   Eye,
 } from 'lucide-react';
-import { SearchBox } from './SearchBox';
 import { ForecastLoading } from './ForecastLoading';
+import { PlannerHeader } from './PlannerHeader';
+import { PlannerMapSection } from './PlannerMapSection';
+import { RouteAnalysisSection } from './RouteAnalysisSection';
 import { AvalancheForecastCard } from './cards/AvalancheForecastCard';
 import { TravelWindowPlannerCard } from './cards/TravelWindowPlannerCard';
 import { WindLoadingCard } from './cards/WindLoadingCard';
-import { RouteConditionsProfile } from './cards/RouteConditionsProfile';
 import { CollapsibleCard } from './CollapsibleCard';
 import { ScoreGauge } from './ScoreGauge';
 import { WeatherCardContent } from './cards/WeatherCardContent';
@@ -56,12 +43,9 @@ import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
 import { GearCard } from './cards/GearCard';
 import { DeepDiveReportCard } from './cards/DeepDiveReportCard';
 import { BriefingView } from './BriefingView';
-import { AppDisclaimer, LocationMarker, MapUpdater } from '../../app/map-components';
-import { renderSimpleMarkdown } from '../../app/markdown';
+import { AppDisclaimer } from '../../app/map-components';
 import {
   APP_CREDIT_TEXT,
-  MAX_TRAVEL_WINDOW_HOURS,
-  MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
 import type {
   DayOverDayComparison,
@@ -868,220 +852,73 @@ export function PlannerView(props: PlannerViewProps) {
   return (
     <div key="view-planner" className={appShellClassName} aria-busy={isViewPending}>
       <a href="#planner-main-content" className="skip-nav">Skip to main content</a>
-      <header className="header-section">
-        <div className="brand">
-          <button
-            type="button"
-            className="brand-mark brand-home-btn"
-            onClick={() => navigateToView('home')}
-            aria-label="Go to homepage"
-            title="Homepage"
-          >
-            <img src="/summitsafe-icon.svg" alt="Backcountry Conditions" className="brand-mark-icon" />
-          </button>
-          <div className="brand-copy">
-            <h1>
-              Backcountry Conditions
-            </h1>
-            <p className="brand-subtitle">Backcountry planning dashboard</p>
-          </div>
-        </div>
+      <PlannerHeader
+        searchWrapperRef={searchWrapperRef}
+        searchInputRef={searchInputRef}
+        searchQuery={searchQuery}
+        trimmedSearchQuery={trimmedSearchQuery}
+        showSuggestions={showSuggestions}
+        searchLoading={searchLoading}
+        suggestions={suggestions}
+        activeSuggestionIndex={activeSuggestionIndex}
+        parsedTypedCoordinates={parsedTypedCoordinates}
+        handleInputChange={handleInputChange}
+        handleFocus={handleFocus}
+        handleSearchKeyDown={handleSearchKeyDown}
+        handleSearchSubmit={handleSearchSubmit}
+        handleSearchClear={handleSearchClear}
+        handleUseTypedCoordinates={handleUseTypedCoordinates}
+        selectSuggestion={selectSuggestion}
+        setActiveSuggestionIndex={setActiveSuggestionIndex}
+        hasObjective={hasObjective}
+        objectiveIsSaved={objectiveIsSaved}
+        handleToggleSaveObjective={handleToggleSaveObjective}
+        copiedLink={copiedLink}
+        handleCopyLink={handleCopyLink}
+        navigateToView={navigateToView}
+      />
 
-        <div className="header-controls">
-          <SearchBox
-            searchWrapperRef={searchWrapperRef}
-            searchInputRef={searchInputRef}
-            searchQuery={searchQuery}
-            trimmedSearchQuery={trimmedSearchQuery}
-            showSuggestions={showSuggestions}
-            searchLoading={searchLoading}
-            suggestions={suggestions}
-            activeSuggestionIndex={activeSuggestionIndex}
-            canUseCoordinates={Boolean(parsedTypedCoordinates)}
-            onInputChange={handleInputChange}
-            onFocus={handleFocus}
-            onKeyDown={handleSearchKeyDown}
-            onSubmit={handleSearchSubmit}
-            onClear={handleSearchClear}
-            onUseCoordinates={handleUseTypedCoordinates}
-            onSelectSuggestion={selectSuggestion}
-            onHoverSuggestion={setActiveSuggestionIndex}
-          />
-
-          <nav className="header-nav" aria-label="Planner controls">
-            <button type="button" className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
-              <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
-            </button>
-            {hasObjective && (
-              <button type="button" className="secondary-btn header-nav-btn" onClick={handleToggleSaveObjective}>
-                {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
-                <span className="nav-btn-label">{objectiveIsSaved ? 'Saved' : 'Save'}</span>
-              </button>
-            )}
-            <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
-              {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
-            </button>
-          </nav>
-        </div>
-      </header>
-
-      <section className="map-shell" id="planner-main-content">
-        <div className="map-section">
-          <MapContainer center={position} zoom={hasObjective ? 11 : 4} style={{ height: '100%', width: '100%' }}>
-            <TileLayer attribution={activeBasemap.attribution} url={activeBasemap.url} />
-            <ScaleControl
-              position="bottomleft"
-              imperial={preferences.elevationUnit === 'ft'}
-              metric={preferences.elevationUnit === 'm'}
-            />
-            <LocationMarker position={position} setPosition={updateObjectivePosition} />
-            <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
-          </MapContainer>
-
-          {/* ── Map overlays ── */}
-          <div className="map-overlay map-overlay-tr">
-            <button
-              type="button"
-              className={`map-overlay-btn ${mapStyle === 'street' ? 'is-active' : ''}`}
-              onClick={() => setMapStyle(mapStyle === 'topo' ? 'street' : 'topo')}
-              title={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
-              aria-label={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
-            >
-              <Layers size={16} />
-            </button>
-            <button
-              type="button"
-              className="map-overlay-btn"
-              onClick={handleUseCurrentLocation}
-              disabled={locatingUser}
-              title={locatingUser ? 'Locating...' : 'Use my location'}
-              aria-label="Use my location"
-            >
-              <LocateFixed size={16} />
-            </button>
-            <button
-              type="button"
-              className="map-overlay-btn"
-              onClick={handleRecenterMap}
-              title="Recenter map"
-              aria-label="Recenter map"
-            >
-              <Navigation size={16} />
-            </button>
-          </div>
-
-          <div className="map-overlay map-overlay-bl">
-            <span className="map-overlay-coords">
-              {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
-            </span>
-          </div>
-
-          {hasObjective && (
-            <div className="map-overlay map-overlay-br">
-              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapElevationChipTitle}>
-                <Mountain size={12} aria-hidden="true" />
-                <span className="map-elevation-value">{mapElevationLabel}</span>
-              </span>
-              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
-                <span className="map-weather-chip-emoji" aria-hidden="true">{mapWeatherEmoji}</span>
-                <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
-                <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ── Flat below-map controls ── */}
-        <div className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
-          <button
-            type="button"
-            className="mobile-map-controls-btn"
-            onClick={() => setMobileMapControlsExpanded((prev) => {
-              const next = !prev;
-              try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', String(next)); } catch { /* ignore */ }
-              return next;
-            })}
-            aria-expanded={mobileMapControlsExpanded}
-            aria-controls="map-actions-flat"
-          >
-            <SlidersHorizontal size={14} />
-            {mobileMapControlsExpanded ? 'Hide plan controls' : 'Show plan controls'}
-          </button>
-
-          <div id="map-actions-flat" className="map-actions-flat">
-            <label className="date-control">
-              <span>Date</span>
-              <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
-            </label>
-
-            <label className="date-control compact">
-              <span>{startLabel}</span>
-              <input
-                type="time"
-                aria-label={startLabel}
-                title="When you plan to start moving."
-                value={alpineStartTime}
-                onChange={handlePlannerTimeChange(setAlpineStartTime)}
-              />
-            </label>
-
-            <label className="date-control compact travel-window-control">
-              <span>Trip hours</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                aria-label="Trip duration in hours"
-                title="How many hours to evaluate from the selected start time."
-                min={MIN_TRAVEL_WINDOW_HOURS}
-                max={MAX_TRAVEL_WINDOW_HOURS}
-                step={1}
-                value={travelWindowHoursDraft}
-                onChange={handleTravelWindowHoursDraftChange}
-                onBlur={handleTravelWindowHoursDraftBlur}
-              />
-            </label>
-
-            <button
-              type="button"
-              className="now-control-btn"
-              onClick={handleUseNowConditions}
-              title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
-            >
-              <Clock size={14} /> Now
-            </button>
-          </div>
-
-          <div className="map-actions-utils">
-            <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
-              <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
-            <button type="button" className="settings-btn" onClick={openTripToolView}>
-              <CalendarDays size={14} /> Multi-day
-            </button>
-            <button type="button" className="settings-btn" onClick={() => { if (satelliteConditionLine) { navigator.clipboard.writeText(satelliteConditionLine); } }} disabled={!satelliteConditionLine} title={satelliteConditionLine || 'SAT one-liner (load a report first)'}>
-              <Zap size={14} /> SAT Msg
-            </button>
-
-            <div className="map-ext-links">
-              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
-                <MapIcon size={15} />
-              </a>
-              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Gaia GPS">
-                <Compass size={15} />
-              </a>
-              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Windy">
-                <Wind size={15} />
-              </a>
-            </div>
-          </div>
-
-          {timezoneMismatch && (
-            <p className="map-time-help is-warning">
-              Objective timezone: <strong>{objectiveTimezone}</strong>. Your device timezone is <strong>{deviceTimezone}</strong>. Times in this report are objective-local.
-            </p>
-          )}
-        </div>
-      </section>
+      <PlannerMapSection
+        position={position}
+        activeBasemap={activeBasemap}
+        preferences={preferences}
+        updateObjectivePosition={updateObjectivePosition}
+        mapFocusNonce={mapFocusNonce}
+        mapStyle={mapStyle}
+        setMapStyle={setMapStyle}
+        locatingUser={locatingUser}
+        handleUseCurrentLocation={handleUseCurrentLocation}
+        handleRecenterMap={handleRecenterMap}
+        hasObjective={hasObjective}
+        safetyData={safetyData}
+        mapElevationChipTitle={mapElevationChipTitle}
+        mapElevationLabel={mapElevationLabel}
+        mapWeatherEmoji={mapWeatherEmoji}
+        mapWeatherTempLabel={mapWeatherTempLabel}
+        mapWeatherConditionLabel={mapWeatherConditionLabel}
+        mapWeatherChipTitle={mapWeatherChipTitle}
+        mobileMapControlsExpanded={mobileMapControlsExpanded}
+        setMobileMapControlsExpanded={setMobileMapControlsExpanded}
+        forecastDate={forecastDate}
+        todayDate={todayDate}
+        maxForecastDate={maxForecastDate}
+        handleDateChange={handleDateChange}
+        startLabel={startLabel}
+        alpineStartTime={alpineStartTime}
+        handlePlannerTimeChange={handlePlannerTimeChange}
+        setAlpineStartTime={setAlpineStartTime}
+        travelWindowHoursDraft={travelWindowHoursDraft}
+        handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
+        handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
+        objectiveTimezone={objectiveTimezone}
+        handleUseNowConditions={handleUseNowConditions}
+        loading={loading}
+        handleRetryFetch={handleRetryFetch}
+        satelliteConditionLine={satelliteConditionLine}
+        openTripToolView={openTripToolView}
+        timezoneMismatch={timezoneMismatch}
+        deviceTimezone={deviceTimezone}
+      />
 
       {!hasObjective && (
         <div className="empty-state">
@@ -1240,140 +1077,29 @@ export function PlannerView(props: PlannerViewProps) {
           </div>
 
           {objectiveName && (
-            <div className="route-analysis-section" style={{ order: reportCardOrder.reportColumns - 1 }}>
-              {!routeSuggestions && !routeAnalysis && !routeLoading && (
-                <button
-                  type="button"
-                  className="route-analyze-btn"
-                  onClick={() => fetchRouteSuggestions(objectiveName, position.lat, position.lng)}
-                >
-                  Analyze Full Route
-                </button>
-              )}
-
-              {routeLoading && (
-                <div className="route-loading">
-                  <div className="route-loading-dots">
-                    <span /><span /><span />
-                  </div>
-                  <div className="route-loading-label">
-                    {routeAnalysis === null && routeSuggestions ? 'Running safety checks along route...' : 'Fetching routes...'}
-                  </div>
-                </div>
-              )}
-
-              {routeError && (
-                <div className="route-error">{routeError}</div>
-              )}
-
-              {routeSuggestions && !routeAnalysis && !routeLoading && (
-                <div className="route-picker-card">
-                  <div className="route-picker-header">Choose a route to analyze</div>
-                  <ul className="route-picker-list">
-                    {routeSuggestions.map((r) => (
-                      <li key={r.name} className="route-picker-item">
-                        <button
-                          type="button"
-                          className="route-picker-option"
-                          onClick={() => fetchRouteAnalysis(objectiveName, r.name, position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours)}
-                        >
-                          <span className="route-option-name">{r.name}</span>
-                          <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
-                          <span className="route-option-desc">{r.description}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="route-picker-custom">
-                    <input
-                      type="text"
-                      placeholder="Or type a route name…"
-                      value={customRouteName}
-                      onChange={(e) => setCustomRouteName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && customRouteName.trim()) {
-                          fetchRouteAnalysis(objectiveName, customRouteName.trim(), position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours);
-                          setCustomRouteName('');
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={!customRouteName.trim()}
-                      onClick={() => {
-                        fetchRouteAnalysis(objectiveName, customRouteName.trim(), position.lat, position.lng, forecastDate, alpineStartTime, travelWindowHours);
-                        setCustomRouteName('');
-                      }}
-                    >
-                      Go
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="route-picker-cancel"
-                    onClick={() => { setRouteSuggestions(null); setRouteError(null); setCustomRouteName(''); }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {routeAnalysis && (
-                <div className="route-analysis-card">
-                  <div className="route-analysis-header">Route Analysis <span className="route-ai-badge">AI Advisory</span></div>
-                  <p className="route-analysis-disclaimer">Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.</p>
-                  <div className="route-waypoints">
-                    {routeAnalysis.summaries.map((wp, i) => {
-                      const wpCoords = routeAnalysis.waypoints[i];
-                      const wpReportParams = new URLSearchParams({
-                        lat: String(wpCoords?.lat ?? ''),
-                        lon: String(wpCoords?.lon ?? ''),
-                        name: wp.name,
-                        date: forecastDate,
-                        start: alpineStartTime,
-                        travel_window_hours: String(travelWindowHours),
-                      });
-                      return (
-                        <div key={wp.name} className="route-waypoint-row">
-                          <span className="route-wp-name">{wp.name}</span>
-                          <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
-                          {wp.weather.temp != null && (
-                            <span className="route-wp-temp">{formatTempDisplay(wp.weather.temp)}</span>
-                          )}
-                          {wp.score !== null && (
-                            <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
-                          )}
-                          {wp.avalanche?.risk && (
-                            <span className="route-wp-avy">{wp.avalanche.risk}</span>
-                          )}
-                          {wpCoords && (
-                            <a
-                              href={`/?${wpReportParams.toString()}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="route-wp-link"
-                              title={`Open full report for ${wp.name}`}
-                            >
-                              <ExternalLink size={13} />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <RouteConditionsProfile
-                    waypoints={routeAnalysis.summaries}
-                    getScoreColor={getScoreColor}
-                    formatTempDisplay={formatTempDisplay}
-                    formatWindDisplay={formatWindDisplay}
-                    formatElevationDisplay={formatElevationDisplay}
-                  />
-                  <div className="route-analysis-text">
-                    {renderSimpleMarkdown(routeAnalysis.analysis)}
-                  </div>
-                </div>
-              )}
-            </div>
+            <RouteAnalysisSection
+              objectiveName={objectiveName}
+              positionLat={position.lat}
+              positionLng={position.lng}
+              forecastDate={forecastDate}
+              alpineStartTime={alpineStartTime}
+              travelWindowHours={travelWindowHours}
+              order={reportCardOrder.reportColumns}
+              routeSuggestions={routeSuggestions}
+              routeAnalysis={routeAnalysis}
+              routeLoading={routeLoading}
+              routeError={routeError}
+              fetchRouteSuggestions={fetchRouteSuggestions}
+              fetchRouteAnalysis={fetchRouteAnalysis}
+              customRouteName={customRouteName}
+              setCustomRouteName={setCustomRouteName}
+              setRouteSuggestions={setRouteSuggestions}
+              setRouteError={setRouteError}
+              getScoreColor={getScoreColor}
+              formatTempDisplay={formatTempDisplay}
+              formatWindDisplay={formatWindDisplay}
+              formatElevationDisplay={formatElevationDisplay}
+            />
           )}
 
           {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
