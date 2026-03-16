@@ -320,7 +320,7 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
                 <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'} onContextMenu={(e) => handleCellContextMenu(e, 'statusCode', entry)}>
                   {entry.statusCode}
                 </td>
-                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 80 ? 'var(--accent-green)' : entry.safetyScore >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)', fontWeight: 600 } : undefined} onContextMenu={(e) => handleCellContextMenu(e, 'safetyScore', entry)}>
+                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 85 ? 'var(--accent-green)' : entry.safetyScore >= 70 ? 'var(--accent-teal)' : entry.safetyScore >= 55 ? 'var(--accent-yellow)' : entry.safetyScore >= 40 ? 'var(--accent-orange)' : 'var(--accent-red)', fontWeight: 600 } : undefined} onContextMenu={(e) => handleCellContextMenu(e, 'safetyScore', entry)}>
                   {entry.safetyScore != null ? `${entry.safetyScore}%` : '—'}
                 </td>
                 <td onContextMenu={(e) => handleCellContextMenu(e, 'partialData', entry)}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>

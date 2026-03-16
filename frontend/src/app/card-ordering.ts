@@ -257,10 +257,11 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
   const scoreTraceRiskLevel = (() => {
     if (!scoreTraceAvailable) return 0;
     if (!Number.isFinite(safetyScoreNumeric)) return decisionRiskLevel;
-    if (safetyScoreNumeric < 42) return 5;
-    if (safetyScoreNumeric < 60) return 4;
-    if (safetyScoreNumeric < 75) return 3;
-    return 2;
+    if (safetyScoreNumeric < 40) return 5;
+    if (safetyScoreNumeric < 55) return 4;
+    if (safetyScoreNumeric < 70) return 3;
+    if (safetyScoreNumeric < 85) return 2;
+    return 1;
   })();
   const recommendedGearRiskLevel = !gearAvailable ? 0 : Math.max(1, decisionRiskLevel - 1);
 

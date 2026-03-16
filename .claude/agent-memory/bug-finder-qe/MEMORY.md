@@ -1,58 +1,78 @@
 # QE Agent Memory — Backcountry Conditions
 
-## Key Architecture Facts
-- Backend: CommonJS, 4000+ line `backend/index.js` monolith
-- Frontend: ES modules, `frontend/src/App.tsx` monolith
+## Key Architecture Facts (Updated 2026-03-13)
+- Backend: CommonJS. `backend/index.js` is now a thin 593-line bootstrap. All logic in `backend/src/utils/` and `backend/src/routes/`.
+- Frontend: ES modules, `frontend/src/App.tsx` (~2410 lines). Modules in `frontend/src/app/`, hooks in `frontend/src/hooks/`.
 - `/api/safety` returns HTTP 200 even on partial failure (`partialData: true`, `apiWarning`)
-- Confidence score floor: 20 (clamped at ~L2583)
-- Safety score: 100 - sum of capped group impacts (see `calculateSafetyScore`)
+- Safety score: 100 - sum of capped group impacts (`backend/src/utils/safety-score.js`)
+- Confidence score floor: 20 (`calculateSafetyScore` bottom of function)
+
+## Architecture Change (2026-03-13)
+- `backend/index.js` refactored from 4000+ lines to 593-line bootstrap.
+- All pipeline logic moved to:
+  - `backend/src/utils/safety-score.js` — full safety score calculation
+  - `backend/src/utils/weather-pipeline.js` — NOAA + Open-Meteo weather pipeline
+  - `backend/src/utils/avalanche-pipeline.js` — avalanche map + detail + scraper
+  - `backend/src/utils/avalanche-orchestration.js` — relevance, danger derivation
+  - `backend/src/utils/geo.js` — haversine, zone matching, elevation service
+- **All prior notes about old `backend/index.js` line numbers are OBSOLETE.**
 
 ## Known Fragility Points
 
-### Rainfall Pipeline (`backend/index.js` ~L1870-L2069)
-- `fetchRecentRainfallData` has a 4-tier fallback: live forecast → fresh cache → archive API → stale cache → zeroed fallback
-- Archive data IS written to cache (L1944). Previous note was wrong — corrected.
-- Zero-fallback scoring: all totals are null so no Surface Conditions factors fire — **underestimates hazard silently** (only a 4-point penalty applied, not surface factor chain)
+### Solar Cache Permanently Caches Failure (`weather-pipeline.js` L328-342)
+- When `solarRes.ok` is false OR `solarJson.status !== 'OK'`, fetch fn returns `null`
+- `solarCache.getOrFetch` stores that `null` for 7 days — next request serves cached null
+- Fix: throw instead of returning null in the fetch callback
 
-### Confidence Chain Ordering (~L2522-2583)
-- `zeroed_totals` check is `else if` after `status` checks — `buildRainfallZeroFallback` sets `status: 'partial'` so zeroed_totals branch IS reached correctly. Do not flag as bug.
+### `alertsRelevantForSelectedTime` — Correctly computed in backend (`safety-score.js` L177)
+- Backend: `alertsRelevantForSelectedTime = forecastLeadHours === null || forecastLeadHours <= 48` — correct
+- Frontend `decision.ts` L130: `const alertsRelevantForSelectedStart = true` — still hardcoded, causing frontend to always show alerts gate regardless of lead time
 
-### `alertsRelevantForSelectedTime` (L2157)
-- Hardcoded `true` — never computed. The else-branch at L2545-2546 is dead code. The `+2` uncertainty bump at L2421-2423 can never fire. All confidence/scoring guards that check `!alertsRelevantForSelectedTime` are dead.
+### `feelsLike` Null Guard Missing in Decision Check (`decision.ts` L368)
+- `feelsLike` is typed `number | null` — but `feelsLike >= minFeelsLikeThreshold` fires without null check
+- When both `data.weather.feelsLike` and `data.weather.temp` are null: `null >= threshold` = false in JS
+- Check fires as "failed" even though data is unavailable, misleading the user
 
-### NOAA Hourly Response `.ok` Check (now fixed in parallelization PR)
-- Original code lacked `.ok` check; new code at L3044 adds `if (!hourlyRes.ok) throw new Error(...)`. Fixed.
+### Precipitation Retry Loop No Backoff (`precipitation.js` L258-276)
+- Inner loop retries 3x on same URL with no delay on rate-limit or 503 errors
+- Hammers the upstream immediately; can worsen rate-limit situation
+- Fix: exponential backoff between retry attempts
 
-### Avalanche Scraper `pageRes.ok` (now fixed in parallelization PR)
-- `pageRes.ok` is now checked at L3631 before calling `.text()`. Fixed.
+### AI Brief Stale Cache Never Revalidates (`ai-brief.js` L28-30)
+- Uses `aiBriefCache.get()` directly — stale entries are returned but never background-refreshed
+- Should use `getOrFetch()` to trigger stale-while-revalidate
 
-### Parallelization Refactor Bugs (backend/index.js L3024-3368, PR: perf/parallelize-safety-handler)
-- BUG: `weatherError` catch block at L3298 reads outer `weatherData?.elevation` — which is the pre-initialized sentinel (unavailable) object, not any partial NOAA data. The original code had the same bug.
-- BUG: Outer `forecastDateRange` and `selectedForecastDate` are mutated inside the IIFE via closure at L3051/3054/3294 — these mutations occur concurrently with `getAvalancheMapLayer`. Avalanche processing after `allSettled` reads `selectedForecastDate` from `w.selectedForecastDate`; safe for that flow. BUT the 400-error throw at L3060-3064 captures `forecastDateRange` from the outer scope at mutation time — that part is fine (sequential within the IIFE).
-- BUG: Solar fetch is now sequential inside the IIFE (awaited at L3278) — not actually parallel with NOAA weather. It's parallel with avalanche map, but was supposed to be parallel with weather too. The `solarPromise` starts before Open-Meteo supplement but `await solarPromise` blocks before `return`, so solar and supplement are not overlapped.
-- The "catastrophic rejection" path in `Promise.allSettled` `else` branch at L3353-3368 does NOT return/throw — it falls through and continues with the avalanche processing using the sentinel `weatherData`. This is correct partial-failure behavior (matches the HTTP 200 + `partialData: true` design).
-- The 400 statusCode re-throw path: the 400 error is caught by `allSettled` (status='rejected'), then re-read from `weatherAndSolarResult.reason` at L3355 and correctly returned. But the 400 error object's `err.details` string uses `forecastDateRange` captured from the outer mutable variable at throw time — since line 3051 sets it just before the throw, it is correctly populated.
-
-### `parseInt` on Undefined Fields — NaN label risk (L3493-3495)
-- `parseInt(currentDay.lower/middle/upper)` → NaN if field missing → `levelMap[NaN]` → `undefined` label.
-
-### `peakFeelsLike12hF` Compares Against Raw Temp, Not Feels-Like (heat-risk.js L42-44)
-- `peakFeelsLike12hF = Math.max(feelsLikeF, peakTemp12hF)` — should compare against peak feels-like across trend, not peak raw temperature. Underestimates heat risk when wind chill is significant, overestimates it when feels-like < raw temp is not possible (low wind).
-
-### URL Share State Missing `turnaroundTime` (frontend/src/App.tsx ~L1407-1449)
-- `buildShareQuery` never sets the `turn` parameter even though `parseLinkState` reads it. Turnaround time is lost on every URL share.
+### `invokeSafetyHandler` Route Analysis Uses Timeout-Wrapped Handler
+- L543 of `backend/index.js`: `createSafetyInvoker({ safetyHandler: safetyHandlerWithTimeout })`
+- The 30s per-request timeout IS applied to route analysis waypoint checks. Previously noted as missing — now fixed.
 
 ## Recurrent Patterns to Watch
-- HTTP `.ok` check applied inconsistently — NOAA hourly and HTML scraper both lack it
-- `parseInt()` without `|| 0` fallback produces NaN when upstream fields are absent
-- Caches are process-local Maps — no TTL eviction, unbounded growth on long-running servers
-- Dead code branches from hardcoded booleans (`alertsRelevantForSelectedTime`)
-- `buildRainfallZeroFallback` suppresses Surface Condition factors silently
+- `getOrFetch` caches `null` values returned by fetch callbacks — don't return null on failure
+- Retry loops without backoff hammer rate-limited upstreams
+- `null >= threshold` / `null <= threshold` evaluates to false in JS — silently wrong checks
+- Frontend `decision.ts` dead/hardcoded booleans (`alertsRelevantForSelectedStart`)
+- `buildRainfallZeroFallback` only applies 4pt penalty — surface condition factors suppressed silently
 
 ## Key File Locations for High-Risk Bugs
-- L2157 `backend/index.js`: `alertsRelevantForSelectedTime = true` hardcoded
-- L3032 `backend/index.js`: NOAA hourly used without `.ok` check
-- L3564 `backend/index.js`: HTML scrape page used without `.ok` check
-- L3493 `backend/index.js`: `parseInt(currentDay.lower/middle/upper)` NaN risk
-- L42 `backend/src/utils/heat-risk.js`: `peakFeelsLike12hF` wrong max comparison
-- L1407 `frontend/src/App.tsx`: `buildShareQuery` missing `turn` param
+- `backend/src/utils/weather-pipeline.js` L333: solar failure cached as `null` for 7 days
+- `backend/src/utils/precipitation.js` L258-276: no-delay retry on same URL
+- `frontend/src/app/decision.ts` L130: `alertsRelevantForSelectedStart = true` hardcoded
+- `frontend/src/app/decision.ts` L368: `feelsLike >= minFeelsLikeThreshold` unguarded null
+- `backend/src/routes/ai-brief.js` L28-30: stale cache never revalidates
+
+## iOS App (BackcountryConditions/)
+- Full audit completed 2026-03-11. See [ios_app_patterns.md](ios_app_patterns.md) for patterns.
+- Key bugs: RouteAnalysisCard task lifecycle; TravelWindowEngine deriveSpans single-pass-row edge; SettingsView lazy init; formatAmPm unclamped; AQI scale indicator clipping; DecisionEngine precipitation never blocks; staleWarning display says "Forecast is X+ old" (confusing "+ old" wording).
+- `AvalancheProblem.problem_description` decoded but never rendered — dead field.
+- 2026-03-12 history persistence PR: `currentReportId` is set before `Task.detached { save }` completes — `updateRouteAnalysis`/`updateAiBrief` may fire before initial save, silently dropping the update since `load(id:)` returns nil. `recentReports` in PlannerView loaded once in `.task` — never refreshed after new report saved.
+
+## Previously Reported Bugs — Now Fixed
+- NOAA hourly `.ok` check: now throws correctly in weather-pipeline.js L86
+- Scraper `pageRes.ok`: now checked in avalanche-pipeline.js L470
+- `alertsRelevantForSelectedTime` hardcoded `true` in old backend/index.js: now computed in safety-score.js
+- `peakFeelsLike12hF` wrong max in heat-risk.js: now correctly uses `feelsLikeF` not `peakTemp12hF`
+
+## Extracted Frontend Modules
+- `frontend/src/app/card-ordering.ts`: `windLoadingLevel` passed in but never used in risk scoring (only `windLoadingConfidence` used)
+- `frontend/src/app/rainfall-display.ts`: `rainfallDataAvailable` returned but not used in App.tsx
+- `frontend/src/app/wind-loading-display.ts`: `windSpeedMph` returned but not destructured in App.tsx
