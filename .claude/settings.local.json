@@ -56,7 +56,10 @@
       "Bash(ls -la /Users/weiranxiong/Developer/conditions/BackcountryConditions/*.swift 2>/dev/null | head -20)",
       "Bash(cd /Users/weiranxiong/Developer/conditions/frontend && npx tsc --noEmit 2>&1 | head -80)",
       "Bash(npx eslint:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(curl *)",
+      "Skill(update-config)"
     ]
   }
 }

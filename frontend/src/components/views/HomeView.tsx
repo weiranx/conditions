@@ -6,10 +6,20 @@ import {
   Mountain,
   Route,
   SlidersHorizontal,
+  ArrowRight,
 } from 'lucide-react';
 import { AppDisclaimer } from '../../app/map-components';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
+
+const FEATURED_PEAKS: Suggestion[] = [
+  { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular', type: 'peak' },
+  { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular', type: 'peak' },
+  { name: 'Mount Whitney, California', lat: 36.5786, lon: -118.2923, class: 'popular', type: 'peak' },
+  { name: 'Longs Peak, Colorado', lat: 40.2549, lon: -105.615, class: 'popular', type: 'peak' },
+  { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular', type: 'peak' },
+  { name: 'Kings Peak, Utah', lat: 40.7764, lon: -110.3726, class: 'popular', type: 'peak' },
+];
 
 export interface HomeViewProps {
   appShellClassName: string;
@@ -117,35 +127,65 @@ export function HomeView({
         </div>
       </section>
 
-      <section className="home-grid">
-        <article className="home-card">
-          <div className="home-card-head">
-            <CloudRain size={18} />
-            <h3>Weather</h3>
-          </div>
-          <p>Temperature, wind, precipitation, and feels-like for your start time with elevation adjustments.</p>
-        </article>
-        <article className="home-card">
-          <div className="home-card-head">
-            <Mountain size={18} />
-            <h3>Snow & Avalanche</h3>
-          </div>
-          <p>Avalanche forecasts combined with SNOTEL and NOHRSC snowpack signals.</p>
-        </article>
-        <article className="home-card">
-          <div className="home-card-head">
-            <AlertTriangle size={18} />
-            <h3>Risk Assessment</h3>
-          </div>
-          <p>Go/no-go decision, critical checks, and travel window based on your thresholds.</p>
-        </article>
-        <article className="home-card">
-          <div className="home-card-head">
-            <Route size={18} />
-            <h3>Field Ready</h3>
-          </div>
-          <p>Printable reports, shareable links, and SAT-ready one-liners.</p>
-        </article>
+      <section className="home-featured" aria-label="Popular objectives">
+        <div className="home-featured-head">
+          <span className="home-featured-label">Popular objectives</span>
+          <span className="home-featured-divider" />
+        </div>
+        <div className="home-featured-row">
+          {FEATURED_PEAKS.map((peak) => (
+            <button
+              key={peak.name}
+              type="button"
+              className="home-featured-chip"
+              onClick={() => {
+                selectSuggestion(peak);
+                navigateToPlanner();
+              }}
+            >
+              <Mountain size={14} aria-hidden />
+              <span>{peak.name.split(',')[0]}</span>
+              <ArrowRight size={13} className="home-featured-arrow" aria-hidden />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="home-section-head">
+          <h2 className="home-section-title">Everything in one place</h2>
+          <p className="home-section-sub">Synthesized from NOAA, avalanche centers, SNOTEL, and more.</p>
+        </div>
+        <div className="home-grid">
+          <article className="home-card">
+            <div className="home-card-head">
+              <CloudRain size={18} />
+              <h3>Weather</h3>
+            </div>
+            <p>Temperature, wind, precipitation, and feels-like for your start time with elevation adjustments.</p>
+          </article>
+          <article className="home-card">
+            <div className="home-card-head">
+              <Mountain size={18} />
+              <h3>Snow & Avalanche</h3>
+            </div>
+            <p>Avalanche forecasts combined with SNOTEL and NOHRSC snowpack signals.</p>
+          </article>
+          <article className="home-card">
+            <div className="home-card-head">
+              <AlertTriangle size={18} />
+              <h3>Risk Assessment</h3>
+            </div>
+            <p>Go/no-go decision, critical checks, and travel window based on your thresholds.</p>
+          </article>
+          <article className="home-card">
+            <div className="home-card-head">
+              <Route size={18} />
+              <h3>Field Ready</h3>
+            </div>
+            <p>Printable reports, shareable links, and SAT-ready one-liners.</p>
+          </article>
+        </div>
       </section>
       <AppDisclaimer />
     </div>
