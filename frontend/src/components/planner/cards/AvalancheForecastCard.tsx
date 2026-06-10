@@ -45,6 +45,7 @@ interface AvalancheForecastCardProps {
   toPlainText: (value: string) => string;
   objectiveElevationFt?: number | null;
   formatElevationDisplay?: (value: number | null | undefined) => string;
+  formatPubTime?: (isoString?: string) => string;
 }
 
 export function AvalancheForecastCard({
@@ -64,14 +65,24 @@ export function AvalancheForecastCard({
   toPlainText,
   objectiveElevationFt,
   formatElevationDisplay,
+  formatPubTime,
 }: AvalancheForecastCardProps) {
+  const issuedLine = formatPubTime && (avalanche.publishedTime || avalanche.expiresTime)
+    ? [
+        avalanche.publishedTime ? `Issued ${formatPubTime(avalanche.publishedTime)}` : null,
+        avalanche.expiresTime ? `Expires ${formatPubTime(avalanche.expiresTime)}` : null,
+      ].filter(Boolean).join(' · ')
+    : null;
   return (
     <>
       {avalancheExpiredForSelectedStart && (
         <p className="muted-note">This bulletin is expired for the selected start time and is shown for context only.</p>
       )}
       {avalanche.staleWarning === '72h' && (
-        <p className="muted-note stale-warning-banner">This bulletin is over 72 hours old — treat danger ratings as unknown.</p>
+        <div className="stale-warning-banner" role="alert">
+          <AlertTriangle size={15} aria-hidden="true" />
+          <span>This bulletin is over 72 hours old — treat danger ratings as unknown.</span>
+        </div>
       )}
       {avalanche.staleWarning === '48h' && (
         <p className="muted-note">This bulletin is over 48 hours old. Verify the latest forecast before departure.</p>
@@ -85,6 +96,12 @@ export function AvalancheForecastCard({
             <p className="muted-note">
               Result is hidden for this objective/time because avalanche forecasting is currently de-emphasized. Re-check if weather or snowpack changes.
             </p>
+            {!avalancheUnknown && overallAvalancheLevel != null && (
+              <p className="muted-note">
+                The latest bulletin still reports <strong>{getDangerText(overallAvalancheLevel)}</strong> danger
+                {issuedLine ? ` (${issuedLine.toLowerCase()})` : ''}. Use the full forecast link below to judge it yourself.
+              </p>
+            )}
           </div>
         </div>
       ) : (
@@ -96,6 +113,7 @@ export function AvalancheForecastCard({
                 {avalancheUnknown ? 'Overall: Unknown' : `Overall: ${getDangerText(overallAvalancheLevel ?? 0)}`}
               </span>
             </div>
+            {issuedLine && <span className="muted-note avy-issued-line">{issuedLine}</span>}
             {!avalancheUnknown && Number.isFinite(objectiveElevationFt) && objectiveElevationFt != null && (
               <span className="objective-elev-note muted-note">Objective: ~{formatElevationDisplay ? formatElevationDisplay(objectiveElevationFt) : `${Math.round(objectiveElevationFt).toLocaleString()} ft`} — check which band applies to your route.</span>
             )}

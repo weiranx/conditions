@@ -162,8 +162,13 @@
   background-clip: padding-box;
 }
 
-.suggestions-list li + li {
+.suggestions-list > * + * {
   margin-top: 2px;
+}
+
+.suggestion-status {
+  display: block;
+  width: 100%;
 }
 
 .suggestion-item:hover,

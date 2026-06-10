@@ -82,58 +82,57 @@ export function SearchBox({
       </div>
 
       {showSuggestions && (searchLoading || suggestions.length > 0 || trimmedSearchQuery.length > 0) && (
-        <ul className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
+        <div className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
           {searchLoading && (
-            <li className="suggestion-status">
+            <div className="suggestion-status" role="presentation">
               Searching...
-            </li>
+            </div>
           )}
           {!searchLoading && canUseCoordinates && (
-            <li>
-              <button
-                type="button"
-                className="suggestion-item coordinate-suggestion"
-                onClick={() => onUseCoordinates(trimmedSearchQuery)}
-              >
-                <strong className="suggestion-title">Use typed coordinates</strong>
-                <span className="suggestion-subtitle">{trimmedSearchQuery}</span>
-              </button>
-            </li>
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              className="suggestion-item coordinate-suggestion"
+              onClick={() => onUseCoordinates(trimmedSearchQuery)}
+            >
+              <strong className="suggestion-title">Use typed coordinates</strong>
+              <span className="suggestion-subtitle">{trimmedSearchQuery}</span>
+            </button>
           )}
           {!searchLoading && suggestions.length === 0 && trimmedSearchQuery.length > 0 && (
-            <li className="suggestion-status">No matches found. Try “Mount Elbert”, “Mt Hood”, or “39.1178 -106.4452”.</li>
+            <div className="suggestion-status" role="presentation">No matches found. Try “Mount Elbert”, “Mt Hood”, or “39.1178 -106.4452”.</div>
           )}
           {!searchLoading &&
             suggestions.map((suggestion, index) => (
-              <li key={`${suggestion.name}-${index}`}>
-                <button
-                  id={`suggestion-${index}`}
-                  type="button"
-                  role="option"
-                  aria-selected={activeSuggestionIndex === index}
-                  className={`suggestion-item ${suggestion.class === 'popular' ? 'popular-suggestion' : ''} ${
-                    suggestion.class === 'saved' ? 'saved-suggestion' : ''
-                  } ${suggestion.class === 'recent' ? 'recent-suggestion' : ''} ${
-                    activeSuggestionIndex === index ? 'active' : ''
-                  }`}
-                  onClick={() => onSelectSuggestion(suggestion)}
-                  onMouseEnter={() => onHoverSuggestion(index)}
-                >
-                  <strong className="suggestion-title">
-                    {suggestion.class === 'popular' && <Star size={13} className="suggestion-title-icon" aria-hidden="true" />}
-                    {suggestion.class === 'saved' && <Bookmark size={13} className="suggestion-title-icon" aria-hidden="true" />}
-                    {suggestion.class === 'recent' && <History size={13} className="suggestion-title-icon" aria-hidden="true" />}
-                    {isMountainSuggestion(suggestion) && <Mountain size={14} className="suggestion-title-icon" aria-hidden="true" />}
-                    <span>{suggestion.name.split(',')[0]}</span>
-                  </strong>
-                  <span className="suggestion-subtitle">{suggestion.name.split(',').slice(1, 3).join(',')}</span>
-                </button>
-              </li>
+              <button
+                key={`${suggestion.name}-${index}`}
+                id={`suggestion-${index}`}
+                type="button"
+                role="option"
+                aria-selected={activeSuggestionIndex === index}
+                className={`suggestion-item ${suggestion.class === 'popular' ? 'popular-suggestion' : ''} ${
+                  suggestion.class === 'saved' ? 'saved-suggestion' : ''
+                } ${suggestion.class === 'recent' ? 'recent-suggestion' : ''} ${
+                  activeSuggestionIndex === index ? 'active' : ''
+                }`}
+                onClick={() => onSelectSuggestion(suggestion)}
+                onMouseEnter={() => onHoverSuggestion(index)}
+              >
+                <strong className="suggestion-title">
+                  {suggestion.class === 'popular' && <Star size={13} className="suggestion-title-icon" aria-hidden="true" />}
+                  {suggestion.class === 'saved' && <Bookmark size={13} className="suggestion-title-icon" aria-hidden="true" />}
+                  {suggestion.class === 'recent' && <History size={13} className="suggestion-title-icon" aria-hidden="true" />}
+                  {isMountainSuggestion(suggestion) && <Mountain size={14} className="suggestion-title-icon" aria-hidden="true" />}
+                  <span>{suggestion.name.split(',')[0]}</span>
+                </strong>
+                <span className="suggestion-subtitle">{suggestion.name.split(',').slice(1, 3).join(',')}</span>
+              </button>
             ))}
           {!searchLoading && suggestions.length > 0 && (
-            <li className="suggestion-status search-shortcuts">Tip: Press `/` to focus, `↑/↓` to navigate, `Enter` to select.</li>
+            <div className="suggestion-status search-shortcuts" role="presentation">Tip: Press `/` to focus, `↑/↓` to navigate, `Enter` to select.</div>
           )}
-        </ul>
+        </div>
       )}
     </div>
   );

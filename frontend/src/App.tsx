@@ -736,6 +736,8 @@ function App() {
   const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
   const returnExtendsPastMidnight = returnMinutes !== null && returnMinutes > 1439;
   const returnTimeFormatted = returnMinutes !== null ? minutesToTwentyFourHourClock(Math.min(returnMinutes, 1439)) : null;
+  // True clock time for display; the clamped value above feeds same-day decision logic.
+  const returnTimeDisplay = returnMinutes !== null ? minutesToTwentyFourHourClock(returnMinutes % 1440) : null;
   let decision = safetyData
     ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, { turnaroundTime: returnTimeFormatted ?? undefined })
     : null;
@@ -1546,7 +1548,7 @@ function App() {
       forecastLeadHoursDisplay={forecastLeadHoursDisplay}
       objectiveName={objectiveName}
       displayStartTime={displayStartTime}
-      returnTimeFormatted={returnTimeFormatted}
+      returnTimeFormatted={returnTimeDisplay}
       returnExtendsPastMidnight={returnExtendsPastMidnight}
       formatClockForStyle={formatClockForStyle}
       error={error}

@@ -2081,7 +2081,9 @@ input {
 }
 
 .planner-jump-nav {
-  display: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .planner-jump-btn {
@@ -2793,8 +2795,8 @@ button.collapsible-card-header:hover .collapsible-chevron {
   appearance: none;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.04);
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   display: flex;
   align-items: center;
@@ -3587,6 +3589,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
   background: rgba(252, 241, 241, 0.6);
 }
 
+.decision-action.go {
+  border-color: rgba(167, 211, 181, 0.55);
+  background: rgba(235, 248, 239, 0.65);
+}
+
 .decision-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -3770,6 +3777,14 @@ button.collapsible-card-header:hover .collapsible-chevron {
 .decision-details[open] {
   display: grid;
   gap: 8px;
+}
+
+.decision-details:not([open]) summary::before {
+  content: 'Show ';
+}
+
+.decision-details[open] summary::before {
+  content: 'Hide ';
 }
 
 .signal-list {
@@ -8766,6 +8781,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
   background: #3a2326;
 }
 
+:root[data-theme='dark'] .decision-action.go {
+  border-color: #3f6a4f;
+  background: #1c3326;
+}
+
 :root[data-theme='dark'] .decision-action-label {
   color: #9db3c3;
 }
@@ -9658,7 +9678,21 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
   .planner-jump-btn {
     flex: 0 0 auto;
-    min-height: 40px;
+    min-height: 44px;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .settings-btn,
+  .header-nav-btn,
+  .search-go-btn {
+    min-height: 44px;
+  }
+
+  .card-modal-close,
+  .search-clear-btn {
+    width: 44px;
+    height: 44px;
   }
 
   .report-layout-toggle {
@@ -10785,14 +10819,40 @@ button.collapsible-card-header:hover .collapsible-chevron {
   color: #f1b89a;
 }
 
+.top-freshness-alert.data-integrity-alert {
+  border-color: #d99c9c;
+  border-left: 4px solid #b93838;
+  background: linear-gradient(180deg, #fdeaea 0%, #f9dcdc 100%);
+  color: #7c1f1f;
+}
+
+:root[data-theme='dark'] .top-freshness-alert.data-integrity-alert {
+  border-color: #8a4040;
+  border-left-color: #c75454;
+  background: linear-gradient(180deg, #3a1d1d 0%, #2e1616 100%);
+  color: #f1b3b3;
+}
+
 /* === Stale Avalanche Warning Banner === */
 .stale-warning-banner {
-  padding: 8px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #e2b1b1;
+  border-left: 4px solid #b93838;
   background: #fdf1f1;
   color: #9b2f2f;
   font-weight: 600;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.stale-warning-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 :root[data-theme='dark'] .stale-warning-banner {
@@ -10883,6 +10943,55 @@ button.collapsible-card-header:hover .collapsible-chevron {
 .card-preview-hero.avy-go { color: var(--accent-green); }
 .card-preview-hero.avy-caution { color: var(--accent-yellow); }
 .card-preview-hero.avy-nogo { color: var(--accent-red); }
+
+/* === Score Card Confidence Line === */
+.score-confidence-line {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.score-confidence-line.low-confidence {
+  color: #a05a1f;
+}
+
+:root[data-theme='dark'] .score-confidence-line.low-confidence {
+  color: #e8b277;
+}
+
+/* === Overnight Return Flag === */
+.overnight-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid #d7b48f;
+  background: #fdf1e5;
+  color: #7a3f1d;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
+:root[data-theme='dark'] .overnight-flag {
+  border-color: #9b5030;
+  background: #3a2218;
+  color: #f1b89a;
+}
+
+/* === Avalanche Bulletin Issued Line === */
+.avy-issued-line {
+  display: block;
+  margin-top: 2px;
+}
+
+/* === Gear Group Labels === */
+.gear-group-label {
+  display: block;
+  margin: 10px 0 6px;
+}
 
 /* === Print Stylesheet === */
 @media print {

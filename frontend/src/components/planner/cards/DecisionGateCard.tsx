@@ -145,7 +145,7 @@ export function DecisionGateCard({
         </div>
       )}
       <details className="decision-details">
-        <summary>Show all check outcomes</summary>
+        <summary>all check outcomes</summary>
         <div className="decision-group">
           <h4>
             <CheckCircle2 size={14} /> Check outcomes

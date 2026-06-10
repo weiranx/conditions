@@ -553,9 +553,11 @@ export function PlannerView(props: PlannerViewProps) {
 
     // Score card
     getScoreColor,
+    forecastLeadHoursDisplay,
     objectiveName,
     displayStartTime,
     returnTimeFormatted,
+    returnExtendsPastMidnight,
     formatClockForStyle,
     error,
     aiBriefNarrative,
@@ -942,7 +944,7 @@ export function PlannerView(props: PlannerViewProps) {
           <p>{error}</p>
           {hasObjective && (
             <div className="error-banner-actions">
-              <button className="settings-btn" onClick={handleRetryFetch}>
+              <button type="button" className="settings-btn" onClick={handleRetryFetch}>
                 Retry Data Fetch
               </button>
             </div>
@@ -959,16 +961,19 @@ export function PlannerView(props: PlannerViewProps) {
       )}
 
       {hasObjective && safetyData && (position.lat < 24.5 || position.lat > 49.5 || position.lng < -125 || position.lng > -66.5) && (
-        <section className="top-freshness-alert coverage-warning" role="status">
+        <section className="top-freshness-alert coverage-warning" role="status" aria-live="polite">
           <strong>Limited coverage</strong>
           <span>Primary data sources (NOAA, NWS, SNOTEL, avalanche centers) are US-focused. Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.</span>
         </section>
       )}
 
       {hasObjective && safetyData && safetyData.partialData && (
-        <section className="top-freshness-alert coverage-warning" role="status" aria-live="assertive">
+        <section className="top-freshness-alert data-integrity-alert" role="alert" aria-live="assertive">
           <strong>Incomplete data</strong>
-          <span>{safetyData.apiWarning || 'One or more upstream data providers failed. Some report sections may be missing or degraded.'}</span>
+          <span>
+            {safetyData.apiWarning || 'One or more upstream data providers failed. Some report sections may be missing or degraded.'}
+            {' '}Treat the safety score and recommendations as lower-confidence until data recovers.
+          </span>
         </section>
       )}
 
@@ -1046,11 +1051,22 @@ export function PlannerView(props: PlannerViewProps) {
               <span className={`status-badge ${safetyData.safety.tierClass || 'is-elevated-risk'}`}>
                 {safetyData.safety.tier ? `${safetyData.safety.tier} Risk` : 'Elevated Risk'}
               </span>
+              {typeof safetyData.safety.confidence === 'number' && (
+                <span
+                  className={`score-confidence-line${safetyData.safety.confidence < 60 ? ' low-confidence' : ''}`}
+                  title={safetyData.safety.confidenceReasons?.length ? safetyData.safety.confidenceReasons.join('; ') : undefined}
+                >
+                  Data confidence: {Math.round(safetyData.safety.confidence)}%
+                </span>
+              )}
               <div className="hazard-badge">
                 <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
               </div>
               <div className="objective-line">
                 {objectiveName || 'Objective'} · {displayStartTime}{returnTimeFormatted ? ` – ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ''}
+                {returnExtendsPastMidnight && (
+                  <span className="overnight-flag" title="Estimated return is after midnight — expect travel in the dark">+1 day</span>
+                )}
               </div>
               {(loading || error) && (
                 <div className="source-line">
@@ -1274,7 +1290,7 @@ export function PlannerView(props: PlannerViewProps) {
                 order={reportCardOrder.atmosphericData}
                 className="weather-card"
                 title={<span className="card-title"><Thermometer size={14} /> Weather</span>}
-                headerMeta={<span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>{safetyData.forecast?.isFuture ? 'Forecast' : 'Current'}</span>}
+                headerMeta={<span className={`forecast-badge ${safetyData.forecast?.isFuture ? 'future' : ''}`}>{safetyData.forecast?.isFuture ? (forecastLeadHoursDisplay || 'Forecast') : 'Current'}</span>}
                 summary={`${formatTempDisplay(weatherCardTemp)} · Wind ${formatWindDisplay(weatherCardWind)}`}
                 preview={<>
                   <div className="card-preview-hero mono">{formatTempDisplay(weatherCardTemp)}</div>
@@ -1780,6 +1796,7 @@ export function PlannerView(props: PlannerViewProps) {
             toPlainText={toPlainText}
             objectiveElevationFt={safetyData.weather.elevation ?? null}
             formatElevationDisplay={formatElevationDisplay}
+            formatPubTime={formatPubTime}
             />
             </CollapsibleCard>
             );

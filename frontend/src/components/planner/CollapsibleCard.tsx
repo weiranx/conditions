@@ -86,7 +86,7 @@ export function CollapsibleCard({
           type="button"
           className="collapsible-card-header card-header"
           onClick={openModal}
-          aria-label="Expand card"
+          aria-haspopup="dialog"
         >
           <span className="collapsible-title-wrap">{title}</span>
           <span className="collapsible-header-right">
