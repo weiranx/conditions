@@ -458,6 +458,49 @@ input {
   flex-shrink: 0;
 }
 
+/* Per-card icon accents: weather=sky, snow=teal, risk=amber, field=green */
+.home-grid .home-card:nth-child(1) svg {
+  color: #38719a;
+  background: linear-gradient(135deg, rgba(77, 143, 183, 0.16), rgba(77, 143, 183, 0.06));
+  border-color: rgba(77, 143, 183, 0.16);
+}
+
+.home-grid .home-card:nth-child(2) svg {
+  color: #20796d;
+  background: linear-gradient(135deg, rgba(31, 131, 118, 0.15), rgba(31, 131, 118, 0.06));
+  border-color: rgba(31, 131, 118, 0.16);
+}
+
+.home-grid .home-card:nth-child(3) svg {
+  color: #a8742b;
+  background: linear-gradient(135deg, rgba(197, 141, 59, 0.17), rgba(197, 141, 59, 0.07));
+  border-color: rgba(197, 141, 59, 0.18);
+}
+
+:root[data-theme='dark'] .home-grid .home-card:nth-child(1) svg {
+  color: #76b6dd;
+  background: linear-gradient(135deg, rgba(118, 182, 221, 0.14), rgba(118, 182, 221, 0.04));
+  border-color: rgba(118, 182, 221, 0.22);
+}
+
+:root[data-theme='dark'] .home-grid .home-card:nth-child(2) svg {
+  color: #5fc9ba;
+  background: linear-gradient(135deg, rgba(95, 201, 186, 0.14), rgba(95, 201, 186, 0.04));
+  border-color: rgba(95, 201, 186, 0.22);
+}
+
+:root[data-theme='dark'] .home-grid .home-card:nth-child(3) svg {
+  color: #e0a84e;
+  background: linear-gradient(135deg, rgba(224, 168, 78, 0.14), rgba(224, 168, 78, 0.04));
+  border-color: rgba(224, 168, 78, 0.22);
+}
+
+:root[data-theme='dark'] .home-grid .home-card:nth-child(4) svg {
+  color: #7ed8a0;
+  background: linear-gradient(135deg, rgba(126, 216, 160, 0.14), rgba(126, 216, 160, 0.04));
+  border-color: rgba(126, 216, 160, 0.22);
+}
+
 .home-card h3 {
   margin: 0;
   font-size: 1rem;
@@ -7840,11 +7883,16 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 :root[data-theme='dark'] .settings-shell {
-  background: rgba(22, 32, 41, 0.78);
+  background:
+    linear-gradient(160deg, rgba(96, 138, 170, 0.10) 0%, rgba(96, 138, 170, 0) 48%),
+    rgba(21, 31, 41, 0.80);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border-color: rgba(43, 57, 70, 0.45);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  border-color: rgba(56, 74, 92, 0.5);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 
@@ -7860,31 +7908,70 @@ button.collapsible-card-header:hover .collapsible-chevron {
 :root[data-theme='dark'] .empty-state,
 :root[data-theme='dark'] .loading-state,
 :root[data-theme='dark'] .error-banner {
-  background: rgba(22, 32, 41, 0.78);
+  background:
+    linear-gradient(160deg, rgba(96, 138, 170, 0.10) 0%, rgba(96, 138, 170, 0) 48%),
+    rgba(21, 31, 41, 0.80);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border-color: rgba(43, 57, 70, 0.45);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  border-color: rgba(56, 74, 92, 0.5);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   color: var(--text-dark);
 }
 
 :root[data-theme='dark'] .header-section {
-  background: rgba(22, 32, 41, 0.82);
+  background:
+    linear-gradient(160deg, rgba(96, 138, 170, 0.12) 0%, rgba(96, 138, 170, 0) 52%),
+    rgba(20, 30, 40, 0.84);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border-color: rgba(43, 57, 70, 0.45);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border-color: rgba(56, 74, 92, 0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 :root[data-theme='dark'] .card:hover,
 :root[data-theme='dark'] .ai-box:hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 12px 32px rgba(0, 0, 0, 0.25);
-  border-color: rgba(60, 75, 90, 0.5);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.18),
+    0 14px 36px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  border-color: rgba(94, 160, 208, 0.32);
 }
 
 :root[data-theme='dark'] .home-card:hover {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
-  border-color: rgba(60, 75, 90, 0.5);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.18),
+    0 14px 36px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  border-color: rgba(94, 160, 208, 0.32);
+}
+
+:root[data-theme='dark'] .home-featured-chip {
+  border-color: rgba(86, 110, 130, 0.45);
+  background:
+    linear-gradient(135deg, rgba(120, 150, 175, 0.14) 0%, rgba(120, 150, 175, 0) 55%),
+    rgba(24, 36, 47, 0.78);
+  color: var(--text-dark);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme='dark'] .home-featured-chip:hover {
+  background:
+    linear-gradient(135deg, rgba(120, 150, 175, 0.2) 0%, rgba(120, 150, 175, 0) 55%),
+    rgba(30, 45, 58, 0.92);
+  border-color: rgba(126, 178, 216, 0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme='dark'] .home-featured-chip svg,
+:root[data-theme='dark'] .home-featured-arrow {
+  color: #7ed8a0;
+}
+
+:root[data-theme='dark'] .home-featured-divider {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 70%);
 }
 
 :root[data-theme='dark'] .brand-copy h1,
@@ -8077,11 +8164,16 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 :root[data-theme='dark'] .score-card {
-  background: rgba(22, 32, 41, 0.78);
+  background:
+    linear-gradient(160deg, rgba(96, 138, 170, 0.12) 0%, rgba(96, 138, 170, 0) 52%),
+    rgba(20, 30, 40, 0.84);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border-color: rgba(43, 57, 70, 0.45);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  border-color: rgba(56, 74, 92, 0.5);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   color: var(--text-dark);
 }
 
@@ -9501,6 +9593,24 @@ button.collapsible-card-header:hover .collapsible-chevron {
       0 12px 28px rgba(0, 0, 0, 0.05),
       0 24px 48px rgba(0, 0, 0, 0.03),
       inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  :root[data-theme='dark'] .home-card:hover,
+  :root[data-theme='dark'] .settings-card:hover,
+  :root[data-theme='dark'] .card:hover,
+  :root[data-theme='dark'] .ai-box:hover {
+    border-color: rgba(94, 160, 208, 0.32);
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.2),
+      0 16px 36px rgba(0, 0, 0, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  :root[data-theme='dark'] .score-card:hover {
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.2),
+      0 16px 36px rgba(0, 0, 0, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
   }
 }
 
