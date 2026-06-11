@@ -3374,7 +3374,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 .card-preview {
-  padding: 8px 0 4px;
+  padding: 10px 0 6px;
 }
 
 .card-preview-hero {
@@ -3382,6 +3382,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .card-preview-hero.mono {
@@ -3411,8 +3412,8 @@ button.collapsible-card-header:hover .collapsible-chevron {
 .card-preview-caption {
   font-size: 0.8rem;
   color: var(--text-muted);
-  margin-top: 4px;
-  line-height: 1.35;
+  margin-top: 6px;
+  line-height: 1.4;
 }
 
 .card-preview-row {
@@ -3438,6 +3439,130 @@ button.collapsible-card-header:hover .collapsible-chevron {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border-color: rgba(43, 57, 70, 0.45);
+}
+
+/* ── Full Report card accents ──────────────────────────────── */
+
+/* Per-topic accent palette, consumed by the title icon chip below.
+   --card-accent is an RGB triplet for translucent tints; ink is the glyph color. */
+.collapsible-card {
+  --card-accent: 47, 122, 87;
+  --card-accent-ink: #2f7a57;
+}
+
+.collapsible-card.weather-card,
+.collapsible-card.projection-card,
+.collapsible-card.air-quality-card,
+.collapsible-card.source-freshness-card {
+  --card-accent: 77, 143, 183;
+  --card-accent-ink: #38719a;
+}
+
+.collapsible-card.plan-card,
+.collapsible-card.snowpack-card,
+.collapsible-card.rainfall-card,
+.collapsible-card.score-trace-card {
+  --card-accent: 31, 131, 118;
+  --card-accent-ink: #20796d;
+}
+
+.collapsible-card.nws-alerts-card,
+.collapsible-card.terrain-condition-card,
+.collapsible-card.wind-loading-card {
+  --card-accent: 197, 141, 59;
+  --card-accent-ink: #a8742b;
+}
+
+.collapsible-card.heat-risk-card,
+.collapsible-card.fire-risk-card {
+  --card-accent: 212, 116, 44;
+  --card-accent-ink: #b05f24;
+}
+
+.collapsible-card.avy-card {
+  --card-accent: 200, 68, 68;
+  --card-accent-ink: #b13a3a;
+}
+
+:root[data-theme='dark'] .collapsible-card { --card-accent-ink: #7ed8a0; }
+
+:root[data-theme='dark'] .collapsible-card.weather-card,
+:root[data-theme='dark'] .collapsible-card.projection-card,
+:root[data-theme='dark'] .collapsible-card.air-quality-card,
+:root[data-theme='dark'] .collapsible-card.source-freshness-card { --card-accent-ink: #76b6dd; }
+
+:root[data-theme='dark'] .collapsible-card.plan-card,
+:root[data-theme='dark'] .collapsible-card.snowpack-card,
+:root[data-theme='dark'] .collapsible-card.rainfall-card,
+:root[data-theme='dark'] .collapsible-card.score-trace-card { --card-accent-ink: #5fc9ba; }
+
+:root[data-theme='dark'] .collapsible-card.nws-alerts-card,
+:root[data-theme='dark'] .collapsible-card.terrain-condition-card,
+:root[data-theme='dark'] .collapsible-card.wind-loading-card { --card-accent-ink: #e0a84e; }
+
+:root[data-theme='dark'] .collapsible-card.heat-risk-card,
+:root[data-theme='dark'] .collapsible-card.fire-risk-card { --card-accent-ink: #ef9d68; }
+
+:root[data-theme='dark'] .collapsible-card.avy-card { --card-accent-ink: #f08a8a; }
+
+/* Title icon rendered as a tinted chip, mirroring the home feature cards */
+.collapsible-card .card-title svg {
+  width: 26px;
+  height: 26px;
+  padding: 6px;
+  border-radius: 8px;
+  color: var(--card-accent-ink);
+  background: linear-gradient(135deg, rgba(var(--card-accent), 0.16), rgba(var(--card-accent), 0.05));
+  border: 1px solid rgba(var(--card-accent), 0.18);
+  flex-shrink: 0;
+}
+
+/* Tone hairline across the card top, keyed by the preview status */
+.collapsible-card:has(.card-preview-hero.go)::before,
+.collapsible-card:has(.card-preview-hero.avy-go)::before,
+.collapsible-card:has(.card-preview-hero.caution)::before,
+.collapsible-card:has(.card-preview-hero.avy-caution)::before,
+.collapsible-card:has(.card-preview-hero.nogo)::before,
+.collapsible-card:has(.card-preview-hero.avy-nogo)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(var(--tone-bar), 0) 0%, rgba(var(--tone-bar), 0.55) 18%, rgba(var(--tone-bar), 0.55) 82%, rgba(var(--tone-bar), 0) 100%);
+}
+
+.collapsible-card:has(.card-preview-hero.go),
+.collapsible-card:has(.card-preview-hero.avy-go) {
+  --tone-bar: 47, 138, 87;
+}
+
+.collapsible-card:has(.card-preview-hero.caution),
+.collapsible-card:has(.card-preview-hero.avy-caution) {
+  --tone-bar: 197, 141, 59;
+}
+
+.collapsible-card:has(.card-preview-hero.nogo),
+.collapsible-card:has(.card-preview-hero.avy-nogo) {
+  --tone-bar: 200, 68, 68;
+}
+
+:root[data-theme='dark'] .collapsible-card:has(.card-preview-hero.go),
+:root[data-theme='dark'] .collapsible-card:has(.card-preview-hero.avy-go) {
+  --tone-bar: 74, 222, 128;
+}
+
+:root[data-theme='dark'] .collapsible-card:has(.card-preview-hero.caution),
+:root[data-theme='dark'] .collapsible-card:has(.card-preview-hero.avy-caution) {
+  --tone-bar: 251, 191, 36;
+}
+
+:root[data-theme='dark'] .collapsible-card:has(.card-preview-hero.nogo),
+:root[data-theme='dark'] .collapsible-card:has(.card-preview-hero.avy-nogo) {
+  --tone-bar: 248, 113, 113;
 }
 
 /* ── End Card Preview ──────────────────────────────────────── */
