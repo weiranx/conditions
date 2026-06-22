@@ -178,6 +178,9 @@ export function SettingsView({
                   <button type="button" className={`theme-chip ${preferences.reportLayout === 'briefing' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('briefing')}>
                     Briefing
                   </button>
+                  <button type="button" className={`theme-chip ${preferences.reportLayout === 'redesign' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('redesign')}>
+                    Redesign
+                  </button>
                 </div>
               </label>
             </div>

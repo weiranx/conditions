@@ -647,7 +647,9 @@ export function normalizeTimeStyle(rawStyle: string | null | undefined): TimeSty
 }
 
 export function normalizeReportLayout(raw: string | null | undefined): ReportLayout {
-  return raw === 'briefing' ? 'briefing' : 'cards';
+  if (raw === 'briefing') return 'briefing';
+  if (raw === 'redesign') return 'redesign';
+  return 'cards';
 }
 
 export function parseIsoDateToUtcMs(value: string | null | undefined): number | null {

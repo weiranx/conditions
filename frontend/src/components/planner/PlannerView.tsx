@@ -43,7 +43,9 @@ import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
 import { GearCard } from './cards/GearCard';
 import { DeepDiveReportCard } from './cards/DeepDiveReportCard';
 import { BriefingView } from './BriefingView';
+import { RedesignView } from './RedesignView';
 import { AppDisclaimer } from '../../app/map-components';
+import '../../styles/planner-redesign.css';
 import {
   APP_CREDIT_TEXT,
 } from '../../app/constants';
@@ -1022,6 +1024,15 @@ export function PlannerView(props: PlannerViewProps) {
             >
               Full Report
             </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={effectiveLayout === 'redesign'}
+              className={`report-layout-toggle-btn ${effectiveLayout === 'redesign' ? 'active' : ''}`}
+              onClick={() => handleReportLayoutChange('redesign')}
+            >
+              Redesign
+            </button>
           </div>
         </div>
       )}
@@ -1126,6 +1137,10 @@ export function PlannerView(props: PlannerViewProps) {
 
           {effectiveLayout === 'briefing' ? (
             <BriefingView {...props} />
+          ) : effectiveLayout === 'redesign' ? (
+            <div style={{ order: reportCardOrder.reportColumns }}>
+              <RedesignView {...props} />
+            </div>
           ) : (<>
           <div className="report-columns" style={{ order: reportCardOrder.reportColumns }}>
             <div className="report-column">
