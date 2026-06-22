@@ -1457,6 +1457,9 @@ function App() {
         handleUseTypedCoordinates={handleUseTypedCoordinates}
         selectSuggestion={selectSuggestion}
         setActiveSuggestionIndex={setActiveSuggestionIndex}
+        preferences={preferences}
+        todayDate={todayDate}
+        formatClockForStyle={formatClockForStyle}
         navigateToPlanner={navigateToPlanner}
         navigateToView={navigateToView}
         openTripToolView={openTripToolView}
