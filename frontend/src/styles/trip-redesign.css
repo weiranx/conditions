@@ -1,0 +1,333 @@
+/* =========================================================
+   Multi-Day Trip Redesign — "SummitSafe" expedition tool
+   Imported from claude.ai/design · Multi-Day Trip.html
+   Scoped under .ssr-trip so it never collides with App.css.
+   Dark mode follows the app's html[data-theme="dark"] switch.
+   ========================================================= */
+
+.ssr-trip {
+  --ssr-surface:     oklch(100% 0 0);
+  --ssr-surface-2:   oklch(97.5% 0.004 80);
+  --ssr-surface-3:   oklch(94.5% 0.005 80);
+  --ssr-line:        oklch(91% 0.006 80);
+  --ssr-line-strong: oklch(84% 0.008 80);
+
+  --ssr-text:        oklch(24% 0.010 80);
+  --ssr-text-2:      oklch(42% 0.010 80);
+  --ssr-text-3:      oklch(58% 0.009 80);
+  --ssr-text-4:      oklch(72% 0.007 80);
+
+  --ssr-brand:       oklch(52% 0.075 155);
+  --ssr-brand-dark:  oklch(40% 0.070 155);
+  --ssr-brand-bg:    oklch(95% 0.020 155);
+
+  --ssr-go:          oklch(72% 0.170 145);
+  --ssr-caution:     oklch(70% 0.180 55);
+  --ssr-nogo:        oklch(60% 0.200 28);
+  --ssr-go-ink:      oklch(38% 0.120 145);
+  --ssr-caution-ink: oklch(42% 0.160 55);
+  --ssr-nogo-ink:    oklch(38% 0.180 28);
+
+  --ssr-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --ssr-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+  color: var(--ssr-text);
+  -webkit-font-smoothing: antialiased;
+}
+.ssr-trip * { box-sizing: border-box; }
+
+html[data-theme="dark"] .ssr-trip {
+  --ssr-surface:     oklch(20% 0.018 240);
+  --ssr-surface-2:   oklch(23% 0.020 240);
+  --ssr-surface-3:   oklch(27% 0.022 240);
+  --ssr-line:        oklch(30% 0.020 240);
+  --ssr-line-strong: oklch(36% 0.022 240);
+  --ssr-text:        oklch(95% 0.010 240);
+  --ssr-text-2:      oklch(80% 0.015 240);
+  --ssr-text-3:      oklch(62% 0.018 240);
+  --ssr-text-4:      oklch(48% 0.020 240);
+  --ssr-brand:       oklch(68% 0.130 210);
+  --ssr-brand-dark:  oklch(78% 0.120 210);
+  --ssr-brand-bg:    oklch(30% 0.040 210);
+}
+
+/* ---------- HEADER + SETUP ---------- */
+.ssr-trip-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 26px;
+}
+.ssr-trip-kicker {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ssr-brand-dark);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.ssr-trip-head h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--ssr-text); }
+.ssr-trip-head p { font-size: 14px; color: var(--ssr-text-2); margin: 0; max-width: 520px; }
+
+.ssr-trip-setup {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--ssr-line-strong);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--ssr-surface);
+}
+.ssr-trip-setup-field {
+  padding: 10px 14px;
+  border-right: 1px solid var(--ssr-line);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ssr-trip-setup-field label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ssr-text-3);
+  font-weight: 600;
+}
+.ssr-trip-setup-field input,
+.ssr-trip-setup-field select {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ssr-text);
+  padding: 0;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.ssr-trip-setup-field input:focus,
+.ssr-trip-setup-field select:focus { outline: none; color: var(--ssr-brand-dark); }
+.ssr-trip-setup-run {
+  border: none;
+  background: var(--ssr-brand);
+  color: white;
+  padding: 0 18px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ssr-trip-setup-run:hover { background: var(--ssr-brand-dark); }
+.ssr-trip-setup-run:disabled { opacity: 0.6; cursor: default; }
+.ssr-trip-setup-run svg { width: 15px; height: 15px; }
+
+/* ---------- OBJECTIVE REQUIRED / ERROR ---------- */
+.ssr-trip-banner {
+  border: 1px solid var(--ssr-line);
+  border-left: 3px solid var(--ssr-caution);
+  background: var(--ssr-surface);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 22px;
+}
+.ssr-trip-banner.error { border-left-color: var(--ssr-nogo); }
+.ssr-trip-banner h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--ssr-text); }
+.ssr-trip-banner p { margin: 0; font-size: 13px; color: var(--ssr-text-2); }
+
+/* ---------- OVERVIEW BAND ---------- */
+.ssr-trip-overview {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 0.8fr) 1.4fr;
+  border: 1px solid var(--ssr-line);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 22px;
+  background: var(--ssr-surface);
+}
+.ssr-trip-ov { padding: 16px 20px; border-right: 1px solid var(--ssr-line); }
+.ssr-trip-ov:last-child { border-right: none; }
+.ssr-trip-ov-k {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ssr-text-3);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.ssr-trip-ov-obj { font-size: 15px; font-weight: 600; color: var(--ssr-text); line-height: 1.3; }
+.ssr-trip-ov-sub { font-size: 12px; color: var(--ssr-text-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.ssr-trip-ov-count { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.ssr-trip-ov-count.go { color: var(--ssr-go-ink); }
+.ssr-trip-ov-count.caution { color: var(--ssr-caution-ink); }
+.ssr-trip-ov-count.nogo { color: var(--ssr-nogo-ink); }
+.ssr-trip-ov-count-k {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ssr-text-3);
+  margin-top: 4px;
+}
+.ssr-trip-ov-best { display: flex; flex-direction: column; gap: 4px; }
+.ssr-trip-ov-best-day { font-size: 15px; font-weight: 700; color: var(--ssr-go-ink); }
+.ssr-trip-ov-best-note { font-size: 12px; color: var(--ssr-text-2); line-height: 1.4; }
+
+/* ---------- TREND ARC ---------- */
+.ssr-trip-trend {
+  background: var(--ssr-surface);
+  border: 1px solid var(--ssr-line);
+  border-radius: 10px;
+  padding: 18px 22px 8px;
+  margin-bottom: 22px;
+}
+.ssr-trip-trend-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; gap: 12px; }
+.ssr-trip-trend-h h2 { font-size: 14px; font-weight: 600; margin: 0; color: var(--ssr-text); }
+.ssr-trip-trend-h span { font-size: 12px; color: var(--ssr-text-3); }
+.ssr-trip-trend svg { width: 100%; height: 150px; display: block; }
+
+/* ---------- DAY STRIP ---------- */
+.ssr-trip-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+.ssr-trip-day {
+  background: var(--ssr-surface);
+  border: 1px solid var(--ssr-line);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 0;
+  font-family: inherit;
+}
+.ssr-trip-day:hover { border-color: var(--ssr-line-strong); box-shadow: 0 6px 20px -12px rgba(30,25,15,0.25); transform: translateY(-2px); }
+.ssr-trip-day.sel { border-color: var(--ssr-brand); box-shadow: 0 0 0 1px var(--ssr-brand); }
+.ssr-trip-day-band { height: 5px; }
+.ssr-trip-day-band.go { background: var(--ssr-go); }
+.ssr-trip-day-band.caution { background: var(--ssr-caution); }
+.ssr-trip-day-band.nogo { background: var(--ssr-nogo); }
+.ssr-trip-day-top { padding: 14px 16px 12px; border-bottom: 1px solid var(--ssr-line); }
+.ssr-trip-day-date { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.ssr-trip-day-wd { font-size: 13px; font-weight: 600; color: var(--ssr-text); }
+.ssr-trip-day-wd b { display: block; font-size: 11px; font-weight: 500; color: var(--ssr-text-3); }
+.ssr-trip-day-sky { font-size: 22px; line-height: 1; }
+.ssr-trip-day-verdict { display: flex; align-items: center; gap: 8px; }
+.ssr-trip-day-pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.ssr-trip-day-pill.go { background: color-mix(in oklch, var(--ssr-go) 28%, transparent); color: var(--ssr-go-ink); }
+.ssr-trip-day-pill.caution { background: color-mix(in oklch, var(--ssr-caution) 32%, transparent); color: var(--ssr-caution-ink); }
+.ssr-trip-day-pill.nogo { background: color-mix(in oklch, var(--ssr-nogo) 26%, transparent); color: var(--ssr-nogo-ink); }
+.ssr-trip-day-score { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; color: var(--ssr-text); font-variant-numeric: tabular-nums; margin-left: auto; }
+.ssr-trip-day-score small { font-size: 11px; font-weight: 500; color: var(--ssr-text-3); }
+.ssr-trip-day-body { padding: 12px 16px 14px; display: grid; gap: 10px; }
+.ssr-trip-day-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ssr-trip-day-metric { display: flex; flex-direction: column; gap: 1px; }
+.ssr-trip-day-metric .mk { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ssr-text-3); }
+.ssr-trip-day-metric .mv { font-size: 14px; font-weight: 600; color: var(--ssr-text); font-variant-numeric: tabular-nums; }
+.ssr-trip-day-metric .mv.warn { color: var(--ssr-nogo-ink); }
+.ssr-trip-day-headline {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ssr-text-2);
+  border-top: 1px solid var(--ssr-line);
+  padding-top: 10px;
+}
+
+/* ---------- SELECTED DAY DETAIL ---------- */
+.ssr-trip-detail {
+  margin-top: 22px;
+  background: var(--ssr-surface);
+  border: 1px solid var(--ssr-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ssr-trip-detail-h {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--ssr-line);
+  background: var(--ssr-surface-2);
+}
+.ssr-trip-detail-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ssr-trip-detail-title h2 { font-size: 18px; font-weight: 700; margin: 0; color: var(--ssr-text); }
+.ssr-trip-detail-body { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--ssr-line); }
+.ssr-trip-detail-cell { background: var(--ssr-surface); padding: 18px 22px; }
+.ssr-trip-detail-cell h3 {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ssr-text-3);
+  font-weight: 600;
+  margin: 0 0 8px;
+  display: flex; align-items: center; gap: 7px;
+}
+.ssr-trip-detail-cell h3 svg { width: 14px; height: 14px; color: var(--ssr-brand-dark); }
+.ssr-trip-detail-cell p { font-size: 14px; line-height: 1.55; color: var(--ssr-text); margin: 0; }
+.ssr-trip-detail-foot {
+  padding: 14px 22px;
+  border-top: 1px solid var(--ssr-line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ssr-text-3);
+  font-family: var(--ssr-mono);
+}
+
+.ssr-btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 7px;
+  border: 1px solid var(--ssr-line-strong);
+  background: var(--ssr-surface);
+  color: var(--ssr-text);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ssr-btn:hover { background: var(--ssr-surface-2); }
+.ssr-btn.primary { background: var(--ssr-brand); border-color: var(--ssr-brand); color: white; }
+.ssr-btn.primary:hover { background: var(--ssr-brand-dark); }
+
+/* disclaimer */
+.ssr-trip-disclaimer {
+  margin-top: 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--ssr-text-3);
+  line-height: 1.5;
+  max-width: 720px;
+}
+.ssr-trip-disclaimer svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; color: var(--ssr-caution-ink); }
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 1000px) {
+  .ssr-trip-overview { grid-template-columns: 1fr 1fr; }
+  .ssr-trip-ov { border-bottom: 1px solid var(--ssr-line); }
+  .ssr-trip-head { grid-template-columns: 1fr; }
+  .ssr-trip-setup { flex-wrap: wrap; }
+  .ssr-trip-detail-body { grid-template-columns: 1fr; }
+}
