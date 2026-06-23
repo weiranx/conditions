@@ -1,9 +1,15 @@
 import React from 'react';
 import {
+  Clock,
+  Eye,
+  Ruler,
+  Gauge,
+  Check,
+  X,
   House,
   Route,
+  FlaskConical,
 } from 'lucide-react';
-import { AppDisclaimer } from '../../app/map-components';
 import type {
   ElevationUnit,
   ReportLayout,
@@ -17,6 +23,7 @@ import {
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
+import '../../styles/settings-redesign.css';
 
 export interface SettingsViewProps {
   appShellClassName: string;
@@ -77,6 +84,70 @@ export interface SettingsViewProps {
   openPlannerView: () => void;
 }
 
+const THEME_OPTIONS: Array<[ThemeMode, string]> = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
+const LAYOUT_OPTIONS: Array<[ReportLayout, string]> = [['cards', 'Cards'], ['briefing', 'Briefing'], ['redesign', 'Redesign']];
+const TEMP_OPTIONS: Array<[TemperatureUnit, string]> = [['f', '°F'], ['c', '°C']];
+const ELEV_OPTIONS: Array<[ElevationUnit, string]> = [['ft', 'Feet'], ['m', 'Meters']];
+const WIND_OPTIONS: Array<[WindSpeedUnit, string]> = [['mph', 'mph'], ['kph', 'kph']];
+const TIME_OPTIONS: Array<[TimeStyle, string]> = [['ampm', '12-hour'], ['24h', '24-hour']];
+
+function Seg<T extends string>({ value, options, onChange }: { value: T; options: Array<[T, string]>; onChange: (v: T) => void }) {
+  return (
+    <div className="ssr-seg" role="radiogroup">
+      {options.map(([v, label]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? 'on' : ''} onClick={() => onChange(v)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Thresh({
+  label, value, min, max, step, unit, onChange, onCommit,
+}: {
+  label: string;
+  value: string | number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <div className="ssr-set-thresh">
+      <span className="ssr-set-thresh-label">{label}</span>
+      <span className="ssr-set-thresh-val">
+        <input
+          type="number"
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          onChange={onChange}
+          onBlur={onCommit}
+          aria-label={label}
+        />
+        <span className="ssr-unit">{unit}</span>
+      </span>
+      <input
+        className="ssr-set-thresh-slider"
+        type="range"
+        value={Number.isFinite(Number(value)) && String(value) !== '' ? Number(value) : min}
+        min={min}
+        max={max}
+        step={step}
+        onChange={onChange}
+        onPointerUp={onCommit}
+        onBlur={onCommit}
+        aria-label={`${label} slider`}
+      />
+      <div className="ssr-set-thresh-track"><span>{min}{unit}</span><span>{max}{unit}</span></div>
+    </div>
+  );
+}
+
 export function SettingsView({
   appShellClassName,
   isViewPending,
@@ -123,205 +194,221 @@ export function SettingsView({
   navigateToView,
   openPlannerView,
 }: SettingsViewProps) {
+  const [saved, setSaved] = React.useState(false);
+  const [activeSection, setActiveSection] = React.useState('timing');
+  const savedTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => () => {
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+  }, []);
+
+  const showSaved = () => {
+    setSaved(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSaved(false), 1800);
+  };
+
+  const goToSection = (id: string) => {
+    setActiveSection(id);
+    document.getElementById(`ssr-set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Live gate check — uses committed canonical preference values (mph / % / °F).
+  const sample = { gust: 32, precip: 5, feelsLike: 16, heat: 71 };
+  const gates = [
+    { label: 'Wind gust under ceiling', val: sample.gust, lim: preferences.maxWindGustMph, unit: 'mph', ok: sample.gust < preferences.maxWindGustMph, cmp: '<' },
+    { label: 'Precip chance under ceiling', val: sample.precip, lim: preferences.maxPrecipChance, unit: '%', ok: sample.precip < preferences.maxPrecipChance, cmp: '<' },
+    { label: 'Feels-like above floor', val: sample.feelsLike, lim: preferences.minFeelsLikeF, unit: '°F', ok: sample.feelsLike > preferences.minFeelsLikeF, cmp: '>' },
+    { label: 'Heat under ceiling', val: sample.heat, lim: preferences.maxFeelsLikeF, unit: '°F', ok: sample.heat < preferences.maxFeelsLikeF, cmp: '<' },
+  ];
+
+  const railItem = (id: string, icon: React.ReactNode, label: string) => (
+    <button type="button" className={activeSection === id ? 'on' : ''} onClick={() => goToSection(id)}>
+      {icon} {label}
+    </button>
+  );
+
   return (
     <div key="view-settings" className={appShellClassName} aria-busy={isViewPending}>
-      <section className="settings-shell">
-        <div className="settings-head">
-          <div>
-            <div className="home-kicker">Backcountry Conditions Preferences</div>
-            <h2>Settings</h2>
-            <p>Set default planning values for this device. Shared links can still override these values.</p>
-          </div>
-          <div className="settings-nav">
-            <button className="settings-btn" onClick={() => navigateToView('home')}>
-              <House size={14} /> Homepage
-            </button>
-            <button className="primary-btn" onClick={openPlannerView}>
-              <Route size={14} /> Planner
-            </button>
-          </div>
+      <div className="ssr-settings">
+        <div className="ssr-set-head">
+          <div className="ssr-set-kicker">Planning preferences</div>
+          <h1>Settings</h1>
+          <p>Defaults for this device. Shared planner links can still override any value for a single report.</p>
         </div>
 
-        <div className="settings-grid">
-          <article className="settings-card">
-            <h3>Default timing</h3>
-            <p>Applied when you start a new objective without shared time values.</p>
-            <div className="settings-time-row">
-              <label className="date-control">
-                <span>Start time</span>
-                <input type="time" value={preferences.defaultStartTime} onChange={(e) => handlePreferenceTimeChange('defaultStartTime', e.target.value)} />
-              </label>
-            </div>
-          </article>
+        <div className="ssr-set-layout">
+          {/* RAIL */}
+          <nav className="ssr-set-rail" aria-label="Settings sections">
+            {railItem('timing', <Clock />, 'Timing')}
+            {railItem('appearance', <Eye />, 'Appearance')}
+            {railItem('units', <Ruler />, 'Units & time')}
+            {railItem('thresholds', <Gauge />, 'Thresholds')}
+            <div className="ssr-set-rail-sep" />
+            <button type="button" onClick={() => navigateToView('home')}><House /> Homepage</button>
+            <button type="button" onClick={openPlannerView}><Route /> Planner</button>
+            <div className="ssr-set-rail-foot">Saved locally in your browser.</div>
+          </nav>
 
-          <article className="settings-card">
-            <h3>Appearance</h3>
-            <p>Theme follows your system by default. Override it here if needed.</p>
-            <div className="settings-theme-row">
-              <button type="button" className={`theme-chip ${preferences.themeMode === 'system' ? 'active' : ''}`} onClick={() => handleThemeModeChange('system')}>
-                System
-              </button>
-              <button type="button" className={`theme-chip ${preferences.themeMode === 'light' ? 'active' : ''}`} onClick={() => handleThemeModeChange('light')}>
-                Light
-              </button>
-              <button type="button" className={`theme-chip ${preferences.themeMode === 'dark' ? 'active' : ''}`} onClick={() => handleThemeModeChange('dark')}>
-                Dark
-              </button>
-            </div>
-            <div style={{ marginTop: '16px' }}>
-              <label className="settings-number-row">
-                <span>Report layout</span>
-                <div className="settings-theme-row">
-                  <button type="button" className={`theme-chip ${preferences.reportLayout === 'cards' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('cards')}>
-                    Cards
-                  </button>
-                  <button type="button" className={`theme-chip ${preferences.reportLayout === 'briefing' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('briefing')}>
-                    Briefing
-                  </button>
-                  <button type="button" className={`theme-chip ${preferences.reportLayout === 'redesign' ? 'active' : ''}`} onClick={() => handleReportLayoutChange('redesign')}>
-                    Redesign
-                  </button>
-                </div>
-              </label>
-            </div>
-          </article>
+          {/* PANELS */}
+          <div className="ssr-set-panels">
+            {/* TIMING */}
+            <section className="ssr-set-card" id="ssr-set-timing">
+              <div className="ssr-set-card-h">
+                <h2><Clock /> Default timing</h2>
+                <p>Applied when you start a new objective without shared time values.</p>
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">
+                  Alpine start time
+                  <span className="ssr-hint">Reports score conditions forward from this start across your travel window.</span>
+                </span>
+                <input
+                  className="ssr-set-time-input"
+                  type="time"
+                  value={preferences.defaultStartTime}
+                  onChange={(e) => handlePreferenceTimeChange('defaultStartTime', e.target.value)}
+                  aria-label="Alpine start time"
+                />
+              </div>
+              <Thresh
+                label="Travel window length"
+                value={travelWindowHoursDraft}
+                min={MIN_TRAVEL_WINDOW_HOURS}
+                max={MAX_TRAVEL_WINDOW_HOURS}
+                step={1}
+                unit="h"
+                onChange={handleTravelWindowHoursDraftChange}
+                onCommit={handleTravelWindowHoursDraftBlur}
+              />
+            </section>
 
-          <article className="settings-card">
-            <h3>Units & time</h3>
-            <p>Controls display units in report cards and exported summaries.</p>
-            <div className="settings-time-row">
-              <label className="settings-number-row">
-                <span>Temperature</span>
-                <div className="settings-theme-row">
-                  <button type="button" className={`theme-chip ${preferences.temperatureUnit === 'f' ? 'active' : ''}`} onClick={() => handleTemperatureUnitChange('f')}>
-                    °F
-                  </button>
-                  <button type="button" className={`theme-chip ${preferences.temperatureUnit === 'c' ? 'active' : ''}`} onClick={() => handleTemperatureUnitChange('c')}>
-                    °C
-                  </button>
-                </div>
-              </label>
-              <label className="settings-number-row">
-                <span>Elevation</span>
-                <div className="settings-theme-row">
-                  <button type="button" className={`theme-chip ${preferences.elevationUnit === 'ft' ? 'active' : ''}`} onClick={() => handleElevationUnitChange('ft')}>
-                    ft
-                  </button>
-                  <button type="button" className={`theme-chip ${preferences.elevationUnit === 'm' ? 'active' : ''}`} onClick={() => handleElevationUnitChange('m')}>
-                    m
-                  </button>
-                </div>
-              </label>
-              <label className="settings-number-row">
-                <span>Wind speed</span>
-                <div className="settings-theme-row">
-                  <button type="button" className={`theme-chip ${preferences.windSpeedUnit === 'mph' ? 'active' : ''}`} onClick={() => handleWindSpeedUnitChange('mph')}>
-                    mph
-                  </button>
-                  <button type="button" className={`theme-chip ${preferences.windSpeedUnit === 'kph' ? 'active' : ''}`} onClick={() => handleWindSpeedUnitChange('kph')}>
-                    kph
-                  </button>
-                </div>
-              </label>
-              <label className="settings-number-row">
-                <span>Time style</span>
-                <div className="settings-theme-row">
-                  <button type="button" className={`theme-chip ${preferences.timeStyle === 'ampm' ? 'active' : ''}`} onClick={() => handleTimeStyleChange('ampm')}>
-                    12h (AM/PM)
-                  </button>
-                  <button type="button" className={`theme-chip ${preferences.timeStyle === '24h' ? 'active' : ''}`} onClick={() => handleTimeStyleChange('24h')}>
-                    24h
-                  </button>
-                </div>
-              </label>
-            </div>
-          </article>
+            {/* APPEARANCE */}
+            <section className="ssr-set-card" id="ssr-set-appearance">
+              <div className="ssr-set-card-h">
+                <h2><Eye /> Appearance</h2>
+                <p>Theme follows your system by default. Report layout sets how the planner renders.</p>
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">Theme</span>
+                <Seg value={preferences.themeMode} options={THEME_OPTIONS} onChange={handleThemeModeChange} />
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">
+                  Report layout
+                  <span className="ssr-hint">Cards is the classic stack. Briefing is narrative. Redesign is the new field brief.</span>
+                </span>
+                <Seg value={preferences.reportLayout} options={LAYOUT_OPTIONS} onChange={handleReportLayoutChange} />
+              </div>
+            </section>
 
-          <article className="settings-card">
-            <h3>Travel window thresholds</h3>
-            <p>Used by the pass/fail timeline in planner view.</p>
-            <div className="settings-time-row">
-              <label className="settings-number-row">
-                <span>Window length (hours)</span>
-                <input
-                  type="number"
-                  min={MIN_TRAVEL_WINDOW_HOURS}
-                  max={MAX_TRAVEL_WINDOW_HOURS}
-                  step={1}
-                  value={travelWindowHoursDraft}
-                  onChange={handleTravelWindowHoursDraftChange}
-                  onBlur={handleTravelWindowHoursDraftBlur}
-                />
-              </label>
-              <label className="settings-number-row">
-                <span>Max gust ({windUnitLabel})</span>
-                <input
-                  type="number"
-                  min={windThresholdMin}
-                  max={windThresholdMax}
-                  step={windThresholdStep}
-                  value={maxWindGustDraft}
-                  onChange={handleWindThresholdDisplayChange}
-                  onBlur={handleWindThresholdDisplayBlur}
-                />
-              </label>
-              <label className="settings-number-row">
-                <span>Max precip chance (%)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={maxPrecipChanceDraft}
-                  onChange={handleMaxPrecipChanceDraftChange}
-                  onBlur={handleMaxPrecipChanceDraftBlur}
-                />
-              </label>
-              <label className="settings-number-row">
-                <span>Min feels-like ({tempUnitLabel})</span>
-                <input
-                  type="number"
-                  min={feelsLikeThresholdMin}
-                  max={feelsLikeThresholdMax}
-                  step={feelsLikeThresholdStep}
-                  value={minFeelsLikeDraft}
-                  onChange={handleFeelsLikeThresholdDisplayChange}
-                  onBlur={handleFeelsLikeThresholdDisplayBlur}
-                />
-              </label>
-              <label className="settings-number-row">
-                <span>Max heat ({tempUnitLabel})</span>
-                <input
-                  type="number"
-                  min={heatCeilingMin}
-                  max={heatCeilingMax}
-                  step={feelsLikeThresholdStep}
-                  value={maxFeelsLikeDraft}
-                  onChange={handleHeatCeilingDisplayChange}
-                  onBlur={handleHeatCeilingDisplayBlur}
-                />
-              </label>
-            </div>
-          </article>
+            {/* UNITS */}
+            <section className="ssr-set-card" id="ssr-set-units">
+              <div className="ssr-set-card-h">
+                <h2><Ruler /> Units &amp; time</h2>
+                <p>Controls display units in report cards and exported summaries.</p>
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">Temperature</span>
+                <Seg value={preferences.temperatureUnit} options={TEMP_OPTIONS} onChange={handleTemperatureUnitChange} />
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">Elevation</span>
+                <Seg value={preferences.elevationUnit} options={ELEV_OPTIONS} onChange={handleElevationUnitChange} />
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">Wind speed</span>
+                <Seg value={preferences.windSpeedUnit} options={WIND_OPTIONS} onChange={handleWindSpeedUnitChange} />
+              </div>
+              <div className="ssr-set-row">
+                <span className="ssr-set-row-label">Time style</span>
+                <Seg value={preferences.timeStyle} options={TIME_OPTIONS} onChange={handleTimeStyleChange} />
+              </div>
+            </section>
 
-          <article className="settings-card settings-card-full">
-            <h3>Actions</h3>
-            <p>Preferences are saved in your browser and stay on this device.</p>
-            <div className="settings-actions">
-              <button className="primary-btn" onClick={applyPreferencesToPlanner}>
-                Open Planner with These Settings
-              </button>
-              <button className="settings-btn settings-reset-btn" onClick={resetPreferences}>
-                Reset Built-in Defaults
-              </button>
-            </div>
-            <div className="settings-note">
-              Current defaults: Start {displayDefaultStartTime} • Theme {preferences.themeMode} • Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} • Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} • Window {travelWindowHoursLabel} • Gust {windThresholdDisplay} • Precip {preferences.maxPrecipChance}% • Feels-like {feelsLikeThresholdDisplay} • Heat {heatCeilingDisplay}
-            </div>
-          </article>
+            {/* THRESHOLDS */}
+            <section className="ssr-set-card" id="ssr-set-thresholds">
+              <div className="ssr-set-card-h">
+                <h2><Gauge /> Travel window thresholds</h2>
+                <p>The gates that drive the pass/fail timeline. An hour is clean only if it clears every threshold.</p>
+              </div>
+              <Thresh
+                label={`Max wind gust`}
+                value={maxWindGustDraft}
+                min={windThresholdMin}
+                max={windThresholdMax}
+                step={windThresholdStep}
+                unit={windUnitLabel}
+                onChange={handleWindThresholdDisplayChange}
+                onCommit={handleWindThresholdDisplayBlur}
+              />
+              <Thresh
+                label="Max precip chance"
+                value={maxPrecipChanceDraft}
+                min={0}
+                max={100}
+                step={1}
+                unit="%"
+                onChange={handleMaxPrecipChanceDraftChange}
+                onCommit={handleMaxPrecipChanceDraftBlur}
+              />
+              <Thresh
+                label="Min feels-like"
+                value={minFeelsLikeDraft}
+                min={feelsLikeThresholdMin}
+                max={feelsLikeThresholdMax}
+                step={feelsLikeThresholdStep}
+                unit={tempUnitLabel}
+                onChange={handleFeelsLikeThresholdDisplayChange}
+                onCommit={handleFeelsLikeThresholdDisplayBlur}
+              />
+              <Thresh
+                label="Max heat (feels-like ceiling)"
+                value={maxFeelsLikeDraft}
+                min={heatCeilingMin}
+                max={heatCeilingMax}
+                step={feelsLikeThresholdStep}
+                unit={tempUnitLabel}
+                onChange={handleHeatCeilingDisplayChange}
+                onCommit={handleHeatCeilingDisplayBlur}
+              />
+
+              <div style={{ padding: '16px 22px 20px' }}>
+                <div className="ssr-set-preview">
+                  <div className="ssr-set-preview-h"><FlaskConical /> Live gate check · sample 09:00 hour</div>
+                  {gates.map((g, i) => (
+                    <div className="ssr-set-gate" key={i}>
+                      <span className={`ssr-set-gate-ic ${g.ok ? 'ok' : 'fail'}`}>
+                        {g.ok ? <Check strokeWidth={3} /> : <X strokeWidth={3} />}
+                      </span>
+                      <span className="ssr-set-gate-label">{g.label}</span>
+                      <span className="ssr-set-gate-val"><b>{g.val}{g.unit}</b> {g.cmp} {g.lim}{g.unit}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* ACTIONS */}
+            <section className="ssr-set-card">
+              <div className="ssr-set-actions">
+                <button type="button" className="ssr-btn primary" onClick={applyPreferencesToPlanner}>
+                  Open planner with these settings
+                </button>
+                <button type="button" className="ssr-btn" onClick={resetPreferences}>Reset to defaults</button>
+                <span className="ssr-spacer" />
+                <button type="button" className="ssr-btn" onClick={showSaved}>Save</button>
+                <span className={`ssr-set-saved ${saved ? 'show' : ''}`} role="status" aria-live="polite">
+                  {saved && <><Check /> Saved to this device</>}
+                </span>
+              </div>
+              <div className="ssr-set-note">
+                <b>Current defaults</b> · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Layout {preferences.reportLayout} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
+              </div>
+            </section>
+          </div>
         </div>
-        <AppDisclaimer compact />
-      </section>
+      </div>
     </div>
   );
 }
