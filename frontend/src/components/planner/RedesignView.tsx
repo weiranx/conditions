@@ -6,7 +6,6 @@ import {
   Thermometer,
   Wind,
   CloudRain,
-  Sun,
   CheckCircle2,
   AlertTriangle,
   Layers,
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
+import { DashboardSummaryCard } from './DashboardSummaryCard';
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -150,7 +150,7 @@ export function RedesignView(props: PlannerViewProps) {
     formatWindDisplay,
     formatElevationDisplay,
     decisionActionLine,
-    decisionKeyDrivers,
+    handleReportLayoutChange,
     travelWindowRows,
     travelWindowHoursLabel,
     travelWindowInsights,
@@ -179,22 +179,7 @@ export function RedesignView(props: PlannerViewProps) {
 
   if (!safetyData || !decision) return null;
 
-  const lvClass = decision.level.toLowerCase().replace('-', ''); // go | caution | nogo
-  const score = Math.round(safetyData.safety.score);
-  const confidence =
-    typeof safetyData.safety.confidence === 'number' ? Math.round(safetyData.safety.confidence) : null;
   const maxGustMph = preferences.maxWindGustMph || 35;
-
-  // ── Quick stats derivations ──
-  const gustValues = travelWindowRows.map((r) => r.gust).filter((n) => Number.isFinite(n));
-  const peakGust = gustValues.length ? Math.max(...gustValues) : safetyData.weather.windGust;
-  const precipValues = travelWindowRows.map((r) => r.precipChance).filter((n) => Number.isFinite(n));
-  const peakPrecip = precipValues.length ? Math.max(...precipValues) : safetyData.weather.precipChance;
-  const cleanHours = travelWindowInsights?.passHours ?? 0;
-  const bestWindow =
-    travelWindowInsights?.bestWindow != null
-      ? `${formatClockForStyle(travelWindowInsights.bestWindow.start, preferences.timeStyle)}–${formatClockForStyle(travelWindowInsights.bestWindow.end, preferences.timeStyle)}`
-      : '—';
 
   const region = safetyData.location
     ? `${safetyData.location.lat.toFixed(4)}°, ${safetyData.location.lon.toFixed(4)}°`
@@ -265,85 +250,24 @@ export function RedesignView(props: PlannerViewProps) {
 
       <main className="ssr-main">
         {/* VERDICT */}
-        <section className="ssr-card">
-          <div className="ssr-verdict">
-            <div className="ssr-v-left">
-              <span className={`ssr-v-pill ${lvClass}`}>{decision.level}</span>
-              <div>
-                <div className="ssr-v-score-big" style={{ color: getScoreColor(score, safetyData.safety.tier) }}>
-                  {score}
-                  <sub>/100</sub>
-                </div>
-                {confidence !== null && (
-                  <div className="ssr-v-conf">
-                    Confidence {confidence}%
-                    <span className="ssr-v-conf-bar">
-                      <i style={{ width: `${confidence}%` }} />
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="ssr-v-right">
-              <h3 className="ssr-v-headline">{decision.headline}</h3>
-              {decisionActionLine && <p className="ssr-v-action">{localizeUnitText(decisionActionLine)}</p>}
-              {decisionKeyDrivers.length > 0 && (
-                <div className="ssr-v-drivers">
-                  <div className="ssr-vd-h">Key drivers</div>
-                  {decisionKeyDrivers.map((t, i) => (
-                    <div className="ssr-v-driver" key={i}>
-                      <span className={`ssr-v-driver-dot ${lvClass}`} />
-                      <span>{localizeUnitText(t)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          {/* QUICK STATS */}
-          <div className="ssr-quick">
-            <div className="ssr-q">
-              <div className="ssr-q-k"><Thermometer size={12} /> Start temp</div>
-              <div className="ssr-q-v">{formatTempDisplay(safetyData.weather.temp)}</div>
-              <div className="ssr-q-sub">
-                feels {formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)}
-              </div>
-            </div>
-            <div className="ssr-q">
-              <div className="ssr-q-k"><Wind size={12} /> Peak gust</div>
-              <div className="ssr-q-v">{formatWindDisplay(peakGust)}</div>
-              <div className={`ssr-q-sub ${peakGust >= maxGustMph ? 'warn' : 'good'}`}>
-                limit {formatWindDisplay(maxGustMph)}
-              </div>
-            </div>
-            <div className="ssr-q">
-              <div className="ssr-q-k"><CloudRain size={12} /> Precip</div>
-              <div className="ssr-q-v">
-                {Math.round(peakPrecip)}<small>%</small>
-              </div>
-              <div className={`ssr-q-sub ${peakPrecip >= preferences.maxPrecipChance ? 'warn' : 'good'}`}>
-                {peakPrecip >= preferences.maxPrecipChance ? 'above threshold' : 'below threshold'}
-              </div>
-            </div>
-            <div className="ssr-q">
-              <div className="ssr-q-k"><Sun size={12} /> Sunrise</div>
-              <div className="ssr-q-v">{safetyData.solar?.sunrise || '—'}</div>
-              <div className="ssr-q-sub">sunset {safetyData.solar?.sunset || '—'}</div>
-            </div>
-            <div className="ssr-q">
-              <div className="ssr-q-k"><Clock size={12} /> Daylight</div>
-              <div className="ssr-q-v">{safetyData.solar?.dayLength || '—'}</div>
-              <div className="ssr-q-sub">total span</div>
-            </div>
-            <div className="ssr-q">
-              <div className="ssr-q-k"><CheckCircle2 size={12} /> Clean hours</div>
-              <div className="ssr-q-v">
-                {cleanHours}<small>h</small>
-              </div>
-              <div className={`ssr-q-sub ${cleanHours > 0 ? 'good' : 'warn'}`}>{bestWindow}</div>
-            </div>
-          </div>
-        </section>
+        <DashboardSummaryCard
+          safetyData={safetyData}
+          decision={decision}
+          preferences={preferences}
+          objectiveName={objectiveName}
+          displayStartTime={displayStartTime}
+          returnTimeFormatted={returnTimeFormatted}
+          returnExtendsPastMidnight={returnExtendsPastMidnight}
+          formatClockForStyle={formatClockForStyle}
+          getScoreColor={getScoreColor}
+          formatTempDisplay={formatTempDisplay}
+          formatWindDisplay={formatWindDisplay}
+          decisionActionLine={decisionActionLine}
+          localizeUnitText={localizeUnitText}
+          travelWindowRows={travelWindowRows}
+          travelWindowInsights={travelWindowInsights}
+          handleReportLayoutChange={handleReportLayoutChange}
+        />
 
         {/* TRAVEL WINDOW STRIP */}
         {travelWindowRows.length > 0 && (
