@@ -1,0 +1,262 @@
+/* =========================================================
+   Planner Shell Re-skin — Conditions Dashboard chrome
+   Imported from claude.ai/design · Conditions Dashboard.html
+   CSS-only overrides keyed to existing planner markup, scoped under
+   .ssr-shell (applied only when the Redesign report layout is active).
+   No markup or wiring changes. Light/dark via html[data-theme].
+   ========================================================= */
+
+.ssr-shell {
+  --d-surface:   oklch(99.6% 0.003 95);
+  --d-surface-2: oklch(97.4% 0.006 95);
+  --d-surface-3: oklch(94.5% 0.008 95);
+  --d-line:      oklch(91% 0.008 110);
+  --d-line-2:    oklch(86% 0.010 110);
+  --d-ink:   oklch(27% 0.014 150);
+  --d-ink-2: oklch(44% 0.013 150);
+  --d-ink-3: oklch(58% 0.011 150);
+  --d-ink-4: oklch(70% 0.009 150);
+  --d-pine:      oklch(46% 0.068 155);
+  --d-pine-deep: oklch(33% 0.055 155);
+  --d-sage-1:    oklch(94.5% 0.030 150);
+  --d-warn:   oklch(58% 0.115 52);
+  --d-warn-deep: oklch(45% 0.115 48);
+  --d-warn-bg:oklch(95% 0.045 62);
+  --d-chip-bg: oklch(99.6% 0.003 95 / .92);
+  --d-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --d-r-lg: 22px;
+  --d-r-pill: 999px;
+  --d-shadow: 0 1px 2px oklch(40% 0.02 150 / .05), 0 8px 24px -12px oklch(40% 0.03 150 / .18);
+  --d-shadow-sm: 0 1px 2px oklch(40% 0.02 150 / .06);
+}
+html[data-theme="dark"] .ssr-shell {
+  --d-surface:   oklch(21% 0.018 240);
+  --d-surface-2: oklch(24% 0.020 240);
+  --d-surface-3: oklch(28% 0.022 240);
+  --d-line:      oklch(31% 0.020 240);
+  --d-line-2:    oklch(37% 0.022 240);
+  --d-ink:   oklch(95% 0.010 240);
+  --d-ink-2: oklch(80% 0.015 240);
+  --d-ink-3: oklch(64% 0.018 240);
+  --d-ink-4: oklch(52% 0.020 240);
+  --d-pine:      oklch(70% 0.110 165);
+  --d-pine-deep: oklch(80% 0.110 165);
+  --d-sage-1:    oklch(28% 0.040 165);
+  --d-warn:   oklch(70% 0.130 60);
+  --d-warn-deep: oklch(82% 0.120 65);
+  --d-warn-bg:oklch(30% 0.050 60);
+  --d-chip-bg: oklch(22% 0.018 240 / .88);
+}
+
+/* ============ HEADER → topbar ============ */
+.ssr-shell .header-section {
+  background: linear-gradient(105deg, var(--d-sage-1) 0%, var(--d-surface) 46%, var(--d-surface) 100%);
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-r-lg);
+  box-shadow: var(--d-shadow);
+  padding: 16px 20px;
+}
+.ssr-shell .brand-mark {
+  background: linear-gradient(160deg, var(--d-pine), var(--d-pine-deep));
+  border-radius: 14px;
+  box-shadow: 0 4px 12px -4px oklch(40% 0.06 155 / .6), inset 0 1px 0 oklch(100% 0 0 / .25);
+  border: none;
+}
+.ssr-shell .brand-mark-icon { filter: brightness(0) invert(1); }
+.ssr-shell .brand-copy h1 { font-weight: 800; letter-spacing: -.02em; }
+.ssr-shell .brand-subtitle { color: var(--d-ink-3); font-weight: 500; }
+
+/* search → pill */
+.ssr-shell .search-bar {
+  background: var(--d-surface);
+  border: 1px solid var(--d-line-2);
+  border-radius: var(--d-r-pill);
+  box-shadow: var(--d-shadow-sm);
+  padding: 6px 8px 6px 16px;
+}
+.ssr-shell .search-bar:focus-within {
+  border-color: var(--d-pine);
+  box-shadow: 0 0 0 3px oklch(46% 0.068 155 / .14);
+}
+.ssr-shell .search-go-btn {
+  border-radius: var(--d-r-pill);
+  background: var(--d-pine);
+  border-color: var(--d-pine);
+  color: #fff;
+}
+.ssr-shell .search-go-btn:hover:not(:disabled) { background: var(--d-pine-deep); }
+.ssr-shell .search-clear-btn { border-radius: var(--d-r-pill); }
+
+/* header nav buttons → pill */
+.ssr-shell .header-nav .secondary-btn {
+  border-radius: var(--d-r-pill);
+  border: 1px solid var(--d-line-2);
+  background: var(--d-surface);
+  box-shadow: var(--d-shadow-sm);
+  color: var(--d-ink);
+}
+.ssr-shell .header-nav .secondary-btn:hover { background: var(--d-surface-2); border-color: var(--d-ink-4); }
+
+/* ============ MAP → rounded card + frosted chips ============ */
+.ssr-shell .map-section {
+  border-radius: var(--d-r-lg);
+  overflow: hidden;
+  border: 1px solid var(--d-line);
+  box-shadow: var(--d-shadow);
+}
+.ssr-shell .map-overlay-btn {
+  border-radius: 11px;
+  background: var(--d-chip-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--d-line-2);
+  color: var(--d-ink-2);
+  box-shadow: 0 4px 14px -6px oklch(40% 0.03 150 / .35);
+}
+.ssr-shell .map-overlay-btn:hover { background: var(--d-surface); color: var(--d-ink); }
+.ssr-shell .map-overlay-btn.is-active {
+  background: var(--d-sage-1);
+  border-color: var(--d-pine);
+  color: var(--d-pine-deep);
+}
+.ssr-shell .map-overlay-coords,
+.ssr-shell .map-overlay-info {
+  background: var(--d-chip-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--d-line-2);
+  border-radius: var(--d-r-pill);
+  box-shadow: 0 4px 14px -6px oklch(40% 0.03 150 / .35);
+  color: var(--d-ink);
+}
+.ssr-shell .map-overlay-coords { font-family: var(--d-mono); color: var(--d-ink-2); }
+.ssr-shell .map-overlay-info svg,
+.ssr-shell .map-elevation-value { color: var(--d-pine); }
+.ssr-shell .map-weather-chip-condition { color: var(--d-ink-3); }
+
+/* ============ CONTROLS → card with pill fields ============ */
+.ssr-shell .map-actions {
+  background: var(--d-surface);
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-r-lg);
+  box-shadow: var(--d-shadow);
+  padding: 14px 18px;
+}
+.ssr-shell .map-actions-flat .date-control {
+  background: var(--d-surface-2);
+  border: 1px solid var(--d-line-2);
+  border-radius: var(--d-r-pill);
+  padding: 8px 14px;
+}
+.ssr-shell .map-actions-flat .date-control > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--d-ink-3);
+}
+.ssr-shell .map-actions-flat .date-control input {
+  background: none;
+  border: none;
+  font-family: var(--d-mono);
+  font-weight: 600;
+  color: var(--d-ink);
+}
+.ssr-shell .now-control-btn {
+  border-radius: var(--d-r-pill);
+  border: 1px solid var(--d-line-2);
+  background: var(--d-surface);
+  color: var(--d-ink);
+}
+.ssr-shell .now-control-btn:hover { border-color: var(--d-pine); color: var(--d-pine-deep); }
+.ssr-shell .map-actions-utils .action-btn,
+.ssr-shell .map-actions-utils .settings-btn {
+  height: 40px;
+  border-radius: var(--d-r-pill);
+  border: 1px solid var(--d-line-2);
+  background: var(--d-surface);
+  color: var(--d-ink);
+}
+.ssr-shell .map-actions-utils .action-btn:hover:not(:disabled),
+.ssr-shell .map-actions-utils .settings-btn:hover:not(:disabled) {
+  background: var(--d-surface-2);
+  border-color: var(--d-ink-4);
+}
+.ssr-shell .map-actions-utils .action-btn svg,
+.ssr-shell .map-actions-utils .settings-btn svg { color: var(--d-pine); }
+.ssr-shell .map-ext-link-btn {
+  border-radius: 11px;
+  border: 1px solid var(--d-line-2);
+  background: var(--d-surface);
+  color: var(--d-ink-3);
+}
+.ssr-shell .map-ext-link-btn:hover { background: var(--d-surface-2); color: var(--d-ink); }
+
+/* ============ FRESHNESS → warm banner ============ */
+.ssr-shell .top-freshness-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(100deg, var(--d-warn-bg), var(--d-surface) 80%);
+  border: 1px solid oklch(85% 0.06 60);
+  border-radius: 16px;
+  padding: 14px 18px;
+}
+html[data-theme="dark"] .ssr-shell .top-freshness-alert { border-color: var(--d-line-2); }
+.ssr-shell .top-freshness-alert::before {
+  content: "!";
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: oklch(90% 0.07 62);
+  color: var(--d-warn-deep);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-family: var(--d-mono);
+}
+html[data-theme="dark"] .ssr-shell .top-freshness-alert::before { background: var(--d-warn-bg); }
+.ssr-shell .top-freshness-alert strong {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--d-warn-deep);
+}
+.ssr-shell .top-freshness-alert span { color: var(--d-ink-2); font-weight: 500; }
+
+/* ============ LAYOUT TOGGLE → underline tabs ============ */
+.ssr-shell .report-layout-toggle {
+  border: none;
+  background: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--d-line);
+  gap: 28px;
+  padding: 0 4px;
+}
+.ssr-shell .report-layout-toggle-btn {
+  position: relative;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 11px 2px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--d-ink-3);
+}
+.ssr-shell .report-layout-toggle-btn:hover { background: none; color: var(--d-ink); }
+.ssr-shell .report-layout-toggle-btn.active {
+  background: none;
+  color: var(--d-pine-deep);
+}
+.ssr-shell .report-layout-toggle-btn.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2.5px;
+  border-radius: 2px 2px 0 0;
+  background: var(--d-pine-deep);
+}

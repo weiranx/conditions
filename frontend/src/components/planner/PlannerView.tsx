@@ -46,6 +46,7 @@ import { BriefingView } from './BriefingView';
 import { RedesignView } from './RedesignView';
 import { AppDisclaimer } from '../../app/map-components';
 import '../../styles/planner-redesign.css';
+import '../../styles/planner-shell-redesign.css';
 import {
   APP_CREDIT_TEXT,
 } from '../../app/constants';
@@ -854,7 +855,7 @@ export function PlannerView(props: PlannerViewProps) {
   const criticalCheckPassCount = criticalCheckTotal - criticalCheckFailCount;
 
   return (
-    <div key="view-planner" className={appShellClassName} aria-busy={isViewPending}>
+    <div key="view-planner" className={`${appShellClassName}${effectiveLayout === 'redesign' ? ' ssr-shell' : ''}`} aria-busy={isViewPending}>
       <a href="#planner-main-content" className="skip-nav">Skip to main content</a>
       <PlannerHeader
         searchWrapperRef={searchWrapperRef}
