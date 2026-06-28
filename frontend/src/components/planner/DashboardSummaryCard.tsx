@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ArrowRight,
   Sparkles,
+  LoaderCircle,
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights, ReportLayout } from '../../app/types';
 import '../../styles/dashboard-redesign.css';
@@ -29,6 +30,10 @@ export interface DashboardSummaryCardProps {
   travelWindowRows: TravelWindowRow[];
   travelWindowInsights: TravelWindowInsights;
   handleReportLayoutChange: (layout: ReportLayout) => void;
+  aiBriefNarrative: string | null;
+  aiBriefError: string | null;
+  aiBriefLoading: boolean;
+  onRequestAiBrief: () => void;
 }
 
 export function DashboardSummaryCard({
@@ -48,6 +53,10 @@ export function DashboardSummaryCard({
   travelWindowRows,
   travelWindowInsights,
   handleReportLayoutChange,
+  aiBriefNarrative,
+  aiBriefError,
+  aiBriefLoading,
+  onRequestAiBrief,
 }: DashboardSummaryCardProps) {
   const lvClass = decision.level.toLowerCase().replace('-', ''); // go | caution | nogo
   const score = Math.round(safetyData.safety.score);
@@ -154,6 +163,23 @@ export function DashboardSummaryCard({
             <p><b>Recommendation.</b> {localizeUnitText(decisionActionLine)}</p>
           </div>
         )}
+
+        <div className="ssr-dash-ai">
+          {aiBriefNarrative ? (
+            <p className="ssr-dash-ai-text"><Sparkles size={14} aria-hidden /> {aiBriefNarrative}</p>
+          ) : aiBriefError ? (
+            <div className="ssr-dash-ai-error">
+              <span>{aiBriefError}</span>
+              <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief}>Retry</button>
+            </div>
+          ) : (
+            <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief} disabled={aiBriefLoading}>
+              {aiBriefLoading
+                ? <><LoaderCircle size={14} className="spin" aria-hidden /> Generating…</>
+                : <><Sparkles size={14} aria-hidden /> AI analysis</>}
+            </button>
+          )}
+        </div>
       </section>
     </div>
   );

@@ -175,6 +175,10 @@ export function RedesignView(props: PlannerViewProps) {
     localizeUnitText,
     toPlainText,
     summarizeText,
+    aiBriefNarrative,
+    aiBriefError,
+    aiBriefLoading,
+    handleRequestAiBriefAction,
   } = props;
 
   if (!safetyData || !decision) return null;
@@ -267,6 +271,10 @@ export function RedesignView(props: PlannerViewProps) {
           travelWindowRows={travelWindowRows}
           travelWindowInsights={travelWindowInsights}
           handleReportLayoutChange={handleReportLayoutChange}
+          aiBriefNarrative={aiBriefNarrative}
+          aiBriefError={aiBriefError}
+          aiBriefLoading={aiBriefLoading}
+          onRequestAiBrief={handleRequestAiBriefAction}
         />
 
         {/* TRAVEL WINDOW STRIP */}
