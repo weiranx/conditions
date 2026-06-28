@@ -1041,6 +1041,7 @@ export function PlannerView(props: PlannerViewProps) {
       {hasObjective && safetyData && decision && (
         <div className="data-grid" role="main" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
+          {effectiveLayout !== 'redesign' && (
           <div className="score-card" role="region" aria-label={`Safety score: ${safetyData.safety.score}%, ${safetyData.safety.tier || 'Elevated'} Risk`} style={{ borderColor: getScoreColor(safetyData.safety.score, safetyData.safety.tier), order: reportCardOrder.scoreCard }}>
             <div className="score-left">
               <ScoreGauge score={safetyData.safety.score} scoreColor={getScoreColor(safetyData.safety.score, safetyData.safety.tier)} />
@@ -1103,6 +1104,7 @@ export function PlannerView(props: PlannerViewProps) {
               </div>
             </div>
           </div>
+          )}
 
           {objectiveName && (
             <RouteAnalysisSection
@@ -1139,7 +1141,7 @@ export function PlannerView(props: PlannerViewProps) {
           {effectiveLayout === 'briefing' ? (
             <BriefingView {...props} />
           ) : effectiveLayout === 'redesign' ? (
-            <div style={{ order: reportCardOrder.reportColumns }}>
+            <div style={{ order: reportCardOrder.scoreCard }}>
               <RedesignView {...props} />
             </div>
           ) : (<>

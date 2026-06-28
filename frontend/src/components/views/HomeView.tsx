@@ -138,6 +138,7 @@ export function HomeView({
                 suggestions={suggestions}
                 activeSuggestionIndex={activeSuggestionIndex}
                 canUseCoordinates={canUseCoordinates}
+                showGoButton={false}
                 onInputChange={handleInputChange}
                 onFocus={handleFocus}
                 onKeyDown={(e) => {

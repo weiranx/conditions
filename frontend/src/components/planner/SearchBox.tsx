@@ -12,6 +12,7 @@ interface SearchBoxProps {
   suggestions: Suggestion[];
   activeSuggestionIndex: number;
   canUseCoordinates: boolean;
+  showGoButton?: boolean;
   onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -32,6 +33,7 @@ export function SearchBox({
   suggestions,
   activeSuggestionIndex,
   canUseCoordinates,
+  showGoButton = true,
   onInputChange,
   onFocus,
   onKeyDown,
@@ -65,15 +67,17 @@ export function SearchBox({
           aria-controls="planner-suggestion-list"
           aria-activedescendant={activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
         />
-        <button
-          type="button"
-          className="search-go-btn"
-          onClick={onSubmit}
-          aria-label={searchLoading ? 'Searching' : 'Search location'}
-          disabled={searchLoading}
-        >
-          {searchLoading ? <LoaderCircle size={14} className="spin" /> : 'Go'}
-        </button>
+        {showGoButton && (
+          <button
+            type="button"
+            className="search-go-btn"
+            onClick={onSubmit}
+            aria-label={searchLoading ? 'Searching' : 'Search location'}
+            disabled={searchLoading}
+          >
+            {searchLoading ? <LoaderCircle size={14} className="spin" /> : 'Go'}
+          </button>
+        )}
         {trimmedSearchQuery.length > 0 && (
           <button type="button" className="search-clear-btn" onClick={onClear} aria-label="Clear search">
             <X size={14} />

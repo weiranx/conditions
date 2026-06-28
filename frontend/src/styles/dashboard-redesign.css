@@ -177,6 +177,24 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 .ssr-dash-recco p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--d-ink-2); }
 .ssr-dash-recco p b { color: var(--d-ink); font-weight: 700; }
 
+/* AI analysis */
+.ssr-dash-ai { padding: 14px 28px 18px; border-top: 1px solid var(--d-line); }
+.ssr-dash-ai-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 9px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--d-ink-2);
+  background: var(--d-surface-2); border: 1px solid var(--d-line);
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.ssr-dash-ai-btn:hover:not(:disabled) { background: var(--d-surface-3); color: var(--d-ink); border-color: var(--d-line-2); }
+.ssr-dash-ai-btn:disabled { opacity: .65; cursor: progress; }
+.ssr-dash-ai-btn svg { color: var(--d-pine, var(--d-go-deep)); }
+.ssr-dash-ai-btn svg.spin { animation: ssr-dash-spin 1s linear infinite; }
+@keyframes ssr-dash-spin { to { transform: rotate(360deg); } }
+.ssr-dash-ai-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--d-ink-2); display: flex; gap: 8px; }
+.ssr-dash-ai-text svg { flex: none; margin-top: 3px; color: var(--d-pine, var(--d-go-deep)); }
+.ssr-dash-ai-error { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--d-nogo-deep); }
+
 @media (max-width: 880px) {
   .ssr-dash-top { grid-template-columns: 1fr; gap: 18px; }
   .ssr-dash-gauge { margin: 0 auto; }
