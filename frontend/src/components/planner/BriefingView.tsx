@@ -130,8 +130,8 @@ export function BriefingView(props: PlannerViewProps) {
     snowpackInterpretation,
     snowpackStatusLabel,
     snowpackPillClass,
-    snotelDepthDisplay,
-    snotelSweDisplay,
+    snowpackBestDepthDisplay,
+    snowpackBestSweDisplay,
     snowpackTakeaways,
 
     fireRiskLabel,
@@ -433,8 +433,8 @@ export function BriefingView(props: PlannerViewProps) {
           <Section icon={<Mountain size={14} />} title="Snowpack" pill={snowpackStatusLabel} pillClass={snowpackPillClass}>
             {snowpackInterpretation?.headline && <p className="briefing-body-line">{snowpackInterpretation.headline}</p>}
             <div className="briefing-kv-row">
-              {snotelDepthDisplay && <Kv label="Depth" value={snotelDepthDisplay} />}
-              {snotelSweDisplay && <Kv label="SWE" value={snotelSweDisplay} />}
+              {snowpackBestDepthDisplay && <Kv label="Depth" value={snowpackBestDepthDisplay} />}
+              {snowpackBestSweDisplay && <Kv label="SWE" value={snowpackBestSweDisplay} />}
             </div>
             {snowpackTakeaways.length > 0 && (
               <ul className="briefing-short-list">

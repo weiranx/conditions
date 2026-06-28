@@ -108,11 +108,17 @@ html[data-theme="dark"] .ssr-settings {
 .ssr-set-card {
   background: var(--ssr-surface);
   border: 1px solid var(--ssr-line);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   scroll-margin-top: 16px;
+  box-shadow: 0 1px 2px rgba(30, 25, 15, 0.04);
 }
-.ssr-set-card-h { padding: 16px 22px; border-bottom: 1px solid var(--ssr-line); }
+html[data-theme="dark"] .ssr-set-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+.ssr-set-card-h {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--ssr-line);
+  background: linear-gradient(180deg, var(--ssr-surface), color-mix(in oklch, var(--ssr-surface-2) 50%, var(--ssr-surface)));
+}
 .ssr-set-card-h h2 {
   font-size: 15px;
   font-weight: 600;
@@ -164,7 +170,11 @@ html[data-theme="dark"] .ssr-settings {
   white-space: nowrap;
 }
 .ssr-seg button:last-child { border-right: none; }
-.ssr-seg button.on { background: var(--ssr-brand); color: white; }
+.ssr-seg button.on {
+  background: linear-gradient(135deg, var(--ssr-brand), var(--ssr-brand-dark));
+  color: white;
+  box-shadow: 0 2px 8px -4px color-mix(in oklch, var(--ssr-brand) 65%, transparent);
+}
 .ssr-seg button:hover:not(.on) { background: var(--ssr-surface-2); }
 
 /* time input */

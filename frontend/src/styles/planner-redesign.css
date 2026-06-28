@@ -158,9 +158,17 @@ html[data-theme="dark"] .ssr-report {
 .ssr-card {
   background: var(--ssr-surface);
   border: 1px solid var(--ssr-line);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(30, 25, 15, 0.04);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
+.ssr-card:hover {
+  box-shadow: 0 12px 30px -20px rgba(30, 25, 15, 0.24);
+  border-color: var(--ssr-line-strong);
+}
+html[data-theme="dark"] .ssr-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 12px 30px -20px rgba(0, 0, 0, 0.6); }
 .ssr-card-h {
   padding: 14px 20px;
   border-bottom: 1px solid var(--ssr-line);
@@ -168,7 +176,7 @@ html[data-theme="dark"] .ssr-report {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  background: var(--ssr-surface);
+  background: linear-gradient(180deg, var(--ssr-surface), color-mix(in oklch, var(--ssr-surface-2) 50%, var(--ssr-surface)));
 }
 .ssr-card-h h2 {
   margin: 0;
@@ -181,11 +189,14 @@ html[data-theme="dark"] .ssr-report {
   color: var(--ssr-text);
 }
 .ssr-h-icon {
-  width: 18px; height: 18px;
+  width: 26px; height: 26px;
+  border-radius: 7px;
   display: grid; place-items: center;
   color: var(--ssr-brand-dark);
+  background: linear-gradient(135deg, var(--ssr-brand-bg), color-mix(in oklch, var(--ssr-brand-bg) 55%, var(--ssr-surface)));
+  box-shadow: 0 1px 0 oklch(100% 0 0 / 0.3) inset;
 }
-.ssr-h-icon svg { width: 16px; height: 16px; }
+.ssr-h-icon svg { width: 15px; height: 15px; }
 .ssr-h-meta {
   font-size: 11px;
   color: var(--ssr-text-3);

@@ -1013,6 +1013,8 @@ function App() {
     snowfall24hIn, snowfall24hDisplay, rainfall24hIn, rainfall24hDisplay,
   );
   const {
+    bestDepthDisplay: snowpackBestDepthDisplay, bestDepthSource: snowpackBestDepthSource,
+    bestSweDisplay: snowpackBestSweDisplay, bestSweSource: snowpackBestSweSource,
     snotelSweDisplay, snotelDepthDisplay, nohrscSweDisplay, nohrscDepthDisplay,
     cdecSweDisplay, cdecDepthDisplay, cdecDistanceDisplay, snotelDistanceDisplay,
     pillClass: snowpackPillClass, statusLabel: snowpackStatusLabel,
@@ -1770,6 +1772,10 @@ function App() {
       airQualityFutureNotApplicable={airQualityFutureNotApplicable}
       // Snowpack card
       snowpackInsights={snowpackInsights}
+      snowpackBestDepthDisplay={snowpackBestDepthDisplay}
+      snowpackBestDepthSource={snowpackBestDepthSource}
+      snowpackBestSweDisplay={snowpackBestSweDisplay}
+      snowpackBestSweSource={snowpackBestSweSource}
       snotelDistanceDisplay={snotelDistanceDisplay}
       snotelDepthDisplay={snotelDepthDisplay}
       snotelSweDisplay={snotelSweDisplay}
