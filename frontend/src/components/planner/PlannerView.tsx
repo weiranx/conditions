@@ -481,7 +481,6 @@ export function PlannerView(props: PlannerViewProps) {
     // Navigation
     navigateToView,
     openTripToolView,
-    jumpToPlannerSection,
 
     // Search
     searchWrapperRef,
@@ -856,7 +855,8 @@ export function PlannerView(props: PlannerViewProps) {
     formatGeneratedAt,
   } = props;
 
-  const effectiveLayout = preferences.reportLayout;
+  // 'cards' (former Full Report) is retired; its detail now lives in the redesign report.
+  const effectiveLayout = preferences.reportLayout === 'cards' ? 'redesign' : preferences.reportLayout;
 
   // Derived values used inline
   const criticalCheckTotal = orderedCriticalChecks.length;
@@ -990,30 +990,6 @@ export function PlannerView(props: PlannerViewProps) {
 
       {hasObjective && safetyData && decision && (
         <div className="report-nav-bar">
-          {effectiveLayout === 'cards' && (
-            <nav className="planner-jump-nav" aria-label="Quick report navigation">
-              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-decision')}>
-                Decision
-              </button>
-              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-travel')}>
-                Travel
-              </button>
-              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-weather')}>
-                Weather
-              </button>
-              {avalancheRelevant && (
-                <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-avalanche')}>
-                  Avalanche
-                </button>
-              )}
-              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-alerts')}>
-                Alerts
-              </button>
-              <button type="button" className="planner-jump-btn" onClick={() => jumpToPlannerSection('planner-section-gear')}>
-                Gear
-              </button>
-            </nav>
-          )}
           <div className="report-layout-toggle" role="radiogroup" aria-label="Report layout">
             <button
               type="button"
@@ -1027,20 +1003,11 @@ export function PlannerView(props: PlannerViewProps) {
             <button
               type="button"
               role="radio"
-              aria-checked={effectiveLayout === 'cards'}
-              className={`report-layout-toggle-btn ${effectiveLayout === 'cards' ? 'active' : ''}`}
-              onClick={() => handleReportLayoutChange('cards')}
-            >
-              Full Report
-            </button>
-            <button
-              type="button"
-              role="radio"
               aria-checked={effectiveLayout === 'redesign'}
               className={`report-layout-toggle-btn ${effectiveLayout === 'redesign' ? 'active' : ''}`}
               onClick={() => handleReportLayoutChange('redesign')}
             >
-              Redesign
+              Full Report
             </button>
           </div>
         </div>

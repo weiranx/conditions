@@ -7,11 +7,18 @@ import {
   Wind,
   CloudRain,
   CheckCircle2,
+  XCircle,
   AlertTriangle,
   Layers,
   Snowflake,
   ShieldAlert,
+  ShieldCheck,
   Radio,
+  Sun,
+  Flame,
+  Route,
+  Eye,
+  Package,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
@@ -150,7 +157,6 @@ export function RedesignView(props: PlannerViewProps) {
     formatWindDisplay,
     formatElevationDisplay,
     decisionActionLine,
-    handleReportLayoutChange,
     travelWindowRows,
     travelWindowHoursLabel,
     travelWindowInsights,
@@ -179,6 +185,84 @@ export function RedesignView(props: PlannerViewProps) {
     aiBriefError,
     aiBriefLoading,
     handleRequestAiBriefAction,
+    shouldRenderRankedCard,
+    // Critical checks
+    orderedCriticalChecks,
+    topCriticalAttentionChecks,
+    criticalCheckFailCount,
+    describeFailedCriticalCheck,
+    // Score breakdown
+    dayOverDay,
+    // Weather
+    weatherCardWithEmoji,
+    weatherCardTemp,
+    weatherCardFeelsLike,
+    formattedWind,
+    formattedGust,
+    weatherCardPrecip,
+    weatherCardHumidity,
+    weatherCardDewPoint,
+    weatherCardPressureLabel,
+    weatherPressureTrendSummary,
+    weatherCardCloudCoverLabel,
+    weatherCardWindDirection,
+    weatherVisibilityScoreLabel,
+    weatherVisibilityRisk,
+    weatherForecastPeriodLabel,
+    forecastLeadHoursDisplay,
+    // Heat risk
+    heatRiskLabel,
+    heatRiskPillClass,
+    heatRiskGuidance,
+    heatRiskReasons,
+    lowerTerrainHeatLabel,
+    // Terrain
+    terrainConditionDetails,
+    terrainConditionPillClass,
+    // Rainfall / precipitation
+    precipInsightLine,
+    expectedPrecipSummaryLine,
+    rainfall24hSeverityClass,
+    rainfall12hDisplay,
+    rainfall24hDisplay,
+    rainfall48hDisplay,
+    snowfall12hDisplay,
+    snowfall24hDisplay,
+    snowfall48hDisplay,
+    snowfall24hIn,
+    expectedRainWindowDisplay,
+    expectedSnowWindowDisplay,
+    // Wind loading
+    windLoadingHintsRelevant,
+    windLoadingLevel,
+    windLoadingPillClass,
+    windLoadingSummary,
+    windLoadingActionLine,
+    windLoadingActiveWindowLabel,
+    windLoadingActiveHoursDetail,
+    resolvedWindDirectionSource,
+    trendAgreementRatio,
+    windLoadingElevationFocus,
+    leewardAspectHints,
+    secondaryWindAspects,
+    windGustMph,
+    windLoadingNotes,
+    aspectOverlapProblems,
+    // Air quality
+    airQualityFutureNotApplicable,
+    airQualityPillClassFn,
+    // Fire risk
+    fireRiskLabel,
+    fireRiskPillClass,
+    fireRiskAlerts,
+    // Daylight / plan snapshot
+    sunriseMinutesForPlan,
+    sunsetMinutesForPlan,
+    startMinutesForPlan,
+    returnMinutes,
+    daylightRemainingFromStartLabel,
+    // Gear
+    gearRecommendations,
   } = props;
 
   if (!safetyData || !decision) return null;
@@ -270,7 +354,6 @@ export function RedesignView(props: PlannerViewProps) {
           localizeUnitText={localizeUnitText}
           travelWindowRows={travelWindowRows}
           travelWindowInsights={travelWindowInsights}
-          handleReportLayoutChange={handleReportLayoutChange}
           aiBriefNarrative={aiBriefNarrative}
           aiBriefError={aiBriefError}
           aiBriefLoading={aiBriefLoading}
@@ -375,6 +458,85 @@ export function RedesignView(props: PlannerViewProps) {
           </section>
         )}
 
+        {/* CRITICAL CHECKS */}
+        {shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0 && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><CheckCircle2 size={16} /></span>
+                Critical Checks
+              </h2>
+              <span className={`ssr-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>
+                {orderedCriticalChecks.filter((c) => c.ok).length}/{orderedCriticalChecks.length} passing
+              </span>
+            </div>
+            <div className="ssr-card-b">
+              {topCriticalAttentionChecks.length > 0 && (
+                <div className="ssr-checks-attention">
+                  <span className="ssr-checks-attention-k">Needs attention now</span>
+                  {topCriticalAttentionChecks.map((check, idx) => (
+                    <div className="ssr-checks-attention-row" key={`att-${idx}`}>
+                      <span className="ssr-checks-attention-lbl">{localizeUnitText(describeFailedCriticalCheck(check))}</span>
+                      <small>{localizeUnitText([check.detail, check.action].filter(Boolean).join(' · ') || 'Review before departure.')}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="ssr-checks">
+                {orderedCriticalChecks.map((check, idx) => (
+                  <div className={`ssr-check ${check.ok ? 'ok' : 'warn'}`} key={idx}>
+                    <span className="ssr-check-ic">{check.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}</span>
+                    <div className="ssr-check-main">
+                      <span className="ssr-check-lbl">{check.label}</span>
+                      {check.detail && <small className="ssr-check-detail">{localizeUnitText(check.detail)}</small>}
+                      {!check.ok && check.action && <small className="ssr-check-action">{localizeUnitText(check.action)}</small>}
+                    </div>
+                    <span className={`ssr-check-tag ${check.ok ? 'ok' : 'warn'}`}>{check.ok ? 'PASS' : 'FAIL'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* WEATHER */}
+        <section className="ssr-card">
+          <div className="ssr-card-h">
+            <h2>
+              <span className="ssr-h-icon"><Thermometer size={16} /></span>
+              Weather
+            </h2>
+            <span className="ssr-h-meta">
+              {safetyData.forecast?.isFuture ? (forecastLeadHoursDisplay || weatherForecastPeriodLabel || 'Forecast') : 'Current'}
+            </span>
+          </div>
+          <div className="ssr-card-b">
+            <div className="ssr-wx-hero">
+              <span className="ssr-wx-temp">{formatTempDisplay(weatherCardTemp)}</span>
+              <div className="ssr-wx-hero-meta">
+                <span className="ssr-wx-cond">{weatherCardWithEmoji}</span>
+                <span className="ssr-wx-feels">Feels {formatTempDisplay(weatherCardFeelsLike)}</span>
+              </div>
+            </div>
+            <div className="ssr-wx-grid">
+              <div className="ssr-wx-cell"><span className="ssr-k">Wind</span><span className="ssr-v">{formattedWind}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Gust</span><span className="ssr-v">{formattedGust}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Direction</span><span className="ssr-v">{weatherCardWindDirection || '—'}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Precip</span><span className="ssr-v">{Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Dew point</span><span className="ssr-v">{formatTempDisplay(weatherCardDewPoint)}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Pressure</span><span className="ssr-v">{weatherCardPressureLabel || '—'}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Cloud cover</span><span className="ssr-v">{weatherCardCloudCoverLabel || '—'}</span></div>
+            </div>
+            {weatherPressureTrendSummary && (
+              <p className="ssr-wx-note">{localizeUnitText(weatherPressureTrendSummary)}</p>
+            )}
+            {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
+              <p className="ssr-wx-vis"><Eye size={13} /> Visibility risk: <b>{weatherVisibilityRisk.level}</b>{weatherVisibilityScoreLabel ? ` · ${weatherVisibilityScoreLabel}` : ''}</p>
+            )}
+          </div>
+        </section>
+
         {/* ELEVATION */}
         {bands.length >= 2 && (
           <section className="ssr-card">
@@ -431,6 +593,128 @@ export function RedesignView(props: PlannerViewProps) {
             <p className="ssr-cross-note" style={{ padding: '0 24px 20px' }}>
               Colored pips mark relative wind hazard along the ascent. Hover any node for temp and wind.
             </p>
+          </section>
+        )}
+
+        {/* WIND LOADING */}
+        {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><Wind size={16} /></span>
+                Wind Loading
+              </h2>
+              <span className={`ssr-pill ${windLoadingPillClass}`}>{windLoadingLevel}</span>
+            </div>
+            <div className="ssr-card-b">
+              {avalancheUnknown && (
+                <p className="ssr-wl-note">No official forecast available — use wind loading as your primary terrain-selection signal.</p>
+              )}
+              {windLoadingSummary && <p className="ssr-body">{localizeUnitText(windLoadingSummary)}</p>}
+              {windLoadingActionLine && <p className="ssr-action-line">{localizeUnitText(windLoadingActionLine)}</p>}
+              <div className="ssr-meta-grid">
+                <div className="ssr-meta"><span className="ssr-k">Transport level</span><span className="ssr-v">{windLoadingLevel}</span></div>
+                <div className="ssr-meta"><span className="ssr-k">Active window</span><span className="ssr-v">{windLoadingActiveWindowLabel}</span></div>
+                <div className="ssr-meta"><span className="ssr-k">Direction source</span><span className="ssr-v">{resolvedWindDirectionSource}</span></div>
+                <div className="ssr-meta"><span className="ssr-k">Trend agreement</span><span className="ssr-v">{trendAgreementRatio !== null ? `${Math.round(trendAgreementRatio * 100)}%` : 'N/A'}</span></div>
+                <div className="ssr-meta ssr-meta-wide"><span className="ssr-k">Active hours</span><span className="ssr-v">{windLoadingActiveHoursDetail}</span></div>
+                <div className="ssr-meta ssr-meta-wide"><span className="ssr-k">Elevation focus</span><span className="ssr-v">{windLoadingElevationFocus}</span></div>
+              </div>
+              {leewardAspectHints.length > 0 && (
+                <div className="ssr-aspect-block">
+                  <span className="ssr-k">Likely lee aspects</span>
+                  <div className="ssr-aspect-chips">
+                    {leewardAspectHints.map((a) => <span key={a} className="ssr-aspect-chip">{a}</span>)}
+                  </div>
+                </div>
+              )}
+              {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
+                <div className="ssr-aspect-block">
+                  <span className="ssr-k">Secondary cross-loading</span>
+                  <div className="ssr-aspect-chips">
+                    {secondaryWindAspects.map((a) => <span key={`s-${a}`} className="ssr-aspect-chip secondary">{a}</span>)}
+                  </div>
+                </div>
+              )}
+              {windLoadingNotes.length > 0 && (
+                <ul className="ssr-bullets">
+                  {windLoadingNotes.map((n, i) => <li key={`wln-${i}`}>{localizeUnitText(n)}</li>)}
+                </ul>
+              )}
+              {aspectOverlapProblems.length > 0 && (
+                <p className="ssr-wl-overlap">Wind loading aligns with active avalanche problem aspects: {aspectOverlapProblems.join(', ')}.</p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* SCORE BREAKDOWN */}
+        {shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
+          const factors = safetyData.safety.factors
+            .slice()
+            .sort((a: any, b: any) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
+          const maxImpact = Math.max(1, ...factors.map((f: any) => Math.abs(Number(f.impact || 0))));
+          return (
+            <section className="ssr-card">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon"><ShieldCheck size={16} /></span>
+                  Score Breakdown
+                </h2>
+                {dayOverDay && (
+                  <span className={`ssr-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>
+                    {dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}
+                  </span>
+                )}
+              </div>
+              <div className="ssr-card-b">
+                <div className="ssr-factors">
+                  {factors.map((f: any, i: number) => {
+                    const impact = Math.round(Number(f.impact || 0));
+                    // Stored impact is positive-for-penalty (risk-increasing); negative = bonus.
+                    const isPenalty = impact >= 0;
+                    return (
+                      <div className="ssr-factor" key={i}>
+                        <div className="ssr-factor-top">
+                          <span className="ssr-factor-name">{f.hazard || 'Factor'}</span>
+                          <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                        </div>
+                        <span className="ssr-factor-bar">
+                          <i className={isPenalty ? 'neg' : 'pos'} style={{ width: `${(Math.abs(impact) / maxImpact) * 100}%` }} />
+                        </span>
+                        {f.message && <small className="ssr-factor-msg">{localizeUnitText(f.message)}</small>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* GEAR */}
+        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><Package size={16} /></span>
+                Gear
+              </h2>
+              <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="ssr-card-b">
+              <div className="ssr-gear">
+                {gearRecommendations.map((g, i) => (
+                  <div className="ssr-gear-item" key={`${g.title}-${i}`}>
+                    <div className="ssr-gear-head">
+                      <span className="ssr-gear-title">{g.title}</span>
+                      <span className={`ssr-pill ${g.tone}`}>{g.category}</span>
+                    </div>
+                    <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
         )}
       </main>
@@ -555,6 +839,165 @@ export function RedesignView(props: PlannerViewProps) {
                   <span className="ssr-k">Station elevation</span>
                   <span className="ssr-v">{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>
                 </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* DAYLIGHT */}
+        {shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
+          const dayLen = sunsetMinutesForPlan - sunriseMinutesForPlan;
+          const clampPct = (m: number | null) => m === null ? null : Math.max(0, Math.min(100, ((m - sunriseMinutesForPlan) / Math.max(1, dayLen)) * 100));
+          const startPct = clampPct(startMinutesForPlan);
+          const returnPct = clampPct(returnMinutes);
+          return (
+            <section className="ssr-card">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon"><Sun size={16} /></span>
+                  Daylight
+                </h2>
+                <span className="ssr-h-meta">{Math.floor(dayLen / 60)}h {dayLen % 60}m</span>
+              </div>
+              <div className="ssr-card-b">
+                <div className="ssr-day-bar">
+                  {startPct !== null && returnPct !== null && (
+                    <span className="ssr-day-window" style={{ left: `${Math.min(startPct, returnPct)}%`, width: `${Math.abs(returnPct - startPct)}%` }} />
+                  )}
+                  {startPct !== null && <span className="ssr-day-mark start" style={{ left: `${startPct}%` }} title="Start" />}
+                  {returnPct !== null && <span className="ssr-day-mark end" style={{ left: `${returnPct}%` }} title="Return" />}
+                </div>
+                <div className="ssr-day-ends">
+                  <span>↑ {safetyData.solar.sunrise ? formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle) : '—'}</span>
+                  <span>↓ {safetyData.solar.sunset ? formatClockForStyle(safetyData.solar.sunset, preferences.timeStyle) : '—'}</span>
+                </div>
+                <div className="ssr-snow-kv"><span className="ssr-k">Start</span><span className="ssr-v">{displayStartTime}</span></div>
+                <div className="ssr-snow-kv"><span className="ssr-k">Est. return</span><span className="ssr-v">{returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : '—'}{returnExtendsPastMidnight ? ' +1' : ''}</span></div>
+                <div className="ssr-snow-kv"><span className="ssr-k">Daylight from start</span><span className="ssr-v">{daylightRemainingFromStartLabel}</span></div>
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* HEAT RISK */}
+        {shouldRenderRankedCard('heatRisk') && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><Sun size={16} /></span>
+                Heat Risk
+              </h2>
+              <span className={`ssr-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>
+            </div>
+            <div className="ssr-card-b">
+              {heatRiskGuidance && <p className="ssr-body">{localizeUnitText(heatRiskGuidance)}</p>}
+              {lowerTerrainHeatLabel && <p className="ssr-muted">{localizeUnitText(lowerTerrainHeatLabel)}</p>}
+              {Array.isArray(heatRiskReasons) && heatRiskReasons.length > 0 && (
+                <ul className="ssr-bullets">
+                  {heatRiskReasons.map((r, i) => <li key={`hr-${i}`}>{localizeUnitText(r)}</li>)}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* FIRE RISK */}
+        {shouldRenderRankedCard('fireRisk') && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><Flame size={16} /></span>
+                Fire Risk
+              </h2>
+              <span className={`ssr-pill ${fireRiskPillClass}`}>{String(fireRiskLabel || 'Low').toUpperCase()}</span>
+            </div>
+            <div className="ssr-card-b">
+              <p className="ssr-body">{localizeUnitText(safetyData.fireRisk?.guidance || 'No fire-risk guidance available.')}</p>
+              {Array.isArray(safetyData.fireRisk?.reasons) && safetyData.fireRisk.reasons.length > 0 && (
+                <ul className="ssr-bullets">
+                  {safetyData.fireRisk.reasons.map((r: string, i: number) => <li key={`fr-${i}`}>{localizeUnitText(r)}</li>)}
+                </ul>
+              )}
+              {Array.isArray(fireRiskAlerts) && fireRiskAlerts.length > 0 && (
+                <div className="ssr-mini-alerts">
+                  {fireRiskAlerts.map((a: any, i: number) => (
+                    <div className="ssr-ac-item" key={`fra-${i}`}>
+                      <span className="ssr-ac-icon"><Flame size={12} /></span>
+                      <div><div className="ssr-ac-text">{a.headline || a.event || 'Fire alert'}</div></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* AIR QUALITY */}
+        {shouldRenderRankedCard('airQuality') && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><Wind size={16} /></span>
+                Air Quality
+              </h2>
+              <span className={`ssr-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClassFn(safetyData.airQuality?.usAqi)}`}>
+                {airQualityFutureNotApplicable ? 'Current-day only' : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}
+              </span>
+            </div>
+            <div className="ssr-card-b">
+              {airQualityFutureNotApplicable ? (
+                <p className="ssr-muted">Air quality readings are current-day only and don’t apply to this future window.</p>
+              ) : (
+                <>
+                  <div className="ssr-snow-kv"><span className="ssr-k">Category</span><span className="ssr-v">{safetyData.airQuality?.category || 'Unknown'}</span></div>
+                  {Number.isFinite(Number(safetyData.airQuality?.pm25)) && <div className="ssr-snow-kv"><span className="ssr-k">PM2.5</span><span className="ssr-v">{Math.round(Number(safetyData.airQuality?.pm25))}</span></div>}
+                  {Number.isFinite(Number(safetyData.airQuality?.pm10)) && <div className="ssr-snow-kv"><span className="ssr-k">PM10</span><span className="ssr-v">{Math.round(Number(safetyData.airQuality?.pm10))}</span></div>}
+                  {Number.isFinite(Number(safetyData.airQuality?.ozone)) && <div className="ssr-snow-kv"><span className="ssr-k">Ozone</span><span className="ssr-v">{Math.round(Number(safetyData.airQuality?.ozone))}</span></div>}
+                  {safetyData.airQuality?.note && <p className="ssr-muted">{safetyData.airQuality.note}</p>}
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* TERRAIN */}
+        {shouldRenderRankedCard('terrainTrailCondition') && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><Route size={16} /></span>
+                Terrain
+              </h2>
+              <span className={`ssr-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
+            </div>
+            <div className="ssr-card-b">
+              {terrainConditionDetails.summary && <p className="ssr-body">{localizeUnitText(terrainConditionDetails.summary)}</p>}
+              {terrainConditionDetails.recommendedTravel && (
+                <div className="ssr-snow-kv"><span className="ssr-k">Recommended travel</span><span className="ssr-v">{localizeUnitText(terrainConditionDetails.recommendedTravel)}</span></div>
+              )}
+              <div className="ssr-snow-kv"><span className="ssr-k">Rain 24h</span><span className="ssr-v">{rainfall24hDisplay}</span></div>
+              {Number.isFinite(snowfall24hIn) && <div className="ssr-snow-kv"><span className="ssr-k">Snow 24h</span><span className="ssr-v">{snowfall24hDisplay}</span></div>}
+            </div>
+          </section>
+        )}
+
+        {/* PRECIPITATION */}
+        {shouldRenderRankedCard('recentRainfall') && (
+          <section className="ssr-card">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon"><CloudRain size={16} /></span>
+                Precipitation
+              </h2>
+              <span className={`ssr-pill ${rainfall24hSeverityClass}`}>24h {rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · ${snowfall24hDisplay}` : ''}</span>
+            </div>
+            <div className="ssr-card-b">
+              {precipInsightLine && <p className="ssr-body">{localizeUnitText(precipInsightLine)}</p>}
+              <div className="ssr-snow-kv"><span className="ssr-k">Rain 12 / 24 / 48h</span><span className="ssr-v">{rainfall12hDisplay} · {rainfall24hDisplay} · {rainfall48hDisplay}</span></div>
+              {Number.isFinite(snowfall24hIn) && <div className="ssr-snow-kv"><span className="ssr-k">Snow 12 / 24 / 48h</span><span className="ssr-v">{snowfall12hDisplay} · {snowfall24hDisplay} · {snowfall48hDisplay}</span></div>}
+              {expectedPrecipSummaryLine && <p className="ssr-muted">{localizeUnitText(expectedPrecipSummaryLine)}</p>}
+              {(expectedRainWindowDisplay || expectedSnowWindowDisplay) && (
+                <div className="ssr-snow-kv"><span className="ssr-k">Expected in window</span><span className="ssr-v">{[expectedRainWindowDisplay, expectedSnowWindowDisplay].filter(Boolean).join(' · ') || '—'}</span></div>
               )}
             </div>
           </section>
