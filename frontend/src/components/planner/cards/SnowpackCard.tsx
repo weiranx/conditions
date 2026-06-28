@@ -3,6 +3,10 @@ import { HelpHint } from '../CardHelpHint';
 
 export interface SnowpackCardProps {
   snowpackInsights: SnowpackSnapshotInsights | null;
+  bestDepthDisplay: string;
+  bestDepthSource: string | null;
+  bestSweDisplay: string;
+  bestSweSource: string | null;
   snotelStationName: string | null | undefined;
   snotelDistanceDisplay: string;
   snotelDepthDisplay: string;
@@ -40,6 +44,10 @@ export interface SnowpackCardProps {
 
 export function SnowpackCard({
   snowpackInsights,
+  bestDepthDisplay,
+  bestDepthSource,
+  bestSweDisplay,
+  bestSweSource,
   snotelStationName,
   snotelDistanceDisplay,
   snotelDepthDisplay,
@@ -89,9 +97,18 @@ export function SnowpackCard({
 
       <div className="snowpack-core-grid">
         <div className="snowpack-core-item">
-          <span className="stat-label stat-label-with-help">SNOTEL Station Snow <HelpHint text="SNOTEL (Snow Telemetry): automated USDA stations measuring snow depth and snow water equivalent (SWE) in real time." /></span>
-          <strong>Depth {snotelDepthDisplay} &bull; SWE {snotelSweDisplay}</strong>
-          <small>{snotelStationName || 'Unavailable'}{snotelDistanceDisplay !== 'N/A' ? ` \u2022 ${snotelDistanceDisplay}` : ''}{snotelObservedDate ? ` \u2022 ${snotelObservedDate}` : ''}</small>
+          <span className="stat-label stat-label-with-help">Snowpack <HelpHint text="Best available reading for this location, drawn from SNOTEL stations, the NOHRSC gridded model, and CDEC. Per-source values are in More snowpack details." /></span>
+          <strong>Depth {bestDepthDisplay} &bull; SWE {bestSweDisplay}</strong>
+          <small>
+            {bestDepthSource || bestSweSource
+              ? `Source: ${[
+                  bestDepthSource ? `depth ${bestDepthSource}` : null,
+                  bestSweSource ? `SWE ${bestSweSource}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' \u2022 ')}`
+              : 'No snowpack reading available'}
+          </small>
         </div>
         <div className="snowpack-core-item">
           <span className="stat-label">Recent 24h</span>
@@ -115,6 +132,11 @@ export function SnowpackCard({
         <summary>More snowpack details</summary>
 
         <div className="snowpack-core-grid" style={{ marginTop: '10px' }}>
+          <div className="snowpack-core-item">
+            <span className="stat-label stat-label-with-help">SNOTEL Station Snow <HelpHint text="SNOTEL (Snow Telemetry): automated USDA stations measuring snow depth and snow water equivalent (SWE) in real time. Many sites report SWE only." /></span>
+            <strong>Depth {snotelDepthDisplay} &bull; SWE {snotelSweDisplay}</strong>
+            <small>{snotelStationName || 'Unavailable'}{snotelDistanceDisplay !== 'N/A' ? ` • ${snotelDistanceDisplay}` : ''}{snotelObservedDate ? ` • ${snotelObservedDate}` : ''}</small>
+          </div>
           <div className="snowpack-core-item">
             <span className="stat-label stat-label-with-help">NOHRSC Grid Snow <HelpHint text="NOHRSC (National Operational Hydrologic Remote Sensing Center): NOAA-modeled gridded snow estimates for any location." /></span>
             <strong>Depth {nohrscDepthDisplay} &bull; SWE {nohrscSweDisplay}</strong>

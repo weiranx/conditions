@@ -405,6 +405,10 @@ export interface PlannerViewProps {
 
   // Snowpack card
   snowpackInsights: SnowpackSnapshotInsights | null;
+  snowpackBestDepthDisplay: string;
+  snowpackBestDepthSource: string | null;
+  snowpackBestSweDisplay: string;
+  snowpackBestSweSource: string | null;
   snotelDistanceDisplay: string;
   snotelDepthDisplay: string;
   snotelSweDisplay: string;
@@ -788,6 +792,10 @@ export function PlannerView(props: PlannerViewProps) {
 
     // Snowpack card
     snowpackInsights,
+    snowpackBestDepthDisplay,
+    snowpackBestDepthSource,
+    snowpackBestSweDisplay,
+    snowpackBestSweSource,
     snotelDistanceDisplay,
     snotelDepthDisplay,
     snotelSweDisplay,
@@ -1663,12 +1671,16 @@ export function PlannerView(props: PlannerViewProps) {
                   headerMeta={<span className={`decision-pill ${snowpackPillClass}`}>{snowpackStatusLabel}</span>}
                   summary={snowpackStatusLabel}
                   preview={<>
-                    <div className="card-preview-hero mono">{snotelDepthDisplay}</div>
+                    <div className="card-preview-hero mono">{snowpackBestDepthDisplay}</div>
                     <div className="card-preview-caption">{snowpackStatusLabel}</div>
                   </>}
                 >
                 <SnowpackCard
                   snowpackInsights={snowpackInsights}
+                  bestDepthDisplay={snowpackBestDepthDisplay}
+                  bestDepthSource={snowpackBestDepthSource}
+                  bestSweDisplay={snowpackBestSweDisplay}
+                  bestSweSource={snowpackBestSweSource}
                   snotelStationName={safetyData.snowpack?.snotel?.stationName}
                   snotelDistanceDisplay={snotelDistanceDisplay}
                   snotelDepthDisplay={snotelDepthDisplay}

@@ -172,6 +172,10 @@ export function buildTerrainConditionDisplay(safetyData: SafetyData | null): Ter
 // --- Snowpack Display ---
 
 export interface SnowpackDisplayState {
+  bestDepthDisplay: string;
+  bestDepthSource: string | null;
+  bestSweDisplay: string;
+  bestSweSource: string | null;
   snotelSweDisplay: string;
   snotelDepthDisplay: string;
   nohrscSweDisplay: string;
@@ -207,21 +211,28 @@ export function buildSnowpackDisplayState(
   rainfall24hIn: number,
   rainfall24hDisplay: string,
 ): SnowpackDisplayState {
-  const snotelSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.snotel?.sweIn), elevationUnit);
-  const snotelDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.snotel?.snowDepthIn), elevationUnit);
-  const nohrscSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.sweIn), elevationUnit);
-  const nohrscDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.nohrsc?.snowDepthIn), elevationUnit);
-  const cdecSweDisplay = formatSweForElevationUnit(Number(safetyData?.snowpack?.cdec?.sweIn), elevationUnit);
-  const cdecDepthDisplay = formatSnowDepthForElevationUnit(Number(safetyData?.snowpack?.cdec?.snowDepthIn), elevationUnit);
-  const cdecDistanceDisplay = formatDistanceForElevationUnit(Number(safetyData?.snowpack?.cdec?.distanceKm), elevationUnit);
-  const snotelDistanceDisplay = formatDistanceForElevationUnit(Number(safetyData?.snowpack?.snotel?.distanceKm), elevationUnit);
+  // Coerce to a finite number, but keep null/undefined/'' as NaN so that a
+  // missing sensor reading renders as "N/A" rather than a spurious "0 in".
+  // (Number(null) === 0, which previously made stations without a depth sensor
+  // — e.g. SWE-only SNOTEL sites — display 0in instead of N/A.)
+  const toFinite = (value: unknown): number =>
+    value === null || value === undefined || value === '' ? Number.NaN : Number(value);
 
-  const snotelDepthIn = Number(safetyData?.snowpack?.snotel?.snowDepthIn);
-  const nohrscDepthIn = Number(safetyData?.snowpack?.nohrsc?.snowDepthIn);
-  const cdecDepthIn = Number(safetyData?.snowpack?.cdec?.snowDepthIn);
-  const snotelSweIn = Number(safetyData?.snowpack?.snotel?.sweIn);
-  const nohrscSweIn = Number(safetyData?.snowpack?.nohrsc?.sweIn);
-  const cdecSweIn = Number(safetyData?.snowpack?.cdec?.sweIn);
+  const snotelSweDisplay = formatSweForElevationUnit(toFinite(safetyData?.snowpack?.snotel?.sweIn), elevationUnit);
+  const snotelDepthDisplay = formatSnowDepthForElevationUnit(toFinite(safetyData?.snowpack?.snotel?.snowDepthIn), elevationUnit);
+  const nohrscSweDisplay = formatSweForElevationUnit(toFinite(safetyData?.snowpack?.nohrsc?.sweIn), elevationUnit);
+  const nohrscDepthDisplay = formatSnowDepthForElevationUnit(toFinite(safetyData?.snowpack?.nohrsc?.snowDepthIn), elevationUnit);
+  const cdecSweDisplay = formatSweForElevationUnit(toFinite(safetyData?.snowpack?.cdec?.sweIn), elevationUnit);
+  const cdecDepthDisplay = formatSnowDepthForElevationUnit(toFinite(safetyData?.snowpack?.cdec?.snowDepthIn), elevationUnit);
+  const cdecDistanceDisplay = formatDistanceForElevationUnit(toFinite(safetyData?.snowpack?.cdec?.distanceKm), elevationUnit);
+  const snotelDistanceDisplay = formatDistanceForElevationUnit(toFinite(safetyData?.snowpack?.snotel?.distanceKm), elevationUnit);
+
+  const snotelDepthIn = toFinite(safetyData?.snowpack?.snotel?.snowDepthIn);
+  const nohrscDepthIn = toFinite(safetyData?.snowpack?.nohrsc?.snowDepthIn);
+  const cdecDepthIn = toFinite(safetyData?.snowpack?.cdec?.snowDepthIn);
+  const snotelSweIn = toFinite(safetyData?.snowpack?.snotel?.sweIn);
+  const nohrscSweIn = toFinite(safetyData?.snowpack?.nohrsc?.sweIn);
+  const cdecSweIn = toFinite(safetyData?.snowpack?.cdec?.sweIn);
 
   const metricAvailable =
     Number.isFinite(snotelDepthIn) || Number.isFinite(nohrscDepthIn) || Number.isFinite(cdecDepthIn) ||
@@ -238,6 +249,30 @@ export function buildSnowpackDisplayState(
     Number.isFinite(cdecSweIn) ? cdecSweIn : 0,
   );
   const lowBroadSnowSignal = metricAvailable && maxSnowDepthSignalIn <= 1 && maxSnowSweSignalIn <= 0.2;
+
+  // Headline "best estimate" — surface whichever source actually has a reading
+  // rather than always leading with SNOTEL (often a SWE-only or melted-out site).
+  // Pick the highest signal across sources (conservative for a safety tool) and
+  // attribute it so provenance stays clear; the per-source breakdown lives below.
+  const pickBestSource = (candidates: Array<{ source: string; value: number }>) => {
+    const finite = candidates.filter((candidate) => Number.isFinite(candidate.value));
+    if (finite.length === 0) return null;
+    return finite.reduce((best, candidate) => (candidate.value > best.value ? candidate : best));
+  };
+  const bestDepth = pickBestSource([
+    { source: 'NOHRSC grid', value: nohrscDepthIn },
+    { source: 'CDEC', value: cdecDepthIn },
+    { source: 'SNOTEL', value: snotelDepthIn },
+  ]);
+  const bestSwe = pickBestSource([
+    { source: 'SNOTEL', value: snotelSweIn },
+    { source: 'CDEC', value: cdecSweIn },
+    { source: 'NOHRSC grid', value: nohrscSweIn },
+  ]);
+  const bestDepthDisplay = bestDepth ? formatSnowDepthForElevationUnit(bestDepth.value, elevationUnit) : 'N/A';
+  const bestDepthSource = bestDepth?.source ?? null;
+  const bestSweDisplay = bestSwe ? formatSweForElevationUnit(bestSwe.value, elevationUnit) : 'N/A';
+  const bestSweSource = bestSwe?.source ?? null;
 
   const pillClass = lowBroadSnowSignal
     ? 'go' as const
@@ -339,6 +374,7 @@ export function buildSnowpackDisplayState(
   const hasSignal = depthSignalValues.length > 0 || sweSignalValues.length > 0;
 
   return {
+    bestDepthDisplay, bestDepthSource, bestSweDisplay, bestSweSource,
     snotelSweDisplay, snotelDepthDisplay,
     nohrscSweDisplay, nohrscDepthDisplay,
     cdecSweDisplay, cdecDepthDisplay,
