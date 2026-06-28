@@ -3722,3 +3722,142 @@ test('calculateSafetyScore applies thunderstorm/convective penalty', () => {
   expect(stormFactor).toBeDefined();
   expect(stormFactor.impact).toBe(18);
 });
+
+// ─── calculateSafetyScore: snowpack / terrain / problem-type / convective trend ───
+
+const calmWeather = (overrides = {}) => ({
+  description: 'Mostly Sunny',
+  windSpeed: 6, windGust: 10, precipChance: 5, humidity: 35, temp: 50, feelsLike: 49,
+  isDaytime: true, issuedTime: new Date().toISOString(),
+  trend: Array.from({ length: 8 }, () => ({ temp: 50, wind: 6, gust: 10, precipChance: 5, condition: 'Mostly Sunny' })),
+  ...overrides,
+});
+
+test('calculateSafetyScore stamps the scoring model version', () => {
+  const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
+  expect(typeof result.scoreVersion).toBe('string');
+  expect(result.scoreVersion.length).toBeGreaterThan(0);
+});
+
+test('calculateSafetyScore adds a Snowpack factor when snowpack is above seasonal average', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: calmWeather(),
+    snowpackData: {
+      status: 'ok',
+      source: 'Snowpack synthesis',
+      snotel: { snowDepthIn: 40, sweIn: 13 },
+      historical: { overall: { status: 'above_average', percentOfAverage: 150 } },
+    },
+  });
+  const snowFactor = result.factors.find((f) => f.hazard === 'Snowpack');
+  expect(snowFactor).toBeDefined();
+  expect(snowFactor.group).toBe('weather');
+  expect(snowFactor.message).toMatch(/above seasonal average/i);
+});
+
+test('calculateSafetyScore leaves snowpack as a no-op when snowpack data is absent (backward compatible)', () => {
+  const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
+  expect(result.factors.some((f) => f.hazard === 'Snowpack')).toBe(false);
+});
+
+test('calculateSafetyScore scales the avalanche-unknown penalty up over a deep snowpack', () => {
+  const base = {
+    ...safetyScoreBaseInput(),
+    avalancheData: { relevant: true, dangerUnknown: true, coverageStatus: 'no_active_forecast' },
+    weatherData: calmWeather(),
+  };
+  const withoutSnow = calculateSafetyScore(base);
+  const withDeepSnow = calculateSafetyScore({
+    ...base,
+    snowpackData: {
+      status: 'ok',
+      snotel: { snowDepthIn: 48, sweIn: 16 },
+      historical: { overall: { status: 'above_average', percentOfAverage: 160 } },
+    },
+  });
+  const baseUnknown = withoutSnow.factors.find((f) => f.hazard === 'Avalanche Uncertainty');
+  const deepUnknown = withDeepSnow.factors.find((f) => f.hazard === 'Avalanche Uncertainty');
+  expect(baseUnknown.impact).toBe(16);
+  expect(deepUnknown.impact).toBeGreaterThan(baseUnknown.impact);
+});
+
+test('calculateSafetyScore adds a Surface Conditions factor from high-impact terrain condition', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: calmWeather(),
+    terrainConditionData: {
+      code: 'icy_hardpack',
+      label: '🧊 Icy / Firm Snow',
+      impact: 'high',
+      confidence: 'high',
+      recommendedTravel: 'Use traction devices.',
+      source: 'Terrain condition synthesis',
+    },
+  });
+  const surfaceFactor = result.factors.find((f) => f.hazard === 'Surface Conditions' && /Icy|hazardous/i.test(f.message));
+  expect(surfaceFactor).toBeDefined();
+});
+
+test('calculateSafetyScore ignores terrain condition when confidence is low', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: calmWeather(),
+    terrainConditionData: { impact: 'high', confidence: 'low', label: 'Uncertain' },
+  });
+  expect(result.factors.some((f) => f.hazard === 'Surface Conditions')).toBe(false);
+});
+
+test('calculateSafetyScore adds Avalanche Problem Type weight for a persistent slab', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    avalancheData: {
+      relevant: true, dangerUnknown: false, coverageStatus: 'reported', dangerLevel: 2, risk: 'Moderate',
+      problems: [{ name: 'Persistent Slab', likelihood: 'possible' }],
+    },
+    weatherData: calmWeather({ temp: 24, feelsLike: 18 }),
+  });
+  const ptFactor = result.factors.find((f) => f.hazard === 'Avalanche Problem Type');
+  expect(ptFactor).toBeDefined();
+  expect(ptFactor.group).toBe('avalanche');
+  expect(ptFactor.impact).toBe(6);
+});
+
+test('calculateSafetyScore adds Avalanche Elevation Spread when danger varies across bands', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    avalancheData: {
+      relevant: true, dangerUnknown: false, coverageStatus: 'reported', dangerLevel: 4, risk: 'High',
+      problems: [],
+      elevations: {
+        above: { level: 4, label: 'High' },
+        at: { level: 2, label: 'Moderate' },
+        below: { level: 1, label: 'Low' },
+      },
+    },
+    weatherData: calmWeather({ temp: 22, feelsLike: 14 }),
+  });
+  const spreadFactor = result.factors.find((f) => f.hazard === 'Avalanche Elevation Spread');
+  expect(spreadFactor).toBeDefined();
+  expect(spreadFactor.impact).toBe(4);
+});
+
+test('calculateSafetyScore detects convective risk from trend-hour conditions without a description keyword', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Partly Cloudy',
+      windSpeed: 12, windGust: 20, precipChance: 45, humidity: 60, temp: 70, feelsLike: 71,
+      isDaytime: true, issuedTime: new Date().toISOString(),
+      trend: [
+        { temp: 70, wind: 12, gust: 20, precipChance: 40, condition: 'Partly Cloudy' },
+        { temp: 70, wind: 12, gust: 20, precipChance: 50, condition: 'Scattered Thunderstorms' },
+        { temp: 69, wind: 14, gust: 24, precipChance: 60, condition: 'Thunderstorms Likely' },
+        { temp: 68, wind: 14, gust: 24, precipChance: 55, condition: 'Partly Cloudy' },
+      ],
+    },
+  });
+  const convective = result.factors.find((f) => f.hazard === 'Storm' && /convective signal across/i.test(f.message));
+  expect(convective).toBeDefined();
+  expect(convective.impact).toBe(18);
+});

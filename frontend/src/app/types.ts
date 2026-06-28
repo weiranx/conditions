@@ -281,7 +281,7 @@ export interface SafetyData {
       swe?: {
         currentIn?: number | null;
         averageIn?: number | null;
-        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown' | string;
+        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown';
         percentOfAverage?: number | null;
         sampleCount?: number | null;
         maxOffsetDays?: number | null;
@@ -289,14 +289,14 @@ export interface SafetyData {
       depth?: {
         currentIn?: number | null;
         averageIn?: number | null;
-        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown' | string;
+        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown';
         percentOfAverage?: number | null;
         sampleCount?: number | null;
         maxOffsetDays?: number | null;
       } | null;
       overall?: {
         metric?: string | null;
-        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown' | string;
+        status?: 'below_average' | 'at_average' | 'above_average' | 'unknown';
         percentOfAverage?: number | null;
       } | null;
       summary?: string | null;
@@ -344,8 +344,9 @@ export interface SafetyData {
   terrainCondition?: {
     code?: string;
     label?: string;
-    impact?: 'low' | 'moderate' | 'high' | string;
+    impact?: 'low' | 'moderate' | 'high';
     recommendedTravel?: string;
+    source?: string;
     snowProfile?: {
       code?: string;
       label?: string;
@@ -378,6 +379,8 @@ export interface SafetyData {
     };
   };
   safety: {
+    /** Scoring model version; bump when thresholds change so logged scores stay comparable. */
+    scoreVersion?: string;
     score: number;
     confidence?: number;
     tier?: string;
@@ -385,8 +388,8 @@ export interface SafetyData {
     primaryHazard: string;
     explanations: string[];
     sourcesUsed?: string[];
-    factors?: Array<{ hazard?: string; impact?: number; source?: string; message?: string }>;
-    groupImpacts?: Record<string, { raw?: number; capped?: number; cap?: number; effective?: number; scale?: number }>;
+    factors?: Array<{ hazard?: string; impact?: number; source?: string; message?: string; group?: string }>;
+    groupImpacts?: Record<string, { raw?: number; effective?: number; scale?: number; /** @deprecated alias of effective */ capped?: number; /** @deprecated alias of scale */ cap?: number }>;
     confidenceReasons?: string[];
     airQualityCategory?: string;
   };
