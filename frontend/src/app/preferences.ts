@@ -48,7 +48,7 @@ export function getDefaultUserPreferences(): UserPreferences {
     minFeelsLikeF: 5,
     maxFeelsLikeF: 95,
     travelWindowHours: 12,
-    reportLayout: 'briefing',
+    reportLayout: 'redesign',
   };
 }
 

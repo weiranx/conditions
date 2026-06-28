@@ -648,8 +648,9 @@ export function normalizeTimeStyle(rawStyle: string | null | undefined): TimeSty
 
 export function normalizeReportLayout(raw: string | null | undefined): ReportLayout {
   if (raw === 'briefing') return 'briefing';
-  if (raw === 'redesign') return 'redesign';
-  return 'cards';
+  // 'cards' (the former Full Report) is retired — its detail now lives in the
+  // comprehensive redesign report, so fold any stored 'cards' value into it.
+  return 'redesign';
 }
 
 export function parseIsoDateToUtcMs(value: string | null | undefined): number | null {

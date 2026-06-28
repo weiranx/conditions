@@ -80,7 +80,7 @@ html[data-theme="dark"] .ssr-dash {
 
 .ssr-dash-top {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   gap: 28px;
   padding: 26px 28px;
   align-items: center;

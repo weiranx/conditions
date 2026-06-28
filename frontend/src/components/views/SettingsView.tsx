@@ -85,7 +85,7 @@ export interface SettingsViewProps {
 }
 
 const THEME_OPTIONS: Array<[ThemeMode, string]> = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
-const LAYOUT_OPTIONS: Array<[ReportLayout, string]> = [['cards', 'Cards'], ['briefing', 'Briefing'], ['redesign', 'Redesign']];
+const LAYOUT_OPTIONS: Array<[ReportLayout, string]> = [['redesign', 'Full Report'], ['briefing', 'Briefing']];
 const TEMP_OPTIONS: Array<[TemperatureUnit, string]> = [['f', '°F'], ['c', '°C']];
 const ELEV_OPTIONS: Array<[ElevationUnit, string]> = [['ft', 'Feet'], ['m', 'Meters']];
 const WIND_OPTIONS: Array<[WindSpeedUnit, string]> = [['mph', 'mph'], ['kph', 'kph']];
@@ -296,7 +296,7 @@ export function SettingsView({
               <div className="ssr-set-row">
                 <span className="ssr-set-row-label">
                   Report layout
-                  <span className="ssr-hint">Cards is the classic stack. Briefing is narrative. Redesign is the new field brief.</span>
+                  <span className="ssr-hint">Full Report is the complete field brief. Briefing is the narrative summary.</span>
                 </span>
                 <Seg value={preferences.reportLayout} options={LAYOUT_OPTIONS} onChange={handleReportLayoutChange} />
               </div>

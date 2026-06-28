@@ -3,11 +3,10 @@ import {
   Wind,
   CloudRain,
   CheckCircle2,
-  ArrowRight,
   Sparkles,
   LoaderCircle,
 } from 'lucide-react';
-import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights, ReportLayout } from '../../app/types';
+import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
 import '../../styles/dashboard-redesign.css';
 
 const GAUGE_R = 56;
@@ -29,7 +28,6 @@ export interface DashboardSummaryCardProps {
   localizeUnitText: (text: string) => string;
   travelWindowRows: TravelWindowRow[];
   travelWindowInsights: TravelWindowInsights;
-  handleReportLayoutChange: (layout: ReportLayout) => void;
   aiBriefNarrative: string | null;
   aiBriefError: string | null;
   aiBriefLoading: boolean;
@@ -52,7 +50,6 @@ export function DashboardSummaryCard({
   localizeUnitText,
   travelWindowRows,
   travelWindowInsights,
-  handleReportLayoutChange,
   aiBriefNarrative,
   aiBriefError,
   aiBriefLoading,
@@ -126,10 +123,6 @@ export function DashboardSummaryCard({
               )}
             </div>
           </div>
-
-          <button type="button" className="ssr-dash-cta" onClick={() => handleReportLayoutChange('cards')}>
-            Full brief <ArrowRight size={16} aria-hidden />
-          </button>
         </div>
 
         <div className="ssr-dash-cond-strip">
