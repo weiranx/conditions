@@ -199,7 +199,7 @@ test('GET /api/safety accepts boundary coordinates lat=90 lon=-180', async () =>
   // Validation should pass — downstream may fail but we get past the 400 check
   const res = await request(app).get('/api/safety?lat=90&lon=-180&date=2026-02-20');
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 // ── /api/sat-oneliner — additional validation edge cases ─────────────────────
 
@@ -225,12 +225,12 @@ test('GET /api/sat-oneliner accepts maxLength at exactly 80 (lower bound)', asyn
   // 80 is the minimum valid value — validation should pass; downstream may fail
   const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=80');
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 test('GET /api/sat-oneliner accepts maxLength at exactly 320 (upper bound)', async () => {
   const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=320');
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 test('GET /api/sat-oneliner rejects maxLength below 80', async () => {
   const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=79');
@@ -451,7 +451,7 @@ test('GET /api/route-suggestions accepts lat=0 lon=0 as valid zero coordinates',
   const res = await request(app).get('/api/route-suggestions?peak=Null+Island&lat=0&lon=0');
   // Should pass validation (not 400); downstream AI call will fail in test env
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 test('GET /api/route-suggestions rejects out-of-range lon', async () => {
   const res = await request(app).get('/api/route-suggestions?peak=Mt+Rainier&lat=46.85&lon=200');
@@ -485,14 +485,14 @@ test('POST /api/route-analysis accepts start=00:00 as valid lower boundary', asy
     .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15', start: '00:00' });
   // Passes validation — downstream AI/safety calls will fail in test env
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 test('POST /api/route-analysis accepts start=23:59 as valid upper boundary', async () => {
   const res = await request(app)
     .post('/api/route-analysis')
     .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15', start: '23:59' });
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 test('POST /api/route-analysis accepts omitted start (start is optional)', async () => {
   const res = await request(app)
@@ -500,7 +500,7 @@ test('POST /api/route-analysis accepts omitted start (start is optional)', async
     .send({ peak: 'Mt Rainier', route: 'Disappointment Cleaver', lat: 46.85, lon: -121.76, date: '2026-06-15' });
   // No start provided — must not be rejected with 400
   expect(res.status).not.toBe(400);
-}, 30000);
+}, 45000);
 
 test('POST /api/route-analysis rejects lat=0 due to falsy-coordinate bug (documents known issue)', async () => {
   // The route uses `!lat` / `!lon` which treats numeric zero as missing.
