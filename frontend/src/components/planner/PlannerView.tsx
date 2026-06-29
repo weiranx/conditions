@@ -17,6 +17,7 @@ import {
   Sparkles,
   Loader2,
   Eye,
+  CloudLightning,
 } from 'lucide-react';
 import { ForecastLoading } from './ForecastLoading';
 import { PlannerHeader } from './PlannerHeader';
@@ -32,6 +33,7 @@ import { DecisionGateCard } from './cards/DecisionGateCard';
 import { CriticalChecksCard } from './cards/CriticalChecksCard';
 import { ScoreTraceCard } from './cards/ScoreTraceCard';
 import { HeatRiskCard } from './cards/HeatRiskCard';
+import { SkyConditionsCard } from './cards/SkyConditionsCard';
 import { TerrainCard } from './cards/TerrainCard';
 import { RainfallCard } from './cards/RainfallCard';
 import { SourceFreshnessCard } from './cards/SourceFreshnessCard';
@@ -1389,6 +1391,33 @@ export function PlannerView(props: PlannerViewProps) {
                   lowerTerrainHeatLabel={lowerTerrainHeatLabel}
                   localizeUnitText={localizeUnitText}
                   formatTempDisplay={formatTempDisplay}
+                />
+                </CollapsibleCard>
+              )}
+
+              {shouldRenderRankedCard('skyConditions') && safetyData.atmosphere && (
+                <CollapsibleCard
+                  cardKey="skyConditions"
+                  defaultExpanded={false}
+                  order={reportCardOrder.skyConditions}
+                  className="sky-conditions-card"
+                  title={<span className="card-title"><CloudLightning size={14} /> Sky &amp; Atmosphere</span>}
+                  headerMeta={<span className="decision-pill">{safetyData.atmosphere.precipType?.label || (Number.isFinite(Number(safetyData.atmosphere.uvIndex)) ? `UV ${Math.round(Number(safetyData.atmosphere.uvIndex))}` : 'Sky')}</span>}
+                  summary={safetyData.atmosphere.precipType?.label || 'Sky conditions'}
+                  preview={<>
+                    <div className="card-preview-hero">{safetyData.atmosphere.precipType?.label || 'Sky conditions'}</div>
+                    <div className="card-preview-caption">
+                      {Number.isFinite(Number(safetyData.atmosphere.uvIndex)) ? `UV ${Math.round(Number(safetyData.atmosphere.uvIndex))}` : 'UV N/A'}
+                      {Number.isFinite(Number(safetyData.atmosphere.thunderProbability)) ? ` · ⚡ ${Math.round(Number(safetyData.atmosphere.thunderProbability))}%` : ''}
+                      {safetyData.atmosphere.moon?.emoji ? ` · ${safetyData.atmosphere.moon.emoji}` : ''}
+                    </div>
+                  </>}
+                >
+                <SkyConditionsCard
+                  atmosphere={safetyData.atmosphere}
+                  formatTempDisplay={formatTempDisplay}
+                  formatElevationDisplay={formatElevationDisplay}
+                  localizeUnitText={localizeUnitText}
                 />
                 </CollapsibleCard>
               )}

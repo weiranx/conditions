@@ -77,6 +77,8 @@ const {
   createElevationService,
 } = require('./src/utils/geo');
 const { ForecastDateOutOfRangeError, fetchWeatherPipeline } = require('./src/utils/weather-pipeline');
+const { buildAtmosphericData } = require('./src/utils/atmospheric');
+const { createAtmosphericService } = require('./src/utils/atmospheric-fetch');
 const { fetchAvalanchePipeline, applyAvalanchePostProcessing } = require('./src/utils/avalanche-pipeline');
 
 const avyLog = (...args) => {
@@ -122,6 +124,11 @@ const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback } = createWe
 const { fetchWeatherAlertsData, fetchAirQualityData } = createAlertsService({ fetchWithTimeout });
 
 const { fetchRecentRainfallData } = createPrecipitationService({
+  fetchWithTimeout,
+  requestTimeoutMs: REQUEST_TIMEOUT_MS,
+});
+
+const { fetchAtmosphericSignals } = createAtmosphericService({
   fetchWithTimeout,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
@@ -196,6 +203,7 @@ const safetyHandler = async (req, res) => {
   let selectedForecastDate = requestedDate || null;
   let selectedForecastPeriod = null;
   let forecastDateRange = { start: null, end: null };
+  let gridDataUrl = null;
   let solarData = { sunrise: 'N/A', sunset: 'N/A', dayLength: 'N/A' };
   let alertsData = createUnavailableAlertsData("unavailable");
   let airQualityData = createUnavailableAirQualityData("unavailable");
@@ -230,6 +238,7 @@ const safetyHandler = async (req, res) => {
       selectedForecastDate = weatherResult.selectedForecastDate;
       selectedForecastPeriod = weatherResult.selectedForecastPeriod;
       forecastDateRange = weatherResult.forecastDateRange;
+      gridDataUrl = weatherResult.gridDataUrl || null;
     } catch (dateRangeErr) {
       if (dateRangeErr instanceof ForecastDateOutOfRangeError) {
         logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
@@ -272,6 +281,15 @@ const safetyHandler = async (req, res) => {
           }),
       fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions),
       fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
+      fetchAtmosphericSignals({
+        lat: parsedLat,
+        lon: parsedLon,
+        selectedDate: selectedForecastDate,
+        startClock: requestedStartClock,
+        gridDataUrl,
+        targetTimeIso: alertTargetTimeIso || airQualityTargetTime,
+        fetchOptions,
+      }),
     ]);
 
     // 3. Avalanche Pipeline: Map Layer → Detail APIs → Scraper Fallback
@@ -287,7 +305,7 @@ const safetyHandler = async (req, res) => {
     // Post-processing: derived danger, expiry checks, staleness warnings
     avalancheData = applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso });
 
-    const [alertsResult, airQualityResult, rainfallResult, snowpackResult] = await parallelBatchPromise;
+    const [alertsResult, airQualityResult, rainfallResult, snowpackResult, atmosphericResult] = await parallelBatchPromise;
 
     if (alertsResult.status === 'fulfilled') {
       alertsData = alertsResult.value;
@@ -316,6 +334,17 @@ const safetyHandler = async (req, res) => {
       logger.warn({ err: snowpackResult.reason }, 'Snowpack fetch failed');
       snowpackData = createUnavailableSnowpackData("unavailable");
     }
+
+    let atmosphericSignals = {};
+    if (atmosphericResult.status === 'fulfilled') {
+      atmosphericSignals = atmosphericResult.value || {};
+    } else {
+      logger.warn({ err: atmosphericResult.reason }, 'Atmospheric fetch failed');
+    }
+    const atmosphereData = buildAtmosphericData({
+      weatherData,
+      fetched: atmosphericSignals,
+    });
 
     terrainConditionData = deriveTerrainCondition(weatherData, snowpackData, rainfallData);
     trailStatus = terrainConditionData.label;
@@ -411,6 +440,7 @@ const safetyHandler = async (req, res) => {
       snowpack: stampGeneratedTime(snowpackData),
       fireRisk: fireRiskData,
       heatRisk: stampGeneratedTime(heatRiskData),
+      atmosphere: stampGeneratedTime(atmosphereData),
       gear: gearSuggestions,
       trail: trailStatus,
       terrainCondition: terrainConditionData,
@@ -509,6 +539,7 @@ const safetyHandler = async (req, res) => {
       snowpack: stampGeneratedTime(safeSnowpackData),
       fireRisk: safeFireRiskData,
       heatRisk: stampGeneratedTime(safeHeatRiskData),
+      atmosphere: stampGeneratedTime(buildAtmosphericData({ weatherData: safeWeatherData, fetched: {} })),
       gear: gearSuggestions,
       trail: safeTrailStatus,
       terrainCondition: safeTerrainCondition,

@@ -24,6 +24,12 @@ export type MultiDayTripForecastDay = {
   avalancheSummary: string;
   travelSummary: string;
   sourceIssuedTime: string | null;
+  deltas?: {
+    score: number | null;
+    tempF: number | null;
+    windGustMph: number | null;
+    precipChance: number | null;
+  } | null;
 };
 
 export interface TripViewProps {
@@ -83,6 +89,17 @@ function monthDayLabel(iso: string): string {
 
 function levelClass(level: DecisionLevel): string {
   return level.toLowerCase().replace('-', '');
+}
+
+/* Inline day-over-day delta marker for a trip metric. */
+function renderMetricDelta(delta: number | null | undefined, unit = '') {
+  if (typeof delta !== 'number' || delta === 0) return null;
+  const rounded = Math.round(delta * 10) / 10;
+  return (
+    <small className={`ssr-trip-metric-delta ${rounded > 0 ? 'up' : 'down'}`}>
+      {' '}{rounded > 0 ? '▲' : '▼'}{Math.abs(rounded)}{unit}
+    </small>
+  );
 }
 
 /* ── Safety-score trend arc across the trip ── */
@@ -346,21 +363,29 @@ export function TripView({
                         {day.score !== null && (
                           <span className="ssr-trip-day-score">{day.score}<small>/100</small></span>
                         )}
+                        {typeof day.deltas?.score === 'number' && day.deltas.score !== 0 && (
+                          <span
+                            className={`ssr-trip-day-delta ${day.deltas.score > 0 ? 'up' : 'down'}`}
+                            title={`Safety score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
+                          >
+                            {day.deltas.score > 0 ? '▲' : '▼'}{Math.abs(day.deltas.score)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="ssr-trip-day-body">
                       <div className="ssr-trip-day-metrics">
                         <div className="ssr-trip-day-metric">
                           <span className="mk">Temp</span>
-                          <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}°</span>
+                          <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}°{renderMetricDelta(day.deltas?.tempF, '°')}</span>
                         </div>
                         <div className="ssr-trip-day-metric">
                           <span className="mk">Gust</span>
-                          <span className={`mv ${gustWarn ? 'warn' : ''}`}>{formatWindDisplay(day.windGustMph, { includeUnit: false })}</span>
+                          <span className={`mv ${gustWarn ? 'warn' : ''}`}>{formatWindDisplay(day.windGustMph, { includeUnit: false })}{renderMetricDelta(day.deltas?.windGustMph)}</span>
                         </div>
                         <div className="ssr-trip-day-metric">
                           <span className="mk">Precip</span>
-                          <span className={`mv ${precipWarn ? 'warn' : ''}`}>{day.precipChance !== null ? `${day.precipChance}%` : '—'}</span>
+                          <span className={`mv ${precipWarn ? 'warn' : ''}`}>{day.precipChance !== null ? `${day.precipChance}%` : '—'}{renderMetricDelta(day.deltas?.precipChance, '%')}</span>
                         </div>
                       </div>
                       <div className="ssr-trip-day-headline">{localizeUnitText(day.decisionHeadline)}</div>

@@ -21,7 +21,16 @@ export type MultiDayTripForecastDay = {
   avalancheSummary: string;
   travelSummary: string;
   sourceIssuedTime: string | null;
+  deltas?: {
+    score: number | null;
+    tempF: number | null;
+    windGustMph: number | null;
+    precipChance: number | null;
+  } | null;
 };
+
+const diffOrNull = (current: number | null, previous: number | null): number | null =>
+  current != null && previous != null ? Math.round((current - previous) * 10) / 10 : null;
 
 export interface UseTripForecastParams {
   hasObjective: boolean;
@@ -169,6 +178,20 @@ export function useTripForecast({
       );
 
       const rows = dailyResults.filter((entry): entry is MultiDayTripForecastDay => Boolean(entry)).sort((a, b) => a.date.localeCompare(b.date));
+      // Day-over-day trend deltas relative to the previous available day.
+      rows.forEach((row, idx) => {
+        if (idx === 0) {
+          row.deltas = null;
+          return;
+        }
+        const prev = rows[idx - 1];
+        row.deltas = {
+          score: diffOrNull(row.score, prev.score),
+          tempF: diffOrNull(row.tempF, prev.tempF),
+          windGustMph: diffOrNull(row.windGustMph, prev.windGustMph),
+          precipChance: diffOrNull(row.precipChance, prev.precipChance),
+        };
+      });
       const failedCount = dates.length - rows.length;
       if (rows.length === 0) {
         setTripForecastRows([]);

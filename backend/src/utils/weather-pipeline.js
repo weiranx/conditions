@@ -53,6 +53,7 @@ async function fetchWeatherPipeline({
   let weatherData;
   let terrainConditionData;
   let trailStatus;
+  let gridDataUrl = null;
 
   try {
     // 1. Get NOAA grid data (cached 24h)
@@ -79,6 +80,7 @@ async function fetchWeatherPipeline({
     }
 
     const hourlyForecastUrl = pointsData.properties.forecastHourly;
+    gridDataUrl = pointsData?.properties?.forecastGridData || null;
 
     // 2. Get Forecasts (cached 20m)
     const hourlyData = await noaaForecastCache.getOrFetch(hourlyForecastUrl, async () => {
@@ -407,6 +409,7 @@ async function fetchWeatherPipeline({
     selectedForecastDate,
     selectedForecastPeriod,
     forecastDateRange,
+    gridDataUrl,
   };
 }
 

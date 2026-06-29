@@ -339,6 +339,30 @@ export interface SafetyData {
     };
     generatedTime?: string | null;
   };
+  atmosphere?: {
+    uvIndex?: number | null;
+    uvIndexMax?: number | null;
+    uvCategory?: string | null;
+    windChill?: number | null;
+    freezingLevelFt?: number | null;
+    snowLevelFt?: number | null;
+    thunderProbability?: number | null;
+    thunderCategory?: string | null;
+    precipType?: {
+      code?: string;
+      label?: string;
+      reason?: string;
+    } | null;
+    moon?: {
+      phase?: number;
+      illumination?: number;
+      name?: string;
+      emoji?: string;
+      ageDays?: number;
+    } | null;
+    sources?: Record<string, string>;
+    generatedTime?: string | null;
+  };
   gear?: (string | { id?: string; title: string; detail: string; category: string; tone: string })[];
   trail?: string;
   terrainCondition?: {

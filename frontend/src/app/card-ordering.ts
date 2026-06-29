@@ -6,6 +6,7 @@ export type SortableCardKey =
   | 'decisionGate'
   | 'criticalChecks'
   | 'atmosphericData'
+  | 'skyConditions'
   | 'heatRisk'
   | 'nwsAlerts'
   | 'travelWindowPlanner'
@@ -37,6 +38,7 @@ export interface ReportCardOrder {
   reportColumns: number;
   criticalChecks: number;
   atmosphericData: number;
+  skyConditions: number;
   heatRisk: number;
   nwsAlerts: number;
   travelWindowPlanner: number;
@@ -139,6 +141,18 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     Number.isFinite(aqiNumeric) ||
     Number.isFinite(Number(safetyData?.airQuality?.pm25)) ||
     Number.isFinite(Number(safetyData?.airQuality?.pm10));
+  const atmosphere = safetyData?.atmosphere;
+  const thunderProbabilityNumeric = Number(atmosphere?.thunderProbability);
+  const uvIndexNumeric = Number(atmosphere?.uvIndex ?? atmosphere?.uvIndexMax);
+  const skyConditionsAvailable = Boolean(
+    atmosphere &&
+      (Number.isFinite(uvIndexNumeric) ||
+        Number.isFinite(Number(atmosphere?.windChill)) ||
+        Number.isFinite(Number(atmosphere?.freezingLevelFt)) ||
+        Number.isFinite(Number(atmosphere?.snowLevelFt)) ||
+        Number.isFinite(thunderProbabilityNumeric) ||
+        Boolean(atmosphere?.precipType?.code && atmosphere.precipType.code !== 'unknown')),
+  );
   const sourceFreshnessAvailable = sourceFreshnessRows.length > 0;
   const scoreTraceAvailable = scoreFactors.length > 0 || Boolean(dayOverDay);
   const gearAvailable = gearRecommendations.length > 0;
@@ -253,6 +267,14 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     if (aqiNumeric > 50) return 3;
     return 2;
   })();
+  const skyConditionsRiskLevel = (() => {
+    if (!skyConditionsAvailable) return 0;
+    const precipCode = String(atmosphere?.precipType?.code || '').toLowerCase();
+    if ((Number.isFinite(thunderProbabilityNumeric) && thunderProbabilityNumeric >= 50) || precipCode === 'freezing') return 5;
+    if ((Number.isFinite(thunderProbabilityNumeric) && thunderProbabilityNumeric >= 25) || (Number.isFinite(uvIndexNumeric) && uvIndexNumeric >= 11)) return 4;
+    if ((Number.isFinite(thunderProbabilityNumeric) && thunderProbabilityNumeric > 0) || (Number.isFinite(uvIndexNumeric) && uvIndexNumeric >= 8) || precipCode === 'snow' || precipCode === 'mix') return 3;
+    return 2;
+  })();
   const planRiskLevel = !planAvailable ? 0 : daylightCheckFailed ? 4 : 2;
   const scoreTraceRiskLevel = (() => {
     if (!scoreTraceAvailable) return 0;
@@ -269,6 +291,7 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     { key: 'decisionGate', base: 100, available: true, relevant: true, riskLevel: decisionRiskLevel },
     { key: 'criticalChecks', base: 96, available: criticalCheckTotal > 0, relevant: true, riskLevel: criticalChecksRiskLevel },
     { key: 'atmosphericData', base: 94, available: weatherAvailable, relevant: true, riskLevel: atmosphericRiskLevel },
+    { key: 'skyConditions', base: 91, available: skyConditionsAvailable, relevant: true, riskLevel: skyConditionsRiskLevel },
     { key: 'heatRisk', base: 93, available: heatRiskAvailable, relevant: true, riskLevel: heatRiskCardLevel },
     { key: 'nwsAlerts', base: 92, available: alertsCardRelevant, relevant: alertsCardRelevant, riskLevel: alertsRiskLevel },
     { key: 'travelWindowPlanner', base: 90, available: travelAvailable, relevant: true, riskLevel: travelRiskLevel },
@@ -332,6 +355,7 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     reportColumns: 3,
     criticalChecks: innerOrder.get('criticalChecks') ?? 11,
     atmosphericData: innerOrder.get('atmosphericData') ?? 12,
+    skyConditions: innerOrder.get('skyConditions') ?? 13,
     heatRisk: innerOrder.get('heatRisk') ?? 13,
     nwsAlerts: innerOrder.get('nwsAlerts') ?? 14,
     travelWindowPlanner: innerOrder.get('travelWindowPlanner') ?? 15,
