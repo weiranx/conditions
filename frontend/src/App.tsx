@@ -84,6 +84,9 @@ import {
   buildTravelWindowInsights,
   buildTrendWindowFromStart,
 } from './app/travel-window';
+import { estimateTripDurationMinutes, buildDaylightMargin, RUNNER_PACE_DEFAULTS, HIKER_PACE_DEFAULTS } from './app/daylight-margin';
+import { buildFootingForecast } from './app/footing';
+import { applyRunnerGearLens } from './app/runner-gear';
 import { sanitizeExternalUrl, parseLinkState } from './app/url-state';
 import {
   evaluateBackcountryDecision,
@@ -183,6 +186,9 @@ function App() {
   const [alpineStartTime, setAlpineStartTime] = useState(initialLinkState.alpineStartTime);
   const [targetElevationInput, setTargetElevationInput] = useState(initialLinkState.targetElevationInput);
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
+  // Fast-and-light trip inputs (drive the daylight-margin and runner gear lens).
+  const [routeDistanceKmInput, setRouteDistanceKmInput] = useState('');
+  const [routeGainMInput, setRouteGainMInput] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
@@ -729,6 +735,7 @@ function App() {
     handleApplyTravelThresholdPreset,
     applyPreferencesToPlanner,
     resetPreferences,
+    updatePreferences,
     travelThresholdEditorOpen,
     setTravelThresholdEditorOpen,
   } = prefHandlers;
@@ -1286,6 +1293,39 @@ function App() {
         })
         .filter((item): item is { title: string; detail: string; category: string; tone: string } => item !== null)
     : [];
+
+  // --- Fast-and-light trip planning ---
+  const runnerMode = preferences.defaultActivity === 'trail-running';
+  const routeDistanceKmValue = parseFloat(routeDistanceKmInput);
+  const routeGainMValue = parseFloat(routeGainMInput);
+  const routeDistanceKm = Number.isFinite(routeDistanceKmValue) && routeDistanceKmValue > 0 ? routeDistanceKmValue : null;
+  const routeGainM = Number.isFinite(routeGainMValue) && routeGainMValue >= 0 ? routeGainMValue : null;
+  const estimatedTripDurationMinutes = estimateTripDurationMinutes(
+    { distanceKm: routeDistanceKm, gainM: routeGainM },
+    runnerMode ? RUNNER_PACE_DEFAULTS : HIKER_PACE_DEFAULTS,
+  );
+  const daylightMargin = buildDaylightMargin({
+    startMinutes: startMinutesForPlan,
+    sunriseMinutes: sunriseMinutesForPlan,
+    sunsetMinutes: sunsetMinutesForPlan,
+    durationMinutes: estimatedTripDurationMinutes,
+  });
+  const footingForecast = safetyData
+    ? buildFootingForecast(trendWindow, {
+        snowDepthIn: travelWindowContext?.snowDepthIn ?? null,
+        rain24hIn: rainfall24hIn,
+        snow24hIn: snowfall24hIn,
+      })
+    : null;
+  const gearRecommendationsForDisplay = applyRunnerGearLens(gearRecommendations, {
+    runnerMode,
+    durationMinutes: estimatedTripDurationMinutes,
+    tempF: safetyData?.weather.temp ?? null,
+    feelsLikeF: safetyData?.weather.feelsLike ?? safetyData?.weather.temp ?? null,
+    gainM: routeGainM,
+    heatLevel: heatRiskLevel ?? null,
+  });
+
   const reportCardOrder = buildReportCardOrder({
     safetyData, decision, preferences,
     travelWindowRows, criticalWindow,
@@ -1807,8 +1847,20 @@ function App() {
       startMinutesForPlan={startMinutesForPlan}
       returnMinutes={returnMinutes}
       daylightRemainingFromStartLabel={daylightRemainingFromStartLabel}
+      // Fast-and-light trip planning
+      runnerPlanning={{
+        runnerMode,
+        onToggleRunnerMode: () => updatePreferences({ defaultActivity: runnerMode ? 'backcountry' : 'trail-running' }),
+        routeDistanceKmInput,
+        setRouteDistanceKmInput,
+        routeGainMInput,
+        setRouteGainMInput,
+        estimatedTripDurationMinutes,
+        daylightMargin,
+        footingForecast,
+      }}
       // Gear card
-      gearRecommendations={gearRecommendations}
+      gearRecommendations={gearRecommendationsForDisplay}
       // Avalanche forecast card
       overallAvalancheLevel={overallAvalancheLevel}
       avalancheNotApplicableReason={avalancheNotApplicableReason}

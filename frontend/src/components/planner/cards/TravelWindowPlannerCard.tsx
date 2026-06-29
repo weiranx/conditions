@@ -381,6 +381,15 @@ export function TravelWindowPlannerCard({
                       </p>
                       {!travelRow?.pass && travelRow?.failedRuleLabels?.length ? (
                         <div className="travel-failure-chips" aria-label="Failed thresholds">
+                          {travelRow.exposureClass ? (
+                            <span className={`travel-exposure-chip ${travelRow.exposureClass}`} title="How long this breach lasts — a runner is only exposed while moving through it">
+                              {travelRow.exposureClass === 'brief'
+                                ? 'Brief exposure (1h)'
+                                : travelRow.exposureClass === 'short'
+                                  ? 'Short exposure (2h)'
+                                  : `Sustained (${travelRow.exposureRunLength}h)`}
+                            </span>
+                          ) : null}
                           {travelRow.failedRuleLabels.map((label, failIdx) => (
                             <span key={`${row.time}-fail-${failIdx}`} className="travel-failure-chip">
                               {label}

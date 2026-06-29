@@ -26,11 +26,8 @@ export function normalizeActivity(rawActivity: string | null): ActivityType {
   }
 
   const cleaned = rawActivity.trim().toLowerCase();
-  if (cleaned === 'backcountry' || cleaned === 'general') {
-    return 'backcountry';
-  }
-  if (cleaned === 'mountaineer' || cleaned === 'hiker' || cleaned === 'hiking' || cleaned === 'trail_runner' || cleaned === 'trail-runner' || cleaned === 'runner') {
-    return 'backcountry';
+  if (cleaned === 'trail-running' || cleaned === 'trail_running' || cleaned === 'trail-runner' || cleaned === 'trail_runner' || cleaned === 'runner' || cleaned === 'running') {
+    return 'trail-running';
   }
   return 'backcountry';
 }

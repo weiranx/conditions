@@ -5224,6 +5224,131 @@ button.collapsible-card-header:hover .collapsible-chevron {
   letter-spacing: 0.03em;
 }
 
+.travel-exposure-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #eef2f7;
+  color: #334155;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.travel-exposure-chip.brief {
+  border-color: #bbe3c6;
+  background: #e6f7ec;
+  color: #1f7a44;
+}
+.travel-exposure-chip.short {
+  border-color: #f3dcae;
+  background: #fdf3df;
+  color: #8a6312;
+}
+.travel-exposure-chip.sustained {
+  border-color: #e9b8b8;
+  background: #f9e7e7;
+  color: #7a3232;
+}
+
+/* ── Fast-and-light (trail running) planning ───────────────────────────── */
+.runner-planning-card {
+  margin-bottom: 14px;
+}
+.runner-planning {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.runner-mode-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.runner-mode-title {
+  font-size: 0.95rem;
+}
+.runner-mode-sub {
+  margin: 2px 0 0;
+  max-width: 46ch;
+}
+.runner-mode-toggle {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #eef2f7;
+  color: #475569;
+  font-weight: 700;
+  cursor: pointer;
+}
+.runner-mode-toggle.on {
+  border-color: #1f7a44;
+  background: #e6f7ec;
+  color: #1f7a44;
+}
+.runner-route-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.runner-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+.runner-input input {
+  width: 110px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.runner-duration strong {
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+.runner-daylight,
+.runner-footing {
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+.runner-daylight.go { border-left-color: #1f7a44; }
+.runner-daylight.caution { border-left-color: #d39512; }
+.runner-daylight.nogo { border-left-color: #c0392b; }
+.runner-footing.go { border-left-color: #1f7a44; }
+.runner-footing.watch { border-left-color: #d39512; }
+.runner-footing.caution { border-left-color: #c0392b; }
+.runner-daylight-head,
+.runner-footing-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.runner-daylight-headline {
+  font-size: 0.95rem;
+}
+.runner-daylight-detail,
+.runner-footing-detail {
+  margin: 0;
+  font-size: 0.83rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
 .plan-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8977,6 +9102,39 @@ button.collapsible-card-header:hover .collapsible-chevron {
   backdrop-filter: blur(8px);
   border-color: rgba(63, 110, 88, 0.5);
   color: #d9efe3;
+}
+
+:root[data-theme='dark'] .runner-mode-toggle {
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: #cbd5e1;
+}
+:root[data-theme='dark'] .runner-mode-toggle.on {
+  background: rgba(36, 71, 56, 0.7);
+  border-color: rgba(63, 110, 88, 0.6);
+  color: #d9efe3;
+}
+:root[data-theme='dark'] .runner-input input {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: #e2e8f0;
+}
+:root[data-theme='dark'] .runner-duration strong {
+  color: #f1f5f9;
+}
+:root[data-theme='dark'] .runner-daylight,
+:root[data-theme='dark'] .runner-footing {
+  background: rgba(15, 23, 42, 0.5);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+:root[data-theme='dark'] .runner-daylight-detail,
+:root[data-theme='dark'] .runner-footing-detail {
+  color: #cbd5e1;
+}
+:root[data-theme='dark'] .travel-exposure-chip {
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
 }
 
 :root[data-theme='dark'] .decision-pill.caution {

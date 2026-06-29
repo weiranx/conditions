@@ -44,6 +44,7 @@ import { LocalConditionsCard } from './cards/LocalConditionsCard';
 import { SnowpackCard } from './cards/SnowpackCard';
 import { FireRiskCard } from './cards/FireRiskCard';
 import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
+import { RunnerPlanningCard } from './cards/RunnerPlanningCard';
 import { GearCard } from './cards/GearCard';
 import { DeepDiveReportCard } from './cards/DeepDiveReportCard';
 import { BriefingView } from './BriefingView';
@@ -75,6 +76,8 @@ import type { RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnaly
 import type { AppView } from '../../hooks/useUrlState';
 import type { Suggestion } from '../../lib/search';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
+import type { DaylightMargin } from '../../app/daylight-margin';
+import type { FootingForecast } from '../../app/footing';
 import type { CriticalWindowRow } from './cards/TravelWindowPlannerCard';
 import type { TerrainConditionDetails } from './cards/TerrainCard';
 import type { TargetElevationForecast } from './cards/WeatherCardContent';
@@ -83,6 +86,18 @@ import type { BetterDaySuggestion } from '../../hooks/useDayComparisons';
 import { criticalRiskLevelText } from '../../app/critical-window';
 
 // ─── Props interface ────────────────────────────────────────────────────────
+
+export interface RunnerPlanningProps {
+  runnerMode: boolean;
+  onToggleRunnerMode: () => void;
+  routeDistanceKmInput: string;
+  setRouteDistanceKmInput: React.Dispatch<React.SetStateAction<string>>;
+  routeGainMInput: string;
+  setRouteGainMInput: React.Dispatch<React.SetStateAction<string>>;
+  estimatedTripDurationMinutes: number | null;
+  daylightMargin: DaylightMargin | null;
+  footingForecast: FootingForecast | null;
+}
 
 export interface PlannerViewProps {
   // Shell / layout
@@ -446,6 +461,9 @@ export interface PlannerViewProps {
   startMinutesForPlan: number | null;
   returnMinutes: number | null;
   daylightRemainingFromStartLabel: string;
+
+  // Fast-and-light trip planning
+  runnerPlanning: RunnerPlanningProps;
 
   // Gear card
   gearRecommendations: Array<{ title: string; detail: string; category: string; tone: string }>;
@@ -833,6 +851,9 @@ export function PlannerView(props: PlannerViewProps) {
     returnMinutes,
     daylightRemainingFromStartLabel,
 
+    // Fast-and-light trip planning
+    runnerPlanning,
+
     // Gear card
     gearRecommendations,
 
@@ -1015,6 +1036,12 @@ export function PlannerView(props: PlannerViewProps) {
             </button>
           </div>
         </div>
+      )}
+
+      {hasObjective && safetyData && decision && (
+        <section className="report-card runner-planning-card" aria-label="Fast and light planning">
+          <RunnerPlanningCard runnerPlanning={runnerPlanning} />
+        </section>
       )}
 
       {hasObjective && safetyData && decision && (

@@ -1,7 +1,7 @@
 import L from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
-export type ActivityType = 'backcountry';
+export type ActivityType = 'backcountry' | 'trail-running';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type MapStyle = 'topo' | 'street';
 export type TemperatureUnit = 'f' | 'c';
@@ -563,6 +563,10 @@ export interface TravelWindowRow {
   gust: number;
   precipChance: number;
   lightningRisk?: boolean;
+  /** Length of the consecutive run of failing hours this row belongs to (0 when passing). */
+  exposureRunLength?: number;
+  /** How long a runner would be exposed to this breach: brief (1h), short (2h), sustained (3h+). */
+  exposureClass?: 'brief' | 'short' | 'sustained';
 }
 
 export interface TravelWindowSpan {

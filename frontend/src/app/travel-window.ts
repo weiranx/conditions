@@ -23,7 +23,7 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
   const minFeelsLike = preferences.minFeelsLikeF;
   const maxFeelsLike = preferences.maxFeelsLikeF;
 
-  return trend.map((point) => {
+  const rows: TravelWindowRow[] = trend.map((point) => {
     const gust = Number.isFinite(Number(point.gust)) ? Number(point.gust) : 0;
     const wind = Number.isFinite(Number(point.wind)) ? Number(point.wind) : 0;
     const temp = Number.isFinite(Number(point.temp)) ? Number(point.temp) : 0;
@@ -81,6 +81,36 @@ export function buildTravelWindowRows(trend: WeatherTrendPoint[], preferences: U
       lightningRisk,
     };
   });
+
+  return annotateExposure(rows);
+}
+
+/**
+ * Classify each failing hour by how long the breach lasts. A runner is only
+ * exposed to a ridge or storm cell for as long as they are in it — an isolated
+ * over-threshold hour flanked by clean hours is a brief crossing, not a reason
+ * to scrub the day, whereas a sustained run of breaches is a hard blocker.
+ */
+export function annotateExposure(rows: TravelWindowRow[]): TravelWindowRow[] {
+  let idx = 0;
+  while (idx < rows.length) {
+    if (rows[idx].pass) {
+      idx += 1;
+      continue;
+    }
+    let end = idx;
+    while (end < rows.length && !rows[end].pass) {
+      end += 1;
+    }
+    const runLength = end - idx;
+    const exposureClass: TravelWindowRow['exposureClass'] = runLength <= 1 ? 'brief' : runLength === 2 ? 'short' : 'sustained';
+    for (let i = idx; i < end; i += 1) {
+      rows[i].exposureRunLength = runLength;
+      rows[i].exposureClass = exposureClass;
+    }
+    idx = end;
+  }
+  return rows;
 }
 
 export function deriveTravelWindowSpans(rows: TravelWindowRow[]): TravelWindowSpan[] {
