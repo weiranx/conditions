@@ -19,6 +19,7 @@ import {
   Route,
   Eye,
   Package,
+  ArrowRight,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
@@ -188,8 +189,6 @@ export function RedesignView(props: PlannerViewProps) {
     shouldRenderRankedCard,
     // Critical checks
     orderedCriticalChecks,
-    topCriticalAttentionChecks,
-    criticalCheckFailCount,
     describeFailedCriticalCheck,
     // Score breakdown
     dayOverDay,
@@ -459,45 +458,67 @@ export function RedesignView(props: PlannerViewProps) {
         )}
 
         {/* CRITICAL CHECKS */}
-        {shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0 && (
-          <section className="ssr-card">
-            <div className="ssr-card-h">
-              <h2>
-                <span className="ssr-h-icon"><CheckCircle2 size={16} /></span>
-                Critical Checks
-              </h2>
-              <span className={`ssr-pill ${criticalCheckFailCount === 0 ? 'go' : 'caution'}`}>
-                {orderedCriticalChecks.filter((c) => c.ok).length}/{orderedCriticalChecks.length} passing
-              </span>
-            </div>
-            <div className="ssr-card-b">
-              {topCriticalAttentionChecks.length > 0 && (
-                <div className="ssr-checks-attention">
-                  <span className="ssr-checks-attention-k">Needs attention now</span>
-                  {topCriticalAttentionChecks.map((check, idx) => (
-                    <div className="ssr-checks-attention-row" key={`att-${idx}`}>
-                      <span className="ssr-checks-attention-lbl">{localizeUnitText(describeFailedCriticalCheck(check))}</span>
-                      <small>{localizeUnitText([check.detail, check.action].filter(Boolean).join(' · ') || 'Review before departure.')}</small>
-                    </div>
-                  ))}
+        {shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0 && (() => {
+          const failing = orderedCriticalChecks.filter((c) => !c.ok);
+          const passing = orderedCriticalChecks.filter((c) => c.ok);
+          const total = orderedCriticalChecks.length;
+          return (
+            <section className="ssr-card">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon"><CheckCircle2 size={16} /></span>
+                  Critical Checks
+                </h2>
+                <div className="ssr-cc-meter" title={`${passing.length} of ${total} checks passing`}>
+                  <span className="ssr-cc-meter-bar">
+                    {orderedCriticalChecks.map((c, i) => <i key={i} className={c.ok ? 'ok' : 'fail'} />)}
+                  </span>
+                  <span className="ssr-cc-meter-num">{passing.length}/{total}</span>
                 </div>
-              )}
-              <div className="ssr-checks">
-                {orderedCriticalChecks.map((check, idx) => (
-                  <div className={`ssr-check ${check.ok ? 'ok' : 'warn'}`} key={idx}>
-                    <span className="ssr-check-ic">{check.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}</span>
-                    <div className="ssr-check-main">
-                      <span className="ssr-check-lbl">{check.label}</span>
-                      {check.detail && <small className="ssr-check-detail">{localizeUnitText(check.detail)}</small>}
-                      {!check.ok && check.action && <small className="ssr-check-action">{localizeUnitText(check.action)}</small>}
-                    </div>
-                    <span className={`ssr-check-tag ${check.ok ? 'ok' : 'warn'}`}>{check.ok ? 'PASS' : 'FAIL'}</span>
-                  </div>
-                ))}
               </div>
-            </div>
-          </section>
-        )}
+              <div className="ssr-card-b">
+                {failing.length > 0 ? (
+                  <div className="ssr-cc-group">
+                    <div className="ssr-cc-group-h warn">
+                      <AlertTriangle size={13} /> Needs attention <span className="ssr-cc-count">{failing.length}</span>
+                    </div>
+                    <div className="ssr-cc-fails">
+                      {failing.map((check, idx) => (
+                        <div className="ssr-cc-fail" key={`f-${idx}`}>
+                          <span className="ssr-cc-fail-ic"><XCircle size={15} /></span>
+                          <div className="ssr-cc-fail-body">
+                            <span className="ssr-cc-fail-lbl">{localizeUnitText(describeFailedCriticalCheck(check))}</span>
+                            {check.detail && <span className="ssr-cc-fail-detail">{localizeUnitText(check.detail)}</span>}
+                            {check.action && (
+                              <span className="ssr-cc-fail-action"><ArrowRight size={12} /> {localizeUnitText(check.action)}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="ssr-cc-allclear"><CheckCircle2 size={16} /> All critical checks pass.</div>
+                )}
+                {passing.length > 0 && (
+                  <div className="ssr-cc-group">
+                    <div className="ssr-cc-group-h">
+                      <CheckCircle2 size={13} /> Passing <span className="ssr-cc-count">{passing.length}</span>
+                    </div>
+                    <div className="ssr-cc-pass-grid">
+                      {passing.map((check, idx) => (
+                        <div className="ssr-cc-pass" key={`p-${idx}`} title={check.detail ? localizeUnitText(check.detail) : undefined}>
+                          <CheckCircle2 size={13} />
+                          <span>{check.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* WEATHER */}
         <section className="ssr-card">
