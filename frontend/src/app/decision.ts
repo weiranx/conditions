@@ -194,7 +194,9 @@ export function evaluateBackcountryDecision(
     : null;
   const freshnessIssues = [
     weatherFreshnessState === 'stale' || weatherFreshnessState === 'missing' ? 'weather' : null,
-    !ignoreAvalancheForDecision && (avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing') ? 'avalanche' : null,
+    // When the bulletin is unavailable, that is already surfaced by its own dedicated
+    // check, so don't double-count it as a stale/missing source-freshness feed.
+    !ignoreAvalancheForDecision && !avalancheUnknown && (avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing') ? 'avalanche' : null,
     alertsFreshnessState === 'stale' || alertsFreshnessState === 'missing' ? 'alerts' : null,
     airQualityFreshnessState === 'stale' || airQualityFreshnessState === 'missing' ? 'air quality' : null,
     precipitationFreshnessState === 'stale' || precipitationFreshnessState === 'missing' ? 'precipitation' : null,
