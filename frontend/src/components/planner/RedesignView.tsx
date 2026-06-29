@@ -24,6 +24,7 @@ import {
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
+import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -209,6 +210,12 @@ export function RedesignView(props: PlannerViewProps) {
     weatherVisibilityRisk,
     weatherForecastPeriodLabel,
     forecastLeadHoursDisplay,
+    weatherHourQuickOptions,
+    selectedWeatherHourIndex,
+    handleWeatherHourSelect,
+    weatherConditionEmojiValue,
+    weatherPreviewActive,
+    weatherCardDisplayTime,
     // Heat risk
     heatRiskLabel,
     heatRiskPillClass,
@@ -528,7 +535,9 @@ export function RedesignView(props: PlannerViewProps) {
               Weather
             </h2>
             <span className="ssr-h-meta">
-              {safetyData.forecast?.isFuture ? (forecastLeadHoursDisplay || weatherForecastPeriodLabel || 'Forecast') : 'Current'}
+              {weatherPreviewActive
+                ? (weatherCardDisplayTime || 'Selected hour')
+                : safetyData.forecast?.isFuture ? (forecastLeadHoursDisplay || weatherForecastPeriodLabel || 'Forecast') : 'Current'}
             </span>
           </div>
           <div className="ssr-card-b">
@@ -539,6 +548,16 @@ export function RedesignView(props: PlannerViewProps) {
                 <span className="ssr-wx-feels">Feels {formatTempDisplay(weatherCardFeelsLike)}</span>
               </div>
             </div>
+            {weatherHourQuickOptions.length > 1 && (
+              <div className="ssr-wx-hours">
+                <WeatherHourPillStrip
+                  options={weatherHourQuickOptions}
+                  selectedIndex={selectedWeatherHourIndex}
+                  onSelect={handleWeatherHourSelect}
+                  weatherConditionEmoji={weatherConditionEmojiValue}
+                />
+              </div>
+            )}
             <div className="ssr-wx-grid">
               <div className="ssr-wx-cell"><span className="ssr-k">Wind</span><span className="ssr-v">{formattedWind}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Gust</span><span className="ssr-v">{formattedGust}</span></div>
@@ -1156,36 +1175,54 @@ export function RedesignView(props: PlannerViewProps) {
             <span className="ssr-h-meta">{openCount} open</span>
           </div>
           <div className="ssr-card-b">
-            {openCount === 0 && <div className="ssr-empty">No open cautions or active alerts.</div>}
-            {blockerItems.map((c, i) => (
-              <div className="ssr-ac-item nogo" key={`b${i}`}>
-                <span className="ssr-ac-icon"><AlertTriangle size={12} /></span>
-                <div>
-                  <div className="ssr-ac-text">{localizeUnitText(c)}</div>
-                  <div className="ssr-ac-meta">Blocker · NO-GO</div>
+            {openCount === 0 && <div className="ssr-cc-allclear"><CheckCircle2 size={16} /> No open cautions or active alerts.</div>}
+            {blockerItems.length > 0 && (
+              <div className="ssr-cc-group">
+                <div className="ssr-cc-group-h nogo"><ShieldAlert size={13} /> Blockers <span className="ssr-cc-count">{blockerItems.length}</span></div>
+                <div className="ssr-cc-fails">
+                  {blockerItems.map((c, i) => (
+                    <div className="ssr-cc-fail nogo" key={`b${i}`}>
+                      <span className="ssr-cc-fail-ic"><AlertTriangle size={15} /></span>
+                      <div className="ssr-cc-fail-body">
+                        <span className="ssr-cc-fail-lbl">{localizeUnitText(c)}</span>
+                        <span className="ssr-cc-fail-meta">No-go condition</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-            {cautionItems.map((c, i) => (
-              <div className="ssr-ac-item" key={`c${i}`}>
-                <span className="ssr-ac-icon"><AlertTriangle size={12} /></span>
-                <div>
-                  <div className="ssr-ac-text">{localizeUnitText(c)}</div>
-                  <div className="ssr-ac-meta">Critical check · CAUTION</div>
+            )}
+            {cautionItems.length > 0 && (
+              <div className="ssr-cc-group">
+                <div className="ssr-cc-group-h warn"><AlertTriangle size={13} /> Cautions <span className="ssr-cc-count">{cautionItems.length}</span></div>
+                <div className="ssr-ac-list">
+                  {cautionItems.map((c, i) => (
+                    <div className="ssr-ac-item" key={`c${i}`}>
+                      <span className="ssr-ac-icon"><AlertTriangle size={12} /></span>
+                      <div><div className="ssr-ac-text">{localizeUnitText(c)}</div></div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-            {alertItems.map((a: any, i: number) => (
-              <div className="ssr-ac-item" key={`a${i}`}>
-                <span className="ssr-ac-icon"><AlertTriangle size={12} /></span>
-                <div>
-                  <div className="ssr-ac-text">{a.headline || a.event || 'Weather alert'}</div>
-                  <div className="ssr-ac-meta">
-                    {[a.event, a.senderName || a.source].filter(Boolean).join(' · ')}
-                  </div>
+            )}
+            {alertItems.length > 0 && (
+              <div className="ssr-cc-group">
+                <div className="ssr-cc-group-h"><Radio size={13} /> Weather alerts <span className="ssr-cc-count">{alertItems.length}</span></div>
+                <div className="ssr-ac-list">
+                  {alertItems.map((a: any, i: number) => (
+                    <div className="ssr-ac-item" key={`a${i}`}>
+                      <span className="ssr-ac-icon"><AlertTriangle size={12} /></span>
+                      <div>
+                        <div className="ssr-ac-text">{a.headline || a.event || 'Weather alert'}</div>
+                        {[a.event, a.senderName || a.source].filter(Boolean).length > 0 && (
+                          <div className="ssr-ac-meta">{[a.event, a.senderName || a.source].filter(Boolean).join(' · ')}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </section>
 
@@ -1205,7 +1242,7 @@ export function RedesignView(props: PlannerViewProps) {
                   <div className="ssr-src-item" key={i}>
                     <span className={`ssr-src-dot ${sourceState(s)}`} />
                     <span className="ssr-src-name">{s.label}</span>
-                    <span className="ssr-src-age">{s.issued ? formatAgeFromNow(s.issued) : 'missing'}</span>
+                    <span className={`ssr-src-age ${sourceState(s)}`}>{s.issued ? formatAgeFromNow(s.issued) : 'missing'}</span>
                     <span className="ssr-src-link">{s.displayValue || ''}</span>
                   </div>
                 ))}
