@@ -18,6 +18,7 @@ export type SortableCardKey =
   | 'recentRainfall'
   | 'fireRisk'
   | 'airQuality'
+  | 'localConditions'
   | 'sourceFreshness'
   | 'scoreTrace'
   | 'recommendedGear';
@@ -50,6 +51,7 @@ export interface ReportCardOrder {
   recentRainfall: number;
   fireRisk: number;
   airQuality: number;
+  localConditions: number;
   sourceFreshness: number;
   scoreTrace: number;
   recommendedGear: number;
@@ -154,6 +156,10 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
         Boolean(atmosphere?.precipType?.code && atmosphere.precipType.code !== 'unknown')),
   );
   const sourceFreshnessAvailable = sourceFreshnessRows.length > 0;
+  const localConditions = safetyData?.localConditions;
+  const localConditionsAvailable = Boolean(localConditions?.hasAnySignal);
+  const smokePeakPm25 = Number(localConditions?.smoke?.peakPm25);
+  const closureAlertCount = Number(localConditions?.closures?.alertCount);
   const scoreTraceAvailable = scoreFactors.length > 0 || Boolean(dayOverDay);
   const gearAvailable = gearRecommendations.length > 0;
   const planAvailable = Boolean(safetyData?.solar?.sunrise || safetyData?.solar?.sunset || safetyData?.forecast?.selectedDate);
@@ -275,6 +281,13 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     if ((Number.isFinite(thunderProbabilityNumeric) && thunderProbabilityNumeric > 0) || (Number.isFinite(uvIndexNumeric) && uvIndexNumeric >= 8) || precipCode === 'snow' || precipCode === 'mix') return 3;
     return 2;
   })();
+  const localConditionsRiskLevel = (() => {
+    if (!localConditionsAvailable) return 0;
+    const streamRising = String(localConditions?.streamflow?.trend || '') === 'rising';
+    if ((Number.isFinite(smokePeakPm25) && smokePeakPm25 > 55.4) || (Number.isFinite(closureAlertCount) && closureAlertCount > 0)) return 4;
+    if ((Number.isFinite(smokePeakPm25) && smokePeakPm25 > 35.4) || streamRising) return 3;
+    return 2;
+  })();
   const planRiskLevel = !planAvailable ? 0 : daylightCheckFailed ? 4 : 2;
   const scoreTraceRiskLevel = (() => {
     if (!scoreTraceAvailable) return 0;
@@ -315,6 +328,7 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     { key: 'sourceFreshness', base: 76, available: sourceFreshnessAvailable, relevant: true, riskLevel: sourceFreshnessRiskLevel },
     { key: 'fireRisk', base: 74, available: fireRiskAvailable, relevant: true, riskLevel: fireRiskCardLevel },
     { key: 'airQuality', base: 72, available: airQualityAvailable, relevant: true, riskLevel: airQualityRiskLevel },
+    { key: 'localConditions', base: 71, available: localConditionsAvailable, relevant: true, riskLevel: localConditionsRiskLevel },
     { key: 'planSnapshot', base: 70, available: planAvailable, relevant: true, riskLevel: planRiskLevel },
     { key: 'scoreTrace', base: 68, available: scoreTraceAvailable, relevant: true, riskLevel: scoreTraceRiskLevel },
     { key: 'recommendedGear', base: 64, available: gearAvailable, relevant: true, riskLevel: recommendedGearRiskLevel },
@@ -367,6 +381,7 @@ export function buildReportCardOrder(inputs: CardOrderingInputs): ReportCardOrde
     recentRainfall: innerOrder.get('recentRainfall') ?? 21,
     fireRisk: innerOrder.get('fireRisk') ?? 22,
     airQuality: innerOrder.get('airQuality') ?? 23,
+    localConditions: innerOrder.get('localConditions') ?? 23,
     sourceFreshness: innerOrder.get('sourceFreshness') ?? 24,
     scoreTrace: innerOrder.get('scoreTrace') ?? 25,
     recommendedGear: innerOrder.get('recommendedGear') ?? 26,

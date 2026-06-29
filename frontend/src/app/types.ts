@@ -363,6 +363,51 @@ export interface SafetyData {
     sources?: Record<string, string>;
     generatedTime?: string | null;
   };
+  localConditions?: {
+    streamflow?: {
+      available?: boolean;
+      siteName?: string | null;
+      siteId?: string | null;
+      distanceKm?: number | null;
+      dischargeCfs?: number | null;
+      gageHeightFt?: number | null;
+      trend?: 'rising' | 'falling' | 'steady' | 'unknown';
+      observedTime?: string | null;
+      source?: string;
+    } | null;
+    smoke?: {
+      available?: boolean;
+      currentPm25?: number | null;
+      currentCategory?: string | null;
+      peakPm25?: number | null;
+      peakCategory?: string | null;
+      peakTimeIso?: string | null;
+      horizonHours?: number | null;
+      source?: string;
+    } | null;
+    tides?: {
+      available?: boolean;
+      stationName?: string | null;
+      stationId?: string | null;
+      distanceKm?: number | null;
+      nextHigh?: { timeIso?: string | null; rawTime?: string | null; heightFt?: number | null } | null;
+      nextLow?: { timeIso?: string | null; rawTime?: string | null; heightFt?: number | null } | null;
+      direction?: 'rising' | 'falling' | 'unknown';
+      source?: string;
+    } | null;
+    closures?: {
+      available?: boolean;
+      parkName?: string | null;
+      parkCode?: string | null;
+      distanceKm?: number | null;
+      alerts?: Array<{ title?: string; category?: string; description?: string; url?: string | null }>;
+      alertCount?: number;
+      source?: string;
+      note?: string;
+    } | null;
+    hasAnySignal?: boolean;
+    generatedTime?: string | null;
+  } | null;
   gear?: (string | { id?: string; title: string; detail: string; category: string; tone: string })[];
   trail?: string;
   terrainCondition?: {

@@ -18,6 +18,7 @@ import {
   Loader2,
   Eye,
   CloudLightning,
+  Waves,
 } from 'lucide-react';
 import { ForecastLoading } from './ForecastLoading';
 import { PlannerHeader } from './PlannerHeader';
@@ -39,6 +40,7 @@ import { RainfallCard } from './cards/RainfallCard';
 import { SourceFreshnessCard } from './cards/SourceFreshnessCard';
 import { NwsAlertsCard } from './cards/NwsAlertsCard';
 import { AirQualityCard } from './cards/AirQualityCard';
+import { LocalConditionsCard } from './cards/LocalConditionsCard';
 import { SnowpackCard } from './cards/SnowpackCard';
 import { FireRiskCard } from './cards/FireRiskCard';
 import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
@@ -1656,6 +1658,37 @@ export function PlannerView(props: PlannerViewProps) {
                 />
                 </CollapsibleCard>
               )}
+
+              {shouldRenderRankedCard('localConditions') && safetyData.localConditions?.hasAnySignal && (() => {
+                const lc = safetyData.localConditions;
+                const summaryBits: string[] = [];
+                if (lc.smoke?.available && Number.isFinite(Number(lc.smoke.peakPm25))) summaryBits.push(`Smoke ${lc.smoke.peakCategory || `${lc.smoke.peakPm25} µg/m³`}`);
+                if (lc.streamflow?.available) summaryBits.push(`Flow ${lc.streamflow.trend || 'N/A'}`);
+                if (lc.tides?.available) summaryBits.push('Tides');
+                if (lc.closures?.available && Number(lc.closures.alertCount) > 0) summaryBits.push(`${lc.closures.alertCount} alert${Number(lc.closures.alertCount) === 1 ? '' : 's'}`);
+                const summaryText = summaryBits.join(' · ') || 'Local data';
+                return (
+                  <CollapsibleCard
+                    cardKey="localConditions"
+                    defaultExpanded={false}
+                    order={reportCardOrder.localConditions}
+                    className="local-conditions-card"
+                    title={<span className="card-title"><Waves size={14} /> Local Conditions</span>}
+                    headerMeta={<span className="decision-pill">{summaryText}</span>}
+                    summary={summaryText}
+                    preview={<>
+                      <div className="card-preview-hero">{summaryBits[0] || 'Local data'}</div>
+                      <div className="card-preview-caption">{summaryBits.slice(1).join(' · ') || 'Nearby water, smoke & access'}</div>
+                    </>}
+                  >
+                  <LocalConditionsCard
+                    localConditions={lc}
+                    formatPubTime={formatPubTime}
+                    localizeUnitText={localizeUnitText}
+                  />
+                  </CollapsibleCard>
+                );
+              })()}
 
               {shouldRenderRankedCard('snowpackSnapshot') && (
                 <CollapsibleCard

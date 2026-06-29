@@ -79,6 +79,7 @@ const {
 const { ForecastDateOutOfRangeError, fetchWeatherPipeline } = require('./src/utils/weather-pipeline');
 const { buildAtmosphericData } = require('./src/utils/atmospheric');
 const { createAtmosphericService } = require('./src/utils/atmospheric-fetch');
+const { createLocalConditionsService } = require('./src/utils/local-conditions-fetch');
 const { fetchAvalanchePipeline, applyAvalanchePostProcessing } = require('./src/utils/avalanche-pipeline');
 
 const avyLog = (...args) => {
@@ -131,6 +132,17 @@ const { fetchRecentRainfallData } = createPrecipitationService({
 const { fetchAtmosphericSignals } = createAtmosphericService({
   fetchWithTimeout,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
+});
+
+const tideStationCache = createCache({ name: 'co-ops-stations', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
+const npsParkCache = createCache({ name: 'nps-parks', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
+const { fetchLocalConditions } = createLocalConditionsService({
+  fetchWithTimeout,
+  haversineKm,
+  requestTimeoutMs: REQUEST_TIMEOUT_MS,
+  npsApiKey: process.env.NPS_API_KEY || null,
+  tideStationCache,
+  npsParkCache,
 });
 
 const getAvalancheMapLayer = async (fetchOptions) => {
@@ -290,6 +302,12 @@ const safetyHandler = async (req, res) => {
         targetTimeIso: alertTargetTimeIso || airQualityTargetTime,
         fetchOptions,
       }),
+      fetchLocalConditions({
+        lat: parsedLat,
+        lon: parsedLon,
+        selectedDate: selectedForecastDate,
+        fetchOptions,
+      }),
     ]);
 
     // 3. Avalanche Pipeline: Map Layer → Detail APIs → Scraper Fallback
@@ -305,7 +323,7 @@ const safetyHandler = async (req, res) => {
     // Post-processing: derived danger, expiry checks, staleness warnings
     avalancheData = applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso });
 
-    const [alertsResult, airQualityResult, rainfallResult, snowpackResult, atmosphericResult] = await parallelBatchPromise;
+    const [alertsResult, airQualityResult, rainfallResult, snowpackResult, atmosphericResult, localConditionsResult] = await parallelBatchPromise;
 
     if (alertsResult.status === 'fulfilled') {
       alertsData = alertsResult.value;
@@ -345,6 +363,13 @@ const safetyHandler = async (req, res) => {
       weatherData,
       fetched: atmosphericSignals,
     });
+
+    let localConditionsData = null;
+    if (localConditionsResult.status === 'fulfilled') {
+      localConditionsData = localConditionsResult.value || null;
+    } else {
+      logger.warn({ err: localConditionsResult.reason }, 'Local conditions fetch failed');
+    }
 
     terrainConditionData = deriveTerrainCondition(weatherData, snowpackData, rainfallData);
     trailStatus = terrainConditionData.label;
@@ -441,6 +466,7 @@ const safetyHandler = async (req, res) => {
       fireRisk: fireRiskData,
       heatRisk: stampGeneratedTime(heatRiskData),
       atmosphere: stampGeneratedTime(atmosphereData),
+      localConditions: localConditionsData ? stampGeneratedTime(localConditionsData) : null,
       gear: gearSuggestions,
       trail: trailStatus,
       terrainCondition: terrainConditionData,
@@ -540,6 +566,7 @@ const safetyHandler = async (req, res) => {
       fireRisk: safeFireRiskData,
       heatRisk: stampGeneratedTime(safeHeatRiskData),
       atmosphere: stampGeneratedTime(buildAtmosphericData({ weatherData: safeWeatherData, fetched: {} })),
+      localConditions: null,
       gear: gearSuggestions,
       trail: safeTrailStatus,
       terrainCondition: safeTerrainCondition,

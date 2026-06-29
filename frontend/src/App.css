@@ -6295,6 +6295,26 @@ button.collapsible-card-header:hover .collapsible-chevron {
   line-height: 1.5;
 }
 
+.local-conditions {
+  display: grid;
+  gap: 14px;
+}
+.local-conditions-section {
+  display: grid;
+  gap: 6px;
+}
+.local-conditions-section + .local-conditions-section {
+  border-top: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.18));
+  padding-top: 12px;
+}
+.local-conditions-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
 .source-meta {
   display: grid;
   justify-items: end;
