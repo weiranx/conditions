@@ -174,6 +174,10 @@ export function RedesignView(props: PlannerViewProps) {
     snotelDepthDisplay,
     snotelSweDisplay,
     snotelDistanceDisplay,
+    snowpackBestDepthDisplay,
+    snowpackBestDepthSource,
+    snowpackBestSweDisplay,
+    snowpackBestSweSource,
     snowpackStatusLabel,
     snowpackPillClass,
     snowpackHistoricalComparisonLine,
@@ -888,20 +892,20 @@ export function RedesignView(props: PlannerViewProps) {
         </section>
 
         {/* SNOWPACK */}
-        {safetyData.snowpack?.snotel && (
+        {safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon"><Snowflake size={16} /></span>
                 Snowpack
               </h2>
-              {safetyData.snowpack.snotel.stationName && (
-                <span className="ssr-h-meta">{safetyData.snowpack.snotel.stationName}</span>
+              {snowpackBestDepthSource && (
+                <span className="ssr-h-meta">via {snowpackBestDepthSource}</span>
               )}
             </div>
             <div className="ssr-card-b">
               <div className="ssr-snow-hero">
-                <span className="ssr-snow-depth">{snotelDepthDisplay}</span>
+                <span className="ssr-snow-depth">{snowpackBestDepthDisplay}</span>
                 {snowpackStatusLabel && (
                   <span className={`ssr-snow-delta ${snowpackPillClass?.includes('warn') ? 'warn' : ''}`}>
                     {snowpackStatusLabel}
@@ -909,24 +913,29 @@ export function RedesignView(props: PlannerViewProps) {
                 )}
               </div>
               <div className="ssr-snow-station">
-                {[snotelDistanceDisplay, safetyData.snowpack.snotel.elevationFt != null
-                  ? formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)
-                  : null]
-                  .filter(Boolean)
-                  .join(' · ')}
+                Best available depth across sources
                 {snowpackHistoricalComparisonLine ? ` · ${snowpackHistoricalComparisonLine}` : ''}
               </div>
               <div className="ssr-snow-kv">
-                <span className="ssr-k">SWE</span>
-                <span className="ssr-v">{snotelSweDisplay}</span>
+                <span className="ssr-k">SWE{snowpackBestSweSource ? ` · ${snowpackBestSweSource}` : ''}</span>
+                <span className="ssr-v">{snowpackBestSweDisplay}</span>
               </div>
-              {safetyData.snowpack.snotel.obsTempF != null && (
+              {safetyData.snowpack.snotel && (
+                <div className="ssr-snow-kv">
+                  <span className="ssr-k">
+                    SNOTEL{safetyData.snowpack.snotel.stationName ? ` · ${safetyData.snowpack.snotel.stationName}` : ''}
+                    {snotelDistanceDisplay && snotelDistanceDisplay !== 'N/A' ? ` · ${snotelDistanceDisplay}` : ''}
+                  </span>
+                  <span className="ssr-v">{snotelDepthDisplay} · {snotelSweDisplay}</span>
+                </div>
+              )}
+              {safetyData.snowpack.snotel?.obsTempF != null && (
                 <div className="ssr-snow-kv">
                   <span className="ssr-k">Observed temp</span>
                   <span className="ssr-v">{formatTempDisplay(safetyData.snowpack.snotel.obsTempF)}</span>
                 </div>
               )}
-              {safetyData.snowpack.snotel.elevationFt != null && (
+              {safetyData.snowpack.snotel?.elevationFt != null && (
                 <div className="ssr-snow-kv">
                   <span className="ssr-k">Station elevation</span>
                   <span className="ssr-v">{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>
