@@ -675,6 +675,11 @@ export function RedesignView(props: PlannerViewProps) {
             .slice()
             .sort((a: any, b: any) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
           const maxImpact = Math.max(1, ...factors.map((f: any) => Math.abs(Number(f.impact || 0))));
+          const score = Math.round(safetyData.safety.score);
+          const scoreColor = getScoreColor(score, safetyData.safety.tier);
+          const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : null;
+          const primary = factors.slice(0, 3);
+          const others = factors.slice(3);
           return (
             <section className="ssr-card">
               <div className="ssr-card-h">
@@ -689,55 +694,102 @@ export function RedesignView(props: PlannerViewProps) {
                 )}
               </div>
               <div className="ssr-card-b">
-                <div className="ssr-factors">
-                  {factors.map((f: any, i: number) => {
-                    const impact = Math.round(Number(f.impact || 0));
-                    // Stored impact is positive-for-penalty (risk-increasing); negative = bonus.
-                    const isPenalty = impact >= 0;
-                    return (
-                      <div className="ssr-factor" key={i}>
-                        <div className="ssr-factor-top">
-                          <span className="ssr-factor-name">{f.hazard || 'Factor'}</span>
-                          <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
-                        </div>
-                        <span className="ssr-factor-bar">
-                          <i className={isPenalty ? 'neg' : 'pos'} style={{ width: `${(Math.abs(impact) / maxImpact) * 100}%` }} />
-                        </span>
-                        {f.message && <small className="ssr-factor-msg">{localizeUnitText(f.message)}</small>}
-                      </div>
-                    );
-                  })}
+                <div className="ssr-sb-summary">
+                  <span className="ssr-sb-score" style={{ color: scoreColor }}>{score}<small>/ 100</small></span>
+                  <div className="ssr-sb-summary-meta">
+                    {tierLabel && <span className="ssr-sb-tier">{tierLabel}</span>}
+                    <span className="ssr-sb-sub">{factors.length} factor{factors.length !== 1 ? 's' : ''} weighed against a 100 baseline</span>
+                  </div>
                 </div>
+                <div className="ssr-cc-group">
+                  <div className="ssr-cc-group-h">Primary drivers <span className="ssr-cc-count">{primary.length}</span></div>
+                  <div className="ssr-factors">
+                    {primary.map((f: any, i: number) => {
+                      const impact = Math.round(Number(f.impact || 0));
+                      // Stored impact is positive-for-penalty (risk-increasing); negative = bonus.
+                      const isPenalty = impact >= 0;
+                      return (
+                        <div className="ssr-factor" key={i}>
+                          <div className="ssr-factor-top">
+                            <span className="ssr-factor-name">{f.hazard || 'Factor'}</span>
+                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                          </div>
+                          <span className="ssr-factor-bar">
+                            <i className={isPenalty ? 'neg' : 'pos'} style={{ width: `${(Math.abs(impact) / maxImpact) * 100}%` }} />
+                          </span>
+                          {f.message && <small className="ssr-factor-msg">{localizeUnitText(f.message)}</small>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {others.length > 0 && (
+                  <div className="ssr-cc-group">
+                    <div className="ssr-cc-group-h">Other factors <span className="ssr-cc-count">{others.length}</span></div>
+                    <div className="ssr-sb-other">
+                      {others.map((f: any, i: number) => {
+                        const impact = Math.round(Number(f.impact || 0));
+                        const isPenalty = impact >= 0;
+                        return (
+                          <div className="ssr-sb-other-row" key={i}>
+                            <span className="ssr-sb-other-name">{f.hazard || 'Factor'}</span>
+                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           );
         })()}
 
         {/* GEAR */}
-        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (
-          <section className="ssr-card">
-            <div className="ssr-card-h">
-              <h2>
-                <span className="ssr-h-icon"><Package size={16} /></span>
-                Gear
-              </h2>
-              <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="ssr-card-b">
-              <div className="ssr-gear">
-                {gearRecommendations.map((g, i) => (
-                  <div className="ssr-gear-item" key={`${g.title}-${i}`}>
-                    <div className="ssr-gear-head">
-                      <span className="ssr-gear-title">{g.title}</span>
-                      <span className={`ssr-pill ${g.tone}`}>{g.category}</span>
-                    </div>
-                    <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
+        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
+          const SAFETY_TONES = new Set(['nogo', 'caution']);
+          const safety = gearRecommendations.filter((g) => SAFETY_TONES.has(g.tone));
+          const comfort = gearRecommendations.filter((g) => !SAFETY_TONES.has(g.tone));
+          const grouped = safety.length > 0 && comfort.length > 0;
+          const gearList = (items: typeof gearRecommendations) => (
+            <div className="ssr-gear">
+              {items.map((g, i) => (
+                <div className="ssr-gear-item" key={`${g.title}-${i}`}>
+                  <div className="ssr-gear-head">
+                    <span className="ssr-gear-title">{g.title}</span>
+                    <span className={`ssr-pill ${g.tone}`}>{g.category}</span>
                   </div>
-                ))}
-              </div>
+                  <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
+                </div>
+              ))}
             </div>
-          </section>
-        )}
+          );
+          return (
+            <section className="ssr-card">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon"><Package size={16} /></span>
+                  Gear
+                </h2>
+                <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="ssr-card-b">
+                {grouped ? (
+                  <>
+                    <div className="ssr-cc-group">
+                      <div className="ssr-cc-group-h warn"><ShieldAlert size={13} /> Safety essentials <span className="ssr-cc-count">{safety.length}</span></div>
+                      {gearList(safety)}
+                    </div>
+                    <div className="ssr-cc-group">
+                      <div className="ssr-cc-group-h"><Package size={13} /> Comfort &amp; efficiency <span className="ssr-cc-count">{comfort.length}</span></div>
+                      {gearList(comfort)}
+                    </div>
+                  </>
+                ) : gearList(gearRecommendations)}
+              </div>
+            </section>
+          );
+        })()}
       </main>
 
       {/* SIDEBAR */}
@@ -992,9 +1044,24 @@ export function RedesignView(props: PlannerViewProps) {
               <span className={`ssr-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
             </div>
             <div className="ssr-card-b">
+              {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
+                <div className="ssr-chip-row">
+                  {terrainConditionDetails.impact && (
+                    <span className={`ssr-pill ${terrainConditionDetails.impact === 'high' ? 'nogo' : terrainConditionDetails.impact === 'low' ? 'go' : 'caution'}`}>
+                      {terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'} impact
+                    </span>
+                  )}
+                  {terrainConditionDetails.confidence && (
+                    <span className="ssr-chip">{terrainConditionDetails.confidence === 'high' ? 'High' : terrainConditionDetails.confidence === 'medium' ? 'Moderate' : 'Low'} confidence</span>
+                  )}
+                </div>
+              )}
               {terrainConditionDetails.summary && <p className="ssr-body">{localizeUnitText(terrainConditionDetails.summary)}</p>}
               {terrainConditionDetails.recommendedTravel && (
-                <div className="ssr-snow-kv"><span className="ssr-k">Recommended travel</span><span className="ssr-v">{localizeUnitText(terrainConditionDetails.recommendedTravel)}</span></div>
+                <div className="ssr-callout">
+                  <span className="ssr-callout-k">Recommended travel</span>
+                  <p>{localizeUnitText(terrainConditionDetails.recommendedTravel)}</p>
+                </div>
               )}
               <div className="ssr-snow-kv"><span className="ssr-k">Rain 24h</span><span className="ssr-v">{rainfall24hDisplay}</span></div>
               {Number.isFinite(snowfall24hIn) && <div className="ssr-snow-kv"><span className="ssr-k">Snow 24h</span><span className="ssr-v">{snowfall24hDisplay}</span></div>}
