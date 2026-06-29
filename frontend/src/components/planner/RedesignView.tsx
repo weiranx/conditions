@@ -965,11 +965,15 @@ export function RedesignView(props: PlannerViewProps) {
             <div className="ssr-card-b">
               {heatRiskGuidance && <p className="ssr-body">{localizeUnitText(heatRiskGuidance)}</p>}
               {lowerTerrainHeatLabel && <p className="ssr-muted">{localizeUnitText(lowerTerrainHeatLabel)}</p>}
-              {Array.isArray(heatRiskReasons) && heatRiskReasons.length > 0 && (
-                <ul className="ssr-bullets">
-                  {heatRiskReasons.map((r, i) => <li key={`hr-${i}`}>{localizeUnitText(r)}</li>)}
-                </ul>
-              )}
+              {(() => {
+                const g = (heatRiskGuidance || '').trim().toLowerCase();
+                const reasons = (Array.isArray(heatRiskReasons) ? heatRiskReasons : []).filter((r) => r && r.trim().toLowerCase() !== g);
+                return reasons.length > 0 ? (
+                  <ul className="ssr-bullets">
+                    {reasons.map((r, i) => <li key={`hr-${i}`}>{localizeUnitText(r)}</li>)}
+                  </ul>
+                ) : null;
+              })()}
             </div>
           </section>
         )}
@@ -985,12 +989,21 @@ export function RedesignView(props: PlannerViewProps) {
               <span className={`ssr-pill ${fireRiskPillClass}`}>{String(fireRiskLabel || 'Low').toUpperCase()}</span>
             </div>
             <div className="ssr-card-b">
-              <p className="ssr-body">{localizeUnitText(safetyData.fireRisk?.guidance || 'No fire-risk guidance available.')}</p>
-              {Array.isArray(safetyData.fireRisk?.reasons) && safetyData.fireRisk.reasons.length > 0 && (
-                <ul className="ssr-bullets">
-                  {safetyData.fireRisk.reasons.map((r: string, i: number) => <li key={`fr-${i}`}>{localizeUnitText(r)}</li>)}
-                </ul>
-              )}
+              {(() => {
+                const guidance = safetyData.fireRisk?.guidance || 'No fire-risk guidance available.';
+                const g = guidance.trim().toLowerCase();
+                const reasons = (Array.isArray(safetyData.fireRisk?.reasons) ? safetyData.fireRisk.reasons : []).filter((r: string) => r && r.trim().toLowerCase() !== g);
+                return (
+                  <>
+                    <p className="ssr-body">{localizeUnitText(guidance)}</p>
+                    {reasons.length > 0 && (
+                      <ul className="ssr-bullets">
+                        {reasons.map((r: string, i: number) => <li key={`fr-${i}`}>{localizeUnitText(r)}</li>)}
+                      </ul>
+                    )}
+                  </>
+                );
+              })()}
               {Array.isArray(fireRiskAlerts) && fireRiskAlerts.length > 0 && (
                 <div className="ssr-mini-alerts">
                   {fireRiskAlerts.map((a: any, i: number) => (
@@ -1020,15 +1033,43 @@ export function RedesignView(props: PlannerViewProps) {
             <div className="ssr-card-b">
               {airQualityFutureNotApplicable ? (
                 <p className="ssr-muted">Air quality readings are current-day only and don’t apply to this future window.</p>
-              ) : (
-                <>
-                  <div className="ssr-snow-kv"><span className="ssr-k">Category</span><span className="ssr-v">{safetyData.airQuality?.category || 'Unknown'}</span></div>
-                  {Number.isFinite(Number(safetyData.airQuality?.pm25)) && <div className="ssr-snow-kv"><span className="ssr-k">PM2.5</span><span className="ssr-v">{Math.round(Number(safetyData.airQuality?.pm25))}</span></div>}
-                  {Number.isFinite(Number(safetyData.airQuality?.pm10)) && <div className="ssr-snow-kv"><span className="ssr-k">PM10</span><span className="ssr-v">{Math.round(Number(safetyData.airQuality?.pm10))}</span></div>}
-                  {Number.isFinite(Number(safetyData.airQuality?.ozone)) && <div className="ssr-snow-kv"><span className="ssr-k">Ozone</span><span className="ssr-v">{Math.round(Number(safetyData.airQuality?.ozone))}</span></div>}
-                  {safetyData.airQuality?.note && <p className="ssr-muted">{safetyData.airQuality.note}</p>}
-                </>
-              )}
+              ) : (() => {
+                const aqi = Number(safetyData.airQuality?.usAqi);
+                const hasAqi = Number.isFinite(aqi);
+                const pct = hasAqi ? Math.max(1, Math.min(100, (aqi / 300) * 100)) : 0;
+                const pollutants = [
+                  ['PM2.5', safetyData.airQuality?.pm25],
+                  ['PM10', safetyData.airQuality?.pm10],
+                  ['Ozone', safetyData.airQuality?.ozone],
+                ].filter(([, v]) => Number.isFinite(Number(v)));
+                return (
+                  <>
+                    <div className="ssr-aqi-hero">
+                      <span className="ssr-aqi-num">{hasAqi ? Math.round(aqi) : 'N/A'}</span>
+                      <div className="ssr-aqi-hero-meta">
+                        <span className="ssr-aqi-cat">{safetyData.airQuality?.category || 'Unknown'}</span>
+                        <span className="ssr-aqi-unit">US AQI</span>
+                      </div>
+                    </div>
+                    {hasAqi && (
+                      <div className="ssr-aqi-scale" title="0–300+ US AQI scale">
+                        <span className="ssr-aqi-marker" style={{ left: `${pct}%` }} />
+                      </div>
+                    )}
+                    {pollutants.length > 0 && (
+                      <div className="ssr-aqi-pollutants">
+                        {pollutants.map(([k, v]) => (
+                          <div className="ssr-aqi-pollutant" key={k as string}>
+                            <span className="ssr-k">{k}</span>
+                            <span className="ssr-v">{Math.round(Number(v))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {safetyData.airQuality?.note && <p className="ssr-muted">{safetyData.airQuality.note}</p>}
+                  </>
+                );
+              })()}
             </div>
           </section>
         )}
@@ -1081,8 +1122,22 @@ export function RedesignView(props: PlannerViewProps) {
             </div>
             <div className="ssr-card-b">
               {precipInsightLine && <p className="ssr-body">{localizeUnitText(precipInsightLine)}</p>}
-              <div className="ssr-snow-kv"><span className="ssr-k">Rain 12 / 24 / 48h</span><span className="ssr-v">{rainfall12hDisplay} · {rainfall24hDisplay} · {rainfall48hDisplay}</span></div>
-              {Number.isFinite(snowfall24hIn) && <div className="ssr-snow-kv"><span className="ssr-k">Snow 12 / 24 / 48h</span><span className="ssr-v">{snowfall12hDisplay} · {snowfall24hDisplay} · {snowfall48hDisplay}</span></div>}
+              <div className="ssr-precip-grid">
+                <div className="ssr-precip-row head">
+                  <span className="ssr-precip-k" />
+                  <span>12h</span><span>24h</span><span>48h</span>
+                </div>
+                <div className="ssr-precip-row">
+                  <span className="ssr-precip-k">Rain</span>
+                  <span>{rainfall12hDisplay}</span><span>{rainfall24hDisplay}</span><span>{rainfall48hDisplay}</span>
+                </div>
+                {Number.isFinite(snowfall24hIn) && (
+                  <div className="ssr-precip-row">
+                    <span className="ssr-precip-k">Snow</span>
+                    <span>{snowfall12hDisplay}</span><span>{snowfall24hDisplay}</span><span>{snowfall48hDisplay}</span>
+                  </div>
+                )}
+              </div>
               {expectedPrecipSummaryLine && <p className="ssr-muted">{localizeUnitText(expectedPrecipSummaryLine)}</p>}
               {(expectedRainWindowDisplay || expectedSnowWindowDisplay) && (
                 <div className="ssr-snow-kv"><span className="ssr-k">Expected in window</span><span className="ssr-v">{[expectedRainWindowDisplay, expectedSnowWindowDisplay].filter(Boolean).join(' · ') || '—'}</span></div>
