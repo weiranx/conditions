@@ -765,6 +765,45 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 12px 30px -20px rgba(0, 
 .ssr-factor-bar i.pos { background: var(--ssr-go); }
 .ssr-factor-msg { font-size: 12px; color: var(--ssr-text-3); line-height: 1.45; }
 
+/* score breakdown summary + compact "other factors" */
+.ssr-sb-summary { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--ssr-line); }
+.ssr-sb-score { font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.ssr-sb-score small { font-size: 14px; font-weight: 500; color: var(--ssr-text-3); margin-left: 3px; }
+.ssr-sb-summary-meta { display: flex; flex-direction: column; gap: 3px; }
+.ssr-sb-tier { font-size: 13px; font-weight: 700; color: var(--ssr-text); text-transform: capitalize; }
+.ssr-sb-sub { font-size: 12px; color: var(--ssr-text-3); }
+.ssr-sb-other { display: grid; gap: 1px; background: var(--ssr-line); border: 1px solid var(--ssr-line); border-radius: 9px; overflow: hidden; }
+.ssr-sb-other-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 14px; background: var(--ssr-surface); }
+.ssr-sb-other-name { font-size: 12.5px; color: var(--ssr-text-2); }
+
+/* inline chips + callout (terrain etc.) */
+.ssr-chip-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.ssr-chip { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; background: var(--ssr-surface-3); color: var(--ssr-text-2); }
+.ssr-callout { border-left: 3px solid var(--ssr-brand); background: var(--ssr-surface-2); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 12px 0; }
+.ssr-callout-k { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ssr-text-3); margin-bottom: 3px; }
+.ssr-callout p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ssr-text); }
+
+/* air quality — hero value + color scale + pollutants */
+.ssr-aqi-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.ssr-aqi-num { font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--ssr-text); font-variant-numeric: tabular-nums; }
+.ssr-aqi-hero-meta { display: flex; flex-direction: column; gap: 2px; }
+.ssr-aqi-cat { font-size: 14px; font-weight: 700; color: var(--ssr-text); }
+.ssr-aqi-unit { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ssr-text-3); font-weight: 600; }
+.ssr-aqi-scale { position: relative; height: 8px; border-radius: 999px; margin: 0 2px 16px;
+  background: linear-gradient(90deg, #00b050 0%, #d4cc00 16.7%, #ff8c00 33.3%, #e8392a 50%, #8f3f97 66.7%, #6e0a1e 100%); }
+.ssr-aqi-marker { position: absolute; top: 50%; width: 4px; height: 16px; border-radius: 2px; background: var(--ssr-text); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--ssr-surface); }
+.ssr-aqi-pollutants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--ssr-line); border: 1px solid var(--ssr-line); border-radius: 9px; overflow: hidden; }
+.ssr-aqi-pollutant { background: var(--ssr-surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.ssr-aqi-pollutant .ssr-k { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ssr-text-3); font-weight: 600; }
+.ssr-aqi-pollutant .ssr-v { font-size: 15px; font-weight: 700; color: var(--ssr-text); font-variant-numeric: tabular-nums; }
+
+/* precipitation accumulation table */
+.ssr-precip-grid { display: grid; gap: 1px; background: var(--ssr-line); border: 1px solid var(--ssr-line); border-radius: 9px; overflow: hidden; margin: 4px 0; }
+.ssr-precip-row { display: grid; grid-template-columns: 52px 1fr 1fr 1fr; background: var(--ssr-surface); }
+.ssr-precip-row > span { padding: 8px 10px; font-size: 12.5px; color: var(--ssr-text); font-variant-numeric: tabular-nums; text-align: right; }
+.ssr-precip-row.head > span { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ssr-text-3); font-weight: 600; padding-top: 9px; padding-bottom: 9px; }
+.ssr-precip-row .ssr-precip-k { text-align: left; font-weight: 600; color: var(--ssr-text-2); }
+
 /* gear */
 .ssr-gear { display: grid; gap: 12px; }
 .ssr-gear-item { border: 1px solid var(--ssr-line); border-radius: 9px; padding: 12px 14px; }
