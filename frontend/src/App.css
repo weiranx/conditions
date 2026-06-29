@@ -11132,7 +11132,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   background: rgba(150, 99, 14, 0.10);
   border-color: rgba(150, 99, 14, 0.25);
 }
-.status-badge.is-guarded-risk {
+.status-badge.is-caution-risk {
   color: #1a7a6e;
   background: rgba(42, 138, 122, 0.10);
   border-color: rgba(42, 138, 122, 0.25);
@@ -11158,7 +11158,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   background: rgba(224, 184, 94, 0.12);
   border-color: rgba(224, 184, 94, 0.3);
 }
-:root[data-theme='dark'] .status-badge.is-guarded-risk {
+:root[data-theme='dark'] .status-badge.is-caution-risk {
   color: #5ec7b8;
   background: rgba(94, 199, 184, 0.12);
   border-color: rgba(94, 199, 184, 0.3);

@@ -22,7 +22,7 @@ const SCORING_CONFIG = {
 
   tiers: [
     { min: 85, label: 'Low', tierClass: 'is-low-risk', color: 'green' },
-    { min: 70, label: 'Guarded', tierClass: 'is-guarded-risk', color: 'teal' },
+    { min: 70, label: 'Caution', tierClass: 'is-caution-risk', color: 'teal' },
     { min: 55, label: 'Elevated', tierClass: 'is-elevated-risk', color: 'yellow' },
     { min: 40, label: 'High', tierClass: 'is-high-risk', color: 'orange' },
     { min: -Infinity, label: 'Extreme', tierClass: 'is-extreme-risk', color: 'red' },
@@ -608,7 +608,7 @@ const calculateSafetyScore = ({
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 2) {
     applyFactor('Heat', T.heat.level2Impact, `Heat risk is ${heatRiskData?.label || 'Elevated'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 1) {
-    applyFactor('Heat', T.heat.level1Impact, `Heat risk is ${heatRiskData?.label || 'Guarded'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
+    applyFactor('Heat', T.heat.level1Impact, `Heat risk is ${heatRiskData?.label || 'Caution'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.peakFeelsLike) {
     applyFactor('Heat', T.heat.peakImpact, `Peak apparent temperature in the window reaches ${Math.round(trendMaxFeelsLike)}F.`, 'NOAA temp + humidity');
   } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.warmFeelsLike && weightedHeatExposureHours >= T.heat.warmDurHours) {

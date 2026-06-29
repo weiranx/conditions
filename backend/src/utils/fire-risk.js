@@ -59,7 +59,7 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
     reasons.push('Moderate AQI could affect exertion tolerance in exposed terrain.');
   }
 
-  const labelMap = ['Low', 'Guarded', 'Elevated', 'High', 'Extreme'];
+  const labelMap = ['Low', 'Caution', 'Elevated', 'High', 'Extreme'];
   const guidanceMap = [
     'No strong fire-weather signal from current sources.',
     'Monitor updates; keep route options flexible.',

@@ -54,7 +54,7 @@ export function buildHeatRiskDisplay(
     else level = 0;
   }
 
-  const label = safetyData?.heatRisk?.label || ['Low', 'Guarded', 'Elevated', 'High', 'Extreme'][level];
+  const label = safetyData?.heatRisk?.label || ['Low', 'Caution', 'Elevated', 'High', 'Extreme'][level];
   const pillClass =
     level >= 4 ? 'nogo' as const
       : level >= 2 ? 'caution' as const

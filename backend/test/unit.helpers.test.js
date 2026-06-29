@@ -2783,18 +2783,18 @@ test('buildHeatRiskData factors in lower terrain bands as warmer exposure', () =
 
 test('computeTier maps score ranges to correct tier labels', () => {
   expect(computeTier(90, 100).tier).toBe('Low');
-  expect(computeTier(75, 100).tier).toBe('Guarded');
+  expect(computeTier(75, 100).tier).toBe('Caution');
   expect(computeTier(60, 100).tier).toBe('Elevated');
   expect(computeTier(45, 100).tier).toBe('High');
   expect(computeTier(20, 100).tier).toBe('Extreme');
 });
 
 test('computeTier shifts tier downward when confidence is low', () => {
-  // At full confidence (100), score 75 = Guarded
-  expect(computeTier(75, 100).tier).toBe('Guarded');
+  // At full confidence (100), score 75 = Caution
+  expect(computeTier(75, 100).tier).toBe('Caution');
   // At low confidence (30), the shift = (70-30)*0.3 = 12, so 75 + 12 threshold
   // means 75 < 82 (=70+12), 75 < 85+12? no, 85+12=97. Let's check tier boundaries:
-  // Guarded needs score >= 70+shift. shift=(70-30)*0.3=12. So 70+12=82. 75 < 82 → not Guarded → Elevated
+  // Caution needs score >= 70+shift. shift=(70-30)*0.3=12. So 70+12=82. 75 < 82 → not Caution → Elevated
   const lowConfResult = computeTier(75, 30);
   expect(['Elevated', 'High', 'Extreme']).toContain(lowConfResult.tier);
 });

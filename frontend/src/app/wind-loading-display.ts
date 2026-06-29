@@ -46,6 +46,7 @@ export function buildWindLoadingDisplay(
   safetyData: SafetyData | null,
   trendWindow: WeatherTrendPoint[],
   avalancheRelevant: boolean,
+  hasSnowpackSignal: boolean,
   formatWindDisplayFn: (value: number | null | undefined) => string,
   timeStyle: TimeStyle,
 ): WindLoadingDisplay {
@@ -270,7 +271,10 @@ export function buildWindLoadingDisplay(
               : null,
       ].filter((entry): entry is string => Boolean(entry))
     : [];
-  const windLoadingHintsRelevant = avalancheRelevant || Boolean(resolvedWindDirection);
+  // Wind loading is an avalanche mechanism: only relevant when there's snow to
+  // transport — an active avalanche context or a measurable snowpack signal.
+  const windLoadingHintsRelevant =
+    (avalancheRelevant || hasSnowpackSignal) && Boolean(resolvedWindDirection);
 
   // Note: aspectOverlapProblems and decision mutation are handled by the caller
 

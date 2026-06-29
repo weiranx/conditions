@@ -585,10 +585,10 @@ function App() {
   const objectiveIsSaved = hasObjective && searchHook.objectiveIsSaved(position.lat, position.lng);
 
   const getScoreColor = (score: number, tier?: string) => {
-    const effectiveTier = tier || (score >= 85 ? 'Low' : score >= 70 ? 'Guarded' : score >= 55 ? 'Elevated' : score >= 40 ? 'High' : 'Extreme');
+    const effectiveTier = tier || (score >= 85 ? 'Low' : score >= 70 ? 'Caution' : score >= 55 ? 'Elevated' : score >= 40 ? 'High' : 'Extreme');
     switch (effectiveTier) {
       case 'Low': return 'var(--accent-green)';
-      case 'Guarded': return 'var(--accent-teal)';
+      case 'Caution': return 'var(--accent-teal)';
       case 'Elevated': return 'var(--accent-yellow)';
       case 'High': return 'var(--accent-orange)';
       case 'Extreme': return 'var(--accent-red)';
@@ -1225,7 +1225,7 @@ function App() {
       ? 'NOAA / Weather.gov + Open-Meteo'
       : weatherSourceLabel;
   const windLoading = buildWindLoadingDisplay(
-    safetyData, trendWindow, avalancheRelevant, formatWindDisplay, preferences.timeStyle,
+    safetyData, trendWindow, avalancheRelevant, hasSnowpackSignal, formatWindDisplay, preferences.timeStyle,
   );
   const {
     resolvedWindDirection, resolvedWindDirectionSource, trendWindDirections,

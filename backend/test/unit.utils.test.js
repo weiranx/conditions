@@ -1022,7 +1022,7 @@ describe('buildHeatRiskData', () => {
     expect(result.label).toBe('Low');
   });
 
-  test('assigns Guarded (1) level for warm daytime temps', () => {
+  test('assigns Caution (1) level for warm daytime temps', () => {
     const result = buildHeatRiskData({
       weatherData: { temp: 78, feelsLike: 79, humidity: 30, isDaytime: true },
     });
@@ -1090,7 +1090,7 @@ describe('buildHeatRiskData', () => {
     expect(result.metrics.peakTemp12hF).toBe(98);
   });
 
-  test('night start does not suppress Guarded level when temp is warm', () => {
+  test('night start does not suppress Caution level when temp is warm', () => {
     // isDaytime false prevents level 1 from the warmth threshold rule only if feelsLike < 76
     const result = buildHeatRiskData({
       weatherData: { temp: 102, feelsLike: 103, humidity: 20, isDaytime: false },
@@ -1195,7 +1195,7 @@ describe('buildFireRiskData', () => {
     expect(result.reasons.some((r) => r.includes('moke') || r.includes('air'))).toBe(true);
   });
 
-  test('assigns Guarded (1) for moderate AQI (51-100)', () => {
+  test('assigns Caution (1) for moderate AQI (51-100)', () => {
     const result = buildFireRiskData({
       ...baseInput,
       airQualityData: { usAqi: 75 },

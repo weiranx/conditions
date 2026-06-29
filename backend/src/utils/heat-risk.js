@@ -19,7 +19,7 @@ const createUnavailableHeatRiskData = (status = 'unavailable') => ({
   },
 });
 
-const HEAT_LABELS = ['Low', 'Guarded', 'Elevated', 'High', 'Extreme'];
+const HEAT_LABELS = ['Low', 'Caution', 'Elevated', 'High', 'Extreme'];
 const HEAT_GUIDANCE = [
   'No notable heat signal from current forecast inputs.',
   'Warm exposure possible. Bring extra water and manage sun/shade transitions.',
