@@ -20,6 +20,7 @@ import {
   Eye,
   Package,
   ArrowRight,
+  Compass,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
@@ -308,6 +309,95 @@ export function RedesignView(props: PlannerViewProps) {
   const bands = elevationForecastBands || [];
   const stripCols = `repeat(${Math.max(1, travelWindowRows.length)}, minmax(0, 1fr))`;
 
+  // ── ACTION PLAN: the plan levers the user can still change, ranked ──
+  const fmtSpan = (s: { start: string; end: string }) =>
+    `${formatClockForStyle(s.start, preferences.timeStyle)}–${formatClockForStyle(s.end, preferences.timeStyle)}`;
+
+  type PlanTone = 'stop' | 'shift' | 'pick' | 'prep';
+  const planActions: Array<{ tone: PlanTone; icon: React.ReactNode; title: string; detail?: string }> = [];
+
+  // Hard stops — surface no-go blockers at the very top of the to-do list.
+  blockerItems.forEach((b) =>
+    planActions.push({
+      tone: 'stop',
+      icon: <ShieldAlert size={15} />,
+      title: localizeUnitText(b),
+      detail: 'Hard no-go — resolve before you commit.',
+    }),
+  );
+
+  // Re-time around the clean travel window.
+  const totalWindowHrs = travelWindowRows.length;
+  const twi = travelWindowInsights;
+  if (totalWindowHrs > 0 && twi) {
+    const topFails = (twi.topFailureLabels || []).slice(0, 2).map(localizeUnitText).join(', ');
+    if (twi.passHours === 0) {
+      planActions.push({
+        tone: 'shift',
+        icon: <Clock size={15} />,
+        title: 'No clean travel hours in your window',
+        detail: twi.nextCleanWindow
+          ? `Next clean break is ${fmtSpan(twi.nextCleanWindow)} — re-time your start or pick another day.`
+          : `Every hour trips a threshold${topFails ? ` (${topFails})` : ''}. Consider another day.`,
+      });
+    } else if (twi.passHours < totalWindowHrs && twi.bestWindow) {
+      planActions.push({
+        tone: 'shift',
+        icon: <Clock size={15} />,
+        title: `Center your push on ${fmtSpan(twi.bestWindow)}`,
+        detail: `${twi.passHours} of ${totalWindowHrs} hrs stay clean${topFails ? `; ${topFails} gate the rest` : ''}.`,
+      });
+    }
+  }
+
+  // Pick terrain away from wind-loaded aspects.
+  if (windLoadingHintsRelevant && leewardAspectHints.length > 0) {
+    planActions.push({
+      tone: 'pick',
+      icon: <Wind size={15} />,
+      title: `Steer off wind-loaded lee aspects: ${leewardAspectHints.join(', ')}`,
+      detail:
+        aspectOverlapProblems.length > 0
+          ? `These overlap active avalanche problem aspects (${aspectOverlapProblems.join(', ')}).`
+          : windLoadingElevationFocus
+            ? `Loading is focused ${localizeUnitText(windLoadingElevationFocus)}.`
+            : undefined,
+    });
+  } else if (
+    windLoadingHintsRelevant &&
+    windLoadingActionLine &&
+    String(windLoadingLevel || '').toLowerCase() !== 'low'
+  ) {
+    planActions.push({ tone: 'pick', icon: <Wind size={15} />, title: localizeUnitText(windLoadingActionLine) });
+  }
+
+  // Prep for finishing in the dark.
+  if (returnExtendsPastMidnight) {
+    planActions.push({
+      tone: 'prep',
+      icon: <Sun size={15} />,
+      title: 'Your plan runs past midnight',
+      detail: 'Pack a headlamp and night layers, or move your start earlier.',
+    });
+  }
+
+  // Non-negotiable gear (safety-critical only).
+  const mustGear = gearRecommendations.filter((g) => g.tone === 'nogo');
+  if (mustGear.length > 0) {
+    planActions.push({
+      tone: 'prep',
+      icon: <Package size={15} />,
+      title: `Don't leave without: ${mustGear.map((g) => g.title).join(', ')}`,
+    });
+  }
+
+  const TONE_PRIORITY: Record<PlanTone, number> = { stop: 0, shift: 1, pick: 2, prep: 3 };
+  const TONE_TAG: Record<PlanTone, string> = { stop: 'Stop', shift: 'Re-time', pick: 'Route', prep: 'Prep' };
+  const rankedActions = planActions
+    .slice()
+    .sort((a, b) => TONE_PRIORITY[a.tone] - TONE_PRIORITY[b.tone])
+    .slice(0, 5);
+
   return (
     <div className="ssr-report" role="main" aria-label="Conditions report (redesign)">
       {/* OBJECTIVE HEADER */}
@@ -369,6 +459,41 @@ export function RedesignView(props: PlannerViewProps) {
           aiBriefLoading={aiBriefLoading}
           onRequestAiBrief={handleRequestAiBriefAction}
         />
+
+        {/* ACTION PLAN */}
+        <section className="ssr-card ssr-actions">
+          <div className="ssr-card-h">
+            <h2>
+              <span className="ssr-h-icon"><Compass size={16} /></span>
+              What to adjust
+            </h2>
+            <span className="ssr-h-meta">
+              {rankedActions.length > 0
+                ? `${rankedActions.length} lever${rankedActions.length !== 1 ? 's' : ''}`
+                : 'on track'}
+            </span>
+          </div>
+          <div className="ssr-card-b">
+            {rankedActions.length === 0 ? (
+              <div className="ssr-cc-allclear">
+                <CheckCircle2 size={16} /> Conditions line up with your plan — no adjustments needed.
+              </div>
+            ) : (
+              <ol className="ssr-actions-list">
+                {rankedActions.map((a, i) => (
+                  <li className={`ssr-action ${a.tone}`} key={i}>
+                    <span className="ssr-action-ic">{a.icon}</span>
+                    <div className="ssr-action-body">
+                      <span className="ssr-action-title">{a.title}</span>
+                      {a.detail && <span className="ssr-action-detail">{a.detail}</span>}
+                    </div>
+                    <span className="ssr-action-tag">{TONE_TAG[a.tone]}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </section>
 
         {/* TRAVEL WINDOW STRIP */}
         {travelWindowRows.length > 0 && (
