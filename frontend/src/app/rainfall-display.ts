@@ -1,4 +1,4 @@
-import type { UserPreferences } from './types';
+import type { RainfallExpected, RainfallTotals, SafetyData, UserPreferences } from './types';
 import {
   formatRainAmountForElevationUnit,
   formatSnowfallAmountForElevationUnit,
@@ -6,7 +6,7 @@ import {
 import { parsePrecipNumericValue } from './planner-helpers';
 
 export interface RainfallDisplay {
-  rainfallTotals: Record<string, unknown> | null;
+  rainfallTotals: RainfallTotals | null;
   rainfall12hIn: number;
   rainfall24hIn: number;
   rainfall48hIn: number;
@@ -32,12 +32,15 @@ export interface RainfallDisplay {
   rainfallNoteLine: string;
   expectedPrecipNoteLine: string;
   precipInsightLine: string;
-  rainfallExpected: Record<string, unknown> | null;
+  rainfallExpected: RainfallExpected | null;
   expectedSnowWindowIn: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildRainfallDisplay(rainfallPayload: any, preferences: UserPreferences, travelWindowHours: number): RainfallDisplay {
+export function buildRainfallDisplay(
+  rainfallPayload: SafetyData['rainfall'] | null | undefined,
+  preferences: UserPreferences,
+  travelWindowHours: number,
+): RainfallDisplay {
   const rainfallTotals = rainfallPayload?.totals || null;
   const rainfall12hIn = parsePrecipNumericValue(rainfallTotals?.rainPast12hIn ?? rainfallTotals?.past12hIn);
   const rainfall24hIn = parsePrecipNumericValue(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);

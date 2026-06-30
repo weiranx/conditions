@@ -1,13 +1,7 @@
 import { Search } from 'lucide-react';
 import { HelpHint } from '../CardHelpHint';
 import { sanitizeExternalUrl } from '../../../app/url-state';
-import type { SummitDecision } from '../../../app/types';
-
-interface FireAlert {
-  event?: string;
-  severity?: string;
-  link?: string;
-}
+import type { FireRiskAlertItem, SummitDecision } from '../../../app/types';
 
 export interface DeepDiveReportCardProps {
   order: number;
@@ -60,7 +54,7 @@ export interface DeepDiveReportCardProps {
   fireRiskLabel: string | null | undefined;
   fireRiskLevel: number | null | undefined;
   fireRiskGuidance: string | null | undefined;
-  fireRiskAlerts: FireAlert[];
+  fireRiskAlerts: FireRiskAlertItem[];
   pm25: number | null | undefined;
   aqiMeasuredTime: string | null | undefined;
   snowpackSummary: string | null | undefined;

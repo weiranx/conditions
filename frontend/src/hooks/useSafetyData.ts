@@ -82,6 +82,10 @@ export function useSafetyData({
     startTime: string;
     attempts: number;
   } | null>(null);
+  // Tracks the controller for whichever /api/safety request is currently
+  // in flight, so a newer request (or unmount) can cancel it instead of
+  // letting an abandoned fetch keep running in the background.
+  const safetyAbortControllerRef = useRef<AbortController | null>(null);
 
   const clearWakeRetry = useCallback(() => {
     if (wakeRetryTimeoutRef.current) {
@@ -178,17 +182,24 @@ export function useSafetyData({
           travelWindowHours: safeTravelWindowHours,
           force: forceReload,
         };
+        // A newer request has superseded the one currently in flight — abort
+        // it immediately rather than letting it run to completion only to
+        // have its result discarded.
+        safetyAbortControllerRef.current?.abort();
         return;
       }
       setLoading(true);
       setError(null);
       inFlightSafetyKeyRef.current = requestKey;
+      const controller = new AbortController();
+      safetyAbortControllerRef.current = controller;
 
       try {
         const { response, payload, requestId } = await fetchApi(
           `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(
             safeStartTime,
           )}&travel_window_hours=${safeTravelWindowHours}&name=${encodeURIComponent(objectiveNameRef.current)}`,
+          { signal: controller.signal },
         );
 
         if (!response.ok) {
@@ -222,12 +233,21 @@ export function useSafetyData({
           }
         }
       } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Superseded by a newer request or the component unmounted —
+          // not a real failure, so don't surface an error or schedule a
+          // wake retry.
+          return;
+        }
         const message = err instanceof Error ? err.message : 'System error';
         setError(message);
         if (isRetriableWakeupError(message)) {
           scheduleWakeRetry({ key: requestKey, lat, lon, date: safeDate, startTime: safeStartTime });
         }
       } finally {
+        if (safetyAbortControllerRef.current === controller) {
+          safetyAbortControllerRef.current = null;
+        }
         inFlightSafetyKeyRef.current = null;
         setLoading(false);
         const pending = pendingSafetyRequestRef.current;
@@ -250,6 +270,7 @@ export function useSafetyData({
   useEffect(() => {
     return () => {
       clearWakeRetry();
+      safetyAbortControllerRef.current?.abort();
     };
   }, [clearWakeRetry]);
 

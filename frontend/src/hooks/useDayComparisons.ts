@@ -262,6 +262,14 @@ export function useDayComparisons({
     return () => {
       cancelled = true;
     };
+    // Only the preference fields actually consumed by the fetch/scoring logic
+    // above (travel window length, threshold values used by
+    // evaluateBackcountryDecision/buildTravelWindowRows, and the units used to
+    // format threshold text in risk summaries) are listed here. Depending on
+    // the whole `preferences` object would re-trigger up to 7 parallel
+    // /api/safety fetches whenever any unrelated preference changes (e.g.
+    // theme, elevation unit, default start time).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     hasObjective,
     view,
@@ -271,8 +279,14 @@ export function useDayComparisons({
     position.lat,
     position.lng,
     alpineStartTime,
-    preferences,
     maxForecastDate,
+    preferences.travelWindowHours,
+    preferences.maxWindGustMph,
+    preferences.maxPrecipChance,
+    preferences.minFeelsLikeF,
+    preferences.maxFeelsLikeF,
+    preferences.windSpeedUnit,
+    preferences.temperatureUnit,
   ]);
 
   return {

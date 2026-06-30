@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './App.css';
@@ -77,7 +77,7 @@ import {
 } from './app/weather-card-state';
 import { buildAvalancheDisplayState } from './app/avalanche-display';
 import { buildDecisionDisplayState, describeFailedCriticalCheck } from './app/decision-display';
-import { buildFireRiskDisplay, buildHeatRiskDisplay, buildTerrainConditionDisplay, buildSnowpackDisplayState } from './app/risk-display';
+import { buildFireRiskDisplay, buildHeatRiskDisplay, buildTerrainConditionDisplay, buildSnowpackDisplayState, pillClassForLevel } from './app/risk-display';
 import {
   buildTravelWindowRows,
   formatTravelWindowSpan,
@@ -120,11 +120,10 @@ L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
 
 function airQualityPillClass(aqi: number | null | undefined): 'go' | 'caution' | 'nogo' {
-  const value = Number(aqi);
-  if (!Number.isFinite(value)) return 'caution';
-  if (value <= 50) return 'go';
-  if (value <= 100) return 'caution';
-  return 'nogo';
+  // AQI only uses a three-tier scale (no 'watch' tier); collapsing the
+  // caution/watch thresholds to the same value makes the shared four-tier
+  // helper degenerate into this three-tier mapping.
+  return pillClassForLevel(aqi, { nogo: 101, caution: 51, watch: 51 }, 'caution') as 'go' | 'caution' | 'nogo';
 }
 
 function formatIsoDateLabel(isoDate: string): string {
@@ -799,23 +798,45 @@ function App() {
     elevationRows: avalancheElevationRows,
   } = avalancheDisplay;
   const elevationForecastBands = safetyData?.weather.elevationForecast || [];
-  const trendWindow = safetyData ? buildTrendWindowFromStart(safetyData.weather.trend || [], alpineStartTime, travelWindowHours) : [];
-  const criticalWindow = safetyData
-    ? trendWindow.map((point) => {
-        const assessment = assessCriticalWindowPoint(point);
-        return {
-          ...point,
-          ...assessment,
-        };
-      })
-    : [];
-  const travelWindowContext = safetyData ? {
-    snowDepthIn: safetyData.terrainCondition?.signals?.maxSnowDepthIn
-      ?? safetyData.snowpack?.snotel?.snowDepthIn
-      ?? safetyData.snowpack?.nohrsc?.snowDepthIn
-      ?? null,
-  } : undefined;
-  const travelWindowRows = safetyData ? buildTravelWindowRows(trendWindow, preferences, travelWindowContext) : [];
+  // trendWindow/criticalWindow/travelWindowRows feed several report cards in
+  // PlannerView/RedesignView (both wrapped in React.memo) as direct array
+  // props; each row does nontrivial per-hour work (assessCriticalWindowPoint,
+  // threshold checks + string formatting in buildTravelWindowRows), so these
+  // are memoized to keep stable references across unrelated re-renders and
+  // avoid redoing that work every render.
+  const trendWindow = useMemo(
+    () => (safetyData ? buildTrendWindowFromStart(safetyData.weather.trend || [], alpineStartTime, travelWindowHours) : []),
+    [safetyData, alpineStartTime, travelWindowHours],
+  );
+  const criticalWindow = useMemo(
+    () =>
+      safetyData
+        ? trendWindow.map((point) => {
+            const assessment = assessCriticalWindowPoint(point);
+            return {
+              ...point,
+              ...assessment,
+            };
+          })
+        : [],
+    [safetyData, trendWindow],
+  );
+  const travelWindowContext = useMemo(
+    () =>
+      safetyData
+        ? {
+            snowDepthIn: safetyData.terrainCondition?.signals?.maxSnowDepthIn
+              ?? safetyData.snowpack?.snotel?.snowDepthIn
+              ?? safetyData.snowpack?.nohrsc?.snowDepthIn
+              ?? null,
+          }
+        : undefined,
+    [safetyData],
+  );
+  const travelWindowRows = useMemo(
+    () => (safetyData ? buildTravelWindowRows(trendWindow, preferences, travelWindowContext) : []),
+    [safetyData, trendWindow, preferences, travelWindowContext],
+  );
   const travelWindowInsights = buildTravelWindowInsights(travelWindowRows, preferences.timeStyle);
   const travelWindowSummary = travelWindowInsights.summary;
   const worstTravelWindowIndex = travelWindowRows.length
@@ -849,7 +870,10 @@ function App() {
     ? criticalWindow.reduce((bestIndex, current, idx, rows) => (current.score > rows[bestIndex].score ? idx : bestIndex), 0)
     : -1;
   const peakCriticalWindow = peakCriticalWindowIndex >= 0 ? criticalWindow[peakCriticalWindowIndex] : null;
-  const visibleCriticalWindowRows = travelWindowExpanded ? criticalWindow : [];
+  const visibleCriticalWindowRows = useMemo(
+    () => (travelWindowExpanded ? criticalWindow : []),
+    [travelWindowExpanded, criticalWindow],
+  );
   const parsedTargetElevation = parseOptionalElevationInput(targetElevationInput);
   const targetElevationFt =
     parsedTargetElevation === null ? Number.NaN : convertDisplayElevationToFeet(parsedTargetElevation, preferences.elevationUnit);
@@ -1330,6 +1354,39 @@ function App() {
         snow24hIn: snowfall24hIn,
       })
     : null;
+  const handleToggleRunnerMode = useCallback(() => {
+    updatePreferences({ defaultActivity: runnerMode ? 'backcountry' : 'trail-running' });
+  }, [updatePreferences, runnerMode]);
+  // PlannerView/RedesignView are wrapped in React.memo; this object literal
+  // was previously rebuilt inline at the JSX callsite on every render
+  // (with a fresh onToggleRunnerMode closure), which defeated that memo for
+  // every other prop too since React.memo does a shallow compare of the
+  // whole props object. Memoizing it keeps the reference stable when none
+  // of the underlying values changed.
+  const runnerPlanning = useMemo(
+    () => ({
+      runnerMode,
+      onToggleRunnerMode: handleToggleRunnerMode,
+      routeDistanceKmInput,
+      setRouteDistanceKmInput,
+      routeGainMInput,
+      setRouteGainMInput,
+      estimatedTripDurationMinutes,
+      daylightMargin,
+      footingForecast,
+    }),
+    [
+      runnerMode,
+      handleToggleRunnerMode,
+      routeDistanceKmInput,
+      setRouteDistanceKmInput,
+      routeGainMInput,
+      setRouteGainMInput,
+      estimatedTripDurationMinutes,
+      daylightMargin,
+      footingForecast,
+    ],
+  );
   const gearRecommendationsForDisplay = applyRunnerGearLens(gearRecommendations, {
     runnerMode,
     durationMinutes: estimatedTripDurationMinutes,
@@ -1861,17 +1918,7 @@ function App() {
       returnMinutes={returnMinutes}
       daylightRemainingFromStartLabel={daylightRemainingFromStartLabel}
       // Fast-and-light trip planning
-      runnerPlanning={{
-        runnerMode,
-        onToggleRunnerMode: () => updatePreferences({ defaultActivity: runnerMode ? 'backcountry' : 'trail-running' }),
-        routeDistanceKmInput,
-        setRouteDistanceKmInput,
-        routeGainMInput,
-        setRouteGainMInput,
-        estimatedTripDurationMinutes,
-        daylightMargin,
-        footingForecast,
-      }}
+      runnerPlanning={runnerPlanning}
       // Gear card
       gearRecommendations={gearRecommendationsForDisplay}
       // Avalanche forecast card

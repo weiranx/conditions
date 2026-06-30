@@ -23,7 +23,7 @@ import {
   Compass,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
-import type { ElevationForecastBand } from '../../app/types';
+import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
@@ -145,7 +145,7 @@ function ElevationCrossPlot({
   );
 }
 
-export function RedesignView(props: PlannerViewProps) {
+function RedesignViewComponent(props: PlannerViewProps) {
   const {
     safetyData,
     decision,
@@ -1043,10 +1043,10 @@ export function RedesignView(props: PlannerViewProps) {
               })()}
               {Array.isArray(fireRiskAlerts) && fireRiskAlerts.length > 0 && (
                 <div className="ssr-mini-alerts">
-                  {fireRiskAlerts.map((a: any, i: number) => (
+                  {fireRiskAlerts.map((a: FireRiskAlertItem, i: number) => (
                     <div className="ssr-ac-item" key={`fra-${i}`}>
                       <span className="ssr-ac-icon"><Flame size={12} /></span>
-                      <div><div className="ssr-ac-text">{a.headline || a.event || 'Fire alert'}</div></div>
+                      <div><div className="ssr-ac-text">{a.event || 'Fire alert'}</div></div>
                     </div>
                   ))}
                 </div>
@@ -1405,3 +1405,8 @@ export function RedesignView(props: PlannerViewProps) {
     </div>
   );
 }
+
+// Same large shared PlannerViewProps object as PlannerView; memoize so an
+// unrelated prop-object rebuild elsewhere doesn't force a re-render of this
+// 1400-line view.
+export const RedesignView = React.memo(RedesignViewComponent);

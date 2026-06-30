@@ -97,10 +97,23 @@ export function CollapsibleCard({
         {preview ? (
           <>
             <span className="sr-only">{summary}</span>
-            <div className="card-preview" onClick={openModal} role="button" tabIndex={-1}>{preview}</div>
+            {/*
+              The card header above is a real <button> that already opens this
+              same modal and is fully keyboard-accessible. This preview is a
+              mouse/touch convenience target only — its content is duplicated
+              for assistive tech via the sr-only summary span above, so it's
+              hidden from the accessibility tree rather than falsely announced
+              as a second, keyboard-unreachable button.
+            */}
+            <div className="card-preview" onClick={openModal} aria-hidden="true">{preview}</div>
           </>
         ) : (
-          <div className="collapsible-summary" onClick={openModal} role="button" tabIndex={-1}>{summary}</div>
+          // No sr-only duplicate exists for this content, so it stays
+          // visible to assistive tech as static text. It's not an
+          // interactive element (the header button is the keyboard path to
+          // open the modal), so role="button"/tabIndex are removed to avoid
+          // announcing an unreachable control.
+          <div className="collapsible-summary" onClick={openModal}>{summary}</div>
         )}
       </div>
 

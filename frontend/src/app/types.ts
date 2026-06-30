@@ -474,6 +474,14 @@ export interface SummitDecision {
 
 export type NwsAlertItem = NonNullable<NonNullable<SafetyData['alerts']>['alerts']>[number];
 
+export type HeatRiskMetrics = NonNullable<NonNullable<SafetyData['heatRisk']>['metrics']>;
+
+export type RainfallTotals = NonNullable<NonNullable<SafetyData['rainfall']>['totals']>;
+
+export type RainfallExpected = NonNullable<NonNullable<SafetyData['rainfall']>['expected']>;
+
+export type FireRiskAlertItem = NonNullable<NonNullable<SafetyData['fireRisk']>['alertsConsidered']>[number];
+
 export interface SnowpackInterpretation {
   headline: string;
   confidence: 'solid' | 'watch' | 'low';

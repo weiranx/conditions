@@ -1,26 +1,41 @@
-import type { SafetyData, ElevationUnit } from './types';
+import type { SafetyData, ElevationUnit, FireRiskAlertItem, HeatRiskMetrics } from './types';
+
+export type PillClass = 'go' | 'watch' | 'caution' | 'nogo';
+
+/**
+ * Maps a numeric risk level/score to a four-tier go/watch/caution/nogo pill
+ * class using descending thresholds: a value at or above `nogo` -> 'nogo',
+ * at or above `caution` -> 'caution', at or above `watch` -> 'watch',
+ * otherwise 'go'. Pass equal `caution`/`watch` thresholds to collapse to a
+ * three-tier scale (the 'watch' branch becomes unreachable). Non-finite
+ * levels resolve to `fallback`.
+ */
+export function pillClassForLevel(
+  level: number | null | undefined,
+  thresholds: { nogo: number; caution: number; watch: number },
+  fallback: PillClass = 'caution',
+): PillClass {
+  const value = Number(level);
+  if (!Number.isFinite(value)) return fallback;
+  if (value >= thresholds.nogo) return 'nogo';
+  if (value >= thresholds.caution) return 'caution';
+  if (value >= thresholds.watch) return 'watch';
+  return 'go';
+}
 
 // --- Fire Risk ---
 
 export interface FireRiskDisplay {
   level: number;
   label: string;
-  pillClass: 'go' | 'watch' | 'caution' | 'nogo';
-  alerts: Array<{ event?: string; headline?: string; severity?: string }>;
+  pillClass: PillClass;
+  alerts: FireRiskAlertItem[];
 }
 
 export function buildFireRiskDisplay(safetyData: SafetyData | null): FireRiskDisplay {
   const level = Number(safetyData?.fireRisk?.level);
   const label = safetyData?.fireRisk?.label || 'Low';
-  const pillClass = !Number.isFinite(level)
-    ? 'caution' as const
-    : level >= 4
-      ? 'nogo' as const
-      : level >= 3
-        ? 'caution' as const
-        : level >= 2
-          ? 'watch' as const
-          : 'go' as const;
+  const pillClass = pillClassForLevel(level, { nogo: 4, caution: 3, watch: 2 }, 'caution');
   const alerts = safetyData?.fireRisk?.alertsConsidered || [];
   return { level, label, pillClass, alerts };
 }
@@ -30,10 +45,10 @@ export function buildFireRiskDisplay(safetyData: SafetyData | null): FireRiskDis
 export interface HeatRiskDisplay {
   level: number;
   label: string;
-  pillClass: 'go' | 'watch' | 'caution' | 'nogo';
+  pillClass: PillClass;
   guidance: string;
   reasons: string[];
-  metrics: Record<string, unknown>;
+  metrics: HeatRiskMetrics;
   lowerTerrainLabel: string | null;
 }
 
@@ -55,11 +70,7 @@ export function buildHeatRiskDisplay(
   }
 
   const label = safetyData?.heatRisk?.label || ['Low', 'Caution', 'Elevated', 'High', 'Extreme'][level];
-  const pillClass =
-    level >= 4 ? 'nogo' as const
-      : level >= 2 ? 'caution' as const
-        : level >= 1 ? 'watch' as const
-          : 'go' as const;
+  const pillClass = pillClassForLevel(level, { nogo: 4, caution: 2, watch: 1 }, 'go');
 
   const guidance =
     safetyData?.heatRisk?.guidance ||
@@ -79,8 +90,8 @@ export function buildHeatRiskDisplay(
   const metrics = safetyData?.heatRisk?.metrics || {};
 
   const lowerTerrainLabel = (() => {
-    const lbl = String((metrics as Record<string, unknown>).lowerTerrainLabel || '').trim();
-    const elevationFt = Number((metrics as Record<string, unknown>).lowerTerrainElevationFt);
+    const lbl = String(metrics.lowerTerrainLabel || '').trim();
+    const elevationFt = Number(metrics.lowerTerrainElevationFt);
     if (!lbl && !Number.isFinite(elevationFt)) return null;
     if (lbl && Number.isFinite(elevationFt)) return `${lbl} (${formatElevationDisplay(elevationFt)})`;
     return lbl || formatElevationDisplay(elevationFt);
@@ -98,7 +109,7 @@ export interface TerrainConditionDisplay {
   impact: string | null;
   recommendedTravel: string | null;
   snowProfile: { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null;
-  pillClass: 'go' | 'watch' | 'caution' | 'nogo';
+  pillClass: PillClass;
 }
 
 export function buildTerrainConditionDisplay(safetyData: SafetyData | null): TerrainConditionDisplay {
@@ -144,7 +155,7 @@ export function buildTerrainConditionDisplay(safetyData: SafetyData | null): Ter
 
   // Pill class
   const terrainCode = String(safetyData?.terrainCondition?.code || '').toLowerCase();
-  let pillClass: 'go' | 'watch' | 'caution' | 'nogo';
+  let pillClass: PillClass;
   if (terrainCode === 'dry_firm') {
     pillClass = 'go';
   } else if (terrainCode === 'weather_unavailable') {

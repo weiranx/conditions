@@ -30,8 +30,7 @@ export interface SourceFreshnessDisplay {
 
 export function buildSourceFreshnessDisplay(
   safetyData: SafetyData | null,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rainfallPayload: any,
+  rainfallPayload: SafetyData['rainfall'] | null | undefined,
   avalancheRelevant: boolean,
   travelWindowHours: number,
 ): SourceFreshnessDisplay {

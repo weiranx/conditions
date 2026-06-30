@@ -1,16 +1,10 @@
 import { sanitizeExternalUrl } from '../../../app/url-state';
-
-interface FireAlert {
-  event?: string;
-  severity?: string;
-  expires?: string;
-  link?: string;
-}
+import type { FireRiskAlertItem } from '../../../app/types';
 
 export interface FireRiskCardProps {
   guidance: string;
   reasons: string[];
-  fireRiskAlerts: FireAlert[];
+  fireRiskAlerts: FireRiskAlertItem[];
   source: string;
   formatPubTime: (isoString?: string) => string;
 }

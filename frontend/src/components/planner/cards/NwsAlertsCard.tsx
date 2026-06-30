@@ -1,33 +1,13 @@
 import { sanitizeExternalUrl } from '../../../app/url-state';
 import { normalizeAlertNarrative, splitAlertNarrativeParagraphs } from '../../../app/text-utils';
-
-interface NwsAlert {
-  event?: string;
-  severity?: string;
-  urgency?: string;
-  certainty?: string;
-  response?: string;
-  effective?: string;
-  onset?: string;
-  ends?: string;
-  expires?: string;
-  headline?: string;
-  description?: string;
-  instruction?: string;
-  link?: string;
-  affectedAreas?: string[];
-  areaDesc?: string;
-  senderName?: string;
-  messageType?: string;
-  category?: string;
-}
+import type { NwsAlertItem } from '../../../app/types';
 
 export interface NwsAlertsCardProps {
   alertsSource: string;
   highestSeverity: string | null | undefined;
   alertsStatus: string | null | undefined;
   nwsTotalAlertCount: number;
-  nwsTopAlerts: NwsAlert[];
+  nwsTopAlerts: NwsAlertItem[];
   formatPubTime: (isoString?: string) => string;
 }
 

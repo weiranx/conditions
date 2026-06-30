@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import L from 'leaflet';
 import {
@@ -58,7 +57,11 @@ import {
 import type {
   DayOverDayComparison,
   ElevationForecastBand,
+  FireRiskAlertItem,
+  HeatRiskMetrics,
   MapStyle,
+  NwsAlertItem,
+  RainfallExpected,
   SafetyData,
   SnowpackInterpretation,
   SnowpackSnapshotInsights,
@@ -69,6 +72,7 @@ import type {
   TravelWindowSpan,
   ReportLayout,
 } from '../../app/types';
+import type { ReportCardOrder } from '../../app/card-ordering';
 import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import { TRAVEL_THRESHOLD_PRESETS } from '../../hooks/usePreferenceHandlers';
@@ -210,7 +214,7 @@ export interface PlannerViewProps {
   setCustomRouteName: (name: string) => void;
   setRouteSuggestions: (routes: RouteOption[] | null) => void;
   setRouteError: (err: string | null) => void;
-  reportCardOrder: Record<string, any>;
+  reportCardOrder: ReportCardOrder;
   travelWindowHours: number;
   formatTempDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
@@ -355,7 +359,7 @@ export interface PlannerViewProps {
   // Heat Risk card
   heatRiskGuidance: string;
   heatRiskReasons: string[];
-  heatRiskMetrics: Record<string, any>;
+  heatRiskMetrics: HeatRiskMetrics;
   heatRiskPillClass: string;
   heatRiskLabel: string;
   lowerTerrainHeatLabel: string | null;
@@ -379,11 +383,11 @@ export interface PlannerViewProps {
   expectedRainWindowDisplay: string;
   expectedSnowWindowIn: number;
   expectedSnowWindowDisplay: string;
-  rainfallExpected: Record<string, any> | null;
+  rainfallExpected: RainfallExpected | null;
   precipitationDisplayTimezone: string | null;
   expectedPrecipNoteLine: string;
   rainfallModeLabel: string;
-  rainfallPayload: Record<string, any> | null;
+  rainfallPayload: SafetyData['rainfall'] | null;
   rainfallNoteLine: string;
   safeRainfallLink: string | null;
   formatForecastPeriodLabel: (isoString?: string | null, timeZone?: string | null) => string;
@@ -416,7 +420,7 @@ export interface PlannerViewProps {
   // NWS Alerts card
   nwsAlertCount: number;
   nwsTotalAlertCount: number;
-  nwsTopAlerts: Record<string, any>[];
+  nwsTopAlerts: NwsAlertItem[];
 
   // Air Quality card
   airQualityPillClassFn: (aqi: number | null | undefined) => string;
@@ -453,7 +457,7 @@ export interface PlannerViewProps {
   // Fire Risk card
   fireRiskLabel: string;
   fireRiskPillClass: string;
-  fireRiskAlerts: Record<string, any>[];
+  fireRiskAlerts: FireRiskAlertItem[];
 
   // Plan Snapshot card
   sunriseMinutesForPlan: number | null;
@@ -480,7 +484,7 @@ export interface PlannerViewProps {
 
   // Deep Dive Report card
   safeShareLink: string | null;
-  weatherFieldSources: Record<string, any>;
+  weatherFieldSources: Record<string, string>;
   weatherCloudCover: number | null;
   weatherBlended: boolean;
   rawReportPayload: string;
@@ -493,7 +497,7 @@ export interface PlannerViewProps {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function PlannerView(props: PlannerViewProps) {
+function PlannerViewComponent(props: PlannerViewProps) {
   const {
     // Shell
     appShellClassName,
@@ -1991,3 +1995,9 @@ export function PlannerView(props: PlannerViewProps) {
     </div>
   );
 }
+
+// PlannerView receives a very large (~390-field) props object rebuilt every
+// render in App.tsx. React.memo's shallow-prop comparator skips re-rendering
+// this 2000-line component when none of those references actually changed
+// (e.g. an unrelated state update elsewhere in App.tsx).
+export const PlannerView = React.memo(PlannerViewComponent);
