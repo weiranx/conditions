@@ -26,6 +26,7 @@ import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
+import { WindDirectionArrow } from './WindDirectionArrow';
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -360,7 +361,7 @@ export function RedesignView(props: PlannerViewProps) {
         aspectOverlapProblems.length > 0
           ? `These overlap active avalanche problem aspects (${aspectOverlapProblems.join(', ')}).`
           : windLoadingElevationFocus
-            ? `Loading is focused ${localizeUnitText(windLoadingElevationFocus)}.`
+            ? localizeUnitText(windLoadingElevationFocus)
             : undefined,
     });
   } else if (
@@ -690,7 +691,7 @@ export function RedesignView(props: PlannerViewProps) {
             <div className="ssr-wx-grid">
               <div className="ssr-wx-cell"><span className="ssr-k">Wind</span><span className="ssr-v">{formattedWind}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Gust</span><span className="ssr-v">{formattedGust}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Direction</span><span className="ssr-v">{weatherCardWindDirection || '—'}</span></div>
+              <div className="ssr-wx-cell"><span className="ssr-k">Direction</span><span className="ssr-v ssr-v-wind-dir"><WindDirectionArrow direction={weatherCardWindDirection} size={13} />{weatherCardWindDirection || '—'}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Precip</span><span className="ssr-v">{Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Dew point</span><span className="ssr-v">{formatTempDisplay(weatherCardDewPoint)}</span></div>
@@ -817,127 +818,6 @@ export function RedesignView(props: PlannerViewProps) {
           </section>
         )}
 
-        {/* SCORE BREAKDOWN */}
-        {shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
-          const factors = safetyData.safety.factors
-            .slice()
-            .sort((a: any, b: any) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
-          const maxImpact = Math.max(1, ...factors.map((f: any) => Math.abs(Number(f.impact || 0))));
-          const score = Math.round(safetyData.safety.score);
-          const scoreColor = getScoreColor(score, safetyData.safety.tier);
-          const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : null;
-          const primary = factors.slice(0, 3);
-          const others = factors.slice(3);
-          return (
-            <section className="ssr-card">
-              <div className="ssr-card-h">
-                <h2>
-                  <span className="ssr-h-icon"><ShieldCheck size={16} /></span>
-                  Score Breakdown
-                </h2>
-                {dayOverDay && (
-                  <span className={`ssr-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>
-                    {dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}
-                  </span>
-                )}
-              </div>
-              <div className="ssr-card-b">
-                <div className="ssr-sb-summary">
-                  <span className="ssr-sb-score" style={{ color: scoreColor }}>{score}<small>/ 100</small></span>
-                  <div className="ssr-sb-summary-meta">
-                    {tierLabel && <span className="ssr-sb-tier">{tierLabel}</span>}
-                    <span className="ssr-sb-sub">{factors.length} factor{factors.length !== 1 ? 's' : ''} weighed against a 100 baseline</span>
-                  </div>
-                </div>
-                <div className="ssr-cc-group">
-                  <div className="ssr-cc-group-h">Primary drivers <span className="ssr-cc-count">{primary.length}</span></div>
-                  <div className="ssr-factors">
-                    {primary.map((f: any, i: number) => {
-                      const impact = Math.round(Number(f.impact || 0));
-                      // Stored impact is positive-for-penalty (risk-increasing); negative = bonus.
-                      const isPenalty = impact >= 0;
-                      return (
-                        <div className="ssr-factor" key={i}>
-                          <div className="ssr-factor-top">
-                            <span className="ssr-factor-name">{f.hazard || 'Factor'}</span>
-                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
-                          </div>
-                          <span className="ssr-factor-bar">
-                            <i className={isPenalty ? 'neg' : 'pos'} style={{ width: `${(Math.abs(impact) / maxImpact) * 100}%` }} />
-                          </span>
-                          {f.message && <small className="ssr-factor-msg">{localizeUnitText(f.message)}</small>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {others.length > 0 && (
-                  <div className="ssr-cc-group">
-                    <div className="ssr-cc-group-h">Other factors <span className="ssr-cc-count">{others.length}</span></div>
-                    <div className="ssr-sb-other">
-                      {others.map((f: any, i: number) => {
-                        const impact = Math.round(Number(f.impact || 0));
-                        const isPenalty = impact >= 0;
-                        return (
-                          <div className="ssr-sb-other-row" key={i}>
-                            <span className="ssr-sb-other-name">{f.hazard || 'Factor'}</span>
-                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* GEAR */}
-        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
-          const SAFETY_TONES = new Set(['nogo', 'caution']);
-          const safety = gearRecommendations.filter((g) => SAFETY_TONES.has(g.tone));
-          const comfort = gearRecommendations.filter((g) => !SAFETY_TONES.has(g.tone));
-          const grouped = safety.length > 0 && comfort.length > 0;
-          const gearList = (items: typeof gearRecommendations) => (
-            <div className="ssr-gear">
-              {items.map((g, i) => (
-                <div className="ssr-gear-item" key={`${g.title}-${i}`}>
-                  <div className="ssr-gear-head">
-                    <span className="ssr-gear-title">{g.title}</span>
-                    <span className={`ssr-pill ${g.tone}`}>{g.category}</span>
-                  </div>
-                  <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
-                </div>
-              ))}
-            </div>
-          );
-          return (
-            <section className="ssr-card">
-              <div className="ssr-card-h">
-                <h2>
-                  <span className="ssr-h-icon"><Package size={16} /></span>
-                  Gear
-                </h2>
-                <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="ssr-card-b">
-                {grouped ? (
-                  <>
-                    <div className="ssr-cc-group">
-                      <div className="ssr-cc-group-h warn"><ShieldAlert size={13} /> Safety essentials <span className="ssr-cc-count">{safety.length}</span></div>
-                      {gearList(safety)}
-                    </div>
-                    <div className="ssr-cc-group">
-                      <div className="ssr-cc-group-h"><Package size={13} /> Comfort &amp; efficiency <span className="ssr-cc-count">{comfort.length}</span></div>
-                      {gearList(comfort)}
-                    </div>
-                  </>
-                ) : gearList(gearRecommendations)}
-              </div>
-            </section>
-          );
-        })()}
       </main>
 
       {/* SIDEBAR */}
@@ -1030,6 +910,7 @@ export function RedesignView(props: PlannerViewProps) {
             </div>
             <div className="ssr-card-b">
               <div className="ssr-snow-hero">
+                <span className="ssr-snow-depth-label">Depth</span>
                 <span className="ssr-snow-depth">{snowpackBestDepthDisplay}</span>
                 {snowpackStatusLabel && (
                   <span className={`ssr-snow-delta ${snowpackPillClass?.includes('warn') ? 'warn' : ''}`}>
@@ -1041,6 +922,9 @@ export function RedesignView(props: PlannerViewProps) {
                 Best available depth across sources
                 {snowpackHistoricalComparisonLine ? ` · ${snowpackHistoricalComparisonLine}` : ''}
               </div>
+              {/* Snow depth and snow-water-equivalent (SWE) are different quantities that can
+                  look like the same number at a glance — every row below is explicitly
+                  prefixed "Depth"/"SWE" rather than relying on a single shared "in" unit. */}
               <div className="ssr-snow-kv">
                 <span className="ssr-k">SWE{snowpackBestSweSource ? ` · ${snowpackBestSweSource}` : ''}</span>
                 <span className="ssr-v">{snowpackBestSweDisplay}</span>
@@ -1051,7 +935,7 @@ export function RedesignView(props: PlannerViewProps) {
                     SNOTEL{safetyData.snowpack.snotel.stationName ? ` · ${safetyData.snowpack.snotel.stationName}` : ''}
                     {snotelDistanceDisplay && snotelDistanceDisplay !== 'N/A' ? ` · ${snotelDistanceDisplay}` : ''}
                   </span>
-                  <span className="ssr-v">{snotelDepthDisplay} · {snotelSweDisplay}</span>
+                  <span className="ssr-v">Depth {snotelDepthDisplay} · SWE {snotelSweDisplay}</span>
                 </div>
               )}
               {safetyData.snowpack.snotel?.obsTempF != null && (
@@ -1385,6 +1269,139 @@ export function RedesignView(props: PlannerViewProps) {
           </section>
         )}
       </aside>
+
+      {/*
+        SCORE BREAKDOWN + GEAR — rendered full-width below the two-column grid rather than
+        packed into the narrow left column. The left column (score gauge → ... → here) is
+        consistently much taller than the right rail (avalanche/snowpack/.../sources), so
+        squeezing these trailing sections into the left track only left a large dead strip of
+        bare page background next to them. Full-width avoids that mismatch entirely instead of
+        depending on JS measurement or position:sticky (which doesn't work inside this app's
+        page-transition shell — see the note on `.ssr-side` in planner-redesign.css).
+      */}
+      <div className="ssr-report-footer">
+        {/* SCORE BREAKDOWN */}
+        {shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
+          const factors = safetyData.safety.factors
+            .slice()
+            .sort((a: any, b: any) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
+          const maxImpact = Math.max(1, ...factors.map((f: any) => Math.abs(Number(f.impact || 0))));
+          const score = Math.round(safetyData.safety.score);
+          const scoreColor = getScoreColor(score, safetyData.safety.tier);
+          const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : null;
+          const primary = factors.slice(0, 3);
+          const others = factors.slice(3);
+          return (
+            <section className="ssr-card">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon"><ShieldCheck size={16} /></span>
+                  Score Breakdown
+                </h2>
+                {dayOverDay && (
+                  <span className={`ssr-pill ${dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution'}`}>
+                    {dayOverDay.delta > 0 ? '+' : ''}{dayOverDay.delta} vs {dayOverDay.previousDate}
+                  </span>
+                )}
+              </div>
+              <div className="ssr-card-b">
+                <div className="ssr-sb-summary">
+                  <span className="ssr-sb-score" style={{ color: scoreColor }}>{score}<small>/ 100</small></span>
+                  <div className="ssr-sb-summary-meta">
+                    {tierLabel && <span className="ssr-sb-tier">{tierLabel}</span>}
+                    <span className="ssr-sb-sub">{factors.length} factor{factors.length !== 1 ? 's' : ''} weighed against a 100 baseline</span>
+                  </div>
+                </div>
+                <div className="ssr-cc-group">
+                  <div className="ssr-cc-group-h">Primary drivers <span className="ssr-cc-count">{primary.length}</span></div>
+                  <div className="ssr-factors">
+                    {primary.map((f: any, i: number) => {
+                      const impact = Math.round(Number(f.impact || 0));
+                      // Stored impact is positive-for-penalty (risk-increasing); negative = bonus.
+                      const isPenalty = impact >= 0;
+                      return (
+                        <div className="ssr-factor" key={i}>
+                          <div className="ssr-factor-top">
+                            <span className="ssr-factor-name">{f.hazard || 'Factor'}</span>
+                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                          </div>
+                          <span className="ssr-factor-bar">
+                            <i className={isPenalty ? 'neg' : 'pos'} style={{ width: `${(Math.abs(impact) / maxImpact) * 100}%` }} />
+                          </span>
+                          {f.message && <small className="ssr-factor-msg">{localizeUnitText(f.message)}</small>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {others.length > 0 && (
+                  <div className="ssr-cc-group">
+                    <div className="ssr-cc-group-h">Other factors <span className="ssr-cc-count">{others.length}</span></div>
+                    <div className="ssr-sb-other">
+                      {others.map((f: any, i: number) => {
+                        const impact = Math.round(Number(f.impact || 0));
+                        const isPenalty = impact >= 0;
+                        return (
+                          <div className="ssr-sb-other-row" key={i}>
+                            <span className="ssr-sb-other-name">{f.hazard || 'Factor'}</span>
+                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* GEAR */}
+        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
+          const SAFETY_TONES = new Set(['nogo', 'caution']);
+          const safety = gearRecommendations.filter((g) => SAFETY_TONES.has(g.tone));
+          const comfort = gearRecommendations.filter((g) => !SAFETY_TONES.has(g.tone));
+          const grouped = safety.length > 0 && comfort.length > 0;
+          const gearList = (items: typeof gearRecommendations) => (
+            <div className="ssr-gear">
+              {items.map((g, i) => (
+                <div className="ssr-gear-item" key={`${g.title}-${i}`}>
+                  <div className="ssr-gear-head">
+                    <span className="ssr-gear-title">{g.title}</span>
+                    <span className={`ssr-pill ${g.tone}`}>{g.category}</span>
+                  </div>
+                  <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
+                </div>
+              ))}
+            </div>
+          );
+          return (
+            <section className="ssr-card">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon"><Package size={16} /></span>
+                  Gear
+                </h2>
+                <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="ssr-card-b">
+                {grouped ? (
+                  <>
+                    <div className="ssr-cc-group">
+                      <div className="ssr-cc-group-h warn"><ShieldAlert size={13} /> Safety essentials <span className="ssr-cc-count">{safety.length}</span></div>
+                      {gearList(safety)}
+                    </div>
+                    <div className="ssr-cc-group">
+                      <div className="ssr-cc-group-h"><Package size={13} /> Comfort &amp; efficiency <span className="ssr-cc-count">{comfort.length}</span></div>
+                      {gearList(comfort)}
+                    </div>
+                  </>
+                ) : gearList(gearRecommendations)}
+              </div>
+            </section>
+          );
+        })()}
+      </div>
     </div>
   );
 }

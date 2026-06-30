@@ -15,7 +15,7 @@ import {
   RefreshCw,
   SlidersHorizontal,
 } from 'lucide-react';
-import { LocationMarker, MapUpdater } from '../../app/map-components';
+import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
 import {
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
@@ -81,7 +81,7 @@ export function PlannerMapSection({
   return (
     <section className="map-shell" id="planner-main-content">
       <div className="map-section">
-        <MapContainer center={position} zoom={hasObjective ? 11 : 4} style={{ height: '100%', width: '100%' }}>
+        <MapContainer center={position} zoom={hasObjective ? 11 : 4} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer attribution={activeBasemap.attribution} url={activeBasemap.url} />
           <ScaleControl
             position="bottomleft"
@@ -90,6 +90,7 @@ export function PlannerMapSection({
           />
           <LocationMarker position={position} setPosition={updateObjectivePosition} />
           <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
+          <CtrlScrollZoom />
         </MapContainer>
 
         <div className="map-overlay map-overlay-tr">

@@ -310,7 +310,7 @@ export function buildSnowpackDisplayState(
     if (!snowpackHistorical) return 'Historical average unavailable for this selected date.';
     const metLine =
       metricLabel.toUpperCase() === 'SWE'
-        ? `SWE ${histSweCurrentDisplay} vs avg ${histSweAverageDisplay}`
+        ? `${histSweCurrentDisplay} vs avg ${histSweAverageDisplay}`
         : metricLabel.toLowerCase() === 'snow depth'
           ? `Depth ${histDepthCurrentDisplay} vs avg ${histDepthAverageDisplay}`
           : null;

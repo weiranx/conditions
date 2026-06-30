@@ -133,19 +133,19 @@ export function DashboardSummaryCard({
           </div>
           <div className="ssr-dash-cond">
             <div className="ssr-dash-cond-k"><Wind /> Peak gust</div>
-            <div className="ssr-dash-cond-v">{formatWindDisplay(peakGust)}</div>
+            <div className={`ssr-dash-cond-v ${peakGust >= maxGustMph ? 'warn' : ''}`}>{formatWindDisplay(peakGust)}</div>
             <div className={`ssr-dash-cond-sub ${peakGust >= maxGustMph ? 'warn' : ''}`}>limit {formatWindDisplay(maxGustMph)}</div>
           </div>
           <div className="ssr-dash-cond">
             <div className="ssr-dash-cond-k"><CloudRain /> Precip</div>
-            <div className="ssr-dash-cond-v">{Math.round(peakPrecip)}<small>%</small></div>
+            <div className={`ssr-dash-cond-v ${peakPrecip >= preferences.maxPrecipChance ? 'warn' : ''}`}>{Math.round(peakPrecip)}<small>%</small></div>
             <div className={`ssr-dash-cond-sub ${peakPrecip >= preferences.maxPrecipChance ? 'warn' : ''}`}>
               {peakPrecip >= preferences.maxPrecipChance ? 'above threshold' : 'below threshold'}
             </div>
           </div>
           <div className="ssr-dash-cond">
             <div className="ssr-dash-cond-k"><CheckCircle2 /> Clean hours</div>
-            <div className="ssr-dash-cond-v">{cleanHours}<small>h</small></div>
+            <div className={`ssr-dash-cond-v ${cleanHours > 0 ? '' : 'warn'}`}>{cleanHours}<small>h</small></div>
             <div className={`ssr-dash-cond-sub ${cleanHours > 0 ? '' : 'warn'}`}>{bestWindow}</div>
           </div>
         </div>

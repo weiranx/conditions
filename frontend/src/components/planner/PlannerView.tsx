@@ -67,9 +67,9 @@ import type {
   TravelWindowInsights,
   TravelWindowRow,
   TravelWindowSpan,
-  WeatherTrendPoint,
   ReportLayout,
 } from '../../app/types';
+import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import { TRAVEL_THRESHOLD_PRESETS } from '../../hooks/usePreferenceHandlers';
 import type { RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
@@ -307,7 +307,7 @@ export interface PlannerViewProps {
   pressureTrendDirection: string | null;
   pressureDeltaLabel: string | null;
   pressureRangeLabel: string | null;
-  weatherHourQuickOptions: Array<{ value: string; label: string; tempLabel: string | null; point: WeatherTrendPoint }>;
+  weatherHourQuickOptions: WeatherHourOption[];
   selectedWeatherHourIndex: number;
   handleWeatherHourSelect: (time: string) => void;
   weatherConditionEmojiValue: (desc: string, isDaytime?: boolean | null) => string;

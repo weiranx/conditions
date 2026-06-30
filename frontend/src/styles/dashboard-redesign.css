@@ -159,6 +159,7 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 .ssr-dash-cond-k svg { width: 14px; height: 14px; color: var(--d-ink-4); }
 .ssr-dash-cond-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: var(--d-ink); font-variant-numeric: tabular-nums; }
 .ssr-dash-cond-v small { font-size: 13px; font-weight: 500; color: var(--d-ink-3); margin-left: 2px; }
+.ssr-dash-cond-v.warn { color: var(--d-warn-deep); }
 .ssr-dash-cond-sub { font-size: 12px; color: var(--d-go-deep); font-weight: 600; }
 .ssr-dash-cond-sub.warn { color: var(--d-warn-deep); }
 

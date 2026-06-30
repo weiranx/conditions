@@ -2,6 +2,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { ElevationDangerGradient } from './ElevationDangerGradient';
 import { WeatherHourPillStrip } from '../WeatherHourPillStrip';
 import type { WeatherHourOption } from '../WeatherHourPillStrip';
+import { WindDirectionArrow } from '../WindDirectionArrow';
 import type { AvalancheElevationBand, ElevationForecastBand } from '../../../app/types';
 
 interface TrendChartRow {
@@ -332,7 +333,7 @@ function WeatherMetricsAll(props: WeatherCardContentProps) {
       </div>
       <div className="metric-chip">
         <span className="stat-label">Wind Dir</span>
-        <strong>{props.windDirection}</strong>
+        <strong className="metric-chip-wind-dir"><WindDirectionArrow direction={props.windDirection} size={13} />{props.windDirection}</strong>
       </div>
       <div className="metric-chip metric-chip-wide">
         <span className="stat-label">Whiteout Risk</span>

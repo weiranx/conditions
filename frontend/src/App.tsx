@@ -245,11 +245,10 @@ function App() {
     setTripForecastErrorDirect(null);
     setTripForecastNoteDirect(null);
     resetRouteState();
-    if (label) {
-      setObjectiveName(label);
-    } else {
-      setObjectiveName((prev) => prev || 'Dropped pin');
-    }
+    // When no explicit label is supplied (a raw map click/drag, as opposed to a search
+    // selection or "use current location"), always relabel as "Dropped pin" rather than
+    // silently keeping a stale name (e.g. "Mount Rainier") attached to brand-new coordinates.
+    setObjectiveName(label || 'Dropped pin');
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setDayOverDay is a stable setter from useDayComparisons, declared later in hook order
   }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
@@ -421,6 +420,20 @@ function App() {
   const handleRecenterMap = () => {
     setMapFocusNonce((prev) => prev + 1);
   };
+
+  // Direct map interaction (click-to-drop-pin or marker drag) bypasses the search flow, so
+  // without this the search box keeps showing the previous query (e.g. "Mount Rainier") while
+  // the report silently reloads for a completely different, unrelated location. Mirror the
+  // same label + search-box sync that handleUseCurrentLocation already does below, so the
+  // change is obvious rather than silent.
+  const handleMapPositionChange = useCallback((nextPosition: L.LatLng) => {
+    const coordinateLabel = `${nextPosition.lat.toFixed(4)}, ${nextPosition.lng.toFixed(4)}`;
+    updateObjectivePosition(nextPosition, 'Dropped pin');
+    setSearchInputValue(coordinateLabel);
+    setCommittedSearchQuery(coordinateLabel);
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+  }, [updateObjectivePosition, setSearchInputValue, setCommittedSearchQuery, setShowSuggestions, setActiveSuggestionIndex]);
 
   const handleUseCurrentLocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -1059,7 +1072,7 @@ function App() {
   const mapElevationChipTitle = hasMapObjectiveElevation
     ? [formatElevationDisplay(mapObjectiveElevationFt), safetyData?.weather.elevationSource || null].filter(Boolean).join(' • ')
     : 'Objective elevation unavailable';
-  const weatherHourQuickOptions = buildWeatherHourQuickOptions(safetyData, preferences.timeStyle, formatTempDisplay);
+  const weatherHourQuickOptions = buildWeatherHourQuickOptions(safetyData, preferences.timeStyle, formatTempDisplay, formatWindDisplay);
   const activeWeatherHourValue = weatherHourPreviewTime || alpineStartTime;
   const selectedWeatherHourIndex = findSelectedWeatherHourIndex(weatherHourQuickOptions, activeWeatherHourValue);
   const selectedWeatherHour = selectedWeatherHourIndex >= 0 ? weatherHourQuickOptions[selectedWeatherHourIndex] : null;
@@ -1547,7 +1560,7 @@ function App() {
       position={position}
       activeBasemap={activeBasemap}
       preferences={preferences}
-      updateObjectivePosition={updateObjectivePosition}
+      updateObjectivePosition={handleMapPositionChange}
       mapFocusNonce={mapFocusNonce}
       mapStyle={mapStyle}
       setMapStyle={setMapStyle}

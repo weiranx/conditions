@@ -1549,6 +1549,34 @@ input {
   opacity: 0.75;
 }
 
+.map-scroll-zoom-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(30, 36, 32, 0.82);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  animation: map-scroll-zoom-hint-fade 1.6s ease both;
+}
+
+@keyframes map-scroll-zoom-hint-fade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .map-overlay-info .map-elevation-value {
   font-size: 0.74rem;
   font-weight: 700;
@@ -2568,7 +2596,7 @@ input {
   background: rgba(246, 241, 230, 0.55);
   border-radius: 10px;
   padding: 6px 4px;
-  min-width: 52px;
+  min-width: 58px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2610,9 +2638,36 @@ input {
   line-height: 1;
 }
 
+.weather-hour-pill-wind {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  font-family: var(--font-data);
+  line-height: 1;
+  color: #6b7a72;
+  white-space: nowrap;
+}
+
+.weather-hour-pill.selected .weather-hour-pill-wind {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.wind-direction-arrow {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  transition: transform 0.15s ease;
+}
+
 .weather-hour-pill.selected .weather-hour-pill-time,
 .weather-hour-pill.selected .weather-hour-pill-icon {
   opacity: 0.9;
+}
+
+:root[data-theme='dark'] .weather-hour-pill-wind {
+  color: #8fa3ad;
 }
 
 :root[data-theme='dark'] .weather-hour-pill {
@@ -4568,6 +4623,16 @@ button.collapsible-card-header:hover .collapsible-chevron {
   margin-top: 4px;
   font-size: 1.05rem;
   font-family: var(--font-data);
+}
+
+.metric-chip strong.metric-chip-wind-dir {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.metric-chip-wind-dir .wind-direction-arrow {
+  color: var(--text-muted);
 }
 
 .metric-chip small {

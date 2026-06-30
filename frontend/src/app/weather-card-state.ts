@@ -198,6 +198,8 @@ export interface WeatherHourOption {
   value: string;
   label: string;
   tempLabel: string | null;
+  windLabel: string | null;
+  windDirectionDeg: number | null;
   point: WeatherTrendPoint;
 }
 
@@ -205,6 +207,7 @@ export function buildWeatherHourQuickOptions(
   safetyData: SafetyData | null,
   timeStyle: TimeStyle,
   formatTempDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string,
+  formatWindDisplay?: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string,
 ): WeatherHourOption[] {
   const options: WeatherHourOption[] = [];
   if (!safetyData || !Array.isArray(safetyData.weather.trend)) return options;
@@ -223,6 +226,8 @@ export function buildWeatherHourQuickOptions(
       value,
       label: formatClockForStyle(value, timeStyle),
       tempLabel: Number.isFinite(Number(point?.temp)) ? formatTempDisplay(Number(point?.temp)) : null,
+      windLabel: formatWindDisplay && Number.isFinite(Number(point?.wind)) ? formatWindDisplay(Number(point?.wind)) : null,
+      windDirectionDeg: windDirectionToDegrees(point?.windDirection ?? null),
       point,
     });
     if (options.length >= 12) break;

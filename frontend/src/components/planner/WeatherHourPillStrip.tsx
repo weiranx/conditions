@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WeatherTrendPoint } from '../../app/types';
+import { WindDirectionArrow } from './WindDirectionArrow';
 
 export interface WeatherHourOption {
   value: string;
   label: string;
   tempLabel: string | null;
+  windLabel: string | null;
+  windDirectionDeg: number | null;
   point: WeatherTrendPoint;
 }
 
@@ -70,6 +73,7 @@ export function WeatherHourPillStrip({
               .replace(/ AM/i, 'a')
               .replace(/ PM/i, 'p');
             const emoji = weatherConditionEmoji(option.point.condition, option.point.isDaytime ?? null);
+            const windDirectionLabel = option.point.windDirection || null;
 
             return (
               <button
@@ -79,11 +83,17 @@ export function WeatherHourPillStrip({
                 className={`weather-hour-pill${isSelected ? ' selected' : ''}`}
                 onClick={() => onSelect(option.value)}
                 aria-pressed={isSelected}
-                aria-label={`${option.label}: ${option.tempLabel || 'N/A'}, ${option.point.condition}`}
+                aria-label={`${option.label}: ${option.tempLabel || 'N/A'}, ${option.point.condition}${option.windLabel ? `, wind ${option.windLabel}${windDirectionLabel ? ` from ${windDirectionLabel}` : ''}` : ''}`}
               >
                 <span className="weather-hour-pill-time">{compactLabel}</span>
                 <span className="weather-hour-pill-temp">{option.tempLabel || '—'}</span>
                 <span className="weather-hour-pill-icon">{emoji}</span>
+                {option.windLabel && (
+                  <span className="weather-hour-pill-wind">
+                    <WindDirectionArrow direction={windDirectionLabel} degrees={option.windDirectionDeg} size={10} />
+                    {option.windLabel}
+                  </span>
+                )}
               </button>
             );
           })}
