@@ -113,6 +113,17 @@ Navigate to the URL printed by Vite (typically `http://localhost:5173`).
 > - The frontend dev server proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://localhost:3001`).
 > - The planner defaults to objective-local time where timezone data is available.
 
+### Optional environment variables
+
+The backend runs against free public data sources out of the box. A couple of features require optional API keys in `backend/.env` (see `backend/.env.example` for the full list):
+
+| Variable | Enables | How to get it |
+|---|---|---|
+| `NPS_API_KEY` | The **Access & Closures** sub-section of the Local Conditions card — nearest national-park alerts and closures via the National Park Service API. Without it the section is hidden; the rest of the report is unaffected. | Free, instant — request at [nps.gov developer get-started](https://www.nps.gov/subjects/developer/get-started.htm). |
+| `ANTHROPIC_API_KEY` | AI-powered features (`/api/route-suggestions`, `/api/route-analysis`, `/api/ai-brief`). These endpoints return `500` without it. | [console.anthropic.com](https://console.anthropic.com) |
+
+Both keys are optional and free to omit — every other signal in the report works without configuration.
+
 ## API Endpoints
 
 | Method | Endpoint | Description |

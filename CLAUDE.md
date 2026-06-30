@@ -26,11 +26,14 @@ npm run lint             # ESLint validation
 npm run build            # Production build → frontend/dist/
 ```
 
-### Run a single test file
+### Run a single test file or pattern
 
 ```bash
 cd backend && npx jest test/unit.helpers.test.js
+cd backend && npx jest test/unit.utils.test.js
+cd backend && npx jest test/unit.utils2.test.js
 cd backend && npx jest test/integration.api.test.js
+cd backend && npx jest --testNamePattern="wind parsing"
 ```
 
 ## Architecture
@@ -46,6 +49,9 @@ Two-tier: React + Vite SPA (`frontend/`) + Express API (`backend/`).
 - **`frontend/src/app/`** — Extracted modules: `types.ts` (domain interfaces), `constants.ts`, `core.ts` (formatting + calculations), `preferences.ts`, `planner-helpers.ts`, `date-time-inputs.ts`, `text-utils.ts`, `map-components.tsx`.
 - **`frontend/src/components/planner/`** — Extracted UI components: `SearchBox.tsx`, `CollapsibleCard.tsx`, `ForecastLoading.tsx`, `CardHelpHint.tsx`, and domain-specific cards in `cards/` (avalanche forecast, wind loading, travel window, aspect rose).
 - **`frontend/src/lib/`** — `api-client.ts` (API calls + retry), `search.ts` (local peak catalog + Nominatim).
+- **`frontend/src/utils/avalanche.ts`** — Avalanche-specific utility functions shared across components.
+- **`backend/src/server/`** — Server bootstrap modules: `runtime.js` (env parsing), `create-app.js` (middleware/CORS/rate limiting/request IDs), `start-server.js` (HTTP listen + graceful shutdown).
+- **`backend/src/data/cdec-snow-stations.json`** — Static CDEC snow station reference data for California.
 
 ### `/api/safety` pipeline
 
@@ -78,3 +84,9 @@ Persisted in browser local storage under `summitsafe:user-preferences:v1`. Unit 
 - Some center-specific avalanche handling exists as explicit hotfix logic in `backend/index.js` — check before modifying avalanche parsing.
 - Backend module system is **CommonJS** (`require`/`module.exports`). Frontend is **ES modules** (`import`/`export`).
 - Backend test suite (`test/unit.helpers.test.js`) is extremely large; run targeted tests during development.
+- `ANTHROPIC_API_KEY` is required in `backend/.env` for AI-powered features (`/api/route-suggestions`, `/api/route-analysis`, `/api/ai-brief`); those endpoints return `500` without it.
+- Set `DEBUG_AVY=true` in `backend/.env` to enable verbose avalanche pipeline debug logs.
+
+## iOS App
+
+A native SwiftUI companion app lives in `BackcountryConditions/`. It targets iOS 17+ and consumes the same backend API. Uses XcodeGen (`project.yml`) for project configuration — open `BackcountryConditions.xcodeproj` in Xcode to build. Key structure: `ViewModels/` (PlannerViewModel, SearchViewModel), `Models/` (SafetyData, RouteAnalysis), `Utilities/` (TravelWindowEngine, WindLoadingEngine).
