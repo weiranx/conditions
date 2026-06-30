@@ -1,4 +1,5 @@
 const { normalizeCoordKey, normalizeCoordDateKey } = require('./cache');
+const { withCircuitBreaker } = require('./http-client');
 const { FT_PER_METER } = require('./geo');
 const { parseIsoTimeToMs, buildPlannedStartIso, clampTravelWindowHours } = require('./time');
 const { parseWindMph, inferWindGustFromPeriods, findNearestWindDirection } = require('./wind');
@@ -45,6 +46,7 @@ async function fetchWeatherPipeline({
   fetchObjectiveElevationFt,
   fetchOpenMeteoWeatherFallback,
   createUnavailableWeatherData,
+  noaaCircuitBreaker = null,
 }) {
   let solarData = { sunrise: 'N/A', sunset: 'N/A', dayLength: 'N/A' };
   let selectedForecastDate = requestedDate || null;
@@ -55,17 +57,22 @@ async function fetchWeatherPipeline({
   let trailStatus;
   let gridDataUrl = null;
 
+  // NOAA is a single critical-path upstream hit on every request; when a breaker is
+  // injected, fast-fail once it's been chronically failing instead of piling on more
+  // doomed requests. Tests/callers that don't inject one simply skip the breaker check.
+  const runNoaaFetch = (fn) => (noaaCircuitBreaker ? withCircuitBreaker(noaaCircuitBreaker, fn) : fn());
+
   try {
     // 1. Get NOAA grid data (cached 24h)
     const pointsCacheKey = normalizeCoordKey(parsedLat, parsedLon);
-    const pointsData = await noaaPointsCache.getOrFetch(pointsCacheKey, async () => {
+    const pointsData = await noaaPointsCache.getOrFetch(pointsCacheKey, () => runNoaaFetch(async () => {
       const pointsRes = await fetchWithTimeout(
         `https://api.weather.gov/points/${parsedLat},${parsedLon}`,
         fetchOptions,
       );
       if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
       return pointsRes.json();
-    });
+    }));
     const pointElevationMeters = Number(pointsData?.properties?.elevation?.value);
     let objectiveElevationFt = Number.isFinite(pointElevationMeters)
       ? Math.round(pointElevationMeters * FT_PER_METER)
@@ -73,21 +80,35 @@ async function fetchWeatherPipeline({
     let objectiveElevationSource = Number.isFinite(pointElevationMeters)
       ? 'NOAA points metadata'
       : null;
-    if (!Number.isFinite(objectiveElevationFt)) {
-      const fallbackElevation = await fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions);
-      objectiveElevationFt = fallbackElevation.elevationFt;
-      objectiveElevationSource = fallbackElevation.source;
-    }
 
     const hourlyForecastUrl = pointsData.properties.forecastHourly;
     gridDataUrl = pointsData?.properties?.forecastGridData || null;
 
+    // The elevation fallback lookup (only needed when NOAA points metadata omits elevation)
+    // and the hourly forecast fetch are independent — both only need `pointsData`, which is
+    // already resolved at this point. Run them concurrently instead of sequentially to save
+    // a network round trip.
+    const needsFallbackElevation = !Number.isFinite(objectiveElevationFt);
+    const elevationFallbackPromise = needsFallbackElevation
+      ? fetchObjectiveElevationFt(parsedLat, parsedLon, fetchOptions)
+      : null;
+
     // 2. Get Forecasts (cached 20m)
-    const hourlyData = await noaaForecastCache.getOrFetch(hourlyForecastUrl, async () => {
+    const hourlyDataPromise = noaaForecastCache.getOrFetch(hourlyForecastUrl, () => runNoaaFetch(async () => {
       const hourlyRes = await fetchWithTimeout(hourlyForecastUrl, fetchOptions);
       if (!hourlyRes.ok) throw new Error(`NOAA hourly forecast failed: ${hourlyRes.status}`);
       return hourlyRes.json();
-    });
+    }));
+
+    const [hourlyData, fallbackElevation] = await Promise.all([
+      hourlyDataPromise,
+      elevationFallbackPromise,
+    ]);
+
+    if (fallbackElevation) {
+      objectiveElevationFt = fallbackElevation.elevationFt;
+      objectiveElevationSource = fallbackElevation.source;
+    }
 
     const periods = hourlyData?.properties?.periods || [];
     if (!periods.length) throw new Error('No hourly forecast data available for this location');

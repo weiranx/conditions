@@ -1,5 +1,7 @@
 'use strict';
 
+const { logger } = require('./logger');
+
 /**
  * In-memory cache with TTL, stale-while-revalidate, LRU eviction,
  * and in-flight request deduplication.
@@ -65,7 +67,10 @@ function createCache({ name, ttlMs, staleTtlMs = 0, maxEntries = 500 }) {
         const bgPromise = Promise.resolve()
           .then(() => fetchFn())
           .then((val) => { set(key, val); return val; })
-          .catch(() => cached.value)
+          .catch((err) => {
+            logger.warn({ cache: name, key, err }, 'Background cache revalidation failed; serving stale value');
+            return cached.value;
+          })
           .finally(() => { inflight.delete(key); });
         inflight.set(key, bgPromise);
       }

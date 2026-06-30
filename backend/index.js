@@ -11,7 +11,7 @@ const {
   RATE_LIMIT_MAX_REQUESTS,
   CORS_ALLOWLIST,
 } = require('./src/server/runtime');
-const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout } = require('./src/utils/http-client');
+const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout, createCircuitBreaker, withCircuitBreaker } = require('./src/utils/http-client');
 const { normalizeWindDirection } = require('./src/utils/wind');
 const {
   parseStartClock,
@@ -97,6 +97,12 @@ const app = createApp({
 
 const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 
+// Circuit breakers for the two chronically-flaky, single-endpoint upstreams that sit on
+// the critical path of every /api/safety request. Once either upstream fails repeatedly
+// in a short window, fail fast instead of waiting out a doomed timeout on every request.
+const noaaCircuitBreaker = createCircuitBreaker({ name: 'noaa', failureThreshold: 5, resetTimeMs: 60000 });
+const avalancheOrgCircuitBreaker = createCircuitBreaker({ name: 'avalanche.org', failureThreshold: 5, resetTimeMs: 60000 });
+
 const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
 let avalancheMapLayerCache = {
@@ -152,14 +158,17 @@ const getAvalancheMapLayer = async (fetchOptions) => {
   }
 
   try {
-    const avyRes = await fetchWithTimeout(`https://api.avalanche.org/v2/public/products/map-layer`, fetchOptions);
-    if (!avyRes.ok) {
-      throw new Error(`Map layer fetch failed with status ${avyRes.status}`);
-    }
-    const avyJson = await avyRes.json();
-    if (!avyJson || !Array.isArray(avyJson.features)) {
-      throw new Error('Map layer response missing features array');
-    }
+    const avyJson = await withCircuitBreaker(avalancheOrgCircuitBreaker, async () => {
+      const avyRes = await fetchWithTimeout(`https://api.avalanche.org/v2/public/products/map-layer`, fetchOptions);
+      if (!avyRes.ok) {
+        throw new Error(`Map layer fetch failed with status ${avyRes.status}`);
+      }
+      const json = await avyRes.json();
+      if (!json || !Array.isArray(json.features)) {
+        throw new Error('Map layer response missing features array');
+      }
+      return json;
+    });
 
     avalancheMapLayerCache = {
       fetchedAt: now,
@@ -173,6 +182,82 @@ const getAvalancheMapLayer = async (fetchOptions) => {
     }
     throw error;
   }
+};
+
+/**
+ * Builds the unified `/api/safety` response payload. Shared by the success path and the
+ * catch-block partial-data fallback so the shape only needs to be defined (and extended) once.
+ * Pass `partial: { apiWarning }` to mark the payload as a degraded/fallback response.
+ */
+const buildSafetyResponsePayload = ({
+  generatedAt,
+  parsedLat,
+  parsedLon,
+  selectedDate,
+  selectedForecastPeriod,
+  weatherData,
+  forecastDateRange,
+  todayDate,
+  solarData,
+  avalancheData,
+  alertsData,
+  airQualityData,
+  rainfallData,
+  snowpackData,
+  fireRiskData,
+  heatRiskData,
+  atmosphereData,
+  localConditionsData,
+  gearSuggestions,
+  trailStatus,
+  terrainConditionData,
+  analysis,
+  partial = null,
+}) => {
+  const stampGeneratedTime = (value) => {
+    if (!value || typeof value !== 'object') {
+      return value;
+    }
+    if (typeof value.generatedTime === 'string' && value.generatedTime.trim()) {
+      return value;
+    }
+    return { ...value, generatedTime: generatedAt };
+  };
+
+  const payload = {
+    generatedAt,
+    location: { lat: parsedLat, lon: parsedLon },
+    forecast: {
+      selectedDate,
+      selectedStartTime: selectedForecastPeriod?.startTime || weatherData?.forecastStartTime || null,
+      selectedEndTime: selectedForecastPeriod?.endTime || weatherData?.forecastEndTime || null,
+      isFuture: selectedDate > todayDate,
+      availableRange: forecastDateRange,
+    },
+    weather: stampGeneratedTime(weatherData),
+    solar: solarData,
+    avalanche: stampGeneratedTime(avalancheData),
+    alerts: stampGeneratedTime(alertsData),
+    airQuality: stampGeneratedTime(airQualityData),
+    rainfall: stampGeneratedTime(rainfallData),
+    snowpack: stampGeneratedTime(snowpackData),
+    fireRisk: fireRiskData,
+    heatRisk: stampGeneratedTime(heatRiskData),
+    atmosphere: stampGeneratedTime(atmosphereData),
+    localConditions: localConditionsData ? stampGeneratedTime(localConditionsData) : null,
+    gear: gearSuggestions,
+    trail: trailStatus,
+    terrainCondition: terrainConditionData,
+    safety: analysis,
+  };
+  delete payload.activity;
+
+  if (partial) {
+    payload.partialData = true;
+    payload.apiWarning = partial.apiWarning;
+  }
+
+  return payload;
 };
 
 const safetyHandler = async (req, res) => {
@@ -242,6 +327,7 @@ const safetyHandler = async (req, res) => {
         fetchObjectiveElevationFt,
         fetchOpenMeteoWeatherFallback,
         createUnavailableWeatherData,
+        noaaCircuitBreaker,
       });
       weatherData = weatherResult.weatherData;
       solarData = weatherResult.solarData;
@@ -434,45 +520,32 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
     const todayDate = new Date().toISOString().slice(0, 10);
-
     const responseGeneratedAt = new Date().toISOString();
-    const stampGeneratedTime = (value) => {
-      if (!value || typeof value !== 'object') {
-        return value;
-      }
-      if (typeof value.generatedTime === 'string' && value.generatedTime.trim()) {
-        return value;
-      }
-      return { ...value, generatedTime: responseGeneratedAt };
-    };
 
-    const responsePayload = {
+    const responsePayload = buildSafetyResponsePayload({
       generatedAt: responseGeneratedAt,
-      location: { lat: parsedLat, lon: parsedLon },
-      forecast: {
-        selectedDate: selectedForecastDate,
-        selectedStartTime: selectedForecastPeriod?.startTime || weatherData?.forecastStartTime || null,
-        selectedEndTime: selectedForecastPeriod?.endTime || weatherData?.forecastEndTime || null,
-        isFuture: selectedForecastDate > todayDate,
-        availableRange: forecastDateRange
-      },
-      weather: stampGeneratedTime(weatherData),
-      solar: solarData,
-      avalanche: stampGeneratedTime(avalancheData),
-      alerts: stampGeneratedTime(alertsData),
-      airQuality: stampGeneratedTime(airQualityData),
-      rainfall: stampGeneratedTime(rainfallData),
-      snowpack: stampGeneratedTime(snowpackData),
-      fireRisk: fireRiskData,
-      heatRisk: stampGeneratedTime(heatRiskData),
-      atmosphere: stampGeneratedTime(atmosphereData),
-      localConditions: localConditionsData ? stampGeneratedTime(localConditionsData) : null,
-      gear: gearSuggestions,
-      trail: trailStatus,
-      terrainCondition: terrainConditionData,
-      safety: analysis,
-    };
-    delete responsePayload.activity;
+      parsedLat,
+      parsedLon,
+      selectedDate: selectedForecastDate,
+      selectedForecastPeriod,
+      weatherData,
+      forecastDateRange,
+      todayDate,
+      solarData,
+      avalancheData,
+      alertsData,
+      airQualityData,
+      rainfallData,
+      snowpackData,
+      fireRiskData,
+      heatRiskData,
+      atmosphereData,
+      localConditionsData,
+      gearSuggestions,
+      trailStatus,
+      terrainConditionData,
+      analysis,
+    });
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.json(responsePayload);
   } catch (error) {
@@ -536,45 +609,32 @@ const safetyHandler = async (req, res) => {
     });
 
     const fallbackGeneratedAt = new Date().toISOString();
-    const stampGeneratedTime = (value) => {
-      if (!value || typeof value !== 'object') {
-        return value;
-      }
-      if (typeof value.generatedTime === 'string' && value.generatedTime.trim()) {
-        return value;
-      }
-      return { ...value, generatedTime: fallbackGeneratedAt };
-    };
 
-    const fallbackResponsePayload = {
+    const fallbackResponsePayload = buildSafetyResponsePayload({
       generatedAt: fallbackGeneratedAt,
-      location: { lat: parsedLat, lon: parsedLon },
-      forecast: {
-        selectedDate: fallbackSelectedDate,
-        selectedStartTime: selectedForecastPeriod?.startTime || safeWeatherData?.forecastStartTime || null,
-        selectedEndTime: selectedForecastPeriod?.endTime || safeWeatherData?.forecastEndTime || null,
-        isFuture: fallbackSelectedDate > todayDate,
-        availableRange: forecastDateRange
-      },
-      weather: stampGeneratedTime(safeWeatherData),
-      solar: solarData,
-      avalanche: stampGeneratedTime(safeAvalancheData),
-      alerts: stampGeneratedTime(safeAlertsData),
-      airQuality: stampGeneratedTime(safeAirQualityData),
-      rainfall: stampGeneratedTime(safeRainfallData),
-      snowpack: stampGeneratedTime(safeSnowpackData),
-      fireRisk: safeFireRiskData,
-      heatRisk: stampGeneratedTime(safeHeatRiskData),
-      atmosphere: stampGeneratedTime(buildAtmosphericData({ weatherData: safeWeatherData, fetched: {} })),
-      localConditions: null,
-      gear: gearSuggestions,
-      trail: safeTrailStatus,
-      terrainCondition: safeTerrainCondition,
-      safety: analysis,
-      partialData: true,
-      apiWarning: error?.message || 'One or more upstream data providers failed during this request.',
-    };
-    delete fallbackResponsePayload.activity;
+      parsedLat,
+      parsedLon,
+      selectedDate: fallbackSelectedDate,
+      selectedForecastPeriod,
+      weatherData: safeWeatherData,
+      forecastDateRange,
+      todayDate,
+      solarData,
+      avalancheData: safeAvalancheData,
+      alertsData: safeAlertsData,
+      airQualityData: safeAirQualityData,
+      rainfallData: safeRainfallData,
+      snowpackData: safeSnowpackData,
+      fireRiskData: safeFireRiskData,
+      heatRiskData: safeHeatRiskData,
+      atmosphereData: buildAtmosphericData({ weatherData: safeWeatherData, fetched: {} }),
+      localConditionsData: null,
+      gearSuggestions,
+      trailStatus: safeTrailStatus,
+      terrainConditionData: safeTerrainCondition,
+      analysis,
+      partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
+    });
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.status(200).json(fallbackResponsePayload);
   }

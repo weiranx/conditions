@@ -5,6 +5,10 @@ const SYSTEM_PROMPT =
 
 const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, staleTtlMs: 60 * 60 * 1000, maxEntries: 200 });
 
+// Mirrors the 200-char cap route-analysis.js applies to peak/route — keeps client-supplied
+// free text bounded before it's used as a cache key or interpolated into the Claude prompt.
+const MAX_CONTEXT_LENGTH = 200;
+
 function buildCacheKey({ score, primaryHazard, decisionLevel, factors, context }) {
   const topFactorNames = (factors || [])
     .slice(0, 3)
@@ -23,7 +27,9 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
       return res.status(400).json({ error: 'Missing required fields: score, primaryHazard, decisionLevel' });
     }
 
-    const cacheKey = buildCacheKey({ score, primaryHazard, decisionLevel, factors, context });
+    const safeContext = typeof context === 'string' ? context.slice(0, MAX_CONTEXT_LENGTH) : context;
+
+    const cacheKey = buildCacheKey({ score, primaryHazard, decisionLevel, factors, context: safeContext });
 
     try {
       const topFactorsText = (factors || [])
@@ -32,7 +38,7 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
         .join('; ');
 
       const userPrompt = [
-        context || '',
+        safeContext || '',
         `Score: ${score}/100 (${confidence ?? '?'}% confidence). Primary hazard: ${primaryHazard}. Decision: ${decisionLevel}.`,
         topFactorsText ? `Top factors: ${topFactorsText}` : '',
       ]

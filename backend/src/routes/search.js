@@ -1,4 +1,5 @@
 const { createCache, normalizeTextKey } = require('../utils/cache');
+const { logger } = require('../utils/logger');
 
 const normalizeSearchText = (value = '') =>
   String(value)
@@ -52,6 +53,7 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
 
       return res.json(uniqueResults);
     } catch (error) {
+      logger.warn({ err: error, query }, 'Nominatim search failed; serving local catalog matches only');
       return res.json(localMatches);
     }
   });

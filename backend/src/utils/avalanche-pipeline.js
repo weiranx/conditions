@@ -623,4 +623,5 @@ function applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso }) {
 module.exports = {
   fetchAvalanchePipeline,
   applyAvalanchePostProcessing,
+  tryScraperFallback,
 };
