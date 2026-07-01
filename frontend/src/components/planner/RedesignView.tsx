@@ -1415,17 +1415,28 @@ function RedesignViewComponent(props: PlannerViewProps) {
 
         {/* GEAR */}
         {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
-          const SAFETY_TONES = new Set(['nogo', 'caution']);
-          const safety = gearRecommendations.filter((g) => SAFETY_TONES.has(g.tone));
-          const comfort = gearRecommendations.filter((g) => !SAFETY_TONES.has(g.tone));
-          const grouped = safety.length > 0 && comfort.length > 0;
+          const GEAR_TONE_LABEL: Record<string, string> = {
+            nogo: 'Essential',
+            caution: 'Recommended',
+            watch: 'Situational',
+            go: 'Standard',
+          };
+          const GEAR_CATEGORY_ORDER: Array<{ key: string; label: string; icon: React.ReactNode; warn?: boolean }> = [
+            { key: 'Safety', label: 'Safety essentials', icon: <ShieldAlert size={13} />, warn: true },
+            { key: 'Conditions', label: 'Layering & traction', icon: <Layers size={13} /> },
+            { key: 'Exposure', label: 'Sun & heat', icon: <Sun size={13} /> },
+            { key: 'General', label: 'Other', icon: <Compass size={13} /> },
+          ];
+          const gearGroups = GEAR_CATEGORY_ORDER
+            .map((g) => ({ ...g, items: gearRecommendations.filter((item) => item.category === g.key) }))
+            .filter((g) => g.items.length > 0);
           const gearList = (items: typeof gearRecommendations) => (
             <div className="ssr-gear">
               {items.map((g, i) => (
                 <div className="ssr-gear-item" key={`${g.title}-${i}`}>
                   <div className="ssr-gear-head">
                     <span className="ssr-gear-title">{g.title}</span>
-                    <span className={`ssr-pill ${g.tone}`}>{g.category}</span>
+                    <span className={`ssr-pill ${g.tone}`}>{GEAR_TONE_LABEL[g.tone] || g.tone}</span>
                   </div>
                   <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
                 </div>
@@ -1442,17 +1453,13 @@ function RedesignViewComponent(props: PlannerViewProps) {
                 <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="ssr-card-b">
-                {grouped ? (
-                  <>
-                    <div className="ssr-cc-group">
-                      <div className="ssr-cc-group-h warn"><ShieldAlert size={13} /> Safety essentials <span className="ssr-cc-count">{safety.length}</span></div>
-                      {gearList(safety)}
+                {gearGroups.length > 1 ? (
+                  gearGroups.map((g) => (
+                    <div className="ssr-cc-group" key={g.key}>
+                      <div className={`ssr-cc-group-h${g.warn ? ' warn' : ''}`}>{g.icon} {g.label} <span className="ssr-cc-count">{g.items.length}</span></div>
+                      {gearList(g.items)}
                     </div>
-                    <div className="ssr-cc-group">
-                      <div className="ssr-cc-group-h"><Package size={13} /> Comfort &amp; efficiency <span className="ssr-cc-count">{comfort.length}</span></div>
-                      {gearList(comfort)}
-                    </div>
-                  </>
+                  ))
                 ) : gearList(gearRecommendations)}
               </div>
             </section>

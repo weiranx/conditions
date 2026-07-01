@@ -9,7 +9,19 @@ export interface GearCardProps {
   gearRecommendations: GearRecommendation[];
 }
 
-const SAFETY_TONES = new Set(['nogo', 'caution']);
+const GEAR_TONE_LABEL: Record<string, string> = {
+  nogo: 'Essential',
+  caution: 'Recommended',
+  watch: 'Situational',
+  go: 'Standard',
+};
+
+const GEAR_CATEGORY_ORDER: Array<{ key: string; label: string }> = [
+  { key: 'Safety', label: 'Safety essentials' },
+  { key: 'Conditions', label: 'Layering & traction' },
+  { key: 'Exposure', label: 'Sun & heat' },
+  { key: 'General', label: 'Other' },
+];
 
 function GearList({ items }: { items: GearRecommendation[] }) {
   return (
@@ -18,7 +30,7 @@ function GearList({ items }: { items: GearRecommendation[] }) {
         <li key={`${item.title}-${idx}`} className="gear-item">
           <div className="gear-item-head">
             <strong className="gear-item-title">{item.title}</strong>
-            <span className={`decision-pill ${item.tone}`}>{item.category}</span>
+            <span className={`decision-pill ${item.tone}`}>{GEAR_TONE_LABEL[item.tone] || item.tone}</span>
           </div>
           <p className="gear-item-detail">{item.detail}</p>
         </li>
@@ -28,8 +40,9 @@ function GearList({ items }: { items: GearRecommendation[] }) {
 }
 
 export function GearCard({ gearRecommendations }: GearCardProps) {
-  const safetyItems = gearRecommendations.filter((item) => SAFETY_TONES.has(item.tone));
-  const comfortItems = gearRecommendations.filter((item) => !SAFETY_TONES.has(item.tone));
+  const groups = GEAR_CATEGORY_ORDER
+    .map((g) => ({ ...g, items: gearRecommendations.filter((item) => item.category === g.key) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <>
@@ -38,13 +51,13 @@ export function GearCard({ gearRecommendations }: GearCardProps) {
           <p className="muted-note">
             Prioritized for this objective/time. Handle safety-critical items first, then comfort and efficiency items.
           </p>
-          {safetyItems.length > 0 && comfortItems.length > 0 ? (
-            <>
-              <span className="section-label gear-group-label">Safety essentials</span>
-              <GearList items={safetyItems} />
-              <span className="section-label gear-group-label">Comfort &amp; efficiency</span>
-              <GearList items={comfortItems} />
-            </>
+          {groups.length > 1 ? (
+            groups.map((g) => (
+              <div key={g.key}>
+                <span className="section-label gear-group-label">{g.label}</span>
+                <GearList items={g.items} />
+              </div>
+            ))
           ) : (
             <GearList items={gearRecommendations} />
           )}
