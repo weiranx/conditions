@@ -67,7 +67,7 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => 
         const analysis = await askClaudeVision(
           base64,
           promptText,
-          { model: 'claude-sonnet-5', maxTokens: 600, system: SYSTEM_PROMPT },
+          { model: 'claude-sonnet-5', maxTokens: 900, system: SYSTEM_PROMPT },
         );
         // Return the same tile shown to Claude so the UI can display exactly what was
         // analyzed, alongside a note pointing users at the app's live satellite basemap.

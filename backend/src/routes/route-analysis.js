@@ -245,7 +245,7 @@ Write a thorough route-wide briefing covering:
 5. Overall go / go-with-caution / no-go recommendation with one-line reasoning, in prose
 
 Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it helps scannability), and only use a bullet list for section 4. Do not add a title or heading at the start.`,
-        { maxTokens: 900, model: 'claude-haiku-4-5-20251001' }
+        { maxTokens: 1400, model: 'claude-haiku-4-5-20251001' }
       ), 20000, 'Route synthesis');
 
       return res.json({ waypoints: waypointsCopy, summaries, analysis, partialData });

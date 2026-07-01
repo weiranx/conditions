@@ -27,7 +27,7 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
       const narrative = await aiBriefCache.getOrFetch(cacheKey, async () => {
         return askClaude(userPrompt, {
           model: 'claude-sonnet-5',
-          maxTokens: 700,
+          maxTokens: 1024,
           system: SYSTEM_PROMPT,
         });
       });
