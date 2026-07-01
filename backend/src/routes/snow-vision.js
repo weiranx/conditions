@@ -17,7 +17,9 @@ const SYSTEM_PROMPT = [
   'and what the historical comparison implies about how the snowpack got here. If ground-station data is absent',
   'or from a station far from the imaged area, say so and rely on the image alone.',
   'Be direct and concrete. This resolution cannot resolve small features like cornices, crevasses, or thin ice —',
-  'do not speculate about them. Do not use markdown.',
+  'do not speculate about them. Structure the response as 2-3 short paragraphs separated by a single blank line',
+  '(e.g. visual coverage, then ground-station cross-reference). Plain prose only: no markdown of any kind —',
+  'no headings, no "#" characters, no bold/italic asterisks, no bullet lists, no title at the start.',
 ].join(' ');
 
 const lonLatToTile = (lon, lat, zoom) => {

@@ -44,30 +44,6 @@ test('GET /api/safety rejects invalid date format', async () => {
   expect(String(res.body.error || '')).toMatch(/Invalid date format/i);
 });
 
-test('GET /api/sat-oneliner rejects missing coordinates', async () => {
-  const res = await request(app).get('/api/sat-oneliner');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/Latitude and longitude are required/i);
-});
-
-test('GET /api/sat-oneliner rejects invalid coordinate ranges', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=200&lon=-121.7');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/valid decimal coordinates/i);
-});
-
-test('GET /api/sat-oneliner validates maxLength bounds', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=20');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/maxLength/i);
-});
-
-test('GET /api/sat-oneliner rejects invalid date format', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&date=02-20-2026');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/Invalid date format/i);
-});
-
 test('GET /api/search supports short local queries without external dependencies', async () => {
   const res = await request(app).get('/api/search?q=ra');
   expect(res.status).toBe(200);
@@ -108,18 +84,6 @@ test('GET /api/search trims whitespace in short queries before local matching', 
   expect(res.body.every((entry) => entry.class === 'natural')).toBe(true);
 });
 
-
-test('GET /api/sat-oneliner rejects non-numeric maxLength', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=abc');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/maxLength/i);
-});
-
-test('GET /api/sat-oneliner rejects maxLength above upper bound', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=500');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/maxLength/i);
-});
 
 test('GET /api/search treats whitespace-only q as empty and returns popular peaks', async () => {
   const res = await request(app).get('/api/search?q=%20%20%20');
@@ -200,43 +164,6 @@ test('GET /api/safety accepts boundary coordinates lat=90 lon=-180', async () =>
   const res = await request(app).get('/api/safety?lat=90&lon=-180&date=2026-02-20');
   expect(res.status).not.toBe(400);
 }, 45000);
-
-// ── /api/sat-oneliner — additional validation edge cases ─────────────────────
-
-test('GET /api/sat-oneliner rejects when only lat is missing', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lon=-121.7');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/Latitude and longitude are required/i);
-});
-
-test('GET /api/sat-oneliner rejects when only lon is missing', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/Latitude and longitude are required/i);
-});
-
-test('GET /api/sat-oneliner rejects NaN coordinates', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=abc&lon=-121.7');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/valid decimal coordinates/i);
-});
-
-test('GET /api/sat-oneliner accepts maxLength at exactly 80 (lower bound)', async () => {
-  // 80 is the minimum valid value — validation should pass; downstream may fail
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=80');
-  expect(res.status).not.toBe(400);
-}, 45000);
-
-test('GET /api/sat-oneliner accepts maxLength at exactly 320 (upper bound)', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=320');
-  expect(res.status).not.toBe(400);
-}, 45000);
-
-test('GET /api/sat-oneliner rejects maxLength below 80', async () => {
-  const res = await request(app).get('/api/sat-oneliner?lat=46.85&lon=-121.76&maxLength=79');
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/maxLength/i);
-});
 
 // ── /api/ai-brief ────────────────────────────────────────────────────────────
 

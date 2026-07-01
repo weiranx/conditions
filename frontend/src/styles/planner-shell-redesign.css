@@ -226,37 +226,3 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert::before { background: va
 }
 .ssr-shell .top-freshness-alert span { color: var(--d-ink-2); font-weight: 500; }
 
-/* ============ LAYOUT TOGGLE → underline tabs ============ */
-.ssr-shell .report-layout-toggle {
-  border: none;
-  background: none;
-  border-radius: 0;
-  border-bottom: 1px solid var(--d-line);
-  gap: 28px;
-  padding: 0 4px;
-}
-.ssr-shell .report-layout-toggle-btn {
-  position: relative;
-  background: none;
-  border: none;
-  border-radius: 0;
-  padding: 11px 2px;
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--d-ink-3);
-}
-.ssr-shell .report-layout-toggle-btn:hover { background: none; color: var(--d-ink); }
-.ssr-shell .report-layout-toggle-btn.active {
-  background: none;
-  color: var(--d-pine-deep);
-}
-.ssr-shell .report-layout-toggle-btn.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2.5px;
-  border-radius: 2px 2px 0 0;
-  background: var(--d-pine-deep);
-}

@@ -46,7 +46,6 @@ import {
 } from './app/planner-helpers';
 import { loadUserPreferences } from './app/preferences';
 import {
-  collapseWhitespace,
   stringifyRawPayload,
   summarizeText,
   toPlainText,
@@ -54,7 +53,7 @@ import {
 } from './app/text-utils';
 import { buildSnowpackInterpretation, buildSnowpackInsights } from './app/snowpack-display';
 import { windDirectionFromDegrees } from './app/wind-analysis';
-import { assessCriticalWindowPoint, criticalRiskLevelText } from './app/critical-window';
+import { assessCriticalWindowPoint } from './app/critical-window';
 import {
   weatherConditionEmoji,
   inferWeatherSourceLabel,
@@ -84,9 +83,6 @@ import {
   buildTravelWindowInsights,
   buildTrendWindowFromStart,
 } from './app/travel-window';
-import { estimateTripDurationMinutes, buildDaylightMargin, RUNNER_PACE_DEFAULTS, HIKER_PACE_DEFAULTS } from './app/daylight-margin';
-import { buildFootingForecast } from './app/footing';
-import { applyRunnerGearLens } from './app/runner-gear';
 import { sanitizeExternalUrl, parseLinkState } from './app/url-state';
 import {
   evaluateBackcountryDecision,
@@ -187,9 +183,6 @@ function App() {
   const [alpineStartTime, setAlpineStartTime] = useState(initialLinkState.alpineStartTime);
   const [targetElevationInput, setTargetElevationInput] = useState(initialLinkState.targetElevationInput);
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
-  // Fast-and-light trip inputs (drive the daylight-margin and runner gear lens).
-  const [routeDistanceKmInput, setRouteDistanceKmInput] = useState('');
-  const [routeGainMInput, setRouteGainMInput] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
@@ -737,7 +730,6 @@ function App() {
     feelsLikeThresholdMax,
     handlePreferenceTimeChange,
     handleThemeModeChange,
-    handleReportLayoutChange,
     handleTemperatureUnitChange,
     handleWindSpeedUnitChange,
     handleElevationUnitChange,
@@ -758,7 +750,6 @@ function App() {
     handleApplyTravelThresholdPreset,
     applyPreferencesToPlanner,
     resetPreferences,
-    updatePreferences,
     travelThresholdEditorOpen,
     setTravelThresholdEditorOpen,
   } = prefHandlers;
@@ -850,33 +841,6 @@ function App() {
   );
   const travelWindowInsights = buildTravelWindowInsights(travelWindowRows, preferences.timeStyle);
   const travelWindowSummary = travelWindowInsights.summary;
-  const worstTravelWindowIndex = travelWindowRows.length
-    ? travelWindowRows.reduce((worstIdx, row, idx) => {
-        const criticalScore = criticalWindow[idx]?.score || 0;
-        const gustOver = Math.max(0, row.gust - preferences.maxWindGustMph);
-        const precipOver = Math.max(0, row.precipChance - preferences.maxPrecipChance);
-        const coldOver = Math.max(0, preferences.minFeelsLikeF - row.feelsLike);
-        const heatOver = Math.max(0, row.feelsLike - preferences.maxFeelsLikeF);
-        const failCount = row.failedRuleLabels.length;
-        const rowSeverity = failCount * 100 + gustOver * 2 + precipOver + coldOver * 1.5 + heatOver * 1.5 + criticalScore;
-
-        const currentWorst = travelWindowRows[worstIdx];
-        const currentCriticalScore = criticalWindow[worstIdx]?.score || 0;
-        const currentGustOver = Math.max(0, currentWorst.gust - preferences.maxWindGustMph);
-        const currentPrecipOver = Math.max(0, currentWorst.precipChance - preferences.maxPrecipChance);
-        const currentColdOver = Math.max(0, preferences.minFeelsLikeF - currentWorst.feelsLike);
-        const currentHeatOver = Math.max(0, currentWorst.feelsLike - preferences.maxFeelsLikeF);
-        const currentFailCount = currentWorst.failedRuleLabels.length;
-        const worstSeverity = currentFailCount * 100 + currentGustOver * 2 + currentPrecipOver + currentColdOver * 1.5 + currentHeatOver * 1.5 + currentCriticalScore;
-
-        if (rowSeverity === worstSeverity && criticalScore > currentCriticalScore) {
-          return idx;
-        }
-        return rowSeverity > worstSeverity ? idx : worstIdx;
-      }, 0)
-    : -1;
-  const worstTravelWindowRow = worstTravelWindowIndex >= 0 ? travelWindowRows[worstTravelWindowIndex] : null;
-  const worstTravelWindowCritical = worstTravelWindowIndex >= 0 ? criticalWindow[worstTravelWindowIndex] || null : null;
   const peakCriticalWindowIndex = criticalWindow.length
     ? criticalWindow.reduce((bestIndex, current, idx, rows) => (current.score > rows[bestIndex].score ? idx : bestIndex), 0)
     : -1;
@@ -1161,61 +1125,6 @@ function App() {
       handleWeatherHourSelect(matchedRow.hourValue);
     }
   };
-  const satObjectiveLabel = truncateText((objectiveName || 'Objective').split(',')[0].trim(), 22);
-  const satAvalancheSnippet =
-    !safetyData
-      ? 'avy n/a'
-      : !avalancheRelevant
-        ? 'avy n/a'
-        : avalancheUnknown
-          ? 'avy unk'
-          : `avy ${['nr', 'low', 'mod', 'csd', 'high', 'ext'][normalizeDangerLevel(safetyData.avalanche.dangerLevel)] || 'unk'}`;
-  const satWorstWindowSnippet = (() => {
-    const satWindowLabel = `worst${travelWindowHours}h`;
-    if (!worstTravelWindowRow) {
-      return `${satWindowLabel} n/a`;
-    }
-    const peakHour = formatClockForStyle(worstTravelWindowRow.time, preferences.timeStyle).replace(/\s+/g, '');
-    const peakFeelsLike = Number.isFinite(Number(worstTravelWindowRow.feelsLike))
-      ? Number(worstTravelWindowRow.feelsLike)
-      : computeFeelsLikeF(Number(worstTravelWindowRow.temp), Number(worstTravelWindowRow.wind));
-    const peakPrecip = Number.isFinite(Number(worstTravelWindowRow.precipChance))
-      ? Math.round(Number(worstTravelWindowRow.precipChance))
-      : Number.isFinite(Number(worstTravelWindowCritical?.precipChance))
-        ? Math.round(Number(worstTravelWindowCritical?.precipChance))
-        : 0;
-    const failedHazards = worstTravelWindowRow.failedRuleLabels
-      .map((label) => {
-        if (label === 'Gust above limit') return 'gust';
-        if (label === 'Precip above limit') return 'precip';
-        if (label === 'Feels-like below limit') return 'cold';
-        return '';
-      })
-      .filter(Boolean)
-      .slice(0, 2);
-    const peakHazard =
-      failedHazards.length > 0
-        ? failedHazards.join('+')
-        : worstTravelWindowCritical?.reasons?.[0]
-          ? localizeUnitText(worstTravelWindowCritical.reasons[0])
-          : criticalRiskLevelText(worstTravelWindowCritical?.level || 'stable').toLowerCase();
-    return collapseWhitespace(
-      `${satWindowLabel} ${peakHour} ${peakHazard} f${formatTempDisplay(peakFeelsLike)} g${formatWindDisplay(worstTravelWindowRow.gust)} p${peakPrecip}%`,
-    );
-  })();
-  const satelliteConditionLine =
-    safetyData && decision
-      ? truncateText(
-          collapseWhitespace(
-            `${satObjectiveLabel} ${safetyData.forecast?.selectedDate || forecastDate} ${displayStartTime} | ${formatTempDisplay(
-              safetyData.weather.temp,
-            )} f${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)} | w${formatWindDisplay(
-              safetyData.weather.windSpeed,
-            )} g${formatWindDisplay(safetyData.weather.windGust)} p${safetyData.weather.precipChance}% | ${satWorstWindowSnippet} | ${satAvalancheSnippet} | ${decision.level}`,
-          ),
-          170,
-        )
-      : '';
   const forecastLeadHoursDisplay = (() => {
     if (!safetyData?.forecast?.selectedDate) return null;
     // Prefer the ISO 8601 forecastStartTime (includes timezone) to avoid
@@ -1342,71 +1251,6 @@ function App() {
         .filter((item): item is { title: string; detail: string; category: string; tone: string } => item !== null)
     : [];
 
-  // --- Fast-and-light trip planning ---
-  const runnerMode = preferences.defaultActivity === 'trail-running';
-  const routeDistanceKmValue = parseFloat(routeDistanceKmInput);
-  const routeGainMValue = parseFloat(routeGainMInput);
-  const routeDistanceKm = Number.isFinite(routeDistanceKmValue) && routeDistanceKmValue > 0 ? routeDistanceKmValue : null;
-  const routeGainM = Number.isFinite(routeGainMValue) && routeGainMValue >= 0 ? routeGainMValue : null;
-  const estimatedTripDurationMinutes = estimateTripDurationMinutes(
-    { distanceKm: routeDistanceKm, gainM: routeGainM },
-    runnerMode ? RUNNER_PACE_DEFAULTS : HIKER_PACE_DEFAULTS,
-  );
-  const daylightMargin = buildDaylightMargin({
-    startMinutes: startMinutesForPlan,
-    sunriseMinutes: sunriseMinutesForPlan,
-    sunsetMinutes: sunsetMinutesForPlan,
-    durationMinutes: estimatedTripDurationMinutes,
-  });
-  const footingForecast = safetyData
-    ? buildFootingForecast(trendWindow, {
-        snowDepthIn: travelWindowContext?.snowDepthIn ?? null,
-        rain24hIn: rainfall24hIn,
-        snow24hIn: snowfall24hIn,
-      })
-    : null;
-  const handleToggleRunnerMode = useCallback(() => {
-    updatePreferences({ defaultActivity: runnerMode ? 'backcountry' : 'trail-running' });
-  }, [updatePreferences, runnerMode]);
-  // PlannerView/RedesignView are wrapped in React.memo; this object literal
-  // was previously rebuilt inline at the JSX callsite on every render
-  // (with a fresh onToggleRunnerMode closure), which defeated that memo for
-  // every other prop too since React.memo does a shallow compare of the
-  // whole props object. Memoizing it keeps the reference stable when none
-  // of the underlying values changed.
-  const runnerPlanning = useMemo(
-    () => ({
-      runnerMode,
-      onToggleRunnerMode: handleToggleRunnerMode,
-      routeDistanceKmInput,
-      setRouteDistanceKmInput,
-      routeGainMInput,
-      setRouteGainMInput,
-      estimatedTripDurationMinutes,
-      daylightMargin,
-      footingForecast,
-    }),
-    [
-      runnerMode,
-      handleToggleRunnerMode,
-      routeDistanceKmInput,
-      setRouteDistanceKmInput,
-      routeGainMInput,
-      setRouteGainMInput,
-      estimatedTripDurationMinutes,
-      daylightMargin,
-      footingForecast,
-    ],
-  );
-  const gearRecommendationsForDisplay = applyRunnerGearLens(gearRecommendations, {
-    runnerMode,
-    durationMinutes: estimatedTripDurationMinutes,
-    tempF: safetyData?.weather.temp ?? null,
-    feelsLikeF: safetyData?.weather.feelsLike ?? safetyData?.weather.temp ?? null,
-    gainM: routeGainM,
-    heatLevel: heatRiskLevel ?? null,
-  });
-
   const reportCardOrder = buildReportCardOrder({
     safetyData, decision, preferences,
     travelWindowRows, criticalWindow,
@@ -1489,7 +1333,6 @@ function App() {
         heatCeilingMax={heatCeilingMax}
         handlePreferenceTimeChange={handlePreferenceTimeChange}
         handleThemeModeChange={handleThemeModeChange}
-        handleReportLayoutChange={handleReportLayoutChange}
         handleTemperatureUnitChange={handleTemperatureUnitChange}
         handleElevationUnitChange={handleElevationUnitChange}
         handleWindSpeedUnitChange={handleWindSpeedUnitChange}
@@ -1595,7 +1438,6 @@ function App() {
       // Shell / layout
       appShellClassName={appShellClassName}
       isViewPending={isViewPending}
-      handleReportLayoutChange={handleReportLayoutChange}
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}
@@ -1660,7 +1502,6 @@ function App() {
       handleUseNowConditions={handleUseNowConditions}
       loading={loading}
       handleRetryFetch={handleRetryFetch}
-      satelliteConditionLine={satelliteConditionLine}
       timezoneMismatch={timezoneMismatch}
       deviceTimezone={deviceTimezone}
       // Decision / safety
@@ -1932,10 +1773,8 @@ function App() {
       startMinutesForPlan={startMinutesForPlan}
       returnMinutes={returnMinutes}
       daylightRemainingFromStartLabel={daylightRemainingFromStartLabel}
-      // Fast-and-light trip planning
-      runnerPlanning={runnerPlanning}
       // Gear card
-      gearRecommendations={gearRecommendationsForDisplay}
+      gearRecommendations={gearRecommendations}
       // Avalanche forecast card
       overallAvalancheLevel={overallAvalancheLevel}
       avalancheNotApplicableReason={avalancheNotApplicableReason}

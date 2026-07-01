@@ -19,8 +19,3 @@ struct AiBriefResponse: Codable, Sendable {
     var narrative: String
     var cached: Bool
 }
-
-struct SatOnelinerResponse: Codable, Sendable {
-    var oneliner: String
-    var cached: Bool
-}

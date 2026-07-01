@@ -84,6 +84,55 @@ export function truncateText(input: string, maxLength: number): string {
   return `${input.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
+// AI-generated field analyses (score card / satellite snow analysis) are prompted to
+// avoid markdown and to break into blank-line-separated paragraphs, but models
+// occasionally slip in a stray "#" heading or "**bold**" anyway, or (for cached
+// responses generated before that prompt existed) return one dense block with no
+// paragraph breaks at all. This cleans up both cases for display.
+export function formatAiNarrativeParagraphs(input: string | null | undefined): string[] {
+  if (!input) {
+    return [];
+  }
+  const stripped = String(input)
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s*#{1,6}\s*/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(^|\s)\*(\S[^*]*?\S|\S)\*(?=\s|$)/g, '$1$2')
+    .trim();
+
+  const blocks = stripped
+    .split(/\n\s*\n+/)
+    .map((block) => collapseWhitespace(block))
+    .filter(Boolean);
+
+  if (blocks.length > 1) {
+    return blocks;
+  }
+
+  const solo = blocks[0] || '';
+  if (solo.length <= 420) {
+    return solo ? [solo] : [];
+  }
+
+  // No paragraph breaks in a long block — group sentences into readable chunks.
+  const sentences = solo.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) || [solo];
+  const paragraphs: string[] = [];
+  let current = '';
+  sentences.forEach((sentence) => {
+    const next = current ? `${current} ${sentence.trim()}` : sentence.trim();
+    if (current && next.length > 280) {
+      paragraphs.push(current);
+      current = sentence.trim();
+    } else {
+      current = next;
+    }
+  });
+  if (current) {
+    paragraphs.push(current);
+  }
+  return paragraphs;
+}
+
 export function escapeHtml(input: string): string {
   return input
     .replace(/&/g, '&amp;')

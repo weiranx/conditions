@@ -200,8 +200,21 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 .ssr-dash-ai-btn svg { color: var(--d-pine, var(--d-go-deep)); }
 .ssr-dash-ai-btn svg.spin { animation: ssr-dash-spin 1s linear infinite; }
 @keyframes ssr-dash-spin { to { transform: rotate(360deg); } }
-.ssr-dash-ai-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--d-ink-2); display: flex; gap: 8px; }
-.ssr-dash-ai-text svg { flex: none; margin-top: 3px; color: var(--d-pine, var(--d-go-deep)); }
+.ssr-dash-ai-text {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--d-line);
+  background: var(--d-surface-2);
+}
+.ssr-dash-ai-label {
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--d-pine, var(--d-go-deep));
+}
+.ssr-dash-ai-label svg { flex: none; }
+.ssr-dash-ai-text p { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: var(--d-ink-2); }
+.ssr-dash-ai-text p:last-child { margin-bottom: 0; }
 .ssr-dash-ai-error { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--d-nogo-deep); }
 
 @media (max-width: 880px) {

@@ -20,7 +20,6 @@ const {
   formatMinutesToClock,
   clampTravelWindowHours,
 } = require('./src/utils/time');
-const { computeFeelsLikeF } = require('./src/utils/weather-normalizers');
 const {
   dateKeyInTimeZone,
   createWeatherDataService,
@@ -47,11 +46,9 @@ const {
 } = require('./src/utils/avalanche-detail');
 const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terrain-condition');
 const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions');
-const { createSatOneLinerBuilder } = require('./src/utils/sat-oneliner');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
-const { registerSatOneLinerRoute } = require('./src/routes/sat-oneliner');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
@@ -104,8 +101,6 @@ const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
 // in a short window, fail fast instead of waiting out a doomed timeout on every request.
 const noaaCircuitBreaker = createCircuitBreaker({ name: 'noaa', failureThreshold: 5, resetTimeMs: 60000 });
 const avalancheOrgCircuitBreaker = createCircuitBreaker({ name: 'avalanche.org', failureThreshold: 5, resetTimeMs: 60000 });
-
-const buildSatOneLiner = createSatOneLinerBuilder({ parseStartClock, computeFeelsLikeF });
 
 let avalancheMapLayerCache = {
   fetchedAt: 0,
@@ -667,13 +662,6 @@ const safetyHandlerWithTimeout = async (req, res) => {
 registerSafetyRoute({ app, safetyHandler: safetyHandlerWithTimeout });
 const invokeSafetyHandler = createSafetyInvoker({ safetyHandler: safetyHandlerWithTimeout });
 
-registerSatOneLinerRoute({
-  app,
-  invokeSafetyHandler,
-  buildSatOneLiner,
-  parseStartClock,
-});
-
 registerSearchRoutes({
   app,
   fetchWithTimeout,
@@ -716,5 +704,4 @@ module.exports = {
   normalizeAvalancheProblemCollection,
   buildUtahForecastJsonUrl,
   extractUtahAvalancheAdvisory,
-  buildSatOneLiner,
 };

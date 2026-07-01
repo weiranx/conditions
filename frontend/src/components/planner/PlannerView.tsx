@@ -43,10 +43,8 @@ import { LocalConditionsCard } from './cards/LocalConditionsCard';
 import { SnowpackCard } from './cards/SnowpackCard';
 import { FireRiskCard } from './cards/FireRiskCard';
 import { PlanSnapshotCard } from './cards/PlanSnapshotCard';
-import { RunnerPlanningCard } from './cards/RunnerPlanningCard';
 import { GearCard } from './cards/GearCard';
 import { DeepDiveReportCard } from './cards/DeepDiveReportCard';
-import { BriefingView } from './BriefingView';
 import { RedesignView } from './RedesignView';
 import { AppDisclaimer } from '../../app/map-components';
 import '../../styles/planner-redesign.css';
@@ -70,7 +68,6 @@ import type {
   TravelWindowInsights,
   TravelWindowRow,
   TravelWindowSpan,
-  ReportLayout,
 } from '../../app/types';
 import type { ReportCardOrder } from '../../app/card-ordering';
 import type { WeatherHourOption } from '../../app/weather-card-state';
@@ -80,34 +77,20 @@ import type { RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnaly
 import type { AppView } from '../../hooks/useUrlState';
 import type { Suggestion } from '../../lib/search';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
-import type { DaylightMargin } from '../../app/daylight-margin';
-import type { FootingForecast } from '../../app/footing';
 import type { CriticalWindowRow } from './cards/TravelWindowPlannerCard';
 import type { TerrainConditionDetails } from './cards/TerrainCard';
 import type { TargetElevationForecast } from './cards/WeatherCardContent';
 import type { SourceFreshnessRow } from './cards/SourceFreshnessCard';
 import type { BetterDaySuggestion } from '../../hooks/useDayComparisons';
 import { criticalRiskLevelText } from '../../app/critical-window';
+import { formatAiNarrativeParagraphs } from '../../app/text-utils';
 
 // ─── Props interface ────────────────────────────────────────────────────────
-
-export interface RunnerPlanningProps {
-  runnerMode: boolean;
-  onToggleRunnerMode: () => void;
-  routeDistanceKmInput: string;
-  setRouteDistanceKmInput: React.Dispatch<React.SetStateAction<string>>;
-  routeGainMInput: string;
-  setRouteGainMInput: React.Dispatch<React.SetStateAction<string>>;
-  estimatedTripDurationMinutes: number | null;
-  daylightMargin: DaylightMargin | null;
-  footingForecast: FootingForecast | null;
-}
 
 export interface PlannerViewProps {
   // Shell / layout
   appShellClassName: string;
   isViewPending: boolean;
-  handleReportLayoutChange: (layout: ReportLayout) => void;
 
   // Navigation
   navigateToView: (view: AppView) => void;
@@ -177,7 +160,6 @@ export interface PlannerViewProps {
   handleUseNowConditions: () => void;
   loading: boolean;
   handleRetryFetch: () => void;
-  satelliteConditionLine: string;
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
 
@@ -470,9 +452,6 @@ export interface PlannerViewProps {
   returnMinutes: number | null;
   daylightRemainingFromStartLabel: string;
 
-  // Fast-and-light trip planning
-  runnerPlanning: RunnerPlanningProps;
-
   // Gear card
   gearRecommendations: Array<{ title: string; detail: string; category: string; tone: string }>;
 
@@ -506,7 +485,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     // Shell
     appShellClassName,
     isViewPending,
-    handleReportLayoutChange,
 
     // Navigation
     navigateToView,
@@ -575,7 +553,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     handleUseNowConditions,
     loading,
     handleRetryFetch,
-    satelliteConditionLine,
     timezoneMismatch,
     deviceTimezone,
 
@@ -863,9 +840,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     returnMinutes,
     daylightRemainingFromStartLabel,
 
-    // Fast-and-light trip planning
-    runnerPlanning,
-
     // Gear card
     gearRecommendations,
 
@@ -964,7 +938,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleUseNowConditions={handleUseNowConditions}
         loading={loading}
         handleRetryFetch={handleRetryFetch}
-        satelliteConditionLine={satelliteConditionLine}
         openTripToolView={openTripToolView}
         timezoneMismatch={timezoneMismatch}
         deviceTimezone={deviceTimezone}
@@ -1026,37 +999,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
       )}
 
       {hasObjective && safetyData && decision && (
-        <div className="report-nav-bar">
-          <div className="report-layout-toggle" role="radiogroup" aria-label="Report layout">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={effectiveLayout === 'briefing'}
-              className={`report-layout-toggle-btn ${effectiveLayout === 'briefing' ? 'active' : ''}`}
-              onClick={() => handleReportLayoutChange('briefing')}
-            >
-              Briefing
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={effectiveLayout === 'redesign'}
-              className={`report-layout-toggle-btn ${effectiveLayout === 'redesign' ? 'active' : ''}`}
-              onClick={() => handleReportLayoutChange('redesign')}
-            >
-              Full Report
-            </button>
-          </div>
-        </div>
-      )}
-
-      {hasObjective && safetyData && decision && (
-        <section className="report-card runner-planning-card" aria-label="Fast and light planning">
-          <RunnerPlanningCard runnerPlanning={runnerPlanning} />
-        </section>
-      )}
-
-      {hasObjective && safetyData && decision && (
         <div className="data-grid" role="main" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
           {effectiveLayout !== 'redesign' && (
@@ -1112,7 +1054,12 @@ function PlannerViewComponent(props: PlannerViewProps) {
               )}
               <div className="score-ai-brief">
                 {aiBriefNarrative ? (
-                  <p className="score-ai-narrative"><Sparkles size={12} /> {aiBriefNarrative}</p>
+                  <div className="score-ai-narrative">
+                    <div className="score-ai-narrative-label"><Sparkles size={12} /> AI field analysis</div>
+                    {formatAiNarrativeParagraphs(aiBriefNarrative).map((para, idx) => (
+                      <p key={idx}>{para}</p>
+                    ))}
+                  </div>
                 ) : aiBriefError ? (
                   <div className="score-ai-error">
                     <span>{aiBriefError}</span>
@@ -1162,9 +1109,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
             </div>
           )}
 
-          {effectiveLayout === 'briefing' ? (
-            <BriefingView {...props} />
-          ) : effectiveLayout === 'redesign' ? (
+          {effectiveLayout === 'redesign' ? (
             <div style={{ order: reportCardOrder.scoreCard }}>
               <RedesignView {...props} />
             </div>
@@ -1985,7 +1930,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
             factorsCount={safetyData.safety.factors?.length || 0}
             groupImpactsCount={Object.keys(safetyData.safety.groupImpacts || {}).length}
             sourcesUsed={safetyData.safety.sourcesUsed || []}
-            satelliteConditionLineLength={satelliteConditionLine.length || 0}
             rawReportPayload={rawReportPayload}
             copiedRawPayload={copiedRawPayload}
             handleCopyRawPayload={handleCopyRawPayload}

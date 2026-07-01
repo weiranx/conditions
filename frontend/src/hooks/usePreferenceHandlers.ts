@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type {
   ElevationUnit,
-  ReportLayout,
   TemperatureUnit,
   ThemeMode,
   TimeStyle,
@@ -84,7 +83,6 @@ export interface UsePreferenceHandlersReturn {
   handleFeelsLikeThresholdDisplayBlur: () => void;
   handleHeatCeilingDisplayChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleHeatCeilingDisplayBlur: () => void;
-  handleReportLayoutChange: (reportLayout: ReportLayout) => void;
   handleApplyTravelThresholdPreset: (presetKey: TravelThresholdPresetKey) => void;
   applyPreferencesToPlanner: () => void;
   resetPreferences: () => void;
@@ -203,10 +201,6 @@ export function usePreferenceHandlers({
 
   const handleTimeStyleChange = useCallback((timeStyle: TimeStyle) => {
     updatePreferences({ timeStyle });
-  }, [updatePreferences]);
-
-  const handleReportLayoutChange = useCallback((reportLayout: ReportLayout) => {
-    updatePreferences({ reportLayout });
   }, [updatePreferences]);
 
   const commitRoundedThresholdValue = useCallback((
@@ -434,7 +428,6 @@ export function usePreferenceHandlers({
     handleFeelsLikeThresholdDisplayBlur,
     handleHeatCeilingDisplayChange,
     handleHeatCeilingDisplayBlur,
-    handleReportLayoutChange,
     handleApplyTravelThresholdPreset,
     applyPreferencesToPlanner,
     resetPreferences,

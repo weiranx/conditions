@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import type {
   ElevationUnit,
-  ReportLayout,
   TemperatureUnit,
   ThemeMode,
   TimeStyle,
@@ -63,7 +62,6 @@ export interface SettingsViewProps {
   handleElevationUnitChange: (elevationUnit: ElevationUnit) => void;
   handleWindSpeedUnitChange: (windSpeedUnit: WindSpeedUnit) => void;
   handleTimeStyleChange: (timeStyle: TimeStyle) => void;
-  handleReportLayoutChange: (reportLayout: ReportLayout) => void;
 
   // Threshold draft handlers
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -85,7 +83,6 @@ export interface SettingsViewProps {
 }
 
 const THEME_OPTIONS: Array<[ThemeMode, string]> = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
-const LAYOUT_OPTIONS: Array<[ReportLayout, string]> = [['redesign', 'Full Report'], ['briefing', 'Briefing']];
 const TEMP_OPTIONS: Array<[TemperatureUnit, string]> = [['f', '°F'], ['c', '°C']];
 const ELEV_OPTIONS: Array<[ElevationUnit, string]> = [['ft', 'Feet'], ['m', 'Meters']];
 const WIND_OPTIONS: Array<[WindSpeedUnit, string]> = [['mph', 'mph'], ['kph', 'kph']];
@@ -178,7 +175,6 @@ export function SettingsView({
   handleElevationUnitChange,
   handleWindSpeedUnitChange,
   handleTimeStyleChange,
-  handleReportLayoutChange,
   handleTravelWindowHoursDraftChange,
   handleTravelWindowHoursDraftBlur,
   handleWindThresholdDisplayChange,
@@ -287,18 +283,11 @@ export function SettingsView({
             <section className="ssr-set-card" id="ssr-set-appearance">
               <div className="ssr-set-card-h">
                 <h2><Eye /> Appearance</h2>
-                <p>Theme follows your system by default. Report layout sets how the planner renders.</p>
+                <p>Theme follows your system by default.</p>
               </div>
               <div className="ssr-set-row">
                 <span className="ssr-set-row-label">Theme</span>
                 <Seg value={preferences.themeMode} options={THEME_OPTIONS} onChange={handleThemeModeChange} />
-              </div>
-              <div className="ssr-set-row">
-                <span className="ssr-set-row-label">
-                  Report layout
-                  <span className="ssr-hint">Full Report is the complete field brief. Briefing is the narrative summary.</span>
-                </span>
-                <Seg value={preferences.reportLayout} options={LAYOUT_OPTIONS} onChange={handleReportLayoutChange} />
               </div>
             </section>
 
@@ -403,7 +392,7 @@ export function SettingsView({
                 </span>
               </div>
               <div className="ssr-set-note">
-                <b>Current defaults</b> · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Layout {preferences.reportLayout} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
+                <b>Current defaults</b> · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
               </div>
             </section>
           </div>

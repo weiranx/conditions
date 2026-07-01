@@ -11,7 +11,6 @@ import {
   Navigation,
   Clock,
   CalendarDays,
-  Zap,
   RefreshCw,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -61,7 +60,6 @@ export interface PlannerMapSectionProps {
   handleUseNowConditions: () => void;
   loading: boolean;
   handleRetryFetch: () => void;
-  satelliteConditionLine: string;
   openTripToolView: () => void;
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
@@ -78,7 +76,7 @@ export function PlannerMapSection({
   startLabel, alpineStartTime, handlePlannerTimeChange, setAlpineStartTime,
   travelWindowHoursDraft, handleTravelWindowHoursDraftChange, handleTravelWindowHoursDraftBlur,
   objectiveTimezone, handleUseNowConditions,
-  loading, handleRetryFetch, satelliteConditionLine, openTripToolView,
+  loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
 }: PlannerMapSectionProps) {
   return (
@@ -223,9 +221,6 @@ export function PlannerMapSection({
           </button>
           <button type="button" className="settings-btn" onClick={openTripToolView}>
             <CalendarDays size={14} /> Multi-day
-          </button>
-          <button type="button" className="settings-btn" onClick={() => { if (satelliteConditionLine) { navigator.clipboard.writeText(satelliteConditionLine); } }} disabled={!satelliteConditionLine} title={satelliteConditionLine || 'SAT one-liner (load a report first)'}>
-            <Zap size={14} /> SAT Msg
           </button>
 
           <div className="map-ext-links">

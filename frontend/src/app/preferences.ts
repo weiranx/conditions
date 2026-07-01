@@ -10,7 +10,6 @@ import {
   normalizeTemperatureUnit,
   normalizeThemeMode,
   normalizeTimeOrFallback,
-  normalizeReportLayout,
   normalizeTimeStyle,
   normalizeWindSpeedUnit,
 } from './core';
@@ -89,7 +88,8 @@ export function loadUserPreferences(): UserPreferences {
         MIN_TRAVEL_WINDOW_HOURS,
         MAX_TRAVEL_WINDOW_HOURS,
       ),
-      reportLayout: normalizeReportLayout(parsed.reportLayout),
+      // 'briefing' and 'cards' layouts are retired; the redesign report is the only one left.
+      reportLayout: 'redesign',
     };
   } catch {
     return defaults;

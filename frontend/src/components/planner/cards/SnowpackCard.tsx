@@ -1,5 +1,6 @@
 import { Loader2, Satellite } from 'lucide-react';
 import type { SnowpackSnapshotInsights, SnowpackInterpretation } from '../../../app/types';
+import { formatAiNarrativeParagraphs } from '../../../app/text-utils';
 import { HelpHint } from '../CardHelpHint';
 
 export interface SnowpackCardProps {
@@ -139,7 +140,12 @@ export function SnowpackCard({
 
       <div className="score-ai-brief">
         {snowVisionAnalysis ? (
-          <p className="score-ai-narrative"><Satellite size={12} /> {snowVisionAnalysis}</p>
+          <div className="score-ai-narrative">
+            <div className="score-ai-narrative-label"><Satellite size={12} /> Satellite snow analysis</div>
+            {formatAiNarrativeParagraphs(snowVisionAnalysis).map((para, idx) => (
+              <p key={idx}>{para}</p>
+            ))}
+          </div>
         ) : snowVisionError ? (
           <div className="score-ai-error">
             <span>{snowVisionError}</span>

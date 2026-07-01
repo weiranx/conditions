@@ -7,6 +7,7 @@ import {
   LoaderCircle,
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
+import { formatAiNarrativeParagraphs } from '../../app/text-utils';
 import '../../styles/dashboard-redesign.css';
 
 const GAUGE_R = 56;
@@ -166,7 +167,12 @@ export function DashboardSummaryCard({
 
         <div className="ssr-dash-ai">
           {aiBriefNarrative ? (
-            <p className="ssr-dash-ai-text"><Sparkles size={14} aria-hidden /> {aiBriefNarrative}</p>
+            <div className="ssr-dash-ai-text">
+              <div className="ssr-dash-ai-label"><Sparkles size={14} aria-hidden /> AI field analysis</div>
+              {formatAiNarrativeParagraphs(aiBriefNarrative).map((para, idx) => (
+                <p key={idx}>{para}</p>
+              ))}
+            </div>
           ) : aiBriefError ? (
             <div className="ssr-dash-ai-error">
               <span>{aiBriefError}</span>

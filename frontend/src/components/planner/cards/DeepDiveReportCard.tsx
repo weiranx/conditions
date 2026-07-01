@@ -77,7 +77,6 @@ export interface DeepDiveReportCardProps {
   factorsCount: number;
   groupImpactsCount: number;
   sourcesUsed: string[];
-  satelliteConditionLineLength: number;
   rawReportPayload: string;
   copiedRawPayload: boolean;
   handleCopyRawPayload: () => void;
@@ -165,7 +164,6 @@ export function DeepDiveReportCard({
   factorsCount,
   groupImpactsCount,
   sourcesUsed,
-  satelliteConditionLineLength,
   rawReportPayload,
   copiedRawPayload,
   handleCopyRawPayload,
@@ -615,10 +613,6 @@ export function DeepDiveReportCard({
                     ? sourcesUsed.map((source, idx) => <span key={`${source}-${idx}`}>{source}</span>)
                     : 'N/A'}
                 </span>
-              </li>
-              <li>
-                <span className="raw-key">SAT One-Liner Length</span>
-                <span className="raw-value">{satelliteConditionLineLength} chars</span>
               </li>
             </ul>
           </section>
