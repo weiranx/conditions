@@ -7539,14 +7539,29 @@ button.collapsible-card-header:hover .collapsible-chevron {
 .route-wp-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   color: var(--text-muted);
   opacity: 0.6;
   transition: opacity 0.15s ease;
   flex-shrink: 0;
+  padding: 8px;
+  margin: -8px;
+  border-radius: 8px;
 }
 
 .route-wp-link:hover {
   opacity: 1;
+}
+
+@media (max-width: 480px) {
+  .route-waypoint-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .route-wp-name {
+    flex: 1 1 100%;
+  }
 }
 
 .route-analysis-text {
@@ -9687,8 +9702,8 @@ button.collapsible-card-header:hover .collapsible-chevron {
   }
 
   .map-overlay-btn {
-    width: 30px;
-    height: 30px;
+    width: 44px;
+    height: 44px;
   }
 
   .map-overlay-bl {
