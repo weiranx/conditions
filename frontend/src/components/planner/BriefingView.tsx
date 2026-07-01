@@ -163,6 +163,18 @@ export function BriefingView(props: PlannerViewProps) {
     .filter((f) => f.impact && Math.abs(f.impact) >= 1)
     .sort((a, b) => Math.abs(b.impact!) - Math.abs(a.impact!))
     .slice(0, 4);
+  const hazardGroupLabels: Record<string, string> = {
+    avalanche: 'Avalanche', weather: 'Weather', alerts: 'Alerts', airQuality: 'Air Quality', fire: 'Fire',
+  };
+  const hazardGroups = Object.entries(safetyData.safety.groupImpacts || {})
+    .map(([key, value]) => ({
+      key,
+      label: hazardGroupLabels[key] || key,
+      effective: Math.round(Number(value?.effective || 0)),
+      scale: Math.round(Number(value?.scale || 0)),
+    }))
+    .filter((g) => g.effective > 0 && g.scale > 0)
+    .sort((a, b) => b.effective - a.effective);
 
   return (
     <div className="briefing-layout">
@@ -331,6 +343,19 @@ export function BriefingView(props: PlannerViewProps) {
             pill={dayOverDay ? `${dayOverDay.delta > 0 ? '+' : ''}${dayOverDay.delta} vs ${dayOverDay.previousDate}` : undefined}
             pillClass={dayOverDay ? (dayOverDay.delta <= -1 ? 'nogo' : dayOverDay.delta >= 1 ? 'go' : 'caution') : undefined}
           >
+            {hazardGroups.length > 0 && (
+              <div className="briefing-hazard-groups">
+                {hazardGroups.map((g) => (
+                  <div key={g.key} className="briefing-hazard-group">
+                    <span className="briefing-hazard-group-name">{g.label}</span>
+                    <span className="briefing-hazard-group-bar">
+                      <i style={{ width: `${(g.effective / g.scale) * 100}%` }} />
+                    </span>
+                    <span className="briefing-factor-impact neg">−{g.effective} <small>/ {g.scale}</small></span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="briefing-factors">
               {topFactors.map((f, i) => (
                 <div key={i} className="briefing-factor">

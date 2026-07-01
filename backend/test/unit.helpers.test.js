@@ -1778,6 +1778,45 @@ test('proportional cold duration: cap at 12 even with many extreme hours', () =>
   expect(coldDuration.impact).toBe(12);
 });
 
+// --- Cold tier boundaries (T.cold ladder) ---
+// No trend hours means trendMinFeelsLike falls back directly to weatherData.feelsLike,
+// isolating the single tier-based 'NOAA temp + windchill' factor from the separate
+// duration-based 'NOAA hourly trend' Cold factor tested above.
+describe('calculateSafetyScore cold tier boundaries', () => {
+  const coldTierImpact = (feelsLike) => {
+    const result = calculateSafetyScore({
+      ...safetyScoreBaseInput(),
+      weatherData: {
+        description: 'Clear', windSpeed: 5, windGust: 8, precipChance: 5, humidity: 30,
+        temp: feelsLike, feelsLike,
+        isDaytime: true, issuedTime: new Date().toISOString(),
+        trend: [],
+      },
+    });
+    return result.factors.find((f) => f.hazard === 'Cold' && f.source === 'NOAA temp + windchill');
+  };
+
+  test('feels-like -10F triggers extreme cold tier (impact 15)', () => {
+    expect(coldTierImpact(-10).impact).toBe(15);
+  });
+
+  test('feels-like 0F triggers very cold tier (impact 10)', () => {
+    expect(coldTierImpact(0).impact).toBe(10);
+  });
+
+  test('feels-like 15F triggers cold tier (impact 6)', () => {
+    expect(coldTierImpact(15).impact).toBe(6);
+  });
+
+  test('feels-like 25F triggers cool tier (impact 3)', () => {
+    expect(coldTierImpact(25).impact).toBe(3);
+  });
+
+  test('feels-like 26F is above the coolest tier (no tier-based Cold factor)', () => {
+    expect(coldTierImpact(26)).toBeUndefined();
+  });
+});
+
 test('combined hazard escalation: all 4 categories active shows count in message', () => {
   const result = calculateSafetyScore({
     ...safetyScoreBaseInput(),

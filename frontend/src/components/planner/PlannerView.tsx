@@ -1075,12 +1075,18 @@ function PlannerViewComponent(props: PlannerViewProps) {
                 {safetyData.safety.tier ? `${safetyData.safety.tier} Risk` : 'Elevated Risk'}
               </span>
               {typeof safetyData.safety.confidence === 'number' && (
-                <span
-                  className={`score-confidence-line${safetyData.safety.confidence < 60 ? ' low-confidence' : ''}`}
-                  title={safetyData.safety.confidenceReasons?.length ? safetyData.safety.confidenceReasons.join('; ') : undefined}
-                >
-                  Data confidence: {Math.round(safetyData.safety.confidence)}%
-                </span>
+                <>
+                  <span className={`score-confidence-line${safetyData.safety.confidence < 60 ? ' low-confidence' : ''}`}>
+                    Data confidence: {Math.round(safetyData.safety.confidence)}%
+                  </span>
+                  {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0 && (
+                    <ul className="score-confidence-reasons">
+                      {safetyData.safety.confidenceReasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
               <div className="hazard-badge">
                 <AlertTriangle size={12} /> {safetyData.safety.primaryHazard}
@@ -1304,6 +1310,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
                 >
                 <ScoreTraceCard
                   factors={safetyData.safety.factors}
+                  groupImpacts={safetyData.safety.groupImpacts}
                   dayOverDay={dayOverDay}
                 />
                 </CollapsibleCard>

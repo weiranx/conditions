@@ -9,15 +9,23 @@ const { normalizeAlertSeverity } = require('./alerts');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.1.0',
+  scoreVersion: '2.2.0',
   maxScore: 95,
 
+  // Group scales intentionally sum to well over maxScore. Avalanche and
+  // weather are kept at full strength because either alone can legitimately
+  // justify a "don't go" decision, matching real avalanche-forecast judgment
+  // — so the pair can saturate the score to 0 without needing any other
+  // hazard to pile on. Alerts/airQuality/fire are capped much lower because
+  // they're compounding/secondary signals, not solo turn-back reasons on
+  // their own — do not "fix" this by shrinking avalanche/weather to make the
+  // sum match maxScore.
   groupScales: {
     avalanche: 55,
     weather: 42,
-    alerts: 24,
-    airQuality: 20,
-    fire: 18,
+    alerts: 10,
+    airQuality: 8,
+    fire: 7,
   },
 
   tiers: [
@@ -201,6 +209,17 @@ const computeTier = (score, confidence) => {
 
 const diminishingReturn = (raw, scale) => {
   return scale * (1 - Math.exp(-raw / scale));
+};
+
+// Shared lookup for the declarative threshold ladders below. 'min' ladders are
+// sorted descending and match the first tier where value >= tier.min (e.g.
+// visibility, airQuality). 'max' ladders are sorted ascending and match the
+// first tier where value <= tier.max (e.g. cold).
+const findTier = (value, ladder, mode) => {
+  if (mode === 'max') {
+    return ladder.find((tier) => value <= tier.max) || null;
+  }
+  return ladder.find((tier) => value >= tier.min) || null;
 };
 
 const calculateSafetyScore = ({
@@ -557,7 +576,7 @@ const calculateSafetyScore = ({
   }
 
   if (visibilityRiskScore !== null) {
-    const visibilityTier = T.visibility.find((tier) => visibilityRiskScore >= tier.min);
+    const visibilityTier = findTier(visibilityRiskScore, T.visibility, 'min');
     const visibilityImpact = visibilityTier ? visibilityTier.impact : 0;
     if (visibilityImpact > 0) {
       const activeHoursNote =
@@ -576,14 +595,15 @@ const calculateSafetyScore = ({
   }
 
   if (Number.isFinite(trendMinFeelsLike)) {
-    if (trendMinFeelsLike <= T.cold[0].max) {
-      applyFactor('Cold', T.cold[0].impact, `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`, 'NOAA temp + windchill');
-    } else if (trendMinFeelsLike <= T.cold[1].max) {
-      applyFactor('Cold', T.cold[1].impact, `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
-    } else if (trendMinFeelsLike <= T.cold[2].max) {
-      applyFactor('Cold', T.cold[2].impact, `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
-    } else if (trendMinFeelsLike <= T.cold[3].max) {
-      applyFactor('Cold', T.cold[3].impact, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
+    const coldTier = findTier(trendMinFeelsLike, T.cold, 'max');
+    if (coldTier === T.cold[0]) {
+      applyFactor('Cold', coldTier.impact, `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`, 'NOAA temp + windchill');
+    } else if (coldTier === T.cold[1]) {
+      applyFactor('Cold', coldTier.impact, `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
+    } else if (coldTier === T.cold[2]) {
+      applyFactor('Cold', coldTier.impact, `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
+    } else if (coldTier === T.cold[3]) {
+      applyFactor('Cold', coldTier.impact, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
     }
   }
 
@@ -753,7 +773,7 @@ const calculateSafetyScore = ({
   }
 
   if (airQualityRelevantForScoring && Number.isFinite(usAqi)) {
-    const aqiTier = T.airQuality.find((tier) => usAqi >= tier.min);
+    const aqiTier = findTier(usAqi, T.airQuality, 'min');
     if (aqiTier) {
       const aqiMessage =
         aqiTier.min >= 201 ? `Air quality is hazardous (US AQI ${Math.round(usAqi)}).`

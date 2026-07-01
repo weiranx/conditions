@@ -125,6 +125,14 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 .ssr-dash-risk.caution .ssr-dash-conf-bar i { background: var(--d-warn); }
 .ssr-dash-risk.nogo .ssr-dash-conf-bar i { background: var(--d-nogo); }
 
+.ssr-dash-conf-reasons {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--d-ink-3);
+}
+
 .ssr-dash-head { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; color: var(--d-ink); }
 .ssr-dash-where { font-size: 14px; color: var(--d-ink-3); font-weight: 500; }
 .ssr-dash-where b { color: var(--d-ink); font-weight: 700; }

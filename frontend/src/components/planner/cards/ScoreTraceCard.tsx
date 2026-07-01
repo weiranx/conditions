@@ -2,13 +2,57 @@ import type { DayOverDayComparison, SafetyData } from '../../../app/types';
 
 export interface ScoreTraceCardProps {
   factors: SafetyData['safety']['factors'];
+  groupImpacts: SafetyData['safety']['groupImpacts'];
   dayOverDay: DayOverDayComparison | null;
 }
 
-export function ScoreTraceCard({ factors, dayOverDay }: ScoreTraceCardProps) {
+const GROUP_LABELS: Record<string, string> = {
+  avalanche: 'Avalanche',
+  weather: 'Weather',
+  alerts: 'Alerts',
+  airQuality: 'Air Quality',
+  fire: 'Fire',
+};
+
+function GroupImpactBreakdown({ groupImpacts }: { groupImpacts: SafetyData['safety']['groupImpacts'] }) {
+  const groups = groupImpacts
+    ? Object.entries(groupImpacts)
+        .map(([key, value]) => ({
+          key,
+          label: GROUP_LABELS[key] || key,
+          effective: Math.round(Number(value?.effective || 0)),
+          scale: Math.round(Number(value?.scale || 0)),
+        }))
+        .filter((g) => g.effective > 0 && g.scale > 0)
+        .sort((a, b) => b.effective - a.effective)
+    : [];
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="score-group-breakdown">
+      <strong>Hazard group contribution</strong>
+      <ul className="score-trace-list compact">
+        {groups.map((g) => (
+          <li key={g.key}>
+            <span className="score-trace-hazard">{g.label}</span>
+            <span className="score-trace-impact down">
+              -{g.effective} <small>of {g.scale}</small>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function ScoreTraceCard({ factors, groupImpacts, dayOverDay }: ScoreTraceCardProps) {
   const sortedFactors = Array.isArray(factors) ? factors : [];
   return (
     <>
+      <GroupImpactBreakdown groupImpacts={groupImpacts} />
       {sortedFactors.length > 0 ? (
         <ul className="score-trace-list">
           {(() => {

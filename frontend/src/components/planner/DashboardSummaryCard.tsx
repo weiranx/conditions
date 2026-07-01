@@ -110,6 +110,13 @@ export function DashboardSummaryCard({
                 </span>
               )}
             </div>
+            {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0 && (
+              <ul className="ssr-dash-conf-reasons">
+                {safetyData.safety.confidenceReasons.map((reason, idx) => (
+                  <li key={idx}>{reason}</li>
+                ))}
+              </ul>
+            )}
             <h2 className="ssr-dash-head">{decision.headline}</h2>
             <div className="ssr-dash-where">
               <b>{objectiveName || 'Objective'}</b>

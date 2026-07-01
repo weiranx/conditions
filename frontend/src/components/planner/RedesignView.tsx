@@ -1312,6 +1312,41 @@ function RedesignViewComponent(props: PlannerViewProps) {
                     <span className="ssr-sb-sub">{factors.length} factor{factors.length !== 1 ? 's' : ''} weighed against a 100 baseline</span>
                   </div>
                 </div>
+                {(() => {
+                  const groupLabels: Record<string, string> = {
+                    avalanche: 'Avalanche', weather: 'Weather', alerts: 'Alerts', airQuality: 'Air Quality', fire: 'Fire',
+                  };
+                  const groups = safetyData.safety.groupImpacts
+                    ? Object.entries(safetyData.safety.groupImpacts)
+                        .map(([key, value]: [string, any]) => ({
+                          key,
+                          label: groupLabels[key] || key,
+                          effective: Math.round(Number(value?.effective || 0)),
+                          scale: Math.round(Number(value?.scale || 0)),
+                        }))
+                        .filter((g) => g.effective > 0 && g.scale > 0)
+                        .sort((a, b) => b.effective - a.effective)
+                    : [];
+                  if (groups.length === 0) return null;
+                  return (
+                    <div className="ssr-cc-group">
+                      <div className="ssr-cc-group-h">Hazard groups <span className="ssr-cc-count">{groups.length}</span></div>
+                      <div className="ssr-factors">
+                        {groups.map((g) => (
+                          <div className="ssr-factor" key={g.key}>
+                            <div className="ssr-factor-top">
+                              <span className="ssr-factor-name">{g.label}</span>
+                              <span className="ssr-factor-impact neg">−{g.effective} <small>/ {g.scale}</small></span>
+                            </div>
+                            <span className="ssr-factor-bar">
+                              <i className="neg" style={{ width: `${(g.effective / g.scale) * 100}%` }} />
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="ssr-cc-group">
                   <div className="ssr-cc-group-h">Primary drivers <span className="ssr-cc-count">{primary.length}</span></div>
                   <div className="ssr-factors">
