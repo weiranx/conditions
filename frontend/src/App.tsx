@@ -552,14 +552,12 @@ function App() {
     void handleRequestAiBrief({
       safetyData,
       decisionLevel: decision.level,
-      fieldBriefPrimaryReason,
-      fieldBriefTopRisks,
     });
   };
 
   const handleRequestSnowVisionAction = () => {
     if (snowVisionLoading) return;
-    void handleRequestSnowVision(position.lat, position.lng);
+    void handleRequestSnowVision(position.lat, position.lng, safetyData?.snowpack);
   };
 
   const handleCopyRawPayload = async () => {

@@ -246,18 +246,18 @@ test('POST /api/ai-brief rejects request with empty body', async () => {
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
 
-test('POST /api/ai-brief rejects missing score', async () => {
+test('POST /api/ai-brief rejects missing report', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ primaryHazard: 'avalanche', decisionLevel: 'GO' });
+    .send({ decisionLevel: 'GO' });
   expect(res.status).toBe(400);
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
 
-test('POST /api/ai-brief rejects missing primaryHazard', async () => {
+test('POST /api/ai-brief rejects non-object report', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ score: 72, decisionLevel: 'GO' });
+    .send({ report: 'not an object', decisionLevel: 'GO' });
   expect(res.status).toBe(400);
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
@@ -265,18 +265,17 @@ test('POST /api/ai-brief rejects missing primaryHazard', async () => {
 test('POST /api/ai-brief rejects missing decisionLevel', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ score: 72, primaryHazard: 'wind' });
+    .send({ report: { safety: { score: 72 } } });
   expect(res.status).toBe(400);
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
 
-test('POST /api/ai-brief accepts score of 0 as a valid non-null value', async () => {
-  // score=0 must NOT trigger "Missing required fields" — the check is `score == null`
+test('POST /api/ai-brief accepts a well-formed report', async () => {
   // The call will reach the AI layer and likely fail in test (no real Claude), so we
   // only assert it gets past validation (not a 400).
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ score: 0, primaryHazard: 'weather', decisionLevel: 'NO-GO' });
+    .send({ report: { safety: { score: 0, primaryHazard: 'weather' } }, decisionLevel: 'NO-GO' });
   expect(res.status).not.toBe(400);
 });
 
@@ -522,18 +521,10 @@ test('POST /api/route-analysis rejects non-numeric lon', async () => {
 
 // ── /api/ai-brief — additional edge cases ───────────────────────────────────
 
-test('POST /api/ai-brief rejects score=null explicitly', async () => {
+test('POST /api/ai-brief rejects report=null explicitly', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ score: null, primaryHazard: 'avalanche', decisionLevel: 'GO' });
-  expect(res.status).toBe(400);
-  expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
-});
-
-test('POST /api/ai-brief rejects empty-string primaryHazard', async () => {
-  const res = await request(app)
-    .post('/api/ai-brief')
-    .send({ score: 72, primaryHazard: '', decisionLevel: 'GO' });
+    .send({ report: null, decisionLevel: 'GO' });
   expect(res.status).toBe(400);
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
@@ -541,16 +532,15 @@ test('POST /api/ai-brief rejects empty-string primaryHazard', async () => {
 test('POST /api/ai-brief rejects empty-string decisionLevel', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ score: 72, primaryHazard: 'wind', decisionLevel: '' });
+    .send({ report: { safety: { score: 72 } }, decisionLevel: '' });
   expect(res.status).toBe(400);
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
 
-test('POST /api/ai-brief passes validation when factors and context are omitted', async () => {
-  // factors and context are optional — omitting them must not cause a 400
+test('POST /api/ai-brief passes validation with a minimal report object', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
-    .send({ score: 55, primaryHazard: 'weather', decisionLevel: 'CAUTION' });
+    .send({ report: {}, decisionLevel: 'CAUTION' });
   expect(res.status).not.toBe(400);
 });
 

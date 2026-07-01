@@ -9,9 +9,14 @@ const SYSTEM_PROMPT = [
   'You are a backcountry conditions analyst reviewing a Sentinel-2 satellite true-color image',
   '(roughly 10m/pixel, a cloud-free mosaic from the least-cloudy pass in the last 30 days,',
   'centered on the requested coordinates and covering about 5x5 km).',
-  'In 2-4 sentences, describe snow coverage relevant to backcountry travel: rough percent coverage,',
-  'how patchy/continuous it is, and any obvious bare or rocky terrain. Be direct and concrete.',
-  'This resolution cannot resolve small features like cornices, crevasses, or thin ice —',
+  'You may also be given raw ground-station snowpack data (SNOTEL/CDEC/NOHRSC snow depth and SWE readings,',
+  'and a comparison to the historical average for this date) as JSON.',
+  'In 4-6 sentences, describe snow coverage relevant to backcountry travel: rough percent coverage,',
+  'how patchy/continuous it is, and any obvious bare or rocky terrain — then cross-reference that with',
+  'the ground-station data if provided, noting whether the visual coverage and the measured depth/SWE agree,',
+  'and what the historical comparison implies about how the snowpack got here. If ground-station data is absent',
+  'or from a station far from the imaged area, say so and rely on the image alone.',
+  'Be direct and concrete. This resolution cannot resolve small features like cornices, crevasses, or thin ice —',
   'do not speculate about them. Do not use markdown.',
 ].join(' ');
 
@@ -26,11 +31,15 @@ const lonLatToTile = (lon, lat, zoom) => {
   };
 };
 
+// Bounds the raw snowpack JSON before it's interpolated into the vision prompt or used
+// as part of the cache key.
+const MAX_SNOWPACK_LENGTH = 4000;
+
 const snowVisionCache = createCache({ name: 'snow-vision', ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 24 * 60 * 60 * 1000, maxEntries: 300 });
 
 const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => {
-  app.get('/api/snow-vision', async (req, res) => {
-    const { lat, lon } = req.query;
+  app.post('/api/snow-vision', async (req, res) => {
+    const { lat, lon, snowpack } = req.body || {};
     const parsedLat = Number(lat);
     const parsedLon = Number(lon);
     if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
@@ -38,17 +47,22 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => 
     }
 
     const { x, y } = lonLatToTile(parsedLon, parsedLat, SNOW_VISION_ZOOM);
+    const snowpackJson = snowpack && typeof snowpack === 'object' ? JSON.stringify(snowpack).slice(0, MAX_SNOWPACK_LENGTH) : '';
     // Keying by tile (not raw lat/lon) means nearby requests within the same ~5km tile
-    // share one Sentinel Hub fetch + one vision call instead of paying for both per-request.
-    const cacheKey = `${SNOW_VISION_ZOOM}/${x}/${y}`;
+    // share one Sentinel Hub fetch. The snowpack payload is appended to the key so a
+    // changed ground-station reading (new SNOTEL read, different day) busts the cache.
+    const cacheKey = `${SNOW_VISION_ZOOM}/${x}/${y}|${snowpackJson}`;
 
     try {
       const result = await snowVisionCache.getOrFetch(cacheKey, async () => {
         const png = await fetchSentinelTile({ z: SNOW_VISION_ZOOM, x, y, fetchWithTimeout });
+        const promptText = snowpackJson
+          ? `Analyze the snow conditions visible in this satellite image, using this ground-station snowpack data (JSON) as supplemental context:\n${snowpackJson}`
+          : 'Analyze the snow conditions visible in this satellite image.';
         const analysis = await askClaudeVision(
           png.toString('base64'),
-          'Analyze the snow conditions visible in this satellite image.',
-          { model: 'claude-sonnet-5', maxTokens: 250, system: SYSTEM_PROMPT },
+          promptText,
+          { model: 'claude-sonnet-5', maxTokens: 350, system: SYSTEM_PROMPT },
         );
         return { analysis, zoom: SNOW_VISION_ZOOM };
       });

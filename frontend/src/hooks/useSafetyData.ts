@@ -36,7 +36,7 @@ export interface UseSafetyDataReturn {
   setSnowVisionLoading: React.Dispatch<React.SetStateAction<boolean>>;
   snowVisionError: string | null;
   setSnowVisionError: React.Dispatch<React.SetStateAction<string | null>>;
-  handleRequestSnowVision: (lat: number, lon: number) => Promise<void>;
+  handleRequestSnowVision: (lat: number, lon: number, snowpack?: SafetyData['snowpack']) => Promise<void>;
   fetchSafetyData: (
     lat: number,
     lon: number,
@@ -49,8 +49,6 @@ export interface UseSafetyDataReturn {
   handleRequestAiBrief: (params: {
     safetyData: SafetyData;
     decisionLevel: DecisionLevel;
-    fieldBriefPrimaryReason: string;
-    fieldBriefTopRisks: string[];
   }) => Promise<void>;
 }
 
@@ -294,37 +292,14 @@ export function useSafetyData({
   const handleRequestAiBrief = useCallback(async (params: {
     safetyData: SafetyData;
     decisionLevel: DecisionLevel;
-    fieldBriefPrimaryReason: string;
-    fieldBriefTopRisks: string[];
   }) => {
     if (aiBriefLoading) return;
     setAiBriefLoading(true);
     setAiBriefError(null);
     try {
-      const factors = Array.isArray(params.safetyData.safety.factors) ? params.safetyData.safety.factors : [];
-      // Include key weather values so the AI can reason about severity
-      const weatherContext: string[] = [];
-      const w = params.safetyData.weather;
-      if (w) {
-        if (Number.isFinite(w.windGust) && w.windGust > 0) weatherContext.push(`Wind gusts: ${Math.round(w.windGust)} mph`);
-        if (Number.isFinite(w.windSpeed) && w.windSpeed > 0) weatherContext.push(`Sustained wind: ${Math.round(w.windSpeed)} mph`);
-        if (w.temp != null) weatherContext.push(`Temp: ${Math.round(w.temp)}°F`);
-      }
-      const contextParts = [
-        params.fieldBriefPrimaryReason,
-        ...params.fieldBriefTopRisks.slice(0, 3),
-        ...weatherContext,
-      ].filter(Boolean);
       const result = await fetchAiBrief({
-        score: params.safetyData.safety.score,
-        confidence: typeof params.safetyData.safety.confidence === 'number' ? params.safetyData.safety.confidence : null,
-        primaryHazard: params.safetyData.safety.primaryHazard || 'Unknown',
         decisionLevel: params.decisionLevel,
-        factors: factors.slice(0, 5).map((f: Record<string, unknown>) => ({
-          hazard: String(f.hazard || f.name || ''),
-          impact: Number(f.impact || 0),
-        })),
-        context: contextParts.join('. '),
+        report: params.safetyData,
       });
       setAiBriefNarrative(result.narrative);
     } catch (err) {
@@ -334,12 +309,12 @@ export function useSafetyData({
     }
   }, [aiBriefLoading]);
 
-  const handleRequestSnowVision = useCallback(async (lat: number, lon: number) => {
+  const handleRequestSnowVision = useCallback(async (lat: number, lon: number, snowpack?: SafetyData['snowpack']) => {
     if (snowVisionLoading) return;
     setSnowVisionLoading(true);
     setSnowVisionError(null);
     try {
-      const result = await fetchSnowVisionAnalysis(lat, lon);
+      const result = await fetchSnowVisionAnalysis(lat, lon, snowpack);
       setSnowVisionAnalysis(result.analysis);
     } catch (err) {
       setSnowVisionError(err instanceof Error ? err.message : 'Satellite snow analysis unavailable');
