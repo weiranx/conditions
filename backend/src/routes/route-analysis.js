@@ -246,7 +246,7 @@ Write a thorough route-wide briefing covering:
 
 Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it helps scannability), and only use a bullet list for section 4. Do not add a title or heading at the start.`,
         { maxTokens: 4096, model: 'claude-sonnet-5' }
-      ), 30000, 'Route synthesis');
+      ), 60000, 'Route synthesis');
 
       return res.json({ waypoints: waypointsCopy, summaries, analysis, partialData });
     } catch (err) {
