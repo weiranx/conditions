@@ -78,13 +78,6 @@ html[data-theme="dark"] .ssr-shell {
   border-color: var(--d-pine);
   box-shadow: 0 0 0 3px oklch(46% 0.068 155 / .14);
 }
-.ssr-shell .search-go-btn {
-  border-radius: var(--d-r-pill);
-  background: var(--d-pine);
-  border-color: var(--d-pine);
-  color: #fff;
-}
-.ssr-shell .search-go-btn:hover:not(:disabled) { background: var(--d-pine-deep); }
 .ssr-shell .search-clear-btn { border-radius: var(--d-r-pill); }
 
 /* header nav buttons → pill */

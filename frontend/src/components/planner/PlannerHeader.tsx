@@ -41,7 +41,7 @@ export function PlannerHeader({
   searchWrapperRef, searchInputRef, searchQuery, trimmedSearchQuery,
   showSuggestions, searchLoading, suggestions, activeSuggestionIndex,
   parsedTypedCoordinates,
-  handleInputChange, handleFocus, handleSearchKeyDown, handleSearchSubmit,
+  handleInputChange, handleFocus, handleSearchKeyDown,
   handleSearchClear, handleUseTypedCoordinates, selectSuggestion, setActiveSuggestionIndex,
   disabled = false,
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
@@ -80,7 +80,6 @@ export function PlannerHeader({
           onInputChange={handleInputChange}
           onFocus={handleFocus}
           onKeyDown={handleSearchKeyDown}
-          onSubmit={handleSearchSubmit}
           onClear={handleSearchClear}
           onUseCoordinates={handleUseTypedCoordinates}
           onSelectSuggestion={selectSuggestion}

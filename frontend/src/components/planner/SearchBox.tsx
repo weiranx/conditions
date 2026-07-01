@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, History, LoaderCircle, Mountain, Search, Star, X } from 'lucide-react';
+import { Bookmark, History, Mountain, Search, Star, X } from 'lucide-react';
 import { isMountainSuggestion, type Suggestion } from '../../lib/search';
 
 interface SearchBoxProps {
@@ -12,12 +12,10 @@ interface SearchBoxProps {
   suggestions: Suggestion[];
   activeSuggestionIndex: number;
   canUseCoordinates: boolean;
-  showGoButton?: boolean;
   disabled?: boolean;
   onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-  onSubmit: () => void;
   onClear: () => void;
   onUseCoordinates: (value: string) => void;
   onSelectSuggestion: (suggestion: Suggestion) => void;
@@ -34,12 +32,10 @@ export function SearchBox({
   suggestions,
   activeSuggestionIndex,
   canUseCoordinates,
-  showGoButton = true,
   disabled = false,
   onInputChange,
   onFocus,
   onKeyDown,
-  onSubmit,
   onClear,
   onUseCoordinates,
   onSelectSuggestion,
@@ -70,17 +66,6 @@ export function SearchBox({
           aria-controls="planner-suggestion-list"
           aria-activedescendant={activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
         />
-        {showGoButton && (
-          <button
-            type="button"
-            className="search-go-btn"
-            onClick={onSubmit}
-            aria-label={searchLoading ? 'Searching' : 'Search location'}
-            disabled={searchLoading || disabled}
-          >
-            {searchLoading ? <LoaderCircle size={14} className="spin" /> : 'Go'}
-          </button>
-        )}
         {trimmedSearchQuery.length > 0 && (
           <button type="button" className="search-clear-btn" onClick={onClear} aria-label="Clear search" disabled={disabled}>
             <X size={14} />

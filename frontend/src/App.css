@@ -9629,13 +9629,6 @@ button.collapsible-card-header:hover .collapsible-chevron {
     font-size: 0.92rem;
   }
 
-  .search-go-btn {
-    min-height: 38px;
-    min-width: 44px;
-    padding: 7px 14px;
-    font-size: 0.78rem;
-  }
-
   .search-clear-btn {
     width: 38px;
     height: 38px;
@@ -9702,8 +9695,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .primary-btn,
   .secondary-btn,
   .settings-btn,
-  .header-nav-btn,
-  .search-go-btn {
+  .header-nav-btn {
     min-height: 44px;
   }
 
@@ -10265,11 +10257,6 @@ button.collapsible-card-header:hover .collapsible-chevron {
     font-size: 16px;
   }
 
-  .search-go-btn {
-    padding: 5px 8px;
-    font-size: 0.7rem;
-  }
-
   .suggestions-list {
     max-height: min(52vh, 300px);
   }
@@ -10359,7 +10346,6 @@ button.collapsible-card-header:hover .collapsible-chevron {
     font-size: 16px;
   }
 
-  .search-go-btn,
   .search-clear-btn {
     min-height: 30px;
   }
