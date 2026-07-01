@@ -465,7 +465,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         <section className="ssr-card ssr-actions">
           <div className="ssr-card-h">
             <h2>
-              <span className="ssr-h-icon"><Compass size={16} /></span>
+              <span className="ssr-h-icon icon-neutral"><Compass size={16} /></span>
               What to adjust
             </h2>
             <span className="ssr-h-meta">
@@ -501,7 +501,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Clock size={16} /></span>
+                <span className="ssr-h-icon icon-blue"><Clock size={16} /></span>
                 Travel Window
               </h2>
               <span className="ssr-h-meta">
@@ -603,7 +603,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
             <section className="ssr-card">
               <div className="ssr-card-h">
                 <h2>
-                  <span className="ssr-h-icon"><CheckCircle2 size={16} /></span>
+                  <span className="ssr-h-icon icon-neutral"><CheckCircle2 size={16} /></span>
                   Critical Checks
                 </h2>
                 <div className="ssr-cc-meter" title={`${passing.length} of ${total} checks passing`}>
@@ -661,7 +661,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         <section className="ssr-card">
           <div className="ssr-card-h">
             <h2>
-              <span className="ssr-h-icon"><Thermometer size={16} /></span>
+              <span className="ssr-h-icon icon-blue"><Thermometer size={16} /></span>
               Weather
             </h2>
             <span className="ssr-h-meta">
@@ -712,7 +712,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Layers size={16} /></span>
+                <span className="ssr-h-icon icon-amber"><Layers size={16} /></span>
                 Elevation profile
               </h2>
               <span className="ssr-h-meta">{bands.length} bands</span>
@@ -771,7 +771,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Wind size={16} /></span>
+                <span className="ssr-h-icon icon-cyan"><Wind size={16} /></span>
                 Wind Loading
               </h2>
               <span className={`ssr-pill ${windLoadingPillClass}`}>{windLoadingLevel}</span>
@@ -826,7 +826,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         <section className="ssr-card">
           <div className="ssr-card-h">
             <h2>
-              <span className="ssr-h-icon"><AlertTriangle size={16} /></span>
+              <span className="ssr-h-icon icon-orange"><AlertTriangle size={16} /></span>
               Avalanche
             </h2>
             {safetyData.avalanche?.center && <span className="ssr-h-meta">{safetyData.avalanche.center}</span>}
@@ -901,7 +901,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Snowflake size={16} /></span>
+                <span className="ssr-h-icon icon-cyan"><Snowflake size={16} /></span>
                 Snowpack
               </h2>
               {snowpackBestDepthSource && (
@@ -964,7 +964,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
             <section className="ssr-card">
               <div className="ssr-card-h">
                 <h2>
-                  <span className="ssr-h-icon"><Sun size={16} /></span>
+                  <span className="ssr-h-icon icon-yellow"><Sun size={16} /></span>
                   Daylight
                 </h2>
                 <span className="ssr-h-meta">{Math.floor(dayLen / 60)}h {dayLen % 60}m</span>
@@ -994,7 +994,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Sun size={16} /></span>
+                <span className="ssr-h-icon icon-orange"><Sun size={16} /></span>
                 Heat Risk
               </h2>
               <span className={`ssr-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>
@@ -1020,7 +1020,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Flame size={16} /></span>
+                <span className="ssr-h-icon icon-orange"><Flame size={16} /></span>
                 Fire Risk
               </h2>
               <span className={`ssr-pill ${fireRiskPillClass}`}>{String(fireRiskLabel || 'Low').toUpperCase()}</span>
@@ -1060,7 +1060,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Wind size={16} /></span>
+                <span className="ssr-h-icon icon-purple"><Wind size={16} /></span>
                 Air Quality
               </h2>
               <span className={`ssr-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClassFn(safetyData.airQuality?.usAqi)}`}>
@@ -1116,7 +1116,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Route size={16} /></span>
+                <span className="ssr-h-icon icon-amber"><Route size={16} /></span>
                 Terrain
               </h2>
               <span className={`ssr-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
@@ -1152,7 +1152,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><CloudRain size={16} /></span>
+                <span className="ssr-h-icon icon-blue"><CloudRain size={16} /></span>
                 Precipitation
               </h2>
               <span className={`ssr-pill ${rainfall24hSeverityClass}`}>24h {rainfall24hDisplay}{Number.isFinite(snowfall24hIn) ? ` · ${snowfall24hDisplay}` : ''}</span>
@@ -1187,7 +1187,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         <section className="ssr-card">
           <div className="ssr-card-h">
             <h2>
-              <span className="ssr-h-icon"><ShieldAlert size={16} /></span>
+              <span className="ssr-h-icon icon-orange"><ShieldAlert size={16} /></span>
               Cautions &amp; Alerts
             </h2>
             <span className="ssr-h-meta">{openCount} open</span>
@@ -1249,7 +1249,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
-                <span className="ssr-h-icon"><Radio size={16} /></span>
+                <span className="ssr-h-icon icon-neutral"><Radio size={16} /></span>
                 Sources
               </h2>
               <span className="ssr-h-meta">{freshCount}/{sourceFreshnessRows.length} fresh</span>
@@ -1379,7 +1379,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
             <section className="ssr-card">
               <div className="ssr-card-h">
                 <h2>
-                  <span className="ssr-h-icon"><Package size={16} /></span>
+                  <span className="ssr-h-icon icon-neutral"><Package size={16} /></span>
                   Gear
                 </h2>
                 <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
