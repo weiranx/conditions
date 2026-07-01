@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
+import { AttributionControl, MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import {
   Wind,
@@ -84,13 +84,14 @@ export function PlannerMapSection({
   return (
     <section className="map-shell" id="planner-main-content">
       <div className="map-section">
-        <MapContainer center={position} zoom={hasObjective ? 11 : 4} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+        <MapContainer center={position} zoom={hasObjective ? 11 : 4} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             key={activeBasemap.url}
             attribution={activeBasemap.attribution}
             url={activeBasemap.url}
             maxNativeZoom={activeBasemap.maxNativeZoom}
           />
+          <AttributionControl position="bottomright" prefix={false} />
           <ScaleControl
             position="bottomleft"
             imperial={preferences.elevationUnit === 'ft'}
