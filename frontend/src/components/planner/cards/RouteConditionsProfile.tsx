@@ -12,7 +12,7 @@ interface RouteConditionsProfileProps {
     name: string;
     elev_ft: number;
     score: number | null;
-    weather: { temp?: number; windSpeed?: number; description?: string; precipChance?: number };
+    weather: { temp?: number; windSpeed?: number; windGust?: number; description?: string; precipChance?: number };
     avalanche?: { risk?: string; dangerLevel?: number };
   }>;
   getScoreColor: (score: number) => string;
@@ -68,6 +68,9 @@ function CustomTooltip({
       {wp.weather.temp != null && <div>Temp: {formatTempDisplay(wp.weather.temp)}</div>}
       {wp.weather.windSpeed != null && (
         <div>Wind: {formatWindDisplay(wp.weather.windSpeed)}</div>
+      )}
+      {wp.weather.windGust != null && (
+        <div>Gust: {formatWindDisplay(wp.weather.windGust)}</div>
       )}
       {wp.weather.precipChance != null && (
         <div>Precip: {Math.round(wp.weather.precipChance)}%</div>

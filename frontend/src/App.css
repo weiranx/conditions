@@ -7502,6 +7502,28 @@ button.collapsible-card-header:hover .collapsible-chevron {
   font-weight: 600;
 }
 
+.route-wp-gust {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-wp-no-data {
+  opacity: 0.6;
+}
+
+.route-wp-no-data-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #b04040;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.route-analysis-partial {
+  color: #b0793f;
+}
+
 .route-wp-avy {
   font-size: 0.78rem;
   color: var(--text-muted);

@@ -5,6 +5,7 @@ import './App.css';
 import {
   DATE_FMT,
   GUST_INCREASE_MPH_PER_1000FT,
+  KM_PER_MILE,
   MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
@@ -173,8 +174,8 @@ function App() {
   const {
     safetyData, setSafetyData, loading, error, setError,
     aiBriefNarrative, setAiBriefNarrative, aiBriefLoading, setAiBriefLoading, aiBriefError, setAiBriefError,
-    snowVisionAnalysis, snowVisionLoading, snowVisionError,
-    setSnowVisionAnalysis, setSnowVisionLoading, setSnowVisionError, handleRequestSnowVision,
+    snowVisionAnalysis, snowVisionImage, snowVisionLoading, snowVisionError,
+    setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, handleRequestSnowVision,
     fetchSafetyData, clearLastLoadedKey, clearWakeRetry,
     handleRequestAiBrief,
   } = safetyHook;
@@ -234,6 +235,7 @@ function App() {
     setAiBriefLoading(false);
     setAiBriefError(null);
     setSnowVisionAnalysis(null);
+    setSnowVisionImage(null);
     setSnowVisionLoading(false);
     setSnowVisionError(null);
     setTargetElevationInput('');
@@ -247,7 +249,7 @@ function App() {
     // silently keeping a stale name (e.g. "Mount Rainier") attached to brand-new coordinates.
     setObjectiveName(label || 'Dropped pin');
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setDayOverDay is a stable setter from useDayComparisons, declared later in hook order
-  }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionLoading, setSnowVisionError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
+  }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
   const searchHook = useSearchSuggestions({
     initialSearchQuery: initialLinkState.searchQuery,
@@ -284,6 +286,7 @@ function App() {
       setAiBriefLoading(false);
       setAiBriefError(null);
       setSnowVisionAnalysis(null);
+      setSnowVisionImage(null);
       setSnowVisionLoading(false);
       setSnowVisionError(null);
       clearLastLoadedKey();
@@ -300,7 +303,7 @@ function App() {
         setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
       }
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
@@ -553,6 +556,17 @@ function App() {
     void handleRequestSnowVision(position.lat, position.lng, safetyData?.snowpack);
   };
 
+  const handleFetchRouteAnalysis = useCallback(
+    (peak: string, route: string, lat: number, lon: number, date: string, start: string, hours: number) => {
+      void fetchRouteAnalysis(peak, route, lat, lon, date, start, hours, {
+        temperature: preferences.temperatureUnit,
+        wind: preferences.windSpeedUnit,
+        elevation: preferences.elevationUnit,
+      });
+    },
+    [fetchRouteAnalysis, preferences.temperatureUnit, preferences.windSpeedUnit, preferences.elevationUnit],
+  );
+
   const handleCopyRawPayload = async () => {
     if (!rawReportPayload || typeof navigator === 'undefined' || !navigator.clipboard) {
       return;
@@ -689,6 +703,8 @@ function App() {
   const formatElevationDisplay = (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) =>
     formatElevationForUnit(value, preferences.elevationUnit, options);
   const formatElevationDeltaDisplay = (value: number | null | undefined) => formatElevationDeltaForUnit(value, preferences.elevationUnit);
+  const formatDistanceDisplay = (miles: number | null | undefined) =>
+    formatDistanceForElevationUnit(Number.isFinite(Number(miles)) ? Number(miles) * KM_PER_MILE : null, preferences.elevationUnit);
   const localizeUnitText = (text: string): string =>
     text
       .replace(/SWE\s*~?\s*(-?\d+(?:\.\d+)?)\s?in\b/gi, (_, value) => `SWE ~${formatSweForElevationUnit(Number(value), preferences.elevationUnit).replace(/\s*SWE$/i, '')}`)
@@ -1524,6 +1540,7 @@ function App() {
       aiBriefLoading={aiBriefLoading}
       handleRequestAiBriefAction={handleRequestAiBriefAction}
       snowVisionAnalysis={snowVisionAnalysis}
+      snowVisionImage={snowVisionImage}
       snowVisionError={snowVisionError}
       snowVisionLoading={snowVisionLoading}
       handleRequestSnowVisionAction={handleRequestSnowVisionAction}
@@ -1533,7 +1550,7 @@ function App() {
       routeLoading={routeLoading}
       routeError={routeError}
       fetchRouteSuggestions={fetchRouteSuggestions}
-      fetchRouteAnalysis={fetchRouteAnalysis}
+      fetchRouteAnalysis={handleFetchRouteAnalysis}
       customRouteName={customRouteName}
       setCustomRouteName={setCustomRouteName}
       setRouteSuggestions={setRouteSuggestions}
@@ -1544,6 +1561,7 @@ function App() {
       formatWindDisplay={formatWindDisplay}
       formatElevationDisplay={formatElevationDisplay}
       formatElevationDeltaDisplay={formatElevationDeltaDisplay}
+      formatDistanceDisplay={formatDistanceDisplay}
       // Visibility banner
       weatherVisibilityRisk={weatherVisibilityRisk}
       weatherVisibilityPill={weatherVisibilityPill}

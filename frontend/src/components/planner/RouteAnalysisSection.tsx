@@ -25,6 +25,7 @@ export interface RouteAnalysisSectionProps {
   formatTempDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatElevationDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
+  formatDistanceDisplay: (miles: number | null | undefined) => string;
 }
 
 export function RouteAnalysisSection({
@@ -33,7 +34,7 @@ export function RouteAnalysisSection({
   routeSuggestions, routeAnalysis, routeLoading, routeError,
   fetchRouteSuggestions, fetchRouteAnalysis,
   customRouteName, setCustomRouteName, setRouteSuggestions, setRouteError,
-  getScoreColor, formatTempDisplay, formatWindDisplay, formatElevationDisplay,
+  getScoreColor, formatTempDisplay, formatWindDisplay, formatElevationDisplay, formatDistanceDisplay,
 }: RouteAnalysisSectionProps) {
   return (
     <div className="route-analysis-section" style={{ order: order - 1 }}>
@@ -74,7 +75,7 @@ export function RouteAnalysisSection({
                   onClick={() => fetchRouteAnalysis(objectiveName, r.name, positionLat, positionLng, forecastDate, alpineStartTime, travelWindowHours)}
                 >
                   <span className="route-option-name">{r.name}</span>
-                  <span className="route-option-meta">{r.distance_rt_miles}mi RT &middot; {r.elev_gain_ft.toLocaleString()}ft &middot; {r.class}</span>
+                  <span className="route-option-meta">{formatDistanceDisplay(r.distance_rt_miles)} RT &middot; {formatElevationDisplay(r.elev_gain_ft)} gain &middot; {r.class}</span>
                   <span className="route-option-desc">{r.description}</span>
                 </button>
               </li>
@@ -118,6 +119,9 @@ export function RouteAnalysisSection({
         <div className="route-analysis-card">
           <div className="route-analysis-header">Route Analysis <span className="route-ai-badge">AI Advisory</span></div>
           <p className="route-analysis-disclaimer">Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.</p>
+          {routeAnalysis.partialData && (
+            <p className="route-analysis-disclaimer route-analysis-partial">Some waypoints had no data available and are excluded from scoring below — the briefing notes which ones.</p>
+          )}
           <div className="route-waypoints">
             {routeAnalysis.summaries.map((wp, i) => {
               const wpCoords = routeAnalysis.waypoints[i];
@@ -130,11 +134,15 @@ export function RouteAnalysisSection({
                 travel_window_hours: String(travelWindowHours),
               });
               return (
-                <div key={wp.name} className="route-waypoint-row">
+                <div key={wp.name} className={`route-waypoint-row${wp.dataAvailable ? '' : ' route-wp-no-data'}`}>
                   <span className="route-wp-name">{wp.name}</span>
-                  <span className="route-wp-elev">{wp.elev_ft.toLocaleString()}ft</span>
+                  <span className="route-wp-elev">{formatElevationDisplay(wp.elev_ft)}</span>
+                  {!wp.dataAvailable && <span className="route-wp-no-data-label">No data</span>}
                   {wp.weather.temp != null && (
                     <span className="route-wp-temp">{formatTempDisplay(wp.weather.temp)}</span>
+                  )}
+                  {wp.weather.windGust != null && (
+                    <span className="route-wp-gust">g {formatWindDisplay(wp.weather.windGust)}</span>
                   )}
                   {wp.score !== null && (
                     <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>

@@ -32,6 +32,8 @@ export interface UseSafetyDataReturn {
   setAiBriefError: React.Dispatch<React.SetStateAction<string | null>>;
   snowVisionAnalysis: string | null;
   setSnowVisionAnalysis: React.Dispatch<React.SetStateAction<string | null>>;
+  snowVisionImage: string | null;
+  setSnowVisionImage: React.Dispatch<React.SetStateAction<string | null>>;
   snowVisionLoading: boolean;
   setSnowVisionLoading: React.Dispatch<React.SetStateAction<boolean>>;
   snowVisionError: string | null;
@@ -65,6 +67,7 @@ export function useSafetyData({
   const [aiBriefLoading, setAiBriefLoading] = useState(false);
   const [aiBriefError, setAiBriefError] = useState<string | null>(null);
   const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(null);
+  const [snowVisionImage, setSnowVisionImage] = useState<string | null>(null);
   const [snowVisionLoading, setSnowVisionLoading] = useState(false);
   const [snowVisionError, setSnowVisionError] = useState<string | null>(null);
 
@@ -236,6 +239,7 @@ export function useSafetyData({
           setAiBriefLoading(false);
           setAiBriefError(null);
           setSnowVisionAnalysis(null);
+          setSnowVisionImage(null);
           setSnowVisionLoading(false);
           setSnowVisionError(null);
           lastLoadedSafetyKeyRef.current = requestKey;
@@ -321,6 +325,7 @@ export function useSafetyData({
     try {
       const result = await fetchSnowVisionAnalysis(lat, lon, snowpack, { elevation: preferences.elevationUnit });
       setSnowVisionAnalysis(result.analysis);
+      setSnowVisionImage(result.image ?? null);
     } catch (err) {
       setSnowVisionError(err instanceof Error ? err.message : 'Satellite snow analysis unavailable');
     } finally {
@@ -342,6 +347,8 @@ export function useSafetyData({
     setAiBriefError,
     snowVisionAnalysis,
     setSnowVisionAnalysis,
+    snowVisionImage,
+    setSnowVisionImage,
     snowVisionLoading,
     setSnowVisionLoading,
     snowVisionError,

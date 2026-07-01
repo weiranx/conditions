@@ -217,6 +217,23 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 .ssr-dash-ai-text p:last-child { margin-bottom: 0; }
 .ssr-dash-ai-error { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--d-nogo-deep); }
 
+.ssr-snow-vision-img {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  border-radius: 10px;
+  border: 1px solid var(--d-line);
+  margin-bottom: 10px;
+}
+.ssr-snow-vision-map-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 4px;
+  padding: 0; border: none; background: none;
+  font-size: 12.5px; font-weight: 600; color: var(--d-pine, var(--d-go-deep));
+  cursor: pointer;
+}
+.ssr-snow-vision-map-btn:hover { text-decoration: underline; }
+
 @media (max-width: 880px) {
   .ssr-dash-top { grid-template-columns: 1fr; gap: 18px; }
   .ssr-dash-gauge { margin: 0 auto; }

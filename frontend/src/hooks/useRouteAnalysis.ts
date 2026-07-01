@@ -1,6 +1,12 @@
 import { useState, useCallback, type Dispatch, type SetStateAction } from 'react';
 import { fetchApi, readApiErrorMessage } from '../lib/api-client';
 
+export interface RouteAnalysisUnits {
+  temperature: 'f' | 'c';
+  wind: 'mph' | 'kph';
+  elevation: 'ft' | 'm';
+}
+
 export interface RouteOption {
   name: string;
   distance_rt_miles: number;
@@ -12,17 +18,19 @@ export interface RouteOption {
 export interface RouteWaypointSummary {
   name: string;
   elev_ft: number;
+  dataAvailable: boolean;
   score: number | null;
-  weather: { temp?: number; windSpeed?: number; description?: string; precipChance?: number };
-  avalanche: { risk?: string; dangerLevel?: number };
+  weather: { temp?: number; feelsLike?: number; windSpeed?: number; windGust?: number; description?: string; precipChance?: number };
+  avalanche?: { risk?: string; dangerLevel?: number };
   activeAlerts: number;
-  snowDepthIn: number | null;
+  snowDepthIn?: number | null;
 }
 
 export interface RouteAnalysisResult {
   waypoints: { name: string; lat: number; lon: number; elev_ft: number }[];
   summaries: RouteWaypointSummary[];
   analysis: string;
+  partialData: boolean;
 }
 
 export interface UseRouteAnalysisReturn {
@@ -43,6 +51,7 @@ export interface UseRouteAnalysisReturn {
     date: string,
     start: string,
     travelWindowHours: number,
+    units?: RouteAnalysisUnits,
   ) => Promise<void>;
   resetRouteState: () => void;
 }
@@ -71,7 +80,7 @@ export function useRouteAnalysis(): UseRouteAnalysisReturn {
     }
   }, []);
 
-  const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string, travelWindowHours: number) => {
+  const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string, travelWindowHours: number, units?: RouteAnalysisUnits) => {
     setRouteAnalysis(null);
     setRouteError(null);
     setRouteLoading(true);
@@ -79,7 +88,7 @@ export function useRouteAnalysis(): UseRouteAnalysisReturn {
       const { response, payload } = await fetchApi('/api/route-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ peak, route, lat, lon, date, start, travel_window_hours: travelWindowHours }),
+        body: JSON.stringify({ peak, route, lat, lon, date, start, travel_window_hours: travelWindowHours, units: units ?? null }),
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
       setRouteAnalysis(payload as RouteAnalysisResult);

@@ -158,6 +158,7 @@ export async function fetchAiBrief(data: AiBriefRequest): Promise<AiBriefRespons
 export interface SnowVisionResponse {
   analysis: string;
   zoom: number;
+  image: string | null;
   generatedAt: string;
 }
 

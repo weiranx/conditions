@@ -59,16 +59,19 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => 
     try {
       const result = await snowVisionCache.getOrFetch(cacheKey, async () => {
         const png = await fetchSentinelTile({ z: SNOW_VISION_ZOOM, x, y, fetchWithTimeout });
+        const base64 = png.toString('base64');
         const depthUnit = metric ? 'centimeters (cm)' : 'inches (in)';
         const promptText = snowpackJson
           ? `Analyze the snow conditions visible in this satellite image, using this ground-station snowpack data (JSON) as supplemental context:\n${snowpackJson}\n\nThe snow depth and SWE values in that JSON are in inches. In your response, convert every depth/SWE value you mention to ${depthUnit} and do not mix unit systems.`
           : 'Analyze the snow conditions visible in this satellite image.';
         const analysis = await askClaudeVision(
-          png.toString('base64'),
+          base64,
           promptText,
           { model: 'claude-sonnet-5', maxTokens: 600, system: SYSTEM_PROMPT },
         );
-        return { analysis, zoom: SNOW_VISION_ZOOM };
+        // Return the same tile shown to Claude so the UI can display exactly what was
+        // analyzed, alongside a note pointing users at the app's live satellite basemap.
+        return { analysis, zoom: SNOW_VISION_ZOOM, image: `data:image/png;base64,${base64}` };
       });
 
       return res.json({ ...result, generatedAt: new Date().toISOString() });

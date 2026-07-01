@@ -185,6 +185,7 @@ export interface PlannerViewProps {
   aiBriefLoading: boolean;
   handleRequestAiBriefAction: () => void;
   snowVisionAnalysis: string | null;
+  snowVisionImage: string | null;
   snowVisionError: string | null;
   snowVisionLoading: boolean;
   handleRequestSnowVisionAction: () => void;
@@ -206,6 +207,7 @@ export interface PlannerViewProps {
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatElevationDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatElevationDeltaDisplay: (value: number | null | undefined) => string;
+  formatDistanceDisplay: (miles: number | null | undefined) => string;
 
   // Visibility banner
   weatherVisibilityRisk: VisibilityRiskEstimate;
@@ -599,6 +601,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     formatWindDisplay,
     formatElevationDisplay,
     formatElevationDeltaDisplay,
+    formatDistanceDisplay,
     // Visibility banner
     weatherVisibilityRisk,
     weatherVisibilityPill,
@@ -1100,6 +1103,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
               formatTempDisplay={formatTempDisplay}
               formatWindDisplay={formatWindDisplay}
               formatElevationDisplay={formatElevationDisplay}
+              formatDistanceDisplay={formatDistanceDisplay}
             />
           )}
 

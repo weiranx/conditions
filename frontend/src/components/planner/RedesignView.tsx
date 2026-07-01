@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
+import { formatAiNarrativeParagraphs } from '../../app/text-utils';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
@@ -197,9 +198,11 @@ function RedesignViewComponent(props: PlannerViewProps) {
     aiBriefLoading,
     handleRequestAiBriefAction,
     snowVisionAnalysis,
+    snowVisionImage,
     snowVisionError,
     snowVisionLoading,
     handleRequestSnowVisionAction,
+    setMapStyle,
     shouldRenderRankedCard,
     // Critical checks
     orderedCriticalChecks,
@@ -969,7 +972,29 @@ function RedesignViewComponent(props: PlannerViewProps) {
               )}
               <div style={{ marginTop: '14px' }}>
                 {snowVisionAnalysis ? (
-                  <p className="ssr-dash-ai-text"><Satellite size={14} aria-hidden /> {snowVisionAnalysis}</p>
+                  <div className="ssr-dash-ai-text">
+                    <div className="ssr-dash-ai-label"><Satellite size={14} aria-hidden /> Satellite snow analysis</div>
+                    {snowVisionImage && (
+                      <img
+                        src={snowVisionImage}
+                        alt="Satellite view of the terrain analyzed above"
+                        className="ssr-snow-vision-img"
+                      />
+                    )}
+                    {formatAiNarrativeParagraphs(snowVisionAnalysis).map((para, idx) => (
+                      <p key={idx}>{para}</p>
+                    ))}
+                    <button
+                      type="button"
+                      className="ssr-snow-vision-map-btn"
+                      onClick={() => {
+                        setMapStyle('satellite');
+                        document.getElementById('planner-main-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
+                      <Layers size={12} aria-hidden /> View live on the map — toggle to Satellite above
+                    </button>
+                  </div>
                 ) : snowVisionError ? (
                   <div className="ssr-dash-ai-error">
                     <span>{snowVisionError}</span>

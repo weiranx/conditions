@@ -1,5 +1,6 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
 const { logger } = require('../utils/logger');
+const { describeUnitsInstruction } = require('../utils/units-instruction');
 
 const withTimeout = (promise, ms, label) =>
   Promise.race([
@@ -8,6 +9,10 @@ const withTimeout = (promise, ms, label) =>
       setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
     ),
   ]);
+
+// Bounds the combined raw per-waypoint report JSON before it's interpolated into the
+// Claude prompt, so a route with several waypoints can't blow up prompt size.
+const MAX_WAYPOINT_REPORTS_LENGTH = 30000;
 
 const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 100 });
 const waypointCache = createCache({ name: 'waypoints', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 200 });
@@ -119,7 +124,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
   // POST /api/route-analysis
   // Body: { peak, route, lat, lon, date, start }
   app.post('/api/route-analysis', async (req, res) => {
-    const { peak, route, lat, lon, date, start, travel_window_hours } = req.body;
+    const { peak, route, lat, lon, date, start, travel_window_hours, units } = req.body;
     if (!peak || !route || !lat || !lon || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
@@ -188,16 +193,20 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         60000, 'Safety checks'
       );
 
-      // Step 3: Strip each payload to key fields to keep synthesis prompt small
+      // Step 3: Build a compact per-waypoint summary for the UI (waypoint list,
+      // elevation/score chart) — this is a display concern, separate from what
+      // gets fed to the AI below.
       const summaries = waypointsCopy.map((wp, i) => {
         const settled = safetySettled[i];
-        const p = (settled.status === 'fulfilled' ? settled.value?.payload : null) || {};
+        const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
+        const p = dataAvailable ? settled.value.payload : {};
         const avyRelevant = p.avalanche?.relevant !== false;
         const snowDepthIn = p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null;
         const hasSnow = snowDepthIn != null && snowDepthIn > 0;
         return {
           name: wp.name,
           elev_ft: wp.elev_ft,
+          dataAvailable,
           score: p.safety?.score ?? null,
           weather: pick(p.weather, ['temp', 'feelsLike', 'windSpeed', 'windGust', 'description', 'precipChance']),
           ...(avyRelevant && hasSnow ? { avalanche: pick(p.avalanche, ['risk', 'dangerLevel', 'bottomLine']) } : {}),
@@ -206,25 +215,40 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         };
       });
 
-      // Step 4: Synthesize
-      const hasAvalancheData = summaries.some((s) => s.avalanche);
+      // Step 4: Synthesize — feed Claude the raw safety report per waypoint (bounded),
+      // the same raw-data approach used for the score card's AI analysis, instead of
+      // pre-summarizing which signals matter.
+      const rawWaypointReports = waypointsCopy.map((wp, i) => {
+        const settled = safetySettled[i];
+        const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
+        return { name: wp.name, elev_ft: wp.elev_ft, dataAvailable, report: dataAvailable ? settled.value.payload : null };
+      });
+      const failedWaypointNames = rawWaypointReports.filter((r) => !r.dataAvailable).map((r) => r.name).filter(Boolean);
+      const partialData = failedWaypointNames.length > 0;
+      const reportsJson = JSON.stringify(rawWaypointReports).slice(0, MAX_WAYPOINT_REPORTS_LENGTH);
+
       const analysis = await withTimeout(askClaude(
-        `You are analyzing backcountry conditions for a trip on ${safePeak}.
+        `${describeUnitsInstruction(units)}
+
+You are analyzing backcountry conditions for a trip on ${safePeak}.
 Route: ${safeRoute}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
-${hasAvalancheData ? '' : '\nNo snowpack or avalanche data is present — do NOT discuss avalanche hazards, snow conditions, or avalanche gear.\n'}
-Waypoint conditions from trailhead to summit:
-${JSON.stringify(summaries, null, 2)}
+${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
+Raw safety report per waypoint, trailhead to summit (JSON):
+${reportsJson}
 
-Write a concise route-wide briefing (3-5 short paragraphs) covering:
-1. Key hazard zones by elevation and where conditions change significantly
-2. Weather windows — when storms arrive, when winds intensify, or when conditions deteriorate (do NOT assume pace or method of travel)
-3. Any gear needs specific to current route conditions
-4. Overall go / go-with-caution / no-go recommendation with one-line reasoning`,
-        { maxTokens: 700, model: 'claude-haiku-4-5-20251001' }
+Write a thorough route-wide briefing covering:
+1. Key hazard zones by elevation and where conditions change significantly — reference the specific waypoint names, in prose
+2. Weather windows — when storms arrive, when winds intensify, or when conditions deteriorate (do NOT assume pace or method of travel), in prose
+3. Any secondary hazards worth flagging from the reports (avalanche, terrain surface, fire/heat risk, air quality, freezing level, thunderstorm timing) — only discuss what's actually present in the data, in prose
+4. Gear needs specific to current route conditions, as a short bullet list (- item)
+5. Overall go / go-with-caution / no-go recommendation with one-line reasoning, in prose
+
+Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it helps scannability), and only use a bullet list for section 4. Do not add a title or heading at the start.`,
+        { maxTokens: 900, model: 'claude-haiku-4-5-20251001' }
       ), 20000, 'Route synthesis');
 
-      return res.json({ waypoints: waypointsCopy, summaries, analysis });
+      return res.json({ waypoints: waypointsCopy, summaries, analysis, partialData });
     } catch (err) {
       logger.error({ err }, 'route-analysis error');
       return res.status(500).json({ error: 'Failed to analyze route: ' + err.message });
