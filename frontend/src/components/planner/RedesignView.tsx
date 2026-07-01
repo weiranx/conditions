@@ -536,7 +536,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
                   <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
                     {travelWindowRows.map((r, i) => (
                       <div key={i} className="ssr-scell">
-                        <span className="ssr-cv">{formatTempDisplay(r.temp, { includeUnit: false })}°</span>
+                        <span className="ssr-cv">{formatTempDisplay(r.temp, { includeUnit: false })}</span>
                       </div>
                     ))}
                   </div>

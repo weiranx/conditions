@@ -377,7 +377,7 @@ export function TripView({
                       <div className="ssr-trip-day-metrics">
                         <div className="ssr-trip-day-metric">
                           <span className="mk">Temp</span>
-                          <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}°{renderMetricDelta(day.deltas?.tempF, '°')}</span>
+                          <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}{renderMetricDelta(day.deltas?.tempF, '°')}</span>
                         </div>
                         <div className="ssr-trip-day-metric">
                           <span className="mk">Gust</span>
