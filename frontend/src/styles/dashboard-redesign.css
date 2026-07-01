@@ -35,7 +35,7 @@
   --d-nogo-deep: oklch(45% 0.160 28);
   --d-nogo-bg: oklch(95% 0.040 28);
 
-  --d-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --d-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --d-r-lg: 22px;
   --d-r-pill: 999px;
   --d-shadow: 0 1px 2px oklch(40% 0.02 150 / .05), 0 8px 24px -12px oklch(40% 0.03 150 / .18);

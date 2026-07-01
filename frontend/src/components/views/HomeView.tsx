@@ -114,6 +114,14 @@ export function HomeView({
       <div className="ssr-home">
         {/* HERO */}
         <section className="ssr-h-hero">
+          <svg className="ssr-h-topo" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1120 420">
+            <g fill="none" strokeWidth="1">
+              <path d="M-20 340 Q 200 260 420 320 T 900 300 T 1200 340" />
+              <path d="M-20 380 Q 220 300 440 360 T 920 340 T 1200 380" />
+              <path d="M-20 60 Q 260 20 500 55 T 940 40 T 1200 70" />
+              <path d="M-20 100 Q 280 60 520 95 T 960 80 T 1200 110" />
+            </g>
+          </svg>
           <div className="ssr-h-kicker">Backcountry conditions, synthesized</div>
           <h1>
             Know before you go.

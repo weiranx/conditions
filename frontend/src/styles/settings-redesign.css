@@ -26,7 +26,7 @@
   --ssr-go-ink:      oklch(38% 0.120 145);
   --ssr-nogo-ink:    oklch(38% 0.180 28);
 
-  --ssr-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+  --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
 
   max-width: 1100px;
   margin: 0 auto;
