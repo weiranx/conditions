@@ -9,6 +9,10 @@ const registerSatelliteTileRoute = ({ app, fetchWithTimeout, tileCache }) => {
       const png = await tileCache.getOrFetch(cacheKey, () => fetchSentinelTile({ z, x, y, fetchWithTimeout }));
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=3600');
+      // Helmet's default Cross-Origin-Resource-Policy: same-origin blocks the browser
+      // from rendering this as an <img> tile when the frontend is on a different origin
+      // (e.g. Vercel frontend + separately hosted backend).
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       return res.status(200).send(png);
     } catch (error) {
       const statusCode = error?.statusCode || 500;
