@@ -21,6 +21,8 @@ import {
   Package,
   ArrowRight,
   Compass,
+  Satellite,
+  LoaderCircle,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
@@ -194,6 +196,10 @@ function RedesignViewComponent(props: PlannerViewProps) {
     aiBriefError,
     aiBriefLoading,
     handleRequestAiBriefAction,
+    snowVisionAnalysis,
+    snowVisionError,
+    snowVisionLoading,
+    handleRequestSnowVisionAction,
     shouldRenderRankedCard,
     // Critical checks
     orderedCriticalChecks,
@@ -961,6 +967,22 @@ function RedesignViewComponent(props: PlannerViewProps) {
                   <span className="ssr-v">{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>
                 </div>
               )}
+              <div style={{ marginTop: '14px' }}>
+                {snowVisionAnalysis ? (
+                  <p className="ssr-dash-ai-text"><Satellite size={14} aria-hidden /> {snowVisionAnalysis}</p>
+                ) : snowVisionError ? (
+                  <div className="ssr-dash-ai-error">
+                    <span>{snowVisionError}</span>
+                    <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction}>Retry</button>
+                  </div>
+                ) : (
+                  <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction} disabled={snowVisionLoading}>
+                    {snowVisionLoading
+                      ? <><LoaderCircle size={14} className="spin" aria-hidden /> Analyzing satellite view…</>
+                      : <><Satellite size={14} aria-hidden /> Analyze snow from satellite</>}
+                  </button>
+                )}
+              </div>
             </div>
           </section>
         )}
