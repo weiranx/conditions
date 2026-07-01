@@ -12,7 +12,7 @@ const getClient = () => {
   return client;
 };
 
-const askClaude = async (prompt, { maxTokens = 1024, model = 'claude-sonnet-4-6', system } = {}) => {
+const askClaude = async (prompt, { maxTokens = 4096, model = 'claude-sonnet-4-6', system } = {}) => {
   const params = {
     model,
     max_tokens: maxTokens,
@@ -25,10 +25,13 @@ const askClaude = async (prompt, { maxTokens = 1024, model = 'claude-sonnet-4-6'
     logger.error({ stopReason: msg.stop_reason, blockTypes: msg.content?.map((b) => b?.type) }, 'askClaude: no text block in AI response');
     throw new Error(`Unexpected response format from AI API (stop_reason: ${msg.stop_reason || 'unknown'})`);
   }
+  if (msg.stop_reason === 'max_tokens') {
+    logger.warn({ maxTokens, model }, 'askClaude: response truncated by max_tokens limit');
+  }
   return textBlock.text;
 };
 
-const askClaudeVision = async (imageBase64, prompt, { maxTokens = 1024, model = 'claude-sonnet-5', system, mediaType = 'image/png' } = {}) => {
+const askClaudeVision = async (imageBase64, prompt, { maxTokens = 4096, model = 'claude-sonnet-5', system, mediaType = 'image/png' } = {}) => {
   const params = {
     model,
     max_tokens: maxTokens,
@@ -46,6 +49,9 @@ const askClaudeVision = async (imageBase64, prompt, { maxTokens = 1024, model = 
   if (!textBlock) {
     logger.error({ stopReason: msg.stop_reason, blockTypes: msg.content?.map((b) => b?.type) }, 'askClaudeVision: no text block in AI response');
     throw new Error(`Unexpected response format from AI API (stop_reason: ${msg.stop_reason || 'unknown'})`);
+  }
+  if (msg.stop_reason === 'max_tokens') {
+    logger.warn({ maxTokens, model }, 'askClaudeVision: response truncated by max_tokens limit');
   }
   return textBlock.text;
 };

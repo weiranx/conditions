@@ -110,7 +110,7 @@ const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetc
           `List all well-known hiking, climbing, and scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-          { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
+          { maxTokens: 2048, model: 'claude-haiku-4-5-20251001' }
         );
         return parseJsonArrayFromClaude(text);
       });
@@ -151,7 +151,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-          { maxTokens: 512, model: 'claude-haiku-4-5-20251001' }
+          { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
         ), 20000, 'Waypoint lookup');
         return parseJsonArrayFromClaude(waypointText);
       });
@@ -245,7 +245,7 @@ Write a thorough route-wide briefing covering:
 5. Overall go / go-with-caution / no-go recommendation with one-line reasoning, in prose
 
 Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it helps scannability), and only use a bullet list for section 4. Do not add a title or heading at the start.`,
-        { maxTokens: 1400, model: 'claude-haiku-4-5-20251001' }
+        { maxTokens: 4096, model: 'claude-haiku-4-5-20251001' }
       ), 20000, 'Route synthesis');
 
       return res.json({ waypoints: waypointsCopy, summaries, analysis, partialData });
