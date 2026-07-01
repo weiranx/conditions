@@ -300,6 +300,11 @@ export function useSafetyData({
       const result = await fetchAiBrief({
         decisionLevel: params.decisionLevel,
         report: params.safetyData,
+        units: {
+          temperature: preferences.temperatureUnit,
+          wind: preferences.windSpeedUnit,
+          elevation: preferences.elevationUnit,
+        },
       });
       setAiBriefNarrative(result.narrative);
     } catch (err) {
@@ -307,21 +312,21 @@ export function useSafetyData({
     } finally {
       setAiBriefLoading(false);
     }
-  }, [aiBriefLoading]);
+  }, [aiBriefLoading, preferences.temperatureUnit, preferences.windSpeedUnit, preferences.elevationUnit]);
 
   const handleRequestSnowVision = useCallback(async (lat: number, lon: number, snowpack?: SafetyData['snowpack']) => {
     if (snowVisionLoading) return;
     setSnowVisionLoading(true);
     setSnowVisionError(null);
     try {
-      const result = await fetchSnowVisionAnalysis(lat, lon, snowpack);
+      const result = await fetchSnowVisionAnalysis(lat, lon, snowpack, { elevation: preferences.elevationUnit });
       setSnowVisionAnalysis(result.analysis);
     } catch (err) {
       setSnowVisionError(err instanceof Error ? err.message : 'Satellite snow analysis unavailable');
     } finally {
       setSnowVisionLoading(false);
     }
-  }, [snowVisionLoading]);
+  }, [snowVisionLoading, preferences.elevationUnit]);
 
   return {
     safetyData,

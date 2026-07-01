@@ -132,6 +132,9 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
 export interface AiBriefRequest {
   decisionLevel: string;
   report: unknown;
+  // Backend report values are imperial (°F, mph, ft, in); this tells the AI which
+  // units to render its narrative in so it matches what the user sees on screen.
+  units: { temperature: 'f' | 'c'; wind: 'mph' | 'kph'; elevation: 'ft' | 'm' };
 }
 
 export interface AiBriefResponse {
@@ -158,11 +161,16 @@ export interface SnowVisionResponse {
   generatedAt: string;
 }
 
-export async function fetchSnowVisionAnalysis(lat: number, lon: number, snowpack?: unknown): Promise<SnowVisionResponse> {
+export async function fetchSnowVisionAnalysis(
+  lat: number,
+  lon: number,
+  snowpack?: unknown,
+  units?: { elevation: 'ft' | 'm' },
+): Promise<SnowVisionResponse> {
   const { response, payload } = await fetchApi('/api/snow-vision', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lat, lon, snowpack: snowpack ?? null }),
+    body: JSON.stringify({ lat, lon, snowpack: snowpack ?? null, units: units ?? null }),
   });
   if (!response.ok) {
     const msg = readApiErrorMessage(payload, 'Satellite snow analysis unavailable');

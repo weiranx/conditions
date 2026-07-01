@@ -9,19 +9,32 @@ const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, stal
 // Claude prompt, so an unusually large payload can't blow up prompt size or cache memory.
 const MAX_REPORT_LENGTH = 12000;
 
+// The raw report is always in the backend's native units (°F, mph, ft, in) regardless
+// of what the user has selected — this tells Claude which units to render its prose in
+// so the narrative matches what's displayed elsewhere in the report.
+function describeUnitsInstruction(units) {
+  const temperature = units?.temperature === 'c' ? 'Celsius (°C)' : 'Fahrenheit (°F)';
+  const wind = units?.wind === 'kph' ? 'kilometers per hour (km/h)' : 'miles per hour (mph)';
+  const metric = units?.elevation === 'm';
+  const elevation = metric ? 'meters (m)' : 'feet (ft)';
+  const distance = metric ? 'kilometers (km)' : 'miles (mi)';
+  const depth = metric ? 'centimeters (cm)' : 'inches (in)';
+  return `Report values below are in imperial units (°F, mph, ft, inches). In your response, convert every value you mention to: temperature in ${temperature}, wind speed in ${wind}, elevation in ${elevation}, distance in ${distance}, and snow depth/SWE/precipitation in ${depth}. Do not mix unit systems and do not show the original imperial value alongside the converted one.`;
+}
+
 const registerAiBriefRoute = ({ app, askClaude }) => {
   app.post('/api/ai-brief', async (req, res) => {
-    const { report, decisionLevel } = req.body || {};
+    const { report, decisionLevel, units } = req.body || {};
 
     if (!report || typeof report !== 'object' || !decisionLevel) {
       return res.status(400).json({ error: 'Missing required fields: report, decisionLevel' });
     }
 
     const reportJson = JSON.stringify(report).slice(0, MAX_REPORT_LENGTH);
-    const cacheKey = `${decisionLevel}|${reportJson}`;
+    const cacheKey = `${decisionLevel}|${JSON.stringify(units || {})}|${reportJson}`;
 
     try {
-      const userPrompt = `Decision level: ${decisionLevel}\n\nFull report data (JSON):\n${reportJson}`;
+      const userPrompt = `${describeUnitsInstruction(units)}\n\nDecision level: ${decisionLevel}\n\nFull report data (JSON):\n${reportJson}`;
 
       const narrative = await aiBriefCache.getOrFetch(cacheKey, async () => {
         return askClaude(userPrompt, {

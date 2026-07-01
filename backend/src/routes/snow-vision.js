@@ -39,7 +39,7 @@ const snowVisionCache = createCache({ name: 'snow-vision', ttlMs: 12 * 60 * 60 *
 
 const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => {
   app.post('/api/snow-vision', async (req, res) => {
-    const { lat, lon, snowpack } = req.body || {};
+    const { lat, lon, snowpack, units } = req.body || {};
     const parsedLat = Number(lat);
     const parsedLon = Number(lon);
     if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
@@ -48,21 +48,23 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => 
 
     const { x, y } = lonLatToTile(parsedLon, parsedLat, SNOW_VISION_ZOOM);
     const snowpackJson = snowpack && typeof snowpack === 'object' ? JSON.stringify(snowpack).slice(0, MAX_SNOWPACK_LENGTH) : '';
+    const metric = units?.elevation === 'm';
     // Keying by tile (not raw lat/lon) means nearby requests within the same ~5km tile
-    // share one Sentinel Hub fetch. The snowpack payload is appended to the key so a
-    // changed ground-station reading (new SNOTEL read, different day) busts the cache.
-    const cacheKey = `${SNOW_VISION_ZOOM}/${x}/${y}|${snowpackJson}`;
+    // share one Sentinel Hub fetch. The snowpack payload and unit preference are appended
+    // to the key so a changed ground-station reading or unit switch busts the cache.
+    const cacheKey = `${SNOW_VISION_ZOOM}/${x}/${y}|${metric ? 'm' : 'ft'}|${snowpackJson}`;
 
     try {
       const result = await snowVisionCache.getOrFetch(cacheKey, async () => {
         const png = await fetchSentinelTile({ z: SNOW_VISION_ZOOM, x, y, fetchWithTimeout });
+        const depthUnit = metric ? 'centimeters (cm)' : 'inches (in)';
         const promptText = snowpackJson
-          ? `Analyze the snow conditions visible in this satellite image, using this ground-station snowpack data (JSON) as supplemental context:\n${snowpackJson}`
+          ? `Analyze the snow conditions visible in this satellite image, using this ground-station snowpack data (JSON) as supplemental context:\n${snowpackJson}\n\nThe snow depth and SWE values in that JSON are in inches. In your response, convert every depth/SWE value you mention to ${depthUnit} and do not mix unit systems.`
           : 'Analyze the snow conditions visible in this satellite image.';
         const analysis = await askClaudeVision(
           png.toString('base64'),
           promptText,
-          { model: 'claude-sonnet-5', maxTokens: 350, system: SYSTEM_PROMPT },
+          { model: 'claude-sonnet-5', maxTokens: 600, system: SYSTEM_PROMPT },
         );
         return { analysis, zoom: SNOW_VISION_ZOOM };
       });
