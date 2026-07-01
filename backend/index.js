@@ -55,6 +55,7 @@ const { registerSatOneLinerRoute } = require('./src/routes/sat-oneliner');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
+const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { askClaude } = require('./src/utils/ai-client');
 const { createCache } = require('./src/utils/cache');
 const { logger } = require('./src/utils/logger');
@@ -142,6 +143,7 @@ const { fetchAtmosphericSignals } = createAtmosphericService({
 
 const tideStationCache = createCache({ name: 'co-ops-stations', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
 const npsParkCache = createCache({ name: 'nps-parks', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
+const satelliteTileCache = createCache({ name: 'satellite-tiles', ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 24 * 60 * 60 * 1000, maxEntries: 3000 });
 const { fetchLocalConditions } = createLocalConditionsService({
   fetchWithTimeout,
   haversineKm,
@@ -677,10 +679,11 @@ registerSearchRoutes({
   defaultFetchHeaders: DEFAULT_FETCH_HEADERS,
   peaks: POPULAR_PEAKS,
 });
-registerHealthRoutes(app, { caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache] });
+registerHealthRoutes(app, { caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, satelliteTileCache] });
 registerReportLogsRoute(app);
 registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askClaude });
+registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 
 const startServer = () => startBackendServer({ app, port: PORT });
 

@@ -17,14 +17,17 @@ import {
 } from 'lucide-react';
 import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
 import {
+  MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
+
+const MAP_STYLE_CYCLE: MapStyle[] = ['topo', 'street', 'satellite'];
 import type { MapStyle, SafetyData, UserPreferences } from '../../app/types';
 
 export interface PlannerMapSectionProps {
   position: L.LatLng;
-  activeBasemap: { url: string; attribution: string };
+  activeBasemap: { url: string; attribution: string; maxNativeZoom?: number };
   preferences: UserPreferences;
   updateObjectivePosition: (pos: L.LatLng, label?: string) => void;
   mapFocusNonce: number;
@@ -82,7 +85,12 @@ export function PlannerMapSection({
     <section className="map-shell" id="planner-main-content">
       <div className="map-section">
         <MapContainer center={position} zoom={hasObjective ? 11 : 4} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
-          <TileLayer attribution={activeBasemap.attribution} url={activeBasemap.url} />
+          <TileLayer
+            key={activeBasemap.url}
+            attribution={activeBasemap.attribution}
+            url={activeBasemap.url}
+            maxNativeZoom={activeBasemap.maxNativeZoom}
+          />
           <ScaleControl
             position="bottomleft"
             imperial={preferences.elevationUnit === 'ft'}
@@ -96,10 +104,14 @@ export function PlannerMapSection({
         <div className="map-overlay map-overlay-tr">
           <button
             type="button"
-            className={`map-overlay-btn ${mapStyle === 'street' ? 'is-active' : ''}`}
-            onClick={() => setMapStyle(mapStyle === 'topo' ? 'street' : 'topo')}
-            title={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
-            aria-label={`Switch to ${mapStyle === 'topo' ? 'street' : 'terrain'} basemap`}
+            className={`map-overlay-btn ${mapStyle !== 'topo' ? 'is-active' : ''}`}
+            onClick={() => {
+              const currentIndex = MAP_STYLE_CYCLE.indexOf(mapStyle as MapStyle);
+              const nextStyle = MAP_STYLE_CYCLE[(currentIndex + 1) % MAP_STYLE_CYCLE.length];
+              setMapStyle(nextStyle);
+            }}
+            title={`Basemap: ${MAP_STYLE_OPTIONS[mapStyle as MapStyle].label} (tap to switch)`}
+            aria-label={`Basemap: ${MAP_STYLE_OPTIONS[mapStyle as MapStyle].label} (tap to switch)`}
           >
             <Layers size={16} />
           </button>

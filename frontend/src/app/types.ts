@@ -3,7 +3,7 @@ import L from 'leaflet';
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
 export type ActivityType = 'backcountry' | 'trail-running';
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type MapStyle = 'topo' | 'street';
+export type MapStyle = 'topo' | 'street' | 'satellite';
 export type TemperatureUnit = 'f' | 'c';
 export type ElevationUnit = 'ft' | 'm';
 export type WindSpeedUnit = 'mph' | 'kph';

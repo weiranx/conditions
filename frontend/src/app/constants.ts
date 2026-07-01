@@ -25,7 +25,7 @@ export const MM_PER_INCH = 25.4;
 export const CM_PER_INCH = 2.54;
 export const KM_PER_MILE = 1.60934;
 
-export const MAP_STYLE_OPTIONS: Record<MapStyle, { label: string; url: string; attribution: string }> = {
+export const MAP_STYLE_OPTIONS: Record<MapStyle, { label: string; url: string; attribution: string; maxNativeZoom?: number }> = {
   topo: {
     label: 'Terrain',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
@@ -35,5 +35,13 @@ export const MAP_STYLE_OPTIONS: Record<MapStyle, { label: string; url: string; a
     label: 'Street',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors',
+  },
+  satellite: {
+    label: 'Satellite',
+    url: '/api/satellite-tile/{z}/{x}/{y}.png',
+    attribution: 'Contains modified Copernicus Sentinel data, processed by Sentinel Hub',
+    // Sentinel-2 native resolution (~10m/px) stops adding detail past this zoom; Leaflet
+    // upsamples the last native tile for closer zoom instead of requesting new imagery.
+    maxNativeZoom: 15,
   },
 };
