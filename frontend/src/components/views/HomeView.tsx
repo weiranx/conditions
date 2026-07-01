@@ -155,20 +155,11 @@ export function HomeView({
                 showGoButton={false}
                 onInputChange={handleInputChange}
                 onFocus={handleFocus}
-                onKeyDown={(e) => {
-                  handleSearchKeyDown(e);
-                  if (e.key === 'Enter' && searchQuery.trim()) navigateToPlanner();
-                }}
+                onKeyDown={handleSearchKeyDown}
                 onSubmit={submitSearch}
                 onClear={handleSearchClear}
-                onUseCoordinates={(v) => {
-                  handleUseTypedCoordinates(v);
-                  navigateToPlanner();
-                }}
-                onSelectSuggestion={(s) => {
-                  selectSuggestion(s);
-                  navigateToPlanner();
-                }}
+                onUseCoordinates={handleUseTypedCoordinates}
+                onSelectSuggestion={selectSuggestion}
                 onHoverSuggestion={setActiveSuggestionIndex}
               />
               <button type="button" className="ssr-h-go" onClick={submitSearch}>
@@ -231,10 +222,7 @@ export function HomeView({
                   type="button"
                   className="ssr-h-chip"
                   key={peak.name}
-                  onClick={() => {
-                    selectSuggestion(peak);
-                    navigateToPlanner();
-                  }}
+                  onClick={() => selectSuggestion(peak)}
                 >
                   <Mountain size={13} aria-hidden />
                   {shortName}
