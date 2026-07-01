@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { fetchApi, readApiErrorMessage, fetchAiBrief } from '../lib/api-client';
+import { fetchApi, readApiErrorMessage, fetchAiBrief, fetchSnowVisionAnalysis } from '../lib/api-client';
 import type { SafetyData, UserPreferences, DecisionLevel } from '../app/types';
 import {
   DATE_FMT,
@@ -30,6 +30,13 @@ export interface UseSafetyDataReturn {
   setAiBriefLoading: React.Dispatch<React.SetStateAction<boolean>>;
   aiBriefError: string | null;
   setAiBriefError: React.Dispatch<React.SetStateAction<string | null>>;
+  snowVisionAnalysis: string | null;
+  setSnowVisionAnalysis: React.Dispatch<React.SetStateAction<string | null>>;
+  snowVisionLoading: boolean;
+  setSnowVisionLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  snowVisionError: string | null;
+  setSnowVisionError: React.Dispatch<React.SetStateAction<string | null>>;
+  handleRequestSnowVision: (lat: number, lon: number) => Promise<void>;
   fetchSafetyData: (
     lat: number,
     lon: number,
@@ -59,6 +66,9 @@ export function useSafetyData({
   const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(null);
   const [aiBriefLoading, setAiBriefLoading] = useState(false);
   const [aiBriefError, setAiBriefError] = useState<string | null>(null);
+  const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(null);
+  const [snowVisionLoading, setSnowVisionLoading] = useState(false);
+  const [snowVisionError, setSnowVisionError] = useState<string | null>(null);
 
   const lastLoadedSafetyKeyRef = useRef<string | null>(null);
   const inFlightSafetyKeyRef = useRef<string | null>(null);
@@ -227,6 +237,9 @@ export function useSafetyData({
           setAiBriefNarrative(null);
           setAiBriefLoading(false);
           setAiBriefError(null);
+          setSnowVisionAnalysis(null);
+          setSnowVisionLoading(false);
+          setSnowVisionError(null);
           lastLoadedSafetyKeyRef.current = requestKey;
           if (wakeRetryStateRef.current?.key === requestKey) {
             clearWakeRetry();
@@ -321,6 +334,20 @@ export function useSafetyData({
     }
   }, [aiBriefLoading]);
 
+  const handleRequestSnowVision = useCallback(async (lat: number, lon: number) => {
+    if (snowVisionLoading) return;
+    setSnowVisionLoading(true);
+    setSnowVisionError(null);
+    try {
+      const result = await fetchSnowVisionAnalysis(lat, lon);
+      setSnowVisionAnalysis(result.analysis);
+    } catch (err) {
+      setSnowVisionError(err instanceof Error ? err.message : 'Satellite snow analysis unavailable');
+    } finally {
+      setSnowVisionLoading(false);
+    }
+  }, [snowVisionLoading]);
+
   return {
     safetyData,
     setSafetyData,
@@ -333,6 +360,13 @@ export function useSafetyData({
     setAiBriefLoading,
     aiBriefError,
     setAiBriefError,
+    snowVisionAnalysis,
+    setSnowVisionAnalysis,
+    snowVisionLoading,
+    setSnowVisionLoading,
+    snowVisionError,
+    setSnowVisionError,
+    handleRequestSnowVision,
     fetchSafetyData,
     clearLastLoadedKey,
     clearWakeRetry,

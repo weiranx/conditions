@@ -156,6 +156,21 @@ export async function fetchAiBrief(data: AiBriefRequest): Promise<AiBriefRespons
   return payload as AiBriefResponse;
 }
 
+export interface SnowVisionResponse {
+  analysis: string;
+  zoom: number;
+  generatedAt: string;
+}
+
+export async function fetchSnowVisionAnalysis(lat: number, lon: number): Promise<SnowVisionResponse> {
+  const { response, payload } = await fetchApi(`/api/snow-vision?lat=${lat}&lon=${lon}`);
+  if (!response.ok) {
+    const msg = readApiErrorMessage(payload, 'Satellite snow analysis unavailable');
+    throw new Error(msg);
+  }
+  return payload as SnowVisionResponse;
+}
+
 export function readApiErrorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
     const record = payload as Record<string, unknown>;

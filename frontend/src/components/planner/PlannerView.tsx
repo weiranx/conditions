@@ -202,6 +202,10 @@ export interface PlannerViewProps {
   aiBriefError: string | null;
   aiBriefLoading: boolean;
   handleRequestAiBriefAction: () => void;
+  snowVisionAnalysis: string | null;
+  snowVisionError: string | null;
+  snowVisionLoading: boolean;
+  handleRequestSnowVisionAction: () => void;
 
   // Route analysis
   routeSuggestions: RouteOption[] | null;
@@ -596,6 +600,10 @@ function PlannerViewComponent(props: PlannerViewProps) {
     aiBriefError,
     aiBriefLoading,
     handleRequestAiBriefAction,
+    snowVisionAnalysis,
+    snowVisionError,
+    snowVisionLoading,
+    handleRequestSnowVisionAction,
 
     // Route analysis
     routeSuggestions,
@@ -1777,6 +1785,10 @@ function PlannerViewComponent(props: PlannerViewProps) {
                   weatherTimezone={safetyData.weather?.timezone || null}
                   localizeUnitText={localizeUnitText}
                   formatForecastPeriodLabel={formatForecastPeriodLabel}
+                  snowVisionAnalysis={snowVisionAnalysis}
+                  snowVisionError={snowVisionError}
+                  snowVisionLoading={snowVisionLoading}
+                  onRequestSnowVision={handleRequestSnowVisionAction}
                 />
                 </CollapsibleCard>
               )}

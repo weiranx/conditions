@@ -177,6 +177,8 @@ function App() {
   const {
     safetyData, setSafetyData, loading, error, setError,
     aiBriefNarrative, setAiBriefNarrative, aiBriefLoading, setAiBriefLoading, aiBriefError, setAiBriefError,
+    snowVisionAnalysis, snowVisionLoading, snowVisionError,
+    setSnowVisionAnalysis, setSnowVisionLoading, setSnowVisionError, handleRequestSnowVision,
     fetchSafetyData, clearLastLoadedKey, clearWakeRetry,
     handleRequestAiBrief,
   } = safetyHook;
@@ -238,6 +240,9 @@ function App() {
     setAiBriefNarrative(null);
     setAiBriefLoading(false);
     setAiBriefError(null);
+    setSnowVisionAnalysis(null);
+    setSnowVisionLoading(false);
+    setSnowVisionError(null);
     setTargetElevationInput('');
     setTargetElevationManual(false);
     setTripForecastRowsDirect([]);
@@ -249,7 +254,7 @@ function App() {
     // silently keeping a stale name (e.g. "Mount Rainier") attached to brand-new coordinates.
     setObjectiveName(label || 'Dropped pin');
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setDayOverDay is a stable setter from useDayComparisons, declared later in hook order
-  }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
+  }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionLoading, setSnowVisionError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
   const searchHook = useSearchSuggestions({
     initialSearchQuery: initialLinkState.searchQuery,
@@ -285,6 +290,9 @@ function App() {
       setAiBriefNarrative(null);
       setAiBriefLoading(false);
       setAiBriefError(null);
+      setSnowVisionAnalysis(null);
+      setSnowVisionLoading(false);
+      setSnowVisionError(null);
       clearLastLoadedKey();
       setPosition(linkState.position);
       setHasObjective(linkState.hasObjective);
@@ -299,7 +307,7 @@ function App() {
         setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
       }
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
@@ -547,6 +555,11 @@ function App() {
       fieldBriefPrimaryReason,
       fieldBriefTopRisks,
     });
+  };
+
+  const handleRequestSnowVisionAction = () => {
+    if (snowVisionLoading) return;
+    void handleRequestSnowVision(position.lat, position.lng);
   };
 
   const handleCopyRawPayload = async () => {
@@ -1671,6 +1684,10 @@ function App() {
       aiBriefError={aiBriefError}
       aiBriefLoading={aiBriefLoading}
       handleRequestAiBriefAction={handleRequestAiBriefAction}
+      snowVisionAnalysis={snowVisionAnalysis}
+      snowVisionError={snowVisionError}
+      snowVisionLoading={snowVisionLoading}
+      handleRequestSnowVisionAction={handleRequestSnowVisionAction}
       // Route analysis
       routeSuggestions={routeSuggestions}
       routeAnalysis={routeAnalysis}

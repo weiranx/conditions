@@ -1,3 +1,4 @@
+import { Loader2, Satellite } from 'lucide-react';
 import type { SnowpackSnapshotInsights, SnowpackInterpretation } from '../../../app/types';
 import { HelpHint } from '../CardHelpHint';
 
@@ -40,6 +41,10 @@ export interface SnowpackCardProps {
   weatherTimezone: string | null;
   localizeUnitText: (text: string) => string;
   formatForecastPeriodLabel: (isoString?: string | null, timeZone?: string | null) => string;
+  snowVisionAnalysis: string | null;
+  snowVisionError: string | null;
+  snowVisionLoading: boolean;
+  onRequestSnowVision: () => void;
 }
 
 export function SnowpackCard({
@@ -77,6 +82,10 @@ export function SnowpackCard({
   weatherTimezone,
   localizeUnitText,
   formatForecastPeriodLabel,
+  snowVisionAnalysis,
+  snowVisionError,
+  snowVisionLoading,
+  onRequestSnowVision,
 }: SnowpackCardProps) {
   return (
     <>
@@ -127,6 +136,23 @@ export function SnowpackCard({
           ? localizeUnitText(snowpackInterpretation.headline)
           : localizeUnitText(snowpackSummary || 'Snowpack observations unavailable.')}
       </p>
+
+      <div className="score-ai-brief">
+        {snowVisionAnalysis ? (
+          <p className="score-ai-narrative"><Satellite size={12} /> {snowVisionAnalysis}</p>
+        ) : snowVisionError ? (
+          <div className="score-ai-error">
+            <span>{snowVisionError}</span>
+            <button type="button" className="btn-ai-brief" onClick={onRequestSnowVision}>Retry</button>
+          </div>
+        ) : (
+          <button type="button" className="btn-ai-brief" onClick={onRequestSnowVision} disabled={snowVisionLoading}>
+            {snowVisionLoading
+              ? <><Loader2 size={12} className="spinner" /> Analyzing satellite view...</>
+              : <><Satellite size={12} /> Analyze snow from satellite</>}
+          </button>
+        )}
+      </div>
 
       <details className="snowpack-details">
         <summary>More snowpack details</summary>
