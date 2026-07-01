@@ -163,6 +163,7 @@ export interface PlannerViewProps {
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
   onStartNewReport: () => void;
+  onGenerateReport: () => void;
 
   // Decision / safety
   decision: SummitDecision | null;
@@ -559,6 +560,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     timezoneMismatch,
     deviceTimezone,
     onStartNewReport,
+    onGenerateReport,
 
     // Decision / safety
     decision,
@@ -954,6 +956,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         deviceTimezone={deviceTimezone}
         locked={reportLocked}
         onStartNewReport={onStartNewReport}
+        onGenerateReport={onGenerateReport}
       />
 
       {!hasObjective && (

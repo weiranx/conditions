@@ -308,14 +308,6 @@ function App() {
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
   useEffect(() => {
-    if (!hasObjective || view !== 'planner') {
-      return;
-    }
-
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime);
-  }, [position, forecastDate, alpineStartTime, hasObjective, view, fetchSafetyData]);
-
-  useEffect(() => {
     if (!hasObjective || !safetyData) {
       return;
     }
@@ -584,6 +576,16 @@ function App() {
   };
 
   const handleRetryFetch = () => {
+    if (!hasObjective) {
+      return;
+    }
+    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
+  };
+
+  // Fetching a report is an explicit, user-confirmed action rather than an automatic
+  // side effect of editing fields — this is the only place (besides Refresh) that
+  // triggers a fetch, so a report never regenerates out from under someone mid-edit.
+  const handleGenerateReport = () => {
     if (!hasObjective) {
       return;
     }
@@ -1197,10 +1199,6 @@ function App() {
     setForecastDate(nextDate);
     setAlpineStartTime(nextTime);
     setError(null);
-
-    if (hasObjective && view === 'planner') {
-      void fetchSafetyData(position.lat, position.lng, nextDate, nextTime, { force: true });
-    }
   };
   const freshness = buildSourceFreshnessDisplay(safetyData, rainfallPayload, avalancheRelevant, travelWindowHours);
   const {
@@ -1541,6 +1539,7 @@ function App() {
       timezoneMismatch={timezoneMismatch}
       deviceTimezone={deviceTimezone}
       onStartNewReport={handleStartNewReport}
+      onGenerateReport={handleGenerateReport}
       // Decision / safety
       decision={decision}
       avalancheRelevant={avalancheRelevant}
