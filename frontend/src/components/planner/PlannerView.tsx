@@ -966,6 +966,13 @@ function PlannerViewComponent(props: PlannerViewProps) {
         </div>
       )}
 
+      {hasObjective && !safetyData && !loading && !error && (
+        <div className="empty-state">
+          <h3>Ready to check {objectiveName || 'this location'}</h3>
+          <p>Review the date, start time, and trip length below, then tap <strong>Generate Report</strong> to pull the latest weather, avalanche, and safety data.</p>
+        </div>
+      )}
+
       {loading && !safetyData && <ForecastLoading />}
 
       {loading && safetyData && (

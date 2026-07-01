@@ -1084,24 +1084,24 @@ function App() {
     lowerTerrainLabel: lowerTerrainHeatLabel,
   } = heatRisk;
   const mapWeatherEmoji = safetyData ? weatherConditionEmoji(safetyData.weather.description, safetyData.weather.isDaytime) : '🌤️';
-  const mapWeatherTempLabel = safetyData ? formatTempDisplay(safetyData.weather.temp) : loading ? 'Loading…' : 'N/A';
+  const mapWeatherTempLabel = safetyData ? formatTempDisplay(safetyData.weather.temp) : loading ? 'Loading…' : '–';
   const mapWeatherConditionLabel = safetyData
     ? truncateText(safetyData.weather.description || 'Conditions unavailable', 34)
     : loading
       ? 'Fetching forecast'
-      : 'Conditions unavailable';
+      : 'Tap Generate Report';
   const mapWeatherChipTitle = safetyData
     ? [
         `${formatTempDisplay(safetyData.weather.temp)} (feels ${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)})`,
         safetyData.weather.description || 'Conditions unavailable',
       ].join(' • ')
-    : 'Forecast not loaded';
+    : 'Generate a report to see the forecast';
   const mapObjectiveElevationFt = safetyData ? Number(safetyData.weather.elevation) : Number.NaN;
   const hasMapObjectiveElevation = Number.isFinite(mapObjectiveElevationFt) && mapObjectiveElevationFt > 0;
-  const mapElevationLabel = hasMapObjectiveElevation ? formatElevationDisplay(mapObjectiveElevationFt) : loading ? 'Loading…' : 'N/A';
+  const mapElevationLabel = hasMapObjectiveElevation ? formatElevationDisplay(mapObjectiveElevationFt) : loading ? 'Loading…' : '–';
   const mapElevationChipTitle = hasMapObjectiveElevation
     ? [formatElevationDisplay(mapObjectiveElevationFt), safetyData?.weather.elevationSource || null].filter(Boolean).join(' • ')
-    : 'Objective elevation unavailable';
+    : 'Elevation appears once you generate a report';
   const weatherHourQuickOptions = buildWeatherHourQuickOptions(safetyData, preferences.timeStyle, formatTempDisplay, formatWindDisplay);
   const activeWeatherHourValue = weatherHourPreviewTime || alpineStartTime;
   const selectedWeatherHourIndex = findSelectedWeatherHourIndex(weatherHourQuickOptions, activeWeatherHourValue);
