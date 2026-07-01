@@ -13,6 +13,7 @@ interface SearchBoxProps {
   activeSuggestionIndex: number;
   canUseCoordinates: boolean;
   showGoButton?: boolean;
+  disabled?: boolean;
   onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -34,6 +35,7 @@ export function SearchBox({
   activeSuggestionIndex,
   canUseCoordinates,
   showGoButton = true,
+  disabled = false,
   onInputChange,
   onFocus,
   onKeyDown,
@@ -61,6 +63,7 @@ export function SearchBox({
           onChange={onInputChange}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
+          disabled={disabled}
           aria-label="Search location"
           aria-autocomplete="list"
           aria-expanded={showSuggestions}
@@ -73,19 +76,19 @@ export function SearchBox({
             className="search-go-btn"
             onClick={onSubmit}
             aria-label={searchLoading ? 'Searching' : 'Search location'}
-            disabled={searchLoading}
+            disabled={searchLoading || disabled}
           >
             {searchLoading ? <LoaderCircle size={14} className="spin" /> : 'Go'}
           </button>
         )}
         {trimmedSearchQuery.length > 0 && (
-          <button type="button" className="search-clear-btn" onClick={onClear} aria-label="Clear search">
+          <button type="button" className="search-clear-btn" onClick={onClear} aria-label="Clear search" disabled={disabled}>
             <X size={14} />
           </button>
         )}
       </div>
 
-      {showSuggestions && (searchLoading || suggestions.length > 0 || trimmedSearchQuery.length > 0) && (
+      {!disabled && showSuggestions && (searchLoading || suggestions.length > 0 || trimmedSearchQuery.length > 0) && (
         <div className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
           {searchLoading && (
             <div className="suggestion-status" role="presentation">

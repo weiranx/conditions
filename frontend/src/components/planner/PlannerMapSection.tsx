@@ -13,6 +13,7 @@ import {
   CalendarDays,
   RefreshCw,
   SlidersHorizontal,
+  FilePlus2,
 } from 'lucide-react';
 import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
 import {
@@ -63,6 +64,8 @@ export interface PlannerMapSectionProps {
   openTripToolView: () => void;
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
+  locked: boolean;
+  onStartNewReport: () => void;
 }
 
 export function PlannerMapSection({
@@ -78,6 +81,7 @@ export function PlannerMapSection({
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
+  locked, onStartNewReport,
 }: PlannerMapSectionProps) {
   return (
     <section className="map-shell" id="planner-main-content">
@@ -95,7 +99,7 @@ export function PlannerMapSection({
             imperial={preferences.elevationUnit === 'ft'}
             metric={preferences.elevationUnit === 'm'}
           />
-          <LocationMarker position={position} setPosition={updateObjectivePosition} />
+          <LocationMarker position={position} setPosition={updateObjectivePosition} locked={locked} />
           <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
           <CtrlScrollZoom />
         </MapContainer>
@@ -118,7 +122,7 @@ export function PlannerMapSection({
             type="button"
             className="map-overlay-btn"
             onClick={handleUseCurrentLocation}
-            disabled={locatingUser}
+            disabled={locatingUser || locked}
             title={locatingUser ? 'Locating...' : 'Use my location'}
             aria-label="Use my location"
           >
@@ -175,7 +179,7 @@ export function PlannerMapSection({
         <div id="map-actions-flat" className="map-actions-flat">
           <label className="date-control">
             <span>Date</span>
-            <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
+            <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} disabled={locked} />
           </label>
 
           <label className="date-control compact">
@@ -186,6 +190,7 @@ export function PlannerMapSection({
               title="When you plan to start moving."
               value={alpineStartTime}
               onChange={handlePlannerTimeChange(setAlpineStartTime)}
+              disabled={locked}
             />
           </label>
 
@@ -202,6 +207,7 @@ export function PlannerMapSection({
               value={travelWindowHoursDraft}
               onChange={handleTravelWindowHoursDraftChange}
               onBlur={handleTravelWindowHoursDraftBlur}
+              disabled={locked}
             />
           </label>
 
@@ -209,6 +215,7 @@ export function PlannerMapSection({
             type="button"
             className="now-control-btn"
             onClick={handleUseNowConditions}
+            disabled={locked}
             title={objectiveTimezone ? `Set date/time to now in ${objectiveTimezone}` : 'Set date/time to now'}
           >
             <Clock size={14} /> Now
@@ -219,6 +226,11 @@ export function PlannerMapSection({
           <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
             <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
           </button>
+          {locked && (
+            <button type="button" className="action-btn" onClick={onStartNewReport} title="Clear this report and unlock the fields to change it">
+              <FilePlus2 size={14} /> New Report
+            </button>
+          )}
           <button type="button" className="settings-btn" onClick={openTripToolView}>
             <CalendarDays size={14} /> Multi-day
           </button>

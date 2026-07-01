@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { APP_DISCLAIMER_TEXT } from './constants';
 import type L from 'leaflet';
 
-export function LocationMarker({ position, setPosition }: { position: L.LatLng; setPosition: (p: L.LatLng) => void }) {
+export function LocationMarker({ position, setPosition, locked = false }: { position: L.LatLng; setPosition: (p: L.LatLng) => void; locked?: boolean }) {
   const markerRef = useRef<L.Marker | null>(null);
   const eventHandlers = useMemo(
     () => ({
@@ -19,11 +19,14 @@ export function LocationMarker({ position, setPosition }: { position: L.LatLng; 
 
   useMapEvents({
     click(e) {
+      if (locked) {
+        return;
+      }
       setPosition(e.latlng);
     },
   });
 
-  return <Marker draggable={true} eventHandlers={eventHandlers} position={position} ref={markerRef} />;
+  return <Marker draggable={!locked} eventHandlers={eventHandlers} position={position} ref={markerRef} />;
 }
 
 export function MapUpdater({ position, zoom, focusKey }: { position: L.LatLng; zoom: number; focusKey: number }) {

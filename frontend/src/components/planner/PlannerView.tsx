@@ -162,6 +162,7 @@ export interface PlannerViewProps {
   handleRetryFetch: () => void;
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
+  onStartNewReport: () => void;
 
   // Decision / safety
   decision: SummitDecision | null;
@@ -557,6 +558,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     handleRetryFetch,
     timezoneMismatch,
     deviceTimezone,
+    onStartNewReport,
 
     // Decision / safety
     decision,
@@ -876,6 +878,11 @@ function PlannerViewComponent(props: PlannerViewProps) {
   const criticalCheckTotal = orderedCriticalChecks.length;
   const criticalCheckPassCount = criticalCheckTotal - criticalCheckFailCount;
 
+  // Once a report is showing, its input fields are locked — changing them
+  // requires explicitly starting a new report (see onStartNewReport), so a
+  // displayed report can't be silently mutated out from under the user.
+  const reportLocked = Boolean(safetyData);
+
   return (
     <div key="view-planner" className={`${appShellClassName}${effectiveLayout === 'redesign' ? ' ssr-shell' : ''}`} aria-busy={isViewPending}>
       <a href="#planner-main-content" className="skip-nav">Skip to main content</a>
@@ -897,6 +904,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleUseTypedCoordinates={handleUseTypedCoordinates}
         selectSuggestion={selectSuggestion}
         setActiveSuggestionIndex={setActiveSuggestionIndex}
+        disabled={reportLocked}
         hasObjective={hasObjective}
         objectiveIsSaved={objectiveIsSaved}
         handleToggleSaveObjective={handleToggleSaveObjective}
@@ -944,6 +952,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
         openTripToolView={openTripToolView}
         timezoneMismatch={timezoneMismatch}
         deviceTimezone={deviceTimezone}
+        locked={reportLocked}
+        onStartNewReport={onStartNewReport}
       />
 
       {!hasObjective && (

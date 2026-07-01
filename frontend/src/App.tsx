@@ -590,6 +590,19 @@ function App() {
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
+  const handleStartNewReport = useCallback(() => {
+    setSafetyData(null);
+    setError(null);
+    setAiBriefNarrative(null);
+    setAiBriefLoading(false);
+    setAiBriefError(null);
+    setSnowVisionAnalysis(null);
+    setSnowVisionImage(null);
+    setSnowVisionLoading(false);
+    setSnowVisionError(null);
+    resetRouteState();
+  }, [setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState]);
+
   const openPlannerView = () => {
     if (!hasObjective && !searchQuery.trim()) {
       setAlpineStartTime(preferences.defaultStartTime);
@@ -1527,6 +1540,7 @@ function App() {
       handleRetryFetch={handleRetryFetch}
       timezoneMismatch={timezoneMismatch}
       deviceTimezone={deviceTimezone}
+      onStartNewReport={handleStartNewReport}
       // Decision / safety
       decision={decision}
       avalancheRelevant={avalancheRelevant}

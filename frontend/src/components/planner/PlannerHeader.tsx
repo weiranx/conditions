@@ -28,6 +28,7 @@ export interface PlannerHeaderProps {
   handleUseTypedCoordinates: (value: string) => void;
   selectSuggestion: (suggestion: Suggestion) => void;
   setActiveSuggestionIndex: (index: number) => void;
+  disabled?: boolean;
   hasObjective: boolean;
   objectiveIsSaved: boolean;
   handleToggleSaveObjective: () => void;
@@ -42,6 +43,7 @@ export function PlannerHeader({
   parsedTypedCoordinates,
   handleInputChange, handleFocus, handleSearchKeyDown, handleSearchSubmit,
   handleSearchClear, handleUseTypedCoordinates, selectSuggestion, setActiveSuggestionIndex,
+  disabled = false,
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
   copiedLink, handleCopyLink, navigateToView,
 }: PlannerHeaderProps) {
@@ -74,6 +76,7 @@ export function PlannerHeader({
           suggestions={suggestions}
           activeSuggestionIndex={activeSuggestionIndex}
           canUseCoordinates={Boolean(parsedTypedCoordinates)}
+          disabled={disabled}
           onInputChange={handleInputChange}
           onFocus={handleFocus}
           onKeyDown={handleSearchKeyDown}
