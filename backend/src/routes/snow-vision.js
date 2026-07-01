@@ -1,5 +1,6 @@
 const { createCache } = require('../utils/cache');
 const { fetchSentinelTile } = require('../utils/sentinel-tiles');
+const { logger } = require('../utils/logger');
 
 // z13 tiles cover ~5km per side at Sentinel-2's ~10m/px native resolution — wide
 // enough to see a route's approach/summit block without losing too much detail.
@@ -76,6 +77,7 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => 
 
       return res.json({ ...result, generatedAt: new Date().toISOString() });
     } catch (error) {
+      logger.error({ err: error }, 'snow-vision error');
       const statusCode = error?.statusCode || 503;
       return res.status(statusCode).json({ error: error?.message || 'Failed to analyze satellite imagery.' });
     }

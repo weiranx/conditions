@@ -1,5 +1,6 @@
 const { createCache } = require('../utils/cache');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
+const { logger } = require('../utils/logger');
 
 const SYSTEM_PROMPT =
   "You are a backcountry conditions analyst. You will be given the full raw backcountry safety report as JSON (weather, avalanche, alerts, air quality, snowpack, fire/heat risk, terrain surface, atmosphere, safety score and scoring factors) plus the app's computed decision level. Read the JSON directly and write a thorough field analysis, 5-8 sentences, synthesizing the data into a coherent picture rather than restating fields as a list. Cover: the dominant hazard driving the score, how secondary factors compound or offset it, any time-sensitive conditions (e.g. wind loading, freezing level, thunderstorm timing) worth noting, and a concrete, specific recommendation. Be direct and specific — reference actual values from the JSON rather than vague language. Structure the response as 2-4 short paragraphs separated by a single blank line, each covering one theme (e.g. dominant hazard, secondary/compounding factors, recommendation) — do not write one dense block. Plain prose only: no markdown of any kind — no headings, no '#' characters, no bold/italic asterisks, no bullet lists. Never start the response with a title. IMPORTANT: Your recommendation MUST be consistent with the provided decision level — if the decision is NO-GO, do not suggest proceeding with caution; instead recommend postponing or choosing a safer objective. Only suggest proceeding when the decision level supports it.";
@@ -34,6 +35,7 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
 
       return res.json({ narrative });
     } catch (err) {
+      logger.error({ err }, 'ai-brief error');
       const msg = err.message || 'AI service unavailable';
       return res.status(503).json({ error: msg });
     }
