@@ -300,7 +300,9 @@ export function evaluateBackcountryDecision(
     : null;
   if (!hasDaylightInputs) {
     addCaution('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
-  } else if (!daylightOkay) {
+  } else if (!daylightOkay && turnaroundMinutes === null) {
+    // When a turnaround time is known, the block below reports the same thin-margin
+    // condition with exact minutes — keep only the more specific message.
     addCaution(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
   }
   if (turnaroundMinutes !== null && sunsetMinutes !== null) {

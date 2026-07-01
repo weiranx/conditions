@@ -675,7 +675,27 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 }
 .ssr-ac-icon svg { width: 12px; height: 12px; }
 .ssr-ac-item.nogo .ssr-ac-icon { background: color-mix(in oklch, var(--ssr-nogo) 25%, transparent); color: var(--ssr-nogo-ink); }
+.ssr-ac-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .ssr-ac-text { font-size: 13px; line-height: 1.45; color: var(--ssr-text); }
+.ssr-ac-severity {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--ssr-surface-3);
+  color: var(--ssr-text-3);
+}
+.ssr-ac-severity.nogo { background: color-mix(in oklch, var(--ssr-nogo) 22%, transparent); color: var(--ssr-nogo-ink); }
+.ssr-ac-severity.warn { background: color-mix(in oklch, var(--ssr-caution) 24%, transparent); color: var(--ssr-caution-ink); }
+.ssr-ac-expiry {
+  font-size: 11px;
+  color: var(--ssr-text-3);
+  margin-top: 2px;
+  font-family: var(--ssr-mono);
+}
 .ssr-ac-meta {
   font-size: 11px;
   color: var(--ssr-text-3);
@@ -768,7 +788,8 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 .ssr-cc-fail-action svg { flex: none; position: relative; top: 2px; }
 .ssr-cc-fail.nogo { background: color-mix(in oklch, var(--ssr-nogo) 8%, transparent); border-color: color-mix(in oklch, var(--ssr-nogo) 26%, transparent); }
 .ssr-cc-fail.nogo .ssr-cc-fail-ic { color: var(--ssr-nogo-ink); }
-.ssr-cc-fail-meta { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ssr-nogo-ink); }
+.ssr-cc-fail-meta { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ssr-caution-ink); }
+.ssr-cc-fail.nogo .ssr-cc-fail-meta { color: var(--ssr-nogo-ink); }
 
 .ssr-cc-allclear { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 10px;
   background: color-mix(in oklch, var(--ssr-go) 10%, transparent);
