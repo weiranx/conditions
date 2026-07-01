@@ -27,7 +27,7 @@ const DEV_BACKEND_FALLBACK_BASES = (() => {
   return Array.from(unique);
 })();
 
-function buildApiUrl(path: string): string {
+export function buildApiUrl(path: string): string {
   const normalizedBase = API_BASE.replace(/\/+$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return normalizedBase ? `${normalizedBase}${normalizedPath}` : normalizedPath;

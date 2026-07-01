@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { buildApiUrl } from '../lib/api-client';
 import type { MapStyle } from './types';
 
 export const DATE_FMT = /^\d{4}-\d{2}-\d{2}$/;
@@ -38,7 +39,7 @@ export const MAP_STYLE_OPTIONS: Record<MapStyle, { label: string; url: string; a
   },
   satellite: {
     label: 'Satellite',
-    url: '/api/satellite-tile/{z}/{x}/{y}.png',
+    url: buildApiUrl('/api/satellite-tile/{z}/{x}/{y}.png'),
     attribution: 'Contains modified Copernicus Sentinel data, processed by Sentinel Hub',
     // Sentinel-2 native resolution (~10m/px) stops adding detail past this zoom; Leaflet
     // upsamples the last native tile for closer zoom instead of requesting new imagery.
