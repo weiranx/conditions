@@ -56,7 +56,8 @@ const { logReportRequest, registerReportLogsRoute } = require('./src/routes/repo
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
-const { askClaude } = require('./src/utils/ai-client');
+const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
+const { askClaude, askClaudeVision } = require('./src/utils/ai-client');
 const { createCache } = require('./src/utils/cache');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
@@ -684,6 +685,7 @@ registerReportLogsRoute(app);
 registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askClaude });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
+registerSnowVisionRoute({ app, fetchWithTimeout, askClaudeVision });
 
 const startServer = () => startBackendServer({ app, port: PORT });
 

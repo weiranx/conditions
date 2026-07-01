@@ -25,4 +25,24 @@ const askClaude = async (prompt, { maxTokens = 1024, model = 'claude-sonnet-4-6'
   return msg.content[0].text;
 };
 
-module.exports = { askClaude };
+const askClaudeVision = async (imageBase64, prompt, { maxTokens = 1024, model = 'claude-sonnet-5', system, mediaType = 'image/png' } = {}) => {
+  const params = {
+    model,
+    max_tokens: maxTokens,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+        { type: 'text', text: prompt },
+      ],
+    }],
+  };
+  if (system) params.system = system;
+  const msg = await getClient().messages.create(params);
+  if (!msg.content?.length || msg.content[0]?.type !== 'text') {
+    throw new Error('Unexpected response format from AI API');
+  }
+  return msg.content[0].text;
+};
+
+module.exports = { askClaude, askClaudeVision };
