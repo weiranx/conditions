@@ -57,7 +57,7 @@ export function PlannerHeader({
           aria-label="Go to homepage"
           title="Homepage"
         >
-          <img src="/summitsafe-icon.svg" alt="Backcountry Conditions" className="brand-mark-icon" />
+          <img src="/summitsafe-mark.svg" alt="Backcountry Conditions" className="brand-mark-icon" />
         </button>
         <div className="brand-copy">
           <h1>Backcountry Conditions</h1>
