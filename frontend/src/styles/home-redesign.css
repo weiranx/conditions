@@ -188,6 +188,30 @@ html[data-theme="dark"] .ssr-h-console:focus-within {
   color: var(--ssr-text);
   font-variant-numeric: tabular-nums;
 }
+.ssr-h-param-input {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  width: 100%;
+  cursor: pointer;
+}
+.ssr-h-param-input:focus {
+  outline: none;
+  color: var(--ssr-brand);
+}
+.ssr-h-param-window {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ssr-text);
+  font-variant-numeric: tabular-nums;
+}
+.ssr-h-param-window input {
+  width: 2.4em;
+}
 .ssr-h-param-note {
   padding: 12px 16px;
   display: flex;

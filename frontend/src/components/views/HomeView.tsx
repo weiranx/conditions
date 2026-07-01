@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
-import type { UserPreferences } from '../../app/types';
+import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../../app/constants';
 import '../../styles/home-redesign.css';
 
 const FEATURED_PEAKS: Suggestion[] = [
@@ -32,14 +32,6 @@ const PEAK_ELEVATIONS: Record<string, string> = {
   'Mount Hood': "OR · 11,249'",
   'Longs Peak': "CO · 14,259'",
 };
-
-function formatTodayLabel(isoDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
-  if (!match) return isoDate;
-  const [, y, m, d] = match;
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-}
 
 export interface HomeViewProps {
   appShellClassName: string;
@@ -66,10 +58,17 @@ export interface HomeViewProps {
   selectSuggestion: (suggestion: Suggestion) => void;
   setActiveSuggestionIndex: (index: number) => void;
 
-  // Trip defaults (shown in the search console)
-  preferences: UserPreferences;
+  // Trip defaults (shown in the search console, editable)
   todayDate: string;
-  formatClockForStyle: (time: string, style: UserPreferences['timeStyle']) => string;
+  maxForecastDate: string;
+  forecastDate: string;
+  handleDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  alpineStartTime: string;
+  handlePlannerTimeChange: (setter: React.Dispatch<React.SetStateAction<string>>) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  setAlpineStartTime: React.Dispatch<React.SetStateAction<string>>;
+  travelWindowHoursDraft: string | number;
+  handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleTravelWindowHoursDraftBlur: () => void;
 
   // Navigation
   navigateToPlanner: () => void;
@@ -97,9 +96,16 @@ export function HomeView({
   handleUseTypedCoordinates,
   selectSuggestion,
   setActiveSuggestionIndex,
-  preferences,
   todayDate,
-  formatClockForStyle,
+  maxForecastDate,
+  forecastDate,
+  handleDateChange,
+  alpineStartTime,
+  handlePlannerTimeChange,
+  setAlpineStartTime,
+  travelWindowHoursDraft,
+  handleTravelWindowHoursDraftChange,
+  handleTravelWindowHoursDraftBlur,
   navigateToPlanner,
   navigateToView,
   openTripToolView,
@@ -170,18 +176,45 @@ export function HomeView({
               </button>
             </div>
             <div className="ssr-h-params">
-              <button type="button" className="ssr-h-param" onClick={navigateToPlanner}>
+              <label className="ssr-h-param">
                 <span className="ssr-h-param-k"><CalendarDays size={12} /> Date</span>
-                <span className="ssr-h-param-v">{formatTodayLabel(todayDate)}</span>
-              </button>
-              <button type="button" className="ssr-h-param" onClick={navigateToPlanner}>
+                <input
+                  type="date"
+                  className="ssr-h-param-v ssr-h-param-input"
+                  value={forecastDate}
+                  min={todayDate}
+                  max={maxForecastDate}
+                  onChange={handleDateChange}
+                />
+              </label>
+              <label className="ssr-h-param">
                 <span className="ssr-h-param-k"><Clock size={12} /> Start</span>
-                <span className="ssr-h-param-v">{formatClockForStyle(preferences.defaultStartTime, preferences.timeStyle)}</span>
-              </button>
-              <button type="button" className="ssr-h-param" onClick={navigateToPlanner}>
+                <input
+                  type="time"
+                  className="ssr-h-param-v ssr-h-param-input"
+                  aria-label="Start time"
+                  value={alpineStartTime}
+                  onChange={handlePlannerTimeChange(setAlpineStartTime)}
+                />
+              </label>
+              <label className="ssr-h-param">
                 <span className="ssr-h-param-k"><Activity size={12} /> Window</span>
-                <span className="ssr-h-param-v">{preferences.travelWindowHours} hours</span>
-              </button>
+                <span className="ssr-h-param-window">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="ssr-h-param-v ssr-h-param-input"
+                    aria-label="Trip duration in hours"
+                    min={MIN_TRAVEL_WINDOW_HOURS}
+                    max={MAX_TRAVEL_WINDOW_HOURS}
+                    step={1}
+                    value={travelWindowHoursDraft}
+                    onChange={handleTravelWindowHoursDraftChange}
+                    onBlur={handleTravelWindowHoursDraftBlur}
+                  />
+                  hours
+                </span>
+              </label>
               <div className="ssr-h-param-note">
                 Reports are scored for your exact start time and travel window.
               </div>
