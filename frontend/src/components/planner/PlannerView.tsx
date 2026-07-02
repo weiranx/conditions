@@ -2,6 +2,7 @@ import React from 'react';
 import L from 'leaflet';
 import {
   Eye,
+  Send,
 } from 'lucide-react';
 import { ForecastLoading } from './ForecastLoading';
 import { PlannerHeader } from './PlannerHeader';
@@ -668,7 +669,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         deviceTimezone={deviceTimezone}
         locked={reportLocked}
         onStartNewReport={onStartNewReport}
-        onGenerateReport={onGenerateReport}
       />
 
       {!hasObjective && (
@@ -679,9 +679,17 @@ function PlannerViewComponent(props: PlannerViewProps) {
       )}
 
       {hasObjective && !safetyData && !loading && !error && (
-        <div className="empty-state">
+        <div className="empty-state empty-state-ready">
           <h3>Ready to check {objectiveName || 'this location'}</h3>
-          <p>Review the date, start time, and trip length below, then tap <strong>Generate Report</strong> to pull the latest weather, avalanche, and safety data.</p>
+          <p>Review the date, start time, and trip length below, then generate a report to pull the latest weather, avalanche, and safety data.</p>
+          <button
+            type="button"
+            className="now-control-btn generate-report-btn empty-state-generate-btn"
+            onClick={onGenerateReport}
+            title="Fetch a report for the selected location, date, and time"
+          >
+            <Send size={16} /> Generate Report
+          </button>
         </div>
       )}
 

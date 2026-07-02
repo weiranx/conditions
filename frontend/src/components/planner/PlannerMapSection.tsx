@@ -14,7 +14,6 @@ import {
   RefreshCw,
   SlidersHorizontal,
   FilePlus2,
-  Send,
 } from 'lucide-react';
 import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
 import {
@@ -67,7 +66,6 @@ export interface PlannerMapSectionProps {
   deviceTimezone: string | null;
   locked: boolean;
   onStartNewReport: () => void;
-  onGenerateReport: () => void;
 }
 
 export function PlannerMapSection({
@@ -83,7 +81,7 @@ export function PlannerMapSection({
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
-  locked, onStartNewReport, onGenerateReport,
+  locked, onStartNewReport,
 }: PlannerMapSectionProps) {
   return (
     <section className="map-shell" id="planner-main-content">
@@ -224,18 +222,6 @@ export function PlannerMapSection({
           >
             <Clock size={14} /> Now
           </button>
-
-          {!locked && (
-            <button
-              type="button"
-              className="now-control-btn generate-report-btn"
-              onClick={onGenerateReport}
-              disabled={!hasObjective || loading}
-              title="Fetch a report for the selected location, date, and time"
-            >
-              {loading ? <RefreshCw size={14} className="spin" /> : <Send size={14} />} {loading ? 'Generating...' : 'Generate Report'}
-            </button>
-          )}
         </div>
 
         <div className="map-actions-utils">
