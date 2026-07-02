@@ -609,6 +609,20 @@ function App() {
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
+  // The home page's "Get conditions" button selects an objective and navigates to the
+  // planner in the same click; selecting the objective is async (it may resolve via a
+  // search lookup), so we can't fetch immediately with the click handler's stale position.
+  // This flag defers the fetch to the next render where the objective is actually set,
+  // then clears itself so later field edits don't trigger another auto-fetch.
+  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(false);
+  useEffect(() => {
+    if (!pendingAutoGenerate || !hasObjective || view !== 'planner') {
+      return;
+    }
+    setPendingAutoGenerate(false);
+    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
+  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, fetchSafetyData]);
+
   const handleStartNewReport = useCallback(() => {
     setSafetyData(null);
     setError(null);
@@ -1450,7 +1464,10 @@ function App() {
   }
 
   if (view === 'home') {
-    const navigateToPlanner = () => startViewChange(() => setView('planner'));
+    const navigateToPlanner = () => {
+      setPendingAutoGenerate(true);
+      startViewChange(() => setView('planner'));
+    };
 
     return (
       <HomeView
