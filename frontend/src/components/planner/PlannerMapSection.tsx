@@ -153,11 +153,13 @@ export function PlannerMapSection({
               <Mountain size={12} aria-hidden="true" />
               <span className="map-elevation-value">{mapElevationLabel}</span>
             </span>
-            <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
-              <span className="map-weather-chip-emoji" aria-hidden="true">{mapWeatherEmoji}</span>
-              <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
-              <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
-            </span>
+            {(safetyData || loading) && (
+              <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapWeatherChipTitle}>
+                <span className="map-weather-chip-emoji" aria-hidden="true">{mapWeatherEmoji}</span>
+                <span className="map-weather-chip-temp">{mapWeatherTempLabel}</span>
+                <span className="map-weather-chip-condition">{mapWeatherConditionLabel}</span>
+              </span>
+            )}
           </div>
         )}
       </div>

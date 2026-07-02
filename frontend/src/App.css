@@ -1502,7 +1502,8 @@ input {
 }
 
 .map-overlay-bl {
-  bottom: 10px;
+  /* Sits above the Leaflet attribution strip so the pills never overlap it */
+  bottom: 32px;
   left: 60px;
   display: flex;
   align-items: center;
@@ -1523,10 +1524,11 @@ input {
 }
 
 .map-overlay-br {
-  bottom: 10px;
+  bottom: 32px;
   right: 10px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
 }
 
@@ -9717,6 +9719,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
   .map-overlay-bl {
     left: 50px;
+    bottom: 44px; /* attribution wraps to two lines at narrow widths */
+  }
+
+  .map-overlay-br {
+    bottom: 44px;
   }
 
   .map-actions {
@@ -10220,6 +10227,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 @media (max-width: 560px) {
+  /* Coordinates stay available in the report header; the pill just adds clutter here */
+  .map-overlay-coords {
+    display: none;
+  }
+
   .app-container {
     padding: 10px 8px calc(24px + env(safe-area-inset-bottom));
   }
@@ -10390,11 +10402,9 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
   .map-overlay-bl {
     left: 44px;
-    bottom: 8px;
   }
 
   .map-overlay-br {
-    bottom: 8px;
     right: 8px;
     gap: 4px;
   }

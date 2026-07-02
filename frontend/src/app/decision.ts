@@ -205,9 +205,8 @@ export function evaluateBackcountryDecision(
 
   if (unknownSnowpackMode) {
     addCaution(
-      'Avalanche forecast coverage is unavailable for this location. Do not treat this as low risk; keep terrain conservative and avoid avalanche features.',
+      'No avalanche bulletin for this zone — travel as if unrated: low-angle terrain, avoid terrain traps, increase spacing. See the Avalanche card.',
     );
-    addCaution('Limited avalanche coverage: use low-angle terrain, avoid terrain traps, and increase spacing/communication.');
   }
   if (avalancheExpired) {
     addCaution('Avalanche bulletin has expired for the selected start time. Danger rating shown is the last-known value; treat conditions as potentially worse.');
@@ -456,7 +455,7 @@ export function evaluateBackcountryDecision(
     headline = 'High-likelihood failure modes detected. Delay or change objective.';
   } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
-    headline = 'Limited avalanche coverage. Favor conservative terrain and explicit abort triggers.';
+    headline = 'No avalanche bulletin — plan conservatively.';
   } else if (cautions.length > 0) {
     level = 'CAUTION';
     headline = 'Conditions are workable with conservative timing and route choices.';

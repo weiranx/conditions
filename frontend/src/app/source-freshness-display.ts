@@ -76,6 +76,10 @@ export function buildSourceFreshnessDisplay(
     safetyData?.snowpack?.nohrsc?.sampledTime || null,
   );
   const snowpackFreshnessTimestamp = snowpackFreshness.referenceTimestamp;
+  // A known no-bulletin state (seasonal gap or uncovered zone) is not a data-pipeline
+  // failure — the Avalanche card explains it, so it shouldn't trip the freshness warning.
+  const avalancheCoverageStatus = String(safetyData?.avalanche?.coverageStatus || '');
+  const avalancheNoBulletin = avalancheCoverageStatus === 'no_active_forecast' || avalancheCoverageStatus === 'no_center_coverage';
   const sourceFreshnessRows: FreshnessRow[] = safetyData
     ? [
         { label: 'Weather', issued: weatherFreshnessTimestamp, staleHours: 12 },
@@ -85,6 +89,12 @@ export function buildSourceFreshnessDisplay(
                 label: 'Avalanche',
                 issued: avalancheFreshnessTimestamp,
                 staleHours: 24,
+                displayValue: avalancheNoBulletin
+                  ? avalancheCoverageStatus === 'no_center_coverage'
+                    ? 'No coverage here'
+                    : 'No bulletin (seasonal)'
+                  : undefined,
+                stateOverride: avalancheNoBulletin ? ('fresh' as const) : undefined,
               },
             ]
           : []),

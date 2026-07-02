@@ -551,6 +551,34 @@ export interface BackendMeta {
 
 export type CriticalRiskLevel = 'stable' | 'watch' | 'high';
 
+export interface CriticalWindowRow {
+  time: string;
+  level: CriticalRiskLevel;
+  reasons: string[];
+  score: number;
+  temp: number;
+  wind: number;
+  gust: number;
+  precipChance?: number;
+}
+
+export interface TerrainConditionDetails {
+  summary: string;
+  reasons: string[];
+  confidence: 'high' | 'medium' | 'low' | null;
+  impact: string | null;
+  recommendedTravel: string | null;
+  snowProfile: { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null;
+}
+
+export interface TargetElevationForecast {
+  deltaFt: number;
+  temp: number;
+  feelsLike: number;
+  windSpeed: number;
+  windGust: number;
+}
+
 export interface DayOverDayComparison {
   previousDate: string;
   previousScore: number;

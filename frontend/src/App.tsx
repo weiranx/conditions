@@ -280,6 +280,23 @@ function App() {
     initialView: initialLinkState.view as AppView,
     isApplyingPopStateRef,
     onPopState: useCallback((linkState: ReturnType<typeof parseLinkState>) => {
+      // Back/forward within the same plan (e.g. report → Settings → Back) should not
+      // throw away the generated report — only a genuinely different plan state resets.
+      const sameReport =
+        linkState.hasObjective === hasObjective &&
+        Math.abs(linkState.position.lat - position.lat) < 1e-6 &&
+        Math.abs(linkState.position.lng - position.lng) < 1e-6 &&
+        linkState.objectiveName === objectiveName &&
+        linkState.forecastDate === forecastDate &&
+        linkState.alpineStartTime === alpineStartTime &&
+        linkState.targetElevationInput === targetElevationInput &&
+        (!linkState.travelWindowHours || linkState.travelWindowHours === preferences.travelWindowHours);
+      if (sameReport) {
+        setSearchInputValue(linkState.searchQuery);
+        setCommittedSearchQuery(linkState.searchQuery);
+        setError(null);
+        return;
+      }
       clearWakeRetry();
       setSafetyData(null);
       setAiBriefNarrative(null);
@@ -303,7 +320,7 @@ function App() {
         setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
       }
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError]),
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
@@ -1064,6 +1081,8 @@ function App() {
   );
   const {
     bestDepthDisplay: snowpackBestDepthDisplay, bestDepthSource: snowpackBestDepthSource,
+    depthConflict: snowpackDepthConflict, depthRangeDisplay: snowpackDepthRangeDisplay,
+    depthConflictCaption: snowpackDepthConflictCaption,
     bestSweDisplay: snowpackBestSweDisplay, bestSweSource: snowpackBestSweSource,
     snotelSweDisplay, snotelDepthDisplay, nohrscSweDisplay, nohrscDepthDisplay,
     cdecSweDisplay, cdecDepthDisplay, cdecDistanceDisplay, snotelDistanceDisplay,
@@ -1087,9 +1106,7 @@ function App() {
   const mapWeatherTempLabel = safetyData ? formatTempDisplay(safetyData.weather.temp) : loading ? 'Loading…' : '–';
   const mapWeatherConditionLabel = safetyData
     ? truncateText(safetyData.weather.description || 'Conditions unavailable', 34)
-    : loading
-      ? 'Fetching forecast'
-      : 'Tap Generate Report';
+    : 'Fetching forecast';
   const mapWeatherChipTitle = safetyData
     ? [
         `${formatTempDisplay(safetyData.weather.temp)} (feels ${formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)})`,
@@ -1242,9 +1259,15 @@ function App() {
           // Structured object from backend
           if (rawItem && typeof rawItem === 'object' && typeof rawItem.title === 'string') {
             const { title, detail, category, tone } = rawItem;
+            let detailText = String(detail || '').trim();
+            // Backend gear details can quote a single observed snow depth; when the
+            // snow sources disagree that number is misleading on its own.
+            if (snowpackDepthConflict && /observed snow depth/i.test(detailText)) {
+              detailText = `${detailText.replace(/\.$/, '')} (snow sources disagree — see Snowpack card).`;
+            }
             return {
               title: String(title || '').trim(),
-              detail: String(detail || '').trim(),
+              detail: detailText,
               category: String(category || 'General'),
               tone: String(tone || 'go'),
             };
@@ -1778,6 +1801,9 @@ function App() {
       snowpackInsights={snowpackInsights}
       snowpackBestDepthDisplay={snowpackBestDepthDisplay}
       snowpackBestDepthSource={snowpackBestDepthSource}
+      snowpackDepthConflict={snowpackDepthConflict}
+      snowpackDepthRangeDisplay={snowpackDepthRangeDisplay}
+      snowpackDepthConflictCaption={snowpackDepthConflictCaption}
       snowpackBestSweDisplay={snowpackBestSweDisplay}
       snowpackBestSweSource={snowpackBestSweSource}
       snotelDistanceDisplay={snotelDistanceDisplay}

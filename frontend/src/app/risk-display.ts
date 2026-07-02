@@ -195,6 +195,9 @@ export interface SnowpackDisplayState {
   cdecDepthDisplay: string;
   cdecDistanceDisplay: string;
   snotelDistanceDisplay: string;
+  depthConflict: boolean;
+  depthRangeDisplay: string | null;
+  depthConflictCaption: string | null;
   pillClass: 'go' | 'watch' | 'caution';
   statusLabel: string;
   historicalPillClass: 'go' | 'watch' | 'caution';
@@ -284,6 +287,24 @@ export function buildSnowpackDisplayState(
   const bestDepthSource = bestDepth?.source ?? null;
   const bestSweDisplay = bestSwe ? formatSweForElevationUnit(bestSwe.value, elevationUnit) : 'N/A';
   const bestSweSource = bestSwe?.source ?? null;
+
+  // When the sources disagree strongly, one confident headline number is misleading —
+  // surface the spread instead and let the per-source rows below carry the detail.
+  const depthCandidates = [
+    { source: 'NOHRSC grid', value: nohrscDepthIn },
+    { source: 'CDEC', value: cdecDepthIn },
+    { source: 'SNOTEL', value: snotelDepthIn },
+  ].filter((candidate) => Number.isFinite(candidate.value));
+  const depthConflict = Boolean(snowpackInsights?.agreement.tone === 'warn' && bestDepth && depthCandidates.length >= 2);
+  const minDepth = depthConflict
+    ? depthCandidates.reduce((lowest, candidate) => (candidate.value < lowest.value ? candidate : lowest))
+    : null;
+  const depthRangeDisplay = depthConflict && bestDepth && minDepth
+    ? `${formatSnowDepthForElevationUnit(minDepth.value, elevationUnit)} – ${formatSnowDepthForElevationUnit(bestDepth.value, elevationUnit)}`
+    : null;
+  const depthConflictCaption = depthConflict && bestDepth && minDepth
+    ? `${bestDepth.source} reads ${formatSnowDepthForElevationUnit(bestDepth.value, elevationUnit)} but ${minDepth.source} reads ${formatSnowDepthForElevationUnit(minDepth.value, elevationUnit)} — verify coverage on route`
+    : null;
 
   const pillClass = lowBroadSnowSignal
     ? 'go' as const
@@ -386,6 +407,7 @@ export function buildSnowpackDisplayState(
 
   return {
     bestDepthDisplay, bestDepthSource, bestSweDisplay, bestSweSource,
+    depthConflict, depthRangeDisplay, depthConflictCaption,
     snotelSweDisplay, snotelDepthDisplay,
     nohrscSweDisplay, nohrscDepthDisplay,
     cdecSweDisplay, cdecDepthDisplay,

@@ -39,6 +39,7 @@
   --ssr-go-ink:      oklch(38% 0.120 145);
   --ssr-caution-ink: oklch(42% 0.160 55);
   --ssr-nogo-ink:    oklch(38% 0.180 28);
+  --ssr-watch-ink:   oklch(42% 0.130 95);
 
   /* Type */
   --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
@@ -63,6 +64,12 @@ html[data-theme="dark"] .ssr-report {
   --ssr-brand:       oklch(68% 0.130 210);
   --ssr-brand-dark:  oklch(78% 0.120 210);
   --ssr-brand-bg:    oklch(30% 0.040 210);
+
+  /* Status inks flip light so they stay readable on the dark tinted pills */
+  --ssr-go-ink:      oklch(80% 0.140 145);
+  --ssr-caution-ink: oklch(80% 0.140 55);
+  --ssr-nogo-ink:    oklch(78% 0.150 28);
+  --ssr-watch-ink:   oklch(82% 0.130 95);
 }
 
 .ssr-report * { box-sizing: border-box; }
@@ -409,9 +416,92 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 .ssr-q-sub.warn { color: var(--ssr-caution-ink); }
 
 /* =========================================================
+   SECTION JUMP NAV
+   ========================================================= */
+.ssr-jump-anchor { display: grid; min-width: 0; }
+.ssr-jump-nav {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.ssr-jump-chip {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ssr-line);
+  background: var(--ssr-surface);
+  color: var(--ssr-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ssr-jump-chip:hover { background: var(--ssr-brand-bg); color: var(--ssr-brand-dark); border-color: var(--ssr-brand); }
+.ssr-report section[id], .ssr-jump-anchor { scroll-margin-top: 12px; }
+.ssr-jump-fab-wrap {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 1100;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ssr-jump-fab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--ssr-line-strong);
+  background: var(--ssr-surface);
+  color: var(--ssr-text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+.ssr-jump-pop {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--ssr-line-strong);
+  background: var(--ssr-surface);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+.ssr-jump-pop button {
+  padding: 9px 14px;
+  min-height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ssr-text-2);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+.ssr-jump-pop button:hover { background: var(--ssr-surface-2); color: var(--ssr-text); }
+@media (max-width: 1100px) {
+  .ssr-jump-fab-wrap { display: flex; }
+}
+
+/* =========================================================
    STRIP CHART — travel-window timeline
    ========================================================= */
-.ssr-strip-rows { display: grid; }
+.ssr-strip-scroll { position: relative; }
+.ssr-strip-rows { display: grid; overflow-x: auto; }
 .ssr-srow {
   display: grid;
   grid-template-columns: 118px 1fr;
@@ -430,6 +520,11 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Pins the label while the hour columns scroll horizontally (scroll container is
+     .ssr-strip-rows, so this is unaffected by the shell-overflow sticky caveat above). */
+  position: sticky;
+  left: 0;
+  z-index: 1;
 }
 .ssr-srow-lbl svg { width: 14px; height: 14px; color: var(--ssr-text-3); flex-shrink: 0; }
 .ssr-srow-cells { display: grid; }
@@ -624,6 +719,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   font-variant-numeric: tabular-nums;
 }
 .ssr-snow-depth small { font-size: 14px; font-weight: 500; color: var(--ssr-text-3); margin-left: 2px; }
+.ssr-snow-depth.ssr-snow-depth-range { font-size: 24px; }
 .ssr-snow-delta {
   font-size: 12px;
   padding: 3px 8px;
@@ -747,7 +843,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   border: 1px solid var(--ssr-line);
 }
 .ssr-pill.go, .ssr-pill.good { background: color-mix(in oklch, var(--ssr-go) 22%, transparent); color: var(--ssr-go-ink); border-color: transparent; }
-.ssr-pill.watch { background: color-mix(in oklch, var(--ssr-risk-2) 26%, transparent); color: oklch(42% 0.130 95); border-color: transparent; }
+.ssr-pill.watch { background: color-mix(in oklch, var(--ssr-risk-2) 26%, transparent); color: var(--ssr-watch-ink); border-color: transparent; }
 .ssr-pill.caution, .ssr-pill.warn { background: color-mix(in oklch, var(--ssr-caution) 24%, transparent); color: var(--ssr-caution-ink); border-color: transparent; }
 .ssr-pill.nogo { background: color-mix(in oklch, var(--ssr-nogo) 22%, transparent); color: var(--ssr-nogo-ink); border-color: transparent; }
 
@@ -856,7 +952,8 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 .ssr-sb-sub { font-size: 12px; color: var(--ssr-text-3); }
 .ssr-sb-other { display: grid; gap: 1px; background: var(--ssr-line); border: 1px solid var(--ssr-line); border-radius: 9px; overflow: hidden; }
 .ssr-sb-other-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 14px; background: var(--ssr-surface); }
-.ssr-sb-other-name { font-size: 12.5px; color: var(--ssr-text-2); }
+.ssr-sb-other-name { font-size: 12.5px; color: var(--ssr-text-2); display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ssr-sb-other-hint { font-size: 11px; color: var(--ssr-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* inline chips + callout (terrain etc.) */
 .ssr-chip-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
@@ -921,6 +1018,17 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   .ssr-q:nth-child(3n) { border-right: 1px solid var(--ssr-line); }
   .ssr-q:nth-child(2n) { border-right: none; }
   .ssr-srow { grid-template-columns: 92px 1fr; }
+  /* Right-edge fade hints that the hour strip scrolls sideways */
+  .ssr-strip-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    background: linear-gradient(to right, transparent, var(--ssr-surface));
+    pointer-events: none;
+  }
   .ssr-wx-grid { grid-template-columns: repeat(2, 1fr); }
   .ssr-cc-pass-grid { grid-template-columns: 1fr; }
 }

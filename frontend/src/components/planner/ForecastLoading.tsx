@@ -1,4 +1,4 @@
-const STEP_LABELS = ['Weather', 'Avalanche', 'Alerts', 'Air Quality'];
+const STEP_LABELS = ['Weather', 'Avalanche', 'Alerts', 'Air Quality', 'Precipitation', 'Snowpack'];
 
 export function ForecastLoading() {
   return (
@@ -13,7 +13,7 @@ export function ForecastLoading() {
       </div>
       <div className="forecast-loading-copy">
         <strong>Building forecast brief...</strong>
-        <span>Checking 4 data sources for your objective.</span>
+        <span>Checking {STEP_LABELS.length} data sources for your objective.</span>
       </div>
       <div className="forecast-loading-steps" aria-hidden="true">
         {STEP_LABELS.map((label, index) => (

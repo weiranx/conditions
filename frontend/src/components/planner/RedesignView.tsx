@@ -149,6 +149,7 @@ function ElevationCrossPlot({
 }
 
 function RedesignViewComponent(props: PlannerViewProps) {
+  const [jumpMenuOpen, setJumpMenuOpen] = React.useState(false);
   const {
     safetyData,
     decision,
@@ -181,6 +182,9 @@ function RedesignViewComponent(props: PlannerViewProps) {
     snotelDistanceDisplay,
     snowpackBestDepthDisplay,
     snowpackBestDepthSource,
+    snowpackDepthConflict,
+    snowpackDepthRangeDisplay,
+    snowpackDepthConflictCaption,
     snowpackBestSweDisplay,
     snowpackBestSweSource,
     snowpackStatusLabel,
@@ -300,6 +304,18 @@ function RedesignViewComponent(props: PlannerViewProps) {
   const avyColor = DANGER_COLORS[Math.max(0, Math.min(5, avyLevel))];
   const avyProblems = (safetyData.avalanche?.problems || []).slice(0, 3);
   const avyBottomLine = safetyData.avalanche?.bottomLine ? toPlainText(safetyData.avalanche.bottomLine) : '';
+  const avalancheCoverageExplanation = (() => {
+    switch (String(safetyData.avalanche?.coverageStatus || '')) {
+      case 'no_active_forecast':
+        return 'No bulletin is currently published for this zone — many centers stop publishing outside winter. Treat avalanche terrain as unrated: choose conservative lines and avoid terrain traps.';
+      case 'no_center_coverage':
+        return 'No avalanche center covers this location, so there is no bulletin to check. Treat avalanche terrain as unrated: choose conservative lines and avoid terrain traps.';
+      case 'temporarily_unavailable':
+        return 'The avalanche bulletin could not be retrieved right now. Treat conditions as unknown until you can review the current bulletin at the center linked above.';
+      default:
+        return 'Avalanche danger is unknown for this objective. Treat avalanche terrain as unrated: choose conservative lines and avoid terrain traps.';
+    }
+  })();
 
   // ── Alerts/cautions ──
   const cautionItems = decision.cautions || [];
@@ -328,7 +344,9 @@ function RedesignViewComponent(props: PlannerViewProps) {
   const freshCount = sourceFreshnessRows.filter((r) => ['fresh', 'ok'].includes(sourceState(r))).length;
 
   const bands = elevationForecastBands || [];
-  const stripCols = `repeat(${Math.max(1, travelWindowRows.length)}, minmax(0, 1fr))`;
+  // 44px floor keeps hour columns tappable/readable on phones; the strip scrolls
+  // horizontally instead of crushing 12 columns into the viewport.
+  const stripCols = `repeat(${Math.max(1, travelWindowRows.length)}, minmax(44px, 1fr))`;
 
   // ── ACTION PLAN: the plan levers the user can still change, ranked ──
   const fmtSpan = (s: { start: string; end: string }) =>
@@ -402,8 +420,9 @@ function RedesignViewComponent(props: PlannerViewProps) {
     });
   }
 
-  // Non-negotiable gear (safety-critical only).
-  const mustGear = gearRecommendations.filter((g) => g.tone === 'nogo');
+  // Non-negotiable gear (safety-critical only). Situational entries like "Avalanche
+  // coverage gap" are advice, not packable items — the caution list already covers them.
+  const mustGear = gearRecommendations.filter((g) => g.tone === 'nogo' && !/coverage gap/i.test(g.title));
   if (mustGear.length > 0) {
     planActions.push({
       tone: 'prep',
@@ -418,6 +437,26 @@ function RedesignViewComponent(props: PlannerViewProps) {
     .slice()
     .sort((a, b) => TONE_PRIORITY[a.tone] - TONE_PRIORITY[b.tone])
     .slice(0, 5);
+
+  // In-page jump navigation: only sections that actually render get a chip. The id
+  // list mirrors the `id` attributes on the sections below.
+  const jumpSections = [
+    { id: 'planner-section-decision', label: 'Verdict', present: true },
+    { id: 'planner-section-actions', label: 'Plan', present: true },
+    { id: 'planner-section-travel', label: 'Travel', present: travelWindowRows.length > 0 },
+    { id: 'planner-section-checks', label: 'Checks', present: Boolean(shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0) },
+    { id: 'planner-section-weather', label: 'Weather', present: true },
+    { id: 'planner-section-wind', label: 'Wind', present: Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
+    { id: 'planner-section-avalanche', label: 'Avalanche', present: true },
+    { id: 'planner-section-snowpack', label: 'Snowpack', present: Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
+    { id: 'planner-section-alerts', label: 'Alerts', present: true },
+    { id: 'planner-section-score', label: 'Score', present: Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
+    { id: 'planner-section-gear', label: 'Gear', present: Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
+  ].filter((s) => s.present);
+  const jumpToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setJumpMenuOpen(false);
+  };
 
   return (
     <div className="ssr-report" role="main" aria-label="Conditions report (redesign)">
@@ -457,8 +496,19 @@ function RedesignViewComponent(props: PlannerViewProps) {
         </div>
       </header>
 
+      {jumpSections.length > 1 && (
+        <nav className="ssr-jump-nav" aria-label="Report sections">
+          {jumpSections.map((s) => (
+            <button key={s.id} type="button" className="ssr-jump-chip" onClick={() => jumpToSection(s.id)}>
+              {s.label}
+            </button>
+          ))}
+        </nav>
+      )}
+
       <main className="ssr-main">
         {/* VERDICT */}
+        <div id="planner-section-decision" className="ssr-jump-anchor">
         <DashboardSummaryCard
           safetyData={safetyData}
           decision={decision}
@@ -480,9 +530,10 @@ function RedesignViewComponent(props: PlannerViewProps) {
           aiBriefLoading={aiBriefLoading}
           onRequestAiBrief={handleRequestAiBriefAction}
         />
+        </div>
 
         {/* ACTION PLAN */}
-        <section className="ssr-card ssr-actions">
+        <section className="ssr-card ssr-actions" id="planner-section-actions">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-neutral"><Compass size={16} /></span>
@@ -518,7 +569,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
 
         {/* TRAVEL WINDOW STRIP */}
         {travelWindowRows.length > 0 && (
-          <section className="ssr-card">
+          <section className="ssr-card" id="planner-section-travel">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-blue"><Clock size={16} /></span>
@@ -529,6 +580,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
               </span>
             </div>
             <div className="ssr-card-b ssr-tight">
+              <div className="ssr-strip-scroll">
               <div className="ssr-strip-rows">
                 <div className="ssr-srow">
                   <div className="ssr-srow-lbl"><Clock size={14} /> Hour</div>
@@ -603,10 +655,11 @@ function RedesignViewComponent(props: PlannerViewProps) {
                   </div>
                 </div>
               </div>
+              </div>
               <div className="ssr-strip-foot">
                 <div className="ssr-keys">
-                  <span className="ssr-key">Clean</span>
-                  <span className="ssr-key gate">Gated</span>
+                  <span className="ssr-key">✓ Clean</span>
+                  <span className="ssr-key gate">✕ Gated</span>
                 </div>
                 <span>{localizeUnitText(travelWindowSummary)}</span>
               </div>
@@ -620,7 +673,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           const passing = orderedCriticalChecks.filter((c) => c.ok);
           const total = orderedCriticalChecks.length;
           return (
-            <section className="ssr-card">
+            <section className="ssr-card" id="planner-section-checks">
               <div className="ssr-card-h">
                 <h2>
                   <span className="ssr-h-icon icon-neutral"><CheckCircle2 size={16} /></span>
@@ -678,7 +731,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         })()}
 
         {/* WEATHER */}
-        <section className="ssr-card">
+        <section className="ssr-card" id="planner-section-weather">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-blue"><Thermometer size={16} /></span>
@@ -788,7 +841,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
 
         {/* WIND LOADING */}
         {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
-          <section className="ssr-card">
+          <section className="ssr-card" id="planner-section-wind">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-cyan"><Wind size={16} /></span>
@@ -843,7 +896,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
       {/* SIDEBAR */}
       <aside className="ssr-side">
         {/* AVALANCHE */}
-        <section className="ssr-card">
+        <section className="ssr-card" id="planner-section-avalanche">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-orange"><AlertTriangle size={16} /></span>
@@ -910,6 +963,8 @@ function RedesignViewComponent(props: PlannerViewProps) {
                   </div>
                 )}
               </>
+            ) : avalancheRelevant && avalancheUnknown ? (
+              <div className="ssr-empty">{avalancheCoverageExplanation}</div>
             ) : (
               <div className="ssr-empty">{avalancheNotApplicableReason || 'No avalanche forecast applies to this objective.'}</div>
             )}
@@ -918,28 +973,36 @@ function RedesignViewComponent(props: PlannerViewProps) {
 
         {/* SNOWPACK */}
         {safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (
-          <section className="ssr-card">
+          <section className="ssr-card" id="planner-section-snowpack">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-cyan"><Snowflake size={16} /></span>
                 Snowpack
               </h2>
-              {snowpackBestDepthSource && (
+              {snowpackDepthConflict ? (
+                <span className="ssr-h-meta">sources differ</span>
+              ) : snowpackBestDepthSource ? (
                 <span className="ssr-h-meta">via {snowpackBestDepthSource}</span>
-              )}
+              ) : null}
             </div>
             <div className="ssr-card-b">
               <div className="ssr-snow-hero">
                 <span className="ssr-snow-depth-label">Depth</span>
-                <span className="ssr-snow-depth">{snowpackBestDepthDisplay}</span>
-                {snowpackStatusLabel && (
+                <span className={`ssr-snow-depth ${snowpackDepthConflict ? 'ssr-snow-depth-range' : ''}`}>
+                  {snowpackDepthConflict && snowpackDepthRangeDisplay ? snowpackDepthRangeDisplay : snowpackBestDepthDisplay}
+                </span>
+                {snowpackDepthConflict ? (
+                  <span className="ssr-snow-delta warn">Sources disagree</span>
+                ) : snowpackStatusLabel ? (
                   <span className={`ssr-snow-delta ${snowpackPillClass?.includes('warn') ? 'warn' : ''}`}>
                     {snowpackStatusLabel}
                   </span>
-                )}
+                ) : null}
               </div>
               <div className="ssr-snow-station">
-                Best available depth across sources
+                {snowpackDepthConflict && snowpackDepthConflictCaption
+                  ? snowpackDepthConflictCaption
+                  : 'Best available depth across sources'}
                 {snowpackHistoricalComparisonLine ? ` · ${snowpackHistoricalComparisonLine}` : ''}
               </div>
               {/* Snow depth and snow-water-equivalent (SWE) are different quantities that can
@@ -1242,7 +1305,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         )}
 
         {/* CAUTIONS & ALERTS */}
-        <section className="ssr-card">
+        <section className="ssr-card" id="planner-section-alerts">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-orange"><ShieldAlert size={16} /></span>
@@ -1360,8 +1423,16 @@ function RedesignViewComponent(props: PlannerViewProps) {
           const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : null;
           const primary = factors.slice(0, 3);
           const others = factors.slice(3);
+          // The backend can emit several distinct sub-factors under one hazard name
+          // (e.g. two "Wind" entries with different messages); without a hint the
+          // repeats read as double counting.
+          const hazardNameCounts = factors.reduce((acc: Record<string, number>, f: any) => {
+            const name = String(f.hazard || 'Factor');
+            acc[name] = (acc[name] || 0) + 1;
+            return acc;
+          }, {});
           return (
-            <section className="ssr-card">
+            <section className="ssr-card" id="planner-section-score">
               <div className="ssr-card-h">
                 <h2>
                   <span className="ssr-h-icon"><ShieldCheck size={16} /></span>
@@ -1445,9 +1516,17 @@ function RedesignViewComponent(props: PlannerViewProps) {
                       {others.map((f: any, i: number) => {
                         const impact = Math.round(Number(f.impact || 0));
                         const isPenalty = impact >= 0;
+                        const name = String(f.hazard || 'Factor');
+                        const message = f.message ? localizeUnitText(String(f.message)) : '';
+                        const hint = hazardNameCounts[name] > 1 && message
+                          ? message.split(/[.(]/)[0].trim().slice(0, 48)
+                          : '';
                         return (
-                          <div className="ssr-sb-other-row" key={i}>
-                            <span className="ssr-sb-other-name">{f.hazard || 'Factor'}</span>
+                          <div className="ssr-sb-other-row" key={i} title={message || undefined}>
+                            <span className="ssr-sb-other-name">
+                              {name}
+                              {hint && <small className="ssr-sb-other-hint">{hint}</small>}
+                            </span>
                             <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
                           </div>
                         );
@@ -1491,7 +1570,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
             </div>
           );
           return (
-            <section className="ssr-card">
+            <section className="ssr-card" id="planner-section-gear">
               <div className="ssr-card-h">
                 <h2>
                   <span className="ssr-h-icon icon-neutral"><Package size={16} /></span>
@@ -1513,6 +1592,31 @@ function RedesignViewComponent(props: PlannerViewProps) {
           );
         })()}
       </div>
+
+      {/* Floating section menu for narrow screens (sticky is unavailable inside the
+          page-transition shell; fixed positioning is unaffected). */}
+      {jumpSections.length > 1 && (
+        <div className="ssr-jump-fab-wrap">
+          {jumpMenuOpen && (
+            <div className="ssr-jump-pop" role="menu" aria-label="Jump to section">
+              {jumpSections.map((s) => (
+                <button key={s.id} role="menuitem" type="button" onClick={() => jumpToSection(s.id)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            className="ssr-jump-fab"
+            aria-expanded={jumpMenuOpen}
+            aria-haspopup="menu"
+            onClick={() => setJumpMenuOpen((open) => !open)}
+          >
+            <Route size={15} /> Sections
+          </button>
+        </div>
+      )}
     </div>
   );
 }
