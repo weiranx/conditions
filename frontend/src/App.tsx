@@ -609,12 +609,15 @@ function App() {
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
-  // The home page's "Get conditions" button selects an objective and navigates to the
-  // planner in the same click; selecting the objective is async (it may resolve via a
-  // search lookup), so we can't fetch immediately with the click handler's stale position.
-  // This flag defers the fetch to the next render where the objective is actually set,
-  // then clears itself so later field edits don't trigger another auto-fetch.
-  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(false);
+  // Arms a one-shot report fetch the next time we're on the planner with an objective set,
+  // then clears itself so later field edits still require an explicit Generate/Refresh —
+  // this is the only path (besides those explicit actions) that triggers a fetch. It starts
+  // true when the page loads from a shared link (URL already carries lat/lon), so opening
+  // someone else's link shows a report immediately instead of an empty "tap Generate" state.
+  // The home page's "Get conditions" button re-arms it on click; selecting the objective
+  // there is async (it may resolve via a search lookup), so that flow can't fetch immediately
+  // with the click handler's stale position and instead relies on this same deferred effect.
+  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective);
   useEffect(() => {
     if (!pendingAutoGenerate || !hasObjective || view !== 'planner') {
       return;
