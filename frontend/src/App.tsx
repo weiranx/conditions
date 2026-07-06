@@ -654,16 +654,6 @@ function App() {
     setTripForecastNoteDirect(null);
     startViewChange(() => setView('trip'));
   };
-  const jumpToPlannerSection = useCallback((sectionId: string) => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-    const section = document.getElementById(sectionId);
-    if (!section) {
-      return;
-    }
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
   const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
@@ -1518,7 +1508,6 @@ function App() {
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}
-      jumpToPlannerSection={jumpToPlannerSection}
       // Search box
       searchWrapperRef={searchWrapperRef}
       searchInputRef={searchInputRef}

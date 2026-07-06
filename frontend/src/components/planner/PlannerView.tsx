@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import {
   Eye,
@@ -53,7 +53,6 @@ export interface PlannerViewProps {
   // Navigation
   navigateToView: (view: AppView) => void;
   openTripToolView: () => void;
-  jumpToPlannerSection: (sectionId: string) => void;
 
   // Search box
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
@@ -597,6 +596,24 @@ function PlannerViewComponent(props: PlannerViewProps) {
   // requires explicitly starting a new report (see onStartNewReport), so a
   // displayed report can't be silently mutated out from under the user.
   const reportLocked = Boolean(safetyData);
+
+  // The report replaces a much shorter "ready to check" / loading state with a
+  // multi-thousand-pixel report. The browser doesn't reset scroll position when
+  // content height changes like that, so without this the viewport is left at
+  // whatever pixel offset it was at — which can land partway into the new report
+  // instead of at its top. Only fires on the empty/loading -> report transition,
+  // not on a refresh of an already-visible report (safetyData stays truthy then).
+  const wasReportVisibleRef = useRef(false);
+  useEffect(() => {
+    const isReportVisible = Boolean(hasObjective && safetyData && decision);
+    if (isReportVisible && !wasReportVisibleRef.current && typeof document !== 'undefined') {
+      // 'auto' (instant), not 'smooth' — map tiles and card images finish loading
+      // just after this fires, and their reflow interrupts a smooth scroll partway.
+      const target = document.getElementById('planner-section-decision') || document.getElementById('planner-main-content');
+      target?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+    wasReportVisibleRef.current = isReportVisible;
+  }, [hasObjective, safetyData, decision]);
 
   return (
     <div key="view-planner" className={`${appShellClassName} ssr-shell`} aria-busy={isViewPending}>
