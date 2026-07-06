@@ -254,7 +254,10 @@ export function PlannerMapSection({
 
         {timezoneMismatch && (
           <p className="map-time-help is-warning">
-            Objective timezone: <strong>{objectiveTimezone}</strong>. Your device timezone is <strong>{deviceTimezone}</strong>. Times in this report are objective-local.
+            <Clock size={13} className="map-time-help-icon" aria-hidden="true" />
+            <span>
+              Objective timezone: <strong>{objectiveTimezone}</strong>. Your device timezone is <strong>{deviceTimezone}</strong>. Times in this report are objective-local.
+            </span>
           </p>
         )}
       </div>

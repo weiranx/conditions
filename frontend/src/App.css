@@ -1626,7 +1626,6 @@ input {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
 }
 
 .map-actions-utils .action-btn {
@@ -1639,6 +1638,8 @@ input {
   align-items: center;
   gap: 4px;
   margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid rgba(215, 210, 194, 0.45);
 }
 
 .map-ext-link-btn {
@@ -1883,6 +1884,9 @@ input {
 }
 
 .map-time-help {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   margin: 0;
   padding: 7px 10px;
   border-radius: 12px;
@@ -1892,6 +1896,13 @@ input {
   font-size: 0.74rem;
   letter-spacing: 0.01em;
   line-height: 1.45;
+}
+
+.map-time-help-icon {
+  flex: none;
+  margin-top: 2px;
+  color: currentColor;
+  opacity: 0.85;
 }
 
 .map-time-help.is-warning {

@@ -184,6 +184,7 @@ html[data-theme="dark"] .ssr-shell {
   color: var(--d-ink-3);
 }
 .ssr-shell .map-ext-link-btn:hover { background: var(--d-surface-2); color: var(--d-ink); }
+.ssr-shell .map-ext-links { border-left-color: var(--d-line-2); }
 
 /* ============ FRESHNESS → warm banner ============ */
 .ssr-shell .top-freshness-alert {
