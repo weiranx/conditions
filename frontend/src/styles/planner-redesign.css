@@ -6,70 +6,10 @@
    ========================================================= */
 
 .ssr-report {
-  /* Surfaces — warm neutral app */
-  --ssr-bg:          oklch(98.5% 0.004 80);
-  --ssr-surface:     oklch(100% 0 0);
-  --ssr-surface-2:   oklch(97.5% 0.004 80);
-  --ssr-surface-3:   oklch(94.5% 0.005 80);
-  --ssr-line:        oklch(91% 0.006 80);
-  --ssr-line-strong: oklch(84% 0.008 80);
-
-  /* Text */
-  --ssr-text:        oklch(24% 0.010 80);
-  --ssr-text-2:      oklch(42% 0.010 80);
-  --ssr-text-3:      oklch(58% 0.009 80);
-  --ssr-text-4:      oklch(72% 0.007 80);
-
-  /* Brand — pine green */
-  --ssr-brand:       oklch(52% 0.075 155);
-  --ssr-brand-dark:  oklch(40% 0.070 155);
-  --ssr-brand-bg:    oklch(95% 0.020 155);
-
-  /* Risk palette (avalanche-bulletin standard-ish) */
-  --ssr-risk-1:      oklch(72% 0.170 145); /* low / green */
-  --ssr-risk-2:      oklch(78% 0.170 100); /* moderate / yellow */
-  --ssr-risk-3:      oklch(70% 0.180 55);  /* considerable / orange */
-  --ssr-risk-4:      oklch(60% 0.200 28);  /* high / red */
-  --ssr-risk-5:      oklch(32% 0.080 28);  /* extreme / black-red */
-
-  --ssr-go:          var(--ssr-risk-1);
-  --ssr-caution:     var(--ssr-risk-3);
-  --ssr-nogo:        var(--ssr-risk-4);
-
-  --ssr-go-ink:      oklch(38% 0.120 145);
-  --ssr-caution-ink: oklch(42% 0.160 55);
-  --ssr-nogo-ink:    oklch(38% 0.180 28);
-  --ssr-watch-ink:   oklch(42% 0.130 95);
-
-  /* Type */
-  --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
-
   color: var(--ssr-text);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-}
-
-html[data-theme="dark"] .ssr-report {
-  --ssr-bg:          oklch(16% 0.015 240);
-  --ssr-surface:     oklch(20% 0.018 240);
-  --ssr-surface-2:   oklch(23% 0.020 240);
-  --ssr-surface-3:   oklch(27% 0.022 240);
-  --ssr-line:        oklch(30% 0.020 240);
-  --ssr-line-strong: oklch(36% 0.022 240);
-  --ssr-text:        oklch(95% 0.010 240);
-  --ssr-text-2:      oklch(80% 0.015 240);
-  --ssr-text-3:      oklch(62% 0.018 240);
-  --ssr-text-4:      oklch(48% 0.020 240);
-  --ssr-brand:       oklch(68% 0.130 210);
-  --ssr-brand-dark:  oklch(78% 0.120 210);
-  --ssr-brand-bg:    oklch(30% 0.040 210);
-
-  /* Status inks flip light so they stay readable on the dark tinted pills */
-  --ssr-go-ink:      oklch(80% 0.140 145);
-  --ssr-caution-ink: oklch(80% 0.140 55);
-  --ssr-nogo-ink:    oklch(78% 0.150 28);
-  --ssr-watch-ink:   oklch(82% 0.130 95);
 }
 
 .ssr-report * { box-sizing: border-box; }

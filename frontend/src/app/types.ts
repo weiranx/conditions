@@ -8,7 +8,6 @@ export type TemperatureUnit = 'f' | 'c';
 export type ElevationUnit = 'ft' | 'm';
 export type WindSpeedUnit = 'mph' | 'kph';
 export type TimeStyle = 'ampm' | '24h';
-export type ReportLayout = 'cards' | 'redesign';
 
 export interface AvalancheElevationBand {
   level?: number;
@@ -527,7 +526,6 @@ export interface UserPreferences {
   minFeelsLikeF: number;
   maxFeelsLikeF: number;
   travelWindowHours: number;
-  reportLayout: ReportLayout;
 }
 
 export type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';

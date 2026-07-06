@@ -6,28 +6,6 @@
    ========================================================= */
 
 .ssr-settings {
-  --ssr-surface:     oklch(100% 0 0);
-  --ssr-surface-2:   oklch(97.5% 0.004 80);
-  --ssr-surface-3:   oklch(94.5% 0.005 80);
-  --ssr-line:        oklch(91% 0.006 80);
-  --ssr-line-strong: oklch(84% 0.008 80);
-
-  --ssr-text:        oklch(24% 0.010 80);
-  --ssr-text-2:      oklch(42% 0.010 80);
-  --ssr-text-3:      oklch(58% 0.009 80);
-  --ssr-text-4:      oklch(72% 0.007 80);
-
-  --ssr-brand:       oklch(52% 0.075 155);
-  --ssr-brand-dark:  oklch(40% 0.070 155);
-  --ssr-brand-bg:    oklch(95% 0.020 155);
-
-  --ssr-go:          oklch(72% 0.170 145);
-  --ssr-nogo:        oklch(60% 0.200 28);
-  --ssr-go-ink:      oklch(38% 0.120 145);
-  --ssr-nogo-ink:    oklch(38% 0.180 28);
-
-  --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
-
   max-width: 1100px;
   margin: 0 auto;
   padding: 32px 24px 80px;
@@ -35,21 +13,6 @@
   -webkit-font-smoothing: antialiased;
 }
 .ssr-settings * { box-sizing: border-box; }
-
-html[data-theme="dark"] .ssr-settings {
-  --ssr-surface:     oklch(20% 0.018 240);
-  --ssr-surface-2:   oklch(23% 0.020 240);
-  --ssr-surface-3:   oklch(27% 0.022 240);
-  --ssr-line:        oklch(30% 0.020 240);
-  --ssr-line-strong: oklch(36% 0.022 240);
-  --ssr-text:        oklch(95% 0.010 240);
-  --ssr-text-2:      oklch(80% 0.015 240);
-  --ssr-text-3:      oklch(62% 0.018 240);
-  --ssr-text-4:      oklch(48% 0.020 240);
-  --ssr-brand:       oklch(68% 0.130 210);
-  --ssr-brand-dark:  oklch(78% 0.120 210);
-  --ssr-brand-bg:    oklch(30% 0.040 210);
-}
 
 /* ---------- HEAD ---------- */
 .ssr-set-head { margin-bottom: 28px; }

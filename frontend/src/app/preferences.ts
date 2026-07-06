@@ -47,7 +47,6 @@ export function getDefaultUserPreferences(): UserPreferences {
     minFeelsLikeF: 5,
     maxFeelsLikeF: 95,
     travelWindowHours: 12,
-    reportLayout: 'redesign',
   };
 }
 
@@ -88,8 +87,6 @@ export function loadUserPreferences(): UserPreferences {
         MIN_TRAVEL_WINDOW_HOURS,
         MAX_TRAVEL_WINDOW_HOURS,
       ),
-      // 'briefing' and 'cards' layouts are retired; the redesign report is the only one left.
-      reportLayout: 'redesign',
     };
   } catch {
     return defaults;

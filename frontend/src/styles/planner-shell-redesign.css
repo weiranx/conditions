@@ -6,47 +6,6 @@
    No markup or wiring changes. Light/dark via html[data-theme].
    ========================================================= */
 
-.ssr-shell {
-  --d-surface:   oklch(99.6% 0.003 95);
-  --d-surface-2: oklch(97.4% 0.006 95);
-  --d-surface-3: oklch(94.5% 0.008 95);
-  --d-line:      oklch(91% 0.008 110);
-  --d-line-2:    oklch(86% 0.010 110);
-  --d-ink:   oklch(27% 0.014 150);
-  --d-ink-2: oklch(44% 0.013 150);
-  --d-ink-3: oklch(58% 0.011 150);
-  --d-ink-4: oklch(70% 0.009 150);
-  --d-pine:      oklch(46% 0.068 155);
-  --d-pine-deep: oklch(33% 0.055 155);
-  --d-sage-1:    oklch(94.5% 0.030 150);
-  --d-warn:   oklch(58% 0.115 52);
-  --d-warn-deep: oklch(45% 0.115 48);
-  --d-warn-bg:oklch(95% 0.045 62);
-  --d-chip-bg: oklch(99.6% 0.003 95 / .92);
-  --d-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --d-r-lg: 22px;
-  --d-r-pill: 999px;
-  --d-shadow: 0 1px 2px oklch(40% 0.02 150 / .05), 0 8px 24px -12px oklch(40% 0.03 150 / .18);
-  --d-shadow-sm: 0 1px 2px oklch(40% 0.02 150 / .06);
-}
-html[data-theme="dark"] .ssr-shell {
-  --d-surface:   oklch(21% 0.018 240);
-  --d-surface-2: oklch(24% 0.020 240);
-  --d-surface-3: oklch(28% 0.022 240);
-  --d-line:      oklch(31% 0.020 240);
-  --d-line-2:    oklch(37% 0.022 240);
-  --d-ink:   oklch(95% 0.010 240);
-  --d-ink-2: oklch(80% 0.015 240);
-  --d-ink-3: oklch(64% 0.018 240);
-  --d-ink-4: oklch(52% 0.020 240);
-  --d-pine:      oklch(70% 0.110 165);
-  --d-pine-deep: oklch(80% 0.110 165);
-  --d-sage-1:    oklch(28% 0.040 165);
-  --d-warn:   oklch(70% 0.130 60);
-  --d-warn-deep: oklch(82% 0.120 65);
-  --d-warn-bg:oklch(30% 0.050 60);
-  --d-chip-bg: oklch(22% 0.018 240 / .88);
-}
 
 /* ============ HEADER → topbar ============ */
 .ssr-shell .header-section {
