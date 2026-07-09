@@ -41,6 +41,14 @@ export function SearchBox({
   onSelectSuggestion,
   onHoverSuggestion,
 }: SearchBoxProps) {
+  const suggestionsListRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (showSuggestions) {
+      suggestionsListRef.current?.scrollTo({ top: 0 });
+    }
+  }, [showSuggestions, trimmedSearchQuery]);
+
   return (
     <div className="search-wrapper" ref={searchWrapperRef}>
       <div className="search-bar">
@@ -74,7 +82,7 @@ export function SearchBox({
       </div>
 
       {!disabled && showSuggestions && (searchLoading || suggestions.length > 0 || trimmedSearchQuery.length > 0) && (
-        <div className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
+        <div ref={suggestionsListRef} className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
           {searchLoading && (
             <div className="suggestion-status" role="presentation">
               Searching...

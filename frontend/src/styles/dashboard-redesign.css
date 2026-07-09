@@ -11,19 +11,16 @@
 .ssr-dash-risk {
   background: var(--d-surface);
   border: 1px solid var(--d-line);
-  border-top: 3px solid var(--d-go);
-  border-radius: var(--d-r-lg);
+  border-top: none;
+  border-radius: 8px;
   box-shadow: var(--d-shadow);
   overflow: hidden;
 }
-.ssr-dash-risk.caution { border-top-color: var(--d-warn); }
-.ssr-dash-risk.nogo { border-top-color: var(--d-nogo); }
-
 .ssr-dash-top {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 28px;
-  padding: 26px 28px;
+  padding: 24px;
   align-items: center;
 }
 
@@ -47,7 +44,7 @@
 .ssr-dash-pill-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ssr-dash-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 7px 14px; border-radius: var(--d-r-pill);
+  padding: 6px 10px; border-radius: 6px;
   background: var(--d-go-bg); color: var(--d-go-deep);
   font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   border: 1px solid oklch(85% 0.06 150);

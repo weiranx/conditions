@@ -11,12 +11,12 @@
 
 :root {
   /* ---- --ssr-*: home / planner / settings / trip ---- */
-  --ssr-bg:          oklch(98.5% 0.004 80);
+  --ssr-bg:          oklch(98.2% 0.006 155);
   --ssr-surface:     oklch(100% 0 0);
-  --ssr-surface-2:   oklch(97.5% 0.004 80);
-  --ssr-surface-3:   oklch(94.5% 0.005 80);
-  --ssr-line:        oklch(91% 0.006 80);
-  --ssr-line-strong: oklch(84% 0.008 80);
+  --ssr-surface-2:   oklch(96.8% 0.008 155);
+  --ssr-surface-3:   oklch(93.2% 0.012 155);
+  --ssr-line:        oklch(89.5% 0.010 155);
+  --ssr-line-strong: oklch(80% 0.015 155);
 
   --ssr-text:        oklch(24% 0.010 80);
   --ssr-text-2:      oklch(42% 0.010 80);
@@ -46,11 +46,11 @@
   --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
 
   /* ---- --d-*: dashboard summary card / planner shell ---- */
-  --d-surface:   oklch(99.6% 0.003 95);
-  --d-surface-2: oklch(97.4% 0.006 95);
-  --d-surface-3: oklch(94.5% 0.008 95);
-  --d-line:      oklch(91% 0.008 110);
-  --d-line-2:    oklch(86% 0.010 110);
+  --d-surface:   oklch(99.4% 0.004 155);
+  --d-surface-2: oklch(96.6% 0.010 155);
+  --d-surface-3: oklch(92.8% 0.014 155);
+  --d-line:      oklch(88.5% 0.012 155);
+  --d-line-2:    oklch(78% 0.018 155);
 
   --d-ink:   oklch(27% 0.014 150);
   --d-ink-2: oklch(44% 0.013 150);
@@ -73,7 +73,7 @@
 
   --d-chip-bg: oklch(99.6% 0.003 95 / .92);
   --d-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --d-r-lg: 22px;
+  --d-r-lg: 8px;
   --d-r-pill: 999px;
   --d-shadow: 0 1px 2px oklch(40% 0.02 150 / .05), 0 8px 24px -12px oklch(40% 0.03 150 / .18);
   --d-shadow-sm: 0 1px 2px oklch(40% 0.02 150 / .06);

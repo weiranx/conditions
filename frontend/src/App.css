@@ -68,13 +68,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(ellipse 900px 500px at 12% 8%, var(--bg-glow-a) 0%, transparent 55%),
-    radial-gradient(ellipse 700px 420px at 92% 6%, var(--bg-glow-b) 0%, transparent 55%),
-    radial-gradient(ellipse 800px 500px at 70% 90%, var(--bg-glow-c) 0%, transparent 55%),
-    radial-gradient(circle at 40% 50%, rgba(158, 130, 109, 0.06) 0%, transparent 50%),
-    linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-main) 60%);
-  background-attachment: fixed;
+  background: var(--bg-main);
   color: var(--text-dark);
   font-family: var(--font-main);
   line-height: 1.5;
@@ -118,7 +112,7 @@ input {
 }
 
 .app-container {
-  max-width: 1120px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: clamp(12px, 2.5vw, 24px) clamp(12px, 2vw, 24px) 32px;
   overflow-x: hidden;

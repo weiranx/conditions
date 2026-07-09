@@ -1,16 +1,13 @@
 import React from 'react';
 import {
-  AlertTriangle,
   CalendarDays,
   Clock,
-  CloudRain,
   Mountain,
   Route,
-  Snowflake,
   Activity,
   ArrowRight,
-  Check,
   Info,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
@@ -118,217 +115,113 @@ export function HomeView({
   return (
     <div key="view-home" className={appShellClassName} aria-busy={isViewPending}>
       <div className="ssr-home">
-        {/* HERO */}
         <section className="ssr-h-hero">
-          <svg className="ssr-h-topo" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1120 420">
-            <g fill="none" strokeWidth="1">
-              <path d="M-20 340 Q 200 260 420 320 T 900 300 T 1200 340" />
-              <path d="M-20 380 Q 220 300 440 360 T 920 340 T 1200 380" />
-              <path d="M-20 60 Q 260 20 500 55 T 940 40 T 1200 70" />
-              <path d="M-20 100 Q 280 60 520 95 T 960 80 T 1200 110" />
-            </g>
-          </svg>
-          <div className="ssr-h-kicker">Backcountry conditions, synthesized</div>
-          <h1>
-            Know before you go.
-            <br />
-            <span className="ssr-accent">One brief, every signal.</span>
-          </h1>
-          <p className="ssr-lede">
-            Enter an objective and your start time. We pull weather, avalanche, snowpack, and alerts
-            into a single time-aware go/no-go call.
-          </p>
-
-          {/* SEARCH CONSOLE */}
-          <div className="ssr-h-console">
-            <div className="ssr-h-console-search">
-              <SearchBox
-                searchWrapperRef={searchWrapperRef}
-                searchInputRef={searchInputRef}
-                searchQuery={searchQuery}
-                trimmedSearchQuery={trimmedSearchQuery}
-                showSuggestions={showSuggestions}
-                searchLoading={searchLoading}
-                suggestions={suggestions}
-                activeSuggestionIndex={activeSuggestionIndex}
-                canUseCoordinates={canUseCoordinates}
-                onInputChange={handleInputChange}
-                onFocus={handleFocus}
-                onKeyDown={handleSearchKeyDown}
-                onClear={handleSearchClear}
-                onUseCoordinates={handleUseTypedCoordinates}
-                onSelectSuggestion={selectSuggestion}
-                onHoverSuggestion={setActiveSuggestionIndex}
-              />
-              <button type="button" className="ssr-h-go" onClick={submitSearch}>
-                Get conditions <ArrowRight size={16} aria-hidden />
-              </button>
-            </div>
-            <div className="ssr-h-params">
-              <label className="ssr-h-param">
-                <span className="ssr-h-param-k"><CalendarDays size={12} /> Date</span>
-                <input
-                  type="date"
-                  className="ssr-h-param-v ssr-h-param-input"
-                  value={forecastDate}
-                  min={todayDate}
-                  max={maxForecastDate}
-                  onChange={handleDateChange}
-                />
-              </label>
-              <label className="ssr-h-param">
-                <span className="ssr-h-param-k"><Clock size={12} /> Start</span>
-                <input
-                  type="time"
-                  className="ssr-h-param-v ssr-h-param-input"
-                  aria-label="Start time"
-                  value={alpineStartTime}
-                  onChange={handlePlannerTimeChange(setAlpineStartTime)}
-                />
-              </label>
-              <label className="ssr-h-param">
-                <span className="ssr-h-param-k"><Activity size={12} /> Window</span>
-                <span className="ssr-h-param-window">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className="ssr-h-param-v ssr-h-param-input"
-                    aria-label="Trip duration in hours"
-                    min={MIN_TRAVEL_WINDOW_HOURS}
-                    max={MAX_TRAVEL_WINDOW_HOURS}
-                    step={1}
-                    value={travelWindowHoursDraft}
-                    onChange={handleTravelWindowHoursDraftChange}
-                    onBlur={handleTravelWindowHoursDraftBlur}
-                  />
-                  hours
-                </span>
-              </label>
-              <div className="ssr-h-param-note">
-                Reports are scored for your exact start time and travel window.
+          <div className="ssr-h-hero-inner">
+            <header className="ssr-h-topbar">
+              <div className="ssr-h-brand" aria-label="Backcountry Conditions">
+                <span className="ssr-h-brand-mark"><Mountain size={17} strokeWidth={2.3} aria-hidden /></span>
+                <span>Backcountry Conditions</span>
               </div>
-            </div>
-          </div>
-
-          {/* POPULAR */}
-          <div className="ssr-h-popular">
-            <span className="ssr-h-popular-label">Popular</span>
-            {FEATURED_PEAKS.map((peak) => {
-              const shortName = peak.name.split(',')[0];
-              return (
-                <button
-                  type="button"
-                  className="ssr-h-chip"
-                  key={peak.name}
-                  onClick={() => selectSuggestion(peak)}
-                >
-                  <Mountain size={13} aria-hidden />
-                  {shortName}
-                  {PEAK_ELEVATIONS[shortName] && <span className="ssr-st">{PEAK_ELEVATIONS[shortName]}</span>}
+              <nav className="ssr-h-nav" aria-label="Application navigation">
+                <button type="button" className="ssr-h-icon-btn" onClick={openTripToolView} aria-label="Open multi-day trip planner" title="Multi-day trip planner">
+                  <Route size={17} aria-hidden />
                 </button>
-              );
-            })}
-          </div>
-        </section>
+                <button type="button" className="ssr-h-icon-btn" onClick={() => navigateToView('settings')} aria-label="Open settings" title="Settings">
+                  <SlidersHorizontal size={17} aria-hidden />
+                </button>
+              </nav>
+            </header>
 
-        {/* HOW IT WORKS */}
-        <section className="ssr-h-section">
-          <div className="ssr-h-section-head">
-            <h2>From objective to decision in one screen</h2>
-            <p>No tab-hopping between five forecast sites. One synthesized brief.</p>
-          </div>
-          <div className="ssr-h-steps">
-            <div className="ssr-h-step">
-              <div className="ssr-h-step-num">1</div>
-              <h3>Pick your objective</h3>
-              <p>Search any peak or drop a pin. Set the date, alpine start, and how long you'll be out.</p>
-            </div>
-            <div className="ssr-h-step">
-              <div className="ssr-h-step-num">2</div>
-              <h3>We synthesize the signals</h3>
-              <p>Weather, avalanche bulletins, snowpack, alerts, and terrain — scored against your thresholds and timing.</p>
-            </div>
-            <div className="ssr-h-step">
-              <div className="ssr-h-step-num">3</div>
-              <h3>Get a go/no-go call</h3>
-              <p>A safety score, critical-check gates, and the cleanest travel window — printable and shareable.</p>
-            </div>
-          </div>
-        </section>
+            <div className="ssr-h-workspace">
+              <h1>Plan an objective</h1>
+              <p className="ssr-lede">Set a location, start time, and travel window to build a conditions brief.</p>
 
-        {/* SAMPLE PREVIEW */}
-        <section className="ssr-h-section">
-          <div className="ssr-h-section-head">
-            <h2>A real brief, not a dashboard</h2>
-            <p>Every report answers one question: should you commit, right now?</p>
-          </div>
-          <div className="ssr-h-preview">
-            <div className="ssr-h-preview-verdict">
-              <span className="ssr-h-preview-pill">Caution</span>
-              <div className="ssr-h-preview-score">71<sub>/100</sub></div>
-              <div className="ssr-h-preview-obj">
-                <b>Mt. Shasta · Avalanche Gulch</b>
-                Apr 22 · 04:30 start · 12h window
+              <div className="ssr-h-console">
+                <div className="ssr-h-console-search">
+                  <SearchBox
+                    searchWrapperRef={searchWrapperRef}
+                    searchInputRef={searchInputRef}
+                    searchQuery={searchQuery}
+                    trimmedSearchQuery={trimmedSearchQuery}
+                    showSuggestions={showSuggestions}
+                    searchLoading={searchLoading}
+                    suggestions={suggestions}
+                    activeSuggestionIndex={activeSuggestionIndex}
+                    canUseCoordinates={canUseCoordinates}
+                    onInputChange={handleInputChange}
+                    onFocus={handleFocus}
+                    onKeyDown={handleSearchKeyDown}
+                    onClear={handleSearchClear}
+                    onUseCoordinates={handleUseTypedCoordinates}
+                    onSelectSuggestion={selectSuggestion}
+                    onHoverSuggestion={setActiveSuggestionIndex}
+                  />
+                  <button type="button" className="ssr-h-go" onClick={submitSearch}>
+                    Build brief <ArrowRight size={16} aria-hidden />
+                  </button>
+                </div>
+                <div className="ssr-h-params">
+                  <label className="ssr-h-param">
+                    <span className="ssr-h-param-k"><CalendarDays size={12} /> Date</span>
+                    <input
+                      type="date"
+                      className="ssr-h-param-v ssr-h-param-input"
+                      value={forecastDate}
+                      min={todayDate}
+                      max={maxForecastDate}
+                      onChange={handleDateChange}
+                    />
+                  </label>
+                  <label className="ssr-h-param">
+                    <span className="ssr-h-param-k"><Clock size={12} /> Start</span>
+                    <input
+                      type="time"
+                      className="ssr-h-param-v ssr-h-param-input"
+                      aria-label="Start time"
+                      value={alpineStartTime}
+                      onChange={handlePlannerTimeChange(setAlpineStartTime)}
+                    />
+                  </label>
+                  <label className="ssr-h-param">
+                    <span className="ssr-h-param-k"><Activity size={12} /> Window</span>
+                    <span className="ssr-h-param-window">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ssr-h-param-v ssr-h-param-input"
+                        aria-label="Trip duration in hours"
+                        min={MIN_TRAVEL_WINDOW_HOURS}
+                        max={MAX_TRAVEL_WINDOW_HOURS}
+                        step={1}
+                        value={travelWindowHoursDraft}
+                        onChange={handleTravelWindowHoursDraftChange}
+                        onBlur={handleTravelWindowHoursDraftBlur}
+                      />
+                      hours
+                    </span>
+                  </label>
+                  <div className="ssr-h-param-note">Conditions are scored for your exact timing.</div>
+                </div>
               </div>
-            </div>
-            <div className="ssr-h-preview-body">
-              <p className="ssr-h-preview-headline">Short but real window — be off the gulch by 11:30.</p>
-              <div className="ssr-h-preview-checks">
-                <div className="ssr-h-preview-check">
-                  <span className="ssr-h-check-ic ok"><Check size={12} strokeWidth={3} /></span>
-                  <span>Overnight refreeze solid below 11k</span>
-                  <span className="ssr-h-check-val">22°F</span>
-                </div>
-                <div className="ssr-h-preview-check">
-                  <span className="ssr-h-check-ic warn"><AlertTriangle size={12} /></span>
-                  <span>Wet-loose hazard on solar aspects after 10:30</span>
-                  <span className="ssr-h-check-val">D1–D2</span>
-                </div>
-                <div className="ssr-h-preview-check">
-                  <span className="ssr-h-check-ic warn"><AlertTriangle size={12} /></span>
-                  <span>Ridge gusts climb through the afternoon</span>
-                  <span className="ssr-h-check-val">G48</span>
-                </div>
-                <div className="ssr-h-preview-check">
-                  <span className="ssr-h-check-ic ok"><Check size={12} strokeWidth={3} /></span>
-                  <span>Precipitation below threshold all window</span>
-                  <span className="ssr-h-check-val">5%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* SIGNALS */}
-        <section className="ssr-h-section">
-          <div className="ssr-h-section-head">
-            <h2>Everything in one place</h2>
-            <p>Pulled live from public forecast infrastructure, refreshed and freshness-tagged.</p>
-          </div>
-          <div className="ssr-h-signals">
-            <div className="ssr-h-signal">
-              <div className="ssr-h-signal-ic"><CloudRain size={19} /></div>
-              <h3>Weather</h3>
-              <p>Hourly temp, wind, gusts, and precip across your window — elevation-adjusted.</p>
-              <div className="ssr-sources">NOAA/NWS · Open-Meteo</div>
-            </div>
-            <div className="ssr-h-signal">
-              <div className="ssr-h-signal-ic"><AlertTriangle size={19} /></div>
-              <h3>Avalanche</h3>
-              <p>Danger ratings, problems, and bottom line scored for your aspect and timing.</p>
-              <div className="ssr-sources">Avalanche.org centers</div>
-            </div>
-            <div className="ssr-h-signal">
-              <div className="ssr-h-signal-ic"><Snowflake size={19} /></div>
-              <h3>Snowpack</h3>
-              <p>Station depth, SWE, and how it compares to the 30-year average.</p>
-              <div className="ssr-sources">SNOTEL · NOHRSC</div>
-            </div>
-            <div className="ssr-h-signal">
-              <div className="ssr-h-signal-ic"><Route size={19} /></div>
-              <h3>Route analysis</h3>
-              <p>Multi-waypoint briefings with per-waypoint conditions and go/no-go.</p>
-              <div className="ssr-sources">AI-assisted</div>
+              <div className="ssr-h-popular">
+                <span className="ssr-h-popular-label">Start with</span>
+                {FEATURED_PEAKS.map((peak) => {
+                  const shortName = peak.name.split(',')[0];
+                  return (
+                    <button
+                      type="button"
+                      className="ssr-h-chip"
+                      key={peak.name}
+                      onClick={() => selectSuggestion(peak)}
+                    >
+                      <Mountain size={13} aria-hidden />
+                      {shortName}
+                      {PEAK_ELEVATIONS[shortName] && <span className="ssr-st">{PEAK_ELEVATIONS[shortName]}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>

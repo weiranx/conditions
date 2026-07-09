@@ -20,10 +20,10 @@
 .ssr-report {
   display: grid;
   grid-template-columns: 1fr 340px;
-  gap: 28px;
+  gap: 24px;
   align-items: start;
 }
-.ssr-main { display: grid; gap: 28px; align-content: start; min-width: 0; }
+.ssr-main { display: grid; gap: 24px; align-content: start; min-width: 0; }
 /* NOTE: `position: sticky` was tried here but doesn't work in this app — the shared page-shell
    wrapper (`.ssr-shell` / `.page-shell-*`, used for page-transition animations) sets
    `overflow: hidden auto` on an ancestor with no fixed/max height, so it never actually scrolls
@@ -36,12 +36,12 @@
    below this grid — see `.ssr-report-footer` — instead of being squeezed into the narrow left
    track next to empty space.
 */
-.ssr-side { display: grid; gap: 28px; align-content: start; min-width: 0; }
+.ssr-side { display: grid; gap: 24px; align-content: start; min-width: 0; }
 .ssr-report-footer {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 28px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -51,7 +51,8 @@
 .ssr-hdr {
   grid-column: 1 / -1;
   background: var(--ssr-surface);
-  border: 1px solid var(--ssr-line);
+  border: 1px solid var(--ssr-line-strong);
+  border-left: 3px solid var(--ssr-brand);
   border-radius: 8px;
   padding: 20px 24px;
   display: grid;
@@ -124,15 +125,14 @@
 .ssr-card {
   background: var(--ssr-surface);
   border: 1px solid var(--ssr-line);
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(30, 25, 15, 0.04), 0 8px 20px -16px rgba(30, 25, 15, 0.18);
-  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 1px 2px rgba(22, 52, 39, 0.04), 0 12px 28px -24px rgba(22, 52, 39, 0.22);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 .ssr-card:hover {
-  box-shadow: 0 16px 34px -18px rgba(30, 25, 15, 0.28);
+  box-shadow: 0 8px 20px -16px rgba(30, 25, 15, 0.28);
   border-color: var(--ssr-line-strong);
-  transform: translateY(-1px);
 }
 html[data-theme="dark"] .ssr-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 24px -16px rgba(0, 0, 0, 0.45); }
 html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.65); }
@@ -143,7 +143,7 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  background: linear-gradient(180deg, var(--ssr-surface), color-mix(in oklch, var(--ssr-surface-2) 50%, var(--ssr-surface)));
+  background: var(--ssr-surface);
 }
 .ssr-card-h h2 {
   margin: 0;
@@ -157,11 +157,11 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 
 }
 .ssr-h-icon {
   width: 26px; height: 26px;
-  border-radius: 7px;
+  border-radius: 6px;
   display: grid; place-items: center;
   color: var(--ssr-brand-dark);
-  background: linear-gradient(135deg, var(--ssr-brand-bg), color-mix(in oklch, var(--ssr-brand-bg) 55%, var(--ssr-surface)));
-  box-shadow: 0 1px 0 oklch(100% 0 0 / 0.3) inset;
+  background: transparent;
+  box-shadow: none;
 }
 .ssr-h-icon svg { width: 15px; height: 15px; }
 
@@ -181,6 +181,26 @@ html[data-theme="dark"] .ssr-h-icon.icon-amber   { color: oklch(78% 0.10 75);  b
 html[data-theme="dark"] .ssr-h-icon.icon-yellow  { color: oklch(80% 0.12 95);  background: linear-gradient(135deg, oklch(34% 0.06 95), color-mix(in oklch, oklch(34% 0.06 95) 55%, var(--ssr-surface))); }
 html[data-theme="dark"] .ssr-h-icon.icon-purple  { color: oklch(78% 0.11 310); background: linear-gradient(135deg, oklch(32% 0.05 310), color-mix(in oklch, oklch(32% 0.05 310) 55%, var(--ssr-surface))); }
 html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); background: var(--ssr-surface-3); }
+.ssr-h-icon.icon-blue,
+.ssr-h-icon.icon-cyan,
+.ssr-h-icon.icon-orange,
+.ssr-h-icon.icon-amber,
+.ssr-h-icon.icon-yellow,
+.ssr-h-icon.icon-purple,
+.ssr-h-icon.icon-neutral {
+  background: transparent;
+  color: var(--ssr-brand-dark);
+}
+html[data-theme="dark"] .ssr-h-icon.icon-blue,
+html[data-theme="dark"] .ssr-h-icon.icon-cyan,
+html[data-theme="dark"] .ssr-h-icon.icon-orange,
+html[data-theme="dark"] .ssr-h-icon.icon-amber,
+html[data-theme="dark"] .ssr-h-icon.icon-yellow,
+html[data-theme="dark"] .ssr-h-icon.icon-purple,
+html[data-theme="dark"] .ssr-h-icon.icon-neutral {
+  background: transparent;
+  color: var(--ssr-brand-dark);
+}
 .ssr-h-meta {
   font-size: 11px;
   color: var(--ssr-text-3);
@@ -362,17 +382,19 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 .ssr-jump-nav {
   grid-column: 1 / -1;
   display: flex;
-  gap: 6px;
+  gap: 0;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--ssr-line);
   -webkit-overflow-scrolling: touch;
 }
 .ssr-jump-chip {
   flex-shrink: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--ssr-line);
-  background: var(--ssr-surface);
+  padding: 9px 12px 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--ssr-text-2);
   font-size: 12px;
   font-weight: 600;
@@ -380,7 +402,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   cursor: pointer;
   white-space: nowrap;
 }
-.ssr-jump-chip:hover { background: var(--ssr-brand-bg); color: var(--ssr-brand-dark); border-color: var(--ssr-brand); }
+.ssr-jump-chip:hover { background: transparent; color: var(--ssr-brand-dark); border-bottom-color: var(--ssr-brand); }
 .ssr-report section[id], .ssr-jump-anchor { scroll-margin-top: 12px; }
 .ssr-jump-fab-wrap {
   position: fixed;
@@ -434,7 +456,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 }
 .ssr-jump-pop button:hover { background: var(--ssr-surface-2); color: var(--ssr-text); }
 @media (max-width: 1100px) {
-  .ssr-jump-fab-wrap { display: flex; }
+  .ssr-jump-fab-wrap { display: none; }
 }
 
 /* =========================================================
@@ -776,7 +798,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 /* status pill (card header, right) */
 .ssr-pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 10px; border-radius: 999px;
+  padding: 4px 8px; border-radius: 6px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
   text-transform: uppercase; white-space: nowrap;
   background: var(--ssr-surface-3); color: var(--ssr-text-2);
@@ -997,7 +1019,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding: 3px 7px;
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--ssr-surface-3);
   color: var(--ssr-text-3);
 }
