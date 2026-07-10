@@ -102,12 +102,72 @@
 }
 
 @media (max-width: 640px) {
-  .ssr-product-nav { min-height: 56px; }
-  .ssr-product-nav-inner { width: calc(100% - 24px); min-height: 56px; gap: 12px; }
-  .ssr-product-brand > span:last-child { display: none; }
-  .ssr-product-links { flex: 1; justify-content: flex-end; }
-  .ssr-product-links button { width: 36px; padding: 0; justify-content: center; }
-  .ssr-product-links button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* Keep the app's primary destinations within thumb reach and clear of the
+     iPhone home indicator. The labels stay visible so the icons are not the
+     only navigation cue. */
+  .ssr-product-nav {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100%;
+    min-height: calc(64px + env(safe-area-inset-bottom));
+    margin-left: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--ui-line);
+    border-bottom: 0;
+    background: color-mix(in oklch, var(--ui-surface) 96%, transparent);
+  }
+
+  .ssr-product-nav-inner {
+    width: 100%;
+    min-height: 64px;
+    gap: 0;
+  }
+
+  .ssr-product-brand { display: none; }
+
+  .ssr-product-links {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    align-self: stretch;
+    gap: 0;
+  }
+
+  .ssr-product-links button {
+    width: auto;
+    min-width: 0;
+    min-height: 56px;
+    padding: 6px 2px 5px;
+    border-radius: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .ssr-product-links button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .ssr-product-links button span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .ssr-product-links button.is-active {
+    box-shadow: inset 0 2px 0 var(--ui-brand-strong);
+  }
+
+  /* Reserve space for the fixed navigation on every app view. */
+  .app-container:has(> .ssr-product-nav) {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+  }
+
   .status-shell,
   .page-shell-logs .settings-shell { padding-top: 0; }
   .status-shell > .settings-head,

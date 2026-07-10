@@ -90,6 +90,24 @@ body:has(.page-shell-planner) {
   .ssr-shell .header-nav > .secondary-btn { flex: 0 0 auto; }
 }
 
+@media (max-width: 640px) {
+  .ssr-shell > .ssr-product-nav { margin-bottom: 0; }
+  .ssr-shell .header-section { padding: 10px; }
+  .ssr-shell .header-controls { gap: 8px; }
+  .ssr-shell .header-nav { width: 100%; overflow: visible; }
+  .ssr-shell .header-nav > .secondary-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .ssr-shell .planner-save-status {
+    position: fixed;
+    right: 12px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    top: auto;
+  }
+}
+
 /* ============ MAP → rounded card + frosted chips ============ */
 .ssr-shell .map-section {
   border-radius: 8px;
