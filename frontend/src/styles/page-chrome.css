@@ -94,7 +94,7 @@
   padding-top: 32px;
 }
 
-.status-shell > .settings-head h2,
+.status-shell > .settings-head h1,
 .page-shell-logs .settings-shell > .settings-head h2 {
   margin-top: 0;
   font-size: 30px;
