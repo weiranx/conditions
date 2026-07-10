@@ -1,10 +1,4 @@
-/* =========================================================
-   Planner Shell Re-skin — Conditions Dashboard chrome
-   Imported from claude.ai/design · Conditions Dashboard.html
-   CSS-only overrides keyed to existing planner markup, scoped under
-   .ssr-shell (applied only when the Redesign report layout is active).
-   No markup or wiring changes. Light/dark via html[data-theme].
-   ========================================================= */
+/* Planner workspace chrome. */
 
 
 /* ============ HEADER → topbar ============ */
@@ -12,22 +6,27 @@ body:has(.page-shell-planner) {
   background-color: var(--ssr-bg);
   background-image: none;
 }
+.page-shell-planner { overflow-anchor: none; }
+
+.ssr-shell > .ssr-product-nav { margin-bottom: 12px; }
 
 .ssr-shell .header-section {
   background: var(--d-surface);
   border: 1px solid var(--d-line);
-  border-radius: var(--d-r-lg);
-  box-shadow: var(--d-shadow);
+  border-radius: 6px;
+  box-shadow: var(--ui-shadow-sm);
   padding: 16px 20px;
 }
+.ssr-shell .header-controls { flex-basis: 100%; }
+.ssr-shell .header-controls .search-wrapper { max-width: none; }
 .ssr-shell .brand-mark {
   background: var(--d-pine-deep);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: none;
   border: none;
 }
 .ssr-shell .brand-mark-icon { filter: brightness(0) invert(1); }
-.ssr-shell .brand-copy h1 { font-weight: 800; letter-spacing: -.02em; }
+.ssr-shell .brand-copy h1 { font-weight: 700; letter-spacing: 0; }
 .ssr-shell .brand-subtitle { color: var(--d-ink-3); font-weight: 500; }
 
 /* search → pill */
@@ -35,7 +34,7 @@ body:has(.page-shell-planner) {
   background: var(--d-surface);
   border: 1px solid var(--d-line-2);
   border-radius: 6px;
-  box-shadow: var(--d-shadow-sm);
+  box-shadow: none;
   padding: 6px 8px 6px 16px;
 }
 .ssr-shell .search-bar:focus-within {
@@ -49,17 +48,54 @@ body:has(.page-shell-planner) {
   border-radius: 6px;
   border: 1px solid var(--d-line-2);
   background: var(--d-surface);
-  box-shadow: var(--d-shadow-sm);
+  box-shadow: none;
   color: var(--d-ink);
 }
 .ssr-shell .header-nav .secondary-btn:hover { background: var(--d-surface-2); border-color: var(--d-ink-4); }
+.ssr-shell .header-nav .header-nav-btn.is-saved {
+  border-color: var(--d-pine);
+  background: var(--d-sage-1);
+  color: var(--d-pine-deep);
+}
+.ssr-shell .planner-save-status {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 90;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 9px 12px;
+  border: 1px solid var(--d-line-2);
+  border-radius: 6px;
+  background: var(--d-surface);
+  box-shadow: var(--ui-shadow-md);
+  color: var(--d-ink-2);
+  font-size: 12.5px;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+.ssr-shell .planner-save-status.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+@media (max-width: 980px) {
+  .ssr-shell > .ssr-product-nav { margin-bottom: 10px; }
+  .ssr-shell .header-section { padding: 12px; }
+  .ssr-shell .header-nav { width: auto; }
+  .ssr-shell .header-nav > .secondary-btn { flex: 0 0 auto; }
+}
 
 /* ============ MAP → rounded card + frosted chips ============ */
 .ssr-shell .map-section {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--d-line);
-  box-shadow: 0 16px 38px -28px oklch(28% 0.04 155 / .42);
+  box-shadow: var(--ui-shadow-sm);
 }
 @media (min-width: 900px) {
   .ssr-shell .map-section {
@@ -74,7 +110,7 @@ body:has(.page-shell-planner) {
   backdrop-filter: blur(8px);
   border: 1px solid var(--d-line-2);
   color: var(--d-ink-2);
-  box-shadow: 0 4px 14px -6px oklch(40% 0.03 150 / .35);
+  box-shadow: none;
 }
 .ssr-shell .map-overlay-btn:hover { background: var(--d-surface); color: var(--d-ink); }
 .ssr-shell .map-overlay-btn.is-active {
@@ -89,7 +125,7 @@ body:has(.page-shell-planner) {
   backdrop-filter: blur(8px);
   border: 1px solid var(--d-line-2);
   border-radius: 6px;
-  box-shadow: 0 4px 14px -6px oklch(40% 0.03 150 / .35);
+  box-shadow: none;
   color: var(--d-ink);
 }
 .ssr-shell .map-overlay-coords { font-family: var(--d-mono); color: var(--d-ink-2); }
@@ -101,8 +137,8 @@ body:has(.page-shell-planner) {
 .ssr-shell .map-actions {
   background: var(--d-surface);
   border: 1px solid var(--d-line);
-  border-radius: var(--d-r-lg);
-  box-shadow: 0 12px 28px -24px oklch(28% 0.04 155 / .35);
+  border-radius: 6px;
+  box-shadow: var(--ui-shadow-sm);
   padding: 14px 18px;
 }
 .ssr-shell .map-actions-flat .date-control {
@@ -114,7 +150,7 @@ body:has(.page-shell-planner) {
 .ssr-shell .map-actions-flat .date-control > span {
   font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--d-ink-3);
 }
@@ -132,6 +168,76 @@ body:has(.page-shell-planner) {
   color: var(--d-ink);
 }
 .ssr-shell .now-control-btn:hover { border-color: var(--d-pine); color: var(--d-pine-deep); }
+.ssr-shell .map-actions-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--d-line);
+}
+.ssr-shell .map-report-workflow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.ssr-shell .map-report-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--d-ink-3);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.ssr-shell .map-report-state > svg {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  flex: none;
+  border-radius: 6px;
+  background: var(--d-sage-1);
+  color: var(--d-pine-deep);
+}
+.ssr-shell .map-report-state span { display: grid; gap: 1px; }
+.ssr-shell .map-report-state strong {
+  color: var(--d-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.ssr-shell .map-report-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.ssr-shell .map-report-actions .action-btn {
+  min-height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--d-line-2);
+  background: var(--d-surface);
+  color: var(--d-ink);
+  box-shadow: none;
+  transform: none;
+}
+.ssr-shell .map-report-actions .action-btn:hover:not(:disabled) {
+  background: var(--d-surface-2);
+  border-color: var(--d-ink-4);
+  box-shadow: none;
+  transform: none;
+}
+.ssr-shell .map-report-actions .plan-action-primary {
+  border-color: var(--d-pine-deep);
+  background: var(--d-pine-deep);
+  color: var(--ui-on-strong);
+}
+.ssr-shell .map-report-actions .plan-action-primary svg { color: currentColor; }
+.ssr-shell .map-report-actions .plan-action-primary:hover:not(:disabled) {
+  border-color: var(--d-pine);
+  background: var(--d-pine);
+  color: var(--ui-on-strong);
+}
 .ssr-shell .map-actions-utils .action-btn,
 .ssr-shell .map-actions-utils .settings-btn {
   height: 40px;
@@ -156,6 +262,19 @@ body:has(.page-shell-planner) {
 .ssr-shell .map-ext-link-btn:hover { background: var(--d-surface-2); color: var(--d-ink); }
 .ssr-shell .map-ext-links { border-left-color: var(--d-line-2); }
 
+@media (max-width: 980px) {
+  .ssr-shell .map-actions-footer { align-items: flex-start; flex-wrap: wrap; }
+  .ssr-shell .map-report-workflow { flex: 1 1 100%; justify-content: space-between; }
+}
+
+@media (max-width: 560px) {
+  .ssr-shell .map-actions-footer { gap: 10px; }
+  .ssr-shell .map-report-workflow { align-items: stretch; flex-direction: column; gap: 10px; }
+  .ssr-shell .map-report-actions { width: 100%; }
+  .ssr-shell .map-report-actions .action-btn { flex: 1 1 0; justify-content: center; }
+  .ssr-shell .map-actions-utils { width: 100%; }
+}
+
 /* ============ FRESHNESS → warm banner ============ */
 .ssr-shell .top-freshness-alert {
   display: flex;
@@ -172,7 +291,7 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert { border-color: var(--d-
   width: 30px;
   height: 30px;
   flex: none;
-  border-radius: 9px;
+  border-radius: 6px;
   background: oklch(90% 0.07 62);
   color: var(--d-warn-deep);
   display: grid;
@@ -184,7 +303,7 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert::before { background: va
 .ssr-shell .top-freshness-alert strong {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .12em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--d-warn-deep);
 }

@@ -5,17 +5,15 @@ import {
   Clock,
   Cpu,
   HardDrive,
-  House,
   RefreshCw,
-  Route,
   ShieldCheck,
-  SlidersHorizontal,
   Wifi,
   XCircle,
 } from 'lucide-react';
 import { AppDisclaimer } from '../../app/map-components';
 import type { BackendMeta, HealthCheckResult } from '../../app/types';
 import type { AppView } from '../../hooks/useUrlState';
+import { ProductNav } from './ProductNav';
 
 export interface StatusViewProps {
   appShellClassName: string;
@@ -29,6 +27,7 @@ export interface StatusViewProps {
   runHealthChecks: () => Promise<void>;
   navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
+  openTripToolView: () => void;
 }
 
 export function StatusView({
@@ -43,6 +42,7 @@ export function StatusView({
   runHealthChecks,
   navigateToView,
   openPlannerView,
+  openTripToolView,
 }: StatusViewProps) {
   const formatUptime = (seconds: number) => {
     const d = Math.floor(seconds / 86400);
@@ -56,6 +56,12 @@ export function StatusView({
   return (
     <div key="view-status" className={appShellClassName} aria-busy={isViewPending}>
       <section className="settings-shell status-shell">
+        <ProductNav
+          active="status"
+          navigateToView={navigateToView}
+          openPlannerView={openPlannerView}
+          openTripToolView={openTripToolView}
+        />
         <div className="settings-head">
           <div>
             <div className="home-kicker">Backcountry Conditions System Health</div>
@@ -63,15 +69,6 @@ export function StatusView({
             <p>Live health checks for backend availability and browser capabilities.</p>
           </div>
           <div className="settings-nav">
-            <button className="settings-btn" onClick={() => navigateToView('home')}>
-              <House size={14} /> Homepage
-            </button>
-            <button className="settings-btn" onClick={openPlannerView}>
-              <Route size={14} /> Planner
-            </button>
-            <button className="settings-btn" onClick={() => navigateToView('settings')}>
-              <SlidersHorizontal size={14} /> Settings
-            </button>
             <button className="primary-btn" onClick={() => void runHealthChecks()} disabled={healthLoading}>
               <RefreshCw size={14} className={healthLoading ? 'spin-icon' : undefined} />
               {healthLoading ? 'Checking\u2026' : 'Run Checks'}

@@ -1,14 +1,9 @@
-/* =========================================================
-   Settings Redesign — "SummitSafe" preferences
-   Imported from claude.ai/design · Settings.html
-   Scoped under .ssr-settings so it never collides with App.css.
-   Dark mode follows the app's html[data-theme="dark"] switch.
-   ========================================================= */
+/* Settings preferences view. */
 
 .ssr-settings {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 24px 80px;
+  padding: 0 24px 80px;
   color: var(--ssr-text);
   font-family: var(--ssr-sans);
   -webkit-font-smoothing: antialiased;
@@ -16,10 +11,10 @@
 .ssr-settings * { box-sizing: border-box; }
 
 /* ---------- HEAD ---------- */
-.ssr-set-head { margin-bottom: 28px; }
+.ssr-set-head { margin-bottom: 30px; padding-top: 34px; }
 .ssr-set-kicker {
   font-size: 12px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--ssr-brand-dark);
   font-weight: 600;
@@ -29,7 +24,8 @@
   font-family: var(--ssr-display);
   font-size: 30px;
   font-weight: 560;
-  letter-spacing: -0.01em;
+  line-height: 1.15;
+  letter-spacing: 0;
   margin: 0 0 6px;
   color: var(--ssr-text);
 }
@@ -38,13 +34,13 @@
 /* ---------- LAYOUT ---------- */
 .ssr-set-layout {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 32px;
+  grid-template-columns: 210px 1fr;
+  gap: 36px;
   align-items: start;
 }
 
 /* RAIL */
-.ssr-set-rail { position: sticky; top: 16px; display: grid; gap: 2px; }
+.ssr-set-rail { position: sticky; top: 16px; display: grid; gap: 3px; }
 .ssr-set-rail a, .ssr-set-rail button {
   display: flex;
   align-items: center;
@@ -74,16 +70,15 @@
 .ssr-set-card {
   background: var(--ssr-surface);
   border: 1px solid var(--ssr-line);
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   scroll-margin-top: 16px;
-  box-shadow: 0 1px 2px rgba(30, 25, 15, 0.04);
+  box-shadow: var(--ui-shadow-sm);
 }
-html[data-theme="dark"] .ssr-set-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
 .ssr-set-card-h {
-  padding: 16px 22px;
+  padding: 17px 22px;
   border-bottom: 1px solid var(--ssr-line);
-  background: linear-gradient(180deg, var(--ssr-surface), color-mix(in oklch, var(--ssr-surface-2) 50%, var(--ssr-surface)));
+  background: var(--ssr-surface);
 }
 .ssr-set-card-h h2 {
   font-size: 15px;
@@ -100,7 +95,7 @@ html[data-theme="dark"] .ssr-set-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)
   grid-template-columns: 1fr auto;
   gap: 16px;
   align-items: center;
-  padding: 16px 22px;
+  padding: 18px 22px;
   border-bottom: 1px solid var(--ssr-line);
 }
 .ssr-set-row:last-child { border-bottom: none; }
@@ -137,9 +132,9 @@ html[data-theme="dark"] .ssr-set-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)
 }
 .ssr-seg button:last-child { border-right: none; }
 .ssr-seg button.on {
-  background: linear-gradient(135deg, var(--ssr-brand), var(--ssr-brand-dark));
+  background: var(--ssr-brand-dark);
   color: white;
-  box-shadow: 0 2px 8px -4px color-mix(in oklch, var(--ssr-brand) 65%, transparent);
+  box-shadow: none;
 }
 .ssr-seg button:hover:not(.on) { background: var(--ssr-surface-2); }
 
@@ -222,14 +217,14 @@ html[data-theme="dark"] .ssr-set-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)
 
 /* live gate preview */
 .ssr-set-preview {
-  background: var(--ssr-surface-2);
+  background: var(--ssr-surface-subtle, var(--ssr-surface-2));
   border: 1px solid var(--ssr-line);
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 18px 20px;
 }
 .ssr-set-preview-h {
   font-size: 12px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--ssr-text-3);
   font-weight: 600;
@@ -295,13 +290,15 @@ html[data-theme="dark"] .ssr-set-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)
   color: var(--ssr-text-3);
   line-height: 1.6;
   font-family: var(--ssr-mono);
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 .ssr-set-note b { color: var(--ssr-text-2); font-weight: 600; }
 
 /* responsive */
 @media (max-width: 820px) {
-  .ssr-set-layout { grid-template-columns: 1fr; }
+  .ssr-settings { padding-inline: 16px; }
+  .ssr-set-head { padding-top: 28px; }
+  .ssr-set-layout { grid-template-columns: 1fr; gap: 20px; }
   .ssr-set-rail { position: static; grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; padding-bottom: 6px; }
   .ssr-set-rail-sep, .ssr-set-rail-foot { display: none; }
   .ssr-set-row { grid-template-columns: 1fr; }

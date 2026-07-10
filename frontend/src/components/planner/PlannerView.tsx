@@ -2,10 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import {
   Eye,
-  Send,
 } from 'lucide-react';
 import { ForecastLoading } from './ForecastLoading';
 import { PlannerHeader } from './PlannerHeader';
+import { ProductNav } from '../views/ProductNav';
 import { PlannerMapSection } from './PlannerMapSection';
 import { RouteAnalysisSection } from './RouteAnalysisSection';
 import { RedesignView } from './RedesignView';
@@ -119,7 +119,7 @@ export interface PlannerViewProps {
   handleRetryFetch: () => void;
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
-  onStartNewReport: () => void;
+  onEditPlan: () => void;
   onGenerateReport: () => void;
 
   // Decision / safety
@@ -519,7 +519,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     handleRetryFetch,
     timezoneMismatch,
     deviceTimezone,
-    onStartNewReport,
+    onEditPlan,
     onGenerateReport,
 
     // Decision / safety
@@ -593,31 +593,31 @@ function PlannerViewComponent(props: PlannerViewProps) {
   } = props;
 
   // Once a report is showing, its input fields are locked — changing them
-  // requires explicitly starting a new report (see onStartNewReport), so a
+  // requires explicitly editing the plan (see onEditPlan), so a
   // displayed report can't be silently mutated out from under the user.
   const reportLocked = Boolean(safetyData);
 
-  // The report replaces a much shorter "ready to check" / loading state with a
-  // multi-thousand-pixel report. The browser doesn't reset scroll position when
-  // content height changes like that, so without this the viewport is left at
-  // whatever pixel offset it was at — which can land partway into the new report
-  // instead of at its top. Only fires on the empty/loading -> report transition,
-  // not on a refresh of an already-visible report (safetyData stays truthy then).
   const wasReportVisibleRef = useRef(false);
   useEffect(() => {
     const isReportVisible = Boolean(hasObjective && safetyData && decision);
-    if (isReportVisible && !wasReportVisibleRef.current && typeof document !== 'undefined') {
-      // 'auto' (instant), not 'smooth' — map tiles and card images finish loading
-      // just after this fires, and their reflow interrupts a smooth scroll partway.
-      const target = document.getElementById('planner-section-decision') || document.getElementById('planner-main-content');
-      target?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    let frame = 0;
+    if (isReportVisible && !wasReportVisibleRef.current) {
+      frame = window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
     }
     wasReportVisibleRef.current = isReportVisible;
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, [hasObjective, safetyData, decision]);
 
   return (
     <div key="view-planner" className={`${appShellClassName} ssr-shell`} aria-busy={isViewPending}>
       <a href="#planner-main-content" className="skip-nav">Skip to main content</a>
+      <ProductNav
+        active="planner"
+        navigateToView={navigateToView}
+        openTripToolView={openTripToolView}
+      />
       <PlannerHeader
         searchWrapperRef={searchWrapperRef}
         searchInputRef={searchInputRef}
@@ -642,7 +642,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleToggleSaveObjective={handleToggleSaveObjective}
         copiedLink={copiedLink}
         handleCopyLink={handleCopyLink}
-        navigateToView={navigateToView}
       />
 
       <PlannerMapSection
@@ -685,28 +684,14 @@ function PlannerViewComponent(props: PlannerViewProps) {
         timezoneMismatch={timezoneMismatch}
         deviceTimezone={deviceTimezone}
         locked={reportLocked}
-        onStartNewReport={onStartNewReport}
+        onEditPlan={onEditPlan}
+        onGenerateReport={onGenerateReport}
       />
 
       {!hasObjective && (
         <div className="empty-state">
           <h3>Select a location to start planning</h3>
           <p>Search for a peak, trail area, zone, or click the map to place a pin.</p>
-        </div>
-      )}
-
-      {hasObjective && !safetyData && !loading && !error && (
-        <div className="empty-state empty-state-ready">
-          <h3>Ready to check {objectiveName || 'this location'}</h3>
-          <p>Review the date, start time, and trip length below, then generate a report to pull the latest weather, avalanche, and safety data.</p>
-          <button
-            type="button"
-            className="now-control-btn generate-report-btn empty-state-generate-btn"
-            onClick={onGenerateReport}
-            title="Fetch a report for the selected location, date, and time"
-          >
-            <Send size={16} /> Generate Report
-          </button>
         </div>
       )}
 

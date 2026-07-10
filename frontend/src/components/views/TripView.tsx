@@ -10,6 +10,7 @@ import type { DecisionLevel, TimeStyle } from '../../app/types';
 import { formatClockForStyle } from '../../app/core';
 import { weatherConditionEmoji } from '../../app/weather-display';
 import '../../styles/trip-redesign.css';
+import { ProductNav } from './ProductNav';
 
 export type MultiDayTripForecastDay = {
   date: string;
@@ -175,6 +176,8 @@ export function TripView({
   setTripForecastError,
   setTripForecastNote,
   runTripForecast,
+  navigateToView,
+  openPlannerView,
   onUseDayInPlanner,
 }: TripViewProps) {
   const [sel, setSel] = React.useState(0);
@@ -222,6 +225,7 @@ export function TripView({
   return (
     <div key="view-trip" className={appShellClassName} aria-busy={isViewPending || tripForecastLoading}>
       <div className="ssr-trip">
+        <ProductNav active="trip" navigateToView={navigateToView} openPlannerView={openPlannerView} />
         {/* HEADER + SETUP */}
         <div className="ssr-trip-head">
           <div>
@@ -281,8 +285,13 @@ export function TripView({
 
         {!hasObjective && (
           <div className="ssr-trip-banner">
-            <h3>Objective required</h3>
-            <p>Select an objective in Planner first, then use this tool for multi-day forecasting.</p>
+            <div>
+              <h3>Objective required</h3>
+              <p>Select an objective in Planner first, then use this tool for multi-day forecasting.</p>
+            </div>
+            <button type="button" className="ssr-trip-banner-action" onClick={openPlannerView}>
+              <Route size={15} aria-hidden /> Open planner
+            </button>
           </div>
         )}
 
