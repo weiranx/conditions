@@ -1328,13 +1328,6 @@ function App() {
     [],
   );
 
-  useEffect(() => {
-    if (view !== 'trip' || !hasObjective || tripForecastLoading || tripForecastRows.length > 0 || Boolean(tripForecastError)) {
-      return;
-    }
-    void runTripForecast();
-  }, [view, hasObjective, tripForecastLoading, tripForecastRows.length, tripForecastError, runTripForecast]);
-
   if (view === 'status') {
     return (
       <StatusView
