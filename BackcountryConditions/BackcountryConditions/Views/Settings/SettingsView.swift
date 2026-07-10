@@ -181,7 +181,7 @@ struct SettingsView: View {
             get: {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "HH:mm"
-                return formatter.date(from: vm.preferences.defaultStartTime) ?? formatter.date(from: "04:30")!
+                return formatter.date(from: vm.preferences.defaultStartTime) ?? formatter.date(from: "07:00")!
             },
             set: { newValue in
                 let formatter = DateFormatter()

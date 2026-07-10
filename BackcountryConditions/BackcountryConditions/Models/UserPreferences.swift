@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 struct UserPreferences: Codable, Sendable, Equatable {
-    var defaultStartTime: String = "04:30"
+    var defaultStartTime: String = "07:00"
     var themeMode: ThemeMode = .system
     var temperatureUnit: TemperatureUnit = .fahrenheit
     var elevationUnit: ElevationUnit = .feet

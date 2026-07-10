@@ -13,7 +13,6 @@ import {
   normalizeTimeStyle,
   normalizeWindSpeedUnit,
 } from './core';
-import { currentLocalTimeInput } from './date-time-inputs';
 import type { UserPreferences } from './types';
 
 function normalizeNumberPreference(rawValue: unknown, fallback: number, min: number, max: number): number {
@@ -36,7 +35,7 @@ function normalizeDecimalPreference(rawValue: unknown, fallback: number, min: nu
 export function getDefaultUserPreferences(): UserPreferences {
   return {
     defaultActivity: 'backcountry',
-    defaultStartTime: currentLocalTimeInput(),
+    defaultStartTime: '07:00',
     themeMode: 'system',
     temperatureUnit: 'f',
     elevationUnit: 'ft',

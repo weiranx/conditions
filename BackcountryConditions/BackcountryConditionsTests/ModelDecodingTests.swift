@@ -145,7 +145,7 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(prefs.elevationUnit, .feet)
         XCTAssertEqual(prefs.windSpeedUnit, .mph)
         XCTAssertEqual(prefs.maxWindGustMph, 40)
-        XCTAssertEqual(prefs.defaultStartTime, "04:30")
+        XCTAssertEqual(prefs.defaultStartTime, "07:00")
     }
 
     func testUserPreferencesEncodingRoundtrip() throws {
