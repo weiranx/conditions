@@ -22,13 +22,14 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 - **Terrain & Gear** — trail surface classification and gear-focus suggestions
 - **Safety Score** — weighted risk score with confidence factors, temporal weighting, combined hazard detection, and plain-language explanations
 - **Pleasantness Score** — a separate 0–100 weather-comfort outlook based on temperature/dew point, wind, precipitation, views/daylight, and air quality
-- **Route Analysis** — Claude-powered multi-waypoint route briefings with per-waypoint conditions and go/no-go recommendations
+- **Route Analysis** — import a GPX track or choose a named route for per-checkpoint conditions and a route-wide go/no-go briefing
 - **AI Field Brief** — on-demand narrative summary of current conditions
 - **Wind Loading** — aspect/elevation rose showing wind exposure patterns
 
 ## Key Capabilities
 
 - Interactive objective search + map pin workflow
+- GPX route import with distance-based safety checkpoints, recorded distance/elevation metadata, and route profiles
 - Time-aware condition reports (`date` + `start time`)
 - Configurable travel-window analysis (`travel_window_hours`, 1-24h)
 - Avalanche forecast ingestion with center/zone matching and fallback handling

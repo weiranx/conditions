@@ -100,6 +100,7 @@ import { TripView } from './components/views/TripView';
 import { HomeView } from './components/views/HomeView';
 import { useHealthChecks } from './hooks/useHealthChecks';
 import { useRouteAnalysis } from './hooks/useRouteAnalysis';
+import type { RouteAnalysisOptions } from './hooks/useRouteAnalysis';
 import { useTripForecast } from './hooks/useTripForecast';
 import { useSafetyData } from './hooks/useSafetyData';
 import { useSearchSuggestions } from './hooks/useSearchSuggestions';
@@ -566,12 +567,12 @@ function App() {
   };
 
   const handleFetchRouteAnalysis = useCallback(
-    (peak: string, route: string, lat: number, lon: number, date: string, start: string, hours: number) => {
+    (peak: string, route: string, lat: number, lon: number, date: string, start: string, hours: number, options?: RouteAnalysisOptions) => {
       void fetchRouteAnalysis(peak, route, lat, lon, date, start, hours, {
         temperature: preferences.temperatureUnit,
         wind: preferences.windSpeedUnit,
         elevation: preferences.elevationUnit,
-      });
+      }, options);
     },
     [fetchRouteAnalysis, preferences.temperatureUnit, preferences.windSpeedUnit, preferences.elevationUnit],
   );

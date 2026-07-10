@@ -7509,6 +7509,16 @@ button.collapsible-card-header:hover .collapsible-chevron {
   padding: 0;
 }
 
+.route-analysis-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.route-gpx-input {
+  display: none;
+}
+
 .route-analyze-btn {
   width: 100%;
   padding: 14px 20px;
@@ -7523,6 +7533,18 @@ button.collapsible-card-header:hover .collapsible-chevron {
   cursor: pointer;
   letter-spacing: 0.01em;
   transition: background 0.15s, border-color 0.15s, border-style 0.15s;
+}
+
+.route-gpx-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.route-analyze-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .route-analyze-btn:hover {
@@ -7590,7 +7612,8 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 .route-picker-card,
-.route-analysis-card {
+.route-analysis-card,
+.route-gpx-card {
   background: rgba(255, 253, 248, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -7598,6 +7621,100 @@ button.collapsible-card-header:hover .collapsible-chevron {
   border-radius: 18px;
   padding: 20px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.route-gpx-card {
+  display: grid;
+  gap: 12px;
+}
+
+.route-gpx-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-green);
+  font-weight: 700;
+}
+
+.route-gpx-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-gpx-meta,
+.route-gpx-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.route-gpx-meta span,
+.route-gpx-result-meta span,
+.route-gpx-result-meta strong {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(246, 241, 230, 0.72);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.route-gpx-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.route-gpx-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.route-gpx-analyze {
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 14px;
+  background: var(--accent-green);
+  color: white;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.route-picker-gpx {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-green);
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.route-gpx-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(45, 112, 82, 0.12);
+  color: var(--accent-green);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+}
+
+.route-gpx-result-meta {
+  margin: 0 0 14px;
 }
 
 .route-picker-header,
@@ -7800,6 +7917,12 @@ button.collapsible-card-header:hover .collapsible-chevron {
   font-variant-numeric: tabular-nums;
 }
 
+.route-wp-distance {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .route-wp-score {
   font-weight: 700;
   font-size: 0.88rem;
@@ -7867,6 +7990,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 @media (max-width: 480px) {
+  .route-analysis-actions {
+    grid-template-columns: 1fr;
+  }
+
   .route-waypoint-row {
     flex-wrap: wrap;
     row-gap: 6px;
@@ -7927,10 +8054,17 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
 /* Route Analysis — Dark mode frosted glass overrides */
 :root[data-theme='dark'] .route-picker-card,
-:root[data-theme='dark'] .route-analysis-card {
+:root[data-theme='dark'] .route-analysis-card,
+:root[data-theme='dark'] .route-gpx-card {
   background: rgba(22, 32, 41, 0.78);
   border-color: rgba(43, 57, 70, 0.45);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='dark'] .route-gpx-meta span,
+:root[data-theme='dark'] .route-gpx-result-meta span,
+:root[data-theme='dark'] .route-gpx-result-meta strong {
+  background: rgba(26, 39, 49, 0.72);
 }
 
 :root[data-theme='dark'] .logs-unlock-form input {

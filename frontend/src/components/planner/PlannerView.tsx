@@ -35,7 +35,7 @@ import type {
 import type { ReportCardOrder } from '../../app/card-ordering';
 import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
-import type { RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
+import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 import type { AppView } from '../../hooks/useUrlState';
 import type { Suggestion } from '../../lib/search';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
@@ -155,7 +155,7 @@ export interface PlannerViewProps {
   routeLoading: boolean;
   routeError: string | null;
   fetchRouteSuggestions: (name: string, lat: number, lng: number) => void;
-  fetchRouteAnalysis: (objectiveName: string, routeName: string, lat: number, lng: number, date: string, startTime: string, hours: number) => void;
+  fetchRouteAnalysis: (objectiveName: string, routeName: string, lat: number, lng: number, date: string, startTime: string, hours: number, options?: RouteAnalysisOptions) => void;
   customRouteName: string;
   setCustomRouteName: (name: string) => void;
   setRouteSuggestions: (routes: RouteOption[] | null) => void;

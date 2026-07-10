@@ -200,7 +200,7 @@ Array of route objects:
 
 ## `POST /api/route-analysis`
 
-Analyzes backcountry conditions along a full route by: (1) asking Claude for key waypoints, (2) running parallel `/api/safety` checks for each waypoint, and (3) synthesizing a route-wide briefing.
+Analyzes conditions along a full route. Callers can supply authoritative checkpoints parsed from a GPX track; otherwise the endpoint asks Claude for named-route waypoints. It runs parallel `/api/safety` checks for each checkpoint and synthesizes a route-wide briefing.
 
 ### Request Body (JSON)
 
@@ -212,6 +212,9 @@ Analyzes backcountry conditions along a full route by: (1) asking Claude for key
 | `lon` | number | Yes | Approximate peak longitude |
 | `date` | string | Yes | `YYYY-MM-DD` forecast date |
 | `start` | string | No | `HH:mm` start time (defaults to `06:00`) |
+| `travel_window_hours` | number | No | Travel window passed to each safety check (defaults to `12`) |
+| `waypoints` | array | No | 2–8 GPX-derived checkpoints with `name`, `lat`, `lon`, and optional `elev_ft`, `distance_miles`, and `progress_percent` |
+| `route_metadata` | object | No | Optional GPX metadata: `fileName`, `pointCount`, `distanceMiles`, elevation gain and range |
 
 ### Example Request
 
@@ -228,6 +231,8 @@ curl -X POST http://localhost:3001/api/route-analysis \
 | `waypoints` | Array of `{ name, lat, lon, elev_ft }` — trailhead to summit |
 | `summaries` | Array of per-waypoint condition snapshots (score, weather, avalanche, alerts, snowpack) |
 | `analysis` | Plain-language route-wide go/no-go briefing from Claude |
+| `routeSource` | `"gpx"` when supplied checkpoints were used; otherwise `"generated"` |
+| `routeMetadata` | Sanitized GPX metadata when supplied |
 
 **Note:** Requires `ANTHROPIC_API_KEY` to be set. Returns `500` if the key is missing or the Claude API call fails.
 

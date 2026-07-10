@@ -428,14 +428,50 @@ test('POST /api/route-analysis accepts omitted start (start is optional)', async
   expect(res.status).not.toBe(400);
 }, 45000);
 
-test('POST /api/route-analysis rejects lat=0 due to falsy-coordinate bug (documents known issue)', async () => {
-  // The route uses `!lat` / `!lon` which treats numeric zero as missing.
-  // lat=0 (equator) is a geographically valid coordinate, but the current code
-  // rejects it with 400. This test documents the existing behavior.
+test('POST /api/route-analysis accepts valid zero coordinates', async () => {
   const res = await request(app)
     .post('/api/route-analysis')
     .send({ peak: 'Null Island', route: 'Shore Walk', lat: 0, lon: 0, date: '2026-06-15' });
+  expect(res.status).not.toBe(400);
+}, 45000);
+
+test('POST /api/route-analysis rejects a GPX waypoint list with fewer than two points', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Mt Rainier', route: 'Imported GPX', lat: 46.85, lon: -121.76, date: '2026-06-15',
+      waypoints: [{ name: 'Only point', lat: 46.85, lon: -121.76 }],
+    });
   expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/between 2 and 8/i);
+});
+
+test('POST /api/route-analysis rejects invalid GPX waypoint coordinates', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Mt Rainier', route: 'Imported GPX', lat: 46.85, lon: -121.76, date: '2026-06-15',
+      waypoints: [
+        { name: 'Start', lat: 46.8, lon: -121.7 },
+        { name: 'Finish', lat: 999, lon: -121.76 },
+      ],
+    });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/valid lat and lon/i);
+});
+
+test('POST /api/route-analysis rejects GPX waypoints far from the selected objective', async () => {
+  const res = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Mt Rainier', route: 'Imported GPX', lat: 46.85, lon: -121.76, date: '2026-06-15',
+      waypoints: [
+        { name: 'Start', lat: 46.8, lon: -121.7 },
+        { name: 'Finish', lat: 34.05, lon: -118.24 },
+      ],
+    });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/too far/i);
 });
 
 test('POST /api/route-analysis rejects non-numeric lon', async () => {

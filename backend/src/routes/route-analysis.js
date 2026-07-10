@@ -13,6 +13,8 @@ const withTimeout = (promise, ms, label) =>
 // Bounds the combined raw per-waypoint report JSON before it's interpolated into the
 // Claude prompt, so a route with several waypoints can't blow up prompt size.
 const MAX_WAYPOINT_REPORTS_LENGTH = 30000;
+const MAX_SUPPLIED_WAYPOINTS = 8;
+const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
 
 const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 100 });
 const waypointCache = createCache({ name: 'waypoints', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 200 });
@@ -60,6 +62,69 @@ const haversineKm = (lat1, lon1, lat2, lon2) => {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const sanitizeSuppliedWaypoints = (rawWaypoints, peakLat, peakLon) => {
+  if (rawWaypoints == null) return null;
+  if (!Array.isArray(rawWaypoints)) {
+    throw new Error('waypoints must be an array');
+  }
+  if (rawWaypoints.length < 2 || rawWaypoints.length > MAX_SUPPLIED_WAYPOINTS) {
+    throw new Error(`waypoints must contain between 2 and ${MAX_SUPPLIED_WAYPOINTS} entries`);
+  }
+
+  return rawWaypoints.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') {
+      throw new Error(`waypoints[${index}] must be an object`);
+    }
+    const lat = Number(raw.lat);
+    const lon = Number(raw.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      throw new Error(`waypoints[${index}] must have valid lat and lon coordinates`);
+    }
+    if (haversineKm(peakLat, peakLon, lat, lon) > MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM) {
+      throw new Error(`waypoints[${index}] is too far from the selected objective`);
+    }
+    const elevation = raw.elev_ft == null ? null : Number(raw.elev_ft);
+    if (elevation !== null && (!Number.isFinite(elevation) || elevation < -2000 || elevation > 30000)) {
+      throw new Error(`waypoints[${index}].elev_ft must be a plausible elevation in feet`);
+    }
+    const distance = raw.distance_miles == null ? null : Number(raw.distance_miles);
+    if (distance !== null && (!Number.isFinite(distance) || distance < 0 || distance > 1000)) {
+      throw new Error(`waypoints[${index}].distance_miles must be between 0 and 1000`);
+    }
+    const progress = raw.progress_percent == null ? null : Number(raw.progress_percent);
+    if (progress !== null && (!Number.isFinite(progress) || progress < 0 || progress > 100)) {
+      throw new Error(`waypoints[${index}].progress_percent must be between 0 and 100`);
+    }
+    return {
+      name: String(raw.name || `Route checkpoint ${index + 1}`).trim().slice(0, 100) || `Route checkpoint ${index + 1}`,
+      lat,
+      lon,
+      ...(elevation !== null ? { elev_ft: Math.round(elevation) } : {}),
+      ...(distance !== null ? { distance_miles: Number(distance.toFixed(2)) } : {}),
+      ...(progress !== null ? { progress_percent: Math.round(progress) } : {}),
+      source: 'gpx',
+    };
+  });
+};
+
+const sanitizeRouteMetadata = (raw) => {
+  if (!raw || typeof raw !== 'object') return null;
+  const finiteOrNull = (value, min, max, precision = 0) => {
+    if (value == null) return null;
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < min || number > max) return null;
+    return Number(number.toFixed(precision));
+  };
+  return {
+    fileName: String(raw.fileName || 'Imported route.gpx').slice(0, 200),
+    pointCount: finiteOrNull(raw.pointCount, 2, 100000),
+    distanceMiles: finiteOrNull(raw.distanceMiles, 0, 1000, 2),
+    elevationGainFt: finiteOrNull(raw.elevationGainFt, 0, 100000),
+    minElevationFt: finiteOrNull(raw.minElevationFt, -2000, 30000),
+    maxElevationFt: finiteOrNull(raw.maxElevationFt, -2000, 30000),
+  };
 };
 
 // Geocode a waypoint name near the peak using Nominatim (cached 24h), return { lat, lon } or null
@@ -124,8 +189,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
   // POST /api/route-analysis
   // Body: { peak, route, lat, lon, date, start }
   app.post('/api/route-analysis', async (req, res) => {
-    const { peak, route, lat, lon, date, start, travel_window_hours, units } = req.body;
-    if (!peak || !route || !lat || !lon || !date) {
+    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata } = req.body;
+    if (!peak || !route || lat == null || lon == null || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
     const safePeak = String(peak).slice(0, 200);
@@ -142,46 +207,55 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       return res.status(400).json({ error: 'start must be HH:MM format (00:00–23:59)' });
     }
 
+    let suppliedWaypoints;
     try {
-      // Step 1: Get waypoints from Claude (cached 24h per peak+route)
-      const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
-      const waypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
-        const waypointText = await withTimeout(askClaude(
-          `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
+      suppliedWaypoints = sanitizeSuppliedWaypoints(waypoints, safeLat, safeLon);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    const routeMetadata = suppliedWaypoints ? sanitizeRouteMetadata(route_metadata) : null;
+
+    try {
+      // Step 1: Use authoritative GPX checkpoints when provided. Otherwise retain
+      // the existing generated-waypoint workflow for named routes.
+      let routeSource = 'generated';
+      let waypointsCopy;
+      if (suppliedWaypoints) {
+        routeSource = 'gpx';
+        waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
+      } else {
+        const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
+        const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
+          const waypointText = await withTimeout(askClaude(
+            `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-          { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
-        ), 20000, 'Waypoint lookup');
-        return parseJsonArrayFromClaude(waypointText);
-      });
-      // Clone so summit pinning doesn't mutate cached array
-      const waypointsCopy = waypoints.map((wp) => ({ ...wp }));
+            { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
+          ), 20000, 'Waypoint lookup');
+          return parseJsonArrayFromClaude(waypointText);
+        });
+        // Clone so summit pinning doesn't mutate the cached array.
+        waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
+        if (waypointsCopy.length > 0) {
+          const summit = waypointsCopy[waypointsCopy.length - 1];
+          summit.lat = safeLat;
+          summit.lon = safeLon;
+        }
 
-      // Pin the last waypoint (summit) to the user's actual peak coordinates
-      // so its safety score matches the main report.
-      if (waypointsCopy.length > 0) {
-        const summit = waypointsCopy[waypointsCopy.length - 1];
-        summit.lat = Number(lat);
-        summit.lon = Number(lon);
+        await Promise.all(
+          waypointsCopy.slice(0, -1).map(async (wp) => {
+            const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
+            if (geo) {
+              wp.lat = geo.lat;
+              wp.lon = geo.lon;
+              wp.geocodingVerified = true;
+            } else {
+              wp.geocodingVerified = false;
+            }
+          })
+        );
       }
-
-      // Step 1b: Geocode non-summit waypoints via Nominatim to correct
-      // coordinates that Claude may have hallucinated.
-      const peakLat = Number(lat);
-      const peakLon = Number(lon);
-      await Promise.all(
-        waypointsCopy.slice(0, -1).map(async (wp) => {
-          const geo = await geocodeWaypoint(wp.name, peakLat, peakLon, fetchWithTimeout, fetchHeaders);
-          if (geo) {
-            wp.lat = geo.lat;
-            wp.lon = geo.lon;
-            wp.geocodingVerified = true;
-          } else {
-            wp.geocodingVerified = false;
-          }
-        })
-      );
 
       // Step 2: Run safety checks for each waypoint in parallel
       const safetySettled = await withTimeout(
@@ -203,12 +277,20 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         const settled = safetySettled[i];
         const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
         const p = dataAvailable ? settled.value.payload : {};
+        const resolvedElevationFt = Number.isFinite(Number(wp.elev_ft))
+          ? Number(wp.elev_ft)
+          : Number.isFinite(Number(p.weather?.elevation))
+            ? Math.round(Number(p.weather.elevation))
+            : 0;
+        wp.elev_ft = resolvedElevationFt;
         const avyRelevant = p.avalanche?.relevant !== false;
         const snowDepthIn = p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null;
         const hasSnow = snowDepthIn != null && snowDepthIn > 0;
         return {
           name: wp.name,
-          elev_ft: wp.elev_ft,
+          elev_ft: resolvedElevationFt,
+          ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
+          ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
           dataAvailable,
           score: p.safety?.score ?? null,
           weather: pick(p.weather, ['temp', 'feelsLike', 'windSpeed', 'windGust', 'description', 'precipChance']),
@@ -224,7 +306,14 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const rawWaypointReports = waypointsCopy.map((wp, i) => {
         const settled = safetySettled[i];
         const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
-        return { name: wp.name, elev_ft: wp.elev_ft, dataAvailable, report: dataAvailable ? settled.value.payload : null };
+        return {
+          name: wp.name,
+          elev_ft: wp.elev_ft,
+          ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
+          ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
+          dataAvailable,
+          report: dataAvailable ? settled.value.payload : null,
+        };
       });
       const failedWaypointNames = rawWaypointReports.filter((r) => !r.dataAvailable).map((r) => r.name).filter(Boolean);
       const partialData = failedWaypointNames.length > 0;
@@ -235,6 +324,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 
 You are analyzing backcountry conditions for a trip on ${safePeak}.
 Route: ${safeRoute}
+Route source: ${routeSource === 'gpx' ? 'user-supplied GPX track with authoritative checkpoint coordinates' : 'generated named-route waypoints'}
+${routeMetadata ? `Recorded GPX metadata: ${JSON.stringify(routeMetadata)}` : ''}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
 ${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
 Raw safety report per waypoint, trailhead to summit (JSON):
@@ -251,7 +342,14 @@ Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it he
         { maxTokens: 4096, model: 'claude-sonnet-5' }
       ), 60000, 'Route synthesis');
 
-      return res.json({ waypoints: waypointsCopy, summaries, analysis, partialData });
+      return res.json({
+        waypoints: waypointsCopy,
+        summaries,
+        analysis,
+        partialData,
+        routeSource,
+        ...(routeMetadata ? { routeMetadata } : {}),
+      });
     } catch (err) {
       logger.error({ err }, 'route-analysis error');
       return res.status(500).json({ error: 'Failed to analyze route: ' + err.message });

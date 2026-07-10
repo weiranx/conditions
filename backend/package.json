@@ -7,7 +7,7 @@
     "dev": "node index.js",
     "start": "node index.js",
     "test": "jest --runInBand",
-    "test:unit": "jest --runInBand test/unit.helpers.test.js test/unit.pleasantness-score.test.js",
+    "test:unit": "jest --runInBand test/unit.helpers.test.js test/unit.pleasantness-score.test.js test/unit.route-analysis-gpx.test.js",
     "test:integration": "jest --runInBand test/integration.api.test.js"
   },
   "keywords": [],

@@ -1,7 +1,9 @@
-import { ExternalLink } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { ExternalLink, FileCheck2, Upload } from 'lucide-react';
 import { RouteConditionsProfile } from './cards/RouteConditionsProfile';
 import { renderSimpleMarkdown } from '../../app/markdown';
-import type { RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
+import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
+import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 
 export interface RouteAnalysisSectionProps {
   objectiveName: string;
@@ -16,7 +18,7 @@ export interface RouteAnalysisSectionProps {
   routeLoading: boolean;
   routeError: string | null;
   fetchRouteSuggestions: (name: string, lat: number, lng: number) => void;
-  fetchRouteAnalysis: (objectiveName: string, routeName: string, lat: number, lng: number, date: string, startTime: string, hours: number) => void;
+  fetchRouteAnalysis: (objectiveName: string, routeName: string, lat: number, lng: number, date: string, startTime: string, hours: number, options?: RouteAnalysisOptions) => void;
   customRouteName: string;
   setCustomRouteName: (name: string) => void;
   setRouteSuggestions: (routes: RouteOption[] | null) => void;
@@ -36,16 +38,114 @@ export function RouteAnalysisSection({
   customRouteName, setCustomRouteName, setRouteSuggestions, setRouteError,
   getScoreColor, formatTempDisplay, formatWindDisplay, formatElevationDisplay, formatDistanceDisplay,
 }: RouteAnalysisSectionProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(null);
+  const [gpxParsing, setGpxParsing] = useState(false);
+
+  useEffect(() => {
+    setGpxRoute(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [objectiveName, positionLat, positionLng]);
+
+  const handleGpxFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setGpxParsing(true);
+    setRouteError(null);
+    try {
+      const parsed = await parseGpxFile(file);
+      setGpxRoute(parsed);
+      setRouteSuggestions(null);
+    } catch (error) {
+      setGpxRoute(null);
+      setRouteError(error instanceof Error ? error.message : 'Could not read this GPX file.');
+    } finally {
+      setGpxParsing(false);
+    }
+  };
+
+  const analyzeGpxRoute = () => {
+    if (!gpxRoute) return;
+    fetchRouteAnalysis(
+      objectiveName,
+      gpxRoute.name,
+      positionLat,
+      positionLng,
+      forecastDate,
+      alpineStartTime,
+      travelWindowHours,
+      {
+        waypoints: gpxRoute.checkpoints,
+        routeMetadata: {
+          fileName: gpxRoute.fileName,
+          pointCount: gpxRoute.pointCount,
+          distanceMiles: gpxRoute.distanceMiles,
+          elevationGainFt: gpxRoute.elevationGainFt,
+          minElevationFt: gpxRoute.minElevationFt,
+          maxElevationFt: gpxRoute.maxElevationFt,
+        },
+      },
+    );
+  };
+
+  const gpxInput = (
+    <input
+      ref={fileInputRef}
+      className="route-gpx-input"
+      type="file"
+      accept=".gpx,application/gpx+xml"
+      onChange={handleGpxFile}
+      aria-label="Import a GPX route"
+    />
+  );
+
   return (
     <div className="route-analysis-section" style={{ order: order - 1 }}>
-      {!routeSuggestions && !routeAnalysis && !routeLoading && (
-        <button
-          type="button"
-          className="route-analyze-btn"
-          onClick={() => fetchRouteSuggestions(objectiveName, positionLat, positionLng)}
-        >
-          Analyze Full Route
-        </button>
+      {!gpxRoute && !routeSuggestions && !routeAnalysis && !routeLoading && (
+        <div className="route-analysis-actions">
+          {gpxInput}
+          <button
+            type="button"
+            className="route-analyze-btn"
+            onClick={() => fetchRouteSuggestions(objectiveName, positionLat, positionLng)}
+          >
+            Analyze a Known Route
+          </button>
+          <button
+            type="button"
+            className="route-analyze-btn route-gpx-upload-btn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={gpxParsing}
+          >
+            <Upload size={16} /> {gpxParsing ? 'Reading GPX…' : 'Import GPX Route'}
+          </button>
+        </div>
+      )}
+
+      {gpxRoute && !routeAnalysis && !routeLoading && (
+        <div className="route-gpx-card">
+          <div className="route-gpx-title"><FileCheck2 size={18} /> <span>{gpxRoute.name}</span></div>
+          <div className="route-gpx-meta">
+            <span>{formatDistanceDisplay(gpxRoute.distanceMiles)}</span>
+            {gpxRoute.elevationGainFt !== null && <span>{formatElevationDisplay(gpxRoute.elevationGainFt)} gain</span>}
+            <span>{gpxRoute.pointCount.toLocaleString()} track points</span>
+            <span>{gpxRoute.checkpoints.length} safety checkpoints</span>
+          </div>
+          <p>Checkpoints follow the uploaded track at even distance intervals. GPX coordinates bypass AI waypoint estimation.</p>
+          <div className="route-gpx-card-actions">
+            <button type="button" className="route-gpx-analyze" onClick={analyzeGpxRoute}>Analyze This Track</button>
+            <button
+              type="button"
+              className="route-picker-cancel"
+              onClick={() => {
+                setGpxRoute(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
       )}
 
       {routeLoading && (
@@ -105,6 +205,10 @@ export function RouteAnalysisSection({
               Go
             </button>
           </div>
+          <button type="button" className="route-picker-gpx" onClick={() => fileInputRef.current?.click()}>
+            <Upload size={14} /> Import GPX instead
+          </button>
+          {gpxInput}
           <button
             type="button"
             className="route-picker-cancel"
@@ -117,8 +221,23 @@ export function RouteAnalysisSection({
 
       {routeAnalysis && (
         <div className="route-analysis-card">
-          <div className="route-analysis-header">Route Analysis <span className="route-ai-badge">AI Advisory</span></div>
-          <p className="route-analysis-disclaimer">Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.</p>
+          <div className="route-analysis-header">
+            Route Analysis <span className="route-ai-badge">AI Advisory</span>
+            {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
+          </div>
+          <p className="route-analysis-disclaimer">
+            {routeAnalysis.routeSource === 'gpx'
+              ? 'Checkpoint coordinates come from your GPX track; conditions and recommendations remain model-derived. Verify the track and official sources before committing.'
+              : 'Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.'}
+          </p>
+          {routeAnalysis.routeMetadata && (
+            <div className="route-gpx-result-meta">
+              <strong>{routeAnalysis.routeMetadata.fileName}</strong>
+              {routeAnalysis.routeMetadata.distanceMiles !== null && <span>{formatDistanceDisplay(routeAnalysis.routeMetadata.distanceMiles)}</span>}
+              {routeAnalysis.routeMetadata.elevationGainFt !== null && <span>{formatElevationDisplay(routeAnalysis.routeMetadata.elevationGainFt)} gain</span>}
+              {routeAnalysis.routeMetadata.pointCount != null && <span>{routeAnalysis.routeMetadata.pointCount.toLocaleString()} points</span>}
+            </div>
+          )}
           {routeAnalysis.partialData && (
             <p className="route-analysis-disclaimer route-analysis-partial">Some waypoints had no data available and are excluded from scoring below — the briefing notes which ones.</p>
           )}
@@ -136,6 +255,7 @@ export function RouteAnalysisSection({
               return (
                 <div key={wp.name} className={`route-waypoint-row${wp.dataAvailable ? '' : ' route-wp-no-data'}`}>
                   <span className="route-wp-name">{wp.name}</span>
+                  {wp.distance_miles != null && <span className="route-wp-distance">mi {wp.distance_miles.toFixed(1)}</span>}
                   <span className="route-wp-elev">{formatElevationDisplay(wp.elev_ft)}</span>
                   {!wp.dataAvailable && <span className="route-wp-no-data-label">No data</span>}
                   {wp.weather.temp != null && (
