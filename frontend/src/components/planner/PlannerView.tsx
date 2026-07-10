@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import L from 'leaflet';
 import {
   Eye,
@@ -596,19 +596,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
   // requires explicitly editing the plan (see onEditPlan), so a
   // displayed report can't be silently mutated out from under the user.
   const reportLocked = Boolean(safetyData);
-
-  const wasReportVisibleRef = useRef(false);
-  useEffect(() => {
-    const isReportVisible = Boolean(hasObjective && safetyData && decision);
-    let frame = 0;
-    if (isReportVisible && !wasReportVisibleRef.current) {
-      frame = window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
-    }
-    wasReportVisibleRef.current = isReportVisible;
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [hasObjective, safetyData, decision]);
 
   return (
     <div key="view-planner" className={`${appShellClassName} ssr-shell`} aria-busy={isViewPending}>

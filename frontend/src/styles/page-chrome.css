@@ -51,7 +51,9 @@
   color: var(--ui-text-3);
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  /* Keep every item at the same weight so changing the active page does not
+     resize the right-aligned flex group and shift the navigation. */
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -63,7 +65,6 @@
 .ssr-product-links button.is-active {
   background: var(--ui-brand-soft);
   color: var(--ui-brand-strong);
-  font-weight: 600;
 }
 
 .ssr-product-nav.is-overlay {
