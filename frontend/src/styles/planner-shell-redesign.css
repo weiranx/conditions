@@ -1,10 +1,4 @@
-/* =========================================================
-   Planner Shell Re-skin — Conditions Dashboard chrome
-   Imported from claude.ai/design · Conditions Dashboard.html
-   CSS-only overrides keyed to existing planner markup, scoped under
-   .ssr-shell (applied only when the Redesign report layout is active).
-   No markup or wiring changes. Light/dark via html[data-theme].
-   ========================================================= */
+/* Planner workspace chrome. */
 
 
 /* ============ HEADER → topbar ============ */
@@ -16,18 +10,18 @@ body:has(.page-shell-planner) {
 .ssr-shell .header-section {
   background: var(--d-surface);
   border: 1px solid var(--d-line);
-  border-radius: var(--d-r-lg);
-  box-shadow: var(--d-shadow);
+  border-radius: 6px;
+  box-shadow: var(--ui-shadow-sm);
   padding: 16px 20px;
 }
 .ssr-shell .brand-mark {
   background: var(--d-pine-deep);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: none;
   border: none;
 }
 .ssr-shell .brand-mark-icon { filter: brightness(0) invert(1); }
-.ssr-shell .brand-copy h1 { font-weight: 800; letter-spacing: -.02em; }
+.ssr-shell .brand-copy h1 { font-weight: 700; letter-spacing: 0; }
 .ssr-shell .brand-subtitle { color: var(--d-ink-3); font-weight: 500; }
 
 /* search → pill */
@@ -35,7 +29,7 @@ body:has(.page-shell-planner) {
   background: var(--d-surface);
   border: 1px solid var(--d-line-2);
   border-radius: 6px;
-  box-shadow: var(--d-shadow-sm);
+  box-shadow: none;
   padding: 6px 8px 6px 16px;
 }
 .ssr-shell .search-bar:focus-within {
@@ -49,7 +43,7 @@ body:has(.page-shell-planner) {
   border-radius: 6px;
   border: 1px solid var(--d-line-2);
   background: var(--d-surface);
-  box-shadow: var(--d-shadow-sm);
+  box-shadow: none;
   color: var(--d-ink);
 }
 .ssr-shell .header-nav .secondary-btn:hover { background: var(--d-surface-2); border-color: var(--d-ink-4); }
@@ -59,7 +53,7 @@ body:has(.page-shell-planner) {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--d-line);
-  box-shadow: 0 16px 38px -28px oklch(28% 0.04 155 / .42);
+  box-shadow: var(--ui-shadow-sm);
 }
 @media (min-width: 900px) {
   .ssr-shell .map-section {
@@ -74,7 +68,7 @@ body:has(.page-shell-planner) {
   backdrop-filter: blur(8px);
   border: 1px solid var(--d-line-2);
   color: var(--d-ink-2);
-  box-shadow: 0 4px 14px -6px oklch(40% 0.03 150 / .35);
+  box-shadow: none;
 }
 .ssr-shell .map-overlay-btn:hover { background: var(--d-surface); color: var(--d-ink); }
 .ssr-shell .map-overlay-btn.is-active {
@@ -89,7 +83,7 @@ body:has(.page-shell-planner) {
   backdrop-filter: blur(8px);
   border: 1px solid var(--d-line-2);
   border-radius: 6px;
-  box-shadow: 0 4px 14px -6px oklch(40% 0.03 150 / .35);
+  box-shadow: none;
   color: var(--d-ink);
 }
 .ssr-shell .map-overlay-coords { font-family: var(--d-mono); color: var(--d-ink-2); }
@@ -101,8 +95,8 @@ body:has(.page-shell-planner) {
 .ssr-shell .map-actions {
   background: var(--d-surface);
   border: 1px solid var(--d-line);
-  border-radius: var(--d-r-lg);
-  box-shadow: 0 12px 28px -24px oklch(28% 0.04 155 / .35);
+  border-radius: 6px;
+  box-shadow: var(--ui-shadow-sm);
   padding: 14px 18px;
 }
 .ssr-shell .map-actions-flat .date-control {
@@ -114,7 +108,7 @@ body:has(.page-shell-planner) {
 .ssr-shell .map-actions-flat .date-control > span {
   font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--d-ink-3);
 }
@@ -172,7 +166,7 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert { border-color: var(--d-
   width: 30px;
   height: 30px;
   flex: none;
-  border-radius: 9px;
+  border-radius: 6px;
   background: oklch(90% 0.07 62);
   color: var(--d-warn-deep);
   display: grid;
@@ -184,7 +178,7 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert::before { background: va
 .ssr-shell .top-freshness-alert strong {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .12em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--d-warn-deep);
 }

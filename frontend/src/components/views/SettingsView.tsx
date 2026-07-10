@@ -6,8 +6,6 @@ import {
   Gauge,
   Check,
   X,
-  House,
-  Route,
   FlaskConical,
 } from 'lucide-react';
 import type {
@@ -23,6 +21,7 @@ import {
   MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
 import '../../styles/settings-redesign.css';
+import { ProductNav } from './ProductNav';
 
 export interface SettingsViewProps {
   appShellClassName: string;
@@ -227,6 +226,7 @@ export function SettingsView({
   return (
     <div key="view-settings" className={appShellClassName} aria-busy={isViewPending}>
       <div className="ssr-settings">
+        <ProductNav active="settings" navigateToView={navigateToView} openPlannerView={openPlannerView} />
         <div className="ssr-set-head">
           <div className="ssr-set-kicker">Planning preferences</div>
           <h1>Settings</h1>
@@ -240,9 +240,6 @@ export function SettingsView({
             {railItem('appearance', <Eye />, 'Appearance')}
             {railItem('units', <Ruler />, 'Units & time')}
             {railItem('thresholds', <Gauge />, 'Thresholds')}
-            <div className="ssr-set-rail-sep" />
-            <button type="button" onClick={() => navigateToView('home')}><House /> Homepage</button>
-            <button type="button" onClick={openPlannerView}><Route /> Planner</button>
             <div className="ssr-set-rail-foot">Saved locally in your browser.</div>
           </nav>
 

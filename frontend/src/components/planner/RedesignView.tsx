@@ -148,8 +148,98 @@ function ElevationCrossPlot({
   );
 }
 
+interface ReportJumpSection {
+  id: string;
+  label: string;
+}
+
+function ReportJumpNav({
+  sections,
+  onJump,
+}: {
+  sections: ReportJumpSection[];
+  onJump: (id: string, moveFocus: boolean) => void;
+}) {
+  const [activeId, setActiveId] = React.useState(sections[0]?.id || '');
+  const sectionsRef = React.useRef(sections);
+  const buttonRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const sectionKey = sections.map((section) => section.id).join('|');
+
+  React.useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
+
+  React.useEffect(() => {
+    let frame = 0;
+    const updateActiveSection = () => {
+      frame = 0;
+      const navOffset = 48;
+      const lastSection = sectionsRef.current.at(-1);
+      const isAtPageEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      if (isAtPageEnd && lastSection) {
+        setActiveId((current) => current === lastSection.id ? current : lastSection.id);
+        return;
+      }
+      let nextId = sectionsRef.current[0]?.id || '';
+      let largestVisibleArea = 0;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      sectionsRef.current.forEach((section) => {
+        const element = document.getElementById(section.id);
+        if (!element) return;
+        const rect = element.getBoundingClientRect();
+        const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, navOffset));
+        const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+        const visibleArea = visibleHeight * visibleWidth;
+        const distance = Math.abs(rect.top - navOffset);
+        if (visibleArea > largestVisibleArea || (visibleArea === largestVisibleArea && distance < nearestDistance)) {
+          largestVisibleArea = visibleArea;
+          nearestDistance = distance;
+          nextId = section.id;
+        }
+      });
+      setActiveId((current) => current === nextId ? current : nextId);
+    };
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateActiveSection);
+    };
+
+    updateActiveSection();
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+    };
+  }, [sectionKey]);
+
+  React.useEffect(() => {
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    buttonRefs.current.get(activeId)?.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+  }, [activeId]);
+
+  return (
+    <nav className="ssr-jump-nav" aria-label="Jump to report section">
+      {sections.map((section) => (
+        <button
+          key={section.id}
+          ref={(node) => {
+            if (node) buttonRefs.current.set(section.id, node);
+            else buttonRefs.current.delete(section.id);
+          }}
+          type="button"
+          className={`ssr-jump-chip ${activeId === section.id ? 'active' : ''}`}
+          aria-current={activeId === section.id ? 'location' : undefined}
+          onClick={(event) => onJump(section.id, event.detail === 0)}
+        >
+          {section.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function RedesignViewComponent(props: PlannerViewProps) {
-  const [jumpMenuOpen, setJumpMenuOpen] = React.useState(false);
   const {
     safetyData,
     decision,
@@ -180,6 +270,10 @@ function RedesignViewComponent(props: PlannerViewProps) {
     snotelDepthDisplay,
     snotelSweDisplay,
     snotelDistanceDisplay,
+    nohrscDepthDisplay,
+    nohrscSweDisplay,
+    cdecDepthDisplay,
+    cdecSweDisplay,
     snowpackBestDepthDisplay,
     snowpackBestDepthSource,
     snowpackDepthConflict,
@@ -342,6 +436,8 @@ function RedesignViewComponent(props: PlannerViewProps) {
     return 'stale';
   };
   const freshCount = sourceFreshnessRows.filter((r) => ['fresh', 'ok'].includes(sourceState(r))).length;
+  const agingCount = sourceFreshnessRows.filter((r) => sourceState(r) === 'aging').length;
+  const sourceIssueCount = Math.max(0, sourceFreshnessRows.length - freshCount - agingCount);
 
   const bands = elevationForecastBands || [];
   // 44px floor keeps hour columns tappable/readable on phones; the strip scrolls
@@ -453,9 +549,16 @@ function RedesignViewComponent(props: PlannerViewProps) {
     { id: 'planner-section-score', label: 'Score', present: Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
     { id: 'planner-section-gear', label: 'Gear', present: Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
   ].filter((s) => s.present);
-  const jumpToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setJumpMenuOpen(false);
+  const jumpToSection = (id: string, moveFocus: boolean) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    if (moveFocus) {
+      const focusTarget = target.querySelector<HTMLElement>('h2') || target;
+      if (!focusTarget.hasAttribute('tabindex')) focusTarget.setAttribute('tabindex', '-1');
+      focusTarget.focus({ preventScroll: true });
+    }
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    target.scrollIntoView({ behavior, block: 'start' });
   };
 
   return (
@@ -497,13 +600,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
       </header>
 
       {jumpSections.length > 1 && (
-        <nav className="ssr-jump-nav" aria-label="Report sections">
-          {jumpSections.map((s) => (
-            <button key={s.id} type="button" className="ssr-jump-chip" onClick={() => jumpToSection(s.id)}>
-              {s.label}
-            </button>
-          ))}
-        </nav>
+        <ReportJumpNav sections={jumpSections} onJump={jumpToSection} />
       )}
 
       <main className="ssr-main">
@@ -964,7 +1061,22 @@ function RedesignViewComponent(props: PlannerViewProps) {
                 )}
               </>
             ) : avalancheRelevant && avalancheUnknown ? (
-              <div className="ssr-empty">{avalancheCoverageExplanation}</div>
+              <div className="ssr-avy-unrated">
+                <div className="ssr-avy-unrated-head">
+                  <span className="ssr-avy-unrated-icon"><ShieldAlert size={20} /></span>
+                  <div>
+                    <span className="ssr-avy-unrated-k">Forecast status</span>
+                    <strong>Unrated terrain</strong>
+                  </div>
+                  <span className="ssr-pill caution">Unknown</span>
+                </div>
+                <p>{avalancheCoverageExplanation}</p>
+                <div className="ssr-avy-actions">
+                  <span><CheckCircle2 size={13} /> Favor low-angle terrain</span>
+                  <span><CheckCircle2 size={13} /> Avoid terrain traps</span>
+                  <span><CheckCircle2 size={13} /> Verify conditions in the field</span>
+                </div>
+              </div>
             ) : (
               <div className="ssr-empty">{avalancheNotApplicableReason || 'No avalanche forecast applies to this objective.'}</div>
             )}
@@ -986,53 +1098,65 @@ function RedesignViewComponent(props: PlannerViewProps) {
               ) : null}
             </div>
             <div className="ssr-card-b">
-              <div className="ssr-snow-hero">
-                <span className="ssr-snow-depth-label">Depth</span>
-                <span className={`ssr-snow-depth ${snowpackDepthConflict ? 'ssr-snow-depth-range' : ''}`}>
-                  {snowpackDepthConflict && snowpackDepthRangeDisplay ? snowpackDepthRangeDisplay : snowpackBestDepthDisplay}
-                </span>
-                {snowpackDepthConflict ? (
-                  <span className="ssr-snow-delta warn">Sources disagree</span>
-                ) : snowpackStatusLabel ? (
-                  <span className={`ssr-snow-delta ${snowpackPillClass?.includes('warn') ? 'warn' : ''}`}>
-                    {snowpackStatusLabel}
+              <div className={`ssr-snow-summary ${snowpackDepthConflict ? 'conflict' : ''}`}>
+                <div>
+                  <span className="ssr-snow-depth-label">{snowpackDepthConflict ? 'Observed depth range' : 'Best available depth'}</span>
+                  <span className={`ssr-snow-depth ${snowpackDepthConflict ? 'ssr-snow-depth-range' : ''}`}>
+                    {snowpackDepthConflict && snowpackDepthRangeDisplay ? snowpackDepthRangeDisplay : snowpackBestDepthDisplay}
                   </span>
-                ) : null}
+                </div>
+                <div className="ssr-snow-confidence">
+                  <span className={`ssr-snow-delta ${snowpackDepthConflict || snowpackPillClass?.includes('warn') ? 'warn' : ''}`}>
+                    {snowpackDepthConflict ? 'Low confidence' : (snowpackStatusLabel || 'Best estimate')}
+                  </span>
+                  <small>{snowpackDepthConflict ? 'Compare sources below' : `Depth via ${snowpackBestDepthSource || 'best source'}`}</small>
+                </div>
               </div>
-              <div className="ssr-snow-station">
+              <p className="ssr-snow-station">
                 {snowpackDepthConflict && snowpackDepthConflictCaption
                   ? snowpackDepthConflictCaption
-                  : 'Best available depth across sources'}
-                {snowpackHistoricalComparisonLine ? ` · ${snowpackHistoricalComparisonLine}` : ''}
+                  : 'Best available observation across reporting sources.'}
+              </p>
+
+              <div className="ssr-snow-sources" aria-label="Snowpack source comparison">
+                {safetyData.snowpack.nohrsc && (
+                  <div className={`ssr-snow-source ${snowpackBestDepthSource?.includes('NOHRSC') ? 'best' : ''}`}>
+                    <div className="ssr-snow-source-h"><strong>NOHRSC</strong><span>Terrain grid</span></div>
+                    <div className="ssr-snow-source-metrics">
+                      <span><small>Depth</small>{nohrscDepthDisplay}</span>
+                      <span><small>SWE</small>{nohrscSweDisplay}</span>
+                    </div>
+                  </div>
+                )}
+                {safetyData.snowpack.snotel && (
+                  <div className={`ssr-snow-source ${snowpackBestDepthSource?.includes('SNOTEL') ? 'best' : ''}`}>
+                    <div className="ssr-snow-source-h">
+                      <strong>SNOTEL</strong>
+                      <span>{[safetyData.snowpack.snotel.stationName, snotelDistanceDisplay !== 'N/A' ? snotelDistanceDisplay : ''].filter(Boolean).join(' · ')}</span>
+                    </div>
+                    <div className="ssr-snow-source-metrics">
+                      <span><small>Depth</small>{snotelDepthDisplay}</span>
+                      <span><small>SWE</small>{snotelSweDisplay}</span>
+                    </div>
+                  </div>
+                )}
+                {safetyData.snowpack.cdec && (
+                  <div className={`ssr-snow-source ${snowpackBestDepthSource?.includes('CDEC') ? 'best' : ''}`}>
+                    <div className="ssr-snow-source-h"><strong>CDEC</strong><span>Station observation</span></div>
+                    <div className="ssr-snow-source-metrics">
+                      <span><small>Depth</small>{cdecDepthDisplay}</span>
+                      <span><small>SWE</small>{cdecSweDisplay}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              {/* Snow depth and snow-water-equivalent (SWE) are different quantities that can
-                  look like the same number at a glance — every row below is explicitly
-                  prefixed "Depth"/"SWE" rather than relying on a single shared "in" unit. */}
-              <div className="ssr-snow-kv">
-                <span className="ssr-k">SWE{snowpackBestSweSource ? ` · ${snowpackBestSweSource}` : ''}</span>
-                <span className="ssr-v">{snowpackBestSweDisplay}</span>
+
+              <div className="ssr-snow-foot">
+                <span><small>Best SWE{snowpackBestSweSource ? ` · ${snowpackBestSweSource}` : ''}</small>{snowpackBestSweDisplay}</span>
+                {safetyData.snowpack.snotel?.obsTempF != null && <span><small>Station temp</small>{formatTempDisplay(safetyData.snowpack.snotel.obsTempF)}</span>}
+                {safetyData.snowpack.snotel?.elevationFt != null && <span><small>Station elev.</small>{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>}
               </div>
-              {safetyData.snowpack.snotel && (
-                <div className="ssr-snow-kv">
-                  <span className="ssr-k">
-                    SNOTEL{safetyData.snowpack.snotel.stationName ? ` · ${safetyData.snowpack.snotel.stationName}` : ''}
-                    {snotelDistanceDisplay && snotelDistanceDisplay !== 'N/A' ? ` · ${snotelDistanceDisplay}` : ''}
-                  </span>
-                  <span className="ssr-v">Depth {snotelDepthDisplay} · SWE {snotelSweDisplay}</span>
-                </div>
-              )}
-              {safetyData.snowpack.snotel?.obsTempF != null && (
-                <div className="ssr-snow-kv">
-                  <span className="ssr-k">Observed temp</span>
-                  <span className="ssr-v">{formatTempDisplay(safetyData.snowpack.snotel.obsTempF)}</span>
-                </div>
-              )}
-              {safetyData.snowpack.snotel?.elevationFt != null && (
-                <div className="ssr-snow-kv">
-                  <span className="ssr-k">Station elevation</span>
-                  <span className="ssr-v">{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>
-                </div>
-              )}
+              {snowpackHistoricalComparisonLine && <p className="ssr-snow-history">{snowpackHistoricalComparisonLine}</p>}
               <div style={{ marginTop: '14px' }}>
                 {snowVisionAnalysis ? (
                   <div className="ssr-dash-ai-text">
@@ -1387,15 +1511,31 @@ function RedesignViewComponent(props: PlannerViewProps) {
               <span className="ssr-h-meta">{freshCount}/{sourceFreshnessRows.length} fresh</span>
             </div>
             <div className="ssr-card-b">
-              <div className="ssr-src-list">
-                {sourceFreshnessRows.map((s, i) => (
-                  <div className="ssr-src-item" key={i}>
-                    <span className={`ssr-src-dot ${sourceState(s)}`} />
-                    <span className="ssr-src-name">{s.label}</span>
-                    <span className={`ssr-src-age ${sourceState(s)}`}>{s.issued ? formatAgeFromNow(s.issued) : 'missing'}</span>
-                    <span className="ssr-src-link">{s.displayValue || ''}</span>
+              <div className="ssr-src-health">
+                <div className="ssr-src-health-copy">
+                  <div>
+                    <span className="ssr-src-health-k">Data readiness</span>
+                    <strong>{sourceIssueCount > 0 ? 'Verify before committing' : agingCount > 0 ? 'Mostly current' : 'All sources current'}</strong>
                   </div>
-                ))}
+                  <span>{freshCount} fresh · {agingCount} aging · {sourceIssueCount} unavailable</span>
+                </div>
+                <div className="ssr-src-meter" aria-label={`${freshCount} fresh, ${agingCount} aging, ${sourceIssueCount} unavailable sources`}>
+                  {sourceFreshnessRows.map((s, i) => <i className={sourceState(s)} key={`meter-${i}`} />)}
+                </div>
+              </div>
+              <div className="ssr-src-list">
+                {sourceFreshnessRows.map((s, i) => {
+                  const state = sourceState(s);
+                  const stateLabel = ['fresh', 'ok'].includes(state) ? 'Fresh' : state === 'aging' ? 'Aging' : state === 'stale' ? 'Stale' : 'Unavailable';
+                  return (
+                    <div className="ssr-src-item" key={i}>
+                      <span className={`ssr-src-dot ${state}`} />
+                      <span className="ssr-src-name">{s.label}</span>
+                      <span className={`ssr-src-status ${state}`}>{stateLabel}</span>
+                      <span className={`ssr-src-age ${state}`}>{s.issued ? formatAgeFromNow(s.issued) : (s.displayValue || 'No timestamp')}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </section>
@@ -1593,30 +1733,6 @@ function RedesignViewComponent(props: PlannerViewProps) {
         })()}
       </div>
 
-      {/* Floating section menu for narrow screens (sticky is unavailable inside the
-          page-transition shell; fixed positioning is unaffected). */}
-      {jumpSections.length > 1 && (
-        <div className="ssr-jump-fab-wrap">
-          {jumpMenuOpen && (
-            <div className="ssr-jump-pop" role="menu" aria-label="Jump to section">
-              {jumpSections.map((s) => (
-                <button key={s.id} role="menuitem" type="button" onClick={() => jumpToSection(s.id)}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            type="button"
-            className="ssr-jump-fab"
-            aria-expanded={jumpMenuOpen}
-            aria-haspopup="menu"
-            onClick={() => setJumpMenuOpen((open) => !open)}
-          >
-            <Route size={15} /> Sections
-          </button>
-        </div>
-      )}
     </div>
   );
 }

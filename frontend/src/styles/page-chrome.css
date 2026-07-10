@@ -1,0 +1,75 @@
+.ssr-product-nav {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.ssr-product-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ssr-product-mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 6px;
+  background: var(--ui-brand-strong);
+  color: var(--ui-on-strong);
+}
+
+.ssr-product-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ssr-product-links button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-text-3);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ssr-product-links button:hover {
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+}
+
+.ssr-product-links button.is-active {
+  background: var(--ui-brand-soft);
+  color: var(--ui-brand-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .ssr-product-nav { min-height: 56px; gap: 12px; }
+  .ssr-product-brand > span:last-child { display: none; }
+  .ssr-product-links { flex: 1; justify-content: flex-end; }
+  .ssr-product-links button { width: 36px; padding: 0; justify-content: center; }
+  .ssr-product-links button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}

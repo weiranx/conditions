@@ -1,124 +1,114 @@
-/* =========================================================
-   Shared design tokens for the "redesign" (--ssr-*) and
-   dashboard (--d-*) surfaces.
-   Single source of truth — previously these custom properties
-   were redeclared per-view (home/planner/settings/trip, and
-   separately shell/dashboard), which let values drift out of
-   sync between surfaces. Declared globally on :root so every
-   `.ssr-*`/`.ssr-dash`/`.ssr-shell` scope inherits the same
-   values; per-view files keep only their non-token rules.
-   ========================================================= */
+/* Canonical application theme. Legacy --ssr-* and --d-* names remain as
+   aliases so every view consumes one palette without a risky class rewrite. */
 
 :root {
-  /* ---- --ssr-*: home / planner / settings / trip ---- */
-  --ssr-bg:          oklch(98.2% 0.006 155);
-  --ssr-surface:     oklch(100% 0 0);
-  --ssr-surface-2:   oklch(96.8% 0.008 155);
-  --ssr-surface-3:   oklch(93.2% 0.012 155);
-  --ssr-line:        oklch(89.5% 0.010 155);
-  --ssr-line-strong: oklch(80% 0.015 155);
+  /* Canonical neutral and semantic palette. */
+  --ui-bg:             oklch(97.6% 0.004 155);
+  --ui-surface:        oklch(99.8% 0.002 155);
+  --ui-surface-subtle: oklch(96.2% 0.005 155);
+  --ui-surface-muted:  oklch(92.8% 0.008 155);
+  --ui-line:           oklch(88.5% 0.007 155);
+  --ui-line-strong:    oklch(78% 0.012 155);
+  --ui-text:           oklch(20.5% 0.012 155);
+  --ui-text-2:         oklch(38% 0.011 155);
+  --ui-text-3:         oklch(54% 0.010 155);
+  --ui-text-4:         oklch(69% 0.008 155);
+  --ui-on-strong:      oklch(99% 0.004 155);
+  --ui-brand:          oklch(47% 0.085 155);
+  --ui-brand-strong:   oklch(34% 0.075 155);
+  --ui-brand-soft:     oklch(94% 0.022 155);
+  --ui-shadow-xs:      0 1px 2px oklch(24% 0.02 155 / 0.06);
+  --ui-shadow-sm:      0 1px 2px oklch(24% 0.02 155 / 0.05), 0 8px 24px -18px oklch(24% 0.02 155 / 0.28);
+  --ui-shadow-md:      0 2px 4px oklch(24% 0.02 155 / 0.06), 0 16px 36px -22px oklch(24% 0.02 155 / 0.32);
+  --ui-risk-1:         oklch(72% 0.170 145);
+  --ui-risk-2:         oklch(78% 0.170 100);
+  --ui-risk-3:         oklch(70% 0.180 55);
+  --ui-risk-4:         oklch(60% 0.200 28);
+  --ui-risk-5:         oklch(32% 0.080 28);
+  --ui-go-ink:         oklch(38% 0.120 145);
+  --ui-caution-ink:    oklch(42% 0.160 55);
+  --ui-nogo-ink:       oklch(38% 0.180 28);
+  --ui-watch-ink:      oklch(42% 0.130 95);
 
-  --ssr-text:        oklch(24% 0.010 80);
-  --ssr-text-2:      oklch(42% 0.010 80);
-  --ssr-text-3:      oklch(58% 0.009 80);
-  --ssr-text-4:      oklch(72% 0.007 80);
-
-  --ssr-brand:       oklch(52% 0.075 155);
-  --ssr-brand-dark:  oklch(40% 0.070 155);
-  --ssr-brand-bg:    oklch(95% 0.020 155);
-
-  --ssr-risk-1:      oklch(72% 0.170 145); /* low / green */
-  --ssr-risk-2:      oklch(78% 0.170 100); /* moderate / yellow */
-  --ssr-risk-3:      oklch(70% 0.180 55);  /* considerable / orange */
-  --ssr-risk-4:      oklch(60% 0.200 28);  /* high / red */
-  --ssr-risk-5:      oklch(32% 0.080 28);  /* extreme / black-red */
-
-  --ssr-go:          var(--ssr-risk-1);
-  --ssr-caution:     var(--ssr-risk-3);
-  --ssr-nogo:        var(--ssr-risk-4);
-
-  --ssr-go-ink:      oklch(38% 0.120 145);
-  --ssr-caution-ink: oklch(42% 0.160 55);
-  --ssr-nogo-ink:    oklch(38% 0.180 28);
-  --ssr-watch-ink:   oklch(42% 0.130 95);
-
-  --ssr-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Page/report aliases. */
+  --ssr-bg:          var(--ui-bg);
+  --ssr-surface:     var(--ui-surface);
+  --ssr-surface-2:   var(--ui-surface-subtle);
+  --ssr-surface-3:   var(--ui-surface-muted);
+  --ssr-line:        var(--ui-line);
+  --ssr-line-strong: var(--ui-line-strong);
+  --ssr-text:        var(--ui-text);
+  --ssr-text-2:      var(--ui-text-2);
+  --ssr-text-3:      var(--ui-text-3);
+  --ssr-text-4:      var(--ui-text-4);
+  --ssr-brand:       var(--ui-brand);
+  --ssr-brand-dark:  var(--ui-brand-strong);
+  --ssr-brand-bg:    var(--ui-brand-soft);
+  --ssr-risk-1:      var(--ui-risk-1);
+  --ssr-risk-2:      var(--ui-risk-2);
+  --ssr-risk-3:      var(--ui-risk-3);
+  --ssr-risk-4:      var(--ui-risk-4);
+  --ssr-risk-5:      var(--ui-risk-5);
+  --ssr-go:          var(--ui-risk-1);
+  --ssr-caution:     var(--ui-risk-3);
+  --ssr-nogo:        var(--ui-risk-4);
+  --ssr-go-ink:      var(--ui-go-ink);
+  --ssr-caution-ink: var(--ui-caution-ink);
+  --ssr-nogo-ink:    var(--ui-nogo-ink);
+  --ssr-watch-ink:   var(--ui-watch-ink);
+  --ssr-sans: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
   --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
 
-  /* ---- --d-*: dashboard summary card / planner shell ---- */
-  --d-surface:   oklch(99.4% 0.004 155);
-  --d-surface-2: oklch(96.6% 0.010 155);
-  --d-surface-3: oklch(92.8% 0.014 155);
-  --d-line:      oklch(88.5% 0.012 155);
-  --d-line-2:    oklch(78% 0.018 155);
-
-  --d-ink:   oklch(27% 0.014 150);
-  --d-ink-2: oklch(44% 0.013 150);
-  --d-ink-3: oklch(58% 0.011 150);
-  --d-ink-4: oklch(70% 0.009 150);
-
-  --d-pine:      oklch(46% 0.068 155);
-  --d-pine-deep: oklch(33% 0.055 155);
-  --d-sage-1:    oklch(94.5% 0.030 150);
-
-  --d-go:        oklch(56% 0.125 150);
-  --d-go-deep:   oklch(42% 0.105 150);
-  --d-go-bg:     oklch(95.5% 0.034 150);
-  --d-warn:      oklch(58% 0.115 52);
-  --d-warn-deep: oklch(45% 0.115 48);
-  --d-warn-bg:   oklch(95% 0.045 62);
-  --d-nogo:      oklch(58% 0.170 28);
-  --d-nogo-deep: oklch(45% 0.160 28);
-  --d-nogo-bg:   oklch(95% 0.040 28);
-
-  --d-chip-bg: oklch(99.6% 0.003 95 / .92);
+  /* Dashboard/shell aliases use the same values as every other view. */
+  --d-surface:   var(--ui-surface);
+  --d-surface-2: var(--ui-surface-subtle);
+  --d-surface-3: var(--ui-surface-muted);
+  --d-line:      var(--ui-line);
+  --d-line-2:    var(--ui-line-strong);
+  --d-ink:       var(--ui-text);
+  --d-ink-2:     var(--ui-text-2);
+  --d-ink-3:     var(--ui-text-3);
+  --d-ink-4:     var(--ui-text-4);
+  --d-pine:      var(--ui-brand);
+  --d-pine-deep: var(--ui-brand-strong);
+  --d-sage-1:    var(--ui-brand-soft);
+  --d-go:        var(--ui-risk-1);
+  --d-go-deep:   var(--ui-go-ink);
+  --d-go-bg:     color-mix(in oklch, var(--ui-risk-1) 12%, var(--ui-surface));
+  --d-warn:      var(--ui-risk-3);
+  --d-warn-deep: var(--ui-caution-ink);
+  --d-warn-bg:   color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface));
+  --d-nogo:      var(--ui-risk-4);
+  --d-nogo-deep: var(--ui-nogo-ink);
+  --d-nogo-bg:   color-mix(in oklch, var(--ui-risk-4) 10%, var(--ui-surface));
+  --d-chip-bg:   color-mix(in oklch, var(--ui-surface) 92%, transparent);
   --d-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --d-r-lg: 8px;
   --d-r-pill: 999px;
-  --d-shadow: 0 1px 2px oklch(40% 0.02 150 / .05), 0 8px 24px -12px oklch(40% 0.03 150 / .18);
-  --d-shadow-sm: 0 1px 2px oklch(40% 0.02 150 / .06);
+  --d-shadow: var(--ui-shadow-sm);
+  --d-shadow-sm: var(--ui-shadow-xs);
 }
 
 html[data-theme="dark"] {
-  --ssr-bg:          oklch(16% 0.015 240);
-  --ssr-surface:     oklch(20% 0.018 240);
-  --ssr-surface-2:   oklch(23% 0.020 240);
-  --ssr-surface-3:   oklch(27% 0.022 240);
-  --ssr-line:        oklch(30% 0.020 240);
-  --ssr-line-strong: oklch(36% 0.022 240);
-  --ssr-text:        oklch(95% 0.010 240);
-  --ssr-text-2:      oklch(80% 0.015 240);
-  --ssr-text-3:      oklch(62% 0.018 240);
-  --ssr-text-4:      oklch(48% 0.020 240);
-  --ssr-brand:       oklch(68% 0.130 210);
-  --ssr-brand-dark:  oklch(78% 0.120 210);
-  --ssr-brand-bg:    oklch(30% 0.040 210);
-
-  --ssr-go-ink:      oklch(80% 0.140 145);
-  --ssr-caution-ink: oklch(80% 0.140 55);
-  --ssr-nogo-ink:    oklch(78% 0.150 28);
-  --ssr-watch-ink:   oklch(82% 0.130 95);
-
-  --d-surface:   oklch(21% 0.018 240);
-  --d-surface-2: oklch(24% 0.020 240);
-  --d-surface-3: oklch(28% 0.022 240);
-  --d-line:      oklch(31% 0.020 240);
-  --d-line-2:    oklch(37% 0.022 240);
-  --d-ink:   oklch(95% 0.010 240);
-  --d-ink-2: oklch(80% 0.015 240);
-  --d-ink-3: oklch(64% 0.018 240);
-  --d-ink-4: oklch(52% 0.020 240);
-  --d-pine:      oklch(70% 0.110 165);
-  --d-pine-deep: oklch(80% 0.110 165);
-  --d-sage-1:    oklch(30% 0.040 165);
-  --d-go:        oklch(68% 0.140 150);
-  --d-go-deep:   oklch(80% 0.130 150);
-  --d-go-bg:     oklch(30% 0.050 150);
-  --d-warn:      oklch(70% 0.130 60);
-  --d-warn-deep: oklch(82% 0.120 65);
-  --d-warn-bg:   oklch(32% 0.050 60);
-  --d-nogo:      oklch(64% 0.180 28);
-  --d-nogo-deep: oklch(78% 0.150 28);
-  --d-nogo-bg:   oklch(32% 0.070 28);
-  --d-chip-bg: oklch(22% 0.018 240 / .88);
+  --ui-bg:             oklch(15.5% 0.008 155);
+  --ui-surface:        oklch(19.5% 0.010 155);
+  --ui-surface-subtle: oklch(23% 0.011 155);
+  --ui-surface-muted:  oklch(27% 0.012 155);
+  --ui-line:           oklch(30% 0.012 155);
+  --ui-line-strong:    oklch(37% 0.014 155);
+  --ui-text:           oklch(95% 0.008 155);
+  --ui-text-2:         oklch(79% 0.010 155);
+  --ui-text-3:         oklch(63% 0.011 155);
+  --ui-text-4:         oklch(49% 0.012 155);
+  --ui-on-strong:      oklch(15.5% 0.008 155);
+  --ui-brand:          oklch(70% 0.110 165);
+  --ui-brand-strong:   oklch(80% 0.110 165);
+  --ui-brand-soft:     oklch(30% 0.040 165);
+  --ui-go-ink:         oklch(80% 0.140 145);
+  --ui-caution-ink:    oklch(80% 0.140 55);
+  --ui-nogo-ink:       oklch(78% 0.150 28);
+  --ui-watch-ink:      oklch(82% 0.130 95);
+  --ui-shadow-xs:      0 1px 2px oklch(4% 0.01 155 / 0.38);
+  --ui-shadow-sm:      0 1px 2px oklch(4% 0.01 155 / 0.32), 0 12px 28px -18px oklch(4% 0.01 155 / 0.8);
+  --ui-shadow-md:      0 2px 4px oklch(4% 0.01 155 / 0.38), 0 20px 40px -24px oklch(4% 0.01 155 / 0.9);
 }

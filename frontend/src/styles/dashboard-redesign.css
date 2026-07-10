@@ -1,9 +1,4 @@
-/* =========================================================
-   Conditions Dashboard — risk gauge summary card
-   Imported from claude.ai/design · Conditions Dashboard.html
-   Scoped under .ssr-dash so it never collides with App.css.
-   Leads the "Redesign" planner layout. Light/dark via html[data-theme].
-   ========================================================= */
+/* Primary conditions summary. */
 
 .ssr-dash * { box-sizing: border-box; }
 
@@ -11,9 +6,8 @@
 .ssr-dash-risk {
   background: var(--d-surface);
   border: 1px solid var(--d-line);
-  border-top: none;
   border-radius: 8px;
-  box-shadow: var(--d-shadow);
+  box-shadow: var(--ui-shadow-md);
   overflow: hidden;
 }
 .ssr-dash-top {
@@ -33,7 +27,7 @@
   align-items: center; justify-content: center; line-height: 1;
 }
 .ssr-dash-gauge-num {
-  font-size: 42px; font-weight: 800; letter-spacing: -.03em;
+  font-size: 42px; font-weight: 700; letter-spacing: 0;
   color: var(--d-go-deep); font-variant-numeric: tabular-nums;
 }
 .ssr-dash-risk.caution .ssr-dash-gauge-num { color: var(--d-warn-deep); }
@@ -44,9 +38,9 @@
 .ssr-dash-pill-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ssr-dash-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 10px; border-radius: 6px;
+  padding: 5px 8px; border-radius: 4px;
   background: var(--d-go-bg); color: var(--d-go-deep);
-  font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none;
   border: 1px solid oklch(85% 0.06 150);
 }
 .ssr-dash-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--d-go); }
@@ -71,7 +65,7 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
   color: var(--d-ink-3);
 }
 
-.ssr-dash-head { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; color: var(--d-ink); }
+.ssr-dash-head { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: 0; line-height: 1.2; color: var(--d-ink); }
 .ssr-dash-where { font-size: 14px; color: var(--d-ink-3); font-weight: 500; }
 .ssr-dash-where b { color: var(--d-ink); font-weight: 700; }
 .ssr-dash-where .mono { font-family: var(--d-mono); font-weight: 600; color: var(--d-ink); }
@@ -79,7 +73,7 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 
 .ssr-dash-cta {
   white-space: nowrap; align-self: center;
-  height: 40px; padding: 0 17px; border-radius: var(--d-r-pill);
+  height: 40px; padding: 0 17px; border-radius: 7px;
   border: 1px solid var(--d-pine); background: var(--d-pine); color: #fff;
   font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; gap: 8px;
@@ -99,11 +93,11 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 }
 .ssr-dash-cond:last-child { border-right: none; }
 .ssr-dash-cond-k {
-  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none;
   color: var(--d-ink-3); display: flex; align-items: center; gap: 6px;
 }
 .ssr-dash-cond-k svg { width: 14px; height: 14px; color: var(--d-ink-4); }
-.ssr-dash-cond-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: var(--d-ink); font-variant-numeric: tabular-nums; }
+.ssr-dash-cond-v { font-size: 22px; font-weight: 700; letter-spacing: 0; color: var(--d-ink); font-variant-numeric: tabular-nums; }
 .ssr-dash-cond-v small { font-size: 13px; font-weight: 500; color: var(--d-ink-3); margin-left: 2px; }
 .ssr-dash-cond-v.warn { color: var(--d-warn-deep); }
 .ssr-dash-cond-sub { font-size: 12px; color: var(--d-go-deep); font-weight: 600; }
@@ -115,7 +109,7 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
   padding: 18px 28px; border-top: 1px solid var(--d-line);
 }
 .ssr-dash-recco-ic {
-  width: 30px; height: 30px; border-radius: 9px; flex: none;
+  width: 30px; height: 30px; border-radius: 6px; flex: none;
   background: var(--d-go-bg); color: var(--d-go-deep); display: grid; place-items: center; margin-top: 1px;
 }
 .ssr-dash-risk.caution .ssr-dash-recco-ic { background: var(--d-warn-bg); color: var(--d-warn-deep); }
@@ -128,7 +122,7 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 .ssr-dash-ai { padding: 14px 28px 18px; border-top: 1px solid var(--d-line); }
 .ssr-dash-ai-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 14px; border-radius: 9px; cursor: pointer;
+  padding: 8px 14px; border-radius: 6px; cursor: pointer;
   font-size: 13px; font-weight: 600; color: var(--d-ink-2);
   background: var(--d-surface-2); border: 1px solid var(--d-line);
   transition: background .15s ease, border-color .15s ease, color .15s ease;
@@ -140,14 +134,14 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 @keyframes ssr-dash-spin { to { transform: rotate(360deg); } }
 .ssr-dash-ai-text {
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: 6px;
   border: 1px solid var(--d-line);
   background: var(--d-surface-2);
 }
 .ssr-dash-ai-label {
   display: flex; align-items: center; gap: 7px;
   margin-bottom: 8px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none;
   color: var(--d-pine, var(--d-go-deep));
 }
 .ssr-dash-ai-label svg { flex: none; }
@@ -159,7 +153,7 @@ html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
   display: block;
   width: 100%;
   max-width: 320px;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid var(--d-line);
   margin-bottom: 10px;
 }
