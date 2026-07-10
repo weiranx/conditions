@@ -4,9 +4,15 @@ const registerSafetyRoute = ({ app, safetyHandler }) => {
   app.get('/api/safety', safetyHandler);
 };
 
-const createSafetyInvoker = ({ safetyHandler }) => async (query) =>
+const createSafetyInvoker = ({ safetyHandler }) => async (query, options = {}) =>
   new Promise((resolve, reject) => {
-    const mockReq = { query, headers: {}, ip: null, log: logger };
+    const mockReq = {
+      query,
+      headers: {},
+      ip: null,
+      log: logger,
+      internal: { suppressReportLog: options.suppressReportLog === true },
+    };
     const mockRes = {
       statusCode: 200,
       headersSent: false,

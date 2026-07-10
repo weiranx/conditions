@@ -268,22 +268,27 @@ const safetyHandler = async (req, res) => {
   const logIp = req.ip || null;
   const logUserAgent = req.headers['user-agent'] || null;
   const baseLogFields = { ip: logIp, userAgent: logUserAgent, name: logName };
+  const writeReportLog = (entry) => {
+    if (req.internal?.suppressReportLog !== true) {
+      logReportRequest(entry);
+    }
+  };
 
   if (!lat || !lon) {
-    logReportRequest({ statusCode: 400, lat: lat || null, lon: lon || null, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
+    writeReportLog({ statusCode: 400, lat: lat || null, lon: lon || null, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude and longitude are required' });
   }
 
   const parsedLat = Number(lat);
   const parsedLon = Number(lon);
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
-    logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
+    writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
   }
 
   const requestedDate = typeof date === 'string' ? date.trim() : '';
   if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
-    logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
+    writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
   }
   const requestedStartClock = parseStartClock(typeof start === 'string' ? start : '');
@@ -340,7 +345,7 @@ const safetyHandler = async (req, res) => {
       gridDataUrl = weatherResult.gridDataUrl || null;
     } catch (dateRangeErr) {
       if (dateRangeErr instanceof ForecastDateOutOfRangeError) {
-        logReportRequest({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
+        writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
         return res.status(400).json({
           error: 'Requested forecast date is outside NOAA forecast range',
           details: `Choose a date between ${dateRangeErr.forecastDateRange.start} and ${dateRangeErr.forecastDateRange.end}.`,
@@ -553,7 +558,7 @@ const safetyHandler = async (req, res) => {
       analysis,
       pleasantness,
     });
-    logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
+    writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.json(responsePayload);
   } catch (error) {
     logger.error({ err: error }, 'API error');
@@ -648,7 +653,7 @@ const safetyHandler = async (req, res) => {
       pleasantness,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     });
-    logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
+    writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.status(200).json(fallbackResponsePayload);
   }
 };

@@ -9,6 +9,9 @@ const LOG_FILE = path.resolve(__dirname, '../../data/report-logs.ndjson');
 
 const reportLogs = [];
 
+const isRouteWaypointEntry = (entry) =>
+  typeof entry?.name === 'string' && entry.name.startsWith('Route waypoint:');
+
 // Privacy/retention policy: report-log entries (including the requester IP below) are kept
 // for at most 7 days (ONE_WEEK_MS, enforced by isWithinOneWeek/trimOldEntries) and are only
 // readable via the bearer-secret-gated /api/report-logs endpoint. Even within that 7-day
@@ -90,7 +93,9 @@ try {
         return [];
       }
     });
-    const recent = parsed.filter(isWithinOneWeek).slice(-MAX_LOG_ENTRIES);
+    const recent = parsed
+      .filter((entry) => isWithinOneWeek(entry) && !isRouteWaypointEntry(entry))
+      .slice(-MAX_LOG_ENTRIES);
     reportLogs.push(...recent);
     if (recent.length !== parsed.length) rewriteFile();
   }
@@ -102,7 +107,7 @@ try {
 setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
 
 const logReportRequest = (entry) => {
-  if (!entry.name) return;
+  if (!entry.name || isRouteWaypointEntry(entry)) return;
   const record = { ...entry, ip: maskIp(entry.ip), timestamp: new Date().toISOString() };
   if (reportLogs.length >= MAX_LOG_ENTRIES) reportLogs.shift();
   reportLogs.push(record);
@@ -137,8 +142,8 @@ const registerReportLogsRoute = (app) => {
     if (!secretsMatch(provided, LOGS_SECRET)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    res.json([...reportLogs].reverse());
+    res.json(reportLogs.filter((entry) => !isRouteWaypointEntry(entry)).reverse());
   });
 };
 
-module.exports = { logReportRequest, registerReportLogsRoute };
+module.exports = { logReportRequest, registerReportLogsRoute, isRouteWaypointEntry };
