@@ -10,6 +10,7 @@
   margin: 0 auto;
   padding: 0 24px;
   color: var(--ssr-text);
+  font-family: var(--ssr-sans);
   -webkit-font-smoothing: antialiased;
 }
 .ssr-home * { box-sizing: border-box; }
@@ -44,10 +45,11 @@ html[data-theme="dark"] .ssr-h-topo { opacity: 0.16; }
   background: var(--ssr-line-strong);
 }
 .ssr-h-hero h1 {
-  font-size: 46px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  font-family: var(--ssr-display);
+  font-size: 50px;
+  font-weight: 560;
+  letter-spacing: -0.015em;
+  line-height: 1.06;
   margin: 0 0 14px;
   color: var(--ssr-text);
 }
@@ -233,9 +235,10 @@ html[data-theme="dark"] .ssr-h-console:focus-within {
 .ssr-h-section { padding: 64px 0 0; }
 .ssr-h-section-head { text-align: center; margin-bottom: 36px; }
 .ssr-h-section-head h2 {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--ssr-display);
+  font-size: 28px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
   margin: 0 0 8px;
   color: var(--ssr-text);
 }
@@ -362,9 +365,10 @@ html[data-theme="dark"] .ssr-h-preview:hover { box-shadow: 0 22px 56px -22px rgb
 }
 .ssr-h-preview-pill::before { content:""; width:6px; height:6px; border-radius:50%; background: currentColor; }
 .ssr-h-preview-score {
-  font-size: 52px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
+  font-family: var(--ssr-display);
+  font-size: 54px;
+  font-weight: 580;
+  letter-spacing: -0.02em;
   line-height: 1;
   color: var(--ssr-text);
   font-variant-numeric: tabular-nums;

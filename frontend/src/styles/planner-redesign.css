@@ -7,6 +7,7 @@
 
 .ssr-report {
   color: var(--ssr-text);
+  font-family: var(--ssr-sans);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -136,6 +137,28 @@
 }
 html[data-theme="dark"] .ssr-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 24px -16px rgba(0, 0, 0, 0.45); }
 html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.65); }
+
+/* Gentle staggered rise-in when a report renders. Runs once on mount;
+   `backwards` keeps delayed cards invisible until their turn. */
+@media (prefers-reduced-motion: no-preference) {
+  .ssr-report .ssr-card {
+    animation: ssr-card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .ssr-main > .ssr-card:nth-child(2),
+  .ssr-side > .ssr-card:nth-child(1) { animation-delay: 0.05s; }
+  .ssr-main > .ssr-card:nth-child(3),
+  .ssr-side > .ssr-card:nth-child(2) { animation-delay: 0.1s; }
+  .ssr-main > .ssr-card:nth-child(4),
+  .ssr-side > .ssr-card:nth-child(3) { animation-delay: 0.15s; }
+  .ssr-main > .ssr-card:nth-child(n + 5),
+  .ssr-side > .ssr-card:nth-child(n + 4) { animation-delay: 0.2s; }
+}
+@keyframes ssr-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
 .ssr-card-h {
   padding: 14px 20px;
   border-bottom: 1px solid var(--ssr-line);
@@ -236,9 +259,10 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
   background: currentColor;
 }
 .ssr-v-score-big {
-  font-size: 56px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
+  font-family: var(--ssr-display);
+  font-size: 58px;
+  font-weight: 580;
+  letter-spacing: -0.02em;
   line-height: 1;
   color: var(--ssr-text);
   font-variant-numeric: tabular-nums;
@@ -885,7 +909,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral { color: var(--ssr-text-3); bac
 
 /* score breakdown summary + compact "other factors" */
 .ssr-sb-summary { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--ssr-line); }
-.ssr-sb-score { font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.ssr-sb-score { font-family: var(--ssr-display); font-size: 40px; font-weight: 580; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .ssr-sb-score small { font-size: 14px; font-weight: 500; color: var(--ssr-text-3); margin-left: 3px; }
 .ssr-sb-summary-meta { display: flex; flex-direction: column; gap: 3px; }
 .ssr-sb-tier { font-size: 13px; font-weight: 700; color: var(--ssr-text); text-transform: capitalize; }
