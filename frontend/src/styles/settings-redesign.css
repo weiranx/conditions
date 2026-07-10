@@ -10,6 +10,7 @@
   margin: 0 auto;
   padding: 32px 24px 80px;
   color: var(--ssr-text);
+  font-family: var(--ssr-sans);
   -webkit-font-smoothing: antialiased;
 }
 .ssr-settings * { box-sizing: border-box; }
@@ -25,9 +26,10 @@
   margin-bottom: 8px;
 }
 .ssr-set-head h1 {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--ssr-display);
+  font-size: 30px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
   margin: 0 0 6px;
   color: var(--ssr-text);
 }

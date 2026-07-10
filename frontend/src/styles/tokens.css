@@ -43,6 +43,7 @@
   --ssr-watch-ink:   oklch(42% 0.130 95);
 
   --ssr-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --ssr-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
   --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
 
   /* ---- --d-*: dashboard summary card / planner shell ---- */
