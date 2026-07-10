@@ -13,12 +13,11 @@
 /* ---------- HEADER + SETUP ---------- */
 .ssr-trip-head {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 24px;
-  align-items: end;
+  gap: 22px;
   margin: 0 0 28px;
   padding-top: 34px;
 }
+.ssr-trip-intro { max-width: 760px; }
 .ssr-trip-kicker {
   font-size: 12px;
   letter-spacing: 0;
@@ -27,17 +26,41 @@
   font-weight: 600;
   margin-bottom: 8px;
 }
-.ssr-trip-head h1 { font-family: var(--ssr-display); font-size: 30px; font-weight: 560; line-height: 1.15; letter-spacing: 0; margin: 0 0 7px; color: var(--ssr-text); }
-.ssr-trip-head p { font-size: 14px; color: var(--ssr-text-2); margin: 0; max-width: 520px; }
+.ssr-trip-head h1 { font-family: var(--ssr-display); font-size: clamp(32px, 4vw, 48px); font-weight: 560; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; color: var(--ssr-text); }
+.ssr-trip-head p { font-size: 15px; line-height: 1.55; color: var(--ssr-text-2); margin: 0; max-width: 680px; }
 
 .ssr-trip-setup {
-  display: flex;
-  gap: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(130px, 0.7fr)) auto;
   border: 1px solid var(--ssr-line-strong);
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
   background: var(--ssr-surface);
+  box-shadow: var(--ui-shadow-sm);
+  min-width: 0;
 }
+.ssr-trip-setup-context {
+  padding: 12px 16px;
+  border-right: 1px solid var(--ssr-line);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.ssr-trip-setup-context > span,
+.ssr-trip-setup-field > span {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--ssr-text-3);
+  font-weight: 650;
+}
+.ssr-trip-setup-context strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ssr-trip-setup-context small { color: var(--ssr-text-3); font-size: 11px; margin-top: 2px; }
 .ssr-trip-setup-field {
   padding: 10px 14px;
   border-right: 1px solid var(--ssr-line);
@@ -80,6 +103,8 @@
   gap: 7px;
   box-shadow: var(--ui-shadow-xs);
   transition: background 0.15s ease;
+  min-height: 60px;
+  justify-content: center;
 }
 .ssr-trip-setup-run:hover:not(:disabled) {
   background: var(--ssr-brand);
@@ -120,6 +145,53 @@
   cursor: pointer;
 }
 .ssr-trip-banner-action:hover { border-color: var(--ssr-brand); color: var(--ssr-brand-dark); }
+
+/* ---------- LOADING ---------- */
+.ssr-trip-loading {
+  min-height: 180px;
+  border: 1px solid var(--ssr-line);
+  border-radius: 10px;
+  background: var(--ssr-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--ssr-text-2);
+  box-shadow: var(--ui-shadow-sm);
+}
+.ssr-trip-loading-icon { width: 24px; height: 24px; color: var(--ssr-brand-dark); animation: ssr-trip-spin 0.9s linear infinite; }
+.ssr-trip-loading div { display: grid; gap: 4px; }
+.ssr-trip-loading strong { color: var(--ssr-text); font-size: 15px; }
+.ssr-trip-loading span { font-size: 13px; }
+@keyframes ssr-trip-spin { to { transform: rotate(360deg); } }
+
+/* ---------- DECISION SPOTLIGHT ---------- */
+.ssr-trip-recommendation {
+  display: grid;
+  grid-template-columns: auto minmax(260px, 1.4fr) minmax(280px, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 20px 22px;
+  margin-bottom: 18px;
+  border: 1px solid var(--ssr-line-strong);
+  border-left: 5px solid var(--ssr-caution);
+  border-radius: 10px;
+  background: linear-gradient(105deg, color-mix(in oklch, var(--ssr-caution) 12%, var(--ssr-surface)), var(--ssr-surface) 45%);
+  box-shadow: var(--ui-shadow-sm);
+}
+.ssr-trip-recommendation.go { border-left-color: var(--ssr-go); background: linear-gradient(105deg, color-mix(in oklch, var(--ssr-go) 11%, var(--ssr-surface)), var(--ssr-surface) 45%); }
+.ssr-trip-recommendation.nogo { border-left-color: var(--ssr-nogo); background: linear-gradient(105deg, color-mix(in oklch, var(--ssr-nogo) 10%, var(--ssr-surface)), var(--ssr-surface) 45%); }
+.ssr-trip-recommendation-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--ssr-surface); color: var(--ssr-brand-dark); border: 1px solid var(--ssr-line); }
+.ssr-trip-recommendation-icon svg { width: 20px; height: 20px; }
+.ssr-trip-recommendation-copy { min-width: 0; }
+.ssr-trip-recommendation-eyebrow { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ssr-text-3); margin-bottom: 4px; }
+.ssr-trip-recommendation-copy h2 { font-size: 21px; margin: 0 0 3px; }
+.ssr-trip-recommendation-copy p { margin: 0; color: var(--ssr-text-2); font-size: 13px; line-height: 1.4; }
+.ssr-trip-recommendation-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ssr-trip-recommendation-facts span { color: var(--ssr-text-3); font-size: 10px; text-transform: uppercase; line-height: 1.3; }
+.ssr-trip-recommendation-facts strong { display: block; color: var(--ssr-text); font-size: 18px; font-variant-numeric: tabular-nums; text-transform: none; }
+.ssr-trip-recommendation-action { min-height: 40px; padding: 0 14px; border: 1px solid var(--ssr-brand-dark); border-radius: 7px; background: var(--ssr-brand-dark); color: white; font: inherit; font-size: 13px; font-weight: 650; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
+.ssr-trip-recommendation-action:hover { background: var(--ssr-brand); }
 
 /* ---------- OVERVIEW BAND ---------- */
 .ssr-trip-overview {
@@ -175,6 +247,11 @@
 .ssr-trip-trend svg { width: 100%; height: 150px; display: block; }
 
 /* ---------- DAY STRIP ---------- */
+.ssr-trip-section-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin: 28px 0 12px; }
+.ssr-trip-section-head span { color: var(--ssr-brand-dark); text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+.ssr-trip-section-head h2 { margin: 3px 0 0; font-size: 20px; }
+.ssr-trip-section-head p { margin: 0; color: var(--ssr-text-3); font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.ssr-trip-section-head p svg { width: 14px; height: 14px; }
 .ssr-trip-days {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -196,6 +273,7 @@
 }
 .ssr-trip-day:hover { border-color: var(--ssr-line-strong); background: var(--ssr-surface-2); }
 .ssr-trip-day.sel { border-color: var(--ssr-brand); box-shadow: 0 0 0 1px var(--ssr-brand); }
+.ssr-trip-day:focus-visible { outline: 3px solid color-mix(in oklch, var(--ssr-brand) 28%, transparent); outline-offset: 2px; }
 .ssr-trip-day-band { height: 5px; }
 .ssr-trip-day-band.go { background: var(--ssr-go); }
 .ssr-trip-day-band.caution { background: var(--ssr-caution); }
@@ -322,21 +400,40 @@
 @media (max-width: 1000px) {
   .ssr-trip-overview { grid-template-columns: 1fr 1fr; }
   .ssr-trip-ov { border-bottom: 1px solid var(--ssr-line); }
-  .ssr-trip-head { grid-template-columns: 1fr; }
-  .ssr-trip-setup { flex-wrap: wrap; }
+  .ssr-trip-setup { grid-template-columns: 1.3fr repeat(3, 1fr); }
+  .ssr-trip-setup-run { grid-column: 1 / -1; min-height: 46px; }
+  .ssr-trip-recommendation { grid-template-columns: auto 1fr auto; }
+  .ssr-trip-recommendation-facts { grid-column: 2 / -1; grid-row: 2; }
   .ssr-trip-detail-body { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
   .ssr-trip { padding-inline: 16px; }
   .ssr-trip-head { padding-top: 28px; }
+  .ssr-trip-head h1 { font-size: 34px; }
   .ssr-trip-setup { display: grid; grid-template-columns: 1fr 1fr; }
+  .ssr-trip-setup-context { grid-column: 1 / -1; border-bottom: 1px solid var(--ssr-line); border-right: 0; }
   .ssr-trip-setup-field { min-width: 0; border-bottom: 1px solid var(--ssr-line); }
-  .ssr-trip-setup-field:nth-child(2) { border-right: 0; }
-  .ssr-trip-setup-field:nth-child(3) { border-bottom: 0; }
+  .ssr-trip-setup-field:nth-child(3) { border-right: 0; }
+  .ssr-trip-setup-field:nth-child(4) { grid-column: 1 / -1; border-right: 0; }
   .ssr-trip-setup-run { min-height: 52px; justify-content: center; }
   .ssr-trip-banner { align-items: flex-start; flex-direction: column; gap: 14px; }
   .ssr-trip-banner-action { width: 100%; justify-content: center; }
   .ssr-trip-overview { grid-template-columns: 1fr; }
   .ssr-trip-ov { border-right: 0; }
+  .ssr-trip-recommendation { grid-template-columns: auto 1fr; padding: 18px; }
+  .ssr-trip-recommendation-facts { grid-column: 1 / -1; grid-row: auto; }
+  .ssr-trip-recommendation-action { grid-column: 1 / -1; justify-content: center; }
+  .ssr-trip-section-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .ssr-trip-days { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 82vw); grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 10px; margin-inline: -2px; }
+  .ssr-trip-day { scroll-snap-align: start; }
+  .ssr-trip-trend { padding-inline: 10px; overflow: hidden; }
+  .ssr-trip-trend-h { align-items: flex-start; flex-direction: column; }
+  .ssr-trip-detail-h { grid-template-columns: 1fr; }
+  .ssr-trip-detail-h .ssr-btn { width: 100%; justify-content: center; }
+  .ssr-trip-detail-foot { align-items: flex-start; flex-direction: column; gap: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssr-trip-loading-icon { animation: none; }
 }

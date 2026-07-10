@@ -5,6 +5,9 @@ import {
   AlertTriangle,
   Route,
   Info,
+  ArrowRight,
+  CalendarDays,
+  Clock3,
 } from 'lucide-react';
 import type { DecisionLevel, TimeStyle } from '../../app/types';
 import { formatClockForStyle } from '../../app/core';
@@ -113,7 +116,7 @@ function TrendArc({
 }) {
   const W = 1000;
   const H = 150;
-  const pad = { l: 28, r: 28, t: 18, b: 26 };
+  const pad = { l: 48, r: 48, t: 22, b: 28 };
   const n = days.length;
   const x = (i: number) => (n <= 1 ? W / 2 : pad.l + (i / (n - 1)) * (W - pad.l - pad.r));
   const y = (s: number) => H - pad.b - (Math.max(0, Math.min(100, s)) / 100) * (H - pad.t - pad.b);
@@ -123,7 +126,7 @@ function TrendArc({
   const areaD = `M ${x(0)} ${H - pad.b} L ${linePts.join(' L ')} L ${x(n - 1)} ${H - pad.b} Z`;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Safety score trend by trip day">
       {[0, 25, 50, 75, 100].map((g) => (
         <g key={g}>
           <line x1={pad.l} x2={W - pad.r} y1={y(g)} y2={y(g)} stroke="var(--ssr-line)" strokeDasharray="2 4" />
@@ -181,6 +184,8 @@ export function TripView({
   onUseDayInPlanner,
 }: TripViewProps) {
   const [sel, setSel] = React.useState(0);
+  const dayRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const detailRef = React.useRef<HTMLDivElement | null>(null);
 
   // Re-anchor selection to the best day whenever a fresh forecast lands.
   React.useEffect(() => {
@@ -213,6 +218,8 @@ export function TripView({
     if (!acc) return row;
     return (row.score ?? -Infinity) > (acc.score ?? -Infinity) ? row : acc;
   }, null);
+  const bestIndex = best ? tripForecastRows.findIndex((row) => row.date === best.date) : -1;
+  const hasClearGoDay = goCount > 0;
 
   const clearForecastState = () => {
     setTripForecastRows([]);
@@ -222,18 +229,40 @@ export function TripView({
 
   const selected = tripForecastRows[sel] ?? null;
 
+  const selectDay = (index: number, moveFocus = false) => {
+    const boundedIndex = Math.max(0, Math.min(tripForecastRows.length - 1, index));
+    setSel(boundedIndex);
+    if (moveFocus) {
+      dayRefs.current[boundedIndex]?.focus();
+      dayRefs.current[boundedIndex]?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  };
+
+  const reviewBestDay = () => {
+    if (bestIndex < 0) return;
+    setSel(bestIndex);
+    window.requestAnimationFrame(() => {
+      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   return (
     <div key="view-trip" className={appShellClassName} aria-busy={isViewPending || tripForecastLoading}>
       <div className="ssr-trip">
         <ProductNav active="trip" navigateToView={navigateToView} openPlannerView={openPlannerView} />
         {/* HEADER + SETUP */}
         <div className="ssr-trip-head">
-          <div>
+          <div className="ssr-trip-intro">
             <div className="ssr-trip-kicker">Expedition tool</div>
-            <h1>Multi-Day Trip Forecast</h1>
-            <p>Daily decision gates across consecutive days — find your summit window and the days to sit out.</p>
+            <h1>Plan the right day, not just the route.</h1>
+            <p>Compare daily decision gates for one objective and find the most favorable weather and travel window.</p>
           </div>
-          <div className="ssr-trip-setup">
+          <div className="ssr-trip-setup" aria-label="Multi-day forecast setup">
+            <div className="ssr-trip-setup-context">
+              <span>Objective</span>
+              <strong>{objectiveSummary}</strong>
+              <small>{hasObjective ? `${travelWindowHoursLabel} travel window` : 'Choose one in Planner'}</small>
+            </div>
             <label className="ssr-trip-setup-field">
               <span>Start date</span>
               <input
@@ -297,13 +326,54 @@ export function TripView({
 
         {tripForecastError && (
           <div className="ssr-trip-banner error">
-            <h3>Multi-day forecast unavailable</h3>
-            <p>{tripForecastError}</p>
+            <div>
+              <h3>Multi-day forecast unavailable</h3>
+              <p>{tripForecastError}</p>
+            </div>
+            {hasObjective && (
+              <button type="button" className="ssr-trip-banner-action" onClick={() => void runTripForecast()}>
+                <RefreshCw size={15} aria-hidden /> Try again
+              </button>
+            )}
+          </div>
+        )}
+
+        {tripForecastLoading && tripForecastRows.length === 0 && (
+          <div className="ssr-trip-loading" role="status" aria-live="polite">
+            <RefreshCw className="ssr-trip-loading-icon" aria-hidden />
+            <div>
+              <strong>Comparing {tripDurationDays} daily windows</strong>
+              <span>Checking weather, avalanche context, and travel-hour thresholds for each day.</span>
+            </div>
           </div>
         )}
 
         {tripForecastRows.length > 0 && (
           <>
+            {/* DECISION SPOTLIGHT */}
+            {best && (
+              <section className={`ssr-trip-recommendation ${levelClass(best.decisionLevel)}`} aria-labelledby="trip-recommendation-title">
+                <div className="ssr-trip-recommendation-icon" aria-hidden>
+                  <CalendarDays />
+                </div>
+                <div className="ssr-trip-recommendation-copy">
+                  <span className="ssr-trip-recommendation-eyebrow">
+                    {hasClearGoDay ? 'Most favorable go day' : 'Most favorable — still use caution'}
+                  </span>
+                  <h2 id="trip-recommendation-title">{weekdayLabel(best.date)}, {monthDayLabel(best.date)}</h2>
+                  <p>{localizeUnitText(best.decisionHeadline)}</p>
+                </div>
+                <div className="ssr-trip-recommendation-facts" aria-label="Recommended day summary">
+                  <span><strong>{best.score ?? '—'}</strong> safety score</span>
+                  <span><strong>{formatWindDisplay(best.windGustMph, { includeUnit: false })}</strong> peak gust</span>
+                  <span><strong>{best.precipChance !== null ? `${best.precipChance}%` : '—'}</strong> precip</span>
+                </div>
+                <button type="button" className="ssr-trip-recommendation-action" onClick={reviewBestDay}>
+                  Review this day <ArrowRight size={15} aria-hidden />
+                </button>
+              </section>
+            )}
+
             {/* OVERVIEW */}
             <div className="ssr-trip-overview">
               <div className="ssr-trip-ov">
@@ -348,7 +418,14 @@ export function TripView({
             </div>
 
             {/* DAY STRIP */}
-            <div className="ssr-trip-days">
+            <div className="ssr-trip-section-head">
+              <div>
+                <span>Day-by-day comparison</span>
+                <h2>Choose a day to inspect</h2>
+              </div>
+              <p><Clock3 aria-hidden /> All days use a {tripStartDisplay} start and {travelWindowHoursLabel} window.</p>
+            </div>
+            <div className="ssr-trip-days" role="group" aria-label="Trip forecast days">
               {tripForecastRows.map((day, i) => {
                 const dlv = levelClass(day.decisionLevel);
                 const gustWarn = typeof day.windGustMph === 'number' && day.windGustMph >= 35;
@@ -357,8 +434,24 @@ export function TripView({
                   <button
                     type="button"
                     key={day.date}
+                    ref={(node) => { dayRefs.current[i] = node; }}
                     className={`ssr-trip-day ${sel === i ? 'sel' : ''}`}
-                    onClick={() => setSel(i)}
+                    onClick={() => selectDay(i)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        selectDay((i + 1) % tripForecastRows.length, true);
+                      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        selectDay((i - 1 + tripForecastRows.length) % tripForecastRows.length, true);
+                      } else if (event.key === 'Home') {
+                        event.preventDefault();
+                        selectDay(0, true);
+                      } else if (event.key === 'End') {
+                        event.preventDefault();
+                        selectDay(tripForecastRows.length - 1, true);
+                      }
+                    }}
                     aria-pressed={sel === i}
                   >
                     <div className={`ssr-trip-day-band ${dlv}`} />
@@ -406,7 +499,7 @@ export function TripView({
 
             {/* SELECTED DAY DETAIL */}
             {selected && (
-              <div className="ssr-trip-detail">
+              <div className="ssr-trip-detail" ref={detailRef} aria-live="polite">
                 <div className="ssr-trip-detail-h">
                   <div className="ssr-trip-detail-title">
                     <span className={`ssr-trip-day-pill ${levelClass(selected.decisionLevel)}`}>{selected.decisionLevel}</span>
