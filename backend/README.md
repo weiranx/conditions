@@ -6,7 +6,7 @@ Express API for the SummitSafe backcountry planning app.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/safety` | Synthesized planning report for a coordinate + date/time |
+| GET | `/api/safety` | Synthesized planning report with separate safety and pleasantness scores |
 | GET | `/api/search` | Objective search (local peak catalog + Nominatim) |
 | GET | `/api/sat-oneliner` | Satellite-friendly one-line condition summary |
 | GET | `/api/route-suggestions` | Claude-generated routes for a named peak |

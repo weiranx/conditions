@@ -195,7 +195,8 @@ Core domain and orchestration logic remains in `backend/index.js`.
 8. **Evaluate avalanche relevance** for the selected objective type and time context.
 9. **Classify terrain/trail** surface and derive gear suggestions.
 10. **Synthesize fire/heat risk** and build the overall safety score with confidence factors.
-11. **Stamp timestamps** and return the unified response payload.
+11. **Calculate pleasantness** as a separate weather-comfort score for the selected travel window.
+12. **Stamp timestamps** and return the unified response payload.
 
 On partial upstream failures, the backend returns a degraded but usable `200` response with `partialData: true` and an `apiWarning` field describing which feeds failed.
 

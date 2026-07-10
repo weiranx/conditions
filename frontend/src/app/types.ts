@@ -446,6 +446,22 @@ export interface SafetyData {
       snotelDistanceKm?: number | null;
     };
   };
+  /** Weather-comfort outlook only; never used for the safety decision. */
+  pleasantness?: {
+    scoreVersion?: string;
+    score: number | null;
+    confidence?: number;
+    label: 'Excellent' | 'Pleasant' | 'Mixed' | 'Uncomfortable' | 'Harsh' | 'Unknown' | string;
+    summary: string;
+    factors?: Array<{
+      factor: string;
+      score: number;
+      weight: number;
+      impact: number;
+      message: string;
+    }>;
+    disclaimer?: string;
+  };
   safety: {
     /** Scoring model version; bump when thresholds change so logged scores stay comparable. */
     scoreVersion?: string;

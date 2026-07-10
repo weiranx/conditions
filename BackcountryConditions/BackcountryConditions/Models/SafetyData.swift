@@ -20,6 +20,7 @@ struct SafetyData: Codable, Sendable {
     var gear: [GearItem]?
     var trail: String?
     var terrainCondition: TerrainCondition?
+    var pleasantness: Pleasantness?
     var safety: Safety
 }
 
@@ -698,4 +699,28 @@ struct GroupImpact: Codable, Sendable {
     var raw: Double?
     var capped: Double?
     var cap: Double?
+}
+
+// MARK: - Pleasantness
+
+/// Weather comfort only. This value is deliberately separate from the safety
+/// score and must not affect DecisionEngine output.
+struct Pleasantness: Codable, Sendable {
+    var scoreVersion: String?
+    var score: Double?
+    var confidence: Double?
+    var label: String
+    var summary: String
+    var factors: [PleasantnessFactor]?
+    var disclaimer: String?
+}
+
+struct PleasantnessFactor: Codable, Sendable, Identifiable {
+    var factor: String
+    var score: Double
+    var weight: Double
+    var impact: Double
+    var message: String
+
+    var id: String { factor }
 }

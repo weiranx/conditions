@@ -82,6 +82,7 @@ curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21
 | `trail` | Trail/terrain surface classification string |
 | `gear` | Array of gear-focus suggestion strings |
 | `safety` | Risk score, confidence level, contributing factors, and plain-language explanations |
+| `pleasantness` | Separate weather-comfort score, label, confidence, summary, and contributing factors |
 
 **Partial data fields** (present when one or more upstream feeds failed):
 
@@ -109,10 +110,23 @@ Legacy rain aliases (`past12h*`, `past24h*`, `past48h*`) are included for compat
 
 | Field | Description |
 |---|---|
-| `score` | Numeric risk score (higher = more risk) |
-| `confidence` | Confidence level of the score (`high` / `medium` / `low`) |
+| `score` | Numeric conditions score from 0–100 (higher means fewer modeled hazards) |
+| `confidence` | Numeric confidence in the score from 20–100 |
 | `factors` | Array of individual risk factor objects with name, value, and weight |
 | `explanations` | Array of plain-language explanation strings for each contributing factor |
+
+### `pleasantness` Field
+
+This score describes expected weather comfort and is deliberately independent from the safety score and go/no-go decision.
+
+| Field | Description |
+|---|---|
+| `score` | Weather-comfort score from 0–100, or `null` when no usable weather forecast is available |
+| `label` | `Excellent`, `Pleasant`, `Mixed`, `Uncomfortable`, `Harsh`, or `Unknown` |
+| `confidence` | Numeric coverage confidence from 0–100 |
+| `summary` | Plain-language comfort outlook for the selected travel window |
+| `factors` | Temperature (including capped dew-point/humidity comfort), wind, precipitation, views/daylight, and air-quality component scores with weights and impacts |
+| `disclaimer` | Reminder that pleasantness does not change the safety decision |
 
 ---
 

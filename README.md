@@ -21,6 +21,7 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 - **Fire & Heat Risk** — synthesized signals for warm-season objectives
 - **Terrain & Gear** — trail surface classification and gear-focus suggestions
 - **Safety Score** — weighted risk score with confidence factors, temporal weighting, combined hazard detection, and plain-language explanations
+- **Pleasantness Score** — a separate 0–100 weather-comfort outlook based on temperature/dew point, wind, precipitation, views/daylight, and air quality
 - **Route Analysis** — Claude-powered multi-waypoint route briefings with per-waypoint conditions and go/no-go recommendations
 - **AI Field Brief** — on-demand narrative summary of current conditions
 - **Wind Loading** — aspect/elevation rose showing wind exposure patterns

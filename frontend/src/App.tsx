@@ -1017,6 +1017,7 @@ function App() {
             snowpack: safetyData.snowpack || null,
             fireRisk: safetyData.fireRisk || null,
             heatRisk: safetyData.heatRisk || null,
+            pleasantness: safetyData.pleasantness || null,
             safety: safetyData.safety,
             decision,
           })

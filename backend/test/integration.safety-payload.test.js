@@ -140,6 +140,16 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.body.terrainCondition).toBeTruthy();
     expect(res.body.safety).toBeTruthy();
     expect(typeof res.body.safety.score).toBe('number');
+    expect(res.body.pleasantness).toMatchObject({
+      scoreVersion: '1.1.0',
+      label: expect.any(String),
+      summary: expect.any(String),
+      disclaimer: expect.stringMatching(/does not change the safety score/i),
+    });
+    expect(typeof res.body.pleasantness.score).toBe('number');
+    expect(res.body.pleasantness.score).toBeGreaterThanOrEqual(0);
+    expect(res.body.pleasantness.score).toBeLessThanOrEqual(100);
+    expect(Array.isArray(res.body.pleasantness.factors)).toBe(true);
   }, 20000);
 
   test('GET /api/safety returns 200 with partialData:true and an apiWarning when a pipeline step throws', async () => {
@@ -161,5 +171,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.body.apiWarning.length).toBeGreaterThan(0);
     expect(res.body.safety).toBeTruthy();
     expect(typeof res.body.safety.score).toBe('number');
+    expect(res.body.pleasantness).toBeTruthy();
+    expect(typeof res.body.pleasantness.score).toBe('number');
   }, 20000);
 });

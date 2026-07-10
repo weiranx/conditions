@@ -50,6 +50,47 @@
 .ssr-dash-risk.nogo .ssr-dash-pill::before { background: var(--d-nogo); }
 html[data-theme="dark"] .ssr-dash-pill { border-color: var(--d-line-2); }
 
+.ssr-dash-pleasantness {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 30px; padding: 5px 8px; border-radius: 4px;
+  border: 1px solid var(--d-line-2); background: var(--d-surface-2); color: var(--d-ink-2);
+  font-size: 12.5px; font-weight: 600;
+}
+.ssr-dash-pleasantness svg { flex: none; }
+.ssr-dash-pleasantness b { font-size: 14px; color: var(--d-ink); font-variant-numeric: tabular-nums; }
+.ssr-dash-pleasantness small { color: var(--d-ink-3); font-size: 11.5px; font-weight: 600; }
+.ssr-dash-pleasantness.good { background: oklch(96% 0.035 86); border-color: oklch(86% 0.08 80); color: oklch(48% 0.12 66); }
+.ssr-dash-pleasantness.good b, .ssr-dash-pleasantness.good small { color: oklch(43% 0.1 66); }
+.ssr-dash-pleasantness.mixed { background: var(--d-warn-bg); border-color: oklch(85% 0.06 60); color: var(--d-warn-deep); }
+.ssr-dash-pleasantness.mixed b, .ssr-dash-pleasantness.mixed small { color: var(--d-warn-deep); }
+.ssr-dash-pleasantness.poor { background: var(--d-nogo-bg); border-color: oklch(82% 0.08 28); color: var(--d-nogo-deep); }
+.ssr-dash-pleasantness.poor b, .ssr-dash-pleasantness.poor small { color: var(--d-nogo-deep); }
+html[data-theme="dark"] .ssr-dash-pleasantness { border-color: var(--d-line-2); }
+
+.ssr-dash-pleasantness-explanation {
+  width: 100%; padding: 10px 12px; border-radius: 5px;
+  border-left: 3px solid oklch(70% 0.12 70);
+  background: oklch(97% 0.025 82); color: var(--d-ink-2);
+  font-size: 12.5px; line-height: 1.5;
+}
+.ssr-dash-pleasantness-explanation p { margin: 0; }
+.ssr-dash-pleasantness-explanation p b { color: var(--d-ink); }
+.ssr-dash-pleasantness-explanation details { margin-top: 7px; }
+.ssr-dash-pleasantness-explanation summary {
+  width: fit-content; cursor: pointer; color: var(--d-ink);
+  font-weight: 700; list-style-position: outside;
+}
+.ssr-dash-pleasantness-explanation ul {
+  display: grid; gap: 6px; margin: 8px 0; padding-left: 18px;
+}
+.ssr-dash-pleasantness-explanation li { padding-left: 2px; }
+.ssr-dash-pleasantness-explanation li b { color: var(--d-ink); }
+.ssr-dash-pleasantness-explanation small { color: var(--d-ink-3); font-size: 11.5px; }
+html[data-theme="dark"] .ssr-dash-pleasantness-explanation {
+  border-left-color: oklch(72% 0.1 75);
+  background: oklch(30% 0.025 75 / 0.65);
+}
+
 .ssr-dash-conf { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--d-ink-2); font-weight: 500; }
 .ssr-dash-conf b { color: var(--d-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ssr-dash-conf-bar { width: 64px; height: 6px; border-radius: 3px; background: var(--d-surface-3); overflow: hidden; }

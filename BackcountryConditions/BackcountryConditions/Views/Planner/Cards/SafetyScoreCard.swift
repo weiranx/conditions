@@ -10,6 +10,7 @@ struct SafetyScoreCard: View {
         CollapsibleSection(title: "Safety Score", systemImage: "shield.checkered", headerColor: scoreColor) {
             VStack(spacing: 16) {
                 scoreHeader
+                pleasantnessOutlook
                 factorBreakdown
                 explanationsList
                 aiBriefSection
@@ -45,6 +46,44 @@ struct SafetyScoreCard: View {
             }
 
             Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Pleasantness
+
+    @ViewBuilder
+    private var pleasantnessOutlook: some View {
+        if let pleasantness = data.pleasantness, let score = pleasantness.score {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sun.max.fill")
+                        .foregroundStyle(.orange)
+                    Text("Pleasantness")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text("\(Int(score.rounded()))")
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(Color.scoreColor(score))
+                    Text("/ 100 · \(pleasantness.label)")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(pleasantness.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Weather comfort only — separate from the safety decision.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(12)
+            .background(.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(.orange.opacity(0.16), lineWidth: 0.5)
+            )
         }
     }
 

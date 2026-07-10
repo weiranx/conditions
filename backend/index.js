@@ -61,6 +61,7 @@ const POPULAR_PEAKS = require('./peaks.json');
 
 // Extracted modules
 const { calculateSafetyScore } = require('./src/utils/safety-score');
+const { calculatePleasantnessScore } = require('./src/utils/pleasantness-score');
 const {
   createUnknownAvalancheData,
   evaluateAvalancheRelevance,
@@ -210,6 +211,7 @@ const buildSafetyResponsePayload = ({
   trailStatus,
   terrainConditionData,
   analysis,
+  pleasantness,
   partial = null,
 }) => {
   const stampGeneratedTime = (value) => {
@@ -247,6 +249,7 @@ const buildSafetyResponsePayload = ({
     trail: trailStatus,
     terrainCondition: terrainConditionData,
     safety: analysis,
+    pleasantness,
   };
   delete payload.activity;
 
@@ -517,6 +520,11 @@ const safetyHandler = async (req, res) => {
       selectedStartClock: requestedStartClock,
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
+    const pleasantness = calculatePleasantnessScore({
+      weatherData,
+      airQualityData,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+    });
     const todayDate = new Date().toISOString().slice(0, 10);
     const responseGeneratedAt = new Date().toISOString();
 
@@ -543,6 +551,7 @@ const safetyHandler = async (req, res) => {
       trailStatus,
       terrainConditionData,
       analysis,
+      pleasantness,
     });
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.json(responsePayload);
@@ -605,6 +614,11 @@ const safetyHandler = async (req, res) => {
       selectedStartClock: requestedStartClock,
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
+    const pleasantness = calculatePleasantnessScore({
+      weatherData: safeWeatherData,
+      airQualityData: safeAirQualityData,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+    });
 
     const fallbackGeneratedAt = new Date().toISOString();
 
@@ -631,6 +645,7 @@ const safetyHandler = async (req, res) => {
       trailStatus: safeTrailStatus,
       terrainConditionData: safeTerrainCondition,
       analysis,
+      pleasantness,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     });
     logReportRequest({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
@@ -691,6 +706,7 @@ module.exports = {
   buildFireRiskData,
   buildHeatRiskData,
   calculateSafetyScore,
+  calculatePleasantnessScore,
   findMatchingAvalancheZone,
   resolveAvalancheCenterLink,
   resolveNwsAlertSourceLink,

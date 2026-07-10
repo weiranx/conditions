@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Sparkles,
   LoaderCircle,
+  Sun,
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
 import { formatAiNarrativeParagraphs } from '../../app/text-utils';
@@ -60,6 +61,17 @@ export function DashboardSummaryCard({
   const score = Math.round(safetyData.safety.score);
   const scoreColor = getScoreColor(score, safetyData.safety.tier);
   const confidence = typeof safetyData.safety.confidence === 'number' ? Math.round(safetyData.safety.confidence) : null;
+  const pleasantness = safetyData.pleasantness;
+  const pleasantnessScore = typeof pleasantness?.score === 'number' && Number.isFinite(pleasantness.score)
+    ? Math.round(pleasantness.score)
+    : null;
+  const pleasantnessTone = pleasantnessScore === null
+    ? ''
+    : pleasantnessScore >= 75
+      ? 'good'
+      : pleasantnessScore >= 60
+        ? 'mixed'
+        : 'poor';
   const dashOffset = GAUGE_C * (1 - Math.max(0, Math.min(100, score)) / 100);
   const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : `${decision.level} risk`;
   const maxGustMph = preferences.maxWindGustMph || 35;
@@ -104,6 +116,17 @@ export function DashboardSummaryCard({
           <div className="ssr-dash-mid">
             <div className="ssr-dash-pill-row">
               <span className="ssr-dash-pill">{tierLabel}</span>
+              {pleasantnessScore !== null && (
+                <span
+                  className={`ssr-dash-pleasantness ${pleasantnessTone}`}
+                  aria-label={`Pleasantness ${pleasantnessScore} out of 100, ${pleasantness?.label || 'rated'}. ${pleasantness?.summary || ''}`}
+                >
+                  <Sun size={14} aria-hidden />
+                  <span>Pleasantness</span>
+                  <b>{pleasantnessScore}</b>
+                  <small>/100 · {pleasantness?.label}</small>
+                </span>
+              )}
               {confidence !== null && (
                 <span className="ssr-dash-conf">
                   Confidence <b>{confidence}%</b>
@@ -111,6 +134,24 @@ export function DashboardSummaryCard({
                 </span>
               )}
             </div>
+            {pleasantnessScore !== null && pleasantness?.summary && (
+              <div className="ssr-dash-pleasantness-explanation">
+                <p><b>Comfort outlook.</b> {pleasantness.summary}</p>
+                {Array.isArray(pleasantness.factors) && pleasantness.factors.length > 0 && (
+                  <details>
+                    <summary>How this score is calculated</summary>
+                    <ul>
+                      {pleasantness.factors.map((factor) => (
+                        <li key={factor.factor}>
+                          <b>{factor.factor}: {Math.round(factor.score)}/100.</b> {factor.message}
+                        </li>
+                      ))}
+                    </ul>
+                    {pleasantness.disclaimer && <small>{pleasantness.disclaimer}</small>}
+                  </details>
+                )}
+              </div>
+            )}
             {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0 && (
               <ul className="ssr-dash-conf-reasons">
                 {safetyData.safety.confidenceReasons.map((reason, idx) => (
