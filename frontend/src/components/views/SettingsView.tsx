@@ -79,6 +79,7 @@ export interface SettingsViewProps {
   resetPreferences: () => void;
   navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
   openPlannerView: () => void;
+  openTripToolView: () => void;
 }
 
 const THEME_OPTIONS: Array<[ThemeMode, string]> = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
@@ -188,6 +189,7 @@ export function SettingsView({
   resetPreferences,
   navigateToView,
   openPlannerView,
+  openTripToolView,
 }: SettingsViewProps) {
   const [saved, setSaved] = React.useState(false);
   const [activeSection, setActiveSection] = React.useState('timing');
@@ -226,7 +228,12 @@ export function SettingsView({
   return (
     <div key="view-settings" className={appShellClassName} aria-busy={isViewPending}>
       <div className="ssr-settings">
-        <ProductNav active="settings" navigateToView={navigateToView} openPlannerView={openPlannerView} />
+        <ProductNav
+          active="settings"
+          navigateToView={navigateToView}
+          openPlannerView={openPlannerView}
+          openTripToolView={openTripToolView}
+        />
         <div className="ssr-set-head">
           <div className="ssr-set-kicker">Planning preferences</div>
           <h1>Settings</h1>

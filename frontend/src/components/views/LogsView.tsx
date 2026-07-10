@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { House } from 'lucide-react';
 import { fetchApi } from '../../lib/api-client';
+import type { AppView } from '../../hooks/useUrlState';
+import { ProductNav } from './ProductNav';
 
 interface ReportLogEntry {
   timestamp: string;
@@ -19,7 +20,13 @@ interface ReportLogEntry {
 
 const LOGS_SESSION_KEY = 'summitsafe:logs-key';
 
-export function LogsView({ onHome }: { onHome: () => void }) {
+interface LogsViewProps {
+  navigateToView: (view: AppView) => void;
+  openPlannerView: () => void;
+  openTripToolView: () => void;
+}
+
+export function LogsView({ navigateToView, openPlannerView, openTripToolView }: LogsViewProps) {
   const [secretKey, setSecretKey] = useState<string>(() => sessionStorage.getItem(LOGS_SESSION_KEY) ?? '');
   const [draft, setDraft] = useState('');
   const [rejected, setRejected] = useState(false);
@@ -42,16 +49,17 @@ export function LogsView({ onHome }: { onHome: () => void }) {
 
   return (
     <>
+      <ProductNav
+        active="logs"
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+        openTripToolView={openTripToolView}
+      />
       <div className="settings-head">
         <div>
           <div className="home-kicker">Backcountry Conditions</div>
           <h2>Report Logs</h2>
           <p>All safety report requests received by the server. Auto-refreshes every 30 seconds.</p>
-        </div>
-        <div className="settings-nav">
-          <button className="settings-btn" onClick={onHome}>
-            <House size={14} /> Homepage
-          </button>
         </div>
       </div>
       {secretKey

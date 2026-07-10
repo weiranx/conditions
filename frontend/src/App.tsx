@@ -626,7 +626,7 @@ function App() {
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, fetchSafetyData]);
 
-  const handleStartNewReport = useCallback(() => {
+  const handleEditPlan = useCallback(() => {
     setSafetyData(null);
     setError(null);
     setAiBriefNarrative(null);
@@ -1348,6 +1348,7 @@ function App() {
         runHealthChecks={runHealthChecks}
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
+        openTripToolView={openTripToolView}
       />
     );
   }
@@ -1356,7 +1357,11 @@ function App() {
     return (
       <div key="view-logs" className={appShellClassName} aria-busy={isViewPending}>
         <section className="settings-shell">
-          <LogsView onHome={() => navigateToView('home')} />
+          <LogsView
+            navigateToView={navigateToView}
+            openPlannerView={openPlannerView}
+            openTripToolView={openTripToolView}
+          />
         </section>
       </div>
     );
@@ -1408,6 +1413,7 @@ function App() {
         resetPreferences={resetPreferences}
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
+        openTripToolView={openTripToolView}
       />
     );
   }
@@ -1495,6 +1501,7 @@ function App() {
         handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
         navigateToPlanner={navigateToPlanner}
         navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
     );
@@ -1570,7 +1577,7 @@ function App() {
       handleRetryFetch={handleRetryFetch}
       timezoneMismatch={timezoneMismatch}
       deviceTimezone={deviceTimezone}
-      onStartNewReport={handleStartNewReport}
+      onEditPlan={handleEditPlan}
       onGenerateReport={handleGenerateReport}
       // Decision / safety
       decision={decision}
@@ -1873,4 +1880,3 @@ function App() {
 }
 
 export default App;
-

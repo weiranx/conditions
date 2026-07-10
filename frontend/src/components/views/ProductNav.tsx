@@ -1,24 +1,35 @@
-import { CalendarRange, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
+import { Activity, CalendarRange, FileClock, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
+import type { AppView } from '../../hooks/useUrlState';
 import '../../styles/page-chrome.css';
 
-type ProductView = 'home' | 'planner' | 'settings' | 'trip';
-
 interface ProductNavProps {
-  active: 'settings' | 'trip';
-  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
-  openPlannerView: () => void;
+  active: AppView;
+  navigateToView: (view: AppView) => void;
+  openPlannerView?: () => void;
+  openTripToolView?: () => void;
+  variant?: 'default' | 'overlay';
 }
 
-export function ProductNav({ active, navigateToView, openPlannerView }: ProductNavProps) {
-  const items: Array<{ id: ProductView; label: string; icon: typeof House; action: () => void }> = [
+export function ProductNav({
+  active,
+  navigateToView,
+  openPlannerView,
+  openTripToolView,
+  variant = 'default',
+}: ProductNavProps) {
+  const items: Array<{ id: AppView; label: string; icon: typeof House; action: () => void }> = [
     { id: 'home', label: 'Home', icon: House, action: () => navigateToView('home') },
-    { id: 'planner', label: 'Planner', icon: Map, action: openPlannerView },
-    { id: 'trip', label: 'Trip', icon: CalendarRange, action: () => navigateToView('trip') },
+    { id: 'planner', label: 'Planner', icon: Map, action: openPlannerView || (() => navigateToView('planner')) },
+    { id: 'trip', label: 'Trip', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) },
+    { id: 'status', label: 'Status', icon: Activity, action: () => navigateToView('status') },
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
   ];
+  if (active === 'logs') {
+    items.push({ id: 'logs', label: 'Logs', icon: FileClock, action: () => navigateToView('logs') });
+  }
 
   return (
-    <header className="ssr-product-nav">
+    <header className={`ssr-product-nav ${variant === 'overlay' ? 'is-overlay' : ''}`}>
       <button type="button" className="ssr-product-brand" onClick={() => navigateToView('home')}>
         <span className="ssr-product-mark"><Mountain size={16} strokeWidth={2.2} aria-hidden /></span>
         <span>Backcountry Conditions</span>

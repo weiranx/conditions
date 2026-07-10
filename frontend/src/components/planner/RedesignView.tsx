@@ -1542,15 +1542,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         )}
       </aside>
 
-      {/*
-        SCORE BREAKDOWN + GEAR — rendered full-width below the two-column grid rather than
-        packed into the narrow left column. The left column (score gauge → ... → here) is
-        consistently much taller than the right rail (avalanche/snowpack/.../sources), so
-        squeezing these trailing sections into the left track only left a large dead strip of
-        bare page background next to them. Full-width avoids that mismatch entirely instead of
-        depending on JS measurement or position:sticky (which doesn't work inside this app's
-        page-transition shell — see the note on `.ssr-side` in planner-redesign.css).
-      */}
+      {/* Continue the primary column while the independent right rail spans alongside it. */}
       <div className="ssr-report-footer">
         {/* SCORE BREAKDOWN */}
         {shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {

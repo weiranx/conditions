@@ -13,7 +13,9 @@ import {
   CalendarDays,
   RefreshCw,
   SlidersHorizontal,
-  FilePlus2,
+  PencilLine,
+  Send,
+  FileCheck2,
 } from 'lucide-react';
 import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
 import {
@@ -65,7 +67,8 @@ export interface PlannerMapSectionProps {
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
   locked: boolean;
-  onStartNewReport: () => void;
+  onEditPlan: () => void;
+  onGenerateReport: () => void;
 }
 
 export function PlannerMapSection({
@@ -81,8 +84,27 @@ export function PlannerMapSection({
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
-  locked, onStartNewReport,
+  locked, onEditPlan, onGenerateReport,
 }: PlannerMapSectionProps) {
+  let workflowTitle = 'Report draft';
+  let workflowDetail = 'Adjust the plan, then generate.';
+  let WorkflowStateIcon = PencilLine;
+  if (locked) {
+    workflowTitle = 'Current report';
+    workflowDetail = 'Inputs match the results below.';
+    WorkflowStateIcon = FileCheck2;
+  } else if (loading) {
+    workflowTitle = 'Generating report';
+    workflowDetail = 'Fetching the latest conditions for this plan.';
+    WorkflowStateIcon = RefreshCw;
+  }
+
+  const handleBeginEditing = () => {
+    onEditPlan();
+    setMobileMapControlsExpanded(() => true);
+    try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', 'true'); } catch { /* ignore */ }
+  };
+
   return (
     <section className="map-shell" id="planner-main-content">
       <div className="map-section">
@@ -224,31 +246,62 @@ export function PlannerMapSection({
           </button>
         </div>
 
-        <div className="map-actions-utils">
-          {locked && (
-            <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={!hasObjective || loading}>
-              <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
+        <div className="map-actions-footer">
+          {hasObjective && (
+            <div className={`map-report-workflow ${locked ? 'is-current' : 'is-draft'}`} role="status" aria-live="polite">
+              <div className="map-report-state">
+                <WorkflowStateIcon size={15} className={!locked && loading ? 'spin' : undefined} aria-hidden />
+                <span>
+                  <strong>{workflowTitle}</strong>
+                  {workflowDetail}
+                </span>
+              </div>
+              <div className="map-report-actions">
+                {locked ? (
+                  <>
+                    <button
+                      type="button"
+                      className="action-btn plan-action-primary"
+                      onClick={handleBeginEditing}
+                      title="Unlock the location and timing to create a different report"
+                    >
+                      <PencilLine size={14} /> Edit plan
+                    </button>
+                    <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
+                      <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating...' : 'Update report'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="action-btn plan-action-primary"
+                    onClick={onGenerateReport}
+                    disabled={loading}
+                    title="Generate a report for this location and timing"
+                  >
+                    <Send size={14} /> {loading ? 'Generating...' : 'Generate report'}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
-          {locked && (
-            <button type="button" className="action-btn" onClick={onStartNewReport} title="Clear this report and unlock the fields to change it">
-              <FilePlus2 size={14} /> New Report
-            </button>
-          )}
-          <button type="button" className="settings-btn" onClick={openTripToolView}>
-            <CalendarDays size={14} /> Multi-day
-          </button>
 
-          <div className="map-ext-links">
-            <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
-              <MapIcon size={15} />
-            </a>
-            <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Gaia GPS">
-              <Compass size={15} />
-            </a>
-            <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Windy">
-              <Wind size={15} />
-            </a>
+          <div className="map-actions-utils">
+            <button type="button" className="settings-btn" onClick={openTripToolView}>
+              <CalendarDays size={14} /> Multi-day
+            </button>
+
+            <div className="map-ext-links">
+              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
+                <MapIcon size={15} />
+              </a>
+              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Gaia GPS">
+                <Compass size={15} />
+              </a>
+              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Windy">
+                <Wind size={15} />
+              </a>
+            </div>
           </div>
         </div>
 

@@ -3,16 +3,15 @@ import {
   CalendarDays,
   Clock,
   Mountain,
-  Route,
   Activity,
   ArrowRight,
   Info,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
 import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../../app/constants';
 import '../../styles/home-redesign.css';
+import { ProductNav } from './ProductNav';
 
 const FEATURED_PEAKS: Suggestion[] = [
   { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular', type: 'peak' },
@@ -70,6 +69,7 @@ export interface HomeViewProps {
   // Navigation
   navigateToPlanner: () => void;
   navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
+  openPlannerView: () => void;
   openTripToolView: () => void;
 }
 
@@ -105,6 +105,7 @@ export function HomeView({
   handleTravelWindowHoursDraftBlur,
   navigateToPlanner,
   navigateToView,
+  openPlannerView,
   openTripToolView,
 }: HomeViewProps) {
   const submitSearch = () => {
@@ -117,20 +118,13 @@ export function HomeView({
       <div className="ssr-home">
         <section className="ssr-h-hero">
           <div className="ssr-h-hero-inner">
-            <header className="ssr-h-topbar">
-              <div className="ssr-h-brand" aria-label="Backcountry Conditions">
-                <span className="ssr-h-brand-mark"><Mountain size={17} strokeWidth={2.3} aria-hidden /></span>
-                <span>Backcountry Conditions</span>
-              </div>
-              <nav className="ssr-h-nav" aria-label="Application navigation">
-                <button type="button" className="ssr-h-icon-btn" onClick={openTripToolView} aria-label="Open multi-day trip planner" title="Multi-day trip planner">
-                  <Route size={17} aria-hidden />
-                </button>
-                <button type="button" className="ssr-h-icon-btn" onClick={() => navigateToView('settings')} aria-label="Open settings" title="Settings">
-                  <SlidersHorizontal size={17} aria-hidden />
-                </button>
-              </nav>
-            </header>
+            <ProductNav
+              active="home"
+              navigateToView={navigateToView}
+              openPlannerView={openPlannerView}
+              openTripToolView={openTripToolView}
+              variant="overlay"
+            />
 
             <div className="ssr-h-workspace">
               <h1>Plan an objective</h1>
@@ -235,11 +229,6 @@ export function HomeView({
               incorrect. Always verify official avalanche forecasts and field observations before
               committing to terrain.
             </span>
-          </div>
-          <div className="ssr-h-foot-links">
-            <button type="button" onClick={() => navigateToView('status')}>Status</button>
-            <button type="button" onClick={openTripToolView}>Multi-Day Trip</button>
-            <button type="button" onClick={() => navigateToView('settings')}>Settings</button>
           </div>
         </footer>
       </div>

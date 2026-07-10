@@ -66,10 +66,60 @@
   font-weight: 600;
 }
 
+.ssr-product-nav.is-overlay {
+  border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+
+.ssr-product-nav.is-overlay .ssr-product-brand {
+  color: #fff;
+}
+
+.ssr-product-nav.is-overlay .ssr-product-mark {
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  background: rgba(7, 22, 18, 0.24);
+  color: #d7efdd;
+}
+
+.ssr-product-nav.is-overlay .ssr-product-links button {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.ssr-product-nav.is-overlay .ssr-product-links button:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+}
+
+.ssr-product-nav.is-overlay .ssr-product-links button.is-active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.status-shell,
+.page-shell-logs .settings-shell {
+  padding-top: 0;
+}
+
+.status-shell > .settings-head,
+.page-shell-logs .settings-shell > .settings-head {
+  margin: 0 0 26px;
+  padding-top: 32px;
+}
+
+.status-shell > .settings-head h2,
+.page-shell-logs .settings-shell > .settings-head h2 {
+  margin-top: 0;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
 @media (max-width: 640px) {
   .ssr-product-nav { min-height: 56px; gap: 12px; }
   .ssr-product-brand > span:last-child { display: none; }
   .ssr-product-links { flex: 1; justify-content: flex-end; }
   .ssr-product-links button { width: 36px; padding: 0; justify-content: center; }
   .ssr-product-links button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .status-shell,
+  .page-shell-logs .settings-shell { padding-top: 0; }
+  .status-shell > .settings-head,
+  .page-shell-logs .settings-shell > .settings-head { padding-top: 28px; }
 }

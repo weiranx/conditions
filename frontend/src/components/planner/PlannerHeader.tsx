@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  SlidersHorizontal,
   BookmarkPlus,
   BookmarkCheck,
   Link2,
@@ -8,7 +7,6 @@ import {
 } from 'lucide-react';
 import { SearchBox } from './SearchBox';
 import type { Suggestion } from '../../lib/search';
-import type { AppView } from '../../hooks/useUrlState';
 
 export interface PlannerHeaderProps {
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
@@ -34,7 +32,6 @@ export interface PlannerHeaderProps {
   handleToggleSaveObjective: () => void;
   copiedLink: boolean;
   handleCopyLink: () => void;
-  navigateToView: (view: AppView) => void;
 }
 
 export function PlannerHeader({
@@ -45,26 +42,27 @@ export function PlannerHeader({
   handleSearchClear, handleUseTypedCoordinates, selectSuggestion, setActiveSuggestionIndex,
   disabled = false,
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
-  copiedLink, handleCopyLink, navigateToView,
+  copiedLink, handleCopyLink,
 }: PlannerHeaderProps) {
+  const [saveMessage, setSaveMessage] = React.useState('');
+  const saveMessageTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => () => {
+    if (saveMessageTimer.current) clearTimeout(saveMessageTimer.current);
+  }, []);
+
+  const toggleSavedObjective = () => {
+    const willSave = !objectiveIsSaved;
+    handleToggleSaveObjective();
+    setSaveMessage(willSave
+      ? 'Objective saved. Find it from any location search.'
+      : 'Objective removed from saved locations.');
+    if (saveMessageTimer.current) clearTimeout(saveMessageTimer.current);
+    saveMessageTimer.current = setTimeout(() => setSaveMessage(''), 2800);
+  };
+
   return (
     <header className="header-section">
-      <div className="brand">
-        <button
-          type="button"
-          className="brand-mark brand-home-btn"
-          onClick={() => navigateToView('home')}
-          aria-label="Go to homepage"
-          title="Homepage"
-        >
-          <img src="/summitsafe-mark.svg" alt="Backcountry Conditions" className="brand-mark-icon" />
-        </button>
-        <div className="brand-copy">
-          <h1>Backcountry Conditions</h1>
-          <p className="brand-subtitle">Backcountry planning dashboard</p>
-        </div>
-      </div>
-
       <div className="header-controls">
         <SearchBox
           searchWrapperRef={searchWrapperRef}
@@ -87,19 +85,25 @@ export function PlannerHeader({
         />
 
         <nav className="header-nav" aria-label="Planner controls">
-          <button type="button" className="secondary-btn header-nav-btn" onClick={() => navigateToView('settings')}>
-            <SlidersHorizontal size={14} /> <span className="nav-btn-label">Settings</span>
-          </button>
           {hasObjective && (
-            <button type="button" className="secondary-btn header-nav-btn" onClick={handleToggleSaveObjective}>
+            <button
+              type="button"
+              className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
+              onClick={toggleSavedObjective}
+              aria-pressed={objectiveIsSaved}
+              title={objectiveIsSaved ? 'Remove this objective from saved locations' : 'Save this objective for faster access from search'}
+            >
               {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
-              <span className="nav-btn-label">{objectiveIsSaved ? 'Saved' : 'Save'}</span>
+              <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
             </button>
           )}
           <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
             {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
           </button>
         </nav>
+        <span className={`planner-save-status ${saveMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
+          {saveMessage}
+        </span>
       </div>
     </header>
   );
