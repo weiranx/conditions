@@ -73,6 +73,53 @@ export function stringifyRawPayload(payload: unknown): string {
   }
 }
 
+export function buildAiAgentPrompt(rawReportPayload: string, reportUrl?: string): string {
+  const reportLink = reportUrl?.trim();
+  return [
+    'I have questions about the following Backcountry Conditions planner report.',
+    '',
+    'Help me understand what the report says and how its weather, avalanche, snowpack, alerts, terrain, and timing signals relate to my plan. Base your answers on the supplied report data. Clearly separate reported facts from your interpretation, call out stale, unavailable, unknown, or conflicting data, and do not invent missing conditions. This is planning support, not a substitute for current official forecasts, field observations, or my own go/no-go decision.',
+    ...(reportLink ? ['', 'Planner report URL:', reportLink] : []),
+    '',
+    'Planner report data (JSON):',
+    rawReportPayload,
+    '',
+    'My question:',
+    '[Type your question here]',
+  ].join('\n');
+}
+
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through for browsers or embedded views that deny the modern API.
+    }
+  }
+
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.readOnly = true;
+  textarea.setAttribute('aria-hidden', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+  }
+}
+
 export function collapseWhitespace(input: string): string {
   return input.replace(/\s+/g, ' ').trim();
 }

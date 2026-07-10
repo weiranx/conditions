@@ -161,6 +161,8 @@ html[data-theme="dark"] .ssr-dash-pleasantness-explanation {
 
 /* AI analysis */
 .ssr-dash-ai { padding: 14px 28px 18px; border-top: 1px solid var(--d-line); }
+.ssr-dash-ai-copy-btn { display: flex; margin-top: 10px; }
+.ssr-dash-ai > .ssr-dash-ai-copy-btn:first-child { margin-top: 0; }
 .ssr-dash-ai-btn {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px; border-radius: 6px; cursor: pointer;

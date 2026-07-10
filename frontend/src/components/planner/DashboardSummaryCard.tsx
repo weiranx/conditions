@@ -4,6 +4,8 @@ import {
   CloudRain,
   CheckCircle2,
   Sparkles,
+  Copy,
+  Check,
   LoaderCircle,
   Sun,
 } from 'lucide-react';
@@ -34,6 +36,8 @@ export interface DashboardSummaryCardProps {
   aiBriefError: string | null;
   aiBriefLoading: boolean;
   onRequestAiBrief: () => void;
+  copiedAiPrompt: boolean;
+  onCopyAiPrompt: () => void;
 }
 
 export function DashboardSummaryCard({
@@ -56,6 +60,8 @@ export function DashboardSummaryCard({
   aiBriefError,
   aiBriefLoading,
   onRequestAiBrief,
+  copiedAiPrompt,
+  onCopyAiPrompt,
 }: DashboardSummaryCardProps) {
   const lvClass = decision.level.toLowerCase().replace('-', ''); // go | caution | nogo
   const score = Math.round(safetyData.safety.score);
@@ -226,6 +232,17 @@ export function DashboardSummaryCard({
                 : <><Sparkles size={14} aria-hidden /> AI analysis</>}
             </button>
           )}
+          <button
+            type="button"
+            className="ssr-dash-ai-btn ssr-dash-ai-copy-btn"
+            onClick={onCopyAiPrompt}
+            aria-live="polite"
+            title="Copy this report and instructions to ask another AI agent a question"
+          >
+            {copiedAiPrompt
+              ? <><Check size={14} aria-hidden /> Prompt copied</>
+              : <><Copy size={14} aria-hidden /> Copy prompt for an AI agent</>}
+          </button>
         </div>
       </section>
     </div>

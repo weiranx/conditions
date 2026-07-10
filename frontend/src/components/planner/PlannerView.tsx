@@ -437,6 +437,8 @@ export interface PlannerViewProps {
   rawReportPayload: string;
   copiedRawPayload: boolean;
   handleCopyRawPayload: () => void;
+  copiedAiPrompt: boolean;
+  handleCopyAiPrompt: () => void;
 
   // Footer
   formatGeneratedAt: () => string;
