@@ -16,6 +16,7 @@ import {
   PencilLine,
   Send,
   FileCheck2,
+  ArrowDown,
 } from 'lucide-react';
 import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
 import {
@@ -105,8 +106,22 @@ export function PlannerMapSection({
     try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', 'true'); } catch { /* ignore */ }
   };
 
+  const handleViewReport = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const report = document.getElementById('planner-section-decision');
+    if (!report) return;
+    if (event.detail === 0) {
+      const heading = report.querySelector<HTMLElement>('h2');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
+    }
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    report.scrollIntoView({ behavior, block: 'start' });
+  };
+
   return (
-    <section className="map-shell" id="planner-main-content">
+    <section className={`map-shell ${locked ? 'has-report' : ''}`} id="planner-main-content">
       <div className="map-section">
         <MapContainer center={position} zoom={hasObjective ? 11 : 4} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer
@@ -261,7 +276,15 @@ export function PlannerMapSection({
                   <>
                     <button
                       type="button"
-                      className="action-btn plan-action-primary"
+                      className="action-btn plan-action-primary plan-view-report"
+                      onClick={handleViewReport}
+                      title="Jump to the report verdict and conditions"
+                    >
+                      <ArrowDown size={14} /> View report
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn"
                       onClick={handleBeginEditing}
                       title="Unlock the location and timing to create a different report"
                     >

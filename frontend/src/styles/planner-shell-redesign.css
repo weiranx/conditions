@@ -285,11 +285,19 @@ body:has(.page-shell-planner) {
   .ssr-shell .map-report-workflow { flex: 1 1 100%; justify-content: space-between; }
 }
 
+@media (max-width: 740px) {
+  .ssr-shell .map-shell.has-report .map-section {
+    height: min(34vh, 280px);
+    min-height: 230px;
+  }
+}
+
 @media (max-width: 560px) {
   .ssr-shell .map-actions-footer { gap: 10px; }
   .ssr-shell .map-report-workflow { align-items: stretch; flex-direction: column; gap: 10px; }
-  .ssr-shell .map-report-actions { width: 100%; }
+  .ssr-shell .map-report-actions { width: 100%; flex-wrap: wrap; }
   .ssr-shell .map-report-actions .action-btn { flex: 1 1 0; justify-content: center; }
+  .ssr-shell .map-report-actions .plan-view-report { flex-basis: 100%; }
   .ssr-shell .map-actions-utils { width: 100%; }
 }
 

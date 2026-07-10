@@ -202,6 +202,13 @@ function App() {
       return true;
     }
   });
+  const collapseMobilePlanControls = useCallback(() => {
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 740px)').matches) {
+      return;
+    }
+    setMobileMapControlsExpanded(() => false);
+    try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', 'false'); } catch { /* ignore */ }
+  }, []);
   const [mapFocusNonce, setMapFocusNonce] = useState(0);
   const [locatingUser, setLocatingUser] = useState(false);
   const hasInitializedHistoryRef = useRef(false);
@@ -640,6 +647,7 @@ function App() {
     if (!hasObjective) {
       return;
     }
+    collapseMobilePlanControls();
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
@@ -657,8 +665,9 @@ function App() {
       return;
     }
     setPendingAutoGenerate(false);
+    collapseMobilePlanControls();
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
-  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, fetchSafetyData]);
+  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, fetchSafetyData, collapseMobilePlanControls]);
 
   const handleEditPlan = useCallback(() => {
     setSafetyData(null);

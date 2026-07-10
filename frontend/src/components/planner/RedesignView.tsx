@@ -588,7 +588,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           <h1>
             {objectiveName || 'Objective'}
             <span className="ssr-sub">
-              {region} · {safetyData.weather.description || 'Backcountry'}
+              {props.formatIsoDateLabel(props.forecastDate)} · {region} · {safetyData.weather.description || 'Backcountry'}
             </span>
           </h1>
         </div>
