@@ -1,4 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Download,
+  ExternalLink,
+  FileClock,
+  KeyRound,
+  LoaderCircle,
+  Lock,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Users,
+  X,
+} from 'lucide-react';
 import { fetchApi } from '../../lib/api-client';
 import type { AppView } from '../../hooks/useUrlState';
 import { ProductNav } from './ProductNav';
@@ -31,14 +47,14 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
   const [draft, setDraft] = useState('');
   const [rejected, setRejected] = useState(false);
 
-  const handleUnauthorized = useCallback(() => {
+  const lockLogs = useCallback((wasRejected = false) => {
     sessionStorage.removeItem(LOGS_SESSION_KEY);
     setSecretKey('');
-    setRejected(true);
+    setRejected(wasRejected);
   }, []);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = useCallback((event: React.FormEvent) => {
+    event.preventDefault();
     const trimmed = draft.trim();
     if (!trimmed) return;
     sessionStorage.setItem(LOGS_SESSION_KEY, trimmed);
@@ -55,96 +71,147 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
-      <div className="settings-head">
-        <div>
-          <div className="home-kicker">Backcountry Conditions</div>
-          <h2>Report Logs</h2>
-          <p>All safety report requests received by the server. Auto-refreshes every 30 seconds.</p>
-        </div>
-      </div>
-      {secretKey
-        ? <ReportLogsTable secretKey={secretKey} onUnauthorized={handleUnauthorized} />
-        : (
-          <form onSubmit={handleSubmit} className="logs-unlock-form">
-            {rejected && <p className="logs-unlock-error">Incorrect key — try again.</p>}
-            <label htmlFor="logs-key-input">Access key</label>
-            <input
-              id="logs-key-input"
-              type="password"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Enter access key"
-              autoFocus
-            />
-            <button type="submit" className="primary-btn">Unlock</button>
-          </form>
-        )
-      }
+      <main className="logs-page">
+        <header className="logs-page-head">
+          <div>
+            <div className="logs-kicker"><FileClock size={14} aria-hidden /> Operations</div>
+            <h1>Report logs</h1>
+            <p>Monitor safety report traffic, response health, and processing time from the last seven days.</p>
+          </div>
+          {secretKey && (
+            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => lockLogs()}>
+              <Lock size={15} aria-hidden /> Lock
+            </button>
+          )}
+        </header>
+
+        {secretKey ? (
+          <ReportLogsDashboard secretKey={secretKey} onUnauthorized={() => lockLogs(true)} />
+        ) : (
+          <section className="logs-unlock-card" aria-labelledby="logs-unlock-title">
+            <div className="logs-unlock-icon"><KeyRound size={22} aria-hidden /></div>
+            <div className="logs-unlock-copy">
+              <h2 id="logs-unlock-title">Restricted access</h2>
+              <p>Enter the server’s logs key. It is stored only for this browser session.</p>
+            </div>
+            <form onSubmit={handleSubmit} className="logs-unlock-form">
+              <label htmlFor="logs-key-input">Access key</label>
+              <div className="logs-unlock-controls">
+                <input
+                  id="logs-key-input"
+                  type="password"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Enter access key"
+                  autoComplete="current-password"
+                  aria-invalid={rejected}
+                  aria-describedby={rejected ? 'logs-unlock-error' : undefined}
+                  autoFocus
+                />
+                <button type="submit" className="logs-btn logs-btn-primary" disabled={!draft.trim()}>
+                  Unlock
+                </button>
+              </div>
+              {rejected && <p id="logs-unlock-error" className="logs-unlock-error">That key was not accepted. Try again.</p>}
+            </form>
+          </section>
+        )}
+      </main>
     </>
   );
 }
 
-type LogSortKey = 'timestamp' | 'name' | 'coords' | 'date' | 'startTime' | 'statusCode' | 'safetyScore' | 'partialData' | 'durationMs' | 'ip';
+type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' | 'durationMs' | 'ip';
+type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial';
 
-const LOG_COLUMNS: { key: LogSortKey; label: string }[] = [
-  { key: 'timestamp', label: 'Time' },
-  { key: 'name', label: 'Name' },
-  { key: 'coords', label: 'Lat / Lon' },
-  { key: 'date', label: 'Date' },
-  { key: 'startTime', label: 'Start' },
-  { key: 'statusCode', label: 'Status' },
-  { key: 'safetyScore', label: 'Score' },
-  { key: 'partialData', label: 'Partial' },
-  { key: 'durationMs', label: 'Duration' },
-  { key: 'ip', label: 'IP' },
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'healthy', label: 'Healthy' },
+  { value: 'issues', label: 'Needs attention' },
+  { value: 'errors', label: 'Errors' },
+  { value: 'partial', label: 'Partial data' },
 ];
 
 function getLogSortValue(entry: ReportLogEntry, key: LogSortKey): string | number {
   switch (key) {
     case 'timestamp': return entry.timestamp;
     case 'name': return entry.name ?? '';
-    case 'coords': return entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)},${entry.lon.toFixed(4)}` : '';
     case 'date': return entry.date ?? '';
-    case 'startTime': return entry.startTime ?? '';
     case 'statusCode': return entry.statusCode;
     case 'safetyScore': return entry.safetyScore ?? -1;
-    case 'partialData': return entry.partialData == null ? -1 : entry.partialData ? 1 : 0;
     case 'durationMs': return entry.durationMs;
     case 'ip': return entry.ip ?? '';
-    default: return '';
   }
 }
 
-function getLogCellText(entry: ReportLogEntry, key: LogSortKey): string {
-  switch (key) {
-    case 'timestamp': return new Date(entry.timestamp).toLocaleString();
-    case 'name': return entry.name ?? '';
-    case 'coords': return entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '';
-    case 'date': return entry.date ?? '';
-    case 'startTime': return entry.startTime ?? '';
-    case 'statusCode': return String(entry.statusCode);
-    case 'safetyScore': return entry.safetyScore != null ? String(entry.safetyScore) : '';
-    case 'partialData': return entry.partialData == null ? '' : entry.partialData ? 'Yes' : 'No';
-    case 'durationMs': return String(entry.durationMs);
-    case 'ip': return entry.ip ?? '';
-    default: return '';
-  }
+function matchesStatus(entry: ReportLogEntry, filter: StatusFilter): boolean {
+  if (filter === 'healthy') return entry.statusCode === 200 && entry.partialData !== true;
+  if (filter === 'issues') return entry.statusCode !== 200 || entry.partialData === true;
+  if (filter === 'errors') return entry.statusCode !== 200;
+  if (filter === 'partial') return entry.partialData === true;
+  return true;
 }
 
-type LogColumnFilters = Partial<Record<LogSortKey, string>>;
+function formatDuration(durationMs: number): string {
+  if (!Number.isFinite(durationMs)) return '—';
+  return durationMs >= 1000 ? `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s` : `${durationMs}ms`;
+}
 
-function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
+function formatLogTime(timestamp: string): { primary: string; secondary: string } {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return { primary: 'Unknown', secondary: timestamp };
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return {
+    primary: date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
+    secondary: sameDay ? 'Today' : date.toLocaleDateString([], { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' }),
+  };
+}
+
+function escapeCsv(value: string | number | boolean | null): string {
+  const text = value == null ? '' : String(value);
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function downloadCsv(entries: ReportLogEntry[]) {
+  const keys: Array<keyof ReportLogEntry> = ['timestamp', 'name', 'lat', 'lon', 'date', 'startTime', 'statusCode', 'safetyScore', 'partialData', 'durationMs', 'ip', 'userAgent'];
+  const csv = [keys.join(','), ...entries.map((entry) => keys.map((key) => escapeCsv(entry[key])).join(','))].join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `report-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function SortButton({ sortKey, activeKey, ascending, onSort, children }: {
+  sortKey: LogSortKey;
+  activeKey: LogSortKey;
+  ascending: boolean;
+  onSort: (key: LogSortKey) => void;
+  children: React.ReactNode;
+}) {
+  const active = sortKey === activeKey;
+  return (
+    <button type="button" className={active ? 'logs-sort is-active' : 'logs-sort'} onClick={() => onSort(sortKey)}>
+      {children}<span aria-hidden>{active ? (ascending ? '↑' : '↓') : '↕'}</span>
+    </button>
+  );
+}
+
+function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
   const [sortAsc, setSortAsc] = useState(false);
-  const [columnSearches, setColumnSearches] = useState<LogColumnFilters>({});
-  const [exactFilters, setExactFilters] = useState<LogColumnFilters>({});
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; key: LogSortKey; value: string } | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (background = false) => {
+    if (background) setRefreshing(true);
     try {
       const { response, payload } = await fetchApi('/api/report-logs', {
         headers: { Authorization: `Bearer ${secretKey}` },
@@ -156,199 +223,185 @@ function ReportLogsTable({ secretKey, onUnauthorized }: { secretKey: string; onU
       if (response.ok && Array.isArray(payload)) {
         setLogs(payload as ReportLogEntry[]);
         setError(null);
+        setLastRefreshed(new Date());
       } else {
-        setError('Failed to load report logs.');
+        setError('The server could not load report logs.');
       }
-      setLastRefreshed(new Date());
     } catch {
-      setError('Network error loading logs.');
+      setError('Could not reach the server. Check your connection and try again.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [secretKey, onUnauthorized]);
 
   useEffect(() => {
     void fetchLogs();
-    const interval = setInterval(() => void fetchLogs(), 30_000);
-    return () => clearInterval(interval);
+    const interval = window.setInterval(() => void fetchLogs(true), 30_000);
+    return () => window.clearInterval(interval);
   }, [fetchLogs]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const dismiss = () => setContextMenu(null);
-    document.addEventListener('click', dismiss);
-    return () => document.removeEventListener('click', dismiss);
-  }, [contextMenu]);
-
-  const handleSort = (key: LogSortKey) => {
-    if (key === sortKey) {
-      setSortAsc((prev) => !prev);
-    } else {
-      setSortKey(key);
-      setSortAsc(key === 'name' || key === 'ip' || key === 'date');
-    }
-  };
-
-  const setColumnSearch = (key: LogSortKey, value: string) => {
-    setColumnSearches((prev) => {
-      if (!value) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return { ...prev, [key]: value };
-    });
-  };
-
-  const handleCellContextMenu = (e: React.MouseEvent, key: LogSortKey, entry: ReportLogEntry) => {
-    e.preventDefault();
-    const value = getLogCellText(entry, key);
-    if (!value) return;
-    setContextMenu({ x: e.clientX, y: e.clientY, key, value });
-  };
-
-  const applyExactFilter = (key: LogSortKey, value: string) => {
-    setExactFilters((prev) => ({ ...prev, [key]: value }));
-    setContextMenu(null);
-  };
-
-  const clearExactFilter = (key: LogSortKey) => {
-    setExactFilters((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const activeFilterCount = Object.keys(exactFilters).length;
+  const metrics = useMemo(() => {
+    const completed = logs.filter((entry) => entry.statusCode === 200).length;
+    const partial = logs.filter((entry) => entry.partialData === true).length;
+    const durations = logs.map((entry) => entry.durationMs).filter(Number.isFinite);
+    return {
+      successRate: logs.length ? Math.round((completed / logs.length) * 100) : 0,
+      partial,
+      averageDuration: durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : 0,
+      uniqueVisitors: new Set(logs.map((entry) => entry.ip).filter(Boolean)).size,
+    };
+  }, [logs]);
 
   const filteredAndSorted = useMemo(() => {
-    let result = logs;
-
-    for (const [key, q] of Object.entries(columnSearches) as [LogSortKey, string][]) {
-      if (!q) continue;
-      const lower = q.toLowerCase();
-      result = result.filter((e) => getLogCellText(e, key).toLowerCase().includes(lower));
-    }
-
-    for (const [key, val] of Object.entries(exactFilters) as [LogSortKey, string][]) {
-      result = result.filter((e) => getLogCellText(e, key) === val);
-    }
-
-    return [...result].sort((a, b) => {
-      const av = getLogSortValue(a, sortKey);
-      const bv = getLogSortValue(b, sortKey);
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortAsc ? cmp : -cmp;
+    const normalizedQuery = query.trim().toLowerCase();
+    const result = logs.filter((entry) => {
+      if (!matchesStatus(entry, statusFilter)) return false;
+      if (!normalizedQuery) return true;
+      return [entry.name, entry.lat, entry.lon, entry.date, entry.startTime, entry.statusCode, entry.safetyScore, entry.durationMs, entry.ip, entry.userAgent]
+        .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery));
     });
-  }, [logs, columnSearches, exactFilters, sortKey, sortAsc]);
+    return [...result].sort((a, b) => {
+      const left = getLogSortValue(a, sortKey);
+      const right = getLogSortValue(b, sortKey);
+      const comparison = left < right ? -1 : left > right ? 1 : 0;
+      return sortAsc ? comparison : -comparison;
+    });
+  }, [logs, query, statusFilter, sortKey, sortAsc]);
+
+  const handleSort = (key: LogSortKey) => {
+    if (key === sortKey) setSortAsc((current) => !current);
+    else {
+      setSortKey(key);
+      setSortAsc(key === 'name' || key === 'date' || key === 'ip');
+    }
+  };
 
   if (loading) {
-    return <p className="logs-status-msg">Loading logs…</p>;
+    return <div className="logs-state-card"><LoaderCircle className="logs-spin" size={20} aria-hidden /><span>Loading report activity…</span></div>;
   }
-  if (error) {
-    return <p className="logs-status-msg logs-error-msg">{error}</p>;
-  }
-  if (logs.length === 0) {
-    return (
-      <div className="logs-status-msg">
-        <p>No report requests logged yet. Run a safety report to see entries here.</p>
-        {lastRefreshed && <p className="logs-meta">Last checked: {lastRefreshed.toLocaleTimeString()}</p>}
-      </div>
-    );
-  }
-
-  const uniqueVisitors = new Set(logs.map((l) => l.ip).filter(Boolean)).size;
 
   return (
-    <div className="logs-table-wrap">
-      <div className="logs-toolbar">
-        {lastRefreshed && (
-          <p className="logs-meta">
-            {logs.length} entr{logs.length === 1 ? 'y' : 'ies'} · {uniqueVisitors} unique visitor{uniqueVisitors === 1 ? '' : 's'}
-            {filteredAndSorted.length !== logs.length && ` · ${filteredAndSorted.length} shown`}
-            {' '}· Last refreshed: {lastRefreshed.toLocaleTimeString()}
-          </p>
-        )}
-        {activeFilterCount > 0 && (
-          <div className="logs-active-filters">
-            {(Object.entries(exactFilters) as [LogSortKey, string][]).map(([key, val]) => {
-              const col = LOG_COLUMNS.find((c) => c.key === key);
-              return (
-                <span key={key} className="logs-filter-tag">
-                  {col?.label}: {val}
-                  <button className="logs-filter-tag-x" onClick={() => clearExactFilter(key)}>×</button>
-                </span>
-              );
-            })}
-            <button className="logs-clear-filters" onClick={() => setExactFilters({})}>Clear all</button>
-          </div>
-        )}
-      </div>
-      <table className="logs-table">
-        <thead>
-          <tr>
-            {LOG_COLUMNS.map((col) => (
-              <th key={col.key} className="logs-th-sortable" onClick={() => handleSort(col.key)}>
-                {col.label}
-                {sortKey === col.key && <span className="logs-sort-arrow">{sortAsc ? ' ▲' : ' ▼'}</span>}
-              </th>
-            ))}
-            <th>Link</th>
-          </tr>
-          <tr className="logs-search-row">
-            {LOG_COLUMNS.map((col) => (
-              <th key={col.key} className="logs-search-cell">
-                <input
-                  type="text"
-                  className="logs-col-search"
-                  placeholder="Filter…"
-                  value={columnSearches[col.key] ?? ''}
-                  onChange={(e) => setColumnSearch(col.key, e.target.value)}
-                />
-              </th>
-            ))}
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {filteredAndSorted.map((entry, i) => {
-            const plannerHref = entry.lat != null && entry.lon != null
-              ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
-              : null;
-            return (
-              <tr key={i} className={i % 2 === 0 ? 'logs-row-alt' : ''}>
-                <td className="logs-cell-nowrap" onContextMenu={(e) => handleCellContextMenu(e, 'timestamp', entry)}>{new Date(entry.timestamp).toLocaleString()}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'name', entry)}>{entry.name ?? '—'}</td>
-                <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'coords', entry)}>
-                  {entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : '—'}
-                </td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'date', entry)}>{entry.date ?? '—'}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'startTime', entry)}>{entry.startTime ?? '—'}</td>
-                <td className={entry.statusCode === 200 ? 'logs-cell-ok' : 'logs-cell-err'} onContextMenu={(e) => handleCellContextMenu(e, 'statusCode', entry)}>
-                  {entry.statusCode}
-                </td>
-                <td style={entry.safetyScore != null ? { color: entry.safetyScore >= 85 ? 'var(--accent-green)' : entry.safetyScore >= 70 ? 'var(--accent-teal)' : entry.safetyScore >= 55 ? 'var(--accent-yellow)' : entry.safetyScore >= 40 ? 'var(--accent-orange)' : 'var(--accent-red)', fontWeight: 600 } : undefined} onContextMenu={(e) => handleCellContextMenu(e, 'safetyScore', entry)}>
-                  {entry.safetyScore != null ? `${entry.safetyScore}%` : '—'}
-                </td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'partialData', entry)}>{entry.partialData == null ? '—' : entry.partialData ? 'Yes' : 'No'}</td>
-                <td onContextMenu={(e) => handleCellContextMenu(e, 'durationMs', entry)}>{entry.durationMs != null ? `${entry.durationMs}ms` : '—'}</td>
-                <td className="logs-cell-mono" onContextMenu={(e) => handleCellContextMenu(e, 'ip', entry)}>{entry.ip ?? '—'}</td>
-                <td>
-                  {plannerHref ? <a href={plannerHref} target="_blank" rel="noopener noreferrer">Open</a> : '—'}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {contextMenu && (
-        <div className="logs-context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
-          <button className="logs-context-item" onClick={() => applyExactFilter(contextMenu.key, contextMenu.value)}>
-            Filter {LOG_COLUMNS.find((c) => c.key === contextMenu.key)?.label} = "{contextMenu.value.length > 24 ? contextMenu.value.slice(0, 24) + '…' : contextMenu.value}"
-          </button>
+    <div className="logs-dashboard">
+      {error && (
+        <div className="logs-alert" role="alert">
+          <AlertTriangle size={17} aria-hidden />
+          <span>{error}</span>
+          <button type="button" onClick={() => void fetchLogs()}>Try again</button>
         </div>
       )}
+
+      <section className="logs-metrics" aria-label="Log summary">
+        <article className="logs-metric-card">
+          <span className="logs-metric-icon is-green"><CheckCircle2 size={18} aria-hidden /></span>
+          <div><strong>{metrics.successRate}%</strong><span>Successful responses</span></div>
+        </article>
+        <article className="logs-metric-card">
+          <span className="logs-metric-icon"><Clock3 size={18} aria-hidden /></span>
+          <div><strong>{formatDuration(metrics.averageDuration)}</strong><span>Average duration</span></div>
+        </article>
+        <article className="logs-metric-card">
+          <span className="logs-metric-icon is-amber"><AlertTriangle size={18} aria-hidden /></span>
+          <div><strong>{metrics.partial}</strong><span>Partial responses</span></div>
+        </article>
+        <article className="logs-metric-card">
+          <span className="logs-metric-icon"><Users size={18} aria-hidden /></span>
+          <div><strong>{metrics.uniqueVisitors}</strong><span>Unique networks</span></div>
+        </article>
+      </section>
+
+      <section className="logs-panel">
+        <div className="logs-panel-head">
+          <div>
+            <h2>Request activity</h2>
+            <p>{logs.length} retained request{logs.length === 1 ? '' : 's'} · up to seven days</p>
+          </div>
+          <div className="logs-panel-actions">
+            <span className="logs-refresh-status" aria-live="polite">
+              {refreshing ? 'Refreshing…' : lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+            </span>
+            <button type="button" className="logs-icon-btn" onClick={() => void fetchLogs(true)} disabled={refreshing} title="Refresh logs" aria-label="Refresh logs">
+              <RefreshCw className={refreshing ? 'logs-spin' : ''} size={16} aria-hidden />
+            </button>
+            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => downloadCsv(filteredAndSorted)} disabled={filteredAndSorted.length === 0}>
+              <Download size={15} aria-hidden /> Export CSV
+            </button>
+          </div>
+        </div>
+
+        <div className="logs-controls">
+          <label className="logs-search">
+            <Search size={16} aria-hidden />
+            <span className="sr-only">Search logs</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search location, date, status, network…" />
+            {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={15} aria-hidden /></button>}
+          </label>
+          <div className="logs-filter-tabs" aria-label="Filter by response status">
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                type="button"
+                key={filter.value}
+                className={statusFilter === filter.value ? 'is-active' : ''}
+                onClick={() => setStatusFilter(filter.value)}
+                aria-pressed={statusFilter === filter.value}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {logs.length === 0 ? (
+          <div className="logs-empty"><ShieldCheck size={26} aria-hidden /><h3>No report requests yet</h3><p>New safety reports will appear here automatically.</p></div>
+        ) : filteredAndSorted.length === 0 ? (
+          <div className="logs-empty"><Search size={26} aria-hidden /><h3>No matching requests</h3><p>Try a different search or status filter.</p><button type="button" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Clear filters</button></div>
+        ) : (
+          <div className="logs-table-scroll">
+            <table className="logs-table">
+              <thead>
+                <tr>
+                  <th><SortButton sortKey="timestamp" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Received</SortButton></th>
+                  <th><SortButton sortKey="name" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Report</SortButton></th>
+                  <th><SortButton sortKey="date" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Plan</SortButton></th>
+                  <th><SortButton sortKey="statusCode" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Response</SortButton></th>
+                  <th><SortButton sortKey="safetyScore" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Score</SortButton></th>
+                  <th><SortButton sortKey="durationMs" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Duration</SortButton></th>
+                  <th><SortButton sortKey="ip" activeKey={sortKey} ascending={sortAsc} onSort={handleSort}>Network</SortButton></th>
+                  <th><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAndSorted.map((entry, index) => {
+                  const time = formatLogTime(entry.timestamp);
+                  const plannerHref = entry.lat != null && entry.lon != null
+                    ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
+                    : null;
+                  const scoreClass = entry.safetyScore == null ? '' : entry.safetyScore >= 70 ? 'is-good' : entry.safetyScore >= 55 ? 'is-watch' : 'is-risk';
+                  return (
+                    <tr key={`${entry.timestamp}-${entry.lat}-${entry.lon}-${index}`}>
+                      <td><span className="logs-cell-primary logs-cell-tabular">{time.primary}</span><span className="logs-cell-secondary">{time.secondary}</span></td>
+                      <td><span className="logs-cell-primary">{entry.name ?? 'Unnamed report'}</span><span className="logs-cell-secondary logs-cell-mono">{entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : 'No coordinates'}</span></td>
+                      <td><span className="logs-cell-primary">{entry.date ?? 'No date'}</span><span className="logs-cell-secondary">{entry.startTime ? `Starts ${entry.startTime}` : 'No start time'}</span></td>
+                      <td>
+                        <span className={entry.statusCode === 200 ? 'logs-status-pill is-ok' : 'logs-status-pill is-error'}>{entry.statusCode}</span>
+                        {entry.partialData === true && <span className="logs-status-pill is-partial">Partial</span>}
+                      </td>
+                      <td><span className={`logs-score ${scoreClass}`}>{entry.safetyScore != null ? entry.safetyScore : '—'}</span></td>
+                      <td className="logs-cell-tabular">{formatDuration(entry.durationMs)}</td>
+                      <td title={entry.userAgent ?? undefined}><span className="logs-cell-primary logs-cell-mono">{entry.ip ?? '—'}</span><span className="logs-cell-secondary">Masked</span></td>
+                      <td>{plannerHref ? <a className="logs-open-link" href={plannerHref} target="_blank" rel="noopener noreferrer" aria-label={`Open ${entry.name ?? 'report'} in planner`}><ExternalLink size={15} aria-hidden /></a> : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <footer className="logs-panel-foot">
+          <span>Showing {filteredAndSorted.length} of {logs.length}</span>
+          <span>Auto-refreshes every 30 seconds</span>
+        </footer>
+      </section>
     </div>
   );
 }
