@@ -30,6 +30,7 @@ import { formatAiNarrativeParagraphs } from '../../app/text-utils';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
+import { StartTimeScenarioCard } from './StartTimeScenarioCard';
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -259,6 +260,11 @@ function RedesignViewComponent(props: PlannerViewProps) {
     formatTempDisplay,
     formatWindDisplay,
     formatElevationDisplay,
+    alpineStartTime,
+    setAlpineStartTime,
+    startTimeScenarioComparison,
+    startTimeScenariosLoading,
+    startTimeScenariosError,
     decisionActionLine,
     travelWindowRows,
     travelWindowHoursLabel,
@@ -646,6 +652,18 @@ function RedesignViewComponent(props: PlannerViewProps) {
           onCopyAiPrompt={handleCopyAiPrompt}
         />
         </div>
+
+        <StartTimeScenarioCard
+          comparison={startTimeScenarioComparison}
+          loading={startTimeScenariosLoading}
+          error={startTimeScenariosError}
+          preferences={preferences}
+          currentStartTime={alpineStartTime}
+          formatClockForStyle={formatClockForStyle}
+          formatWindDisplay={formatWindDisplay}
+          formatTempDisplay={formatTempDisplay}
+          onSelectStartTime={setAlpineStartTime}
+        />
 
         {/* ACTION PLAN */}
         <section className="ssr-card ssr-actions" id="planner-section-actions">

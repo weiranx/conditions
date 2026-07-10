@@ -109,6 +109,7 @@ import { useSearchSuggestions } from './hooks/useSearchSuggestions';
 import { useUrlState, useSyncUrlEffect } from './hooks/useUrlState';
 import type { AppView } from './hooks/useUrlState';
 import { useDayComparisons } from './hooks/useDayComparisons';
+import { useStartTimeScenarios } from './hooks/useStartTimeScenarios';
 import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePreferenceHandlers';
 import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 
@@ -873,6 +874,12 @@ function App() {
     maxForecastDate,
   });
   const { dayOverDay, setDayOverDay, betterDaySuggestions, betterDaySuggestionsLoading, betterDaySuggestionsNote } = dayComparisonsHook;
+  const startTimeScenarios = useStartTimeScenarios({
+    enabled: hasObjective && view === 'planner' && Boolean(safetyData),
+    forecastDate,
+    position: { lat: position.lat, lng: position.lng },
+    preferences,
+  });
 
   const decisionDisplay = buildDecisionDisplayState(decision);
   const {
@@ -1675,6 +1682,9 @@ function App() {
       betterDaySuggestions={betterDaySuggestions}
       betterDaySuggestionsLoading={betterDaySuggestionsLoading}
       betterDaySuggestionsNote={betterDaySuggestionsNote}
+      startTimeScenarioComparison={startTimeScenarios.comparison}
+      startTimeScenariosLoading={startTimeScenarios.loading}
+      startTimeScenariosError={startTimeScenarios.error}
       localizeUnitText={localizeUnitText}
       formatIsoDateLabel={formatIsoDateLabel}
       setForecastDate={setForecastDate}

@@ -42,6 +42,7 @@ import type { VisibilityRiskEstimate } from '../../app/visibility';
 import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecast } from '../../app/types';
 import type { FreshnessRow as SourceFreshnessRow } from '../../app/source-freshness-display';
 import type { BetterDaySuggestion } from '../../hooks/useDayComparisons';
+import type { StartTimeScenarioComparison } from '../../app/start-time-scenarios';
 
 // ─── Props interface ────────────────────────────────────────────────────────
 
@@ -186,6 +187,9 @@ export interface PlannerViewProps {
   betterDaySuggestions: BetterDaySuggestion[] | null;
   betterDaySuggestionsLoading: boolean;
   betterDaySuggestionsNote: string | null;
+  startTimeScenarioComparison: StartTimeScenarioComparison | null;
+  startTimeScenariosLoading: boolean;
+  startTimeScenariosError: string | null;
   localizeUnitText: (text: string) => string;
   formatIsoDateLabel: (isoDate: string) => string;
   setForecastDate: React.Dispatch<React.SetStateAction<string>>;
