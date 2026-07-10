@@ -50,9 +50,15 @@ export function WeatherHourPillStrip({
   }, [updateScrollState, options.length]);
 
   useEffect(() => {
-    if (selectedRef.current) {
-      selectedRef.current.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
-    }
+    const strip = stripRef.current;
+    const selected = selectedRef.current;
+    if (!strip || !selected) return;
+    const stripRect = strip.getBoundingClientRect();
+    const selectedRect = selected.getBoundingClientRect();
+    let left = strip.scrollLeft;
+    if (selectedRect.left < stripRect.left) left += selectedRect.left - stripRect.left;
+    else if (selectedRect.right > stripRect.right) left += selectedRect.right - stripRect.right;
+    if (left !== strip.scrollLeft) strip.scrollTo({ left, behavior: 'smooth' });
   }, [selectedIndex]);
 
   if (options.length <= 1) return null;

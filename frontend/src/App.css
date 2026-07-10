@@ -112,6 +112,7 @@ input {
 
 .page-shell {
   animation: page-shell-enter 0.2s ease-out both;
+  padding-top: 0;
 }
 
 /* backdrop-filter allowed inside frosted glass cards */
@@ -10488,12 +10489,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
 @keyframes page-shell-enter {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

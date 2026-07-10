@@ -115,17 +115,15 @@ export function HomeView({
 
   return (
     <div key="view-home" className={appShellClassName} aria-busy={isViewPending}>
+      <ProductNav
+        active="home"
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+        openTripToolView={openTripToolView}
+      />
       <div className="ssr-home">
         <section className="ssr-h-hero">
           <div className="ssr-h-hero-inner">
-            <ProductNav
-              active="home"
-              navigateToView={navigateToView}
-              openPlannerView={openPlannerView}
-              openTripToolView={openTripToolView}
-              variant="overlay"
-            />
-
             <div className="ssr-h-workspace">
               <h1>Plan an objective</h1>
               <p className="ssr-lede">Set a location, start time, and travel window to build a conditions brief.</p>

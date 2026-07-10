@@ -7,7 +7,6 @@ interface ProductNavProps {
   navigateToView: (view: AppView) => void;
   openPlannerView?: () => void;
   openTripToolView?: () => void;
-  variant?: 'default' | 'overlay';
 }
 
 export function ProductNav({
@@ -15,7 +14,6 @@ export function ProductNav({
   navigateToView,
   openPlannerView,
   openTripToolView,
-  variant = 'default',
 }: ProductNavProps) {
   const items: Array<{ id: AppView; label: string; icon: typeof House; action: () => void }> = [
     { id: 'home', label: 'Home', icon: House, action: () => navigateToView('home') },
@@ -29,26 +27,28 @@ export function ProductNav({
   }
 
   return (
-    <header className={`ssr-product-nav ${variant === 'overlay' ? 'is-overlay' : ''}`}>
-      <button type="button" className="ssr-product-brand" onClick={() => navigateToView('home')}>
-        <span className="ssr-product-mark"><Mountain size={16} strokeWidth={2.2} aria-hidden /></span>
-        <span>Backcountry Conditions</span>
-      </button>
-      <nav className="ssr-product-links" aria-label="Application navigation">
-        {items.map(({ id, label, icon: Icon, action }) => (
-          <button
-            key={id}
-            type="button"
-            className={active === id ? 'is-active' : ''}
-            aria-current={active === id ? 'page' : undefined}
-            title={label}
-            onClick={action}
-          >
-            <Icon size={15} aria-hidden />
-            <span>{label}</span>
-          </button>
-        ))}
-      </nav>
+    <header className="ssr-product-nav">
+      <div className="ssr-product-nav-inner">
+        <button type="button" className="ssr-product-brand" onClick={() => navigateToView('home')}>
+          <span className="ssr-product-mark"><Mountain size={16} strokeWidth={2.2} aria-hidden /></span>
+          <span>Backcountry Conditions</span>
+        </button>
+        <nav className="ssr-product-links" aria-label="Application navigation">
+          {items.map(({ id, label, icon: Icon, action }) => (
+            <button
+              key={id}
+              type="button"
+              className={active === id ? 'is-active' : ''}
+              aria-current={active === id ? 'page' : undefined}
+              title={label}
+              onClick={active === id ? undefined : action}
+            >
+              <Icon size={15} aria-hidden />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
     </header>
   );
 }

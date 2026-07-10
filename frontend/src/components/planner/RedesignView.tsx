@@ -162,6 +162,7 @@ function ReportJumpNav({
 }) {
   const [activeId, setActiveId] = React.useState(sections[0]?.id || '');
   const sectionsRef = React.useRef(sections);
+  const navRef = React.useRef<HTMLElement>(null);
   const buttonRefs = React.useRef(new Map<string, HTMLButtonElement>());
   const sectionKey = sections.map((section) => section.id).join('|');
 
@@ -215,11 +216,15 @@ function ReportJumpNav({
 
   React.useEffect(() => {
     const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-    buttonRefs.current.get(activeId)?.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+    const nav = navRef.current;
+    const button = buttonRefs.current.get(activeId);
+    if (!nav || !button) return;
+    const left = button.offsetLeft - (nav.clientWidth - button.offsetWidth) / 2;
+    nav.scrollTo({ left: Math.max(0, left), behavior });
   }, [activeId]);
 
   return (
-    <nav className="ssr-jump-nav" aria-label="Jump to report section">
+    <nav ref={navRef} className="ssr-jump-nav" aria-label="Jump to report section">
       {sections.map((section) => (
         <button
           key={section.id}
