@@ -17,6 +17,7 @@ export type MultiDayTripForecastDay = {
   feelsLikeF: number | null;
   windGustMph: number | null;
   precipChance: number | null;
+  isDaytime: boolean | null;
   travelSummary: string;
   sourceIssuedTime: string | null;
   deltas?: {
@@ -35,6 +36,8 @@ export interface UseTripForecastParams {
   position: { lat: number; lng: number };
   todayDate: string;
   maxForecastDate: string;
+  initialStartDate: string;
+  initialStartTime: string;
   preferences: UserPreferences;
 }
 
@@ -60,10 +63,12 @@ export function useTripForecast({
   position,
   todayDate,
   maxForecastDate,
+  initialStartDate,
+  initialStartTime,
   preferences,
 }: UseTripForecastParams): UseTripForecastReturn {
-  const [tripStartDate, setTripStartDate] = useState(todayDate);
-  const [tripStartTime, setTripStartTime] = useState(preferences.defaultStartTime);
+  const [tripStartDate, setTripStartDate] = useState(initialStartDate);
+  const [tripStartTime, setTripStartTime] = useState(initialStartTime);
   const [tripDurationDays, setTripDurationDays] = useState(3);
   const [tripForecastRows, setTripForecastRows] = useState<MultiDayTripForecastDay[]>([]);
   const [tripForecastLoading, setTripForecastLoading] = useState(false);
@@ -167,6 +172,7 @@ export function useTripForecast({
               feelsLikeF: Number.isFinite(feelsRaw) ? feelsRaw : null,
               windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
               precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
+              isDaytime: typeof dayData?.weather?.isDaytime === 'boolean' ? dayData.weather.isDaytime : null,
               travelSummary: `${travelInsights.passHours}/${travelRows.length}h passing`,
               sourceIssuedTime: dayData?.weather?.issuedTime || null,
             } as MultiDayTripForecastDay;

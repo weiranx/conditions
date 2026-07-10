@@ -212,6 +212,8 @@ function App() {
     position,
     todayDate,
     maxForecastDate,
+    initialStartDate: forecastDate,
+    initialStartTime: alpineStartTime,
     preferences,
   });
   const {
@@ -281,6 +283,13 @@ function App() {
     initialView: initialLinkState.view as AppView,
     isApplyingPopStateRef,
     onPopState: useCallback((linkState: ReturnType<typeof parseLinkState>) => {
+      if (linkState.view === 'trip') {
+        setTripStartDate(linkState.forecastDate);
+        setTripStartTime(linkState.alpineStartTime);
+        setTripForecastRowsDirect([]);
+        setTripForecastErrorDirect(null);
+        setTripForecastNoteDirect(null);
+      }
       // Back/forward within the same plan (e.g. report → Settings → Back) should not
       // throw away the generated report — only a genuinely different plan state resets.
       const sameReport =
@@ -321,7 +330,7 @@ function App() {
         setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
       }
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, setTripStartDate, setTripStartTime, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
@@ -386,8 +395,8 @@ function App() {
     position,
     objectiveName,
     committedSearchQuery,
-    forecastDate,
-    alpineStartTime,
+    forecastDate: view === 'trip' ? tripStartDate : forecastDate,
+    alpineStartTime: view === 'trip' ? tripStartTime : alpineStartTime,
     targetElevationInput,
     travelWindowHours: Math.max(
       MIN_TRAVEL_WINDOW_HOURS,

@@ -24,6 +24,7 @@ export type MultiDayTripForecastDay = {
   feelsLikeF: number | null;
   windGustMph: number | null;
   precipChance: number | null;
+  isDaytime: boolean | null;
   travelSummary: string;
   sourceIssuedTime: string | null;
   deltas?: {
@@ -456,7 +457,7 @@ export function TripView({
                     <div className="ssr-trip-day-top">
                       <div className="ssr-trip-day-date">
                         <span className="ssr-trip-day-wd">{weekdayLabel(day.date)}<b>{monthDayLabel(day.date)}</b></span>
-                        <span className="ssr-trip-day-sky">{weatherConditionEmoji(day.weatherDescription, null)}</span>
+                        <span className="ssr-trip-day-sky">{weatherConditionEmoji(day.weatherDescription, day.isDaytime)}</span>
                       </div>
                       <div className="ssr-trip-day-verdict">
                         <span className={`ssr-trip-day-pill ${dlv}`}>{day.decisionLevel}</span>
