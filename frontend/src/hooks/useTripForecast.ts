@@ -4,8 +4,7 @@ import type { SafetyData, UserPreferences, DecisionLevel } from '../app/types';
 import { DATE_FMT, MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS } from '../app/constants';
 import { addDaysToIsoDate, normalizeForecastDate } from '../app/core';
 import { parseTimeInputMinutes } from '../app/core';
-import { evaluateBackcountryDecision } from '../app/decision';
-import { normalizeDangerLevel } from '../app/planner-helpers';
+import { evaluateBackcountryDecision, normalizedDecisionScore } from '../app/decision';
 import { buildTravelWindowRows, buildTravelWindowInsights, buildTrendWindowFromStart } from '../app/travel-window';
 
 export type MultiDayTripForecastDay = {
@@ -18,7 +17,6 @@ export type MultiDayTripForecastDay = {
   feelsLikeF: number | null;
   windGustMph: number | null;
   precipChance: number | null;
-  avalancheSummary: string;
   travelSummary: string;
   sourceIssuedTime: string | null;
   deltas?: {
@@ -131,7 +129,8 @@ export function useTripForecast({
               return null;
             }
             const dayData = payload as SafetyData;
-            const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences);
+            const decisionOptions = { ignoreAvalancheForDecision: true } as const;
+            const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences, decisionOptions);
             const trendWindow = buildTrendWindowFromStart(dayData.weather?.trend || [], safeStartTime, safeTravelWindowHours);
             const tripSnowContext = {
               snowDepthIn: dayData.terrainCondition?.signals?.maxSnowDepthIn
@@ -141,17 +140,18 @@ export function useTripForecast({
             };
             const travelRows = buildTravelWindowRows(trendWindow, preferences, tripSnowContext);
             const travelInsights = buildTravelWindowInsights(travelRows, preferences.timeStyle);
+            const noCleanTravelHours = travelRows.length > 0 && travelInsights.passHours === 0;
+            const decisionLevel = noCleanTravelHours && dayDecision.level !== 'NO-GO'
+              ? 'CAUTION'
+              : dayDecision.level;
+            const decisionHeadline = noCleanTravelHours && dayDecision.level !== 'NO-GO'
+              ? 'No clean travel hours under current thresholds.'
+              : dayDecision.headline;
 
-            const avalancheRelevant = dayData.avalanche?.relevant !== false;
-            const avalancheUnknown = avalancheRelevant && Boolean(dayData.avalanche?.dangerUnknown || dayData.avalanche?.coverageStatus !== 'reported');
-            const dangerLabel = ['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(dayData.avalanche?.dangerLevel)] || 'N/A';
-            const avalancheSummary = !avalancheRelevant
-              ? 'Not primary'
-              : avalancheUnknown
-                ? 'Coverage limited'
-                : dangerLabel;
-
-            const scoreRaw = Number(dayData?.safety?.score);
+            const rawSafetyScore = Number(dayData?.safety?.score);
+            const scoreRaw = Number.isFinite(rawSafetyScore)
+              ? normalizedDecisionScore(dayData, decisionOptions)
+              : Number.NaN;
             const tempRaw = Number(dayData?.weather?.temp);
             const feelsRaw = Number(dayData?.weather?.feelsLike ?? dayData?.weather?.temp);
             const gustRaw = Number(dayData?.weather?.windGust);
@@ -159,15 +159,14 @@ export function useTripForecast({
 
             return {
               date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : date,
-              decisionLevel: dayDecision.level,
-              decisionHeadline: dayDecision.headline,
+              decisionLevel,
+              decisionHeadline,
               score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
               weatherDescription: String(dayData?.weather?.description || 'Unknown'),
               tempF: Number.isFinite(tempRaw) ? tempRaw : null,
               feelsLikeF: Number.isFinite(feelsRaw) ? feelsRaw : null,
               windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
               precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
-              avalancheSummary,
               travelSummary: `${travelInsights.passHours}/${travelRows.length}h passing`,
               sourceIssuedTime: dayData?.weather?.issuedTime || null,
             } as MultiDayTripForecastDay;

@@ -2,7 +2,6 @@ import React from 'react';
 import {
   RefreshCw,
   CloudRain,
-  AlertTriangle,
   Route,
   Info,
   ArrowRight,
@@ -25,7 +24,6 @@ export type MultiDayTripForecastDay = {
   feelsLikeF: number | null;
   windGustMph: number | null;
   precipChance: number | null;
-  avalancheSummary: string;
   travelSummary: string;
   sourceIssuedTime: string | null;
   deltas?: {
@@ -126,7 +124,7 @@ function TrendArc({
   const areaD = `M ${x(0)} ${H - pad.b} L ${linePts.join(' L ')} L ${x(n - 1)} ${H - pad.b} Z`;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Safety score trend by trip day">
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Conditions score trend by trip day">
       {[0, 25, 50, 75, 100].map((g) => (
         <g key={g}>
           <line x1={pad.l} x2={W - pad.r} y1={y(g)} y2={y(g)} stroke="var(--ssr-line)" strokeDasharray="2 4" />
@@ -343,7 +341,7 @@ export function TripView({
             <RefreshCw className="ssr-trip-loading-icon" aria-hidden />
             <div>
               <strong>Comparing {tripDurationDays} daily windows</strong>
-              <span>Checking weather, avalanche context, and travel-hour thresholds for each day.</span>
+              <span>Checking weather and travel-hour thresholds for each day.</span>
             </div>
           </div>
         )}
@@ -364,7 +362,7 @@ export function TripView({
                   <p>{localizeUnitText(best.decisionHeadline)}</p>
                 </div>
                 <div className="ssr-trip-recommendation-facts" aria-label="Recommended day summary">
-                  <span><strong>{best.score ?? '—'}</strong> safety score</span>
+                  <span><strong>{best.score ?? '—'}</strong> conditions score</span>
                   <span><strong>{formatWindDisplay(best.windGustMph, { includeUnit: false })}</strong> peak gust</span>
                   <span><strong>{best.precipChance !== null ? `${best.precipChance}%` : '—'}</strong> precip</span>
                 </div>
@@ -411,7 +409,7 @@ export function TripView({
             {/* TREND ARC */}
             <div className="ssr-trip-trend">
               <div className="ssr-trip-trend-h">
-                <h2>Safety score across the trip</h2>
+                <h2>Conditions score across the trip</h2>
                 <span>Worst day · {worst}{tripForecastNote ? ` · ${tripForecastNote}` : ''}</span>
               </div>
               <TrendArc days={tripForecastRows} getScoreColor={getScoreColor} />
@@ -468,7 +466,7 @@ export function TripView({
                         {typeof day.deltas?.score === 'number' && day.deltas.score !== 0 && (
                           <span
                             className={`ssr-trip-day-delta ${day.deltas.score > 0 ? 'up' : 'down'}`}
-                            title={`Safety score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
+                            title={`Conditions score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
                           >
                             {day.deltas.score > 0 ? '▲' : '▼'}{Math.abs(day.deltas.score)}
                           </span>
@@ -522,10 +520,6 @@ export function TripView({
                     </p>
                   </div>
                   <div className="ssr-trip-detail-cell">
-                    <h3><AlertTriangle /> Avalanche</h3>
-                    <p>{localizeUnitText(selected.avalancheSummary)}</p>
-                  </div>
-                  <div className="ssr-trip-detail-cell">
                     <h3><Route /> Travel window</h3>
                     <p>{localizeUnitText(selected.travelSummary)}</p>
                   </div>
@@ -546,8 +540,8 @@ export function TripView({
         <div className="ssr-trip-disclaimer">
           <Info />
           <span>
-            Multi-day forecasts grow less certain further out. Re-run within 24h of departure and verify official
-            avalanche forecasts before committing to terrain.
+            This view compares forecast weather and travel windows only; it does not project avalanche danger.
+            Check the current official bulletin within 24h of departure and use Planner for the final day-specific assessment.
           </span>
         </div>
       </div>

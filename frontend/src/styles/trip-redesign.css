@@ -335,7 +335,7 @@
 }
 .ssr-trip-detail-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ssr-trip-detail-title h2 { font-size: 18px; font-weight: 700; margin: 0; color: var(--ssr-text); }
-.ssr-trip-detail-body { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--ssr-line); }
+.ssr-trip-detail-body { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--ssr-line); }
 .ssr-trip-detail-cell { background: var(--ssr-surface); padding: 18px 22px; }
 .ssr-trip-detail-cell h3 {
   font-size: 11px;
