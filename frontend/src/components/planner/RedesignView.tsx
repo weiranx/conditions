@@ -445,6 +445,15 @@ function RedesignViewComponent(props: PlannerViewProps) {
   const sourceIssueCount = Math.max(0, sourceFreshnessRows.length - freshCount - agingCount);
 
   const bands = elevationForecastBands || [];
+  const visibilityElevated = ['Moderate', 'High', 'Extreme'].includes(weatherVisibilityRisk.level);
+  const visibilityTone = weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme'
+    ? 'danger'
+    : visibilityElevated
+      ? 'caution'
+      : 'quiet';
+  const precipTone = Number.isFinite(weatherCardPrecip) && weatherCardPrecip >= 60
+    ? 'caution'
+    : 'quiet';
   // 44px floor keeps hour columns tappable/readable on phones; the strip scrolls
   // horizontally instead of crushing 12 columns into the viewport.
   const stripCols = `repeat(${Math.max(1, travelWindowRows.length)}, minmax(44px, 1fr))`;
@@ -846,11 +855,40 @@ function RedesignViewComponent(props: PlannerViewProps) {
             </span>
           </div>
           <div className="ssr-card-b">
-            <div className="ssr-wx-hero">
-              <span className="ssr-wx-temp">{formatTempDisplay(weatherCardTemp)}</span>
-              <div className="ssr-wx-hero-meta">
-                <span className="ssr-wx-cond">{weatherCardWithEmoji}</span>
-                <span className="ssr-wx-feels">Feels {formatTempDisplay(weatherCardFeelsLike)}</span>
+            <div className="ssr-wx-overview">
+              <div className="ssr-wx-hero">
+                <span className="ssr-wx-temp">{formatTempDisplay(weatherCardTemp)}</span>
+                <div className="ssr-wx-hero-meta">
+                  <span className="ssr-wx-cond">{weatherCardWithEmoji}</span>
+                  <span className="ssr-wx-feels">Feels like {formatTempDisplay(weatherCardFeelsLike)}</span>
+                  {weatherForecastPeriodLabel && <span className="ssr-wx-period">{weatherForecastPeriodLabel}</span>}
+                </div>
+              </div>
+              <div className="ssr-wx-priority" aria-label="Weather at a glance">
+                <div className="ssr-wx-priority-item">
+                  <span className="ssr-wx-priority-icon"><Wind size={15} /></span>
+                  <span className="ssr-wx-priority-copy">
+                    <span className="ssr-k">Wind · gust</span>
+                    <span className="ssr-v">{formattedWind} · {formattedGust}</span>
+                    <span className="ssr-wx-sub"><WindDirectionArrow direction={weatherCardWindDirection} size={11} />{weatherCardWindDirection || 'Direction unavailable'}</span>
+                  </span>
+                </div>
+                <div className={`ssr-wx-priority-item ${precipTone}`}>
+                  <span className="ssr-wx-priority-icon"><CloudRain size={15} /></span>
+                  <span className="ssr-wx-priority-copy">
+                    <span className="ssr-k">Precipitation</span>
+                    <span className="ssr-v">{Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}</span>
+                    <span className="ssr-wx-sub">Chance at selected hour</span>
+                  </span>
+                </div>
+                <div className={`ssr-wx-priority-item ${visibilityTone}`}>
+                  <span className="ssr-wx-priority-icon"><Eye size={15} /></span>
+                  <span className="ssr-wx-priority-copy">
+                    <span className="ssr-k">Visibility</span>
+                    <span className="ssr-v">{weatherVisibilityRisk.level || 'Unknown'}</span>
+                    <span className="ssr-wx-sub">{weatherVisibilityScoreLabel || 'No elevated signal'}</span>
+                  </span>
+                </div>
               </div>
             </div>
             {weatherHourQuickOptions.length > 1 && (
@@ -863,11 +901,8 @@ function RedesignViewComponent(props: PlannerViewProps) {
                 />
               </div>
             )}
+            <div className="ssr-wx-section-label">Supporting readings</div>
             <div className="ssr-wx-grid">
-              <div className="ssr-wx-cell"><span className="ssr-k">Wind</span><span className="ssr-v">{formattedWind}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Gust</span><span className="ssr-v">{formattedGust}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Direction</span><span className="ssr-v ssr-v-wind-dir"><WindDirectionArrow direction={weatherCardWindDirection} size={13} />{weatherCardWindDirection || '—'}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Precip</span><span className="ssr-v">{Number.isFinite(weatherCardPrecip) ? `${weatherCardPrecip}%` : 'N/A'}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Dew point</span><span className="ssr-v">{formatTempDisplay(weatherCardDewPoint)}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Pressure</span><span className="ssr-v">{weatherCardPressureLabel || '—'}</span></div>
@@ -876,7 +911,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
             {weatherPressureTrendSummary && (
               <p className="ssr-wx-note">{localizeUnitText(weatherPressureTrendSummary)}</p>
             )}
-            {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
+            {visibilityElevated && (
               <p className="ssr-wx-vis"><Eye size={13} /> Visibility risk: <b>{weatherVisibilityRisk.level}</b>{weatherVisibilityScoreLabel ? ` · ${weatherVisibilityScoreLabel}` : ''}</p>
             )}
           </div>
