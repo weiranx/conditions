@@ -9,3 +9,33 @@ body,
   width: 100%;
   min-height: 100%;
 }
+
+html {
+  /* Thin, theme-matched scrollbars (Firefox + Chromium 121+) without
+     forcing always-visible overlay scrollbars the way ::-webkit-scrollbar does. */
+  scrollbar-color: var(--ssr-line-strong) transparent;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--ssr-brand) 26%, transparent);
+}
+
+/* Fallback focus ring for controls that don't define their own —
+   component-level :focus/:focus-visible rules out-specify this. */
+:focus-visible {
+  outline: 2px solid var(--ssr-brand);
+  outline-offset: 2px;
+}

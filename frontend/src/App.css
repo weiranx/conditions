@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+/* Web fonts (Inter, IBM Plex Sans/Mono) are loaded via <link> in index.html
+   so they preconnect and load in parallel with CSS instead of blocking on it. */
 @import './styles/search.css';
 @import './styles/loading.css';
 
@@ -145,6 +146,32 @@ input {
 .page-shell.is-nav-pending .secondary-btn,
 .page-shell.is-nav-pending .settings-btn {
   opacity: 0.92;
+}
+
+/* View Transitions API cross-fade between views (triggered in useUrlState).
+   The outgoing snapshot sits on top and fades out while the incoming view —
+   with its own page-shell-enter rise — is revealed underneath. `normal`
+   blending overrides the UA's plus-lighter cross-fade default. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    mix-blend-mode: normal;
+  }
+
+  ::view-transition-old(root) {
+    z-index: 1;
+    animation: view-cross-fade-out 0.22s ease both;
+  }
+
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+@keyframes view-cross-fade-out {
+  to {
+    opacity: 0;
+  }
 }
 
 .home-hero {

@@ -1,7 +1,41 @@
 import { useState, useCallback, useEffect, useTransition } from 'react';
+import { flushSync } from 'react-dom';
 import L from 'leaflet';
 import type { UserPreferences } from '../app/types';
 import { parseLinkState, buildShareQuery } from '../app/url-state';
+
+/**
+ * Cross-fade between views using the View Transitions API when available.
+ * The state change must be flushed synchronously inside the transition
+ * callback so the "new" snapshot captures the updated DOM — flushSync would
+ * not flush a startTransition-marked update, so `apply` must set state
+ * directly. `fallback` runs instead on unsupported browsers or when the user
+ * prefers reduced motion.
+ */
+function withViewTransition(apply: () => void, fallback: () => void = apply) {
+  const doc = document as Document & {
+    startViewTransition?: (callback: () => void) => {
+      ready?: Promise<void>;
+      finished?: Promise<void>;
+      updateCallbackDone?: Promise<void>;
+    };
+  };
+  if (
+    typeof doc.startViewTransition !== 'function' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    fallback();
+    return;
+  }
+  const transition = doc.startViewTransition(() => {
+    flushSync(apply);
+  });
+  // A transition aborted by a rapid follow-up navigation (or a hidden tab)
+  // rejects these promises; that's expected, not an error worth surfacing.
+  transition?.ready?.catch(() => {});
+  transition?.finished?.catch(() => {});
+  transition?.updateCallbackDone?.catch(() => {});
+}
 
 export type AppView = 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs';
 
@@ -31,7 +65,14 @@ export function useUrlState({
   isApplyingPopStateRef,
 }: UseUrlStateParams): UseUrlStateReturn {
   const [view, setView] = useState<AppView>(initialView);
-  const [isViewPending, startViewChange] = useTransition();
+  const [isViewPending, startReactTransition] = useTransition();
+
+  const startViewChange = useCallback(
+    (callback: () => void) => {
+      withViewTransition(callback, () => startReactTransition(callback));
+    },
+    [startReactTransition],
+  );
 
   const navigateToView = useCallback(
     (nextView: AppView) => {
@@ -49,8 +90,10 @@ export function useUrlState({
     const handlePopState = () => {
       if (isApplyingPopStateRef) isApplyingPopStateRef.current = true;
       const linkState = parseLinkState(todayDate, maxForecastDate, preferences);
-      onPopState(linkState);
-      setView(linkState.view);
+      withViewTransition(() => {
+        onPopState(linkState);
+        setView(linkState.view);
+      });
     };
 
     window.addEventListener('popstate', handlePopState);
