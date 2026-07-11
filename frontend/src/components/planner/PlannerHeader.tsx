@@ -4,6 +4,7 @@ import {
   BookmarkCheck,
   Link2,
   Check,
+  Compass,
 } from 'lucide-react';
 import { SearchBox } from './SearchBox';
 import type { Suggestion } from '../../lib/search';
@@ -63,6 +64,11 @@ export function PlannerHeader({
 
   return (
     <header className="header-section">
+      <div className="planner-header-intro">
+        <p className="planner-header-kicker"><Compass size={12} aria-hidden /> Decision workspace</p>
+        <h1>Plan with the whole picture.</h1>
+        <p className="planner-header-lede">Set an objective and timing. We’ll organize the signals that shape the call.</p>
+      </div>
       <div className="header-controls">
         <SearchBox
           searchWrapperRef={searchWrapperRef}
