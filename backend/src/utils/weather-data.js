@@ -3,6 +3,7 @@ const { buildVisibilityRisk, buildElevationForecastBands } = require('./visibili
 const { estimateWindGustFromWindSpeed, findNearestCardinalFromDegreeSeries } = require('./wind');
 const { parseStartClock, clampTravelWindowHours } = require('./time');
 const { deriveTrailStatus, deriveTerrainCondition } = require('./terrain-condition');
+const { createCache, normalizeCoordKey } = require('./cache');
 
 const OPEN_METEO_CODE_LABELS = {
   0: 'Clear',
@@ -271,6 +272,13 @@ const buildOpenMeteoWeatherApiUrl = (host, lat, lon) => {
 const buildOpenMeteoWeatherSourceLink = (lat, lon) => buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon);
 
 const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
+  const openMeteoWeatherPayloadCache = createCache({
+    name: 'open-meteo-weather-payload',
+    ttlMs: 15 * 60 * 1000,
+    staleTtlMs: 15 * 60 * 1000,
+    maxEntries: 300,
+  });
+
   const createUnavailableWeatherData = ({ lat, lon, forecastDate }) => ({
     temp: null,
     feelsLike: null,
@@ -318,47 +326,63 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     objectiveElevationSource,
     trendHours,
   }) => {
-    const apiUrls = [
-      buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon),
-      buildOpenMeteoWeatherApiUrl('customer-api.open-meteo.com', lat, lon),
-    ];
+    const cacheKey = normalizeCoordKey(lat, lon);
+    const cachedForecast = await openMeteoWeatherPayloadCache.getOrFetch(cacheKey, async () => {
+      const apiUrls = [
+        buildOpenMeteoWeatherApiUrl('api.open-meteo.com', lat, lon),
+        buildOpenMeteoWeatherApiUrl('customer-api.open-meteo.com', lat, lon),
+      ];
 
-    let payload = null;
-    let payloadIssuedTime = null;
-    let lastError = null;
+      let payload = null;
+      let payloadIssuedTime = null;
+      let lastError = null;
 
-    for (const apiUrl of apiUrls) {
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
-        try {
-          const response = await fetchWithTimeout(apiUrl, fetchOptions, Math.max(requestTimeoutMs, 12000));
-          if (!response.ok) {
-            throw new Error(`Open-Meteo forecast failed with status ${response.status}`);
-          }
-          payload = await response.json();
-          const responseDateHeader = response.headers.get('date');
-          if (responseDateHeader) {
-            const parsedDate = Date.parse(responseDateHeader);
-            if (Number.isFinite(parsedDate)) {
-              payloadIssuedTime = new Date(parsedDate).toISOString();
+      for (const apiUrl of apiUrls) {
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          try {
+            const response = await fetchWithTimeout(apiUrl, fetchOptions, Math.max(requestTimeoutMs, 12000));
+            if (!response.ok) {
+              throw new Error(`Open-Meteo forecast failed with status ${response.status}`);
             }
+            const candidatePayload = await response.json();
+            const candidateHourlyTimes = Array.isArray(candidatePayload?.hourly?.time)
+              ? candidatePayload.hourly.time
+              : [];
+            if (!candidateHourlyTimes.length) {
+              throw new Error('Open-Meteo forecast response did not include hourly time series.');
+            }
+            payload = candidatePayload;
+            const responseDateHeader = response.headers.get('date');
+            if (responseDateHeader) {
+              const parsedDate = Date.parse(responseDateHeader);
+              if (Number.isFinite(parsedDate)) {
+                payloadIssuedTime = new Date(parsedDate).toISOString();
+              }
+            }
+            if (!payloadIssuedTime) {
+              payloadIssuedTime = new Date().toISOString();
+            }
+            lastError = null;
+            break;
+          } catch (error) {
+            if (fetchOptions?.signal?.aborted) {
+              throw error;
+            }
+            lastError = error;
           }
-          if (!payloadIssuedTime) {
-            payloadIssuedTime = new Date().toISOString();
-          }
-          lastError = null;
+        }
+        if (payload) {
           break;
-        } catch (error) {
-          lastError = error;
         }
       }
-      if (payload) {
-        break;
-      }
-    }
 
-    if (!payload) {
-      throw lastError || new Error('Open-Meteo forecast failed');
-    }
+      if (!payload) {
+        throw lastError || new Error('Open-Meteo forecast failed');
+      }
+
+      return { payload, payloadIssuedTime };
+    });
+    const { payload, payloadIssuedTime } = cachedForecast;
 
     const hourly = payload?.hourly;
     const hourlyTimes = Array.isArray(hourly?.time) ? hourly.time : [];

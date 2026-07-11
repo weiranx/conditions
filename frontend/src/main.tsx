@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './styles/tokens.css'
@@ -8,7 +8,15 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <Suspense
+        fallback={(
+          <main className="loading-state" role="status" aria-live="polite" aria-busy="true">
+            Loading Backcountry Conditions…
+          </main>
+        )}
+      >
+        <App />
+      </Suspense>
     </ErrorBoundary>
   </StrictMode>,
 )

@@ -9,6 +9,7 @@ import {
   Check,
   Info,
   Layers3,
+  LoaderCircle,
   RadioTower,
   Route,
   ShieldCheck,
@@ -55,7 +56,7 @@ export interface HomeViewProps {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFocus: () => void;
   handleSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  handleSearchSubmit: () => void;
+  handleSearchSubmit: () => Promise<boolean>;
   handleSearchClear: () => void;
   handleUseTypedCoordinates: (value: string) => void;
   selectSuggestion: (suggestion: Suggestion) => void;
@@ -115,9 +116,9 @@ export function HomeView({
   openPlannerView,
   openTripToolView,
 }: HomeViewProps) {
-  const submitSearch = () => {
-    handleSearchSubmit();
-    if (searchQuery.trim()) navigateToPlanner();
+  const submitSearch = async () => {
+    const didSelectObjective = await handleSearchSubmit();
+    if (didSelectObjective) navigateToPlanner();
   };
 
   return (
@@ -168,8 +169,18 @@ export function HomeView({
                     onSelectSuggestion={selectSuggestion}
                     onHoverSuggestion={setActiveSuggestionIndex}
                   />
-                  <button type="button" className="ssr-h-go" onClick={submitSearch}>
-                    Build brief <ArrowRight size={16} aria-hidden />
+                  <button
+                    type="button"
+                    className="ssr-h-go"
+                    onClick={submitSearch}
+                    disabled={!trimmedSearchQuery || searchLoading}
+                    aria-busy={searchLoading}
+                  >
+                    {searchLoading ? (
+                      <><LoaderCircle size={16} className="spin" aria-hidden /> Finding location…</>
+                    ) : (
+                      <>Build brief <ArrowRight size={16} aria-hidden /></>
+                    )}
                   </button>
                 </div>
                 <div className="ssr-h-params">

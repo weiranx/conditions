@@ -36,6 +36,7 @@ export function useStartTimeScenarios({
       MIN_TRAVEL_WINDOW_HOURS,
       Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
     );
+    const controller = new AbortController();
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -45,6 +46,7 @@ export function useStartTimeScenarios({
           try {
             const { response, payload } = await fetchApi(
               `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(forecastDate)}&start=${encodeURIComponent(startTime)}&travel_window_hours=${safeTravelWindowHours}`,
+              { signal: controller.signal },
             );
             if (!response.ok || !payload || typeof payload !== 'object') return null;
             return { startTime, data: payload as SafetyData };
@@ -64,6 +66,7 @@ export function useStartTimeScenarios({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     enabled,

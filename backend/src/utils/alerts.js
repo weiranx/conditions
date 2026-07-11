@@ -3,6 +3,7 @@ const { parseIsoTimeToMs, findClosestTimeIndex, withExplicitTimezone } = require
 const { createCache, normalizeCoordKey } = require('./cache');
 
 const airQualityCache = createCache({ name: 'air-quality', ttlMs: 30 * 60 * 1000, staleTtlMs: 30 * 60 * 1000, maxEntries: 100 });
+const ACTIVE_ALERTS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 const ALERT_SEVERITY_RANK = {
   unknown: 0,
@@ -180,18 +181,30 @@ const resolveNwsAlertSourceLink = ({ feature, props, lat, lon }) => {
 };
 
 const createAlertsService = ({ fetchWithTimeout }) => {
+  // Cache the provider payload, not the target-time-filtered result. The same active-alert
+  // response can then serve different planned start times without returning a result that was
+  // filtered for a previous request. createCache also coalesces simultaneous requests for the
+  // same coordinate and serves stale data while one background refresh runs.
+  const activeAlertsPayloadCache = createCache({
+    name: 'weather-alerts',
+    ttlMs: ACTIVE_ALERTS_CACHE_TTL_MS,
+    staleTtlMs: 3 * 60 * 1000,
+    maxEntries: 300,
+  });
+
   const fetchWeatherAlertsData = async (lat, lon, fetchOptions, targetTimeIso = null) => {
     const targetTimeMs = parseIsoTimeToMs(targetTimeIso) ?? Date.now();
-
-    const alertsRes = await fetchWithTimeout(
-      `https://api.weather.gov/alerts/active?point=${lat},${lon}`,
-      fetchOptions,
-    );
-    if (!alertsRes.ok) {
-      throw new Error(`NWS alerts request failed with status ${alertsRes.status}`);
-    }
-
-    const alertsJson = await alertsRes.json();
+    const cacheKey = normalizeCoordKey(lat, lon);
+    const alertsJson = await activeAlertsPayloadCache.getOrFetch(cacheKey, async () => {
+      const alertsRes = await fetchWithTimeout(
+        `https://api.weather.gov/alerts/active?point=${lat},${lon}`,
+        fetchOptions,
+      );
+      if (!alertsRes.ok) {
+        throw new Error(`NWS alerts request failed with status ${alertsRes.status}`);
+      }
+      return alertsRes.json();
+    });
     const features = Array.isArray(alertsJson?.features) ? alertsJson.features : [];
     if (features.length === 0) {
       return {

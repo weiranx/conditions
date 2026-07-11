@@ -263,6 +263,8 @@ function RedesignViewComponent(props: PlannerViewProps) {
     formatElevationDisplay,
     alpineStartTime,
     setAlpineStartTime,
+    setMobileMapControlsExpanded,
+    onEditPlan,
     startTimeScenarioComparison,
     startTimeScenariosLoading,
     startTimeScenariosError,
@@ -584,9 +586,18 @@ function RedesignViewComponent(props: PlannerViewProps) {
     const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     target.scrollIntoView({ behavior, block: 'start' });
   };
+  const useStartTimeForNewReport = (startTime: string) => {
+    onEditPlan();
+    setAlpineStartTime(startTime);
+    setMobileMapControlsExpanded(() => true);
+    try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', 'true'); } catch { /* ignore */ }
+    window.requestAnimationFrame(() => {
+      document.getElementById('planner-plan-workflow')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
+  };
 
   return (
-    <div className="ssr-report" role="main" aria-label="Conditions report (redesign)">
+    <div className="ssr-report">
       {/* OBJECTIVE HEADER */}
       <header className="ssr-hdr">
         <div className="ssr-hdr-title">
@@ -627,7 +638,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         <ReportJumpNav sections={jumpSections} onJump={jumpToSection} />
       )}
 
-      <main className="ssr-main">
+      <div className="ssr-main">
         {/* VERDICT */}
         <div id="planner-section-decision" className="ssr-jump-anchor">
         <DashboardSummaryCard
@@ -664,7 +675,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           formatClockForStyle={formatClockForStyle}
           formatWindDisplay={formatWindDisplay}
           formatTempDisplay={formatTempDisplay}
-          onSelectStartTime={setAlpineStartTime}
+          onUseForNewReport={useStartTimeForNewReport}
         />
 
         {/* ACTION PLAN */}
@@ -1053,7 +1064,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
           </section>
         )}
 
-      </main>
+      </div>
 
       {/* SIDEBAR */}
       <aside className="ssr-side">

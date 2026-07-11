@@ -49,7 +49,7 @@ export interface UseSearchSuggestionsReturn {
   searchAndSelectFirst: (rawQuery: string) => Promise<boolean>;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  handleSearchSubmit: () => void;
+  handleSearchSubmit: () => Promise<boolean>;
   handleFocus: () => void;
   handleSearchClear: () => void;
   handleUseTypedCoordinates: (value: string) => void;
@@ -345,6 +345,11 @@ export function useSearchSuggestions({
     const value = e.target.value;
     setSearchQueryState(value);
     setActiveSuggestionIndex(-1);
+    latestSuggestionRequestId.current += 1;
+    suggestionAbortControllerRef.current?.abort();
+    suggestionAbortControllerRef.current = null;
+    setSuggestions([]);
+    setSearchLoading(value.length > 0);
 
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -413,7 +418,7 @@ export function useSearchSuggestions({
     void searchAndSelectFirst(liveQuery);
   }, [activeSuggestionIndex, searchAndSelectFirst, searchQuery, selectSuggestion, showSuggestions, suggestions]);
 
-  const handleSearchSubmit = useCallback(() => {
+  const handleSearchSubmit = useCallback(async (): Promise<boolean> => {
     const liveQuery = searchQuery;
     const suggestionsMatchLiveQuery =
       normalizeSuggestionText(liveQuery) === normalizeSuggestionText(suggestionsQueryRef.current);
@@ -423,18 +428,17 @@ export function useSearchSuggestions({
       if (!suggestions.length && !searchLoading) {
         void fetchSuggestions('');
       }
-      return;
+      return false;
     }
     if (suggestionsMatchLiveQuery && activeSuggestionIndex >= 0 && suggestions[activeSuggestionIndex]) {
       selectSuggestion(suggestions[activeSuggestionIndex]);
-      return;
+      return true;
     }
     if (suggestionsMatchLiveQuery && suggestions.length > 0) {
       selectSuggestion(suggestions[0]);
-      return;
+      return true;
     }
-    setCommittedSearchQuery(liveQuery.trim());
-    void searchAndSelectFirst(liveQuery);
+    return searchAndSelectFirst(liveQuery);
   }, [activeSuggestionIndex, fetchSuggestions, searchAndSelectFirst, searchLoading, searchQuery, selectSuggestion, suggestions]);
 
   const handleFocus = useCallback(() => {

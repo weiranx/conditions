@@ -68,8 +68,33 @@ function isRetryableStatus(status: number): boolean {
   return RETRYABLE_STATUS_CODES.has(status);
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function createAbortError(signal?: AbortSignal | null): DOMException {
+  return signal?.reason instanceof DOMException
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError');
+}
+
+function isAbortError(error: unknown, signal?: AbortSignal | null): boolean {
+  return Boolean(signal?.aborted) || (error instanceof DOMException && error.name === 'AbortError');
+}
+
+function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError(signal));
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', handleAbort);
+      resolve();
+    }, ms);
+    const handleAbort = () => {
+      clearTimeout(timeoutId);
+      reject(createAbortError(signal));
+    };
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
 }
 
 export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFetchResult> {
@@ -79,6 +104,9 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
   let sawEmptyProxy500 = false;
 
   for (let index = 0; index < attemptUrls.length; index += 1) {
+    if (init?.signal?.aborted) {
+      throw createAbortError(init.signal);
+    }
     const requestUrl = attemptUrls[index];
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -92,7 +120,7 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
         }
 
         if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
-          await delay(RETRY_DELAYS_MS[attempt]);
+          await delay(RETRY_DELAYS_MS[attempt], init?.signal);
           continue;
         }
 
@@ -102,9 +130,12 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
           requestId: response.headers.get('x-request-id'),
         };
       } catch (error) {
+        if (isAbortError(error, init?.signal)) {
+          throw error;
+        }
         lastError = error;
         if (attempt < MAX_RETRIES) {
-          await delay(RETRY_DELAYS_MS[attempt]);
+          await delay(RETRY_DELAYS_MS[attempt], init?.signal);
           continue;
         }
         break;

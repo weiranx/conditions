@@ -2,7 +2,9 @@ import type { SafetyData, UserPreferences } from './types';
 import { convertTempFToDisplayValue, convertWindMphToDisplayValue } from './core';
 import { formatSignedDelta } from './weather-display';
 
-export function buildDayOverDayChanges(current: SafetyData, previous: SafetyData, preferences: UserPreferences): string[] {
+type DayOverDayUnits = Pick<UserPreferences, 'temperatureUnit' | 'windSpeedUnit'>;
+
+export function buildDayOverDayChanges(current: SafetyData, previous: SafetyData, preferences: DayOverDayUnits): string[] {
   const changes: string[] = [];
   const currentScore = Number(current?.safety?.score);
   const previousScore = Number(previous?.safety?.score);

@@ -7,8 +7,6 @@ import { ForecastLoading } from './ForecastLoading';
 import { PlannerHeader } from './PlannerHeader';
 import { ProductNav } from '../views/ProductNav';
 import { PlannerMapSection } from './PlannerMapSection';
-import { RouteAnalysisSection } from './RouteAnalysisSection';
-import { RedesignView } from './RedesignView';
 import { AppDisclaimer } from '../../app/map-components';
 import '../../styles/planner-redesign.css';
 import '../../styles/planner-shell-redesign.css';
@@ -41,8 +39,14 @@ import type { Suggestion } from '../../lib/search';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
 import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecast } from '../../app/types';
 import type { FreshnessRow as SourceFreshnessRow } from '../../app/source-freshness-display';
-import type { BetterDaySuggestion } from '../../hooks/useDayComparisons';
 import type { StartTimeScenarioComparison } from '../../app/start-time-scenarios';
+
+const RouteAnalysisSection = React.lazy(() =>
+  import('./RouteAnalysisSection').then((module) => ({ default: module.RouteAnalysisSection })),
+);
+const RedesignView = React.lazy(() =>
+  import('./RedesignView').then((module) => ({ default: module.RedesignView })),
+);
 
 // ─── Props interface ────────────────────────────────────────────────────────
 
@@ -68,7 +72,7 @@ export interface PlannerViewProps {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFocus: () => void;
   handleSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  handleSearchSubmit: () => void;
+  handleSearchSubmit: () => Promise<boolean>;
   handleSearchClear: () => void;
   handleUseTypedCoordinates: (value: string) => void;
   selectSuggestion: (suggestion: Suggestion) => void;
@@ -76,6 +80,7 @@ export interface PlannerViewProps {
 
   // Header controls
   hasObjective: boolean;
+  objectiveDraftDirty: boolean;
   objectiveIsSaved: boolean;
   handleToggleSaveObjective: () => void;
   copiedLink: boolean;
@@ -184,9 +189,6 @@ export interface PlannerViewProps {
   decisionFailingChecks: SummitDecision['checks'];
   decisionKeyDrivers: string[];
   orderedCriticalChecks: SummitDecision['checks'];
-  betterDaySuggestions: BetterDaySuggestion[] | null;
-  betterDaySuggestionsLoading: boolean;
-  betterDaySuggestionsNote: string | null;
   startTimeScenarioComparison: StartTimeScenarioComparison | null;
   startTimeScenariosLoading: boolean;
   startTimeScenariosError: string | null;
@@ -481,6 +483,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
 
     // Header
     hasObjective,
+    objectiveDraftDirty,
     objectiveIsSaved,
     handleToggleSaveObjective,
     copiedLink,
@@ -602,6 +605,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
   // requires explicitly editing the plan (see onEditPlan), so a
   // displayed report can't be silently mutated out from under the user.
   const reportLocked = Boolean(safetyData);
+  const objectiveReady = hasObjective && !objectiveDraftDirty;
 
   return (
     <div key="view-planner" className={`${appShellClassName} ssr-shell`} aria-busy={isViewPending}>
@@ -611,6 +615,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         navigateToView={navigateToView}
         openTripToolView={openTripToolView}
       />
+      <main id="planner-main-content" className="planner-page-main" tabIndex={-1}>
       <PlannerHeader
         searchWrapperRef={searchWrapperRef}
         searchInputRef={searchInputRef}
@@ -630,7 +635,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         selectSuggestion={selectSuggestion}
         setActiveSuggestionIndex={setActiveSuggestionIndex}
         disabled={reportLocked}
-        hasObjective={hasObjective}
+        hasObjective={objectiveReady}
         objectiveIsSaved={objectiveIsSaved}
         handleToggleSaveObjective={handleToggleSaveObjective}
         copiedLink={copiedLink}
@@ -649,6 +654,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleUseCurrentLocation={handleUseCurrentLocation}
         handleRecenterMap={handleRecenterMap}
         hasObjective={hasObjective}
+        objectiveDraftDirty={objectiveDraftDirty}
+        objectiveName={objectiveName}
         safetyData={safetyData}
         mapElevationChipTitle={mapElevationChipTitle}
         mapElevationLabel={mapElevationLabel}
@@ -659,6 +666,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
         mobileMapControlsExpanded={mobileMapControlsExpanded}
         setMobileMapControlsExpanded={setMobileMapControlsExpanded}
         forecastDate={forecastDate}
+        dateLabel={props.formatIsoDateLabel(forecastDate)}
+        displayStartTime={props.displayStartTime}
         todayDate={todayDate}
         maxForecastDate={maxForecastDate}
         handleDateChange={handleDateChange}
@@ -680,13 +689,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         onEditPlan={onEditPlan}
         onGenerateReport={onGenerateReport}
       />
-
-      {!hasObjective && (
-        <div className="empty-state">
-          <h3>Select a location to start planning</h3>
-          <p>Search for a peak, trail area, zone, or click the map to place a pin.</p>
-        </div>
-      )}
 
       {loading && !safetyData && <ForecastLoading />}
 
@@ -737,34 +739,48 @@ function PlannerViewComponent(props: PlannerViewProps) {
       )}
 
       {hasObjective && safetyData && decision && (
-        <div className="data-grid" role="main" aria-label="Conditions report">
+        <section className="data-grid" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
 
           {objectiveName && (
-            <RouteAnalysisSection
-              objectiveName={objectiveName}
-              positionLat={position.lat}
-              positionLng={position.lng}
-              forecastDate={forecastDate}
-              alpineStartTime={alpineStartTime}
-              travelWindowHours={travelWindowHours}
-              order={reportCardOrder.reportColumns}
-              routeSuggestions={routeSuggestions}
-              routeAnalysis={routeAnalysis}
-              routeLoading={routeLoading}
-              routeError={routeError}
-              fetchRouteSuggestions={fetchRouteSuggestions}
-              fetchRouteAnalysis={fetchRouteAnalysis}
-              customRouteName={customRouteName}
-              setCustomRouteName={setCustomRouteName}
-              setRouteSuggestions={setRouteSuggestions}
-              setRouteError={setRouteError}
-              getScoreColor={getScoreColor}
-              formatTempDisplay={formatTempDisplay}
-              formatWindDisplay={formatWindDisplay}
-              formatElevationDisplay={formatElevationDisplay}
-              formatDistanceDisplay={formatDistanceDisplay}
-            />
+            <React.Suspense
+              fallback={(
+                <div
+                  className="route-analysis-section loading-state inline-loading-state"
+                  style={{ order: reportCardOrder.reportColumns - 1 }}
+                  role="status"
+                  aria-live="polite"
+                  aria-busy="true"
+                >
+                  Loading route analysis tools…
+                </div>
+              )}
+            >
+              <RouteAnalysisSection
+                objectiveName={objectiveName}
+                positionLat={position.lat}
+                positionLng={position.lng}
+                forecastDate={forecastDate}
+                alpineStartTime={alpineStartTime}
+                travelWindowHours={travelWindowHours}
+                order={reportCardOrder.reportColumns}
+                routeSuggestions={routeSuggestions}
+                routeAnalysis={routeAnalysis}
+                routeLoading={routeLoading}
+                routeError={routeError}
+                fetchRouteSuggestions={fetchRouteSuggestions}
+                fetchRouteAnalysis={fetchRouteAnalysis}
+                customRouteName={customRouteName}
+                setCustomRouteName={setCustomRouteName}
+                setRouteSuggestions={setRouteSuggestions}
+                setRouteError={setRouteError}
+                getScoreColor={getScoreColor}
+                formatTempDisplay={formatTempDisplay}
+                formatWindDisplay={formatWindDisplay}
+                formatElevationDisplay={formatElevationDisplay}
+                formatDistanceDisplay={formatDistanceDisplay}
+              />
+            </React.Suspense>
           )}
 
           {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
@@ -774,10 +790,18 @@ function PlannerViewComponent(props: PlannerViewProps) {
           )}
 
           <div style={{ order: reportCardOrder.scoreCard }}>
-            <RedesignView {...props} />
+            <React.Suspense
+              fallback={(
+                <div className="loading-state inline-loading-state" role="status" aria-live="polite" aria-busy="true">
+                  Loading report details…
+                </div>
+              )}
+            >
+              <RedesignView {...props} />
+            </React.Suspense>
           </div>
 
-        </div>
+        </section>
       )}
 
       <div className="planner-footer-stack">
@@ -788,6 +812,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
           </div>
         )}
       </div>
+      </main>
     </div>
   );
 }

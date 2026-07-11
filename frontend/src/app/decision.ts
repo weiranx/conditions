@@ -463,25 +463,3 @@ export function evaluateBackcountryDecision(
 
   return { level, headline, blockers, cautions, checks };
 }
-
-export function isAvalancheSummaryText(text: string): boolean {
-  return /\bavalanche\b|\bbulletin\b/i.test(String(text || ''));
-}
-
-export function summarizeBetterDayWithoutAvalancheText(decision: SummitDecision): string {
-  const nonAvalancheBlockers = decision.blockers.filter((line) => !isAvalancheSummaryText(line));
-  if (nonAvalancheBlockers.length > 0) {
-    return nonAvalancheBlockers[0];
-  }
-
-  const nonAvalancheCautions = decision.cautions.filter((line) => !isAvalancheSummaryText(line));
-  if (nonAvalancheCautions.length > 0) {
-    return nonAvalancheCautions[0];
-  }
-
-  if (!isAvalancheSummaryText(decision.headline || '')) {
-    return decision.headline;
-  }
-
-  return 'Conditions remain mixed; review weather, wind, and timing details for this day.';
-}

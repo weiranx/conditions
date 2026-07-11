@@ -3,9 +3,11 @@ import { AttributionControl, MapContainer, TileLayer, ScaleControl } from 'react
 import L from 'leaflet';
 import {
   Wind,
+  Check,
   Mountain,
   Compass,
   Map as MapIcon,
+  MapPin,
   LocateFixed,
   Layers,
   Navigation,
@@ -40,6 +42,8 @@ export interface PlannerMapSectionProps {
   handleUseCurrentLocation: () => void;
   handleRecenterMap: () => void;
   hasObjective: boolean;
+  objectiveDraftDirty: boolean;
+  objectiveName: string;
   safetyData: SafetyData | null;
   mapElevationChipTitle: string;
   mapElevationLabel: string;
@@ -50,6 +54,8 @@ export interface PlannerMapSectionProps {
   mobileMapControlsExpanded: boolean;
   setMobileMapControlsExpanded: (fn: (prev: boolean) => boolean) => void;
   forecastDate: string;
+  dateLabel: string;
+  displayStartTime: string;
   todayDate: string;
   maxForecastDate: string;
   handleDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -75,11 +81,11 @@ export interface PlannerMapSectionProps {
 export function PlannerMapSection({
   position, activeBasemap, preferences, updateObjectivePosition, mapFocusNonce,
   mapStyle, setMapStyle, locatingUser, handleUseCurrentLocation, handleRecenterMap,
-  hasObjective, safetyData,
+  hasObjective, objectiveDraftDirty, objectiveName, safetyData,
   mapElevationChipTitle, mapElevationLabel,
   mapWeatherEmoji, mapWeatherTempLabel, mapWeatherConditionLabel, mapWeatherChipTitle,
   mobileMapControlsExpanded, setMobileMapControlsExpanded,
-  forecastDate, todayDate, maxForecastDate, handleDateChange,
+  forecastDate, dateLabel, displayStartTime, todayDate, maxForecastDate, handleDateChange,
   startLabel, alpineStartTime, handlePlannerTimeChange, setAlpineStartTime,
   travelWindowHoursDraft, handleTravelWindowHoursDraftChange, handleTravelWindowHoursDraftBlur,
   objectiveTimezone, handleUseNowConditions,
@@ -87,18 +93,33 @@ export function PlannerMapSection({
   timezoneMismatch, deviceTimezone,
   locked, onEditPlan, onGenerateReport,
 }: PlannerMapSectionProps) {
-  let workflowTitle = 'Report draft';
-  let workflowDetail = 'Adjust the plan, then generate.';
-  let WorkflowStateIcon = PencilLine;
-  if (locked) {
-    workflowTitle = 'Current report';
-    workflowDetail = 'Inputs match the results below.';
-    WorkflowStateIcon = FileCheck2;
+  const objectiveReady = hasObjective && !objectiveDraftDirty;
+  let workflowTitle = 'Choose an objective';
+  let workflowDetail = 'Search above or tap the map to place a pin.';
+  let WorkflowStateIcon = MapPin;
+  if (objectiveDraftDirty) {
+    workflowTitle = 'Choose a search result';
+    workflowDetail = 'Your typed search is not the selected map objective yet.';
+  } else if (loading && locked) {
+    workflowTitle = 'Updating current report';
+    workflowDetail = 'The existing report stays visible while fresh data loads.';
+    WorkflowStateIcon = RefreshCw;
   } else if (loading) {
     workflowTitle = 'Generating report';
     workflowDetail = 'Fetching the latest conditions for this plan.';
     WorkflowStateIcon = RefreshCw;
+  } else if (locked) {
+    workflowTitle = 'Report ready';
+    workflowDetail = 'These inputs match the current results.';
+    WorkflowStateIcon = FileCheck2;
+  } else if (objectiveReady) {
+    workflowTitle = 'Ready to generate';
+    workflowDetail = 'Review the timing, then build your conditions brief.';
+    WorkflowStateIcon = PencilLine;
   }
+
+  const activeWorkflowStep = !objectiveReady ? 0 : loading || locked ? 2 : 1;
+  const workflowSteps = ['Objective', 'Timing', 'Report'];
 
   const handleBeginEditing = () => {
     onEditPlan();
@@ -120,8 +141,116 @@ export function PlannerMapSection({
     report.scrollIntoView({ behavior, block: 'start' });
   };
 
+  const handleReviewTiming = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setMobileMapControlsExpanded(() => true);
+    try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', 'true'); } catch { /* ignore */ }
+    window.requestAnimationFrame(() => {
+      const controls = document.getElementById('planner-timing-controls');
+      if (!controls) return;
+      if (event.detail === 0) {
+        controls.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+      }
+      const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      controls.scrollIntoView({ behavior, block: 'center' });
+    });
+  };
+
   return (
-    <section className={`map-shell ${locked ? 'has-report' : ''}`} id="planner-main-content">
+    <section className={`map-shell ${locked ? 'has-report' : ''}`}>
+      <div
+        id="planner-plan-workflow"
+        className={`planner-flowbar ${locked ? 'is-current' : objectiveReady ? 'is-ready' : 'is-awaiting'}`}
+      >
+        <ol className="planner-flow-steps" aria-label="Planning progress">
+          {workflowSteps.map((step, index) => {
+            const isComplete = index === 0
+              ? objectiveReady
+              : index === 1
+                ? loading || locked
+                : locked && !loading;
+            const isActive = index === activeWorkflowStep;
+            return (
+              <li
+                key={step}
+                className={`${isComplete ? 'is-complete' : ''} ${isActive ? 'is-active' : ''}`}
+                aria-current={isActive ? 'step' : undefined}
+              >
+                <span className="planner-flow-step-marker" aria-hidden>
+                  {isComplete ? <Check size={12} /> : index + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="map-report-workflow">
+          <div className="map-report-state" role="status" aria-live="polite">
+            <WorkflowStateIcon size={15} className={loading ? 'spin' : undefined} aria-hidden />
+            <span>
+              <strong>{workflowTitle}</strong>
+              {workflowDetail}
+            </span>
+          </div>
+
+          {objectiveReady && (
+            <div className="planner-flow-summary" role="group" aria-label="Selected plan">
+              <strong>{objectiveName || 'Dropped pin'}</strong>
+              <span><time dateTime={forecastDate}>{dateLabel}</time> · {displayStartTime} · {travelWindowHoursDraft}h</span>
+            </div>
+          )}
+
+          {objectiveReady && (
+            <div className="map-report-actions">
+              {locked ? (
+                <>
+                  <button
+                    type="button"
+                    className="action-btn plan-action-primary plan-view-report"
+                    onClick={handleViewReport}
+                    title="Jump to the report verdict and conditions"
+                  >
+                    <ArrowDown size={14} /> View report
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={handleBeginEditing}
+                    disabled={loading}
+                    title="Start a new report with editable location and timing"
+                  >
+                    <PencilLine size={14} /> New report
+                  </button>
+                  <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
+                    <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating…' : 'Update report'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="action-btn plan-review-timing"
+                    onClick={handleReviewTiming}
+                    disabled={loading}
+                  >
+                    <SlidersHorizontal size={14} /> Review timing
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn plan-action-primary"
+                    onClick={onGenerateReport}
+                    disabled={loading}
+                    title="Generate a report for this location and timing"
+                  >
+                    <Send size={14} /> {loading ? 'Generating…' : 'Generate report'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="map-section">
         <MapContainer center={position} zoom={hasObjective ? 11 : 4} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer
@@ -182,7 +311,7 @@ export function PlannerMapSection({
           </span>
         </div>
 
-        {hasObjective && (
+        {objectiveReady && (
           <div className="map-overlay map-overlay-br">
             <span className={`map-overlay-info ${safetyData ? '' : 'is-pending'}`} title={mapElevationChipTitle}>
               <Mountain size={12} aria-hidden="true" />
@@ -199,7 +328,7 @@ export function PlannerMapSection({
         )}
       </div>
 
-      <div className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
+      <div id="planner-timing-controls" className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
         <button
           type="button"
           className="mobile-map-controls-btn"
@@ -261,72 +390,27 @@ export function PlannerMapSection({
           </button>
         </div>
 
-        <div className="map-actions-footer">
-          {hasObjective && (
-            <div className={`map-report-workflow ${locked ? 'is-current' : 'is-draft'}`} role="status" aria-live="polite">
-              <div className="map-report-state">
-                <WorkflowStateIcon size={15} className={!locked && loading ? 'spin' : undefined} aria-hidden />
-                <span>
-                  <strong>{workflowTitle}</strong>
-                  {workflowDetail}
-                </span>
-              </div>
-              <div className="map-report-actions">
-                {locked ? (
-                  <>
-                    <button
-                      type="button"
-                      className="action-btn plan-action-primary plan-view-report"
-                      onClick={handleViewReport}
-                      title="Jump to the report verdict and conditions"
-                    >
-                      <ArrowDown size={14} /> View report
-                    </button>
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={handleBeginEditing}
-                      title="Unlock the location and timing to create a different report"
-                    >
-                      <PencilLine size={14} /> Edit plan
-                    </button>
-                    <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
-                      <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating...' : 'Update report'}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="action-btn plan-action-primary"
-                    onClick={onGenerateReport}
-                    disabled={loading}
-                    title="Generate a report for this location and timing"
-                  >
-                    <Send size={14} /> {loading ? 'Generating...' : 'Generate report'}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
+        {objectiveReady && (
+          <div className="map-actions-footer is-utilities-only">
           <div className="map-actions-utils">
             <button type="button" className="settings-btn" onClick={openTripToolView}>
               <CalendarDays size={14} /> Multi-day
             </button>
 
             <div className="map-ext-links">
-              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="CalTopo">
-                <MapIcon size={15} />
+              <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Open in CalTopo" aria-label="Open objective in CalTopo (new tab)">
+                <MapIcon size={15} aria-hidden />
               </a>
-              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Gaia GPS">
-                <Compass size={15} />
+              <a href={`https://www.gaiagps.com/map/?lat=${position.lat}&lon=${position.lng}&zoom=14`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Open in Gaia GPS" aria-label="Open objective in Gaia GPS (new tab)">
+                <Compass size={15} aria-hidden />
               </a>
-              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Windy">
-                <Wind size={15} />
+              <a href={`https://www.windy.com/?${position.lat},${position.lng},12`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Open in Windy" aria-label="Open objective in Windy (new tab)">
+                <Wind size={15} aria-hidden />
               </a>
             </div>
           </div>
-        </div>
+          </div>
+        )}
 
         {timezoneMismatch && (
           <p className="map-time-help is-warning">

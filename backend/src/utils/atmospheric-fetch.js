@@ -10,6 +10,7 @@
 
 const { FT_PER_METER } = require('./geo');
 const { logger } = require('./logger');
+const { createCache, normalizeCoordKey } = require('./cache');
 
 const toFiniteOrNull = (value) => {
   // Open-Meteo emits null for missing hours; Number(null) would coerce to 0.
@@ -52,33 +53,60 @@ const resolveGridpointValueAt = (layer, targetMs) => {
 };
 
 const createAtmosphericService = ({ fetchWithTimeout, requestTimeoutMs = 10000 } = {}) => {
+  const openMeteoAtmospherePayloadCache = createCache({
+    name: 'open-meteo-atmosphere-payload',
+    ttlMs: 15 * 60 * 1000,
+    staleTtlMs: 15 * 60 * 1000,
+    maxEntries: 300,
+  });
+  const noaaGridpointPayloadCache = createCache({
+    name: 'noaa-gridpoint-payload',
+    ttlMs: 20 * 60 * 1000,
+    staleTtlMs: 25 * 60 * 1000,
+    maxEntries: 100,
+  });
+
   const fetchOpenMeteoAtmosphere = async ({ lat, lon, selectedDate, startClock, fetchOptions }) => {
-    const params = new URLSearchParams({
-      latitude: String(lat),
-      longitude: String(lon),
-      timezone: 'auto',
-      forecast_days: '16',
-      hourly: 'uv_index,freezing_level_height',
-      daily: 'uv_index_max',
-    });
-    const hosts = ['api.open-meteo.com', 'customer-api.open-meteo.com'];
-    let payload = null;
-    let lastError = null;
-    for (const host of hosts) {
-      try {
-        const res = await fetchWithTimeout(
-          `https://${host}/v1/forecast?${params.toString()}`,
-          fetchOptions,
-          Math.max(requestTimeoutMs, 10000),
-        );
-        if (!res.ok) throw new Error(`Open-Meteo atmosphere failed ${res.status}`);
-        payload = await res.json();
-        break;
-      } catch (err) {
-        lastError = err;
+    const cacheKey = normalizeCoordKey(lat, lon);
+    const payload = await openMeteoAtmospherePayloadCache.getOrFetch(cacheKey, async () => {
+      const params = new URLSearchParams({
+        latitude: String(lat),
+        longitude: String(lon),
+        timezone: 'auto',
+        forecast_days: '16',
+        hourly: 'uv_index,freezing_level_height',
+        daily: 'uv_index_max',
+      });
+      const hosts = ['api.open-meteo.com', 'customer-api.open-meteo.com'];
+      let nextPayload = null;
+      let lastError = null;
+      for (const host of hosts) {
+        try {
+          const res = await fetchWithTimeout(
+            `https://${host}/v1/forecast?${params.toString()}`,
+            fetchOptions,
+            Math.max(requestTimeoutMs, 10000),
+          );
+          if (!res.ok) throw new Error(`Open-Meteo atmosphere failed ${res.status}`);
+          const candidatePayload = await res.json();
+          const candidateTimes = Array.isArray(candidatePayload?.hourly?.time)
+            ? candidatePayload.hourly.time
+            : [];
+          if (!candidateTimes.length) {
+            throw new Error('Open-Meteo atmosphere missing hourly time series');
+          }
+          nextPayload = candidatePayload;
+          break;
+        } catch (err) {
+          if (fetchOptions?.signal?.aborted) {
+            throw err;
+          }
+          lastError = err;
+        }
       }
-    }
-    if (!payload) throw lastError || new Error('Open-Meteo atmosphere failed');
+      if (!nextPayload) throw lastError || new Error('Open-Meteo atmosphere failed');
+      return nextPayload;
+    });
 
     const times = Array.isArray(payload?.hourly?.time) ? payload.hourly.time : [];
     if (!times.length) throw new Error('Open-Meteo atmosphere missing hourly time series');
@@ -119,9 +147,15 @@ const createAtmosphericService = ({ fetchWithTimeout, requestTimeoutMs = 10000 }
 
   const fetchNoaaGridpointAtmosphere = async ({ gridDataUrl, targetTimeIso, fetchOptions }) => {
     if (!gridDataUrl) return {};
-    const res = await fetchWithTimeout(gridDataUrl, fetchOptions, requestTimeoutMs);
-    if (!res.ok) throw new Error(`NOAA gridpoint failed ${res.status}`);
-    const json = await res.json();
+    const json = await noaaGridpointPayloadCache.getOrFetch(gridDataUrl, async () => {
+      const res = await fetchWithTimeout(gridDataUrl, fetchOptions, requestTimeoutMs);
+      if (!res.ok) throw new Error(`NOAA gridpoint failed ${res.status}`);
+      const payload = await res.json();
+      if (!payload?.properties || typeof payload.properties !== 'object') {
+        throw new Error('NOAA gridpoint response missing properties');
+      }
+      return payload;
+    });
     const props = json?.properties || {};
     const targetMs = Date.parse(targetTimeIso) || Date.now();
 

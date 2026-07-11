@@ -2,13 +2,19 @@ const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/c
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
 
-const withTimeout = (promise, ms, label) =>
-  Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
-    ),
-  ]);
+const withTimeout = (promise, ms, label) => {
+  let timeout = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeout = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms / 1000}s`)),
+      ms,
+    );
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+};
 
 // Bounds the combined raw per-waypoint report JSON before it's interpolated into the
 // Claude prompt, so a route with several waypoints can't blow up prompt size.
@@ -357,4 +363,4 @@ Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it he
   });
 };
 
-module.exports = { registerRouteAnalysisRoutes };
+module.exports = { registerRouteAnalysisRoutes, withTimeout };

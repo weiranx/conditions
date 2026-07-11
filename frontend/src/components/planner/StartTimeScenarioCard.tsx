@@ -11,7 +11,7 @@ interface StartTimeScenarioCardProps {
   formatClockForStyle: (time: string, style: UserPreferences['timeStyle']) => string;
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatTempDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
-  onSelectStartTime: (startTime: string) => void;
+  onUseForNewReport: (startTime: string) => void;
 }
 
 function formatDaylight(minutes: number | null): string {
@@ -54,7 +54,7 @@ export function StartTimeScenarioCard({
   formatClockForStyle,
   formatWindDisplay,
   formatTempDisplay,
-  onSelectStartTime,
+  onUseForNewReport,
 }: StartTimeScenarioCardProps) {
   const best = comparison?.scenarios.find((scenario) => scenario.startTime === comparison.bestStartTime) ?? null;
 
@@ -108,8 +108,8 @@ export function StartTimeScenarioCard({
                     <div><dt>Avalanche</dt><dd>{scenario.avalancheLabel} <small>{scenario.avalancheLevel === null || best.avalancheLevel === null ? '—' : formatDelta(scenario.avalancheLevel, best.avalancheLevel, '')}</small></dd></div>
                   </dl>
                   {!isCurrent && (
-                    <button type="button" className="ssr-scenario-use" onClick={() => onSelectStartTime(scenario.startTime)}>
-                      Use this start
+                    <button type="button" className="ssr-scenario-use" onClick={() => onUseForNewReport(scenario.startTime)}>
+                      Use in new report
                     </button>
                   )}
                   {isCurrent && <span className="ssr-scenario-current">Current plan</span>}

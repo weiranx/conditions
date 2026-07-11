@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { ExternalLink, FileCheck2, Upload } from 'lucide-react';
-import { RouteConditionsProfile } from './cards/RouteConditionsProfile';
 import { renderSimpleMarkdown } from '../../app/markdown';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
+
+const RouteConditionsProfile = lazy(() =>
+  import('./cards/RouteConditionsProfile').then((module) => ({ default: module.RouteConditionsProfile })),
+);
 
 export interface RouteAnalysisSectionProps {
   objectiveName: string;
@@ -285,13 +288,21 @@ export function RouteAnalysisSection({
               );
             })}
           </div>
-          <RouteConditionsProfile
-            waypoints={routeAnalysis.summaries}
-            getScoreColor={getScoreColor}
-            formatTempDisplay={formatTempDisplay}
-            formatWindDisplay={formatWindDisplay}
-            formatElevationDisplay={formatElevationDisplay}
-          />
+          <Suspense
+            fallback={(
+              <div className="loading-state inline-loading-state" role="status" aria-live="polite" aria-busy="true">
+                Loading route profile…
+              </div>
+            )}
+          >
+            <RouteConditionsProfile
+              waypoints={routeAnalysis.summaries}
+              getScoreColor={getScoreColor}
+              formatTempDisplay={formatTempDisplay}
+              formatWindDisplay={formatWindDisplay}
+              formatElevationDisplay={formatElevationDisplay}
+            />
+          </Suspense>
           <div className="route-analysis-text">
             {renderSimpleMarkdown(routeAnalysis.analysis)}
           </div>

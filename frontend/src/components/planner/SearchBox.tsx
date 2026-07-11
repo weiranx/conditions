@@ -49,10 +49,28 @@ export function SearchBox({
     }
   }, [showSuggestions, trimmedSearchQuery]);
 
+  React.useEffect(() => {
+    if (!showSuggestions || activeSuggestionIndex < 0) return;
+    suggestionsListRef.current
+      ?.querySelector<HTMLElement>(`#suggestion-${activeSuggestionIndex}`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeSuggestionIndex, showSuggestions]);
+
+  const optionCount = suggestions.length + (canUseCoordinates ? 1 : 0);
+  const searchStatus = disabled || !showSuggestions
+    ? ''
+    : searchLoading
+      ? 'Searching for locations.'
+      : trimmedSearchQuery && optionCount === 0
+        ? 'No matching locations found.'
+        : optionCount > 0
+          ? `${optionCount} location ${optionCount === 1 ? 'option' : 'options'} available.`
+          : '';
+
   return (
     <div className="search-wrapper" ref={searchWrapperRef}>
       <div className="search-bar">
-        <Search size={16} />
+        <Search size={16} aria-hidden />
         <input
           ref={searchInputRef}
           type="text"
@@ -68,23 +86,36 @@ export function SearchBox({
           onFocus={onFocus}
           onKeyDown={onKeyDown}
           disabled={disabled}
+          role="combobox"
           aria-label="Search location"
           aria-autocomplete="list"
-          aria-expanded={showSuggestions}
+          aria-haspopup="listbox"
+          aria-expanded={!disabled && showSuggestions}
           aria-controls="planner-suggestion-list"
-          aria-activedescendant={activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
+          aria-describedby="planner-search-status"
+          aria-activedescendant={!disabled && activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
         />
         {trimmedSearchQuery.length > 0 && (
           <button type="button" className="search-clear-btn" onClick={onClear} aria-label="Clear search" disabled={disabled}>
-            <X size={14} />
+            <X size={14} aria-hidden />
           </button>
         )}
       </div>
+      <span id="planner-search-status" className="sr-only" role="status" aria-live="polite">
+        {searchStatus}
+      </span>
 
       {!disabled && showSuggestions && (searchLoading || suggestions.length > 0 || trimmedSearchQuery.length > 0) && (
-        <div ref={suggestionsListRef} className="suggestions-list" id="planner-suggestion-list" role="listbox" aria-label="Search suggestions">
+        <div
+          ref={suggestionsListRef}
+          className="suggestions-list"
+          id="planner-suggestion-list"
+          role="listbox"
+          aria-label="Search suggestions"
+          aria-busy={searchLoading}
+        >
           {searchLoading && (
-            <div className="suggestion-status" role="presentation">
+            <div className="suggestion-status">
               Searching...
             </div>
           )}
@@ -101,12 +132,12 @@ export function SearchBox({
             </button>
           )}
           {!searchLoading && suggestions.length === 0 && trimmedSearchQuery.length > 0 && (
-            <div className="suggestion-status" role="presentation">No matches found. Try “Mount Elbert”, “Mt Hood”, or “39.1178 -106.4452”.</div>
+            <div className="suggestion-status">No matches found. Try “Mount Elbert”, “Mt Hood”, or “39.1178 -106.4452”.</div>
           )}
           {!searchLoading &&
             suggestions.map((suggestion, index) => (
               <button
-                key={`${suggestion.name}-${index}`}
+                key={`${suggestion.name}-${suggestion.lat}-${suggestion.lon}`}
                 id={`suggestion-${index}`}
                 type="button"
                 role="option"
@@ -130,7 +161,7 @@ export function SearchBox({
               </button>
             ))}
           {!searchLoading && suggestions.length > 0 && (
-            <div className="suggestion-status search-shortcuts" role="presentation">Tip: Press `/` to focus, `↑/↓` to navigate, `Enter` to select.</div>
+            <div className="suggestion-status search-shortcuts">Tip: Press `/` to focus, `↑/↓` to navigate, `Enter` to select.</div>
           )}
         </div>
       )}

@@ -28,7 +28,7 @@
   position: absolute;
   z-index: -2;
   inset: 0;
-  background: url('/hero-rainier.png') center 42% / cover no-repeat;
+  background: url('/hero-rainier.jpg') center 42% / cover no-repeat;
   transform: scale(1.012);
 }
 .ssr-h-hero::after {
@@ -172,6 +172,9 @@ html[data-theme="dark"] .ssr-h-hero::after {
   background: rgba(255, 255, 255, .97);
   box-shadow: 0 1px 0 rgba(255, 255, 255, .6) inset, 0 8px 24px -18px rgba(0, 0, 0, .7);
 }
+.ssr-h-console-search .search-bar input { color: #1d2922; }
+.ssr-h-console-search .search-bar input::placeholder { color: #59645d; }
+.ssr-h-console-search .search-bar svg { color: #59645d; }
 .ssr-h-console-search .search-wrapper:focus-within .search-bar { border-color: #8fbba0; background: #fff; box-shadow: 0 0 0 3px rgba(190, 231, 202, .24); }
 .ssr-h-console .suggestions-list { max-height: min(32vh, 272px); }
 @media (min-width: 881px) {
@@ -203,6 +206,12 @@ html[data-theme="dark"] .ssr-h-hero::after {
   transform: translateY(-1px);
   background: linear-gradient(180deg, #4b8965, #346f4e);
   box-shadow: 0 12px 24px -12px rgba(4, 20, 12, .86), inset 0 1px rgba(255, 255, 255, .16);
+}
+.ssr-h-go:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+  transform: none;
+  box-shadow: none;
 }
 .ssr-h-go:active { transform: translateY(1px); }
 .ssr-h-go svg { width: 16px; height: 16px; }

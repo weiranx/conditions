@@ -1,7 +1,17 @@
 const express = require('express');
 const request = require('supertest');
 
-const { registerRouteAnalysisRoutes } = require('../src/routes/route-analysis');
+const { registerRouteAnalysisRoutes, withTimeout } = require('../src/routes/route-analysis');
+
+test('withTimeout clears its timer when work finishes before the deadline', async () => {
+  jest.useFakeTimers();
+  try {
+    await expect(withTimeout(Promise.resolve('done'), 60000, 'Fast work')).resolves.toBe('done');
+    expect(jest.getTimerCount()).toBe(0);
+  } finally {
+    jest.useRealTimers();
+  }
+});
 
 test('GPX route analysis uses supplied coordinates without generating or geocoding waypoints', async () => {
   const app = express();

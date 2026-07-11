@@ -22,7 +22,7 @@ export interface PlannerHeaderProps {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFocus: () => void;
   handleSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  handleSearchSubmit: () => void;
+  handleSearchSubmit: () => Promise<boolean>;
   handleSearchClear: () => void;
   handleUseTypedCoordinates: (value: string) => void;
   selectSuggestion: (suggestion: Suggestion) => void;
@@ -63,7 +63,7 @@ export function PlannerHeader({
   };
 
   return (
-    <header className="header-section">
+    <header className={`header-section ${hasObjective ? 'has-objective' : 'is-awaiting-objective'} ${disabled ? 'is-locked' : ''}`}>
       <div className="planner-header-intro">
         <p className="planner-header-kicker"><Compass size={12} aria-hidden /> Decision workspace</p>
         <h1>Plan with the whole picture.</h1>
@@ -90,8 +90,8 @@ export function PlannerHeader({
           onHoverSuggestion={setActiveSuggestionIndex}
         />
 
-        <nav className="header-nav" aria-label="Planner controls">
-          {hasObjective && (
+        {hasObjective && (
+          <nav className="header-nav" aria-label="Planner controls">
             <button
               type="button"
               className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
@@ -102,11 +102,11 @@ export function PlannerHeader({
               {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
               <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
             </button>
-          )}
-          <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
-            {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
-          </button>
-        </nav>
+            <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
+              {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
+            </button>
+          </nav>
+        )}
         <span className={`planner-save-status ${saveMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
           {saveMessage}
         </span>

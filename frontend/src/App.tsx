@@ -90,15 +90,10 @@ import { sanitizeExternalUrl, parseLinkState } from './app/url-state';
 import {
   evaluateBackcountryDecision,
 } from './app/decision';
-import { PlannerView } from './components/planner/PlannerView';
 import { buildReportCardOrder } from './app/card-ordering';
 import { buildWindLoadingDisplay } from './app/wind-loading-display';
 import { buildRainfallDisplay } from './app/rainfall-display';
 import { buildSourceFreshnessDisplay } from './app/source-freshness-display';
-import { LogsView } from './components/views/LogsView';
-import { StatusView } from './components/views/StatusView';
-import { SettingsView } from './components/views/SettingsView';
-import { TripView } from './components/views/TripView';
 import { HomeView } from './components/views/HomeView';
 import { useHealthChecks } from './hooks/useHealthChecks';
 import { useRouteAnalysis } from './hooks/useRouteAnalysis';
@@ -106,6 +101,7 @@ import type { RouteAnalysisOptions } from './hooks/useRouteAnalysis';
 import { useTripForecast } from './hooks/useTripForecast';
 import { useSafetyData } from './hooks/useSafetyData';
 import { useSearchSuggestions } from './hooks/useSearchSuggestions';
+import { normalizeSuggestionText } from './lib/search';
 import { useUrlState, useSyncUrlEffect } from './hooks/useUrlState';
 import type { AppView } from './hooks/useUrlState';
 import { useDayComparisons } from './hooks/useDayComparisons';
@@ -115,6 +111,22 @@ import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const PlannerView = React.lazy(() =>
+  import('./components/planner/PlannerView').then((module) => ({ default: module.PlannerView })),
+);
+const LogsView = React.lazy(() =>
+  import('./components/views/LogsView').then((module) => ({ default: module.LogsView })),
+);
+const StatusView = React.lazy(() =>
+  import('./components/views/StatusView').then((module) => ({ default: module.StatusView })),
+);
+const SettingsView = React.lazy(() =>
+  import('./components/views/SettingsView').then((module) => ({ default: module.SettingsView })),
+);
+const TripView = React.lazy(() =>
+  import('./components/views/TripView').then((module) => ({ default: module.TripView })),
+);
 
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
@@ -244,7 +256,6 @@ function App() {
     setHasObjective(true);
     setTravelWindowExpanded(false);
     setSafetyData(null);
-    setDayOverDay(null);
     setError(null);
     setAiBriefNarrative(null);
     setAiBriefLoading(false);
@@ -263,7 +274,6 @@ function App() {
     // selection or "use current location"), always relabel as "Dropped pin" rather than
     // silently keeping a stale name (e.g. "Mount Rainier") attached to brand-new coordinates.
     setObjectiveName(label || 'Dropped pin');
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- setDayOverDay is a stable setter from useDayComparisons, declared later in hook order
   }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
   const searchHook = useSearchSuggestions({
@@ -282,6 +292,8 @@ function App() {
     recordRecentSuggestion,
     parsedTypedCoordinates,
   } = searchHook;
+  const objectiveDraftDirty = hasObjective
+    && normalizeSuggestionText(searchQuery) !== normalizeSuggestionText(committedSearchQuery);
 
   const handleToggleSaveObjective = useCallback(() => {
     handleToggleSaveObjectiveRaw({ hasObjective, objectiveName, position });
@@ -866,14 +878,11 @@ function App() {
     hasObjective,
     view,
     safetyData,
-    decisionLevel: decision?.level,
     forecastDate,
-    alpineStartTime,
     position: { lat: position.lat, lng: position.lng },
     preferences,
-    maxForecastDate,
   });
-  const { dayOverDay, setDayOverDay, betterDaySuggestions, betterDaySuggestionsLoading, betterDaySuggestionsNote } = dayComparisonsHook;
+  const { dayOverDay } = dayComparisonsHook;
   const startTimeScenarios = useStartTimeScenarios({
     enabled: hasObjective && view === 'planner' && Boolean(safetyData),
     forecastDate,
@@ -1579,6 +1588,7 @@ function App() {
       setActiveSuggestionIndex={setActiveSuggestionIndex}
       // Header controls
       hasObjective={hasObjective}
+      objectiveDraftDirty={objectiveDraftDirty}
       objectiveIsSaved={objectiveIsSaved}
       handleToggleSaveObjective={handleToggleSaveObjective}
       copiedLink={copiedLink}
@@ -1679,9 +1689,6 @@ function App() {
       decisionFailingChecks={decisionFailingChecks}
       decisionKeyDrivers={decisionKeyDrivers}
       orderedCriticalChecks={orderedCriticalChecks}
-      betterDaySuggestions={betterDaySuggestions}
-      betterDaySuggestionsLoading={betterDaySuggestionsLoading}
-      betterDaySuggestionsNote={betterDaySuggestionsNote}
       startTimeScenarioComparison={startTimeScenarios.comparison}
       startTimeScenariosLoading={startTimeScenarios.loading}
       startTimeScenariosError={startTimeScenarios.error}

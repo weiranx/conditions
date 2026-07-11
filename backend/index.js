@@ -1,5 +1,3 @@
-const { createApp } = require('./src/server/create-app');
-const { startServer: startBackendServer } = require('./src/server/start-server');
 const {
   PORT,
   IS_PRODUCTION,
@@ -11,6 +9,10 @@ const {
   RATE_LIMIT_MAX_REQUESTS,
   CORS_ALLOWLIST,
 } = require('./src/server/runtime');
+// Runtime configuration loads dotenv. Keep it ahead of modules that initialize
+// environment-sensitive singletons (notably the logger transport).
+const { createApp } = require('./src/server/create-app');
+const { startServer: startBackendServer } = require('./src/server/start-server');
 const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout, createCircuitBreaker, withCircuitBreaker } = require('./src/utils/http-client');
 const { normalizeWindDirection } = require('./src/utils/wind');
 const {
@@ -55,7 +57,7 @@ const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askClaude, askClaudeVision } = require('./src/utils/ai-client');
-const { createCache } = require('./src/utils/cache');
+const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
@@ -107,11 +109,13 @@ let avalancheMapLayerCache = {
   fetchedAt: 0,
   data: null,
 };
+let avalancheMapLayerRefreshPromise = null;
 
 const noaaPointsCache = createCache({ name: 'noaa-points', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 48 * 60 * 60 * 1000, maxEntries: 200 });
 const { elevationCache, fetchObjectiveElevationFt } = createElevationService({ fetchWithTimeout, requestTimeoutMs: REQUEST_TIMEOUT_MS });
 const solarCache = createCache({ name: 'solar', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 23 * 24 * 60 * 60 * 1000, maxEntries: 300 });
 const noaaForecastCache = createCache({ name: 'noaa-forecast', ttlMs: 20 * 60 * 1000, staleTtlMs: 25 * 60 * 1000, maxEntries: 100 });
+const avalancheForecastCache = createCache({ name: 'avalanche-forecast', ttlMs: 10 * 60 * 1000, staleTtlMs: 20 * 60 * 1000, maxEntries: 300 });
 
 const { createUnavailableSnowpackData, fetchSnowpackData } = createSnowpackService({
   fetchWithTimeout,
@@ -156,31 +160,42 @@ const getAvalancheMapLayer = async (fetchOptions) => {
     return avalancheMapLayerCache.data;
   }
 
-  try {
-    const avyJson = await withCircuitBreaker(avalancheOrgCircuitBreaker, async () => {
-      const avyRes = await fetchWithTimeout(`https://api.avalanche.org/v2/public/products/map-layer`, fetchOptions);
-      if (!avyRes.ok) {
-        throw new Error(`Map layer fetch failed with status ${avyRes.status}`);
-      }
-      const json = await avyRes.json();
-      if (!json || !Array.isArray(json.features)) {
-        throw new Error('Map layer response missing features array');
-      }
-      return json;
-    });
+  // Deduplicate both cold starts and TTL-boundary refreshes. The previous
+  // implementation allowed every concurrent safety request to refresh the same
+  // global map layer independently.
+  if (!avalancheMapLayerRefreshPromise) {
+    avalancheMapLayerRefreshPromise = (async () => {
+      try {
+        const avyJson = await withCircuitBreaker(avalancheOrgCircuitBreaker, async () => {
+          const avyRes = await fetchWithTimeout(`https://api.avalanche.org/v2/public/products/map-layer`, fetchOptions);
+          if (!avyRes.ok) {
+            throw new Error(`Map layer fetch failed with status ${avyRes.status}`);
+          }
+          const json = await avyRes.json();
+          if (!json || !Array.isArray(json.features)) {
+            throw new Error('Map layer response missing features array');
+          }
+          return json;
+        });
 
-    avalancheMapLayerCache = {
-      fetchedAt: now,
-      data: avyJson,
-    };
-    return avyJson;
-  } catch (error) {
-    if (avalancheMapLayerCache.data) {
-      avyLog(`[Avy] map-layer refresh failed, serving cached copy: ${error.message}`);
-      return avalancheMapLayerCache.data;
-    }
-    throw error;
+        avalancheMapLayerCache = {
+          fetchedAt: Date.now(),
+          data: avyJson,
+        };
+        return avyJson;
+      } catch (error) {
+        if (avalancheMapLayerCache.data) {
+          avyLog(`[Avy] map-layer refresh failed, serving cached copy: ${error.message}`);
+          return avalancheMapLayerCache.data;
+        }
+        throw error;
+      } finally {
+        avalancheMapLayerRefreshPromise = null;
+      }
+    })();
   }
+
+  return avalancheMapLayerRefreshPromise;
 };
 
 /**
@@ -315,9 +330,25 @@ const safetyHandler = async (req, res) => {
   let fireRiskData = createUnavailableFireRiskData("unavailable");
   let heatRiskData = createUnavailableHeatRiskData("unavailable");
 
-  const fetchOptions = { headers: DEFAULT_FETCH_HEADERS };
+  const fetchOptions = { headers: DEFAULT_FETCH_HEADERS, signal: req.safetySignal };
   try {
     const avyMapLayerPromise = getAvalancheMapLayer(fetchOptions);
+    // Avalanche detail does not depend on weather. Start it immediately so its
+    // API/scraper work overlaps the weather pipeline, and cache the pre-date-
+    // processed result so route/scenario fan-out reuses one forecast lookup.
+    const avalanchePipelinePromise = avalancheForecastCache
+      .getOrFetch(normalizeCoordKey(parsedLat, parsedLon), () => fetchAvalanchePipeline({
+        avyMapLayerPromise,
+        parsedLat,
+        parsedLon,
+        fetchOptions,
+        fetchWithTimeout,
+        avyLog,
+      }))
+      .then(
+        (value) => ({ status: 'fulfilled', value }),
+        (reason) => ({ status: 'rejected', reason }),
+      );
     try {
       const weatherResult = await fetchWeatherPipeline({
         parsedLat,
@@ -403,14 +434,11 @@ const safetyHandler = async (req, res) => {
     ]);
 
     // 3. Avalanche Pipeline: Map Layer → Detail APIs → Scraper Fallback
-    avalancheData = await fetchAvalanchePipeline({
-      avyMapLayerPromise,
-      parsedLat,
-      parsedLon,
-      fetchOptions,
-      fetchWithTimeout,
-      avyLog,
-    });
+    const avalancheResult = await avalanchePipelinePromise;
+    if (avalancheResult.status === 'rejected') {
+      throw avalancheResult.reason;
+    }
+    avalancheData = avalancheResult.value;
 
     // Post-processing: derived danger, expiry checks, staleness warnings
     avalancheData = applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso });
@@ -558,13 +586,16 @@ const safetyHandler = async (req, res) => {
       analysis,
       pleasantness,
     });
+    if (req.safetySignal?.aborted || res.headersSent) {
+      return;
+    }
     writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.json(responsePayload);
   } catch (error) {
-    logger.error({ err: error }, 'API error');
-    if (res.headersSent) {
+    if (req.safetySignal?.aborted || res.headersSent) {
       return;
     }
+    logger.error({ err: error }, 'API error');
 
     const todayDate = new Date().toISOString().slice(0, 10);
     const fallbackSelectedDate = selectedForecastDate || requestedDate || todayDate;
@@ -662,6 +693,23 @@ const SAFETY_HANDLER_TIMEOUT_MS = 30000;
 
 const safetyHandlerWithTimeout = async (req, res) => {
   const ac = new AbortController();
+  req.safetySignal = ac.signal;
+  const abortForDisconnectedClient = () => {
+    if (!ac.signal.aborted) {
+      ac.abort(new Error('Client disconnected'));
+    }
+  };
+  if (typeof req.once === 'function') {
+    req.once('aborted', abortForDisconnectedClient);
+  }
+  const abortForClosedResponse = () => {
+    if (res.writableEnded !== true) {
+      abortForDisconnectedClient();
+    }
+  };
+  if (typeof res.once === 'function') {
+    res.once('close', abortForClosedResponse);
+  }
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       logger.warn({ lat: req.query.lat, lon: req.query.lon, timeoutMs: SAFETY_HANDLER_TIMEOUT_MS }, 'Safety request timed out');
@@ -670,12 +718,20 @@ const safetyHandlerWithTimeout = async (req, res) => {
         partialData: true,
       });
     }
-    ac.abort();
+    if (!ac.signal.aborted) {
+      ac.abort(new Error(`Safety request timed out after ${SAFETY_HANDLER_TIMEOUT_MS}ms`));
+    }
   }, SAFETY_HANDLER_TIMEOUT_MS);
   try {
     await safetyHandler(req, res);
   } finally {
     clearTimeout(timeout);
+    if (typeof req.removeListener === 'function') {
+      req.removeListener('aborted', abortForDisconnectedClient);
+    }
+    if (typeof res.removeListener === 'function') {
+      res.removeListener('close', abortForClosedResponse);
+    }
   }
 };
 
@@ -688,7 +744,7 @@ registerSearchRoutes({
   defaultFetchHeaders: DEFAULT_FETCH_HEADERS,
   peaks: POPULAR_PEAKS,
 });
-registerHealthRoutes(app, { caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, satelliteTileCache] });
+registerHealthRoutes(app, { caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, avalancheForecastCache, satelliteTileCache] });
 registerReportLogsRoute(app);
 registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askClaude });

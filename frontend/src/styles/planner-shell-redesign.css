@@ -10,6 +10,7 @@ body:has(.page-shell-planner) {
   background-attachment: fixed;
 }
 .page-shell-planner { overflow-anchor: none; }
+.planner-page-main { outline: none; }
 
 .ssr-shell > .ssr-product-nav { margin-bottom: 18px; }
 
@@ -152,6 +153,10 @@ body:has(.page-shell-planner) {
     bottom: calc(76px + env(safe-area-inset-bottom));
     top: auto;
   }
+  .ssr-shell .header-section.has-objective .planner-header-lede { display: none; }
+  .ssr-shell .header-section.has-objective .planner-header-intro h1 { font-size: 25px; }
+  .ssr-shell .header-section.has-objective { gap: 12px; }
+  .ssr-shell .header-nav:empty { display: none; }
 }
 
 /* ============ MAP → rounded card + frosted chips ============ */
@@ -160,6 +165,86 @@ body:has(.page-shell-planner) {
   border: 1px solid color-mix(in oklch, var(--d-line) 88%, transparent);
   border-radius: 18px;
   box-shadow: 0 2px 3px rgba(20, 42, 27, .04), 0 28px 64px -40px rgba(18, 48, 29, .44);
+}
+.ssr-shell .planner-flowbar {
+  padding: 14px 16px 15px;
+  border-bottom: 1px solid var(--d-line);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in oklch, var(--d-sage-1) 64%, transparent), transparent 40%),
+    var(--d-surface);
+}
+.ssr-shell .planner-flow-steps {
+  width: min(440px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.ssr-shell .planner-flow-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--d-ink-4);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.ssr-shell .planner-flow-steps li:not(:last-child)::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  min-width: 8px;
+  margin-left: 3px;
+  background: var(--d-line-2);
+}
+.ssr-shell .planner-flow-step-marker {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 1px solid var(--d-line-2);
+  border-radius: 999px;
+  background: var(--d-surface);
+  color: var(--d-ink-3);
+  font-family: var(--d-mono);
+  font-size: 9px;
+}
+.ssr-shell .planner-flow-steps li.is-complete,
+.ssr-shell .planner-flow-steps li.is-active { color: var(--d-pine-deep); }
+.ssr-shell .planner-flow-steps li.is-complete .planner-flow-step-marker {
+  border-color: color-mix(in oklch, var(--d-pine) 52%, var(--d-line));
+  background: var(--d-sage-1);
+  color: var(--d-pine-deep);
+}
+.ssr-shell .planner-flow-steps li.is-active .planner-flow-step-marker {
+  border-color: var(--d-pine);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--d-sage-1) 78%, transparent);
+}
+.ssr-shell .planner-flow-summary {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding-left: 14px;
+  border-left: 1px solid var(--d-line);
+}
+.ssr-shell .planner-flow-summary strong {
+  overflow: hidden;
+  color: var(--d-ink);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ssr-shell .planner-flow-summary span {
+  color: var(--d-ink-3);
+  font-family: var(--d-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
 }
 .ssr-shell .map-section {
   border: 0;
@@ -252,12 +337,15 @@ body:has(.page-shell-planner) {
   padding-top: 13px;
   border-top: 1px solid var(--d-line);
 }
+.ssr-shell .map-actions-footer.is-utilities-only { justify-content: flex-end; }
 .ssr-shell .map-report-workflow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(180px, .72fr) auto;
   align-items: center;
   gap: 14px;
   min-width: 0;
 }
+.ssr-shell .planner-flowbar.is-awaiting .map-report-workflow { grid-template-columns: minmax(0, 1fr); }
 .ssr-shell .map-report-state {
   display: flex;
   align-items: center;
@@ -297,6 +385,7 @@ body:has(.page-shell-planner) {
   box-shadow: none;
   transform: none;
 }
+.ssr-shell .map-report-actions .action-btn:disabled { cursor: wait; opacity: .62; }
 .ssr-shell .map-report-actions .action-btn:hover:not(:disabled) {
   background: var(--d-surface-2);
   border-color: var(--d-ink-4);
@@ -331,6 +420,8 @@ body:has(.page-shell-planner) {
 .ssr-shell .map-actions-utils .action-btn svg,
 .ssr-shell .map-actions-utils .settings-btn svg { color: var(--d-pine); }
 .ssr-shell .map-ext-link-btn {
+  width: 42px;
+  height: 42px;
   border-radius: 9px;
   border: 1px solid var(--d-line-2);
   background: var(--d-surface);
@@ -341,23 +432,41 @@ body:has(.page-shell-planner) {
 
 @media (max-width: 980px) {
   .ssr-shell .map-actions-footer { align-items: flex-start; flex-wrap: wrap; }
-  .ssr-shell .map-report-workflow { flex: 1 1 100%; justify-content: space-between; }
+  .ssr-shell .map-actions.is-collapsed .map-actions-footer { display: none; }
+  .ssr-shell .map-report-workflow { grid-template-columns: minmax(0, 1fr) auto; }
+  .ssr-shell .planner-flow-summary { justify-self: end; }
+  .ssr-shell .map-report-actions { grid-column: 1 / -1; justify-self: end; }
 }
 
 @media (max-width: 740px) {
+  .ssr-shell .map-section {
+    height: min(38vh, 310px);
+    min-height: 240px;
+  }
   .ssr-shell .map-shell.has-report .map-section {
-    height: min(34vh, 280px);
-    min-height: 230px;
+    height: min(30vh, 260px);
+    min-height: 220px;
   }
 }
 
 @media (max-width: 560px) {
   .ssr-shell .map-actions-footer { gap: 10px; }
-  .ssr-shell .map-report-workflow { align-items: stretch; flex-direction: column; gap: 10px; }
+  .ssr-shell .planner-flowbar { padding: 12px 14px 14px; }
+  .ssr-shell .planner-flow-steps { width: 100%; }
+  .ssr-shell .planner-flow-steps li { gap: 5px; font-size: 10px; }
+  .ssr-shell .map-report-workflow { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ssr-shell .planner-flow-summary {
+    justify-self: stretch;
+    padding: 9px 10px;
+    border: 1px solid var(--d-line);
+    border-radius: 9px;
+    background: color-mix(in oklch, var(--d-surface) 74%, transparent);
+  }
   .ssr-shell .map-report-actions { width: 100%; flex-wrap: wrap; }
   .ssr-shell .map-report-actions .action-btn { flex: 1 1 0; justify-content: center; }
   .ssr-shell .map-report-actions .plan-view-report { flex-basis: 100%; }
   .ssr-shell .map-actions-utils { width: 100%; }
+  .ssr-shell .map-ext-link-btn { width: 44px; height: 44px; }
 }
 
 /* ============ FRESHNESS → warm banner ============ */
