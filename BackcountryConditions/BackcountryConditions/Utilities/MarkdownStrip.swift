@@ -1,6 +1,12 @@
 import Foundation
 
 enum MarkdownStrip {
+    static func paragraphs(_ text: String) -> [String] {
+        text.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     /// Converts block-level markdown (headings) into inline bold text
     /// that SwiftUI's `Text(LocalizedStringKey(...))` can render.
     static func inlineOnly(_ text: String) -> String {

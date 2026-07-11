@@ -10,7 +10,7 @@ struct MultiDayRiskArc: View {
             guard let data = day.data, let decision = day.decision else { return nil }
             return ChartEntry(
                 label: day.displayDate,
-                score: data.safety.score,
+                score: day.score ?? data.safety.score,
                 precipChance: data.weather.precipChance,
                 decisionLevel: decision.level
             )

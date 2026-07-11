@@ -21,7 +21,7 @@ struct TripDayDetailView: View {
 
                     if let data = dayResult.data, let decision = dayResult.decision {
                         let prefs = appState.preferences
-                        let visibleCards = PlannerCardType.allCases.filter { $0.isVisible(for: data) }
+                        let visibleCards = PlannerCardType.allCases.filter { $0 != .avalanche && $0.isVisible(for: data) }
                         LazyVStack(spacing: 12) {
                             ForEach(visibleCards) { cardType in
                                 PlannerCardFactory.view(
@@ -62,13 +62,9 @@ struct TripDayDetailView: View {
         defer { isLoadingBrief = false }
         do {
             let request = AiBriefRequest(
-                score: data.safety.score,
-                confidence: data.safety.confidence,
-                primaryHazard: data.safety.primaryHazard,
                 decisionLevel: decision.level.rawValue,
-                factors: (data.safety.factors ?? []).map {
-                    AiBriefRequest.BriefFactor(hazard: $0.hazard, name: nil, impact: $0.impact ?? 0)
-                }
+                report: data,
+                units: .init(preferences: appState.preferences)
             )
             let response = try await briefService.fetchAiBrief(request: request)
             aiBrief = response.narrative

@@ -10,6 +10,7 @@ final class SettingsViewModel {
     }
 
     func save(to appState: AppState) {
+        preferences.normalize()
         appState.preferences = preferences
         preferences.save()
     }

@@ -8,9 +8,10 @@ struct UserPreferences: Codable, Sendable, Equatable {
     var elevationUnit: ElevationUnit = .feet
     var windSpeedUnit: WindSpeedUnit = .mph
     var timeStyle: TimeStyle = .ampm
-    var maxWindGustMph: Double = 40
-    var maxPrecipChance: Double = 40
-    var minFeelsLikeF: Double = 15
+    var maxWindGustMph: Double = 25
+    var maxPrecipChance: Double = 60
+    var minFeelsLikeF: Double = 5
+    var maxFeelsLikeF: Double = 95
     var travelWindowHours: Double = 12
 
     enum ThemeMode: String, Codable, Sendable, CaseIterable {
@@ -109,6 +110,15 @@ struct UserPreferences: Codable, Sendable, Equatable {
             }
         }
 
+        var maxFeelsLikeF: Double {
+            switch self {
+            case .conservative: return 85
+            case .standard: return 95
+            case .aggressive: return 105
+            case .runner: return 90
+            }
+        }
+
         var travelWindowHours: Double {
             switch self {
             case .conservative: return 10
@@ -123,7 +133,59 @@ struct UserPreferences: Codable, Sendable, Equatable {
         maxWindGustMph = preset.maxWindGustMph
         maxPrecipChance = preset.maxPrecipChance
         minFeelsLikeF = preset.minFeelsLikeF
+        maxFeelsLikeF = preset.maxFeelsLikeF
         travelWindowHours = preset.travelWindowHours
+    }
+
+    mutating func reset() {
+        self = UserPreferences()
+    }
+
+    mutating func normalize() {
+        maxWindGustMph = min(80, max(10, maxWindGustMph))
+        maxPrecipChance = min(100, max(0, maxPrecipChance.rounded()))
+        minFeelsLikeF = min(60, max(-40, minFeelsLikeF))
+        maxFeelsLikeF = min(120, max(70, maxFeelsLikeF))
+        travelWindowHours = min(24, max(1, travelWindowHours.rounded()))
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case defaultStartTime, themeMode, temperatureUnit, elevationUnit, windSpeedUnit, timeStyle
+        case maxWindGustMph, maxPrecipChance, minFeelsLikeF, maxFeelsLikeF, travelWindowHours
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let defaults = UserPreferences()
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        defaultStartTime = try values.decodeIfPresent(String.self, forKey: .defaultStartTime) ?? defaults.defaultStartTime
+        themeMode = try values.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? defaults.themeMode
+        temperatureUnit = try values.decodeIfPresent(TemperatureUnit.self, forKey: .temperatureUnit) ?? defaults.temperatureUnit
+        elevationUnit = try values.decodeIfPresent(ElevationUnit.self, forKey: .elevationUnit) ?? defaults.elevationUnit
+        windSpeedUnit = try values.decodeIfPresent(WindSpeedUnit.self, forKey: .windSpeedUnit) ?? defaults.windSpeedUnit
+        timeStyle = try values.decodeIfPresent(TimeStyle.self, forKey: .timeStyle) ?? defaults.timeStyle
+        maxWindGustMph = try values.decodeIfPresent(Double.self, forKey: .maxWindGustMph) ?? defaults.maxWindGustMph
+        maxPrecipChance = try values.decodeIfPresent(Double.self, forKey: .maxPrecipChance) ?? defaults.maxPrecipChance
+        minFeelsLikeF = try values.decodeIfPresent(Double.self, forKey: .minFeelsLikeF) ?? defaults.minFeelsLikeF
+        maxFeelsLikeF = try values.decodeIfPresent(Double.self, forKey: .maxFeelsLikeF) ?? defaults.maxFeelsLikeF
+        travelWindowHours = try values.decodeIfPresent(Double.self, forKey: .travelWindowHours) ?? defaults.travelWindowHours
+        normalize()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(defaultStartTime, forKey: .defaultStartTime)
+        try values.encode(themeMode, forKey: .themeMode)
+        try values.encode(temperatureUnit, forKey: .temperatureUnit)
+        try values.encode(elevationUnit, forKey: .elevationUnit)
+        try values.encode(windSpeedUnit, forKey: .windSpeedUnit)
+        try values.encode(timeStyle, forKey: .timeStyle)
+        try values.encode(maxWindGustMph, forKey: .maxWindGustMph)
+        try values.encode(maxPrecipChance, forKey: .maxPrecipChance)
+        try values.encode(minFeelsLikeF, forKey: .minFeelsLikeF)
+        try values.encode(maxFeelsLikeF, forKey: .maxFeelsLikeF)
+        try values.encode(travelWindowHours, forKey: .travelWindowHours)
     }
 
     // MARK: - Persistence
@@ -139,7 +201,9 @@ struct UserPreferences: Codable, Sendable, Equatable {
     }
 
     func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
+        var normalized = self
+        normalized.normalize()
+        guard let data = try? JSONEncoder().encode(normalized) else { return }
         UserDefaults.standard.set(data, forKey: UserPreferences.storageKey)
     }
 }

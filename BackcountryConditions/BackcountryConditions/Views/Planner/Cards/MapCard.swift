@@ -27,23 +27,32 @@ struct MapCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Map(position: $position, interactionModes: [.pan, .zoom]) {
-                Annotation("", coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.red)
-                            .background(Circle().fill(.white).frame(width: 18, height: 18))
+            MapReader { proxy in
+                Map(position: $position, interactionModes: [.pan, .zoom]) {
+                    Annotation("", coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)) {
+                        VStack(spacing: 2) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.red)
+                                .background(Circle().fill(.white).frame(width: 18, height: 18))
 
-                        Text(objectiveName)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .lineLimit(1)
+                            Text(objectiveName)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .lineLimit(1)
+                        }
                     }
                 }
+                .simultaneousGesture(
+                    SpatialTapGesture().onEnded { value in
+                        guard let onTapLocation,
+                              let coordinate = proxy.convert(value.location, from: .local) else { return }
+                        onTapLocation(coordinate.latitude, coordinate.longitude)
+                    }
+                )
             }
             .mapStyle(mapStyle.style)
             .frame(height: 220)

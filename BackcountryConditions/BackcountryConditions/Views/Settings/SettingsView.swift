@@ -107,6 +107,17 @@ struct SettingsView: View {
                         }
 
                         HStack {
+                            Text("Max Feels Like")
+                            Spacer()
+                            TextField("95", value: heatCeilingDisplayBinding(vm), format: .number)
+                                .keyboardType(.numberPad)
+                                .frame(width: 60)
+                                .multilineTextAlignment(.trailing)
+                            Text(settings.preferences.temperatureUnit.symbol)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
                             Text("Travel Window Hours")
                             Spacer()
                             TextField("12", value: $settings.preferences.travelWindowHours, format: .number)
@@ -128,10 +139,19 @@ struct SettingsView: View {
                         }
                     }
 
+                    Section {
+                        Button("Reset to Defaults", role: .destructive) {
+                            settings.preferences.reset()
+                        }
+                    }
+
                     // Status
                     Section {
                         NavigationLink("Backend Status") {
                             StatusView()
+                        }
+                        NavigationLink("Report Logs") {
+                            ReportLogsView()
                         }
                     }
 
@@ -195,6 +215,7 @@ struct SettingsView: View {
         preferences.maxWindGustMph == preset.maxWindGustMph &&
         preferences.maxPrecipChance == preset.maxPrecipChance &&
         preferences.minFeelsLikeF == preset.minFeelsLikeF &&
+        preferences.maxFeelsLikeF == preset.maxFeelsLikeF &&
         preferences.travelWindowHours == preset.travelWindowHours
     }
 
@@ -205,6 +226,18 @@ struct SettingsView: View {
             },
             set: { newValue in
                 vm.preferences.minFeelsLikeF = convertDisplayTempToF(newValue, unit: vm.preferences.temperatureUnit)
+            }
+        )
+    }
+
+
+    private func heatCeilingDisplayBinding(_ vm: SettingsViewModel) -> Binding<Double> {
+        Binding(
+            get: {
+                convertTempFToDisplay(vm.preferences.maxFeelsLikeF, unit: vm.preferences.temperatureUnit).rounded()
+            },
+            set: { newValue in
+                vm.preferences.maxFeelsLikeF = convertDisplayTempToF(newValue, unit: vm.preferences.temperatureUnit)
             }
         )
     }

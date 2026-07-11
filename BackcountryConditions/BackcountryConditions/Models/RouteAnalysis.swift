@@ -29,6 +29,18 @@ struct RouteAnalysisResult: Codable, Sendable {
     var waypoints: [RouteWaypoint]?
     var summaries: [RouteSummary]?
     var analysis: String?
+    var partialData: Bool?
+    var routeSource: String?
+    var routeMetadata: GPXRouteMetadata?
+}
+
+struct GPXRouteMetadata: Codable, Sendable {
+    var fileName: String
+    var pointCount: Int?
+    var distanceMiles: Double?
+    var elevationGainFt: Double?
+    var minElevationFt: Double?
+    var maxElevationFt: Double?
 }
 
 struct RouteWaypoint: Codable, Sendable, Identifiable {
@@ -36,6 +48,8 @@ struct RouteWaypoint: Codable, Sendable, Identifiable {
     var lat: Double?
     var lon: Double?
     var elev_ft: Double?
+    var distance_miles: Double?
+    var progress_percent: Double?
 
     var id: String { (name ?? "") + "\(lat ?? 0)" }
 
@@ -50,6 +64,9 @@ struct RouteSummary: Codable, Sendable {
     var weather: RouteSummaryWeather?
     var avalanche: RouteSummaryAvalanche?
     var snowDepthIn: Double?
+    var dataAvailable: Bool?
+    var distance_miles: Double?
+    var progress_percent: Double?
 }
 
 struct RouteSummaryWeather: Codable, Sendable {

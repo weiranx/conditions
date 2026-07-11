@@ -116,19 +116,15 @@ final class PlannerViewModel {
     // MARK: - AI Brief
 
     @MainActor
-    func loadAiBrief() async {
+    func loadAiBrief(preferences: UserPreferences) async {
         guard let data = safetyData, let decision else { return }
 
         isLoadingBrief = true
         do {
             let request = AiBriefRequest(
-                score: data.safety.score,
-                confidence: data.safety.confidence,
-                primaryHazard: data.safety.primaryHazard,
                 decisionLevel: decision.level.rawValue,
-                factors: (data.safety.factors ?? []).map {
-                    AiBriefRequest.BriefFactor(hazard: $0.hazard, name: nil, impact: $0.impact ?? 0)
-                }
+                report: data,
+                units: .init(preferences: preferences)
             )
             let response = try await briefService.fetchAiBrief(request: request)
             aiBrief = response.narrative

@@ -144,7 +144,10 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(prefs.temperatureUnit, .fahrenheit)
         XCTAssertEqual(prefs.elevationUnit, .feet)
         XCTAssertEqual(prefs.windSpeedUnit, .mph)
-        XCTAssertEqual(prefs.maxWindGustMph, 40)
+        XCTAssertEqual(prefs.maxWindGustMph, 25)
+        XCTAssertEqual(prefs.maxPrecipChance, 60)
+        XCTAssertEqual(prefs.minFeelsLikeF, 5)
+        XCTAssertEqual(prefs.maxFeelsLikeF, 95)
         XCTAssertEqual(prefs.defaultStartTime, "07:00")
     }
 
@@ -159,5 +162,22 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(decoded.temperatureUnit, .celsius)
         XCTAssertEqual(decoded.elevationUnit, .meters)
         XCTAssertEqual(decoded.maxWindGustMph, 50)
+    }
+
+    func testUserPreferencesDecodesLegacyPayloadWithoutHeatCeiling() throws {
+        let data = Data(#"{"maxWindGustMph":35,"defaultStartTime":"06:00"}"#.utf8)
+        let decoded = try JSONDecoder().decode(UserPreferences.self, from: data)
+        XCTAssertEqual(decoded.maxWindGustMph, 35)
+        XCTAssertEqual(decoded.maxFeelsLikeF, 95)
+        XCTAssertEqual(decoded.defaultStartTime, "06:00")
+    }
+
+    func testHealthResponseDecodesCurrentBackendShape() throws {
+        let json = #"{"ok":true,"service":"backcountry-conditions-backend","version":"1.2.3","env":"production","uptime":120,"nodeVersion":"v24","memory":{"heapUsedMb":42,"rssMb":96},"caches":[{"name":"weather","size":3,"hits":8,"misses":2}]}"#
+        let health = try JSONDecoder().decode(HealthCheckResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(health.status, "ok")
+        XCTAssertEqual(health.heapUsedMb, 42)
+        XCTAssertEqual(health.rssMb, 96)
+        XCTAssertEqual(health.caches?.first?.name, "weather")
     }
 }

@@ -6,13 +6,17 @@ struct PlannerView: View {
     @State private var searchVM = SearchViewModel()
     @State private var isSearchActive = false
     @State private var recentReports: [SavedReport] = []
+    @State private var locationService = LocationService()
+    @State private var locationError: String?
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 16) {
-                        searchBar
+                        if !plannerVM.hasReport {
+                            searchBar
+                        }
                         savedObjectivesSection
                         recentSearches
                         recentReportsSection
@@ -28,6 +32,24 @@ struct PlannerView: View {
             }
             .navigationTitle("Planner")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                if let data = plannerVM.safetyData, let decision = plannerVM.decision {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ShareLink(item: shareSummary(data: data, decision: decision)) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share report")
+                    }
+                }
+                if plannerVM.hasObjective {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(plannerVM.hasReport ? "New Objective" : "Clear") {
+                            plannerVM.clear()
+                            isSearchActive = true
+                        }
+                    }
+                }
+            }
             .task {
                 recentReports = (try? await ReportStore.shared.loadAll()) ?? []
             }
@@ -41,17 +63,53 @@ struct PlannerView: View {
                     await plannerVM.loadReport(preferences: appState.preferences)
                 }
             }
+            .onChange(of: locationService.currentLocation?.latitude) { _, _ in
+                guard let coordinate = locationService.currentLocation else { return }
+                selectCoordinate(name: "Current Location", lat: coordinate.latitude, lon: coordinate.longitude)
+            }
+            .onChange(of: locationService.locationError?.localizedDescription) { _, message in
+                locationError = message
+            }
         }
     }
 
+    private func shareSummary(data: SafetyData, decision: SummitDecision) -> String {
+        [
+            "Backcountry Conditions — \(plannerVM.objectiveName)",
+            "\(plannerVM.forecastDate) at \(plannerVM.startTime)",
+            "Decision: \(decision.level.rawValue)",
+            "Safety score: \(Int(data.safety.score))/100",
+            decision.headline,
+            "Coordinates: \(String(format: "%.5f", data.location.lat)), \(String(format: "%.5f", data.location.lon))",
+            "",
+            Configuration.appDisclaimer
+        ].joined(separator: "\n")
+    }
+
     private var searchBar: some View {
-        SearchBarView(searchVM: searchVM, isSearchActive: $isSearchActive) { result in
-            Haptics.selection()
-            isSearchActive = false
-            plannerVM.setObjective(result: result)
-            searchVM.addToRecent(result)
-            Task {
-                await plannerVM.loadReport(preferences: appState.preferences)
+        VStack(spacing: 8) {
+            SearchBarView(searchVM: searchVM, isSearchActive: $isSearchActive) { result in
+                Haptics.selection()
+                isSearchActive = false
+                plannerVM.setObjective(result: result)
+                searchVM.addToRecent(result)
+            }
+            HStack {
+                Button {
+                    locationError = nil
+                    if locationService.authorizationStatus == .notDetermined {
+                        locationService.requestPermission()
+                    } else {
+                        locationService.requestLocation()
+                    }
+                } label: {
+                    Label("Use My Location", systemImage: "location.fill")
+                }
+                .font(.caption.weight(.medium))
+                Spacer()
+                if let locationError {
+                    Text(locationError).font(.caption2).foregroundStyle(.red).lineLimit(1)
+                }
             }
         }
         .padding(.horizontal)
@@ -82,7 +140,7 @@ struct PlannerView: View {
 
     @ViewBuilder
     private var recentSearches: some View {
-        if (isSearchActive || !plannerVM.hasReport) && !plannerVM.isLoading && !searchVM.recentSearches.isEmpty && searchVM.suggestions.isEmpty {
+        if (isSearchActive || !plannerVM.hasObjective) && !plannerVM.isLoading && !searchVM.recentSearches.isEmpty && searchVM.suggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Label("Recent", systemImage: "clock")
@@ -104,9 +162,6 @@ struct PlannerView: View {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         plannerVM.setObjective(result: result)
                         searchVM.addToRecent(result)
-                        Task {
-                            await plannerVM.loadReport(preferences: appState.preferences)
-                        }
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "mountain.2")
@@ -154,7 +209,7 @@ struct PlannerView: View {
 
     @ViewBuilder
     private var recentReportsSection: some View {
-        if !plannerVM.hasReport && !plannerVM.isLoading && !recentReports.isEmpty && searchVM.suggestions.isEmpty {
+        if !plannerVM.hasObjective && !plannerVM.isLoading && !recentReports.isEmpty && searchVM.suggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Recent Reports", systemImage: "clock.arrow.circlepath")
                     .font(.caption.weight(.semibold))
@@ -173,9 +228,8 @@ struct PlannerView: View {
                             type: nil
                         )
                         plannerVM.setObjective(result: result)
-                        Task {
-                            await plannerVM.loadReport(preferences: appState.preferences)
-                        }
+                        plannerVM.forecastDate = report.forecastDate
+                        plannerVM.startTime = report.startTime
                     } label: {
                         HStack(spacing: 10) {
                             decisionDot(report.decisionLevel)
@@ -253,6 +307,7 @@ struct PlannerView: View {
                     forecastDate: $plannerVM.forecastDate,
                     startTime: $plannerVM.startTime,
                     objectiveName: plannerVM.objectiveName,
+                    isLocked: plannerVM.hasReport,
                     onReload: {
                         Task {
                             await plannerVM.loadReport(preferences: appState.preferences)
@@ -262,6 +317,20 @@ struct PlannerView: View {
                 )
             }
             .padding(.horizontal)
+
+            if !plannerVM.hasReport && !plannerVM.isLoading {
+                Button {
+                    Task { await plannerVM.loadReport(preferences: appState.preferences) }
+                } label: {
+                    Label("Get Conditions", systemImage: "checkmark.shield.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+                .accessibilityHint("Generates the safety report for the selected date and start time")
+            }
         }
     }
 
@@ -276,7 +345,23 @@ struct PlannerView: View {
                 elevationUnit: appState.preferences.elevationUnit
             )
             .padding(.horizontal)
+        } else if !isSearchActive {
+            MapCard(
+                lat: Configuration.defaultCenter.lat,
+                lon: Configuration.defaultCenter.lon,
+                objectiveName: "Drop a pin",
+                onTapLocation: { lat, lon in selectCoordinate(name: "Dropped Pin", lat: lat, lon: lon) }
+            )
+            .padding(.horizontal)
         }
+    }
+
+    private func selectCoordinate(name: String, lat: Double, lon: Double) {
+        let result = SearchResult(name: name, lat: lat, lon: lon, resultClass: "coordinate", type: "location")
+        plannerVM.setObjective(result: result)
+        searchVM.addToRecent(result)
+        isSearchActive = false
+        Haptics.selection()
     }
 
     @ViewBuilder
@@ -329,7 +414,7 @@ struct PlannerView: View {
                         preferences: prefs,
                         aiBrief: plannerVM.aiBrief,
                         isLoadingBrief: plannerVM.isLoadingBrief,
-                        onRequestBrief: { Task { await plannerVM.loadAiBrief() } },
+                        onRequestBrief: { Task { await plannerVM.loadAiBrief(preferences: prefs) } },
                         objectiveName: plannerVM.objectiveName,
                         forecastDate: plannerVM.forecastDate,
                         startTime: plannerVM.startTime,
@@ -354,7 +439,7 @@ struct PlannerView: View {
 
     @ViewBuilder
     private var savedObjectivesSection: some View {
-        if (isSearchActive || !plannerVM.hasReport) && !searchVM.savedObjectives.isEmpty && searchVM.suggestions.isEmpty {
+        if (isSearchActive || !plannerVM.hasObjective) && !searchVM.savedObjectives.isEmpty && searchVM.suggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Saved Objectives", systemImage: "bookmark.fill")
                     .font(.caption.weight(.semibold))
@@ -368,9 +453,6 @@ struct PlannerView: View {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         plannerVM.setObjective(result: result)
                         searchVM.addToRecent(result)
-                        Task {
-                            await plannerVM.loadReport(preferences: appState.preferences)
-                        }
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "bookmark.fill")
@@ -533,7 +615,7 @@ enum PlannerCardFactory {
         preferences: UserPreferences,
         aiBrief: String?,
         isLoadingBrief: Bool,
-        onRequestBrief: @escaping () -> Void,
+        onRequestBrief: (() -> Void)?,
         objectiveName: String = "",
         forecastDate: String = "",
         startTime: String? = nil,
@@ -600,13 +682,12 @@ struct PlannerControlsView<Trailing: View>: View {
     @Binding var forecastDate: String
     @Binding var startTime: String
     var objectiveName: String
+    var isLocked: Bool
     var onReload: () -> Void
     @ViewBuilder var trailingContent: () -> Trailing
 
     @State private var datePickerDate = Date()
     @State private var timePickerDate = Date()
-    @State private var reloadTask: Task<Void, Never>?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -627,11 +708,11 @@ struct PlannerControlsView<Trailing: View>: View {
                     Text("Date")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
-                    DatePicker("", selection: $datePickerDate, displayedComponents: .date)
+                    DatePicker("", selection: $datePickerDate, in: forecastDateRange, displayedComponents: .date)
                         .labelsHidden()
+                        .disabled(isLocked)
                         .onChange(of: datePickerDate) { _, newValue in
                             forecastDate = DateFormatting.formatDateInput(newValue)
-                            debouncedReload()
                         }
                 }
 
@@ -641,26 +722,29 @@ struct PlannerControlsView<Trailing: View>: View {
                         .foregroundStyle(.tertiary)
                     DatePicker("", selection: $timePickerDate, displayedComponents: .hourAndMinute)
                         .labelsHidden()
+                        .disabled(isLocked)
                         .onChange(of: timePickerDate) { _, newValue in
                             let formatter = DateFormatter()
                             formatter.dateFormat = "HH:mm"
                             startTime = formatter.string(from: newValue)
-                            debouncedReload()
                         }
                 }
 
                 Spacer()
 
-                Button(action: onReload) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .top, endPoint: .bottom),
-                            in: Circle()
-                        )
-                        .shadow(color: .blue.opacity(0.25), radius: 4, y: 2)
+                if isLocked {
+                    Button(action: onReload) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .top, endPoint: .bottom),
+                                in: Circle()
+                            )
+                            .shadow(color: .blue.opacity(0.25), radius: 4, y: 2)
+                    }
+                    .accessibilityLabel("Refresh report")
                 }
             }
         }
@@ -676,15 +760,6 @@ struct PlannerControlsView<Trailing: View>: View {
         }
     }
 
-    private func debouncedReload() {
-        reloadTask?.cancel()
-        reloadTask = Task {
-            try? await Task.sleep(for: .milliseconds(800))
-            guard !Task.isCancelled else { return }
-            onReload()
-        }
-    }
-
     private func syncPickers() {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -696,6 +771,12 @@ struct PlannerControlsView<Trailing: View>: View {
         if let t = timeFormatter.date(from: startTime) {
             timePickerDate = t
         }
+    }
+
+    private var forecastDateRange: ClosedRange<Date> {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return today...(calendar.date(byAdding: .day, value: 7, to: today) ?? today)
     }
 }
 

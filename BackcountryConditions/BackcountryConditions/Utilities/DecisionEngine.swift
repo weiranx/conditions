@@ -1,7 +1,7 @@
 import Foundation
 
 enum DecisionEngine {
-    static func evaluate(data: SafetyData, preferences: UserPreferences) -> SummitDecision {
+    static func evaluate(data: SafetyData, preferences: UserPreferences, ignoreAvalanche: Bool = false) -> SummitDecision {
         var blockers: [String] = []
         var cautions: [String] = []
         var checks: [SummitDecision.Check] = []
@@ -9,26 +9,28 @@ enum DecisionEngine {
         // Avalanche danger
         let avyLevel = data.avalanche.dangerLevel
         let avyRelevant = data.avalanche.relevant ?? true
-        if avyRelevant {
-            if avyLevel >= 4 {
-                blockers.append("Avalanche danger: \(data.avalanche.risk)")
+        if avyRelevant && !ignoreAvalanche {
+            let avalancheUnknown = data.avalanche.dangerUnknown == true || (data.avalanche.coverageStatus != nil && data.avalanche.coverageStatus != "reported")
+            if avalancheUnknown {
+                cautions.append("Avalanche forecast coverage is unavailable — treat terrain as unrated")
             } else if avyLevel >= 3 {
-                cautions.append("Avalanche danger: \(data.avalanche.risk)")
+                blockers.append("Avalanche danger: \(data.avalanche.risk)")
             }
             checks.append(.init(
                 key: "avalanche",
                 label: "Avalanche Danger",
-                ok: avyLevel < 3,
+                ok: !avalancheUnknown && avyLevel < 3,
                 detail: data.avalanche.risk
             ))
         }
 
         // Wind
-        let gustMph = data.weather.windGust
+        let trend = Array((data.weather.trend ?? []).prefix(Int(preferences.travelWindowHours)))
+        let gustMph = max(data.weather.windGust, trend.map(\.gust).max() ?? 0)
         let maxGust = preferences.maxWindGustMph
-        if gustMph > maxGust * 1.5 {
+        if gustMph >= max(35, maxGust + 10) {
             blockers.append("Wind gusts extreme (\(Int(gustMph)) mph)")
-        } else if gustMph > maxGust {
+        } else if gustMph >= maxGust {
             cautions.append("Wind gusts exceed threshold (\(Int(gustMph)) mph)")
         }
         checks.append(.init(
@@ -39,11 +41,11 @@ enum DecisionEngine {
         ))
 
         // Precipitation
-        let precipChance = data.weather.precipChance
+        let precipChance = max(data.weather.precipChance, trend.compactMap(\.precipChance).max() ?? 0)
         let maxPrecip = preferences.maxPrecipChance
-        if precipChance > maxPrecip * 1.5 {
+        if precipChance >= max(85, maxPrecip + 25) {
             blockers.append("Precipitation chance very high (\(Int(precipChance))%)")
-        } else if precipChance > maxPrecip {
+        } else if precipChance >= max(55, maxPrecip) {
             cautions.append("Precipitation chance \(Int(precipChance))%")
         }
         checks.append(.init(
@@ -54,7 +56,10 @@ enum DecisionEngine {
         ))
 
         // Feels like
-        let feelsLike = data.weather.feelsLike ?? data.weather.temp
+        let trendFeelsLike = trend.map { TravelWindowEngine.computeFeelsLikeF($0.temp, windMph: $0.wind) }
+        let currentFeelsLike = data.weather.feelsLike ?? data.weather.temp
+        let feelsLike = min(currentFeelsLike, trendFeelsLike.min() ?? currentFeelsLike)
+        let hottestFeelsLike = max(currentFeelsLike, trendFeelsLike.max() ?? currentFeelsLike)
         let minFeelsLike = preferences.minFeelsLikeF
         if feelsLike < minFeelsLike - 15 {
             blockers.append("Feels like \(Int(feelsLike))°F — extreme cold")
@@ -67,6 +72,33 @@ enum DecisionEngine {
             ok: feelsLike >= minFeelsLike,
             detail: "\(Int(feelsLike))°F"
         ))
+
+        let maxFeelsLike = preferences.maxFeelsLikeF
+        if hottestFeelsLike >= maxFeelsLike {
+            blockers.append("Feels like \(Int(hottestFeelsLike))°F — heat ceiling reached")
+        }
+        checks.append(.init(
+            key: "heat-threshold",
+            label: "Heat Ceiling",
+            ok: hottestFeelsLike < maxFeelsLike,
+            detail: "\(Int(hottestFeelsLike))°F"
+        ))
+
+        if data.weather.description.localizedCaseInsensitiveContains("weather data unavailable") {
+            blockers.append("Weather data is unavailable — conditions are unknown")
+        }
+
+        if trend.contains(where: { point in
+            let value = point.condition.lowercased()
+            return value.contains("thunder") || value.contains("lightning") || value.contains("hail") || value.contains("blizzard")
+        }) {
+            cautions.append("Storm or thunder signal appears inside the travel window")
+        }
+
+        let travelRows = TravelWindowEngine.buildRows(trend: trend, preferences: preferences)
+        if !travelRows.isEmpty && !travelRows.contains(where: \.pass) {
+            cautions.append("No clean travel hours under current thresholds")
+        }
 
         // Active NWS alerts
         let alertCount = data.alerts?.activeCount ?? 0

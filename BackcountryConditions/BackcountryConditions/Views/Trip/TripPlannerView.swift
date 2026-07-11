@@ -4,6 +4,7 @@ struct TripPlannerView: View {
     @Environment(AppState.self) private var appState
     @State private var days: Int = 3
     @State private var startDate = Date()
+    @State private var startTime = TripPlannerView.defaultStartDate()
     @State private var objectiveName: String = ""
     @State private var lat: Double?
     @State private var lon: Double?
@@ -20,6 +21,8 @@ struct TripPlannerView: View {
         let displayDate: String
         let data: SafetyData?
         let decision: SummitDecision?
+        let score: Double?
+        let travelSummary: String?
         let error: String?
     }
 
@@ -91,7 +94,15 @@ struct TripPlannerView: View {
                     Text("Start Date")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
-                    DatePicker("", selection: $startDate, displayedComponents: .date)
+                    DatePicker("", selection: $startDate, in: tripDateRange, displayedComponents: .date)
+                        .labelsHidden()
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Start Time")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
                         .labelsHidden()
                 }
 
@@ -99,7 +110,7 @@ struct TripPlannerView: View {
                     Text("Days")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
-                    Stepper("\(days)", value: $days, in: 1...7)
+                    Stepper("\(days)", value: $days, in: 2...7)
                         .frame(width: 120)
                 }
 
@@ -277,8 +288,8 @@ struct TripPlannerView: View {
                     Divider().frame(height: 28)
                     metricCell(
                         icon: "shield.checkered",
-                        value: "\(Int(data.safety.score))",
-                        color: Color.scoreColor(data.safety.score)
+                        value: "\(Int(day.score ?? data.safety.score))",
+                        color: Color.scoreColor(day.score ?? data.safety.score)
                     )
                 }
                 .padding(.vertical, 6)
@@ -289,6 +300,11 @@ struct TripPlannerView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                }
+                if let summary = day.travelSummary {
+                    Label(summary, systemImage: "clock.badge.checkmark")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -372,7 +388,9 @@ struct TripPlannerView: View {
         dayResults = []
 
         let preferences = appState.preferences
-        let defaultStart = preferences.defaultStartTime
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let defaultStart = formatter.string(from: startTime)
         let startDateStr = DateFormatting.formatDateInput(startDate)
 
         await withTaskGroup(of: DayResult.self) { group in
@@ -383,10 +401,27 @@ struct TripPlannerView: View {
                         let data = try await safetyService.loadReport(
                             lat: lat, lon: lon, date: date, startTime: defaultStart
                         )
-                        let decision = DecisionEngine.evaluate(data: data, preferences: preferences)
-                        return DayResult(date: date, displayDate: formatDisplayDate(date), data: data, decision: decision, error: nil)
+                        var decision = DecisionEngine.evaluate(data: data, preferences: preferences, ignoreAvalanche: true)
+                        let trend = Array((data.weather.trend ?? []).prefix(Int(preferences.travelWindowHours)))
+                        let rows = TravelWindowEngine.buildRows(trend: trend, preferences: preferences)
+                        let cleanHours = rows.filter(\.pass).count
+                        if !rows.isEmpty, cleanHours == 0, decision.level == .go {
+                            decision.level = .caution
+                            decision.headline = "No clean travel hours under current thresholds."
+                            decision.cautions.append(decision.headline)
+                        }
+                        let score = normalizedTripScore(data)
+                        return DayResult(
+                            date: date,
+                            displayDate: formatDisplayDate(date),
+                            data: data,
+                            decision: decision,
+                            score: score,
+                            travelSummary: rows.isEmpty ? nil : "\(cleanHours)/\(rows.count)h passing",
+                            error: nil
+                        )
                     } catch {
-                        return DayResult(date: date, displayDate: formatDisplayDate(date), data: nil, decision: nil, error: error.localizedDescription)
+                        return DayResult(date: date, displayDate: formatDisplayDate(date), data: nil, decision: nil, score: nil, travelSummary: nil, error: error.localizedDescription)
                     }
                 }
             }
@@ -409,6 +444,26 @@ struct TripPlannerView: View {
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "EEE, MMM d"
         return displayFormatter.string(from: date)
+    }
+
+    private nonisolated func normalizedTripScore(_ data: SafetyData) -> Double {
+        let avalanchePenalty = (data.safety.factors ?? []).reduce(0.0) { total, factor in
+            guard factor.hazard?.localizedCaseInsensitiveContains("avalanche") == true else { return total }
+            return total + max(0, factor.impact ?? 0)
+        }
+        return min(100, max(0, data.safety.score + avalanchePenalty))
+    }
+
+    private static func defaultStartDate() -> Date {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.date(from: UserPreferences.load().defaultStartTime) ?? Date()
+    }
+
+    private var tripDateRange: ClosedRange<Date> {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return today...(calendar.date(byAdding: .day, value: 7, to: today) ?? today)
     }
 
     private func decisionColor(_ level: DecisionLevel) -> Color {

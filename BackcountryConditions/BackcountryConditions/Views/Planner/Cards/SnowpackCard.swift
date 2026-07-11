@@ -1,8 +1,14 @@
 import SwiftUI
+import UIKit
 
 struct SnowpackCard: View {
     let data: SafetyData
     let preferences: UserPreferences
+    @State private var vision: SnowVisionResponse?
+    @State private var visionError: String?
+    @State private var isAnalyzing = false
+
+    private let visionService = SnowVisionService()
 
     var body: some View {
         CollapsibleSection(title: "Snowpack", systemImage: "snowflake", headerColor: .cyan) {
@@ -16,6 +22,7 @@ struct SnowpackCard: View {
 
                     stationReadings(snowpack)
                     historicalNote(snowpack)
+                    satelliteAnalysis
                 }
             } else {
                 Text("Snowpack data not available")
@@ -23,6 +30,74 @@ struct SnowpackCard: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    @ViewBuilder
+    private var satelliteAnalysis: some View {
+        Divider()
+        if let vision {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Satellite Snow Analysis", systemImage: "satellite")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.cyan)
+                if let image = decodedImage(vision.image) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .accessibilityLabel("Satellite image used for snow analysis")
+                }
+                ForEach(MarkdownStrip.paragraphs(vision.analysis), id: \.self) { paragraph in
+                    Text(paragraph)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button("Analyze Again") { Task { await analyzeSnow() } }
+                    .font(.caption)
+            }
+        } else if let visionError {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(visionError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Button("Retry Satellite Analysis") { Task { await analyzeSnow() } }
+                    .font(.caption)
+            }
+        } else {
+            Button {
+                Task { await analyzeSnow() }
+            } label: {
+                if isAnalyzing {
+                    HStack { ProgressView().controlSize(.small); Text("Analyzing satellite view…") }
+                } else {
+                    Label("Analyze Snow from Satellite", systemImage: "satellite")
+                }
+            }
+            .buttonStyle(.bordered)
+            .tint(.cyan)
+            .controlSize(.small)
+            .disabled(isAnalyzing)
+        }
+    }
+
+    @MainActor
+    private func analyzeSnow() async {
+        guard !isAnalyzing else { return }
+        isAnalyzing = true
+        visionError = nil
+        defer { isAnalyzing = false }
+        do {
+            vision = try await visionService.analyze(data: data, preferences: preferences)
+        } catch {
+            visionError = error.localizedDescription
+        }
+    }
+
+    private func decodedImage(_ value: String?) -> UIImage? {
+        guard let value, let comma = value.firstIndex(of: ","),
+              let bytes = Data(base64Encoded: String(value[value.index(after: comma)...])) else { return nil }
+        return UIImage(data: bytes)
     }
 
     // MARK: - Station Readings (merged table)

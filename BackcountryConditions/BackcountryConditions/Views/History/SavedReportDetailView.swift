@@ -21,10 +21,26 @@ struct SavedReportDetailView: View {
         .navigationTitle(report.objectiveName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                ShareLink(item: savedShareSummary) {
+                    Image(systemName: "square.and.arrow.up")
+                }
                 offlineBadge
             }
         }
+    }
+
+    private var savedShareSummary: String {
+        [
+            "Backcountry Conditions — \(report.objectiveName)",
+            "\(report.forecastDate) at \(report.startTime)",
+            "Decision: \(report.decisionLevel)",
+            "Safety score: \(Int(report.safetyScore))/100",
+            report.headline,
+            "Coordinates: \(String(format: "%.5f", report.lat)), \(String(format: "%.5f", report.lon))",
+            "",
+            Configuration.appDisclaimer
+        ].joined(separator: "\n")
     }
 
     // MARK: - Header
@@ -115,7 +131,7 @@ struct SavedReportDetailView: View {
                     preferences: prefs,
                     aiBrief: report.aiBrief,
                     isLoadingBrief: false,
-                    onRequestBrief: {},
+                    onRequestBrief: nil,
                     objectiveName: report.objectiveName,
                     forecastDate: report.forecastDate,
                     startTime: report.startTime

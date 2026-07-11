@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct SafetyScoreCard: View {
     let data: SafetyData
     var aiBrief: String?
     var isLoadingBrief: Bool = false
     var onRequestBrief: (() -> Void)?
+    @State private var copiedPrompt = false
 
     var body: some View {
         CollapsibleSection(title: "Safety Score", systemImage: "shield.checkered", headerColor: scoreColor) {
@@ -14,8 +16,43 @@ struct SafetyScoreCard: View {
                 factorBreakdown
                 explanationsList
                 aiBriefSection
+                copyPromptButton
             }
         }
+    }
+
+    private var copyPromptButton: some View {
+        Button {
+            UIPasteboard.general.string = aiAgentPrompt()
+            copiedPrompt = true
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                copiedPrompt = false
+            }
+        } label: {
+            Label(copiedPrompt ? "Prompt Copied" : "Copy Prompt for an AI Agent", systemImage: copiedPrompt ? "checkmark" : "doc.on.doc")
+                .font(.subheadline.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+        .tint(.blue)
+        .controlSize(.small)
+    }
+
+    private func aiAgentPrompt() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let json = (try? encoder.encode(data)).flatMap { String(data: $0, encoding: .utf8) } ?? "{\"error\":\"Unable to serialize raw payload\"}"
+        return [
+            "I have questions about the following Backcountry Conditions planner report.",
+            "",
+            "Help me understand what the report says and how its weather, avalanche, snowpack, alerts, terrain, and timing signals relate to my plan. Base your answers on the supplied report data. Clearly separate reported facts from your interpretation, call out stale, unavailable, unknown, or conflicting data, and do not invent missing conditions. This is planning support, not a substitute for current official forecasts, field observations, or my own go/no-go decision.",
+            "",
+            "Planner report data (JSON):",
+            json,
+            "",
+            "My question:",
+            "[Type your question here]"
+        ].joined(separator: "\n")
     }
 
     // MARK: - Score Header

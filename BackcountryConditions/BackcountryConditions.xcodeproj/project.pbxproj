@@ -83,6 +83,13 @@
 		F7B6BDD81A6CC7F449BE0537 /* AvalancheCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671BEBA0B205CCA53115B232 /* AvalancheCard.swift */; };
 		F880321FD3C6E10746ABFC42 /* SafetyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95AFC2D33635BD2805B66CB /* SafetyService.swift */; };
 		FE9E7B1D0ECFBF11B02B306D /* SearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E3BBB8B9CDEFD1BA168608 /* SearchViewModel.swift */; };
+		AA0000010000000000000001 /* SnowVision.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000002 /* SnowVision.swift */; };
+		AA0000020000000000000001 /* SnowVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000002 /* SnowVisionService.swift */; };
+		AA0000030000000000000001 /* GPXParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000030000000000000002 /* GPXParser.swift */; };
+		AA0000040000000000000001 /* ReportLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000040000000000000002 /* ReportLog.swift */; };
+		AA0000050000000000000001 /* ReportLogsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000050000000000000002 /* ReportLogsService.swift */; };
+		AA0000060000000000000001 /* ReportLogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000060000000000000002 /* ReportLogsView.swift */; };
+		AA0000070000000000000001 /* GPXParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000070000000000000002 /* GPXParserTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -174,6 +181,13 @@
 		F9E1517CCFF0F46D1451C06D /* BackcountryConditionsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BackcountryConditionsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBB9F034E1979D405D4EC409 /* SearchResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResult.swift; sourceTree = "<group>"; };
 		FEEEE754F3151F5EBB346D60 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		AA0000010000000000000002 /* SnowVision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnowVision.swift; sourceTree = "<group>"; };
+		AA0000020000000000000002 /* SnowVisionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnowVisionService.swift; sourceTree = "<group>"; };
+		AA0000030000000000000002 /* GPXParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXParser.swift; sourceTree = "<group>"; };
+		AA0000040000000000000002 /* ReportLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportLog.swift; sourceTree = "<group>"; };
+		AA0000050000000000000002 /* ReportLogsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportLogsService.swift; sourceTree = "<group>"; };
+		AA0000060000000000000002 /* ReportLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportLogsView.swift; sourceTree = "<group>"; };
+		AA0000070000000000000002 /* GPXParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXParserTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -203,9 +217,11 @@
 				BFD5DF16D4C5D72BC05C3E58 /* BriefService.swift */,
 				FEEEE754F3151F5EBB346D60 /* LocationService.swift */,
 				48F7C156E504B502F6A632B6 /* ReportStore.swift */,
+				AA0000050000000000000002 /* ReportLogsService.swift */,
 				5E04F413167F605D92D4204E /* RouteService.swift */,
 				E95AFC2D33635BD2805B66CB /* SafetyService.swift */,
 				E7AC23DA8EE5075B85BB468A /* SearchService.swift */,
+				AA0000020000000000000002 /* SnowVisionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -311,6 +327,7 @@
 				9B44C5B39C856938B4323451 /* Constants.swift */,
 				BECEF48B390E4429BFB05164 /* DateFormatting.swift */,
 				25DD646B67E7372050CCEE1E /* DecisionEngine.swift */,
+				AA0000030000000000000002 /* GPXParser.swift */,
 				4D366C1F31E6542EEBAA0034 /* Haptics.swift */,
 				3CA1B7E8D9F24A1B8E5C0D72 /* MarkdownStrip.swift */,
 				D772530171E09A3CD006D5D9 /* TravelWindowEngine.swift */,
@@ -345,6 +362,14 @@
 			path = Status;
 			sourceTree = "<group>";
 		};
+		AA0000060000000000000003 /* Logs */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000060000000000000002 /* ReportLogsView.swift */,
+			);
+			path = Logs;
+			sourceTree = "<group>";
+		};
 		BD3A663D80E56AC693F1923A /* BackcountryConditions */ = {
 			isa = PBXGroup;
 			children = (
@@ -365,6 +390,7 @@
 			children = (
 				CE1588482DB1C2A6B71704AD /* DateFormattingTests.swift */,
 				B092B2325C6E075E08FCB8C4 /* DecisionEngineTests.swift */,
+				AA0000070000000000000002 /* GPXParserTests.swift */,
 				79E836EE4A5C95B0DCBF8CC8 /* ModelDecodingTests.swift */,
 				EDF498B2B5D1ADE01F8C294F /* UnitConversionTests.swift */,
 			);
@@ -396,8 +422,10 @@
 				6F9516F59D07CD4C5B62E816 /* AiBrief.swift */,
 				DFA24219D3BA2DAB6A1288D0 /* HealthCheck.swift */,
 				58B69146F2008A6F85222265 /* RouteAnalysis.swift */,
+				AA0000040000000000000002 /* ReportLog.swift */,
 				DDB9C9DF4A01815162F13F3E /* SafetyData.swift */,
 				42DFED4E53FC9A86AEDC1545 /* SavedReport.swift */,
+				AA0000010000000000000002 /* SnowVision.swift */,
 				FBB9F034E1979D405D4EC409 /* SearchResult.swift */,
 				4E0AAB8DF1EC19DC7B7C63D5 /* SummitDecision.swift */,
 				96150DE5B8D0967D36CCF2E2 /* TravelWindow.swift */,
@@ -410,6 +438,7 @@
 			isa = PBXGroup;
 			children = (
 				14A9E6C358DE254B31528DF3 /* History */,
+				AA0000060000000000000003 /* Logs */,
 				0082432D40B46F018FA7FF1A /* Planner */,
 				9C4FA4A0EE7D32AEBB7876D1 /* Search */,
 				5C8F1669FB94F5882E2F11A6 /* Settings */,
@@ -507,6 +536,7 @@
 			files = (
 				F35154DD89802785525A09A8 /* DateFormattingTests.swift in Sources */,
 				B44CB8B28117B8D00701E8D4 /* DecisionEngineTests.swift in Sources */,
+				AA0000070000000000000001 /* GPXParserTests.swift in Sources */,
 				0C66DA9564A0CF8BA0B1D44E /* ModelDecodingTests.swift in Sources */,
 				C4E8A30975264EDBEAE71AB4 /* UnitConversionTests.swift in Sources */,
 			);
@@ -540,6 +570,7 @@
 				1A35EEBAFE60AC8B57615388 /* FireRiskCard.swift in Sources */,
 				46D86C9127BBCFF29F92430D /* ForecastLoadingView.swift in Sources */,
 				0F2E4A6E392013AF8E18F589 /* GearCard.swift in Sources */,
+				AA0000030000000000000001 /* GPXParser.swift in Sources */,
 				3C9F354700B6BA0C4708BAA9 /* Haptics.swift in Sources */,
 				98D21BF442BF077E61D0DFCB /* HealthCheck.swift in Sources */,
 				7B4EC2CC61F39340CB34E20C /* HeatRiskCard.swift in Sources */,
@@ -549,6 +580,9 @@
 				D86E406CBFABC2D807C36399 /* PlannerView.swift in Sources */,
 				14106E98EE0817947AA7379B /* PlannerViewModel.swift in Sources */,
 				2DF707999B443E4ECCA31FF7 /* RainfallCard.swift in Sources */,
+				AA0000040000000000000001 /* ReportLog.swift in Sources */,
+				AA0000050000000000000001 /* ReportLogsService.swift in Sources */,
+				AA0000060000000000000001 /* ReportLogsView.swift in Sources */,
 				DE825E64652BB7CD99652F84 /* ReportHistoryView.swift in Sources */,
 				5239425180EC82ADB39A9AAE /* ReportHistoryViewModel.swift in Sources */,
 				1770408E5BBF530CF22D48D9 /* ReportStore.swift in Sources */,
@@ -569,6 +603,8 @@
 				486F9ECDEA3628D2FF9AAC44 /* SettingsView.swift in Sources */,
 				486002490D7128C83115588A /* SettingsViewModel.swift in Sources */,
 				0ABBACFDB7CF336580DE7A40 /* SnowpackCard.swift in Sources */,
+				AA0000010000000000000001 /* SnowVision.swift in Sources */,
+				AA0000020000000000000001 /* SnowVisionService.swift in Sources */,
 				1F018EDDE66ED7D5AAFC8302 /* SourceFreshnessCard.swift in Sources */,
 				5FB3183242DAFB1D9A5721D4 /* StatusView.swift in Sources */,
 				D05C225C0EE6195C20F945FC /* StatusViewModel.swift in Sources */,

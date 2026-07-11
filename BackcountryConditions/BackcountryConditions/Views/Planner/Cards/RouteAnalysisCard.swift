@@ -1,6 +1,8 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RouteAnalysisCard: View {
+    @Environment(AppState.self) private var appState
     let data: SafetyData
     let lat: Double
     let lon: Double
@@ -16,6 +18,9 @@ struct RouteAnalysisCard: View {
     @State private var isLoadingAnalysis = false
     @State private var error: String?
     @State private var analysisTask: Task<Void, Never>?
+    @State private var showingGPXImporter = false
+    @State private var importedGPX: ParsedGPXRoute?
+    @State private var customRouteName = ""
 
     private let routeService = RouteService()
 
@@ -23,9 +28,16 @@ struct RouteAnalysisCard: View {
         CollapsibleSection(title: "Route Analysis", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill", headerColor: .purple, initiallyExpanded: false) {
             VStack(alignment: .leading, spacing: 12) {
                 routeSuggestionsSection
+                importedGPXSection
                 errorSection
                 analysisSection
             }
+            .fileImporter(
+                isPresented: $showingGPXImporter,
+                allowedContentTypes: [UTType(filenameExtension: "gpx") ?? .xml],
+                allowsMultipleSelection: false,
+                onCompletion: importGPX
+            )
         }
     }
 
@@ -33,7 +45,9 @@ struct RouteAnalysisCard: View {
 
     @ViewBuilder
     private var routeSuggestionsSection: some View {
-        if isLoadingSuggestions {
+        if analysis != nil {
+            EmptyView()
+        } else if isLoadingSuggestions {
             HStack {
                 ProgressView().controlSize(.small)
                 Text("Loading routes...")
@@ -41,17 +55,57 @@ struct RouteAnalysisCard: View {
                     .foregroundStyle(.secondary)
             }
         } else if suggestions.isEmpty {
-            Button {
-                Task { await loadSuggestions() }
-            } label: {
-                Label("Load Route Suggestions", systemImage: "arrow.triangle.branch")
-                    .font(.subheadline.weight(.medium))
+            HStack {
+                Button {
+                    Task { await loadSuggestions() }
+                } label: {
+                    Label("Suggested Routes", systemImage: "arrow.triangle.branch")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
+                .controlSize(.small)
+
+                Button {
+                    showingGPXImporter = true
+                } label: {
+                    Label("Import GPX", systemImage: "square.and.arrow.down")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
+                .controlSize(.small)
             }
-            .buttonStyle(.bordered)
-            .tint(.purple)
-            .controlSize(.small)
         } else {
             routeList
+        }
+    }
+
+    @ViewBuilder
+    private var importedGPXSection: some View {
+        if let route = importedGPX, analysis == nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(route.name, systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(String(format: "%.2f", route.distanceMiles)) mi · \(route.pointCount) points" + (route.elevationGainFt.map { " · +\(Int($0)) ft" } ?? ""))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Five evenly spaced checkpoints will use the uploaded coordinates instead of estimated waypoints.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                HStack {
+                    Button("Analyze This Track") {
+                        Task { await analyzeImportedGPX(route) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                    .controlSize(.small)
+                    Button("Remove", role: .destructive) { importedGPX = nil }
+                        .controlSize(.small)
+                }
+            }
+            .padding(10)
+            .background(.purple.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -63,6 +117,18 @@ struct RouteAnalysisCard: View {
 
             ForEach(suggestions) { route in
                 routeButton(route)
+            }
+
+            HStack {
+                TextField("Other route name", text: $customRouteName)
+                    .textFieldStyle(.roundedBorder)
+                Button("Analyze") {
+                    let name = customRouteName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty else { return }
+                    selectedRoute = name
+                    Task { await analyzeRoute(name) }
+                }
+                .disabled(customRouteName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -142,9 +208,20 @@ struct RouteAnalysisCard: View {
     @ViewBuilder
     private var analysisSection: some View {
         if let analysis {
+            if analysis.partialData == true {
+                Label("Some route checkpoints could not be checked.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             routeProfileChart(analysis)
             analysisText(analysis)
             waypointsList(analysis)
+            Button("Analyze Another Route") {
+                self.analysis = nil
+                selectedRoute = nil
+                importedGPX = nil
+            }
+            .font(.caption)
         }
     }
 
@@ -225,7 +302,7 @@ struct RouteAnalysisCard: View {
                         .foregroundStyle(Color.scoreColor(score))
                 }
                 if let elev = wp.elevation {
-                    Text("\(Int(elev)) ft")
+                    Text(formatElevation(elev, unit: appState.preferences.elevationUnit))
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                 }
@@ -236,12 +313,12 @@ struct RouteAnalysisCard: View {
                 HStack(spacing: 10) {
                     if let w = s.weather {
                         if let temp = w.temp {
-                            Label("\(Int(temp))°F", systemImage: "thermometer.medium")
+                            Label(formatTemperature(temp, unit: appState.preferences.temperatureUnit), systemImage: "thermometer.medium")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                         if let wind = w.windGust ?? w.windSpeed {
-                            Label("\(Int(wind)) mph", systemImage: "wind")
+                            Label(formatWind(wind, unit: appState.preferences.windSpeedUnit), systemImage: "wind")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -305,7 +382,9 @@ struct RouteAnalysisCard: View {
                     lat: lat,
                     lon: lon,
                     date: forecastDate,
-                    start: startTime
+                    start: startTime,
+                    travelWindowHours: Int(appState.preferences.travelWindowHours),
+                    preferences: appState.preferences
                 )
                 guard !Task.isCancelled else { return }
                 analysis = result
@@ -317,5 +396,53 @@ struct RouteAnalysisCard: View {
         }
         analysisTask = task
         await task.value
+    }
+
+    private func importGPX(_ result: Result<[URL], Error>) {
+        do {
+            guard let url = try result.get().first else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
+            importedGPX = try GPXParser.parse(data: data, fileName: url.lastPathComponent)
+            suggestions = []
+            analysis = nil
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func analyzeImportedGPX(_ route: ParsedGPXRoute) async {
+        analysisTask?.cancel()
+        error = nil
+        isLoadingAnalysis = true
+        defer { isLoadingAnalysis = false }
+        do {
+            let metadata = GPXRouteMetadata(
+                fileName: route.fileName,
+                pointCount: route.pointCount,
+                distanceMiles: route.distanceMiles,
+                elevationGainFt: route.elevationGainFt,
+                minElevationFt: route.minElevationFt,
+                maxElevationFt: route.maxElevationFt
+            )
+            let result = try await routeService.analyzeRoute(
+                peak: objectiveName,
+                route: route.name,
+                lat: lat,
+                lon: lon,
+                date: forecastDate,
+                start: startTime,
+                travelWindowHours: Int(appState.preferences.travelWindowHours),
+                preferences: appState.preferences,
+                waypoints: route.checkpoints,
+                routeMetadata: metadata
+            )
+            analysis = result
+            onRouteAnalysisLoaded?(result)
+        } catch {
+            self.error = "Analysis failed: \(error.localizedDescription)"
+        }
     }
 }

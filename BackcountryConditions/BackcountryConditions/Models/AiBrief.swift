@@ -1,21 +1,24 @@
 import Foundation
 
-struct AiBriefRequest: Codable, Sendable {
-    var score: Double
-    var confidence: Double?
-    var primaryHazard: String
+struct AiBriefRequest: Encodable, Sendable {
     var decisionLevel: String
-    var factors: [BriefFactor]
-    var context: String?
+    var report: SafetyData
+    var units: DisplayUnits
 
-    struct BriefFactor: Codable, Sendable {
-        var hazard: String?
-        var name: String?
-        var impact: Double
+    struct DisplayUnits: Encodable, Sendable {
+        var temperature: String
+        var wind: String
+        var elevation: String
+
+        init(preferences: UserPreferences) {
+            temperature = preferences.temperatureUnit.rawValue
+            wind = preferences.windSpeedUnit.rawValue
+            elevation = preferences.elevationUnit.rawValue
+        }
     }
 }
 
 struct AiBriefResponse: Codable, Sendable {
     var narrative: String
-    var cached: Bool
+    var cached: Bool?
 }

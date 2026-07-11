@@ -54,6 +54,26 @@ actor APIClient {
         }
     }
 
+    func fetch<T: Decodable>(_ path: String, headers: [String: String], type: T.Type) async throws -> T {
+        guard let url = buildURL(path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.noData }
+            guard (200...299).contains(http.statusCode) else {
+                throw APIError.httpError(statusCode: http.statusCode, message: extractErrorMessage(from: data))
+            }
+            return try decoder.decode(T.self, from: data)
+        } catch let error as APIError {
+            throw error
+        } catch let error as DecodingError {
+            throw APIError.decodingError(error)
+        } catch {
+            throw APIError.networkError(error)
+        }
+    }
+
     func fetchRaw(_ path: String) async throws -> Data {
         guard let url = buildURL(path) else {
             throw APIError.invalidURL

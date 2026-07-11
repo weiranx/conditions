@@ -19,6 +19,7 @@ enum TravelWindowEngine {
         let maxGust = preferences.maxWindGustMph
         let maxPrecip = preferences.maxPrecipChance
         let minFeelsLike = preferences.minFeelsLikeF
+        let maxFeelsLike = preferences.maxFeelsLikeF
 
         return trend.map { point in
             let gust = point.gust.isFinite ? point.gust : 0
@@ -41,6 +42,10 @@ enum TravelWindowEngine {
             if feelsLike < minFeelsLike {
                 failedRules.append("feels \(Int(feelsLike))<\(Int(minFeelsLike))°F")
                 failedRuleLabels.append("Feels-like below limit")
+            }
+            if feelsLike > maxFeelsLike {
+                failedRules.append("feels \(Int(feelsLike))>\(Int(maxFeelsLike))°F")
+                failedRuleLabels.append("Feels-like above heat limit")
             }
 
             let condLower = point.condition.lowercased()
