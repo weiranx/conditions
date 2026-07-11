@@ -12,16 +12,17 @@ struct SearchBarView: View {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(isFocused ? .blue : .secondary)
+                    .foregroundStyle(isFocused ? Color.webPineDeep : Color.webInkTertiary)
 
-                TextField("Search peaks, trailheads, coordinates...", text: Binding(
+                TextField("Search by peak, trailhead, zone, town, or coordinates", text: Binding(
                     get: { searchVM.query },
                     set: { newValue in
                         searchVM.query = newValue
                         searchVM.performSearch(newValue)
                     }
                 ))
-                .font(.subheadline)
+                .font(.webSans(15))
+                .foregroundStyle(Color.webInk)
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -46,13 +47,13 @@ struct SearchBarView: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .frame(minHeight: 52)
+            .background(Color.white.opacity(0.98), in: RoundedRectangle(cornerRadius: 9))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(isFocused ? Color.blue.opacity(0.4) : Color.gray.opacity(0.15), lineWidth: isFocused ? 1 : 0.5)
+                RoundedRectangle(cornerRadius: 9)
+                    .strokeBorder(isFocused ? Color.webPine.opacity(0.75) : Color.webLine, lineWidth: isFocused ? 1.5 : 1)
             )
-            .shadow(color: isFocused ? Color.blue.opacity(0.08) : Color.clear, radius: 8, y: 2)
+            .shadow(color: isFocused ? Color.webPine.opacity(0.17) : Color.black.opacity(0.04), radius: 10, y: 4)
             .animation(.easeInOut(duration: 0.2), value: isFocused)
             .onChange(of: isFocused) { _, newValue in
                 isSearchActive = newValue
@@ -75,7 +76,7 @@ struct SearchBarView: View {
                                     .frame(width: 28, height: 28)
                                     .background(
                                         LinearGradient(
-                                            colors: [.blue, .blue.opacity(0.7)],
+                                            colors: [.webPine, .webPineDeep],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         ),
@@ -100,7 +101,7 @@ struct SearchBarView: View {
                                     .foregroundStyle(.quaternary)
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 11)
                         }
 
                         if index < searchVM.suggestions.count - 1 {
@@ -109,10 +110,10 @@ struct SearchBarView: View {
                         }
                     }
                 }
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.webLine, lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.1), radius: 16, y: 8)
                 .padding(.top, 6)
@@ -129,10 +130,10 @@ struct SearchBarView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.webLine, lineWidth: 1)
                 )
                 .padding(.top, 6)
             }

@@ -4,9 +4,9 @@ import XCTest
 final class DateFormattingTests: XCTestCase {
 
     func testFormatDateInput() {
-        let date = Date(timeIntervalSince1970: 0) // 1970-01-01
+        let date = Calendar.current.date(from: DateComponents(year: 1970, month: 1, day: 1, hour: 12))!
         let result = DateFormatting.formatDateInput(date)
-        XCTAssertTrue(result.contains("1970"))
+        XCTAssertEqual(result, "1970-01-01")
     }
 
     func testAddDays() {

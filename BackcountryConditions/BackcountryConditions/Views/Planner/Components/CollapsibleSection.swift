@@ -33,26 +33,20 @@ struct CollapsibleSection<Content: View>: View {
                 HStack(spacing: 10) {
                     Image(systemName: systemImage)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(headerColor)
                         .frame(width: 30, height: 30)
-                        .background(
-                            LinearGradient(
-                                colors: [headerColor, headerColor.opacity(0.75)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
+                        .background(headerColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(headerColor.opacity(0.16)))
 
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .font(.webSans(15, weight: .semibold))
+                        .foregroundStyle(Color.webInk)
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Color.webInkTertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
@@ -63,7 +57,7 @@ struct CollapsibleSection<Content: View>: View {
             .accessibilityAddTraits(.isButton)
 
             if isExpanded {
-                Divider()
+                Divider().overlay(Color.webLine)
                     .padding(.horizontal, 14)
 
                 content()
@@ -75,12 +69,12 @@ struct CollapsibleSection<Content: View>: View {
                     ))
             }
         }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.webLine, lineWidth: 1)
         )
         .compositingGroup()
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+        .shadow(color: Color.webPineDeep.opacity(0.045), radius: 14, y: 7)
     }
 }

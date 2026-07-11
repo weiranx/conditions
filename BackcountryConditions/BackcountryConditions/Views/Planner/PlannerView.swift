@@ -8,50 +8,32 @@ struct PlannerView: View {
     @State private var recentReports: [SavedReport] = []
     @State private var locationService = LocationService()
     @State private var locationError: String?
+    @State private var travelWindowHours = UserPreferences.load().travelWindowHours
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 16) {
-                        if !plannerVM.hasReport {
-                            searchBar
-                        }
+                        plannerHeader
                         savedObjectivesSection
                         recentSearches
                         recentReportsSection
-                        controls
                         mapView
+                        controls
                         status
                         cards(proxy: proxy)
                         emptyState
                     }
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 18)
                 }
-                .background(Color(.systemGroupedBackground))
+                .background(Color.webBackground)
             }
-            .navigationTitle("Planner")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if let data = plannerVM.safetyData, let decision = plannerVM.decision {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ShareLink(item: shareSummary(data: data, decision: decision)) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                        .accessibilityLabel("Share report")
-                    }
-                }
-                if plannerVM.hasObjective {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(plannerVM.hasReport ? "New Objective" : "Clear") {
-                            plannerVM.clear()
-                            isSearchActive = true
-                        }
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task {
                 recentReports = (try? await ReportStore.shared.loadAll()) ?? []
+                applyPendingPlannerState()
             }
             .onChange(of: plannerVM.currentReportId) { _, _ in
                 Task {
@@ -60,9 +42,11 @@ struct PlannerView: View {
             }
             .refreshable {
                 if plannerVM.hasObjective {
-                    await plannerVM.loadReport(preferences: appState.preferences)
+                    await plannerVM.loadReport(preferences: effectivePreferences)
                 }
             }
+            .onChange(of: appState.selectedObjective?.id) { _, _ in applyPendingPlannerState() }
+            .onChange(of: plannerVM.lat) { _, _ in syncSelectedObjective() }
             .onChange(of: locationService.currentLocation?.latitude) { _, _ in
                 guard let coordinate = locationService.currentLocation else { return }
                 selectCoordinate(name: "Current Location", lat: coordinate.latitude, lon: coordinate.longitude)
@@ -71,6 +55,69 @@ struct PlannerView: View {
                 locationError = message
             }
         }
+    }
+
+    private var effectivePreferences: UserPreferences {
+        var preferences = appState.preferences
+        preferences.travelWindowHours = travelWindowHours
+        return preferences
+    }
+
+    private var plannerHeader: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 7) {
+                    WebKicker(text: "Decision workspace", systemImage: "safari")
+                    Text("Plan with the\nwhole picture.")
+                        .font(.webDisplay(34, weight: .semibold))
+                        .tracking(-1.1)
+                        .foregroundStyle(Color.webInk)
+                    Text("Set an objective and timing. We’ll organize the signals that shape the call.")
+                        .font(.webSans(13))
+                        .foregroundStyle(Color.webInkSecondary)
+                        .lineSpacing(3)
+                }
+                Spacer(minLength: 4)
+                VStack(spacing: 9) {
+                    NavigationLink {
+                        ReportHistoryView()
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .frame(width: 36, height: 36)
+                            .background(Color.webSurfaceSubtle, in: RoundedRectangle(cornerRadius: 9))
+                    }
+                    if let data = plannerVM.safetyData, let decision = plannerVM.decision {
+                        ShareLink(item: shareSummary(data: data, decision: decision)) {
+                            Image(systemName: "square.and.arrow.up")
+                                .frame(width: 36, height: 36)
+                                .background(Color.webSurfaceSubtle, in: RoundedRectangle(cornerRadius: 9))
+                        }
+                    }
+                }
+                .foregroundStyle(Color.webPineDeep)
+            }
+
+            if !plannerVM.hasReport {
+                searchBar
+            } else {
+                HStack {
+                    Label(plannerVM.objectiveName, systemImage: "mappin.and.ellipse")
+                        .font(.webSans(14, weight: .semibold))
+                        .foregroundStyle(Color.webPineDeep)
+                    Spacer()
+                    Button("New objective") {
+                        plannerVM.clear()
+                        appState.selectedObjective = nil
+                        isSearchActive = true
+                    }
+                    .font(.webSans(12, weight: .semibold))
+                    .foregroundStyle(Color.webPineDeep)
+                }
+                .padding(12)
+                .background(Color.webPineSoft, in: RoundedRectangle(cornerRadius: 9))
+            }
+        }
+        .webCard(padding: 18)
     }
 
     private func shareSummary(data: SafetyData, decision: SummitDecision) -> String {
@@ -112,7 +159,6 @@ struct PlannerView: View {
                 }
             }
         }
-        .padding(.horizontal)
     }
 
     @ViewBuilder
@@ -197,13 +243,12 @@ struct PlannerView: View {
                 }
             }
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+                    .strokeBorder(Color.webLine, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-            .padding(.horizontal)
+            .shadow(color: Color.webPineDeep.opacity(0.045), radius: 14, y: 7)
         }
     }
 
@@ -270,13 +315,12 @@ struct PlannerView: View {
                 }
             }
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+                    .strokeBorder(Color.webLine, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-            .padding(.horizontal)
+            .shadow(color: Color.webPineDeep.opacity(0.045), radius: 14, y: 7)
         }
     }
 
@@ -306,29 +350,28 @@ struct PlannerView: View {
                 PlannerControlsView(
                     forecastDate: $plannerVM.forecastDate,
                     startTime: $plannerVM.startTime,
+                    travelWindowHours: $travelWindowHours,
                     objectiveName: plannerVM.objectiveName,
                     isLocked: plannerVM.hasReport,
                     onReload: {
                         Task {
-                            await plannerVM.loadReport(preferences: appState.preferences)
+                            await plannerVM.loadReport(preferences: effectivePreferences)
                         }
                     },
                     trailingContent: { bookmarkButton }
                 )
             }
-            .padding(.horizontal)
 
             if !plannerVM.hasReport && !plannerVM.isLoading {
                 Button {
-                    Task { await plannerVM.loadReport(preferences: appState.preferences) }
+                    Task { await plannerVM.loadReport(preferences: effectivePreferences) }
                 } label: {
                     Label("Get Conditions", systemImage: "checkmark.shield.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal)
+                .buttonStyle(WebPrimaryButtonStyle())
                 .accessibilityHint("Generates the safety report for the selected date and start time")
             }
         }
@@ -344,7 +387,6 @@ struct PlannerView: View {
                 elevationFt: plannerVM.safetyData?.weather.elevation,
                 elevationUnit: appState.preferences.elevationUnit
             )
-            .padding(.horizontal)
         } else if !isSearchActive {
             MapCard(
                 lat: Configuration.defaultCenter.lat,
@@ -352,7 +394,6 @@ struct PlannerView: View {
                 objectiveName: "Drop a pin",
                 onTapLocation: { lat, lon in selectCoordinate(name: "Dropped Pin", lat: lat, lon: lon) }
             )
-            .padding(.horizontal)
         }
     }
 
@@ -364,6 +405,37 @@ struct PlannerView: View {
         Haptics.selection()
     }
 
+    private func syncSelectedObjective() {
+        guard let lat = plannerVM.lat, let lon = plannerVM.lon else { return }
+        appState.selectedObjective = SearchResult(
+            name: plannerVM.objectiveName,
+            lat: lat,
+            lon: lon,
+            resultClass: "selected",
+            type: "location"
+        )
+    }
+
+    private func applyPendingPlannerState() {
+        if let objective = appState.selectedObjective {
+            let currentId = plannerVM.lat.flatMap { lat in
+                plannerVM.lon.map { lon in SearchResult(name: plannerVM.objectiveName, lat: lat, lon: lon, resultClass: nil, type: nil).id }
+            }
+            if currentId != objective.id {
+                plannerVM.clear()
+                plannerVM.setObjective(result: objective)
+                searchVM.query = objective.name
+            }
+        }
+        if let date = appState.plannerForecastDate { plannerVM.forecastDate = date }
+        if let start = appState.plannerStartTime { plannerVM.startTime = start }
+        if let hours = appState.plannerTravelWindowHours { travelWindowHours = hours }
+        if appState.shouldGeneratePlannerReport, plannerVM.hasObjective {
+            appState.shouldGeneratePlannerReport = false
+            Task { await plannerVM.loadReport(preferences: effectivePreferences) }
+        }
+    }
+
     @ViewBuilder
     private var status: some View {
         if plannerVM.isLoading {
@@ -373,10 +445,9 @@ struct PlannerView: View {
         } else if let error = plannerVM.error {
             ErrorBannerView(message: error) {
                 Task {
-                    await plannerVM.loadReport(preferences: appState.preferences)
+                    await plannerVM.loadReport(preferences: effectivePreferences)
                 }
             }
-            .padding(.horizontal)
         }
 
         if plannerVM.safetyData?.partialData == true {
@@ -396,14 +467,13 @@ struct PlannerView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(.orange.opacity(0.15), lineWidth: 0.5)
             )
-            .padding(.horizontal)
         }
     }
 
     @ViewBuilder
     private func cards(proxy: ScrollViewProxy) -> some View {
         if let data = plannerVM.safetyData, let decision = plannerVM.decision {
-            let prefs = appState.preferences
+            let prefs = effectivePreferences
             let visibleCards = PlannerCardType.allCases.filter { $0.isVisible(for: data) }
             LazyVStack(spacing: 12) {
                 ForEach(visibleCards) { cardType in
@@ -430,7 +500,6 @@ struct PlannerView: View {
                     .id(cardType)
                 }
             }
-            .padding(.horizontal)
             .opacity(plannerVM.isLoading ? 0.4 : 1)
             .allowsHitTesting(!plannerVM.isLoading)
             .animation(.easeInOut(duration: 0.2), value: plannerVM.isLoading)
@@ -492,54 +561,30 @@ struct PlannerView: View {
                 }
             }
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+                    .strokeBorder(Color.webLine, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-            .padding(.horizontal)
+            .shadow(color: Color.webPineDeep.opacity(0.045), radius: 14, y: 7)
         }
     }
 
     @ViewBuilder
     private var emptyState: some View {
-        if !plannerVM.hasObjective && !plannerVM.isLoading && searchVM.recentSearches.isEmpty {
-            VStack(spacing: 24) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.blue.opacity(0.08), .blue.opacity(0.02)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 100, height: 100)
-
-                    Image(systemName: "mountain.2.fill")
-                        .font(.system(size: 42, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.blue.opacity(0.5), .blue.opacity(0.2)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-
-                VStack(spacing: 8) {
-                    Text("Plan your adventure")
-                        .font(.title3.weight(.semibold))
-
-                    Text("Search for a peak, trailhead, or coordinates\nto check backcountry conditions")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                }
+        if !plannerVM.hasObjective && !plannerVM.isLoading {
+            VStack(alignment: .leading, spacing: 14) {
+                WebSectionHeader(
+                    "Select a location to start planning",
+                    number: "01",
+                    subtitle: "Search for a peak, trail area, zone, or tap the map to place a pin."
+                )
+                Divider().overlay(Color.webLine)
+                Label("Your date, start time, and travel window unlock after selecting an objective.", systemImage: "arrow.up")
+                    .font(.webSans(12))
+                    .foregroundStyle(Color.webInkTertiary)
             }
-            .padding(.top, 48)
+            .webCard(padding: 18)
         }
     }
 }
@@ -681,6 +726,7 @@ enum PlannerCardFactory {
 struct PlannerControlsView<Trailing: View>: View {
     @Binding var forecastDate: String
     @Binding var startTime: String
+    @Binding var travelWindowHours: Double
     var objectiveName: String
     var isLocked: Bool
     var onReload: () -> Void
@@ -693,11 +739,10 @@ struct PlannerControlsView<Trailing: View>: View {
             HStack(spacing: 10) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 22))
-                    .foregroundStyle(
-                        LinearGradient(colors: [.blue, .blue.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                    )
+                    .foregroundStyle(Color.webPineDeep)
                 Text(objectiveName)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.webSans(14, weight: .semibold))
+                    .foregroundStyle(Color.webInk)
                     .lineLimit(1)
                 Spacer()
                 trailingContent()
@@ -705,9 +750,9 @@ struct PlannerControlsView<Trailing: View>: View {
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Date")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                    Text("DATE")
+                        .font(.webMono(9))
+                        .foregroundStyle(Color.webInkTertiary)
                     DatePicker("", selection: $datePickerDate, in: forecastDateRange, displayedComponents: .date)
                         .labelsHidden()
                         .disabled(isLocked)
@@ -717,9 +762,9 @@ struct PlannerControlsView<Trailing: View>: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Start Time")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                    Text("START TIME")
+                        .font(.webMono(9))
+                        .foregroundStyle(Color.webInkTertiary)
                     DatePicker("", selection: $timePickerDate, displayedComponents: .hourAndMinute)
                         .labelsHidden()
                         .disabled(isLocked)
@@ -728,6 +773,19 @@ struct PlannerControlsView<Trailing: View>: View {
                             formatter.dateFormat = "HH:mm"
                             startTime = formatter.string(from: newValue)
                         }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TRIP HOURS")
+                        .font(.webMono(9))
+                        .foregroundStyle(Color.webInkTertiary)
+                    HStack(spacing: 3) {
+                        Text("\(Int(travelWindowHours))")
+                            .font(.webMono(13))
+                        Stepper("", value: $travelWindowHours, in: 1...24, step: 1)
+                            .labelsHidden()
+                            .disabled(isLocked)
+                    }
                 }
 
                 Spacer()
@@ -739,22 +797,22 @@ struct PlannerControlsView<Trailing: View>: View {
                             .foregroundStyle(.white)
                             .frame(width: 36, height: 36)
                             .background(
-                                LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .top, endPoint: .bottom),
+                            LinearGradient(colors: [.webPine, .webPineDeep], startPoint: .top, endPoint: .bottom),
                                 in: Circle()
                             )
-                            .shadow(color: .blue.opacity(0.25), radius: 4, y: 2)
+                            .shadow(color: Color.webPineDeep.opacity(0.2), radius: 6, y: 3)
                     }
                     .accessibilityLabel("Refresh report")
                 }
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.webLine, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+        .shadow(color: Color.webPineDeep.opacity(0.045), radius: 14, y: 7)
         .onAppear {
             syncPickers()
         }

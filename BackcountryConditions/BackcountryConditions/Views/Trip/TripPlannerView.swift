@@ -29,14 +29,21 @@ struct TripPlannerView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 16) {
+                    WebPageHeader(
+                        kicker: "Expedition tool",
+                        title: "Plan the right day, not just the route.",
+                        subtitle: "Compare the decision picture across several days for the same objective.",
+                        systemImage: "calendar.badge.clock"
+                    )
+
                     SearchBarView(searchVM: searchVM, isSearchActive: $isSearchActive) { result in
                         objectiveName = result.name
                         lat = result.lat
                         lon = result.lon
+                        appState.selectedObjective = result
                         searchVM.addToRecent(result)
                     }
-                    .padding(.horizontal)
 
                     if lat != nil {
                         controlsCard
@@ -56,11 +63,12 @@ struct TripPlannerView: View {
                         emptyState
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(16)
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Trip Planner")
-            .navigationBarTitleDisplayMode(.large)
+            .background(Color.webBackground)
+            .toolbar(.hidden, for: .navigationBar)
+            .onAppear { syncObjective() }
+            .onChange(of: appState.selectedObjective) { _, _ in syncObjective() }
             .navigationDestination(for: UUID.self) { dayId in
                 if let day = dayResults.first(where: { $0.id == dayId }) {
                     TripDayDetailView(dayResult: day, objectiveName: objectiveName)
@@ -78,38 +86,31 @@ struct TripPlannerView: View {
             HStack(spacing: 10) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 22))
-                    .foregroundStyle(
-                        LinearGradient(colors: [.blue, .blue.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                    )
+                    .foregroundStyle(Color.webPineDeep)
                 Text(objectiveName)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.webSans(14, weight: .semibold))
+                    .foregroundStyle(Color.webInk)
                     .lineLimit(1)
                 Spacer()
             }
 
-            Divider()
+            Divider().overlay(Color.webLine)
 
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Start Date")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                    Text("START DATE").font(.webMono(9)).foregroundStyle(Color.webInkTertiary)
                     DatePicker("", selection: $startDate, in: tripDateRange, displayedComponents: .date)
                         .labelsHidden()
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Start Time")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                    Text("START TIME").font(.webMono(9)).foregroundStyle(Color.webInkTertiary)
                     DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
                         .labelsHidden()
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Days")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                    Text("DAYS").font(.webMono(9)).foregroundStyle(Color.webInkTertiary)
                     Stepper("\(days)", value: $days, in: 2...7)
                         .frame(width: 120)
                 }
@@ -120,32 +121,13 @@ struct TripPlannerView: View {
             Button {
                 Task { await loadTrip() }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Plan Trip")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .foregroundStyle(.white)
-                .background(
-                    LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .top, endPoint: .bottom),
-                    in: RoundedRectangle(cornerRadius: 12)
-                )
-                .shadow(color: .blue.opacity(0.25), radius: 4, y: 2)
+                Label("Plan trip", systemImage: "calendar.badge.clock").frame(maxWidth: .infinity)
             }
+            .buttonStyle(WebPrimaryButtonStyle())
             .disabled(isLoading)
             .opacity(isLoading ? 0.6 : 1)
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-        .padding(.horizontal)
+        .webCard(padding: 18)
     }
 
     // MARK: - Loading View
@@ -174,13 +156,8 @@ struct TripPlannerView: View {
             summaryPill(label: "NO-GO", count: noGoCount, colors: [Color(red: 0.88, green: 0.22, blue: 0.22), Color(red: 0.7, green: 0.12, blue: 0.15)])
         }
         .padding(4)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-        .padding(.horizontal)
+        .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.webLine))
     }
 
     private func summaryPill(label: String, count: Int, colors: [Color]) -> some View {
@@ -208,13 +185,8 @@ struct TripPlannerView: View {
     private var riskArcChart: some View {
         MultiDayRiskArc(dayResults: dayResults)
             .padding(14)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
-            )
-            .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-            .padding(.horizontal)
+            .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.webLine))
     }
 
     // MARK: - Day Results
@@ -228,7 +200,6 @@ struct TripPlannerView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal)
     }
 
     private func dayCard(_ day: DayResult) -> some View {
@@ -320,12 +291,8 @@ struct TripPlannerView: View {
             }
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+        .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.webLine))
     }
 
     private func metricCell(icon: String, value: String, color: Color) -> some View {
@@ -342,41 +309,12 @@ struct TripPlannerView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.08), .blue.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 42, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.5), .blue.opacity(0.2)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-
-            VStack(spacing: 8) {
-                Text("Plan a multi-day trip")
-                    .font(.title3.weight(.semibold))
-
-                Text("Search for a location to compare\nconditions across multiple days")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-            }
-        }
-        .padding(.top, 48)
+        WebSectionHeader(
+            "Choose one objective",
+            number: "01",
+            subtitle: "Search above to compare its conditions and decision signal across two to seven days."
+        )
+        .webCard(padding: 18)
     }
 
     // MARK: - Load Trip
@@ -458,6 +396,14 @@ struct TripPlannerView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter.date(from: UserPreferences.load().defaultStartTime) ?? Date()
+    }
+
+    private func syncObjective() {
+        guard let objective = appState.selectedObjective else { return }
+        objectiveName = objective.name
+        lat = objective.lat
+        lon = objective.lon
+        if searchVM.query.isEmpty { searchVM.query = objective.name }
     }
 
     private var tripDateRange: ClosedRange<Date> {

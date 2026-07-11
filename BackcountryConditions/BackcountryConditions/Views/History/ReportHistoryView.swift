@@ -6,60 +6,61 @@ struct ReportHistoryView: View {
     @State private var showDeleteAllConfirmation = false
 
     var body: some View {
-        NavigationStack {
-            Group {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                WebPageHeader(
+                    kicker: "Offline library",
+                    title: "Saved reports",
+                    subtitle: "Reopen decision briefs you have already generated, even when reception disappears.",
+                    systemImage: "clock.arrow.circlepath"
+                )
                 if historyVM.isLoading {
                     ProgressView("Loading reports...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity).padding(.vertical, 40)
                 } else if historyVM.reports.isEmpty {
                     emptyState
                 } else {
                     reportList
                 }
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("History")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if !historyVM.reports.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Clear All", role: .destructive) {
-                            showDeleteAllConfirmation = true
-                        }
-                        .font(.subheadline)
+            .padding(16)
+        }
+        .background(Color.webBackground)
+        .navigationTitle("Saved reports")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !historyVM.reports.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Clear All", role: .destructive) {
+                        showDeleteAllConfirmation = true
                     }
+                    .font(.webSans(13, weight: .semibold))
                 }
-            }
-            .confirmationDialog("Delete all saved reports?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
-                Button("Delete All", role: .destructive) {
-                    Task { await historyVM.deleteAll() }
-                }
-            } message: {
-                Text("This will permanently remove all offline reports. This cannot be undone.")
-            }
-            .task {
-                await historyVM.loadReports()
             }
         }
+        .confirmationDialog("Delete all saved reports?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
+            Button("Delete All", role: .destructive) {
+                Task { await historyVM.deleteAll() }
+            }
+        } message: {
+            Text("This will permanently remove all offline reports. This cannot be undone.")
+        }
+        .navigationDestination(for: String.self) { reportId in
+            if let report = historyVM.reports.first(where: { $0.id == reportId }) {
+                SavedReportDetailView(report: report)
+            }
+        }
+        .task { await historyVM.loadReports() }
     }
 
     // MARK: - Report List
 
     private var reportList: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                ForEach(historyVM.reports) { report in
-                    NavigationLink(value: report.id) {
-                        reportRow(report)
-                    }
+        LazyVStack(spacing: 10) {
+            ForEach(historyVM.reports) { report in
+                NavigationLink(value: report.id) {
+                    reportRow(report)
                 }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-        }
-        .navigationDestination(for: String.self) { reportId in
-            if let report = historyVM.reports.first(where: { $0.id == reportId }) {
-                SavedReportDetailView(report: report)
             }
         }
     }
@@ -79,7 +80,7 @@ struct ReportHistoryView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(report.objectiveName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.webInk)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
@@ -107,12 +108,9 @@ struct ReportHistoryView: View {
                 .foregroundStyle(.quaternary)
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+        .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.webLine))
+        .shadow(color: Color.webPineDeep.opacity(0.045), radius: 14, y: 7)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 Task { await historyVM.deleteReport(report) }
@@ -132,41 +130,12 @@ struct ReportHistoryView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.08), .blue.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 42, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.5), .blue.opacity(0.2)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-
-            VStack(spacing: 8) {
-                Text("No saved reports")
-                    .font(.title3.weight(.semibold))
-
-                Text("Reports are automatically saved when you\nload conditions in the Planner")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WebSectionHeader(
+            "No saved reports yet",
+            number: "01",
+            subtitle: "Conditions briefs are saved automatically after a successful Planner request."
+        )
+        .webCard(padding: 18)
     }
 
     // MARK: - Helpers

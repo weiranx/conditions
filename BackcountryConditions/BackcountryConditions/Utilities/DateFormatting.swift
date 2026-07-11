@@ -3,6 +3,8 @@ import Foundation
 enum DateFormatting {
     static func formatDateInput(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = .current
         return formatter.string(from: date)
@@ -10,6 +12,8 @@ enum DateFormatting {
 
     static func addDays(to dateStr: String, days: Int) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
         guard let date = formatter.date(from: dateStr) else { return dateStr }
         guard let newDate = Calendar.current.date(byAdding: .day, value: days, to: date) else { return dateStr }

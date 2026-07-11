@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AB1000010000000000000001 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1000010000000000000002 /* HomeView.swift */; };
+		AB1000020000000000000001 /* WebComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1000020000000000000002 /* WebComponents.swift */; };
 		00A87270579B0C2163852152 /* MapCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7929ADA19C4ACA337A2E2DEA /* MapCard.swift */; };
 		012E7954D6A781D1906F783D /* AiBrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9516F59D07CD4C5B62E816 /* AiBrief.swift */; };
 		0196F06323F715E15A17F079 /* RouteAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B69146F2008A6F85222265 /* RouteAnalysis.swift */; };
@@ -103,6 +105,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AB1000010000000000000002 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Home/HomeView.swift; sourceTree = "<group>"; };
+		AB1000020000000000000002 /* WebComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebComponents.swift; sourceTree = "<group>"; };
 		00CA26F696C96D2E1EEF95CE /* UsefulLinksCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsefulLinksCard.swift; sourceTree = "<group>"; };
 		029D27205FCDF63BC43520AC /* DangerLevelBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DangerLevelBadge.swift; sourceTree = "<group>"; };
 		081FB27E9F246EFDC4364767 /* ScoreGauge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreGauge.swift; sourceTree = "<group>"; };
@@ -342,6 +346,7 @@
 			children = (
 				34B7F8D4C9A72780EC386474 /* ErrorBannerView.swift */,
 				5EEAAF9647685C7BC85D517A /* ForecastLoadingView.swift */,
+				AB1000020000000000000002 /* WebComponents.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -437,6 +442,7 @@
 		F66C386A25AB4132080B74A4 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AB1000010000000000000002 /* HomeView.swift */,
 				14A9E6C358DE254B31528DF3 /* History */,
 				AA0000060000000000000003 /* Logs */,
 				0082432D40B46F018FA7FF1A /* Planner */,
@@ -546,6 +552,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AB1000010000000000000001 /* HomeView.swift in Sources */,
+				AB1000020000000000000001 /* WebComponents.swift in Sources */,
 				680F2E995D576BFA45291FC5 /* APIClient.swift in Sources */,
 				012E7954D6A781D1906F783D /* AiBrief.swift in Sources */,
 				8C23DA94569914899AA8269A /* AirQualityCard.swift in Sources */,

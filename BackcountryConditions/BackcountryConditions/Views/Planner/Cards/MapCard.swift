@@ -7,17 +7,19 @@ struct MapCard: View {
     let objectiveName: String
     var elevationFt: Double?
     var elevationUnit: UserPreferences.ElevationUnit = .feet
+    var height: CGFloat = 300
     var onTapLocation: ((Double, Double) -> Void)?
 
     @State private var mapStyle: MapStyleOption = .standard
     @State private var position: MapCameraPosition
 
-    init(lat: Double, lon: Double, objectiveName: String, elevationFt: Double? = nil, elevationUnit: UserPreferences.ElevationUnit = .feet, onTapLocation: ((Double, Double) -> Void)? = nil) {
+    init(lat: Double, lon: Double, objectiveName: String, elevationFt: Double? = nil, elevationUnit: UserPreferences.ElevationUnit = .feet, height: CGFloat = 300, onTapLocation: ((Double, Double) -> Void)? = nil) {
         self.lat = lat
         self.lon = lon
         self.objectiveName = objectiveName
         self.elevationFt = elevationFt
         self.elevationUnit = elevationUnit
+        self.height = height
         self.onTapLocation = onTapLocation
         _position = State(initialValue: .region(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
@@ -55,7 +57,7 @@ struct MapCard: View {
                 )
             }
             .mapStyle(mapStyle.style)
-            .frame(height: 220)
+            .frame(height: height)
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12))
             .overlay(alignment: .topTrailing) {
                 mapStyleToggle
@@ -68,10 +70,10 @@ struct MapCard: View {
 
             coordinateBar
         }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.webSurface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+                .strokeBorder(Color.webPineDeep.opacity(0.65), lineWidth: 1.5)
         )
         .onChange(of: lat) { _, _ in recenter() }
         .onChange(of: lon) { _, _ in recenter() }
