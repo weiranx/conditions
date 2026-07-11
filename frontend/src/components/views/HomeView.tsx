@@ -6,9 +6,13 @@ import {
   Mountain,
   Activity,
   ArrowRight,
+  Check,
   Info,
+  Layers3,
+  RadioTower,
   Route,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
@@ -128,10 +132,23 @@ export function HomeView({
         <section className="ssr-h-hero">
           <div className="ssr-h-hero-inner">
             <div className="ssr-h-workspace">
-              <h1>Plan an objective</h1>
-              <p className="ssr-lede">Set a location, start time, and travel window to build a conditions brief.</p>
+              <div className="ssr-h-kicker">
+                <span className="ssr-h-kicker-mark" aria-hidden><Sparkles size={12} /></span>
+                Mountain intelligence, on your clock
+              </div>
+              <h1>Know the mountain <br />before you move.</h1>
+              <p className="ssr-lede">
+                Build a time-aware conditions brief for the exact place and window you plan to travel.
+              </p>
 
               <div className="ssr-h-console">
+                <div className="ssr-h-console-head">
+                  <div>
+                    <span className="ssr-h-live-dot" aria-hidden />
+                    Conditions brief
+                  </div>
+                  <span>6 signal families · one decision view</span>
+                </div>
                 <div className="ssr-h-console-search">
                   <SearchBox
                     searchWrapperRef={searchWrapperRef}
@@ -197,6 +214,11 @@ export function HomeView({
                   </label>
                   <div className="ssr-h-param-note">Conditions are scored for your exact timing.</div>
                 </div>
+                <div className="ssr-h-confidence" aria-label="Brief qualities">
+                  <span><RadioTower size={12} aria-hidden /> Official forecast feeds</span>
+                  <span><Layers3 size={12} aria-hidden /> Cross-signal synthesis</span>
+                  <span><Check size={12} aria-hidden /> Decision-ready summary</span>
+                </div>
               </div>
 
               <div className="ssr-h-popular">
@@ -235,7 +257,7 @@ export function HomeView({
             <article className="ssr-h-feature">
               <div className="ssr-h-feature-icon"><Clock3 aria-hidden /></div>
               <div>
-                <span className="ssr-h-feature-label">Your timing</span>
+                <span className="ssr-h-feature-label"><b>01</b> Your timing</span>
                 <h3>Conditions for your exact window</h3>
                 <p>See hourly weather, daylight, and changing hazards from your start through your return.</p>
               </div>
@@ -244,7 +266,7 @@ export function HomeView({
             <article className="ssr-h-feature">
               <div className="ssr-h-feature-icon"><ShieldCheck aria-hidden /></div>
               <div>
-                <span className="ssr-h-feature-label">Your risk picture</span>
+                <span className="ssr-h-feature-label"><b>02</b> Your risk picture</span>
                 <h3>Critical signals, weighed together</h3>
                 <p>Weather, avalanche, snowpack, alerts, air quality, and terrain become one prioritized brief.</p>
               </div>
@@ -253,11 +275,23 @@ export function HomeView({
             <article className="ssr-h-feature">
               <div className="ssr-h-feature-icon"><Route aria-hidden /></div>
               <div>
-                <span className="ssr-h-feature-label">Your next move</span>
+                <span className="ssr-h-feature-label"><b>03</b> Your next move</span>
                 <h3>Planning that leads to action</h3>
                 <p>Compare start times, inspect route exposure, and carry the same context into a multi-day plan.</p>
               </div>
             </article>
+          </div>
+
+          <div className="ssr-h-signal-band" aria-label="Conditions included in every brief">
+            <span>Every brief considers</span>
+            <div>
+              <b>Weather</b>
+              <b>Avalanche</b>
+              <b>Snowpack</b>
+              <b>Alerts</b>
+              <b>Air quality</b>
+              <b>Terrain</b>
+            </div>
           </div>
         </section>
 

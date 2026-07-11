@@ -5,17 +5,18 @@
   width: 100vw;
   margin-left: calc(50% - 50vw);
   box-sizing: border-box;
-  min-height: 62px;
-  border-bottom: 1px solid var(--ui-line);
-  background: color-mix(in oklch, var(--ui-bg) 94%, transparent);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  min-height: 68px;
+  border-bottom: 1px solid color-mix(in oklch, var(--ui-line) 78%, transparent);
+  background: color-mix(in oklch, var(--ui-bg) 91%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .42) inset, 0 12px 30px -30px rgba(19, 44, 28, .5);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
   font-family: var(--ssr-sans);
 }
 
 .ssr-product-nav-inner {
   width: min(1120px, calc(100% - 48px));
-  min-height: 62px;
+  min-height: 68px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -26,43 +27,49 @@
 .ssr-product-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--ui-text);
   font: inherit;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 720;
+  letter-spacing: -.015em;
   cursor: pointer;
+  transition: opacity .18s ease;
 }
+.ssr-product-brand:hover { opacity: .78; }
 
 .ssr-product-mark {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   flex: none;
-  border-radius: 6px;
-  background: var(--ui-brand-strong);
+  border: 1px solid color-mix(in oklch, var(--ui-brand) 44%, transparent);
+  border-radius: 9px;
+  background: linear-gradient(145deg, color-mix(in oklch, var(--ui-brand) 88%, white), var(--ui-brand-strong));
   color: var(--ui-on-strong);
+  box-shadow: 0 6px 14px -9px var(--ui-brand-strong), inset 0 1px rgba(255, 255, 255, .2);
 }
 
 .ssr-product-links {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .ssr-product-links button {
-  min-height: 36px;
+  position: relative;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 0 10px;
+  padding: 0 11px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--ui-text-3);
   font: inherit;
@@ -71,6 +78,7 @@
      resize the right-aligned flex group and shift the navigation. */
   font-weight: 600;
   cursor: pointer;
+  transition: background .16s ease, color .16s ease;
 }
 
 .ssr-product-links button:hover {
@@ -79,8 +87,15 @@
 }
 
 .ssr-product-links button.is-active {
-  background: var(--ui-brand-soft);
+  background: color-mix(in oklch, var(--ui-brand-soft) 82%, transparent);
   color: var(--ui-brand-strong);
+}
+.ssr-product-links button.is-active::after {
+  content: "";
+  position: absolute;
+  inset: auto 11px 3px;
+  height: 1px;
+  background: color-mix(in oklch, var(--ui-brand) 72%, transparent);
 }
 
 .status-shell,
@@ -162,6 +177,8 @@
   .ssr-product-links button.is-active {
     box-shadow: inset 0 2px 0 var(--ui-brand-strong);
   }
+
+  .ssr-product-links button.is-active::after { display: none; }
 
   /* Reserve space for the fixed navigation on every app view. */
   .app-container:has(> .ssr-product-nav) {
