@@ -177,12 +177,6 @@ html[data-theme="dark"] .ssr-h-hero::after {
 .ssr-h-console-search .search-bar svg { color: #59645d; }
 .ssr-h-console-search .search-wrapper:focus-within .search-bar { border-color: #8fbba0; background: #fff; box-shadow: 0 0 0 3px rgba(190, 231, 202, .24); }
 .ssr-h-console .suggestions-list { max-height: min(32vh, 272px); }
-@media (min-width: 881px) {
-  .ssr-h-console .suggestions-list {
-    /* Keep search results below the desktop planning controls. */
-    top: calc(100% + 82px);
-  }
-}
 .ssr-h-go {
   height: 54px;
   padding: 0 23px;

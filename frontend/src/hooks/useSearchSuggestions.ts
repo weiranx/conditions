@@ -172,7 +172,7 @@ export function useSearchSuggestions({
       }
       const nextSuggestions = Array.isArray(payload) ? payload : [];
       const resolvedSuggestions = mergeSuggestionBuckets(
-        [storedMatches, rankAndDeduplicateSuggestions(nextSuggestions, query)],
+        [storedMatches, getLocalPopularSuggestions(query), rankAndDeduplicateSuggestions(nextSuggestions, query)],
         8,
       );
       suggestionCacheRef.current.set(cacheKey, resolvedSuggestions);
@@ -309,7 +309,7 @@ export function useSearchSuggestions({
         }
         const nextSuggestions = Array.isArray(payload) ? payload : [];
         const resolvedSuggestions = mergeSuggestionBuckets(
-          [getStoredSuggestionsForQuery(query), rankAndDeduplicateSuggestions(nextSuggestions, query)],
+          [getStoredSuggestionsForQuery(query), getLocalPopularSuggestions(query), rankAndDeduplicateSuggestions(nextSuggestions, query)],
           8,
         );
         setSuggestions(resolvedSuggestions);
@@ -430,6 +430,12 @@ export function useSearchSuggestions({
       }
       return false;
     }
+    if (
+      committedSearchQuery.trim()
+      && normalizeSuggestionText(liveQuery) === normalizeSuggestionText(committedSearchQuery)
+    ) {
+      return true;
+    }
     if (suggestionsMatchLiveQuery && activeSuggestionIndex >= 0 && suggestions[activeSuggestionIndex]) {
       selectSuggestion(suggestions[activeSuggestionIndex]);
       return true;
@@ -439,7 +445,7 @@ export function useSearchSuggestions({
       return true;
     }
     return searchAndSelectFirst(liveQuery);
-  }, [activeSuggestionIndex, fetchSuggestions, searchAndSelectFirst, searchLoading, searchQuery, selectSuggestion, suggestions]);
+  }, [activeSuggestionIndex, committedSearchQuery, fetchSuggestions, searchAndSelectFirst, searchLoading, searchQuery, selectSuggestion, suggestions]);
 
   const handleFocus = useCallback(() => {
     setShowSuggestions(true);
