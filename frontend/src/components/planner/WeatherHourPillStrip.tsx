@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WeatherTrendPoint } from '../../app/types';
+import { getTemperatureBand } from '../../app/weather-display';
 import { WindDirectionArrow } from './WindDirectionArrow';
 
 export interface WeatherHourOption {
@@ -80,19 +81,20 @@ export function WeatherHourPillStrip({
               .replace(/ PM/i, 'p');
             const emoji = weatherConditionEmoji(option.point.condition, option.point.isDaytime ?? null);
             const windDirectionLabel = option.point.windDirection || null;
+            const temperatureBand = getTemperatureBand(option.point.temp);
 
             return (
               <button
                 key={option.value}
                 ref={isSelected ? selectedRef : undefined}
                 type="button"
-                className={`weather-hour-pill${isSelected ? ' selected' : ''}`}
+                className={`weather-hour-pill${isSelected ? ' selected' : ''}${temperatureBand ? ` temp-${temperatureBand.key}` : ''}`}
                 onClick={() => onSelect(option.value)}
                 aria-pressed={isSelected}
-                aria-label={`${option.label}: ${option.tempLabel || 'N/A'}, ${option.point.condition}${option.windLabel ? `, wind ${option.windLabel}${windDirectionLabel ? ` from ${windDirectionLabel}` : ''}` : ''}`}
+                aria-label={`${option.label}: ${option.tempLabel || 'N/A'}${temperatureBand ? `, ${temperatureBand.label}` : ''}, ${option.point.condition}${option.windLabel ? `, wind ${option.windLabel}${windDirectionLabel ? ` from ${windDirectionLabel}` : ''}` : ''}`}
               >
                 <span className="weather-hour-pill-time">{compactLabel}</span>
-                <span className="weather-hour-pill-temp">{option.tempLabel || '—'}</span>
+                <span className="weather-hour-pill-temp" title={temperatureBand?.label}>{option.tempLabel || '—'}</span>
                 <span className="weather-hour-pill-icon">{emoji}</span>
                 {option.windLabel && (
                   <span className="weather-hour-pill-wind">

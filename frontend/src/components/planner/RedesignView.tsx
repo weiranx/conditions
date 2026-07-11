@@ -27,6 +27,7 @@ import {
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
 import { formatAiNarrativeParagraphs } from '../../app/text-utils';
+import { getTemperatureBand } from '../../app/weather-display';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
@@ -462,6 +463,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
   const precipTone = Number.isFinite(weatherCardPrecip) && weatherCardPrecip >= 60
     ? 'caution'
     : 'quiet';
+  const temperatureBand = getTemperatureBand(weatherCardTemp);
   // 44px floor keeps hour columns tappable/readable on phones; the strip scrolls
   // horizontally instead of crushing 12 columns into the viewport.
   const stripCols = `repeat(${Math.max(1, travelWindowRows.length)}, minmax(44px, 1fr))`;
@@ -878,10 +880,11 @@ function RedesignViewComponent(props: PlannerViewProps) {
           </div>
           <div className="ssr-card-b">
             <div className="ssr-wx-overview">
-              <div className="ssr-wx-hero">
+              <div className={`ssr-wx-hero${temperatureBand ? ` temp-${temperatureBand.key}` : ''}`}>
                 <span className="ssr-wx-temp">{formatTempDisplay(weatherCardTemp)}</span>
                 <div className="ssr-wx-hero-meta">
                   <span className="ssr-wx-cond">{weatherCardWithEmoji}</span>
+                  {temperatureBand && <span className="ssr-wx-temp-band">{temperatureBand.label}</span>}
                   <span className="ssr-wx-feels">Feels like {formatTempDisplay(weatherCardFeelsLike)}</span>
                   {weatherForecastPeriodLabel && <span className="ssr-wx-period">{weatherForecastPeriodLabel}</span>}
                 </div>

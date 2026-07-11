@@ -2908,6 +2908,18 @@ input {
   font-weight: 700;
   font-family: var(--font-data);
   line-height: 1.1;
+  color: var(--temperature-color, currentColor);
+}
+
+.temp-freezing { --temperature-color: var(--ui-temp-freezing); }
+.temp-cold { --temperature-color: var(--ui-temp-cold); }
+.temp-warm { --temperature-color: var(--ui-temp-warm); }
+.temp-hot { --temperature-color: var(--ui-temp-hot); }
+
+.weather-hour-pill.selected .weather-hour-pill-temp {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: color-mix(in oklch, white 94%, var(--temperature-color));
 }
 
 .weather-hour-pill-icon {

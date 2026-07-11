@@ -1,6 +1,23 @@
 import type { SafetyData, TimeStyle } from './types';
 import { minutesToTwentyFourHourClock, parseSolarClockMinutes } from './core';
 
+export type TemperatureBand = 'freezing' | 'cold' | 'warm' | 'hot';
+
+export interface TemperatureBandDisplay {
+  key: TemperatureBand;
+  label: string;
+}
+
+/** Classify the API's canonical Fahrenheit temperature for display. */
+export function getTemperatureBand(tempF: number | null | undefined): TemperatureBandDisplay | null {
+  if (!Number.isFinite(Number(tempF))) return null;
+  const value = Number(tempF);
+  if (value <= 32) return { key: 'freezing', label: 'Freezing' };
+  if (value < 50) return { key: 'cold', label: 'Cold' };
+  if (value < 80) return { key: 'warm', label: 'Warm' };
+  return { key: 'hot', label: 'Hot' };
+}
+
 export function weatherConditionEmoji(description: string | undefined, isDaytime?: boolean | null): string {
   const text = String(description || '').toLowerCase();
   if (/thunder|lightning|storm|hail/.test(text)) return '\u26C8\uFE0F';

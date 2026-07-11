@@ -29,6 +29,10 @@
   --ui-caution-ink:    oklch(42% 0.160 55);
   --ui-nogo-ink:       oklch(38% 0.180 28);
   --ui-watch-ink:      oklch(42% 0.130 95);
+  --ui-temp-freezing:  oklch(43% 0.165 278);
+  --ui-temp-cold:      oklch(43% 0.130 230);
+  --ui-temp-warm:      oklch(45% 0.145 65);
+  --ui-temp-hot:       oklch(44% 0.190 30);
 
   /* Page/report aliases. */
   --ssr-bg:          var(--ui-bg);
@@ -109,6 +113,10 @@ html[data-theme="dark"] {
   --ui-caution-ink:    oklch(80% 0.140 55);
   --ui-nogo-ink:       oklch(78% 0.150 28);
   --ui-watch-ink:      oklch(82% 0.130 95);
+  --ui-temp-freezing:  oklch(76% 0.125 278);
+  --ui-temp-cold:      oklch(78% 0.105 230);
+  --ui-temp-warm:      oklch(82% 0.125 75);
+  --ui-temp-hot:       oklch(76% 0.160 35);
   --ui-shadow-xs:      0 1px 2px oklch(4% 0.01 155 / 0.38);
   --ui-shadow-sm:      0 1px 2px oklch(4% 0.01 155 / 0.32), 0 12px 28px -18px oklch(4% 0.01 155 / 0.8);
   --ui-shadow-md:      0 2px 4px oklch(4% 0.01 155 / 0.38), 0 20px 40px -24px oklch(4% 0.01 155 / 0.9);
