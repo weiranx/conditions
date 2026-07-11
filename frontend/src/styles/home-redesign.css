@@ -100,6 +100,8 @@
 
 /* ---------- SEARCH CONSOLE ---------- */
 .ssr-h-console {
+  position: relative;
+  z-index: 2;
   max-width: 780px;
   margin: 0;
   background: linear-gradient(145deg, rgba(8, 27, 21, .86), rgba(7, 22, 18, .72));
@@ -166,7 +168,9 @@ html[data-theme="dark"] .ssr-h-hero::after {
 /* host the wired SearchBox inside the console field slot */
 .ssr-h-console-search .search-wrapper { width: 100%; }
 .ssr-h-console-search .search-bar {
+  height: 54px;
   min-height: 54px;
+  padding-block: 9px;
   border: 1px solid transparent;
   border-radius: 9px;
   background: rgba(255, 255, 255, .97);
