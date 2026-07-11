@@ -2,10 +2,13 @@ import React from 'react';
 import {
   CalendarDays,
   Clock,
+  Clock3,
   Mountain,
   Activity,
   ArrowRight,
   Info,
+  Route,
+  ShieldCheck,
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
@@ -215,6 +218,46 @@ export function HomeView({
                 })}
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="ssr-h-intro" aria-labelledby="home-features-title">
+          <div className="ssr-h-intro-copy">
+            <p className="ssr-h-eyebrow">One brief. The whole picture.</p>
+            <h2 id="home-features-title">Know the window before you go.</h2>
+            <p>
+              Backcountry Conditions turns scattered forecasts into a decision-ready view of your
+              objective, matched to when and where you plan to move.
+            </p>
+          </div>
+
+          <div className="ssr-h-feature-grid">
+            <article className="ssr-h-feature">
+              <div className="ssr-h-feature-icon"><Clock3 aria-hidden /></div>
+              <div>
+                <span className="ssr-h-feature-label">Your timing</span>
+                <h3>Conditions for your exact window</h3>
+                <p>See hourly weather, daylight, and changing hazards from your start through your return.</p>
+              </div>
+            </article>
+
+            <article className="ssr-h-feature">
+              <div className="ssr-h-feature-icon"><ShieldCheck aria-hidden /></div>
+              <div>
+                <span className="ssr-h-feature-label">Your risk picture</span>
+                <h3>Critical signals, weighed together</h3>
+                <p>Weather, avalanche, snowpack, alerts, air quality, and terrain become one prioritized brief.</p>
+              </div>
+            </article>
+
+            <article className="ssr-h-feature">
+              <div className="ssr-h-feature-icon"><Route aria-hidden /></div>
+              <div>
+                <span className="ssr-h-feature-label">Your next move</span>
+                <h3>Planning that leads to action</h3>
+                <p>Compare start times, inspect route exposure, and carry the same context into a multi-day plan.</p>
+              </div>
+            </article>
           </div>
         </section>
 
