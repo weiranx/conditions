@@ -1564,7 +1564,9 @@ function App() {
       />
       </React.Activity>
 
-      <React.Activity name="planner-page" mode={view === 'planner' ? 'visible' : 'hidden'}>
+      {/* Leaflet cannot reconnect its imperative map instance after Activity
+          disconnects the planner's effects. Remount the planner instead. */}
+      {view === 'planner' ? (
     <PlannerView
       // Shell / layout
       appShellClassName={appShellClassName}
@@ -1937,7 +1939,7 @@ function App() {
       // Footer
       formatGeneratedAt={formatGeneratedAt}
     />
-      </React.Activity>
+      ) : null}
     </>
   );
 
