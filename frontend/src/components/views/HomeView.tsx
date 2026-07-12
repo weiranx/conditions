@@ -237,6 +237,21 @@ export function HomeView({
           </a>
         </section>
 
+        <section className="ssr-h-signal-rail" aria-label="Conditions synthesized in every brief">
+          <div className="ssr-h-signal-rail-inner">
+            <div className="ssr-h-signal-rail-intro">
+              <span>One connected picture</span>
+              <strong>Six forecasts. One travel window.</strong>
+            </div>
+            <div className="ssr-h-signal-rail-items">
+              <span><CloudSun aria-hidden /><b>Weather</b><small>Hourly</small></span>
+              <span><TriangleAlert aria-hidden /><b>Avalanche</b><small>Official</small></span>
+              <span><Snowflake aria-hidden /><b>Snowpack</b><small>Latest</small></span>
+              <span><Layers3 aria-hidden /><b>Terrain</b><small>Route-aware</small></span>
+            </div>
+          </div>
+        </section>
+
         <section className="ssr-h-story" id="how-it-works" aria-labelledby="home-story-title">
           <div className="ssr-h-story-head">
             <div>
