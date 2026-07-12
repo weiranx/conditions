@@ -181,6 +181,18 @@ test('POST /api/ai-brief rejects request with empty body', async () => {
   expect(String(res.body.error || '')).toMatch(/Missing required fields/i);
 });
 
+test('POST /api/report-chat rejects requests without report context', async () => {
+  const res = await request(app).post('/api/report-chat').send({ messages: [] });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/report/i);
+});
+
+test('POST /api/report-chat rejects requests without a user message', async () => {
+  const res = await request(app).post('/api/report-chat').send({ report: {}, messages: [] });
+  expect(res.status).toBe(400);
+  expect(String(res.body.error || '')).toMatch(/user message/i);
+});
+
 test('POST /api/ai-brief rejects missing report', async () => {
   const res = await request(app)
     .post('/api/ai-brief')
@@ -530,6 +542,11 @@ test('POST /api/safety is not a registered route (Express returns 404)', async (
 
 test('GET /api/ai-brief is not a registered route (Express returns 404)', async () => {
   const res = await request(app).get('/api/ai-brief');
+  expect(res.status).toBe(404);
+});
+
+test('GET /api/report-chat is not a registered route (Express returns 404)', async () => {
+  const res = await request(app).get('/api/report-chat');
   expect(res.status).toBe(404);
 });
 

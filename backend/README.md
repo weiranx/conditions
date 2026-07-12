@@ -12,6 +12,7 @@ Express API for the SummitSafe backcountry planning app.
 | GET | `/api/route-suggestions` | AI-generated routes for a named peak |
 | POST | `/api/route-analysis` | Multi-waypoint route analysis with go/no-go briefing |
 | POST | `/api/ai-brief` | On-demand AI narrative field brief |
+| POST | `/api/report-chat` | Streaming, report-aware Q&A conversation |
 | GET | `/api/report-logs` | Retrieve logged reports (requires `LOGS_SECRET`) |
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Health check (also `/health`, `/api/healthz`, `/api/health`) |

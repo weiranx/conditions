@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
 import { formatAiNarrativeParagraphs } from '../../app/text-utils';
+import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
 
 const GAUGE_R = 56;
@@ -39,6 +40,7 @@ export interface DashboardSummaryCardProps {
   onRequestAiBrief: () => void;
   copiedAiPrompt: boolean;
   onCopyAiPrompt: () => void;
+  rawReportPayload: string;
 }
 
 export function DashboardSummaryCard({
@@ -64,6 +66,7 @@ export function DashboardSummaryCard({
   onRequestAiBrief,
   copiedAiPrompt,
   onCopyAiPrompt,
+  rawReportPayload,
 }: DashboardSummaryCardProps) {
   const lvClass = decision.level.toLowerCase().replace('-', ''); // go | caution | nogo
   const score = Math.round(safetyData.safety.score);
@@ -246,6 +249,7 @@ export function DashboardSummaryCard({
               ? <><Check size={14} aria-hidden /> Prompt copied</>
               : <><Copy size={14} aria-hidden /> Copy prompt for an AI agent</>}
           </button>
+          <ReportChat reportPayload={rawReportPayload} />
           </div>
         )}
       </section>

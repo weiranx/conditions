@@ -18,8 +18,11 @@
     "node": ">=20.19.0"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.96",
+    "@ai-sdk/openai": "^3.0.84",
     "@anthropic-ai/sdk": "^0.111.0",
     "@turf/turf": "^7.3.4",
+    "ai": "^6.0.224",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

@@ -20,4 +20,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/components/ai-elements/**/*.tsx', 'src/components/ui/**/*.tsx'],
+    rules: {
+      // Registry components intentionally colocate reusable variants/helpers.
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

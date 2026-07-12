@@ -54,6 +54,7 @@ const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safet
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
+const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askAI, askAIVision, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
@@ -754,6 +755,7 @@ registerHealthRoutes(app, {
 registerReportLogsRoute(app);
 registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askAI });
+registerReportChatRoute({ app });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision });
 
