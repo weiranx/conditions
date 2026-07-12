@@ -546,7 +546,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   let code = 'variable_surface';
   let label = '🌲 Variable Surface';
   let impact = 'moderate';
-  let recommendedTravel = 'Use adaptable pacing and verify traction/footing at key transitions.';
+  let recommendedTravel = 'Start at a conservative pace, test traction at aspect and elevation transitions, and turn around if footing becomes unpredictable.';
   const reasons = [];
   let evidenceWeight = 0;
   const addReason = (reason, weight = 1) => {
@@ -561,7 +561,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     code = 'weather_unavailable';
     label = '⚠️ Weather Unavailable';
     impact = 'moderate';
-    recommendedTravel = 'Treat this as unknown conditions; verify with official products and in-field checks before committing.';
+    recommendedTravel = 'Do not rely on this surface estimate. Check official products, then test traction and supportability in low-consequence terrain before committing.';
     addReason('Weather feed is unavailable, so terrain classification confidence is limited.', 1);
   } else if (
     noSnowOrWetSignal &&
@@ -572,7 +572,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     code = 'dry_firm';
     label = '✅ Dry / Firm Trail';
     impact = 'low';
-    recommendedTravel = 'Traction is generally favorable; normal pacing applies — watch for isolated loose or rocky sections.';
+    recommendedTravel = 'Normal pacing is reasonable, but test loose or rocky sections before exposed moves and keep standard traction available.';
     addReason('No strong snow, rain, or freeze-thaw signal is present in recent/expected conditions.', 2);
     if (precipChance !== null) {
       addReason(`Low precipitation chance (${Math.round(precipChance)}%) supports drier surfaces.`, 1);
@@ -588,27 +588,27 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       code = 'snow_fresh_powder';
       label = '❄️ Fresh Powder Snow';
       impact = 'high';
-      recommendedTravel = 'Slower travel and hidden obstacles under fresh snow; prioritize conservative terrain, spacing, and route-finding.';
+      recommendedTravel = 'Allow extra time for hidden obstacles and route-finding; use conservative terrain and spacing until depth and supportability are confirmed.';
     } else if (snowProfile.code === 'spring_snow') {
       code = 'spring_snow';
       label = '🌤️ Corn-Snow Cycle';
       impact = 'moderate';
-      recommendedTravel = `${meltFreeze.summary} Reassess boot penetration and surface water before committing to steep solar terrain.`;
+      recommendedTravel = `${meltFreeze.summary} Test boot penetration and surface water before steep solar terrain, and leave when supportability starts to fail.`;
     } else if (snowProfile.code === 'wet_slushy_snow') {
       code = 'wet_snow';
       label = '💧 Wet / Slushy Snow';
       impact = 'high';
-      recommendedTravel = `${meltFreeze.summary} Shorten exposure windows and avoid avalanche paths as supportability declines.`;
+      recommendedTravel = `${meltFreeze.summary} Shorten exposure and leave avalanche paths before boot penetration or free water increases.`;
     } else if (snowProfile.code === 'icy_hardpack') {
       code = 'snow_ice';
       label = '🧊 Icy / Firm Snow';
       impact = 'high';
-      recommendedTravel = 'Firm or icy crust demands deliberate footwork; a slip on steep terrain can become a long slide.';
+      recommendedTravel = 'Use traction suited to firm or icy snow, and avoid any slope where a slip would be consequential; turn around if secure footing is not possible.';
     } else {
       code = 'snow_mixed';
       label = '❄️ Mixed Snow Surface';
       impact = 'moderate';
-      recommendedTravel = 'Variable firmness and moisture by aspect and elevation; reassess traction often and stay on lower-angle terrain.';
+      recommendedTravel = 'Test traction and supportability whenever aspect or elevation changes; stay on lower-angle terrain and turn around if the surface becomes unpredictable.';
     }
     addReason(snowProfile.summary, 2);
     if (maxDepthIn !== null || maxSweIn !== null) {
@@ -648,7 +648,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     code = 'wet_muddy';
     label = '🌧️ Wet / Muddy';
     impact = 'moderate';
-    recommendedTravel = 'Slick or muddy footing — slow on steep/eroded sections; use poles on descents and step wide of trail edges to limit erosion.';
+    recommendedTravel = 'Slow down on steep or eroded sections, use poles on descents, avoid widening the trail, and turn around where secure footing cannot be maintained.';
     if (hasRainAccumulationSignal) {
       addReason(
         `Recent rainfall: ${rain12hIn !== null ? `${rain12hIn.toFixed(2)} in` : 'N/A'} (12h), ${
@@ -673,7 +673,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     code = 'cold_slick';
     label = '🧊 Cold / Slick';
     impact = 'moderate';
-    recommendedTravel = 'Patchy ice or frozen mud likely in shaded and north-facing sections, especially in early morning; prioritize stable footing.';
+    recommendedTravel = 'Expect patchy ice or frozen mud in shaded terrain; carry appropriate traction and avoid exposed sections if secure footing is uncertain.';
     if (hasFreezeThawSignal && freezeThawMinTempF !== null && freezeThawMaxTempF !== null) {
       addReason(
         `Freeze-thaw signal in next ${Math.round(tempContextWindowHours)} hours (${Math.round(freezeThawMinTempF)}F to ${Math.round(
@@ -692,7 +692,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     code = 'dry_loose';
     label = '🌵 Dry / Loose';
     impact = 'moderate';
-    recommendedTravel = 'Loose dust or gravel over hardpack reduces grip; reduce speed on corners and descents, and use poles for control.';
+    recommendedTravel = 'Reduce speed on corners and descents, use poles for control, and avoid exposed moves where loose gravel makes a slip consequential.';
     if (humidity !== null) {
       addReason(`Low humidity (${Math.round(humidity)}%) supports loose/dry surface texture.`, 1);
     }
@@ -706,7 +706,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     code = 'mixed_variable';
     label = '🌲 Variable Surface';
     impact = 'moderate';
-    recommendedTravel = 'Surface conditions change across aspect and elevation; check footing at transitions and keep route options flexible.';
+    recommendedTravel = 'Expect changing surfaces across aspect and elevation; test footing at each transition and keep a lower-consequence route option available.';
     addReason('No single dominant wet, snow/ice, or freeze-thaw signal in current upstream data.', 1);
     if (tempF !== null) {
       addReason(`Temperature ${Math.round(tempF)}F with ${precipChance !== null ? `${Math.round(precipChance)}%` : 'unknown'} precip chance supports mixed surface outcomes.`, 1);

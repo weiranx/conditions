@@ -3,8 +3,8 @@ const createUnavailableFireRiskData = (status = 'unavailable') => ({
   status,
   level: null,
   label: 'Unknown',
-  guidance: 'Fire risk signal unavailable.',
-  reasons: ['Fire risk signal unavailable.'],
+  guidance: 'Fire-risk guidance is unavailable. Check current closures, incident maps, and official fire-weather products before departure.',
+  reasons: ['Fire-risk guidance is unavailable from the current source inputs.'],
   alertsConsidered: [],
   alertsUsed: 0,
 });
@@ -85,11 +85,11 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData, localCondi
 
   const labelMap = ['Low', 'Caution', 'Elevated', 'High', 'Extreme'];
   const guidanceMap = [
-    'No strong fire-weather signal from current sources.',
-    'Monitor updates; keep route options flexible.',
-    'Avoid committing to long, exposed approaches; identify smoke/egress contingencies.',
-    'Conservative plan advised: shorter objective, hard turn-around rules, and active monitoring.',
-    'Do not commit to exposed objective windows in fire-prone terrain.',
+    'No strong fire-weather signal appears in current sources. Still check closures before departure and avoid flame or spark-producing activity.',
+    'Monitor fire-weather and incident updates, keep more than one exit option, and avoid ignition sources.',
+    'Elevated fire conditions are possible. Shorten exposed approaches, identify smoke and closure triggers, and keep a clear exit route.',
+    'High fire risk. Choose a shorter objective with multiple exits, use no flame or sparks, and turn around for increasing smoke, wind, or new closures.',
+    'Extreme fire risk. Choose another area or time; do not enter fire-affected terrain, and verify closures and evacuation information before travel.',
   ];
 
   return {

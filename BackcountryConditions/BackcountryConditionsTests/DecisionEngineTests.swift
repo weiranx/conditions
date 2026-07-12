@@ -61,6 +61,7 @@ final class DecisionEngineTests: XCTestCase {
         let data = makeSafetyData(dangerLevel: 4)
         let decision = DecisionEngine.evaluate(data: data, preferences: legacyThresholds)
         XCTAssertEqual(decision.level, .noGo)
+        XCTAssertTrue(decision.blockers.contains { $0.contains("Choose non-avalanche terrain") })
     }
 
     func testNoGoFromWindAboveHardCeiling() {
@@ -79,6 +80,7 @@ final class DecisionEngineTests: XCTestCase {
         let data = makeSafetyData(precipChance: 60)
         let decision = DecisionEngine.evaluate(data: data, preferences: legacyThresholds)
         XCTAssertEqual(decision.level, .caution)
+        XCTAssertTrue(decision.cautions.contains { $0.contains("turn around if footing or visibility deteriorates") })
     }
 
     func testCautionFromCold() {
@@ -98,6 +100,14 @@ final class DecisionEngineTests: XCTestCase {
         let decision = DecisionEngine.evaluate(data: data, preferences: legacyThresholds)
         XCTAssertFalse(decision.checks.isEmpty)
         XCTAssertTrue(decision.checks.contains { $0.key == "wind" })
+    }
+
+    func testFailedChecksIncludeActionableAdvice() {
+        let data = makeSafetyData(windGust: 45)
+        let decision = DecisionEngine.evaluate(data: data, preferences: legacyThresholds)
+        let windCheck = decision.checks.first { $0.key == "wind" }
+        XCTAssertFalse(windCheck?.ok ?? true)
+        XCTAssertNotNil(windCheck?.action)
     }
 
     func testTripDecisionIgnoresAvalancheGate() {

@@ -226,19 +226,19 @@ export function RouteAnalysisSection({
       {routeAnalysis && (
         <div className="route-analysis-card">
           <div className="route-analysis-header">
-            Route Analysis <span className="route-ai-badge">AI Advisory</span>
+            Route Analysis <span className="route-ai-badge">AI-assisted · verify</span>
             {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
             {routeAnalysis.routeSource === 'nps' && <span className="route-gpx-badge">NPS Trail</span>}
             {routeAnalysis.routeSource === 'openstreetmap' && <span className="route-gpx-badge">Mapped Trail</span>}
           </div>
           <p className="route-analysis-disclaimer">
             {routeAnalysis.routeSource === 'gpx'
-              ? 'Checkpoint coordinates come from your GPX track; conditions and recommendations remain model-derived. Verify the track and official sources before committing.'
+              ? 'Checkpoints come from your GPX track, but conditions and recommendations are model-derived. Verify the route, closures, and current official sources, and navigate with your original track.'
               : routeAnalysis.routeSource === 'nps'
-                ? `Waypoint coordinates follow National Park Service public trail geometry${routeAnalysis.routeSourceDetails?.matchedName ? ` (${routeAnalysis.routeSourceDetails.matchedName})` : ''}; conditions and recommendations remain model-derived.`
+                ? `Waypoints follow National Park Service public trail geometry${routeAnalysis.routeSourceDetails?.matchedName ? ` (${routeAnalysis.routeSourceDetails.matchedName})` : ''}, not live trail or closure status. Verify current park information and navigate with a trusted map.`
                 : routeAnalysis.routeSource === 'openstreetmap'
-                  ? `Waypoint coordinates follow OpenStreetMap trail geometry${routeAnalysis.routeSourceDetails?.matchedName ? ` (${routeAnalysis.routeSourceDetails.matchedName})` : ''}. Community mapping may be incomplete; verify before committing.`
-                  : 'Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.'}
+                  ? `Waypoints follow OpenStreetMap trail geometry${routeAnalysis.routeSourceDetails?.matchedName ? ` (${routeAnalysis.routeSourceDetails.matchedName})` : ''}. Community mapping can be incomplete or outdated; verify the route and navigate with a trusted map.`
+                  : 'Waypoint locations and recommendations are AI-estimated and are not navigation instructions. Cross-check the route in CalTopo, Gaia GPS, or another trusted map before committing.'}
           </p>
           {routeAnalysis.terrainProfile && (
             <div className="route-gpx-result-meta">
@@ -258,7 +258,7 @@ export function RouteAnalysisSection({
             </div>
           )}
           {routeAnalysis.partialData && (
-            <p className="route-analysis-disclaimer route-analysis-partial">Some waypoints had no data available and are excluded from scoring below — the briefing notes which ones.</p>
+            <p className="route-analysis-disclaimer route-analysis-partial">Some waypoints have no data and are excluded from scoring. Treat those segments as unknown, review the briefing notes, and verify them from current sources before travel.</p>
           )}
           <div className="route-waypoints">
             {routeAnalysis.summaries.map((wp, i) => {

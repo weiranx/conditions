@@ -150,7 +150,7 @@ export function useTripForecast({
               ? 'CAUTION'
               : dayDecision.level;
             const decisionHeadline = noCleanTravelHours && dayDecision.level !== 'NO-GO'
-              ? 'No clean travel hours under current thresholds.'
+              ? 'No travel hour meets every threshold — re-time the start, shorten the objective, or choose another day.'
               : dayDecision.headline;
 
             const rawSafetyScore = Number(dayData?.safety?.score);

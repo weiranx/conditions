@@ -75,14 +75,14 @@ export function buildHeatRiskDisplay(
   const guidance =
     safetyData?.heatRisk?.guidance ||
     (level >= 4
-      ? 'Extreme heat-stress risk. Avoid long exposed pushes during this window.'
+      ? 'Extreme heat-stress risk. Choose a cooler time or objective and avoid long exposed travel.'
       : level >= 3
-        ? 'High heat-stress risk. Increase water, shorten pushes, and add cooling breaks.'
+        ? 'High heat-stress risk. Move in cooler hours, shorten exposed segments, and set water and cooling checkpoints.'
         : level >= 2
-          ? 'Heat stress is possible. Use conservative pace and hydration.'
+          ? 'Heat stress may build. Schedule shade and hydration breaks, ease the pace, and watch for early symptoms.'
           : level >= 1
-            ? 'Warm conditions possible; monitor hydration and pace.'
-            : 'No notable heat signal from current forecast inputs.');
+            ? 'Warm conditions are possible. Carry extra water, use sun protection, and ease the pace before symptoms build.'
+            : 'No notable heat signal in the current forecast. Carry normal water and sun protection, and reassess if the day runs warmer than forecast.');
 
   const reasons = Array.isArray(safetyData?.heatRisk?.reasons) && safetyData!.heatRisk!.reasons!.length > 0
     ? safetyData!.heatRisk!.reasons!.slice(0, 4)

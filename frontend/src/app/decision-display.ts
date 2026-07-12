@@ -25,10 +25,10 @@ export function buildDecisionDisplayState(decision: SummitDecision | null): Deci
 
   const fieldBriefPrimaryReason = decision
     ? decision.level === 'NO-GO'
-      ? decision.blockers[0] || 'High-likelihood failure modes detected. Delay or choose a safer objective.'
+      ? decision.blockers[0] || 'A no-go threshold is tripped. Change the objective, timing, or day before committing.'
       : decision.level === 'CAUTION'
-        ? decision.cautions[0] || 'Conservative execution is recommended for this window.'
-        : 'No dominant blocker in current model outputs.'
+        ? decision.cautions[0] || 'Adjust terrain, timing, or pace, and define a clear turnaround trigger before committing.'
+        : 'No current threshold is tripped. Verify official sources and reassess conditions at planned checkpoints.'
     : '';
   const fieldBriefTopRisks = decision
     ? (decision.blockers.length > 0 ? decision.blockers : decision.cautions).slice(0, 3)
@@ -37,10 +37,10 @@ export function buildDecisionDisplayState(decision: SummitDecision | null): Deci
   const decisionPassingChecksCount = decision ? decision.checks.filter((check) => check.ok).length : 0;
   const decisionActionLine = decision
     ? decision.level === 'NO-GO'
-      ? 'Do not commit to this objective window. Move to a safer backup objective or delay.'
+      ? 'Do not commit to this objective window. Change the objective, timing, or day instead of trying to solve the hazard with gear alone.'
       : decision.level === 'CAUTION'
-        ? 'Proceed only on conservative terrain with strict timing and explicit abort triggers.'
-        : 'Proceed with normal controls and continue checkpoint-based reassessment.'
+        ? 'Make the listed adjustments before leaving, then reassess at planned checkpoints and turn around when a trigger is met.'
+        : 'Keep normal backcountry precautions, verify current official sources, and reassess at planned checkpoints.'
     : '';
   const decisionKeyDrivers = decision
     ? decision.blockers.length > 0

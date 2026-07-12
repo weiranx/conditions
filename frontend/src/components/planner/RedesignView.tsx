@@ -436,13 +436,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   const avalancheCoverageExplanation = (() => {
     switch (String(safetyData.avalanche?.coverageStatus || '')) {
       case 'no_active_forecast':
-        return 'No bulletin is currently published for this zone — many centers stop publishing outside winter. Treat avalanche terrain as unrated: choose conservative lines and avoid terrain traps.';
+        return 'No bulletin is currently published for this zone; many centers stop issuing products outside winter. Treat avalanche terrain as unrated: use low-angle, low-consequence routes, avoid terrain traps, and increase spacing.';
       case 'no_center_coverage':
-        return 'No avalanche center covers this location, so there is no bulletin to check. Treat avalanche terrain as unrated: choose conservative lines and avoid terrain traps.';
+        return 'No avalanche center covers this location. Treat avalanche terrain as unrated: use low-angle, low-consequence routes, avoid terrain traps, and increase spacing.';
       case 'temporarily_unavailable':
-        return 'The avalanche bulletin could not be retrieved right now. Treat conditions as unknown until you can review the current bulletin at the center linked above.';
+        return 'The avalanche bulletin could not be retrieved. Open the center linked above before departure; until a current product is available, treat the terrain as unrated and conditions as potentially worse.';
       default:
-        return 'Avalanche danger is unknown for this objective. Treat avalanche terrain as unrated: choose conservative lines and avoid terrain traps.';
+        return 'Avalanche danger is unknown for this objective. Use low-angle, low-consequence routes, avoid terrain traps, and increase spacing until current information is available.';
     }
   })();
 
@@ -502,7 +502,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       tone: 'stop',
       icon: <ShieldAlert size={15} />,
       title: localizeUnitText(b),
-      detail: 'Hard no-go — resolve before you commit.',
+      detail: 'No-go: change the objective, timing, or day; do not try to solve this hazard with gear alone.',
     }),
   );
 
@@ -518,7 +518,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         title: 'No clean travel hours in your window',
         detail: twi.nextCleanWindow
           ? `Next clean break is ${fmtSpan(twi.nextCleanWindow)} — re-time your start or pick another day.`
-          : `Every hour trips a threshold${topFails ? ` (${topFails})` : ''}. Consider another day.`,
+          : `Every hour trips a threshold${topFails ? ` (${topFails})` : ''}. Choose another day or a lower-consequence objective.`,
       });
     } else if (twi.passHours < totalWindowHrs && twi.bestWindow) {
       planActions.push({
@@ -716,7 +716,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           <div className="ssr-card-b">
             {rankedActions.length === 0 ? (
               <div className="ssr-cc-allclear">
-                <CheckCircle2 size={16} /> Conditions line up with your plan — no adjustments needed.
+                <CheckCircle2 size={16} /> No model threshold calls for an adjustment. Verify current official sources and reassess at field checkpoints.
               </div>
             ) : (
               <ol className="ssr-actions-list">
@@ -1663,7 +1663,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             <span className="ssr-h-meta">{openCount} open</span>
           </div>
           <div className="ssr-card-b">
-            {openCount === 0 && <div className="ssr-cc-allclear"><CheckCircle2 size={16} /> No open cautions or active alerts.</div>}
+            {openCount === 0 && <div className="ssr-cc-allclear"><CheckCircle2 size={16} /> No open modeled cautions or active alerts. Keep monitoring current official sources and field conditions.</div>}
             {blockerItems.length > 0 && (
               <div className="ssr-cc-group">
                 <div className="ssr-cc-group-h nogo"><ShieldAlert size={13} /> Blockers <span className="ssr-cc-count">{blockerItems.length}</span></div>

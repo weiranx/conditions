@@ -1049,6 +1049,7 @@ describe('buildHeatRiskData', () => {
     });
     expect(result.level).toBe(4);
     expect(result.label).toBe('Extreme');
+    expect(result.guidance).toContain('Choose a cooler time or objective');
   });
 
   test('also triggers Extreme for hot + humid pattern (90F, RH >= 55)', () => {
@@ -1108,6 +1109,10 @@ describe('buildHeatRiskData', () => {
     const result = buildHeatRiskData({ weatherData: { temp: 55, feelsLike: 52 } });
     expect(result.reasons.length).toBeGreaterThanOrEqual(1);
   });
+
+  test('unavailable guidance gives a concrete verification step', () => {
+    expect(createUnavailableHeatRiskData().guidance).toContain('Check the hourly forecast');
+  });
 });
 
 // ─── fire-risk.js ─────────────────────────────────────────────────────────────
@@ -1157,6 +1162,7 @@ describe('buildFireRiskData', () => {
     expect(result.level).toBe(4);
     expect(result.reasons.some((r) => r.includes('Red Flag'))).toBe(true);
     expect(result.alertsUsed).toBe(1);
+    expect(result.guidance).toContain('Choose another area or time');
   });
 
   test('assigns High (3) for Fire Weather Watch', () => {
@@ -1227,6 +1233,10 @@ describe('buildFireRiskData', () => {
   test('always includes at least one reason', () => {
     const result = buildFireRiskData(baseInput);
     expect(result.reasons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('unavailable guidance points to official fire information', () => {
+    expect(createUnavailableFireRiskData().guidance).toContain('official fire-weather products');
   });
 
   test('caps alertsConsidered at 5 entries', () => {

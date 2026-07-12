@@ -345,7 +345,7 @@ struct TripPlannerView: View {
                         let cleanHours = rows.filter(\.pass).count
                         if !rows.isEmpty, cleanHours == 0, decision.level == .go {
                             decision.level = .caution
-                            decision.headline = "No clean travel hours under current thresholds."
+                            decision.headline = "No travel hour meets every threshold — re-time the start, shorten the objective, or choose another day."
                             decision.cautions.append(decision.headline)
                         }
                         let score = normalizedTripScore(data)

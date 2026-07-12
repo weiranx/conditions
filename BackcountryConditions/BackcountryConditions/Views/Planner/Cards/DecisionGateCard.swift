@@ -125,27 +125,38 @@ struct DecisionGateCard: View {
 
     @ViewBuilder
     private func checkRow(check: SummitDecision.Check, targetCard: PlannerCardType?) -> some View {
-        let content = HStack(spacing: 10) {
+        let content = HStack(alignment: .top, spacing: 10) {
             Image(systemName: check.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .foregroundStyle(check.ok ? .green : .red)
                 .font(.system(size: 17))
+                .padding(.top, 1)
 
-            Text(check.label)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(check.label)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+
+                if let detail = check.detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !check.ok, let action = check.action {
+                    Text(action)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             Spacer()
-
-            if let detail = check.detail {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
             if targetCard != nil {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.quaternary)
+                    .padding(.top, 3)
             }
         }
 

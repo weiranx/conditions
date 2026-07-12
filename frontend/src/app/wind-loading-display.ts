@@ -226,12 +226,12 @@ export function buildWindLoadingDisplay(
     !safetyData
       ? ''
       : windLoadingLevel === 'Severe'
-        ? 'Route action: avoid lee convexities and cross-loaded start zones; use sheltered, lower-angle terrain.'
+        ? 'Route action: stay off lee convexities and cross-loaded start zones; use sheltered, lower-angle terrain and turn around if fresh slabs or shooting cracks appear.'
         : windLoadingLevel === 'Active'
-          ? 'Route action: keep ridgeline exposure short and avoid terrain traps beneath lee start zones.'
+          ? 'Route action: minimize ridgeline exposure, stay out of terrain traps below lee start zones, and retreat if active drifting or cracking appears.'
           : windLoadingLevel === 'Localized'
-            ? 'Route action: probe small test slopes and watch for drifted pillows before committing to steeper terrain.'
-            : 'Route action: wind loading is a secondary hazard, but still check for isolated drifts near ridges.';
+            ? 'Route action: check small, low-consequence features for stiff drifted snow before steeper terrain; avoid any pillow that cracks or sounds hollow.'
+            : 'Route action: broad wind loading is unlikely, but still check for isolated stiff drifts near ridges and terrain breaks.';
   const windLoadingSummary =
     !safetyData
       ? 'Wind loading hints unavailable until a forecast is loaded.'

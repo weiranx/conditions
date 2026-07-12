@@ -3,8 +3,8 @@ const createUnavailableHeatRiskData = (status = 'unavailable') => ({
   status,
   level: 0,
   label: 'Low',
-  guidance: 'Heat-risk signal unavailable.',
-  reasons: ['Heat-risk signal unavailable.'],
+  guidance: 'Heat-risk guidance is unavailable. Check the hourly forecast and official heat products before departure, and carry extra water and cooling margin.',
+  reasons: ['Heat-risk guidance is unavailable from the current forecast inputs.'],
   metrics: {
     tempF: null,
     feelsLikeF: null,
@@ -21,11 +21,11 @@ const createUnavailableHeatRiskData = (status = 'unavailable') => ({
 
 const HEAT_LABELS = ['Low', 'Caution', 'Elevated', 'High', 'Extreme'];
 const HEAT_GUIDANCE = [
-  'No notable heat signal from current forecast inputs.',
-  'Warm exposure possible. Bring extra water and manage sun/shade transitions.',
-  'Heat stress is plausible during sustained movement. Increase hydration and pace control.',
-  'High heat-stress risk. Shorten exposed pushes and enforce frequent cooling breaks.',
-  'Extreme heat-stress risk. Avoid committing to long, exposed objectives in this window.',
+  'No notable heat signal in the current forecast. Carry normal water and sun protection, and reassess if the day runs warmer than forecast.',
+  'Warm exposure is possible. Carry extra water, use sun protection, and ease the pace before symptoms build.',
+  'Heat stress may build during sustained movement. Start in cooler hours, schedule shade and hydration breaks, and watch the group for early symptoms.',
+  'High heat-stress risk. Shorten exposed segments, move in cooler hours, and set a firm turnaround if water or cooling becomes limited.',
+  'Extreme heat-stress risk. Choose a cooler time or objective; avoid long exposed travel and do not rely on pace alone to manage the heat.',
 ];
 
 const { computeFeelsLikeF } = require('./weather-normalizers');

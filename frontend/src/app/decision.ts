@@ -205,82 +205,86 @@ export function evaluateBackcountryDecision(
 
   if (unknownSnowpackMode) {
     addCaution(
-      'No avalanche bulletin for this zone — travel as if unrated: low-angle terrain, avoid terrain traps, increase spacing. See the Avalanche card.',
+      'No current avalanche bulletin covers this zone. Use low-angle, low-consequence terrain, avoid terrain traps, increase spacing, and open the Avalanche card before committing.',
     );
   }
   if (avalancheExpired) {
-    addCaution('Avalanche bulletin has expired for the selected start time. Danger rating shown is the last-known value; treat conditions as potentially worse.');
+    addCaution('The avalanche bulletin expires before this start time. Open the latest center product before leaving; if no update is available, treat the terrain as unrated and conditions as potentially worse.');
   }
 
   if (avalancheGateRequired && !avalancheUnknown && danger >= 4) {
-    addBlocker('Avalanche danger is High/Extreme. Avoid avalanche terrain.');
+    addBlocker('Avalanche danger is High or Extreme. Choose non-avalanche terrain or another day; do not enter avalanche terrain.');
   } else if (avalancheGateRequired && !avalancheUnknown && danger === 3) {
-    addBlocker('Avalanche danger is Considerable. Avoid avalanche terrain unless trained in terrain selection and risk management.');
+    addBlocker('Avalanche danger is Considerable. Choose non-avalanche terrain or another day unless your team can reliably identify and avoid the day’s avalanche problems.');
   }
   if (hasStormSignal) {
-    addCaution('Storm or thunder signal in forecast. Avoid exposed terrain and keep fallback options ready.');
+    addCaution('A storm or thunder signal appears in the travel window. Stay off exposed ridges, identify a fast descent route, and turn around at the first thunder, lightning, or rapid cloud growth.');
   }
   if (precip >= Math.max(85, maxPrecipThreshold + 25)) {
-    addBlocker(`Precipitation chance at ${precip}% is too high for stable travel conditions.`);
+    addBlocker(`Precipitation chance reaches ${precip}%. Delay or choose a lower-consequence route where slick surfaces, poor visibility, and slower travel do not create a trap.`);
   } else if (precip >= Math.max(55, maxPrecipThreshold)) {
-    addCaution(`Precipitation chance at ${precip}% can create slick surfaces and slower travel.`);
+    addCaution(`Precipitation chance reaches ${precip}%. Allow extra travel time, carry traction and weather protection, and turn around if footing or visibility deteriorates.`);
   }
   if (gust >= Math.max(35, maxGustThreshold + 10)) {
-    addBlocker(`Wind gusts around ${formatWind(gust)} exceed conservative backcountry thresholds.`);
+    addBlocker(`Wind gusts reach about ${formatWind(gust)}. Choose a sheltered, lower objective or delay; avoid exposed ridges and terrain where a stumble would be consequential.`);
   } else if (gust >= maxGustThreshold) {
-    addCaution(`Wind gusts near ${formatWind(gust)} can affect exposed movement and stability.`);
+    addCaution(`Wind gusts reach about ${formatWind(gust)}. Shorten ridge exposure, secure loose gear, and use a firm turnaround if balance or communication becomes difficult.`);
   }
 
   if (feelsLike !== null && feelsLike >= 95) {
-    addBlocker(`Apparent temperature near ${formatTemp(feelsLike)} has high heat-stress risk.`);
+    addBlocker(`Apparent temperature reaches about ${formatTemp(feelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
   } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
-    addCaution(`Apparent temperature near ${formatTemp(feelsLike)} increases cold-exposure risk.`);
+    addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }
 
   if (alertsRelevantForSelectedStart && hasActiveAlertCount && activeAlertCount > 0) {
+    const alertNoun = activeAlertCount === 1 ? 'alert' : 'alerts';
+    const alertVerb = activeAlertCount === 1 ? 'includes' : 'include';
+    const overlapVerb = activeAlertCount === 1 ? 'overlaps' : 'overlap';
     if (highestAlertSeverityRank >= 4) {
-      addBlocker(`${activeAlertCount} active NWS alert(s) include high-severity products (${highestAlertSeverity}).`);
+      addBlocker(`${activeAlertCount} active NWS ${alertNoun} ${alertVerb} ${highestAlertSeverity.toLowerCase()}-severity products. Open the alert details and move the plan outside the affected area and time.`);
     } else {
-      addCaution(`${activeAlertCount} active NWS alert(s) are in effect at selected start time.`);
+      addCaution(`${activeAlertCount} active NWS ${alertNoun} ${overlapVerb} the selected start. Read each alert’s area, timing, and instructions before choosing the route.`);
     }
   }
 
   if (hasAqi) {
     if (aqi >= 151) {
-      addBlocker(`Air quality is unhealthy/hazardous (AQI ${Math.round(aqi)}).`);
+      addBlocker(`Air quality is unhealthy or worse (AQI ${Math.round(aqi)}). Choose a cleaner-air objective or postpone strenuous travel.`);
     } else if (aqi >= 101) {
-      addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}).`);
+      addCaution(`Air quality is unhealthy for sensitive groups (AQI ${Math.round(aqi)}). Reduce exertion, shorten the plan, and use a cleaner-air alternative if anyone develops symptoms.`);
     } else if (aqi >= 51) {
-      addCaution(`Air quality is moderate (AQI ${Math.round(aqi)}).`);
+      addCaution(`Air quality is moderate (AQI ${Math.round(aqi)}). Sensitive group members should reduce sustained exertion and monitor symptoms.`);
     }
   }
 
   if (hasFireRisk) {
     if (fireRiskLevel >= 4) {
-      addBlocker(`Fire danger is extreme (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
+      addBlocker(`Fire danger is extreme (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}). Choose another area or time, verify closures, and do not enter fire-affected terrain.`);
     } else if (fireRiskLevel >= 3) {
-      addCaution(`Fire danger is high (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
+      addCaution(`Fire danger is high (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}). Use a short objective with multiple exits, avoid ignition sources, and turn around for increasing smoke or wind.`);
     } else if (fireRiskLevel >= 2) {
-      addCaution(`Fire danger is elevated (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}).`);
+      addCaution(`Fire danger is elevated (${data.fireRisk?.label || `L${Math.round(fireRiskLevel)}`}). Check closures and incident updates, avoid ignition sources, and keep a clear exit route.`);
     }
   }
 
   if (hasHeatRisk) {
     if (heatRiskLevel >= 4) {
-      addBlocker(`Heat risk is extreme (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
+      addBlocker(`Heat risk is extreme (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}). Choose a cooler time or objective and avoid long exposed travel.`);
     } else if (heatRiskLevel >= 3) {
-      addCaution(`Heat risk is high (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
+      addCaution(`Heat risk is high (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}). Move in cooler hours, shorten exposed segments, and set a firm turnaround if water or cooling becomes limited.`);
     } else if (heatRiskLevel >= 2) {
-      addCaution(`Heat risk is elevated (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}).`);
+      addCaution(`Heat risk is elevated (${data.heatRisk?.label || `L${Math.round(heatRiskLevel)}`}). Schedule shade and hydration breaks, ease the pace, and watch the group for early symptoms.`);
     }
   }
 
   if (terrainNeedsAttention) {
-    addCaution(`Terrain/trail condition needs attention (${terrainLabel}).`);
+    const terrainAction = String(data.terrainCondition?.recommendedTravel || '').trim();
+    addCaution(`Terrain and trail surfaces need attention (${terrainLabel}).${terrainAction ? ` ${terrainAction}` : ' Test footing at low-consequence transitions before exposed travel.'}`);
   }
 
   if (freshnessIssues.length > 0) {
-    addCaution(`Some feeds are stale or missing timestamps (${freshnessIssues.join(', ')}). Re-verify before committing.`);
+    addCaution(`Some feeds are stale or missing timestamps (${freshnessIssues.join(', ')}). Refresh the report and open the affected official sources before committing.`);
   }
 
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
@@ -298,18 +302,18 @@ export function evaluateBackcountryDecision(
     ? sunsetMinutes - effectiveReturnMinutes
     : null;
   if (!hasDaylightInputs) {
-    addCaution('Daylight timing data is unavailable. Confirm sunset timing from official sources before committing.');
+    addCaution('Daylight timing is unavailable. Confirm sunset from an official source, set a return time with at least 30 minutes of margin, and carry a headlamp.');
   } else if (!daylightOkay && turnaroundMinutes === null) {
     // When a turnaround time is known, the block below reports the same thin-margin
     // condition with exact minutes — keep only the more specific message.
-    addCaution(`Daylight margin is too thin for this plan. Keep at least a ${daylightBuffer}-minute buffer before sunset.`);
+    addCaution(`Daylight margin is too thin. Start earlier or shorten the route to finish at least ${daylightBuffer} minutes before sunset, and carry a headlamp.`);
   }
   if (turnaroundMinutes !== null && sunsetMinutes !== null) {
     const margin = sunsetMinutes - turnaroundMinutes;
     if (margin < 0) {
-      addCaution(`Turnaround time is ${Math.abs(margin)} min after sunset (${data.solar.sunset}). Adjust plan or expect darkness.`);
+      addCaution(`Turnaround time is ${Math.abs(margin)} minutes after sunset (${data.solar.sunset}). Move the start earlier or shorten the route; do not make darkness the default plan.`);
     } else if (margin < 30) {
-      addCaution(`Turnaround margin is only ${margin} min before sunset — very thin buffer.`);
+      addCaution(`Turnaround margin is only ${margin} minutes before sunset. Move the turnaround earlier and preserve at least 30 minutes for delays.`);
     }
   }
 
@@ -325,9 +329,9 @@ export function evaluateBackcountryDecision(
           : `Current danger: ${['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(danger)] || 'Unknown'}.`,
       action:
         avalancheGateRequired && avalancheUnknown
-          ? 'Use conservative, low-consequence terrain until a current bulletin is available.'
+          ? 'Use low-angle, low-consequence terrain, avoid terrain traps, and increase spacing until a current bulletin is available.'
           : avalancheGateRequired && danger > 2
-            ? 'Choose lower-angle terrain or delay until hazard rating drops.'
+            ? 'Choose non-avalanche terrain or delay until the hazard and avalanche problems can be managed.'
             : undefined,
     },
     {
@@ -339,21 +343,21 @@ export function evaluateBackcountryDecision(
           ? `Convective risk keywords in start-time forecast: ${normalizedConditionText}.`
           : `Convective risk keywords detected at ${stormSignalHour} within travel window.`)
         : `Forecast text: ${normalizedConditionText}. No convective keywords detected.`,
-      action: hasStormSignal ? 'Avoid exposed ridgelines and move to lower-consequence terrain windows.' : undefined,
+      action: hasStormSignal ? 'Leave exposed terrain before the storm arrives; descend at the first thunder, lightning, or rapid cloud growth.' : undefined,
     },
     {
       key: 'precipitation',
       label: `Precipitation chance is at or below ${maxPrecipThreshold}%`,
       ok: precip <= maxPrecipThreshold,
       detail: peakPrecipHour ? `Peak ${precip}% at ${peakPrecipHour} in window (limit ${maxPrecipThreshold}%).` : `Now ${precip}% (limit ${maxPrecipThreshold}%).`,
-      action: precip > maxPrecipThreshold ? 'Expect slower travel and reduced traction; tighten route and timing.' : undefined,
+      action: precip > maxPrecipThreshold ? 'Allow extra time, carry traction and weather protection, and turn around if footing or visibility deteriorates.' : undefined,
     },
     {
       key: 'wind-gust',
       label: `Wind gusts are at or below ${displayMaxGustThreshold}`,
       ok: gust <= maxGustThreshold,
       detail: peakGustHour ? `Peak ${formatWind(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).` : `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
-      action: gust > maxGustThreshold ? 'Reduce ridge exposure and shorten high-wind segments.' : undefined,
+      action: gust > maxGustThreshold ? 'Use sheltered terrain, secure loose gear, and turn around if balance or communication becomes difficult.' : undefined,
     },
     {
       key: 'daylight',
@@ -378,7 +382,7 @@ export function evaluateBackcountryDecision(
       label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,
       ok: feelsLike !== null && feelsLike >= minFeelsLikeThreshold,
       detail: feelsLike === null ? 'Feels-like data unavailable.' : coldestFeelsLikeHour ? `Coldest ${formatTemp(feelsLike)} at ${coldestFeelsLikeHour} in window (limit ${displayMinFeelsLikeThreshold}).` : `Now ${formatTemp(feelsLike)} (limit ${displayMinFeelsLikeThreshold}).`,
-      action: feelsLike !== null && feelsLike < minFeelsLikeThreshold ? 'Increase insulation/warmth margin or reduce exposure duration.' : undefined,
+      action: feelsLike !== null && feelsLike < minFeelsLikeThreshold ? 'Add insulation and hand protection, reduce exposed time, and set a warming checkpoint.' : undefined,
     },
   ];
 
@@ -401,7 +405,7 @@ export function evaluateBackcountryDecision(
       label: 'Air quality is <= 100 AQI',
       ok: aqi <= 100,
       detail: `Current AQI ${Math.round(aqi)} (${data.airQuality?.category || 'Unknown'}).`,
-      action: aqi > 100 ? 'Reduce exertion, carry respiratory protection, or pick a cleaner-air objective.' : undefined,
+      action: aqi > 100 ? 'Reduce exertion and shorten the plan; choose a cleaner-air objective if anyone develops symptoms.' : undefined,
     });
   }
 
@@ -411,7 +415,7 @@ export function evaluateBackcountryDecision(
       label: 'Fire risk is below High (L3+)',
       ok: fireRiskLevel < 3,
       detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})`,
-      action: fireRiskLevel >= 3 ? 'Avoid fire-restricted areas and plan low-spark/no-flame operations.' : undefined,
+      action: fireRiskLevel >= 3 ? 'Verify closures, use no flame or sparks, keep multiple exits, and leave for increasing smoke or wind.' : undefined,
     });
   }
 
@@ -421,7 +425,7 @@ export function evaluateBackcountryDecision(
       label: 'Heat risk is below High (L3+)',
       ok: heatRiskLevel < 3,
       detail: `${data.heatRisk?.label || 'Unknown'} (${Number.isFinite(heatRiskLevel) ? `L${Math.round(heatRiskLevel)}` : 'L?'})`,
-      action: heatRiskLevel >= 3 ? 'Shift to cooler hours/elevations and increase hydration/cooling controls.' : undefined,
+      action: heatRiskLevel >= 3 ? 'Shift to cooler hours or elevations, shorten exposed segments, and set water and cooling checkpoints.' : undefined,
     });
   }
 
@@ -435,7 +439,7 @@ export function evaluateBackcountryDecision(
         : terrainConfidence
           ? `${terrainLabel} \u2022 confidence ${terrainConfidence} \u2022 use as advisory context, not a hard gate.`
           : `${terrainLabel} \u2022 use as advisory context, not a hard gate.`,
-      action: terrainCriticalGateFail ? 'Use field observations for traction/surface risk since model signal is unavailable.' : undefined,
+      action: terrainCriticalGateFail ? 'Test traction and supportability in low-consequence terrain before committing to exposed travel.' : undefined,
     });
   }
 
@@ -444,21 +448,21 @@ export function evaluateBackcountryDecision(
     label: 'Core source freshness has no stale/missing feeds',
     ok: freshnessIssues.length === 0,
     detail: freshnessIssues.length === 0 ? 'Timestamps are current enough for active feeds.' : `Issue: ${freshnessIssues.join(', ')}.`,
-    action: freshnessIssues.length > 0 ? 'Refresh and verify upstream official products before committing.' : undefined,
+    action: freshnessIssues.length > 0 ? 'Refresh the report and open each affected official source before committing.' : undefined,
   });
 
   let level: DecisionLevel = 'GO';
-  let headline = 'Proceed with conservative backcountry travel controls.';
+  let headline = 'No current threshold is tripped — keep normal precautions.';
 
   if (blockers.length > 0) {
     level = 'NO-GO';
-    headline = 'High-likelihood failure modes detected. Delay or change objective.';
+    headline = 'Do not commit to this plan — change the objective, timing, or day.';
   } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
-    headline = 'No avalanche bulletin — plan conservatively.';
+    headline = 'No current avalanche bulletin — use unrated-terrain travel practices.';
   } else if (cautions.length > 0) {
     level = 'CAUTION';
-    headline = 'Conditions are workable with conservative timing and route choices.';
+    headline = 'Adjust terrain, timing, or pace before committing.';
   }
 
   return { level, headline, blockers, cautions, checks };
