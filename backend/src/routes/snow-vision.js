@@ -1,4 +1,5 @@
 const { createCache } = require('../utils/cache');
+const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { fetchSentinelTile } = require('../utils/sentinel-tiles');
 const { logger } = require('../utils/logger');
 
@@ -44,13 +45,23 @@ const MAX_SNOWPACK_LENGTH = 4000;
 
 const snowVisionCache = createCache({ name: 'snow-vision', ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 24 * 60 * 60 * 1000, maxEntries: 300 });
 
-const registerSnowVisionRoute = ({ app, fetchWithTimeout, askAIVision }) => {
+const registerSnowVisionRoute = ({
+  app,
+  fetchWithTimeout,
+  askAIVision,
+  ensureFeatureEnabled = () => assertAIFeatureEnabled('snowVision'),
+}) => {
   app.post('/api/snow-vision', async (req, res) => {
     const { lat, lon, snowpack, units } = req.body || {};
     const parsedLat = Number(lat);
     const parsedLon = Number(lon);
     if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
       return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
+    }
+    try {
+      ensureFeatureEnabled();
+    } catch (error) {
+      return res.status(503).json({ error: error.message || 'AI features are unavailable' });
     }
 
     const { x, y } = lonLatToTile(parsedLon, parsedLat, SNOW_VISION_ZOOM);

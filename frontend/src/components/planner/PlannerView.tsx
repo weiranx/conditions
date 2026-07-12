@@ -35,6 +35,7 @@ import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 import type { AppView } from '../../hooks/useUrlState';
+import { useAiAvailability } from '../../hooks/useAiAvailability';
 import type { Suggestion } from '../../lib/search';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
 import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecast } from '../../app/types';
@@ -453,7 +454,7 @@ export interface PlannerViewProps {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 function PlannerViewComponent(props: PlannerViewProps) {
-  const aiAvailable = props.safetyData?.capabilities?.ai === true;
+  const aiAvailability = useAiAvailability(props.safetyData?.capabilities);
   const {
     // Shell
     appShellClassName,
@@ -742,7 +743,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         <section className="data-grid" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
 
-          {aiAvailable && objectiveName && (
+          {aiAvailability.routeAnalysis && objectiveName && (
             <React.Suspense
               fallback={(
                 <div
@@ -797,7 +798,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
                 </div>
               )}
             >
-              <RedesignView {...props} aiAvailable={aiAvailable} />
+              <RedesignView {...props} aiAvailability={aiAvailability} />
             </React.Suspense>
           </div>
 

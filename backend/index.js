@@ -55,7 +55,7 @@ const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
-const { askAI, askAIVision, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
+const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
@@ -246,6 +246,7 @@ const buildSafetyResponsePayload = ({
     generatedAt,
     capabilities: {
       ai: isAIAvailable(),
+      ...getAIFeatureAvailability(),
     },
     location: { lat: parsedLat, lon: parsedLon },
     forecast: {
@@ -780,7 +781,7 @@ registerSearchRoutes({
 });
 registerHealthRoutes(app, {
   caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, avalancheForecastCache, satelliteTileCache],
-  ai: getAIStatus(),
+  ai: getAIStatus,
 });
 registerReportLogsRoute(app);
 registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });

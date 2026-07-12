@@ -1,4 +1,4 @@
-const { assertAIEnabled, getAIStatus } = require('../utils/ai-client');
+const { assertAIEnabled, assertAIFeatureEnabled, getAIStatus } = require('../utils/ai-client');
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 
@@ -292,7 +292,7 @@ const registerReportChatRoute = ({
   app,
   createStream = createReportChatStream,
   pipeStream = pipeReportChatStreamToResponse,
-  ensureAIEnabled = assertAIEnabled,
+  ensureAIEnabled = () => assertAIFeatureEnabled('reportChat'),
 }) => {
   app.post('/api/report-chat', async (req, res) => {
     let reportJson;

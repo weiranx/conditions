@@ -36,6 +36,29 @@ test('route suggestions use the fast model tier', async () => {
   expect(calls[0].options).toMatchObject({ tier: 'fast', maxTokens: 2048 });
 });
 
+test('disabled route analysis blocks suggestions before an AI request', async () => {
+  const app = express();
+  const askAI = jest.fn();
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler: jest.fn(),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureFeatureEnabled: () => {
+      throw new Error('AI features are unavailable');
+    },
+  });
+
+  const response = await request(app)
+    .get('/api/route-suggestions')
+    .query({ peak: 'Test Peak', lat: 39.1234, lon: -106.5678 });
+
+  expect(response.status).toBe(503);
+  expect(response.body.error).toBe('AI features are unavailable');
+  expect(askAI).not.toHaveBeenCalled();
+});
+
 test('GPX route analysis uses supplied coordinates without generating or geocoding waypoints', async () => {
   const app = express();
   app.use(express.json());

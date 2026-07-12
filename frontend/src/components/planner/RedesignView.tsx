@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
+import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
 import { formatSnowVisionSections } from '../../app/text-utils';
 import { getTemperatureBand } from '../../app/weather-display';
 import { AiInsightBriefing } from './AiInsightBriefing';
@@ -247,10 +248,10 @@ function ReportJumpNav({
   );
 }
 
-function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean }) {
+function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability }) {
   const {
     safetyData,
-    aiAvailable,
+    aiAvailability,
     decision,
     preferences,
     objectiveName,
@@ -659,7 +660,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
         {/* VERDICT */}
         <div id="planner-section-decision" className="ssr-jump-anchor">
         <DashboardSummaryCard
-          aiAvailable={aiAvailable}
+          aiAvailability={aiAvailability}
           safetyData={safetyData}
           decision={decision}
           preferences={preferences}
@@ -1266,7 +1267,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
               {safetyData.snowpack.viirs?.observedTime && (
                 <p className="ssr-muted">Latest NASA VIIRS 375 m snow-cover granule: {formatPubTime(safetyData.snowpack.viirs.observedTime)}. Used as freshness/corroboration metadata; pixel-level NDSI is not treated as a depth measurement.</p>
               )}
-              {aiAvailable && (
+              {aiAvailability.snowVision && (
                 <div style={{ marginTop: '14px' }}>
                   {snowVisionAnalysis ? (
                     <AiInsightBriefing

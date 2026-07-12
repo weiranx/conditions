@@ -1,4 +1,5 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
+const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
@@ -161,7 +162,14 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
   }).catch(() => null);
 };
 
-const registerRouteAnalysisRoutes = ({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders }) => {
+const registerRouteAnalysisRoutes = ({
+  app,
+  askAI,
+  invokeSafetyHandler,
+  fetchWithTimeout,
+  fetchHeaders,
+  ensureFeatureEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
+}) => {
   const routeDataService = createRouteDataService({
     fetchWithTimeout,
     fetchHeaders,
@@ -178,6 +186,11 @@ const registerRouteAnalysisRoutes = ({ app, askAI, invokeSafetyHandler, fetchWit
     const safeLon = Number(lon);
     if (!Number.isFinite(safeLat) || !Number.isFinite(safeLon)) {
       return res.status(400).json({ error: 'lat and lon must be valid numbers' });
+    }
+    try {
+      ensureFeatureEnabled();
+    } catch (error) {
+      return res.status(503).json({ error: error.message || 'AI features are unavailable' });
     }
 
     try {
@@ -217,6 +230,11 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     }
     if (start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) {
       return res.status(400).json({ error: 'start must be HH:MM format (00:00–23:59)' });
+    }
+    try {
+      ensureFeatureEnabled();
+    } catch (error) {
+      return res.status(503).json({ error: error.message || 'AI features are unavailable' });
     }
 
     let suppliedWaypoints;

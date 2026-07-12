@@ -36,8 +36,15 @@ test('authorized AI admin routes read and update runtime settings', () => {
   expect(getResponse.payload).toEqual({ enabled: true, provider: 'openai' });
 
   const patchResponse = createResponse();
-  routes.patch.get('/api/admin/ai-settings')({ headers, body: { enabled: false } }, patchResponse);
-  expect(updateAISettings).toHaveBeenCalledWith({ enabled: false, provider: undefined });
+  routes.patch.get('/api/admin/ai-settings')({
+    headers,
+    body: { enabled: false, features: { aiBrief: false } },
+  }, patchResponse);
+  expect(updateAISettings).toHaveBeenCalledWith({
+    enabled: false,
+    provider: undefined,
+    features: { aiBrief: false },
+  });
   expect(patchResponse.payload).toEqual({ enabled: false, provider: 'openai' });
 
   jest.dontMock('../src/utils/ai-client');

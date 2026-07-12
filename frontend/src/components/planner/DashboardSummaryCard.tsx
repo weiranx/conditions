@@ -8,6 +8,7 @@ import {
   Sun,
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
+import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
 import { formatAiBriefSections } from '../../app/text-utils';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
@@ -16,7 +17,7 @@ import '../../styles/dashboard-redesign.css';
 const GAUGE_R = 56;
 const GAUGE_C = 2 * Math.PI * GAUGE_R; // ≈ 351.86
 export interface DashboardSummaryCardProps {
-  aiAvailable: boolean;
+  aiAvailability: AiFeatureAvailability;
   safetyData: SafetyData;
   decision: SummitDecision;
   preferences: UserPreferences;
@@ -40,7 +41,7 @@ export interface DashboardSummaryCardProps {
 }
 
 export function DashboardSummaryCard({
-  aiAvailable,
+  aiAvailability,
   safetyData,
   decision,
   preferences,
@@ -212,9 +213,9 @@ export function DashboardSummaryCard({
           </div>
         )}
 
-        {aiAvailable && (
+        {(aiAvailability.aiBrief || aiAvailability.reportChat) && (
           <div className="ssr-dash-ai">
-          {aiBriefNarrative ? (
+          {aiAvailability.aiBrief && (aiBriefNarrative ? (
             <AiInsightBriefing
               title="Your field briefing"
               subtitle="The quick read on what matters most for this plan."
@@ -232,8 +233,8 @@ export function DashboardSummaryCard({
                 ? <><LoaderCircle size={14} className="spin" aria-hidden /> Generating…</>
                 : <><Sparkles size={14} aria-hidden /> AI analysis</>}
             </button>
-          )}
-          <ReportChat reportPayload={rawReportPayload} />
+          ))}
+          {aiAvailability.reportChat && <ReportChat reportPayload={rawReportPayload} />}
           </div>
         )}
       </section>

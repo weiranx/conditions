@@ -169,6 +169,12 @@ describe('AI provider client wrapper', () => {
           configured: true,
         },
       },
+      features: {
+        aiBrief: { enabled: true, available: true },
+        reportChat: { enabled: true, available: true },
+        routeAnalysis: { enabled: true, available: true },
+        snowVision: { enabled: true, available: true },
+      },
       primaryTimeoutMs: 28000,
       fastTimeoutMs: 8000,
     });
@@ -197,11 +203,21 @@ describe('AI provider client wrapper', () => {
     process.env.AI_SETTINGS_FILE = settingsFile;
     try {
       const firstClient = loadClient('openai');
-      firstClient.updateAISettings({ enabled: false, provider: 'anthropic' });
+      firstClient.updateAISettings({
+        enabled: false,
+        provider: 'anthropic',
+        features: { reportChat: false },
+      });
 
       expect(JSON.parse(fs.readFileSync(settingsFile, 'utf8'))).toEqual({
         enabled: false,
         provider: 'anthropic',
+        features: {
+          aiBrief: true,
+          reportChat: false,
+          routeAnalysis: true,
+          snowVision: true,
+        },
       });
       expect(fs.statSync(settingsFile).mode & 0o777).toBe(0o600);
 
@@ -211,6 +227,9 @@ describe('AI provider client wrapper', () => {
         provider: 'anthropic',
         defaultProvider: 'openai',
         persistent: true,
+        features: expect.objectContaining({
+          reportChat: { enabled: false, available: false },
+        }),
       }));
     } finally {
       fs.rmSync(settingsFile, { force: true });
@@ -237,12 +256,35 @@ describe('AI provider client wrapper', () => {
 
     updateAISettings({ enabled: false });
 
-    await expect(askAI('conditions')).rejects.toMatchObject({ code: 'AI_DISABLED' });
-    await expect(askAIVision('YWJj', 'analyze')).rejects.toMatchObject({ code: 'AI_DISABLED' });
+    await expect(askAI('conditions')).rejects.toMatchObject({ code: 'AI_DISABLED', message: 'AI features are unavailable' });
+    await expect(askAIVision('YWJj', 'analyze')).rejects.toMatchObject({ code: 'AI_DISABLED', message: 'AI features are unavailable' });
     expect(mockOpenAICreate).not.toHaveBeenCalled();
     expect(mockAnthropicCreate).not.toHaveBeenCalled();
     expect(getAIStatus()).toEqual(expect.objectContaining({ enabled: false, available: false }));
     expect(isAIAvailable()).toBe(false);
+  });
+
+  test('individual feature switches only block the selected feature', () => {
+    const {
+      assertAIFeatureEnabled,
+      getAIStatus,
+      isAIFeatureAvailable,
+      updateAISettings,
+    } = loadClient('openai');
+
+    updateAISettings({ features: { aiBrief: false } });
+
+    expect(() => assertAIFeatureEnabled('aiBrief')).toThrow(expect.objectContaining({
+      code: 'AI_FEATURE_DISABLED',
+      message: 'AI features are unavailable',
+    }));
+    expect(() => assertAIFeatureEnabled('reportChat')).not.toThrow();
+    expect(isAIFeatureAvailable('aiBrief')).toBe(false);
+    expect(isAIFeatureAvailable('reportChat')).toBe(true);
+    expect(getAIStatus().features).toMatchObject({
+      aiBrief: { enabled: false, available: false },
+      reportChat: { enabled: true, available: true },
+    });
   });
 
   test('rejects switching to a provider without a configured key', () => {

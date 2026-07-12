@@ -6,6 +6,8 @@ const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
 
 const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic']);
+const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision'];
+const AI_FEATURE_KEY_SET = new Set(AI_FEATURE_KEYS);
 const DEFAULT_AI_PROVIDER = String(process.env.AI_PROVIDER || 'openai').trim().toLowerCase();
 if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
   throw new Error(`AI_PROVIDER must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
@@ -42,6 +44,7 @@ let openAIClient;
 let anthropicClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
 let aiEnabled = DEFAULT_AI_ENABLED;
+let aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, true]));
 
 const fallbackProviderFor = (provider) => provider === 'openai' ? 'anthropic' : 'openai';
 
@@ -65,8 +68,19 @@ const loadPersistedAISettings = () => {
         'Ignoring unavailable persisted AI provider',
       );
     }
+    if (persisted.features && typeof persisted.features === 'object' && !Array.isArray(persisted.features)) {
+      AI_FEATURE_KEYS.forEach((feature) => {
+        if (typeof persisted.features[feature] === 'boolean') {
+          aiFeatures[feature] = persisted.features[feature];
+        } else if (persisted.features[feature] !== undefined) {
+          logger.warn({ file: AI_SETTINGS_FILE, feature }, 'Ignoring invalid persisted AI feature value');
+        }
+      });
+    } else if (persisted.features !== undefined) {
+      logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI feature settings');
+    }
     logger.info(
-      { file: AI_SETTINGS_FILE, enabled: aiEnabled, provider: activeProvider },
+      { file: AI_SETTINGS_FILE, enabled: aiEnabled, provider: activeProvider, features: aiFeatures },
       'Loaded persisted AI runtime settings',
     );
   } catch (error) {
@@ -81,7 +95,7 @@ const persistAISettings = () => {
     fs.mkdirSync(path.dirname(AI_SETTINGS_FILE), { recursive: true });
     fs.writeFileSync(
       tempFile,
-      `${JSON.stringify({ enabled: aiEnabled, provider: activeProvider }, null, 2)}\n`,
+      `${JSON.stringify({ enabled: aiEnabled, provider: activeProvider, features: aiFeatures }, null, 2)}\n`,
       { encoding: 'utf8', mode: 0o600 },
     );
     fs.renameSync(tempFile, AI_SETTINGS_FILE);
@@ -259,8 +273,19 @@ const errorMessage = (error) => error instanceof Error ? error.message : String(
 
 const assertAIEnabled = () => {
   if (aiEnabled) return;
-  const error = new Error('AI features are disabled by an administrator');
+  const error = new Error('AI features are unavailable');
   error.code = 'AI_DISABLED';
+  throw error;
+};
+
+const assertAIFeatureEnabled = (feature) => {
+  if (!AI_FEATURE_KEY_SET.has(feature)) {
+    throw new TypeError(`Unknown AI feature: ${feature}`);
+  }
+  assertAIEnabled();
+  if (aiFeatures[feature]) return;
+  const error = new Error('AI features are unavailable');
+  error.code = 'AI_FEATURE_DISABLED';
   throw error;
 };
 
@@ -311,9 +336,10 @@ const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, syste
 
 const getAIStatus = () => {
   const fallbackProvider = fallbackProviderFor(activeProvider);
+  const available = aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured);
   return {
     enabled: aiEnabled,
-    available: aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured),
+    available,
     persistent: Boolean(AI_SETTINGS_FILE),
     provider: activeProvider,
     defaultProvider: DEFAULT_AI_PROVIDER,
@@ -325,12 +351,16 @@ const getAIStatus = () => {
     fallbackFastModel: MODEL_CONFIG[fallbackProvider].fast,
     fallbackConfigured: MODEL_CONFIG[fallbackProvider].configured,
     providers: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, { ...MODEL_CONFIG[provider] }])),
+    features: Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, {
+      enabled: aiFeatures[feature],
+      available: available && aiFeatures[feature],
+    }])),
     primaryTimeoutMs: PRIMARY_TIMEOUT_MS,
     fastTimeoutMs: FAST_TIMEOUT_MS,
   };
 };
 
-const updateAISettings = ({ enabled, provider } = {}) => {
+const updateAISettings = ({ enabled, provider, features } = {}) => {
   if (enabled !== undefined && typeof enabled !== 'boolean') {
     const error = new TypeError('enabled must be a boolean');
     error.code = 'INVALID_AI_SETTINGS';
@@ -346,15 +376,36 @@ const updateAISettings = ({ enabled, provider } = {}) => {
     error.code = 'AI_PROVIDER_NOT_CONFIGURED';
     throw error;
   }
+  if (features !== undefined && (!features || typeof features !== 'object' || Array.isArray(features))) {
+    const error = new TypeError('features must be an object');
+    error.code = 'INVALID_AI_SETTINGS';
+    throw error;
+  }
+  if (features !== undefined) {
+    Object.entries(features).forEach(([feature, value]) => {
+      if (!AI_FEATURE_KEY_SET.has(feature)) {
+        const error = new TypeError(`Unknown AI feature: ${feature}`);
+        error.code = 'INVALID_AI_SETTINGS';
+        throw error;
+      }
+      if (typeof value !== 'boolean') {
+        const error = new TypeError(`${feature} must be a boolean`);
+        error.code = 'INVALID_AI_SETTINGS';
+        throw error;
+      }
+    });
+  }
 
-  const previous = { enabled: aiEnabled, provider: activeProvider };
+  const previous = { enabled: aiEnabled, provider: activeProvider, features: { ...aiFeatures } };
   if (enabled !== undefined) aiEnabled = enabled;
   if (provider !== undefined) activeProvider = provider;
+  if (features !== undefined) aiFeatures = { ...aiFeatures, ...features };
   try {
     persistAISettings();
   } catch (error) {
     aiEnabled = previous.enabled;
     activeProvider = previous.provider;
+    aiFeatures = previous.features;
     logger.error({ err: error, file: AI_SETTINGS_FILE }, 'Failed to persist AI runtime settings');
     const persistenceError = new Error('AI settings could not be saved');
     persistenceError.code = 'AI_SETTINGS_PERSIST_FAILED';
@@ -362,12 +413,26 @@ const updateAISettings = ({ enabled, provider } = {}) => {
     throw persistenceError;
   }
   logger.warn(
-    { previous, current: { enabled: aiEnabled, provider: activeProvider } },
+    { previous, current: { enabled: aiEnabled, provider: activeProvider, features: aiFeatures } },
     'AI runtime settings changed by administrator',
   );
   return getAIStatus();
 };
 
 const isAIAvailable = () => aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured);
+const isAIFeatureAvailable = (feature) => AI_FEATURE_KEY_SET.has(feature) && isAIAvailable() && aiFeatures[feature];
+const getAIFeatureAvailability = () => Object.fromEntries(
+  AI_FEATURE_KEYS.map((feature) => [feature, isAIFeatureAvailable(feature)]),
+);
 
-module.exports = { askAI, askAIVision, assertAIEnabled, getAIStatus, isAIAvailable, updateAISettings };
+module.exports = {
+  askAI,
+  askAIVision,
+  assertAIEnabled,
+  assertAIFeatureEnabled,
+  getAIFeatureAvailability,
+  getAIStatus,
+  isAIAvailable,
+  isAIFeatureAvailable,
+  updateAISettings,
+};

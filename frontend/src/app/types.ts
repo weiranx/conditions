@@ -93,6 +93,10 @@ export interface SafetyData {
   apiWarning?: string;
   capabilities?: {
     ai?: boolean;
+    aiBrief?: boolean;
+    reportChat?: boolean;
+    routeAnalysis?: boolean;
+    snowVision?: boolean;
   };
   location: { lat: number; lon: number };
   forecast?: {

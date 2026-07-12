@@ -183,7 +183,7 @@ describe('report chat request handling', () => {
     const app = express();
     app.use(express.json());
     const createStream = jest.fn();
-    const disabledError = Object.assign(new Error('AI features are disabled by an administrator'), { code: 'AI_DISABLED' });
+    const disabledError = Object.assign(new Error('AI features are unavailable'), { code: 'AI_DISABLED' });
     registerReportChatRoute({
       app,
       createStream,
@@ -198,7 +198,7 @@ describe('report chat request handling', () => {
       });
 
     expect(response.status).toBe(503);
-    expect(response.body.error).toMatch(/disabled by an administrator/i);
+    expect(response.body.error).toMatch(/AI features are unavailable/i);
     expect(createStream).not.toHaveBeenCalled();
   });
 });

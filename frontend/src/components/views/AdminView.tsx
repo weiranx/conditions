@@ -14,11 +14,14 @@ import {
   KeyRound,
   LoaderCircle,
   Lock,
+  MessageCircleQuestion,
   Pause,
   Play,
   Power,
   MapPinned,
   RefreshCw,
+  Route,
+  Satellite,
   Search,
   Server,
   ShieldCheck,
@@ -40,6 +43,7 @@ import {
 } from 'recharts';
 import { fetchApi } from '../../lib/api-client';
 import type { AppView } from '../../hooks/useUrlState';
+import { publishAiAvailability } from '../../hooks/useAiAvailability';
 import { ProductNav } from './ProductNav';
 
 interface ReportLogEntry {
@@ -107,7 +111,40 @@ interface AIAdminSettings {
     fast: string;
     configured: boolean;
   }>;
+  features: Record<AIFeatureKey, {
+    enabled: boolean;
+    available: boolean;
+  }>;
 }
+
+type AIFeatureKey = 'aiBrief' | 'reportChat' | 'routeAnalysis' | 'snowVision';
+
+const AI_FEATURE_CONTROLS = [
+  {
+    key: 'aiBrief',
+    label: 'Field briefing',
+    description: 'Shows the generated AI analysis in the report summary.',
+    icon: Sparkles,
+  },
+  {
+    key: 'reportChat',
+    label: 'Report chat',
+    description: 'Lets users ask follow-up questions about a generated report.',
+    icon: MessageCircleQuestion,
+  },
+  {
+    key: 'routeAnalysis',
+    label: 'Route analysis',
+    description: 'Enables AI route suggestions, waypoint generation, and route briefing.',
+    icon: Route,
+  },
+  {
+    key: 'snowVision',
+    label: 'Satellite snow vision',
+    description: 'Enables AI analysis of satellite imagery and nearby snow measurements.',
+    icon: Satellite,
+  },
+] as const;
 
 const ADMIN_SESSION_KEY = 'summitsafe:admin-key';
 const LEGACY_LOGS_SESSION_KEY = 'summitsafe:logs-key';
@@ -539,7 +576,11 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     }
   }, [secretKey, onUnauthorized]);
 
-  const updateAIControl = useCallback(async (settings: { enabled?: boolean; provider?: AIProvider }) => {
+  const updateAIControl = useCallback(async (settings: {
+    enabled?: boolean;
+    provider?: AIProvider;
+    features?: Partial<Record<AIFeatureKey, boolean>>;
+  }) => {
     setAISettingsPending(true);
     setAISettingsError(null);
     try {
@@ -556,7 +597,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
         return;
       }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
-        setAISettings(result.payload as AIAdminSettings);
+        const nextSettings = result.payload as AIAdminSettings;
+        setAISettings(nextSettings);
+        publishAiAvailability(nextSettings);
         return;
       }
       const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
@@ -574,6 +617,12 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     if (!aiSettings) return;
     if (aiSettings.enabled && !window.confirm('Stop all AI features? New AI requests will fail until you turn them back on.')) return;
     void updateAIControl({ enabled: !aiSettings.enabled });
+  };
+
+  const toggleAIFeature = (feature: AIFeatureKey) => {
+    const current = aiSettings?.features?.[feature]?.enabled;
+    if (typeof current !== 'boolean') return;
+    void updateAIControl({ features: { [feature]: !current } });
   };
 
   useEffect(() => {
@@ -886,6 +935,32 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
               })}
             </div>
           </div>
+
+          {AI_FEATURE_CONTROLS.map((feature) => {
+            const featureSettings = aiSettings?.features?.[feature.key];
+            const enabled = featureSettings?.enabled ?? false;
+            const Icon = feature.icon;
+            return (
+              <div className="admin-ai-setting" key={feature.key}>
+                <span className="admin-ai-setting-icon"><Icon size={18} aria-hidden /></span>
+                <div>
+                  <strong>{feature.label}</strong>
+                  <p>{feature.description}</p>
+                </div>
+                <button
+                  type="button"
+                  className={enabled ? 'admin-kill-switch is-enabled' : 'admin-kill-switch is-stopped'}
+                  onClick={() => toggleAIFeature(feature.key)}
+                  disabled={!featureSettings || aiSettingsPending}
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={`${enabled ? 'Disable' : 'Enable'} ${feature.label}`}
+                >
+                  {aiSettingsPending ? 'Saving…' : enabled ? 'Disable' : 'Enable'}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 

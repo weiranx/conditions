@@ -3,6 +3,7 @@ const { version } = require('../../package.json');
 const registerHealthRoutes = (app, { caches = [], ai = null } = {}) => {
   const respond = (_req, res) => {
     const mem = process.memoryUsage();
+    const aiStatus = typeof ai === 'function' ? ai() : ai;
     res.json({
       ok: true,
       service: 'backcountry-conditions-backend',
@@ -14,7 +15,7 @@ const registerHealthRoutes = (app, { caches = [], ai = null } = {}) => {
         heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
         rssMb: Math.round(mem.rss / 1024 / 1024),
       },
-      ...(ai ? { ai } : {}),
+      ...(aiStatus ? { ai: aiStatus } : {}),
       caches: caches.map((c) => c.stats()),
       timestamp: new Date().toISOString(),
     });

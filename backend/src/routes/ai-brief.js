@@ -1,4 +1,5 @@
 const { createCache } = require('../utils/cache');
+const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
 const { logger } = require('../utils/logger');
 
@@ -13,7 +14,11 @@ const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, stal
 // AI prompt, so an unusually large payload can't blow up prompt size or cache memory.
 const MAX_REPORT_LENGTH = 12000;
 
-const registerAiBriefRoute = ({ app, askAI }) => {
+const registerAiBriefRoute = ({
+  app,
+  askAI,
+  ensureFeatureEnabled = () => assertAIFeatureEnabled('aiBrief'),
+}) => {
   app.post('/api/ai-brief', async (req, res) => {
     const { report, decisionLevel, units } = req.body || {};
 
@@ -25,6 +30,7 @@ const registerAiBriefRoute = ({ app, askAI }) => {
     const cacheKey = `${AI_BRIEF_PROMPT_VERSION}|${decisionLevel}|${JSON.stringify(units || {})}|${reportJson}`;
 
     try {
+      ensureFeatureEnabled();
       const userPrompt = `${describeUnitsInstruction(units)}\n\nDecision level: ${decisionLevel}\n\nFull report data (JSON):\n${reportJson}`;
 
       const narrative = await aiBriefCache.getOrFetch(cacheKey, async () => {
