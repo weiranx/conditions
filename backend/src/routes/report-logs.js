@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { logger } = require('../utils/logger');
 const { getAIUsageEntries } = require('../utils/ai-usage');
+const { getAIStatus, updateAISettings } = require('../utils/ai-client');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -156,6 +157,26 @@ const registerReportLogsRoute = (app) => {
   app.get('/api/ai-usage', (req, res) => {
     if (!authorize(req, res)) return;
     res.json(getAIUsageEntries());
+  });
+
+  app.get('/api/admin/ai-settings', (req, res) => {
+    if (!authorize(req, res)) return;
+    res.json(getAIStatus());
+  });
+
+  app.patch('/api/admin/ai-settings', (req, res) => {
+    if (!authorize(req, res)) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    if (body.enabled === undefined && body.provider === undefined) {
+      res.status(400).json({ error: 'Provide enabled or provider' });
+      return;
+    }
+    try {
+      res.json(updateAISettings({ enabled: body.enabled, provider: body.provider }));
+    } catch (error) {
+      const status = error?.code === 'AI_PROVIDER_NOT_CONFIGURED' ? 409 : 400;
+      res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid AI settings' });
+    }
   });
 };
 

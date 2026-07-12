@@ -881,6 +881,82 @@ input {
 
 .admin-all-clear { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--ui-go-ink); font-size: 10.5px; }
 
+.admin-ai-controls { display: grid; gap: 12px; }
+
+.admin-ai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-ai-status > span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.admin-ai-status.is-enabled { background: var(--ui-brand-soft); color: var(--ui-go-ink); }
+.admin-ai-status.is-stopped { background: color-mix(in oklch, var(--ui-risk-4) 11%, var(--ui-surface)); color: var(--ui-nogo-ink); }
+
+.admin-ai-control-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 10px; }
+
+.admin-ai-setting {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+}
+
+.admin-ai-setting-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 7px; background: var(--ui-surface); color: var(--ui-text-2); }
+.admin-ai-setting > div { min-width: 0; }
+.admin-ai-setting > div > strong { color: var(--ui-text); font-size: 12px; }
+.admin-ai-setting > div > p { max-width: 520px; margin: 3px 0 0; color: var(--ui-text-3); font-size: 10.5px; line-height: 1.45; }
+
+.admin-kill-switch {
+  min-width: 82px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-kill-switch.is-enabled { border-color: color-mix(in oklch, var(--ui-risk-4) 45%, var(--ui-line)); color: var(--ui-nogo-ink); }
+.admin-kill-switch.is-stopped { border-color: var(--ui-brand); background: var(--ui-brand-strong); color: var(--ui-on-strong); }
+.admin-kill-switch:disabled { cursor: wait; opacity: 0.55; }
+
+.admin-provider-options { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 7px; }
+
+.admin-provider-options button {
+  display: grid;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-provider-options button:hover:not(:disabled) { border-color: var(--ui-brand); }
+.admin-provider-options button.is-selected { border-color: var(--ui-brand); background: var(--ui-brand-soft); color: var(--ui-brand-strong); box-shadow: inset 0 0 0 1px var(--ui-brand); }
+.admin-provider-options button:disabled { cursor: not-allowed; opacity: 0.48; }
+.admin-provider-options span { font-size: 11px; font-weight: 700; }
+.admin-provider-options small { overflow: hidden; margin-top: 2px; color: var(--ui-text-4); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
 .logs-metric-card {
   display: flex;
   align-items: center;
@@ -10767,6 +10843,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-range-control button { flex: 1; }
   .admin-operations-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-ai-control-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-ai-setting { grid-template-columns: 36px minmax(0, 1fr); }
+  .admin-ai-setting > button,
+  .admin-ai-setting > .admin-provider-options { grid-column: 1 / -1; }
   .logs-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .logs-analytics-grid { grid-template-columns: minmax(0, 1fr); }
   .logs-ai-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

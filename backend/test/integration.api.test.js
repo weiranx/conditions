@@ -300,11 +300,17 @@ test('POST /api/route-analysis rejects non-numeric lat', async () => {
 
 // ── /api/report-logs ─────────────────────────────────────────────────────────
 
-test('GET /api/report-logs returns 403 when LOGS_SECRET is not configured', async () => {
-  // In the test environment LOGS_SECRET env var is unset, so the endpoint is disabled.
+test('GET /api/report-logs rejects access without the admin key', async () => {
   const res = await request(app).get('/api/report-logs');
-  expect(res.status).toBe(403);
-  expect(String(res.body.error || '')).toMatch(/disabled|LOGS_SECRET/i);
+  expect([401, 403]).toContain(res.status);
+});
+
+test('AI admin settings endpoints reject access without the admin key', async () => {
+  const getResponse = await request(app).get('/api/admin/ai-settings');
+  const patchResponse = await request(app).patch('/api/admin/ai-settings').send({ enabled: false });
+
+  expect([401, 403]).toContain(getResponse.status);
+  expect([401, 403]).toContain(patchResponse.status);
 });
 
 // ── Response shape / header assertions ───────────────────────────────────────

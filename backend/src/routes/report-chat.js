@@ -1,4 +1,4 @@
-const { getAIStatus } = require('../utils/ai-client');
+const { assertAIEnabled, getAIStatus } = require('../utils/ai-client');
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 
@@ -97,6 +97,7 @@ const sanitizeFollowUpSuggestions = (value, askedQuestions = []) => {
 };
 
 const resolveStreamingModel = async () => {
+  assertAIEnabled();
   const status = getAIStatus();
   const provider = status.configured
     ? status.provider
@@ -291,6 +292,7 @@ const registerReportChatRoute = ({
   app,
   createStream = createReportChatStream,
   pipeStream = pipeReportChatStreamToResponse,
+  ensureAIEnabled = assertAIEnabled,
 }) => {
   app.post('/api/report-chat', async (req, res) => {
     let reportJson;
@@ -303,6 +305,12 @@ const registerReportChatRoute = ({
       }
     } catch (error) {
       return res.status(400).json({ error: error.message || 'Invalid report chat request' });
+    }
+
+    try {
+      ensureAIEnabled();
+    } catch (error) {
+      return res.status(503).json({ error: error.message || 'AI features are unavailable' });
     }
 
     const abortController = new AbortController();

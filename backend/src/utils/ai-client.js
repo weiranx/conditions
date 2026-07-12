@@ -4,8 +4,8 @@ const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
 
 const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic']);
-const AI_PROVIDER = String(process.env.AI_PROVIDER || 'openai').trim().toLowerCase();
-if (!SUPPORTED_PROVIDERS.has(AI_PROVIDER)) {
+const DEFAULT_AI_PROVIDER = String(process.env.AI_PROVIDER || 'openai').trim().toLowerCase();
+if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
   throw new Error(`AI_PROVIDER must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
 }
 
@@ -29,10 +29,13 @@ const parseTimeout = (value, fallback) => {
 
 const PRIMARY_TIMEOUT_MS = parseTimeout(process.env.AI_PRIMARY_TIMEOUT_MS, 28000);
 const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
-const FALLBACK_PROVIDER = AI_PROVIDER === 'openai' ? 'anthropic' : 'openai';
 
 let openAIClient;
 let anthropicClient;
+let activeProvider = DEFAULT_AI_PROVIDER;
+let aiEnabled = true;
+
+const fallbackProviderFor = (provider) => provider === 'openai' ? 'anthropic' : 'openai';
 
 const getOpenAIClient = () => {
   if (!openAIClient) {
@@ -194,25 +197,38 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
 
 const errorMessage = (error) => error instanceof Error ? error.message : String(error);
 
+const assertAIEnabled = () => {
+  if (aiEnabled) return;
+  const error = new Error('AI features are disabled by an administrator');
+  error.code = 'AI_DISABLED';
+  throw error;
+};
+
 const runWithFailover = async (operation, tier, invoke) => {
+  assertAIEnabled();
+
+  // Snapshot provider selection for the full request so an admin change made while a
+  // request is in flight cannot alter its fallback path midway through the operation.
+  const primaryProvider = activeProvider;
+  const fallbackProvider = fallbackProviderFor(primaryProvider);
   try {
-    return await invoke(AI_PROVIDER, true);
+    return await invoke(primaryProvider, true);
   } catch (primaryError) {
-    if (!MODEL_CONFIG[FALLBACK_PROVIDER].configured) throw primaryError;
+    if (!MODEL_CONFIG[fallbackProvider].configured) throw primaryError;
 
     logger.warn(
-      { err: primaryError, primaryProvider: AI_PROVIDER, fallbackProvider: FALLBACK_PROVIDER, tier },
+      { err: primaryError, primaryProvider, fallbackProvider, tier },
       `${operation}: preferred AI provider failed; retrying with fallback`,
     );
     try {
-      return await invoke(FALLBACK_PROVIDER, false);
+      return await invoke(fallbackProvider, false);
     } catch (fallbackError) {
       logger.error(
-        { err: fallbackError, primaryProvider: AI_PROVIDER, fallbackProvider: FALLBACK_PROVIDER, tier },
+        { err: fallbackError, primaryProvider, fallbackProvider, tier },
         `${operation}: fallback AI provider also failed`,
       );
       throw new Error(
-        `Both AI providers failed (${AI_PROVIDER}: ${errorMessage(primaryError)}; ${FALLBACK_PROVIDER}: ${errorMessage(fallbackError)})`,
+        `Both AI providers failed (${primaryProvider}: ${errorMessage(primaryError)}; ${fallbackProvider}: ${errorMessage(fallbackError)})`,
         { cause: fallbackError },
       );
     }
@@ -233,19 +249,53 @@ const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, syste
   ));
 };
 
-const getAIStatus = () => ({
-  provider: AI_PROVIDER,
-  primaryModel: MODEL_CONFIG[AI_PROVIDER].primary,
-  fastModel: MODEL_CONFIG[AI_PROVIDER].fast,
-  configured: MODEL_CONFIG[AI_PROVIDER].configured,
-  fallbackProvider: FALLBACK_PROVIDER,
-  fallbackPrimaryModel: MODEL_CONFIG[FALLBACK_PROVIDER].primary,
-  fallbackFastModel: MODEL_CONFIG[FALLBACK_PROVIDER].fast,
-  fallbackConfigured: MODEL_CONFIG[FALLBACK_PROVIDER].configured,
-  primaryTimeoutMs: PRIMARY_TIMEOUT_MS,
-  fastTimeoutMs: FAST_TIMEOUT_MS,
-});
+const getAIStatus = () => {
+  const fallbackProvider = fallbackProviderFor(activeProvider);
+  return {
+    enabled: aiEnabled,
+    available: aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured),
+    provider: activeProvider,
+    defaultProvider: DEFAULT_AI_PROVIDER,
+    primaryModel: MODEL_CONFIG[activeProvider].primary,
+    fastModel: MODEL_CONFIG[activeProvider].fast,
+    configured: MODEL_CONFIG[activeProvider].configured,
+    fallbackProvider,
+    fallbackPrimaryModel: MODEL_CONFIG[fallbackProvider].primary,
+    fallbackFastModel: MODEL_CONFIG[fallbackProvider].fast,
+    fallbackConfigured: MODEL_CONFIG[fallbackProvider].configured,
+    providers: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, { ...MODEL_CONFIG[provider] }])),
+    primaryTimeoutMs: PRIMARY_TIMEOUT_MS,
+    fastTimeoutMs: FAST_TIMEOUT_MS,
+  };
+};
 
-const isAIAvailable = () => MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured;
+const updateAISettings = ({ enabled, provider } = {}) => {
+  if (enabled !== undefined && typeof enabled !== 'boolean') {
+    const error = new TypeError('enabled must be a boolean');
+    error.code = 'INVALID_AI_SETTINGS';
+    throw error;
+  }
+  if (provider !== undefined && !SUPPORTED_PROVIDERS.has(provider)) {
+    const error = new TypeError(`provider must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
+    error.code = 'INVALID_AI_SETTINGS';
+    throw error;
+  }
+  if (provider !== undefined && !MODEL_CONFIG[provider].configured) {
+    const error = new Error(`${provider} is not configured`);
+    error.code = 'AI_PROVIDER_NOT_CONFIGURED';
+    throw error;
+  }
 
-module.exports = { askAI, askAIVision, getAIStatus, isAIAvailable };
+  const previous = { enabled: aiEnabled, provider: activeProvider };
+  if (enabled !== undefined) aiEnabled = enabled;
+  if (provider !== undefined) activeProvider = provider;
+  logger.warn(
+    { previous, current: { enabled: aiEnabled, provider: activeProvider } },
+    'AI runtime settings changed by administrator',
+  );
+  return getAIStatus();
+};
+
+const isAIAvailable = () => aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured);
+
+module.exports = { askAI, askAIVision, assertAIEnabled, getAIStatus, isAIAvailable, updateAISettings };

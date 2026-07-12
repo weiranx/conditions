@@ -16,6 +16,7 @@ import {
   Lock,
   Pause,
   Play,
+  Power,
   MapPinned,
   RefreshCw,
   Search,
@@ -78,12 +79,6 @@ interface AdminHealthSnapshot {
     heapUsedMb: number;
     rssMb: number;
   };
-  ai?: {
-    provider: string;
-    primaryModel: string;
-    configured: boolean;
-    fallbackConfigured: boolean;
-  };
   caches: Array<{
     name: string;
     size: number;
@@ -92,6 +87,25 @@ interface AdminHealthSnapshot {
     staleHits: number;
   }>;
   timestamp: string;
+}
+
+type AIProvider = 'openai' | 'anthropic';
+
+interface AIAdminSettings {
+  enabled: boolean;
+  available: boolean;
+  provider: AIProvider;
+  defaultProvider: AIProvider;
+  primaryModel: string;
+  fastModel: string;
+  configured: boolean;
+  fallbackProvider: AIProvider;
+  fallbackConfigured: boolean;
+  providers: Record<AIProvider, {
+    primary: string;
+    fast: string;
+    configured: boolean;
+  }>;
 }
 
 const ADMIN_SESSION_KEY = 'summitsafe:admin-key';
@@ -454,11 +468,14 @@ function SortButton({ sortKey, activeKey, ascending, onSort, children }: {
 function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [aiUsage, setAIUsage] = useState<AIUsageEntry[]>([]);
+  const [aiSettings, setAISettings] = useState<AIAdminSettings | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiUsageError, setAIUsageError] = useState<string | null>(null);
+  const [aiSettingsError, setAISettingsError] = useState<string | null>(null);
+  const [aiSettingsPending, setAISettingsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
@@ -475,12 +492,13 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     if (background) setRefreshing(true);
     try {
       const headers = { Authorization: `Bearer ${secretKey}` };
-      const [logsResult, aiUsageResult, healthResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, aiSettingsResult] = await Promise.all([
         fetchApi('/api/report-logs', { headers }),
         fetchApi('/api/ai-usage', { headers }),
         fetchApi('/api/healthz'),
+        fetchApi('/api/admin/ai-settings', { headers }),
       ]);
-      if ([logsResult.response.status, aiUsageResult.response.status].some((status) => status === 401 || status === 403)) {
+      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status].some((status) => status === 401 || status === 403)) {
         onUnauthorized();
         return;
       }
@@ -503,15 +521,59 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       } else {
         setHealthError('System details are temporarily unavailable.');
       }
+      if (aiSettingsResult.response.ok && aiSettingsResult.payload && typeof aiSettingsResult.payload === 'object') {
+        setAISettings(aiSettingsResult.payload as AIAdminSettings);
+        setAISettingsError(null);
+      } else {
+        setAISettingsError('AI controls are temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
       setHealthError('System details are temporarily unavailable.');
+      setAISettingsError('AI controls are temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [secretKey, onUnauthorized]);
+
+  const updateAIControl = useCallback(async (settings: { enabled?: boolean; provider?: AIProvider }) => {
+    setAISettingsPending(true);
+    setAISettingsError(null);
+    try {
+      const result = await fetchApi('/api/admin/ai-settings', {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
+      });
+      if (result.response.status === 401 || result.response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (result.response.ok && result.payload && typeof result.payload === 'object') {
+        setAISettings(result.payload as AIAdminSettings);
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : 'The server could not update AI controls.';
+      setAISettingsError(message);
+    } catch {
+      setAISettingsError('Could not reach the server to update AI controls.');
+    } finally {
+      setAISettingsPending(false);
+    }
+  }, [onUnauthorized, secretKey]);
+
+  const toggleAIEnabled = () => {
+    if (!aiSettings) return;
+    if (aiSettings.enabled && !window.confirm('Stop all AI features? New AI requests will fail until you turn them back on.')) return;
+    void updateAIControl({ enabled: !aiSettings.enabled });
+  };
 
   useEffect(() => {
     if (!hasLoadedRef.current) {
@@ -720,8 +782,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             </div>
             <div>
               <span><Bot size={14} aria-hidden /> AI provider</span>
-              <strong>{health?.ai?.provider ?? '—'}</strong>
-              <small>{health?.ai ? `${health.ai.primaryModel} · ${health.ai.configured ? 'configured' : 'key missing'}` : 'Provider unavailable'}</small>
+              <strong>{aiSettings?.enabled === false ? 'Stopped' : aiSettings?.provider ?? '—'}</strong>
+              <small>{aiSettings ? `${aiSettings.primaryModel} · ${aiSettings.configured ? 'configured' : 'key missing'}` : 'Provider unavailable'}</small>
             </div>
           </div>
         </article>
@@ -759,6 +821,69 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
         </article>
+      </section>
+
+      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title">
+        <div className="logs-chart-head">
+          <div>
+            <h2 id="admin-ai-controls-title">AI controls</h2>
+            <p>Runtime settings apply immediately and reset to environment defaults after a backend restart</p>
+          </div>
+          <span className={aiSettings?.enabled ? 'admin-ai-status is-enabled' : 'admin-ai-status is-stopped'}>
+            <span aria-hidden /> {aiSettings ? (aiSettings.enabled ? 'AI enabled' : 'AI stopped') : 'Status unavailable'}
+          </span>
+        </div>
+
+        {aiSettingsError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {aiSettingsError}</div>}
+
+        <div className="admin-ai-control-grid">
+          <div className="admin-ai-setting">
+            <span className="admin-ai-setting-icon"><Power size={18} aria-hidden /></span>
+            <div>
+              <strong>AI feature kill switch</strong>
+              <p>{aiSettings?.enabled ? 'AI briefs, chat, route analysis, and vision features can make model calls.' : 'All new text and vision model calls are blocked by the backend.'}</p>
+            </div>
+            <button
+              type="button"
+              className={aiSettings?.enabled ? 'admin-kill-switch is-enabled' : 'admin-kill-switch is-stopped'}
+              onClick={toggleAIEnabled}
+              disabled={!aiSettings || aiSettingsPending}
+              role="switch"
+              aria-checked={aiSettings?.enabled ?? false}
+            >
+              {aiSettingsPending ? 'Saving…' : aiSettings?.enabled ? 'Stop AI' : 'Enable AI'}
+            </button>
+          </div>
+
+          <div className="admin-ai-setting admin-provider-setting">
+            <span className="admin-ai-setting-icon"><Bot size={18} aria-hidden /></span>
+            <div>
+              <strong>Preferred provider</strong>
+              <p>New requests use this provider first and retain the other configured provider as fallback.</p>
+            </div>
+            <div className="admin-provider-options" role="radiogroup" aria-label="Preferred AI provider">
+              {(['openai', 'anthropic'] as const).map((provider) => {
+                const providerConfig = aiSettings?.providers[provider];
+                const selected = aiSettings?.provider === provider;
+                return (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={selected ? 'is-selected' : ''}
+                    key={provider}
+                    disabled={!providerConfig?.configured || aiSettingsPending}
+                    onClick={() => void updateAIControl({ provider })}
+                    title={providerConfig?.configured ? `Use ${provider}` : `${provider} key is not configured`}
+                  >
+                    <span>{provider === 'openai' ? 'OpenAI' : 'Anthropic'}</span>
+                    <small>{providerConfig?.configured ? providerConfig.primary : 'Key not configured'}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="logs-metrics" aria-label="Report analytics summary">

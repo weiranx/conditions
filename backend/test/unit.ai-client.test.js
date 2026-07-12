@@ -137,7 +137,10 @@ describe('AI provider client wrapper', () => {
     const { getAIStatus, isAIAvailable } = loadClient('anthropic');
 
     expect(getAIStatus()).toEqual({
+      enabled: true,
+      available: true,
       provider: 'anthropic',
+      defaultProvider: 'anthropic',
       primaryModel: 'claude-sonnet-5',
       fastModel: 'claude-haiku-4-5-20251001',
       configured: true,
@@ -145,6 +148,18 @@ describe('AI provider client wrapper', () => {
       fallbackPrimaryModel: 'gpt-5.6-terra',
       fallbackFastModel: 'gpt-5.6-luna',
       fallbackConfigured: true,
+      providers: {
+        openai: {
+          primary: 'gpt-5.6-terra',
+          fast: 'gpt-5.6-luna',
+          configured: true,
+        },
+        anthropic: {
+          primary: 'claude-sonnet-5',
+          fast: 'claude-haiku-4-5-20251001',
+          configured: true,
+        },
+      },
       primaryTimeoutMs: 28000,
       fastTimeoutMs: 8000,
     });
@@ -158,6 +173,42 @@ describe('AI provider client wrapper', () => {
     const { isAIAvailable } = loadClient('openai');
 
     expect(isAIAvailable()).toBe(false);
+  });
+
+  test('switches the preferred provider at runtime', async () => {
+    mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'runtime switch' }] });
+    const { askAI, getAIStatus, updateAISettings } = loadClient('openai');
+
+    expect(updateAISettings({ provider: 'anthropic' })).toEqual(expect.objectContaining({
+      enabled: true,
+      provider: 'anthropic',
+      defaultProvider: 'openai',
+    }));
+    await expect(askAI('conditions')).resolves.toBe('runtime switch');
+    expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
+    expect(mockOpenAICreate).not.toHaveBeenCalled();
+    expect(getAIStatus().fallbackProvider).toBe('openai');
+  });
+
+  test('kill switch blocks text and vision calls before reaching a provider', async () => {
+    const { askAI, askAIVision, getAIStatus, isAIAvailable, updateAISettings } = loadClient('openai');
+
+    updateAISettings({ enabled: false });
+
+    await expect(askAI('conditions')).rejects.toMatchObject({ code: 'AI_DISABLED' });
+    await expect(askAIVision('YWJj', 'analyze')).rejects.toMatchObject({ code: 'AI_DISABLED' });
+    expect(mockOpenAICreate).not.toHaveBeenCalled();
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+    expect(getAIStatus()).toEqual(expect.objectContaining({ enabled: false, available: false }));
+    expect(isAIAvailable()).toBe(false);
+  });
+
+  test('rejects switching to a provider without a configured key', () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const { getAIStatus, updateAISettings } = loadClient('openai');
+
+    expect(() => updateAISettings({ provider: 'anthropic' })).toThrow('anthropic is not configured');
+    expect(getAIStatus().provider).toBe('openai');
   });
 
   test('falls back when the selected provider API key is missing', async () => {

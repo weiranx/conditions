@@ -178,4 +178,27 @@ describe('report chat request handling', () => {
     expect(noUser.status).toBe(400);
     expect(createStream).not.toHaveBeenCalled();
   });
+
+  test('rejects new report chats when the AI kill switch is active', async () => {
+    const app = express();
+    app.use(express.json());
+    const createStream = jest.fn();
+    const disabledError = Object.assign(new Error('AI features are disabled by an administrator'), { code: 'AI_DISABLED' });
+    registerReportChatRoute({
+      app,
+      createStream,
+      ensureAIEnabled: () => { throw disabledError; },
+    });
+
+    const response = await request(app)
+      .post('/api/report-chat')
+      .send({
+        report: { decision: { level: 'CAUTION' } },
+        messages: [{ id: 'question', role: 'user', parts: [{ type: 'text', text: 'What changed?' }] }],
+      });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toMatch(/disabled by an administrator/i);
+    expect(createStream).not.toHaveBeenCalled();
+  });
 });
