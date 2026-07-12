@@ -18,7 +18,6 @@ export const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
 export const BACKEND_WAKE_RETRY_MAX_ATTEMPTS = 24;
 export const APP_DISCLAIMER_TEXT =
   'Backcountry Conditions is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or wrong. Verify official weather, avalanche, fire, and land-management products, then make final decisions from field observations and team judgment.';
-export const APP_CREDIT_TEXT = 'Built by Weiran Xiong with AI support.';
 
 export const FT_PER_METER = 3.28084;
 export const METER_PER_FOOT = 1 / FT_PER_METER;

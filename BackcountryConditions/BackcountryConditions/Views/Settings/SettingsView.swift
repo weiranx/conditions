@@ -106,7 +106,6 @@ struct SettingsView: View {
 
         VStack(alignment: .leading, spacing: 8) {
             Text(Configuration.appDisclaimer).font(.webSans(11)).foregroundStyle(Color.webInkTertiary).lineSpacing(3)
-            Text(Configuration.appCredit).font(.webMono(9)).foregroundStyle(Color.webInkTertiary)
         }
         .padding(4)
     }

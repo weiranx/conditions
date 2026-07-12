@@ -4,10 +4,6 @@ SummitSafe is a backcountry planning app that synthesizes weather, avalanche, al
 
 Built for ski mountaineers, alpinists, trail runners, and backcountry travelers who need consolidated condition data before committing to terrain.
 
-## Credits
-
-Built by Weiran Xiong with AI support.
-
 ## What It Does
 
 Enter an objective, pick a date and start time, and the app returns a unified conditions report covering:
