@@ -86,9 +86,12 @@
 .report-chat-message { max-width: 88%; }
 .report-chat-message-content {
   width: fit-content;
+  min-width: 0;
+  max-width: 100%;
   padding: 0;
   color: var(--d-ink);
   font: 450 13px/1.58 var(--ssr-sans);
+  overflow-wrap: anywhere;
 }
 
 .report-chat-message.is-user .report-chat-message-content {
@@ -182,9 +185,10 @@
 
 .report-chat-form {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 9px;
+  min-width: 0;
   padding: 10px 10px 8px;
   border-top: 1px solid var(--d-line);
   background: var(--d-surface);
@@ -192,6 +196,7 @@
 
 .report-chat-form textarea {
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   max-height: 110px;
   resize: vertical;
@@ -235,10 +240,20 @@
 
 @media (max-width: 560px) {
   .report-chat-message { max-width: 94%; }
-  .report-chat-conversation { height: 360px; }
+  .report-chat-conversation { height: clamp(220px, 42dvh, 360px); }
   .report-chat-suggestions { flex-direction: column; width: 100%; }
   .report-chat-suggestions button { width: 100%; }
   .report-chat-follow-up-list { align-items: stretch; }
+
+  /* iOS Safari zooms the page when a focused form control is below 16px,
+     which makes the composer and fixed navigation appear wider than the
+     phone. Keep the chat at the native viewport scale while typing. */
+  .report-chat-form textarea {
+    font-size: 16px;
+    resize: none;
+  }
+
+  .report-chat-disclaimer { overflow-wrap: anywhere; }
 }
 
 @media (prefers-reduced-motion: reduce) {

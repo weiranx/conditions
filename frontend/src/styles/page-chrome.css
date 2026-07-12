@@ -130,6 +130,16 @@
     border-top: 1px solid var(--ui-line);
     border-bottom: 0;
     background: color-mix(in oklch, var(--ui-surface) 96%, transparent);
+    transition: transform 160ms ease, opacity 160ms ease;
+  }
+
+  /* The software keyboard already occupies the lower viewport. Moving the
+     fixed tab bar out of the way keeps focused fields and their actions
+     visible instead of wedging navigation between the form and keyboard. */
+  body:has(input:focus, textarea:focus, select:focus) .ssr-product-nav {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(100%);
   }
 
   .ssr-product-nav-inner {
@@ -189,4 +199,8 @@
   .page-shell-logs .settings-shell { padding-top: 0; }
   .status-shell > .settings-head,
   .page-shell-logs .settings-shell > .settings-head { padding-top: 28px; }
+}
+
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .ssr-product-nav { transition: none; }
 }
