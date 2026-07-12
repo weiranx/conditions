@@ -313,6 +313,16 @@ test('AI admin settings endpoints reject access without the admin key', async ()
   expect([401, 403]).toContain(patchResponse.status);
 });
 
+test.each([
+  '/api/admin/maintenance/report-logs',
+  '/api/admin/maintenance/ai-usage',
+  '/api/admin/maintenance/caches',
+  '/api/admin/maintenance/feature-flags',
+])('POST %s rejects access without the admin key', async (path) => {
+  const response = await request(app).post(path);
+  expect([401, 403]).toContain(response.status);
+});
+
 // ── Response shape / header assertions ───────────────────────────────────────
 
 test('All 400 validation errors return JSON content-type', async () => {

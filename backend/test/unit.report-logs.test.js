@@ -13,18 +13,25 @@ test('authorized AI admin routes read and update runtime settings', () => {
 
   const getAIStatus = jest.fn(() => ({ enabled: true, provider: 'openai' }));
   const updateAISettings = jest.fn((settings) => ({ enabled: settings.enabled, provider: 'openai' }));
+  const getAIUsageEntries = jest.fn(() => []);
+  const clearAIUsageEntries = jest.fn(() => 7);
   const getFeatureFlagStatus = jest.fn(() => ({ persistent: true, flags: { tripPlanning: true } }));
   const updateFeatureFlags = jest.fn((flags) => ({ persistent: true, flags }));
+  const resetFeatureFlags = jest.fn(() => ({ persistent: true, flags: { tripPlanning: true } }));
   jest.doMock('../src/utils/ai-client', () => ({ getAIStatus, updateAISettings }));
-  jest.doMock('../src/utils/feature-flags', () => ({ getFeatureFlagStatus, updateFeatureFlags }));
+  jest.doMock('../src/utils/ai-usage', () => ({ clearAIUsageEntries, getAIUsageEntries }));
+  jest.doMock('../src/utils/feature-flags', () => ({ getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags }));
 
-  const routes = { get: new Map(), patch: new Map() };
+  const routes = { get: new Map(), patch: new Map(), post: new Map() };
   const app = {
     get: jest.fn((path, handler) => routes.get.set(path, handler)),
     patch: jest.fn((path, handler) => routes.patch.set(path, handler)),
+    post: jest.fn((path, handler) => routes.post.set(path, handler)),
   };
+  const firstCache = { clear: jest.fn(), stats: jest.fn(() => ({ name: 'weather', size: 3 })) };
+  const secondCache = { clear: jest.fn(), stats: jest.fn(() => ({ name: 'imagery', size: 2 })) };
   const { registerReportLogsRoute } = require('../src/routes/report-logs');
-  registerReportLogsRoute(app);
+  registerReportLogsRoute(app, { caches: [firstCache, null, secondCache] });
 
   const createResponse = () => ({
     statusCode: 200,
@@ -62,7 +69,31 @@ test('authorized AI admin routes read and update runtime settings', () => {
   expect(updateFeatureFlags).toHaveBeenCalledWith({ tripPlanning: false });
   expect(patchFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: false } });
 
+  const aiUsageResponse = createResponse();
+  routes.post.get('/api/admin/maintenance/ai-usage')({ headers }, aiUsageResponse);
+  expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
+  expect(aiUsageResponse.payload).toEqual({ cleared: 7 });
+
+  const cachesResponse = createResponse();
+  routes.post.get('/api/admin/maintenance/caches')({ headers }, cachesResponse);
+  expect(firstCache.clear).toHaveBeenCalledTimes(1);
+  expect(secondCache.clear).toHaveBeenCalledTimes(1);
+  expect(cachesResponse.payload).toEqual({ cleared: ['weather', 'imagery'], count: 2 });
+
+  const resetFlagsResponse = createResponse();
+  routes.post.get('/api/admin/maintenance/feature-flags')({ headers }, resetFlagsResponse);
+  expect(resetFeatureFlags).toHaveBeenCalledTimes(1);
+  expect(resetFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
+
+  const unauthorizedResponse = createResponse();
+  routes.post.get('/api/admin/maintenance/ai-usage')({ headers: {} }, unauthorizedResponse);
+  expect(unauthorizedResponse.statusCode).toBe(401);
+  expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
+
+  expect(routes.post.has('/api/admin/maintenance/report-logs')).toBe(true);
+
   jest.dontMock('../src/utils/ai-client');
+  jest.dontMock('../src/utils/ai-usage');
   jest.dontMock('../src/utils/feature-flags');
   if (originalSecret === undefined) delete process.env.LOGS_SECRET;
   else process.env.LOGS_SECRET = originalSecret;

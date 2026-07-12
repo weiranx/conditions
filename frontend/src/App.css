@@ -881,6 +881,39 @@ input {
 
 .admin-all-clear { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--ui-go-ink); font-size: 10.5px; }
 
+.admin-maintenance-card { display: grid; gap: 10px; }
+
+.admin-maintenance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-maintenance-grid button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-maintenance-grid button:hover:not(:disabled) { border-color: var(--ui-brand); background: var(--ui-brand-soft); }
+.admin-maintenance-grid button:disabled { cursor: default; opacity: 0.55; }
+.admin-maintenance-grid button > span:first-child { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; background: var(--ui-surface); color: var(--ui-text-3); }
+.admin-maintenance-grid button > span:nth-child(2) { display: grid; min-width: 0; }
+.admin-maintenance-grid strong { font-size: 11.5px; }
+.admin-maintenance-grid small { margin-top: 2px; color: var(--ui-text-4); font-size: 9.5px; line-height: 1.35; }
+.admin-maintenance-grid b { grid-column: 1 / -1; color: var(--ui-text-3); font-family: var(--font-data); font-size: 9.5px; font-weight: 650; }
+.logs-inline-note.is-success { color: var(--ui-go-ink); }
+
 .admin-ai-controls { display: grid; gap: 12px; }
 
 .admin-ai-status {
@@ -11033,6 +11066,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-range-control { flex: 1; }
   .logs-range-control button { flex: 1; }
   .admin-operations-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ai-control-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-ai-setting { grid-template-columns: 36px minmax(0, 1fr); }
@@ -11314,6 +11348,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 @media (max-width: 560px) {
+  .admin-maintenance-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   /* Coordinates stay available in the report header; the pill just adds clutter here */
   .map-overlay-coords {
     display: none;

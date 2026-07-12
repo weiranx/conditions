@@ -22,12 +22,14 @@ import {
   Power,
   MapPinned,
   RefreshCw,
+  RotateCcw,
   Route,
   Satellite,
   Search,
   Server,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -279,6 +281,7 @@ export function AdminView({ navigateToView, openPlannerView, openTripToolView }:
 type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' | 'durationMs' | 'ip';
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow';
 type AnalyticsRange = '24h' | '7d';
+type MaintenanceAction = 'reportLogs' | 'aiUsage' | 'caches' | 'featureFlags';
 
 const ANALYTICS_RANGES: Array<{ value: AnalyticsRange; label: string; durationMs: number }> = [
   { value: '24h', label: 'Last 24 hours', durationMs: 24 * 60 * 60 * 1000 },
@@ -556,6 +559,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [maintenancePending, setMaintenancePending] = useState<MaintenanceAction | null>(null);
+  const [maintenanceNotice, setMaintenanceNotice] = useState<{ message: string; error: boolean } | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
   const [sortAsc, setSortAsc] = useState(false);
@@ -706,6 +711,76 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       setFeatureFlagsError('Could not reach the server to update product feature flags.');
     } finally {
       setFeatureFlagsPending(false);
+    }
+  };
+
+  const runMaintenanceAction = async (action: MaintenanceAction) => {
+    const config: Record<MaintenanceAction, {
+      endpoint: string;
+      confirmation: string;
+      success: string;
+    }> = {
+      reportLogs: {
+        endpoint: '/api/admin/maintenance/report-logs',
+        confirmation: 'Clear all stored report activity? This cannot be undone.',
+        success: 'Report activity was cleared.',
+      },
+      aiUsage: {
+        endpoint: '/api/admin/maintenance/ai-usage',
+        confirmation: 'Clear all stored AI usage history? This cannot be undone.',
+        success: 'AI usage history was cleared.',
+      },
+      caches: {
+        endpoint: '/api/admin/maintenance/caches',
+        confirmation: 'Clear backend data caches? The next requests may take longer while data is refreshed.',
+        success: 'Backend caches were cleared.',
+      },
+      featureFlags: {
+        endpoint: '/api/admin/maintenance/feature-flags',
+        confirmation: 'Restore every product feature flag to its enabled default?',
+        success: 'Product feature flags were restored.',
+      },
+    };
+    const selected = config[action];
+    if (!window.confirm(selected.confirmation)) return;
+
+    setMaintenancePending(action);
+    setMaintenanceNotice(null);
+    try {
+      const result = await fetchApi(selected.endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      if (result.response.status === 401 || result.response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The server could not complete this maintenance action.';
+        setMaintenanceNotice({ message, error: true });
+        return;
+      }
+
+      if (action === 'reportLogs') setLogs([]);
+      if (action === 'aiUsage') setAIUsage([]);
+      if (action === 'caches') {
+        setHealth((current) => current ? {
+          ...current,
+          caches: current.caches.map((cache) => ({ ...cache, size: 0 })),
+        } : current);
+      }
+      if (action === 'featureFlags' && result.payload && typeof result.payload === 'object') {
+        const nextStatus = result.payload as ProductFeatureFlagStatus;
+        setFeatureFlagStatus(nextStatus);
+        publishProductFeatureFlags(nextStatus.flags);
+      }
+      setMaintenanceNotice({ message: selected.success, error: false });
+    } catch {
+      setMaintenanceNotice({ message: 'Could not reach the server to complete this maintenance action.', error: true });
+    } finally {
+      setMaintenancePending(null);
     }
   };
 
@@ -955,6 +1030,63 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
         </article>
+      </section>
+
+      <section className="logs-chart-card admin-maintenance-card" aria-labelledby="admin-maintenance-title">
+        <div className="logs-chart-head">
+          <div>
+            <h2 id="admin-maintenance-title">Maintenance controls</h2>
+            <p>Clear operational data or restore product defaults without restarting the server</p>
+          </div>
+          <Database size={18} aria-hidden />
+        </div>
+        {maintenanceNotice && (
+          <div
+            className={maintenanceNotice.error ? 'logs-inline-note' : 'logs-inline-note is-success'}
+            role={maintenanceNotice.error ? 'alert' : 'status'}
+          >
+            {maintenanceNotice.error ? <AlertTriangle size={15} aria-hidden /> : <CheckCircle2 size={15} aria-hidden />}
+            {maintenanceNotice.message}
+          </div>
+        )}
+        <div className="admin-maintenance-grid">
+          <button
+            type="button"
+            onClick={() => void runMaintenanceAction('reportLogs')}
+            disabled={maintenancePending !== null || logs.length === 0}
+          >
+            <span><Trash2 size={17} aria-hidden /></span>
+            <span><strong>Clear report activity</strong><small>Delete retained request logs and analytics history</small></span>
+            <b>{maintenancePending === 'reportLogs' ? 'Clearing…' : logs.length.toLocaleString()}</b>
+          </button>
+          <button
+            type="button"
+            onClick={() => void runMaintenanceAction('aiUsage')}
+            disabled={maintenancePending !== null || aiUsage.length === 0}
+          >
+            <span><Bot size={17} aria-hidden /></span>
+            <span><strong>Clear AI usage</strong><small>Delete retained model usage and token history</small></span>
+            <b>{maintenancePending === 'aiUsage' ? 'Clearing…' : aiUsage.length.toLocaleString()}</b>
+          </button>
+          <button
+            type="button"
+            onClick={() => void runMaintenanceAction('caches')}
+            disabled={maintenancePending !== null || !health || health.caches.every((cache) => cache.size === 0)}
+          >
+            <span><Database size={17} aria-hidden /></span>
+            <span><strong>Clear data caches</strong><small>Force fresh weather, avalanche, elevation, and imagery data</small></span>
+            <b>{maintenancePending === 'caches' ? 'Clearing…' : cacheMetrics.entries.toLocaleString()}</b>
+          </button>
+          <button
+            type="button"
+            onClick={() => void runMaintenanceAction('featureFlags')}
+            disabled={maintenancePending !== null || !featureFlagStatus || Object.values(featureFlagStatus.flags).every(Boolean)}
+          >
+            <span><RotateCcw size={17} aria-hidden /></span>
+            <span><strong>Restore feature defaults</strong><small>Enable every product feature flag in one step</small></span>
+            <b>{maintenancePending === 'featureFlags' ? 'Restoring…' : 'Reset'}</b>
+          </button>
+        </div>
       </section>
 
       <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title">

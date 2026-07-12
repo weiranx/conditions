@@ -119,10 +119,13 @@ const updateFeatureFlags = (updates) => {
   return getFeatureFlagStatus();
 };
 
+const resetFeatureFlags = () => updateFeatureFlags(DEFAULT_FEATURE_FLAGS);
+
 module.exports = {
   assertFeatureEnabled,
   getFeatureFlags,
   getFeatureFlagStatus,
   isFeatureEnabled,
+  resetFeatureFlags,
   updateFeatureFlags,
 };

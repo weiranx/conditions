@@ -41,6 +41,20 @@ test('product feature flags reject unknown or non-boolean values', () => {
   expect(() => updateFeatureFlags({ tripPlanning: 'off' })).toThrow('tripPlanning must be a boolean');
 });
 
+test('product feature flags can be restored to enabled defaults', () => {
+  const { getFeatureFlags, resetFeatureFlags, updateFeatureFlags } = loadFeatureFlags();
+
+  updateFeatureFlags({ tripPlanning: false, satelliteImagery: false, startTimeComparisons: false });
+  const status = resetFeatureFlags();
+
+  expect(status.flags).toEqual({
+    tripPlanning: true,
+    satelliteImagery: true,
+    startTimeComparisons: true,
+  });
+  expect(getFeatureFlags()).toEqual(status.flags);
+});
+
 test('product feature flags persist across module reloads', () => {
   const settingsFile = path.join(os.tmpdir(), `conditions-feature-flags-${process.pid}-${Date.now()}.json`);
   try {

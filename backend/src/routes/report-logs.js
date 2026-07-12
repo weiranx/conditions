@@ -2,9 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { logger } = require('../utils/logger');
-const { getAIUsageEntries } = require('../utils/ai-usage');
+const { clearAIUsageEntries, getAIUsageEntries } = require('../utils/ai-usage');
 const { getAIStatus, updateAISettings } = require('../utils/ai-client');
-const { getFeatureFlagStatus, updateFeatureFlags } = require('../utils/feature-flags');
+const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require('../utils/feature-flags');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -60,8 +60,10 @@ const rewriteFile = () => {
       ? reportLogs.map((r) => JSON.stringify(r)).join('\n') + '\n'
       : '';
     fs.writeFileSync(LOG_FILE, content, 'utf8');
+    return true;
   } catch (err) {
     logger.error({ err }, 'report-logs rewrite failed');
+    return false;
   }
 };
 
@@ -121,6 +123,18 @@ const logReportRequest = (entry) => {
   }
 };
 
+const clearReportLogs = () => {
+  const previous = [...reportLogs];
+  reportLogs.splice(0);
+  if (!rewriteFile()) {
+    reportLogs.push(...previous);
+    const error = new Error('Report activity could not be cleared');
+    error.code = 'REPORT_LOGS_CLEAR_FAILED';
+    throw error;
+  }
+  return previous.length;
+};
+
 const LOGS_SECRET = process.env.LOGS_SECRET || '';
 
 // Constant-time secret comparison — avoids leaking timing information that could help an
@@ -135,7 +149,7 @@ const secretsMatch = (provided, expected) => {
   return crypto.timingSafeEqual(providedBuf, expectedBuf);
 };
 
-const registerReportLogsRoute = (app) => {
+const registerReportLogsRoute = (app, { caches = [] } = {}) => {
   const authorize = (req, res) => {
     if (!LOGS_SECRET) {
       res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
@@ -199,6 +213,45 @@ const registerReportLogsRoute = (app) => {
       res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid feature flags' });
     }
   });
+
+  app.post('/api/admin/maintenance/report-logs', (req, res) => {
+    if (!authorize(req, res)) return;
+    try {
+      res.json({ cleared: clearReportLogs() });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Report activity could not be cleared' });
+    }
+  });
+
+  app.post('/api/admin/maintenance/ai-usage', (req, res) => {
+    if (!authorize(req, res)) return;
+    try {
+      res.json({ cleared: clearAIUsageEntries() });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'AI usage history could not be cleared' });
+    }
+  });
+
+  app.post('/api/admin/maintenance/caches', (req, res) => {
+    if (!authorize(req, res)) return;
+    const cleared = caches.flatMap((cache) => {
+      if (!cache || typeof cache.clear !== 'function') return [];
+      const stats = typeof cache.stats === 'function' ? cache.stats() : null;
+      cache.clear();
+      return [stats?.name || 'unnamed-cache'];
+    });
+    res.json({ cleared, count: cleared.length });
+  });
+
+  app.post('/api/admin/maintenance/feature-flags', (req, res) => {
+    if (!authorize(req, res)) return;
+    try {
+      res.json(resetFeatureFlags());
+    } catch (error) {
+      const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
+      res.status(status).json({ error: error instanceof Error ? error.message : 'Feature flags could not be reset' });
+    }
+  });
 };
 
-module.exports = { logReportRequest, registerReportLogsRoute, isRouteWaypointEntry };
+module.exports = { clearReportLogs, logReportRequest, registerReportLogsRoute, isRouteWaypointEntry };

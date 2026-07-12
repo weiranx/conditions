@@ -781,11 +781,19 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
 });
 registerFeatureFlagRoutes(app);
+const observableCaches = [
+  noaaPointsCache,
+  elevationCache,
+  solarCache,
+  noaaForecastCache,
+  avalancheForecastCache,
+  satelliteTileCache,
+];
 registerHealthRoutes(app, {
-  caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, avalancheForecastCache, satelliteTileCache],
+  caches: observableCaches,
   ai: getAIStatus,
 });
-registerReportLogsRoute(app);
+registerReportLogsRoute(app, { caches: observableCaches });
 registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askAI });
 registerReportChatRoute({ app });

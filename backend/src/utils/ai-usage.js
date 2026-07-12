@@ -33,8 +33,10 @@ const rewriteFile = () => {
       ? `${aiUsageEntries.map((entry) => JSON.stringify(entry)).join('\n')}\n`
       : '';
     fs.writeFileSync(USAGE_FILE, content, 'utf8');
+    return true;
   } catch (error) {
     logger.error({ err: error }, 'ai-usage rewrite failed');
+    return false;
   }
 };
 
@@ -94,4 +96,16 @@ const getAIUsageEntries = () => {
   return [...aiUsageEntries].reverse();
 };
 
-module.exports = { getAIUsageEntries, normalizeTokenUsage, recordAIUsage };
+const clearAIUsageEntries = () => {
+  const previous = [...aiUsageEntries];
+  aiUsageEntries.splice(0);
+  if (!rewriteFile()) {
+    aiUsageEntries.push(...previous);
+    const error = new Error('AI usage history could not be cleared');
+    error.code = 'AI_USAGE_CLEAR_FAILED';
+    throw error;
+  }
+  return previous.length;
+};
+
+module.exports = { clearAIUsageEntries, getAIUsageEntries, normalizeTokenUsage, recordAIUsage };
