@@ -37,7 +37,7 @@ function withViewTransition(apply: () => void, fallback: () => void = apply) {
   transition?.updateCallbackDone?.catch(() => {});
 }
 
-export type AppView = 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms';
+export type AppView = 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
 
 export interface UseUrlStateParams {
   todayDate: string;
@@ -142,6 +142,14 @@ export function useSyncUrlEffect(params: {
 
   useEffect(() => {
     if (typeof window === 'undefined') {
+      return;
+    }
+
+    // Keep the requested path visible on the 404 page. A subsequent in-app
+    // navigation will replace it with the destination's canonical path.
+    if (view === 'not-found') {
+      isApplyingPopStateRef.current = false;
+      hasInitializedHistoryRef.current = true;
       return;
     }
 

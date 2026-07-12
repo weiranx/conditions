@@ -68,9 +68,22 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const hasExplicitAdminView = viewParam === 'admin' || viewParam === 'logs';
   const hasExplicitPrivacyView = viewParam === 'privacy';
   const hasExplicitTermsView = viewParam === 'terms';
+  const hasUnknownView = Boolean(viewParam) && ![
+    'home',
+    'planner',
+    'settings',
+    'status',
+    'trip',
+    'admin',
+    'logs',
+    'privacy',
+    'terms',
+  ].includes(viewParam);
 
   return {
-    view: hasExplicitSettingsView
+    view: hasUnknownView
+      ? 'not-found'
+      : hasExplicitSettingsView
       ? 'settings'
       : hasExplicitStatusView
         ? 'status'
@@ -98,7 +111,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 }
 
 export function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;
