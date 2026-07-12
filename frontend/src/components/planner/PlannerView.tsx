@@ -601,9 +601,9 @@ function PlannerViewComponent(props: PlannerViewProps) {
     formatGeneratedAt,
   } = props;
 
-  // Once a report is showing, its input fields are locked — changing them
-  // requires explicitly editing the plan (see onEditPlan), so a
-  // displayed report can't be silently mutated out from under the user.
+  // Once a report is showing, its timing inputs stay locked. Location controls
+  // remain available because selecting a new objective clears the old report
+  // and returns the planner to its explicit pre-generation state.
   const reportLocked = Boolean(safetyData);
   const objectiveReady = hasObjective && !objectiveDraftDirty;
 
@@ -634,7 +634,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleUseTypedCoordinates={handleUseTypedCoordinates}
         selectSuggestion={selectSuggestion}
         setActiveSuggestionIndex={setActiveSuggestionIndex}
-        disabled={reportLocked}
         hasObjective={objectiveReady}
         objectiveIsSaved={objectiveIsSaved}
         handleToggleSaveObjective={handleToggleSaveObjective}

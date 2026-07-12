@@ -265,7 +265,7 @@ export function PlannerMapSection({
             imperial={preferences.elevationUnit === 'ft'}
             metric={preferences.elevationUnit === 'm'}
           />
-          <LocationMarker position={position} setPosition={updateObjectivePosition} locked={locked} />
+          <LocationMarker position={position} setPosition={updateObjectivePosition} />
           <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
           <CtrlScrollZoom />
         </MapContainer>
@@ -288,7 +288,7 @@ export function PlannerMapSection({
             type="button"
             className="map-overlay-btn"
             onClick={handleUseCurrentLocation}
-            disabled={locatingUser || locked}
+            disabled={locatingUser}
             title={locatingUser ? 'Locating...' : 'Use my location'}
             aria-label="Use my location"
           >
