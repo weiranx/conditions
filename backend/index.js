@@ -355,6 +355,29 @@ const safetyHandler = async (req, res) => {
         (value) => ({ status: 'fulfilled', value }),
         (reason) => ({ status: 'rejected', reason }),
       );
+
+    // A normal report request always includes a date. Snowpack and local
+    // conditions only need coordinates plus that date, so start them beside
+    // weather and avalanche instead of waiting for the weather pipeline to
+    // finish. Settling immediately also prevents a fast rejection from
+    // becoming unhandled while the critical weather path is still running.
+    const prefetchedSnowpackPromise = requestedDate
+      ? fetchSnowpackData(parsedLat, parsedLon, requestedDate, fetchOptions).then(
+          (value) => ({ status: 'fulfilled', value }),
+          (reason) => ({ status: 'rejected', reason }),
+        )
+      : null;
+    const prefetchedLocalConditionsPromise = requestedDate
+      ? fetchLocalConditions({
+          lat: parsedLat,
+          lon: parsedLon,
+          selectedDate: requestedDate,
+          fetchOptions,
+        }).then(
+          (value) => ({ status: 'fulfilled', value }),
+          (reason) => ({ status: 'rejected', reason }),
+        )
+      : null;
     try {
       const weatherResult = await fetchWeatherPipeline({
         parsedLat,
@@ -412,17 +435,22 @@ const safetyHandler = async (req, res) => {
       referenceIso: weatherData?.forecastStartTime || selectedForecastPeriod?.startTime || weatherData?.issuedTime || null,
     });
 
-    const parallelBatchPromise = Promise.allSettled([
-      fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso),
+    const settle = (promise) => Promise.resolve(promise).then(
+      (value) => ({ status: 'fulfilled', value }),
+      (reason) => ({ status: 'rejected', reason }),
+    );
+    const parallelBatchPromise = Promise.all([
+      settle(fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
       useCurrentDayAirQuality
-        ? fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)
-        : Promise.resolve({
+        ? settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions))
+        : settle(Promise.resolve({
             ...createUnavailableAirQualityData('not_applicable_future_date'),
             note: 'Air quality is current-day only and is not applied to future-date forecasts.',
-          }),
-      fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions),
-      fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions),
-      fetchAtmosphericSignals({
+          })),
+      settle(fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
+      prefetchedSnowpackPromise
+        || settle(fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions)),
+      settle(fetchAtmosphericSignals({
         lat: parsedLat,
         lon: parsedLon,
         selectedDate: selectedForecastDate,
@@ -430,13 +458,14 @@ const safetyHandler = async (req, res) => {
         gridDataUrl,
         targetTimeIso: alertTargetTimeIso || airQualityTargetTime,
         fetchOptions,
-      }),
-      fetchLocalConditions({
-        lat: parsedLat,
-        lon: parsedLon,
-        selectedDate: selectedForecastDate,
-        fetchOptions,
-      }),
+      })),
+      prefetchedLocalConditionsPromise
+        || settle(fetchLocalConditions({
+          lat: parsedLat,
+          lon: parsedLon,
+          selectedDate: selectedForecastDate,
+          fetchOptions,
+        })),
     ]);
 
     // 3. Avalanche Pipeline: Map Layer → Detail APIs → Scraper Fallback

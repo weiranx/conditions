@@ -4,6 +4,7 @@ const { createAlertsService } = require('../src/utils/alerts');
 const { createAtmosphericService } = require('../src/utils/atmospheric-fetch');
 const { createPrecipitationService } = require('../src/utils/precipitation');
 const { createWeatherDataService } = require('../src/utils/weather-data');
+const { createLocalConditionsService } = require('../src/utils/local-conditions-fetch');
 
 const precipitationPayload = {
   timezone: 'UTC',
@@ -22,6 +23,34 @@ const okJsonResponse = (payload) => ({
 });
 
 describe('provider raw-payload caches', () => {
+  test('local conditions reuses the assembled snapshot for repeated reports', async () => {
+    const fetchWithTimeout = jest.fn(async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+      text: async () => '',
+    }));
+    const { fetchLocalConditions } = createLocalConditionsService({
+      fetchWithTimeout,
+      haversineKm: () => 0,
+      requestTimeoutMs: 100,
+    });
+    const request = {
+      lat: 46.8523,
+      lon: -121.7603,
+      selectedDate: '2026-07-10',
+      fetchOptions: {},
+    };
+
+    const first = await fetchLocalConditions(request);
+    const callsAfterFirstReport = fetchWithTimeout.mock.calls.length;
+    const second = await fetchLocalConditions(request);
+
+    expect(callsAfterFirstReport).toBeGreaterThan(0);
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(callsAfterFirstReport);
+    expect(second).toEqual(first);
+  });
+
   test('Open-Meteo weather reuses raw data while selecting each requested start time', async () => {
     const weatherPayload = {
       timezone: 'UTC',

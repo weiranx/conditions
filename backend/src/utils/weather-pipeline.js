@@ -57,6 +57,37 @@ async function fetchWeatherPipeline({
   let trailStatus;
   let gridDataUrl = null;
 
+  const fetchSolarData = async (solarDate) => {
+    try {
+      const solarCacheKey = normalizeCoordDateKey(parsedLat, parsedLon, solarDate);
+      return await solarCache.getOrFetch(solarCacheKey, async () => {
+        const solarRes = await fetchWithTimeout(
+          `https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`,
+          fetchOptions,
+        );
+        if (!solarRes.ok) throw new Error(`Solar API returned ${solarRes.status}`);
+        const solarJson = await solarRes.json();
+        if (solarJson.status !== 'OK') throw new Error('Solar API status not OK');
+        return {
+          sunrise: solarJson.results.sunrise,
+          sunset: solarJson.results.sunset,
+          dayLength: solarJson.results.day_length,
+        };
+      });
+    } catch (error) {
+      logger.error({ err: error }, 'Solar API error');
+      return null;
+    }
+  };
+
+  // The UI always supplies a report date. Start the date-scoped solar lookup
+  // before NOAA weather so a cold solar-cache miss does not add another serial
+  // network round trip after the forecast has finished.
+  const prefetchedSolarDate = requestedDate || null;
+  const prefetchedSolarPromise = prefetchedSolarDate
+    ? fetchSolarData(prefetchedSolarDate)
+    : null;
+
   // NOAA is a single critical-path upstream hit on every request; when a breaker is
   // injected, fast-fail once it's been chronically failing instead of piling on more
   // doomed requests. Tests/callers that don't inject one simply skip the breaker check.
@@ -343,29 +374,15 @@ async function fetchWeatherPipeline({
       }
     }
 
-    // 2.5 Get Solar Data (cached 7d per coord+date)
-    try {
-      const solarDate =
-        selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
-      const solarCacheKey = normalizeCoordDateKey(parsedLat, parsedLon, solarDate);
-      const cachedSolar = await solarCache.getOrFetch(solarCacheKey, async () => {
-        const solarRes = await fetchWithTimeout(
-          `https://api.sunrisesunset.io/json?lat=${parsedLat}&lng=${parsedLon}&date=${solarDate}`,
-          fetchOptions,
-        );
-        if (!solarRes.ok) throw new Error(`Solar API returned ${solarRes.status}`);
-        const solarJson = await solarRes.json();
-        if (solarJson.status !== 'OK') throw new Error('Solar API status not OK');
-        return {
-          sunrise: solarJson.results.sunrise,
-          sunset: solarJson.results.sunset,
-          dayLength: solarJson.results.day_length,
-        };
-      });
-      if (cachedSolar) solarData = cachedSolar;
-    } catch (e) {
-      logger.error({ err: e }, 'Solar API error');
-    }
+    // 2.5 Resolve Solar Data (cached 7d per coord+date). Reuse the request
+    // started above when NOAA selected the same date; date-less API callers
+    // retain the previous behavior and fetch after the forecast picks a date.
+    const solarDate =
+      selectedForecastDate || requestedDate || new Date().toISOString().slice(0, 10);
+    const cachedSolar = prefetchedSolarPromise && prefetchedSolarDate === solarDate
+      ? await prefetchedSolarPromise
+      : await fetchSolarData(solarDate);
+    if (cachedSolar) solarData = cachedSolar;
   } catch (weatherError) {
     // Re-throw date range errors so the caller can return 400
     if (weatherError instanceof ForecastDateOutOfRangeError) {

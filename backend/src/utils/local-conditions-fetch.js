@@ -5,6 +5,7 @@
  */
 
 const { logger } = require('./logger');
+const { createCache, normalizeCoordDateKey } = require('./cache');
 const {
   toFiniteOrNull,
   classifyFlowTrend,
@@ -35,6 +36,12 @@ const createLocalConditionsService = ({
     haversineKm,
     requestTimeoutMs,
     firmsMapKey,
+  });
+  const localConditionsCache = createCache({
+    name: 'local-conditions',
+    ttlMs: 5 * 60 * 1000,
+    staleTtlMs: 10 * 60 * 1000,
+    maxEntries: 300,
   });
   // ── USGS NWIS streamflow ────────────────────────────────────────────────
   const fetchStreamflow = async ({ lat, lon, fetchOptions }) => {
@@ -340,7 +347,7 @@ const createLocalConditionsService = ({
     };
   };
 
-  const fetchLocalConditions = async ({ lat, lon, selectedDate, fetchOptions }) => {
+  const fetchLocalConditionsUncached = async ({ lat, lon, selectedDate, fetchOptions }) => {
     const [streamflow, smoke, tides, closures, weatherObservation, radar, access, wildfire] = await Promise.allSettled([
       fetchStreamflow({ lat, lon, fetchOptions }),
       fetchSmokeOutlook({ lat, lon, fetchOptions }),
@@ -351,6 +358,12 @@ const createLocalConditionsService = ({
       environmentalObservations.fetchAccessStatus({ lat, lon, fetchOptions }),
       environmentalObservations.fetchWildfireActivity({ lat, lon, fetchOptions }),
     ]);
+
+    // Do not turn a superseded report's aborted provider results into a fresh
+    // all-unavailable cache entry for the next request.
+    if (fetchOptions?.signal?.aborted) {
+      throw fetchOptions.signal.reason || new Error('Local conditions request aborted');
+    }
 
     const unwrap = (result, label) => {
       if (result.status === 'fulfilled') return result.value;
@@ -368,6 +381,13 @@ const createLocalConditionsService = ({
       access: unwrap(access, 'Access status'),
       wildfire: unwrap(wildfire, 'Wildfire activity'),
     });
+  };
+
+  const fetchLocalConditions = ({ lat, lon, selectedDate, fetchOptions }) => {
+    const cacheDate = selectedDate || new Date().toISOString().slice(0, 10);
+    const cacheKey = normalizeCoordDateKey(lat, lon, cacheDate);
+    return localConditionsCache.getOrFetch(cacheKey, () =>
+      fetchLocalConditionsUncached({ lat, lon, selectedDate: cacheDate, fetchOptions }));
   };
 
   return { fetchLocalConditions, fetchStreamflow, fetchSmokeOutlook, fetchTides, fetchClosures };

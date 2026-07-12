@@ -50,6 +50,8 @@ const jsonResponse = (status, body) => ({
 
 const notFoundResponse = () => jsonResponse(404, { error: 'not found' });
 
+let hourlyForecastGate = null;
+
 const buildFetchMock = () =>
   jest.fn(async (url) => {
     const u = String(url);
@@ -66,6 +68,9 @@ const buildFetchMock = () =>
     }
 
     if (u.includes('/gridpoints/MOCK/1,1/forecast/hourly')) {
+      if (hourlyForecastGate) {
+        await hourlyForecastGate;
+      }
       return jsonResponse(200, {
         properties: {
           updateTime: new Date().toISOString(),
@@ -113,6 +118,44 @@ describe('/api/safety response payload (mocked upstreams)', () => {
   afterAll(() => {
     global.fetch = originalFetch;
   });
+
+  test('GET /api/safety overlaps dated secondary sources with the weather request', async () => {
+    let releaseHourlyForecast;
+    hourlyForecastGate = new Promise((resolve) => {
+      releaseHourlyForecast = resolve;
+    });
+
+    const responsePromise = Promise.resolve(
+      request(app)
+        .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00`),
+    );
+
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const urls = fetchMock.mock.calls.map(([url]) => String(url));
+        const startedAllPrefetches =
+          urls.some((url) => url.includes('/gridpoints/MOCK/1,1/forecast/hourly'))
+          && urls.some((url) => url.includes('api.sunrisesunset.io'))
+          && urls.some((url) => url.includes('waterservices.usgs.gov/nwis/iv/'))
+          && urls.some((url) => url.includes('/awdbRestApi/services/v1/stations'));
+        if (startedAllPrefetches) break;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+
+      const urlsBeforeWeatherResolved = fetchMock.mock.calls.map(([url]) => String(url));
+      expect(urlsBeforeWeatherResolved).toEqual(expect.arrayContaining([
+        expect.stringContaining('api.sunrisesunset.io'),
+        expect.stringContaining('waterservices.usgs.gov/nwis/iv/'),
+        expect.stringContaining('/awdbRestApi/services/v1/stations'),
+      ]));
+    } finally {
+      hourlyForecastGate = null;
+      releaseHourlyForecast();
+    }
+
+    const res = await responsePromise;
+    expect(res.status).toBe(200);
+  }, 20000);
 
   test('GET /api/safety returns 200 with the expected top-level shape when upstreams succeed', async () => {
     const res = await request(app)
