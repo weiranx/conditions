@@ -1,5 +1,5 @@
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { DefaultChatTransport, type UIMessage } from 'ai';
 import { ChevronDown, MessageCircleQuestion, Send, Square } from 'lucide-react';
 import React from 'react';
 import {
@@ -22,43 +22,23 @@ const STARTER_QUESTIONS = [
   'How does the timing affect this plan?',
 ];
 
-const FOLLOW_UP_QUESTIONS = {
-  avalanche: [
-    'Which avalanche details matter most?',
-    'What terrain should I avoid?',
-    'What should I confirm in the official forecast?',
-  ],
-  weather: [
-    'When is the safest travel window?',
-    'Which weather threshold is closest?',
-    'What should I recheck before leaving?',
-  ],
-  uncertainty: [
-    'What is the biggest uncertainty?',
-    'Which missing data matters most?',
-    'Where should I verify it?',
-  ],
-  general: [
-    'What could change this recommendation?',
-    'What should I check in the field?',
-    'What would make this a no-go?',
-  ],
-} as const;
+type ReportChatMessage = UIMessage<never, {
+  followUpSuggestions: { suggestions: string[] };
+}>;
 
-const AVALANCHE_TERMS = ['avalanche', 'slab', 'snowpack', 'aspect', 'slope', 'terrain trap'];
-const WEATHER_TERMS = ['weather', 'wind', 'gust', 'precipitation', 'storm', 'temperature', 'travel window'];
-const UNCERTAINTY_TERMS = ['unknown', 'missing', 'unavailable', 'stale', 'conflict', 'uncertain'];
-
-function includesAny(text: string, terms: readonly string[]) {
-  return terms.some((term) => text.includes(term));
-}
-
-function getFollowUpQuestions(answer: string): readonly string[] {
-  const normalizedAnswer = answer.toLowerCase();
-  if (includesAny(normalizedAnswer, AVALANCHE_TERMS)) return FOLLOW_UP_QUESTIONS.avalanche;
-  if (includesAny(normalizedAnswer, WEATHER_TERMS)) return FOLLOW_UP_QUESTIONS.weather;
-  if (includesAny(normalizedAnswer, UNCERTAINTY_TERMS)) return FOLLOW_UP_QUESTIONS.uncertainty;
-  return FOLLOW_UP_QUESTIONS.general;
+function getFollowUpQuestions(message: ReportChatMessage | undefined): string[] {
+  if (!message || message.role !== 'assistant') return [];
+  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+    const part = message.parts[index];
+    if (part.type === 'data-followUpSuggestions') {
+      const suggestions = part.data?.suggestions;
+      if (!Array.isArray(suggestions)) return [];
+      return suggestions
+        .filter((suggestion) => typeof suggestion === 'string' && suggestion.trim())
+        .slice(0, 3);
+    }
+  }
+  return [];
 }
 
 export interface ReportChatProps {
@@ -80,17 +60,11 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
     error,
     setMessages,
     stop,
-  } = useChat({ transport });
+  } = useChat<ReportChatMessage>({ transport });
   const isBusy = status === 'submitted' || status === 'streaming';
   const latestMessage = messages[messages.length - 1];
-  const latestAssistantAnswer = latestMessage?.role === 'assistant'
-    ? latestMessage.parts
-      .filter((part) => part.type === 'text')
-      .map((part) => part.text)
-      .join('\n')
-    : '';
-  const followUpQuestions = !isBusy && !error && latestAssistantAnswer
-    ? getFollowUpQuestions(latestAssistantAnswer)
+  const followUpQuestions = !isBusy && !error
+    ? getFollowUpQuestions(latestMessage)
     : [];
 
   React.useEffect(() => {
