@@ -47,8 +47,6 @@ import {
 } from './app/planner-helpers';
 import { loadUserPreferences } from './app/preferences';
 import {
-  buildAiAgentPrompt,
-  copyTextToClipboard,
   stringifyRawPayload,
   summarizeText,
   toPlainText,
@@ -201,7 +199,6 @@ function App() {
   const [targetElevationInput, setTargetElevationInput] = useState(initialLinkState.targetElevationInput);
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
   const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
   const [weatherTrendMetric, setWeatherTrendMetric] = useState<WeatherTrendMetricKey>('temp');
@@ -227,7 +224,6 @@ function App() {
   const hasInitializedHistoryRef = useRef(false);
   const isApplyingPopStateRef = useRef(false);
   const copyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const aiPromptCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
   const hasVisitedTripRef = useRef(initialLinkState.view === 'trip');
@@ -452,9 +448,6 @@ function App() {
       if (copyResetTimeout.current) {
         clearTimeout(copyResetTimeout.current);
       }
-      if (aiPromptCopyResetTimeout.current) {
-        clearTimeout(aiPromptCopyResetTimeout.current);
-      }
       if (rawCopyResetTimeout.current) {
         clearTimeout(rawCopyResetTimeout.current);
       }
@@ -625,23 +618,6 @@ function App() {
       rawCopyResetTimeout.current = setTimeout(() => setCopiedRawPayload(false), 1500);
     } catch {
       setCopiedRawPayload(false);
-    }
-  };
-
-  const handleCopyAiPrompt = async () => {
-    if (!rawReportPayload) {
-      return;
-    }
-    const reportUrl = typeof window !== 'undefined' ? window.location.href : undefined;
-    const didCopy = await copyTextToClipboard(buildAiAgentPrompt(rawReportPayload, reportUrl));
-    if (didCopy) {
-      setCopiedAiPrompt(true);
-      if (aiPromptCopyResetTimeout.current) {
-        clearTimeout(aiPromptCopyResetTimeout.current);
-      }
-      aiPromptCopyResetTimeout.current = setTimeout(() => setCopiedAiPrompt(false), 1800);
-    } else {
-      setCopiedAiPrompt(false);
     }
   };
 
@@ -1934,8 +1910,6 @@ function App() {
       rawReportPayload={rawReportPayload}
       copiedRawPayload={copiedRawPayload}
       handleCopyRawPayload={handleCopyRawPayload}
-      copiedAiPrompt={copiedAiPrompt}
-      handleCopyAiPrompt={handleCopyAiPrompt}
       // Footer
       formatGeneratedAt={formatGeneratedAt}
     />

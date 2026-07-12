@@ -313,8 +313,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
     aiBriefError,
     aiBriefLoading,
     handleRequestAiBriefAction,
-    copiedAiPrompt,
-    handleCopyAiPrompt,
     rawReportPayload,
     snowVisionAnalysis,
     snowVisionImage,
@@ -681,8 +679,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
           aiBriefError={aiBriefError}
           aiBriefLoading={aiBriefLoading}
           onRequestAiBrief={handleRequestAiBriefAction}
-          copiedAiPrompt={copiedAiPrompt}
-          onCopyAiPrompt={handleCopyAiPrompt}
           rawReportPayload={rawReportPayload}
         />
         </div>
