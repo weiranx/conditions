@@ -2,7 +2,6 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Cpu,
   Database,
   HardDrive,
@@ -77,7 +76,7 @@ export function StatusView({
     ok: {
       eyebrow: 'All systems operational',
       title: 'Ready for trip planning',
-      detail: 'The API is responding normally and this browser supports the features used by the planner.',
+      detail: 'The API is responding normally and this device supports the features used by the planner.',
     },
     warn: {
       eyebrow: 'Some features degraded',
@@ -100,8 +99,9 @@ export function StatusView({
 
   const serviceChecks = healthChecks.filter((check) => ['Backend API', 'API Latency', 'AI Provider'].includes(check.label));
   const browserChecks = healthChecks.filter((check) => !serviceChecks.includes(check));
+  const operationalServiceCount = serviceChecks.filter((check) => check.status === 'ok').length;
 
-  const renderCheck = (check: HealthCheckResult) => {
+  const renderCheck = (check: HealthCheckResult, variant: 'service' | 'browser') => {
     const pillClass = check.status === 'ok' ? 'go' : check.status === 'warn' ? 'caution' : 'nogo';
     const StatusIcon = check.status === 'ok' ? CheckCircle2 : check.status === 'warn' ? AlertTriangle : XCircle;
     const CheckIcon = check.label === 'Backend API'
@@ -109,25 +109,23 @@ export function StatusView({
       : check.label === 'AI Provider'
         ? Cpu
         : check.label === 'API Latency' || check.label === 'Browser Network'
-        ? Wifi
-        : check.label === 'Browser Storage'
-          ? Database
-          : MonitorCog;
+          ? Wifi
+          : check.label === 'Browser Storage'
+            ? Database
+            : MonitorCog;
 
     return (
-      <article key={check.label} className={`settings-card status-card status-card--${check.status}`}>
+      <article key={check.label} className={`status-card status-card--${variant} status-card--${check.status}`}>
         <div className="status-card-icon" aria-hidden><CheckIcon size={18} /></div>
         <div className="status-card-body">
-          <div className="status-card-head">
-            <h3>{check.label}</h3>
-            <span className={`decision-pill ${pillClass}`}>
-              <StatusIcon size={11} />
-              {check.status === 'ok' ? 'Operational' : check.status === 'warn' ? 'Limited' : 'Down'}
-            </span>
-          </div>
+          <div className="status-card-head"><h3>{check.label}</h3></div>
           <p>{check.detail}</p>
           {check.meta && <p className="status-card-meta">{check.meta}</p>}
         </div>
+        <span className={`decision-pill status-card-pill ${pillClass}`}>
+          <StatusIcon size={11} />
+          {check.status === 'ok' ? 'Operational' : check.status === 'warn' ? 'Limited' : 'Down'}
+        </span>
       </article>
     );
   };
@@ -141,41 +139,47 @@ export function StatusView({
           openPlannerView={openPlannerView}
           openTripToolView={openTripToolView}
         />
-        <div className="settings-head">
+        <div className="settings-head status-page-head">
           <div>
-            <div className="home-kicker">Backcountry Conditions System Health</div>
-            <h1>Status</h1>
-            <p>Live service availability and device readiness for the trip-planning tools.</p>
+            <div className="home-kicker">System health</div>
+            <h1>Service status</h1>
+            <p>Live availability for Backcountry Conditions and the tools used to plan a trip.</p>
           </div>
-          <div className="settings-nav">
+          <div className="settings-nav status-page-actions">
+            <div className="status-page-updated">
+              <span className={`status-live-dot status-live-dot--${overallStatus}`} aria-hidden />
+              <span>{healthLoading ? 'Verifying now' : healthCheckedAt ? `Verified ${formatPubTime(healthCheckedAt)}` : 'Not yet verified'}</span>
+            </div>
             <button className="primary-btn" onClick={() => void runHealthChecks()} disabled={healthLoading}>
               <RefreshCw size={14} className={healthLoading ? 'spin-icon' : undefined} />
-              {healthLoading ? 'Checking\u2026' : 'Refresh status'}
+              {healthLoading ? 'Checking\u2026' : 'Run checks'}
             </button>
           </div>
         </div>
 
         {healthError && (
           <article className="settings-card error-banner">
-            <h3>Health Check Error</h3>
+            <h3>Health check error</h3>
             <p>{healthError}</p>
           </article>
         )}
 
         <section className={`status-overview status-overview--${overallStatus}`} aria-live="polite">
-          <div className="status-overview-signal" aria-hidden>
-            {overallStatus === 'checking'
-              ? <RefreshCw size={28} className="spin-icon" />
-              : overallStatus === 'ok'
-                ? <CheckCircle2 size={28} />
-                : overallStatus === 'warn'
-                  ? <AlertTriangle size={28} />
-                  : <XCircle size={28} />}
-          </div>
-          <div className="status-overview-copy">
-            <div className="status-overview-eyebrow">{overallCopy.eyebrow}</div>
-            <h2>{overallCopy.title}</h2>
-            <p>{overallCopy.detail}</p>
+          <div className="status-overview-main">
+            <div className="status-overview-signal" aria-hidden>
+              {overallStatus === 'checking'
+                ? <RefreshCw size={28} className="spin-icon" />
+                : overallStatus === 'ok'
+                  ? <CheckCircle2 size={28} />
+                  : overallStatus === 'warn'
+                    ? <AlertTriangle size={28} />
+                    : <XCircle size={28} />}
+            </div>
+            <div className="status-overview-copy">
+              <div className="status-overview-eyebrow">{overallCopy.eyebrow}</div>
+              <h2>{overallCopy.title}</h2>
+              <p>{overallCopy.detail}</p>
+            </div>
           </div>
           {healthChecks.length > 0 && (
             <div className="status-overview-counts" aria-label={`${okCount} operational, ${warningCount} limited, ${downCount} down`}>
@@ -186,100 +190,80 @@ export function StatusView({
           )}
         </section>
 
-        {backendMeta && (
-          <article className="status-meta-bar" aria-label="Backend details">
-            <div className="status-meta-bar-inner">
-              <div className="status-meta-stat">
-                <Activity size={13} />
-                <span className="status-meta-label">Environment</span>
-                <strong>{backendMeta.env}</strong>
-              </div>
-              <div className="status-meta-stat">
-                <Activity size={13} />
-                <span className="status-meta-label">Version</span>
-                <strong>{backendMeta.version}</strong>
-              </div>
-              <div className="status-meta-stat">
-                <Clock size={13} />
-                <span className="status-meta-label">Uptime</span>
-                <strong>{formatUptime(backendMeta.uptime)}</strong>
-              </div>
-              <div className="status-meta-stat">
-                <Cpu size={13} />
-                <span className="status-meta-label">Node</span>
-                <strong>{backendMeta.nodeVersion}</strong>
-              </div>
-              <div className="status-meta-stat">
-                <HardDrive size={13} />
-                <span className="status-meta-label">Heap</span>
-                <strong>{backendMeta.heapUsedMb} MB</strong>
-              </div>
-              <div className="status-meta-stat">
-                <HardDrive size={13} />
-                <span className="status-meta-label">RSS</span>
-                <strong>{backendMeta.rssMb} MB</strong>
-              </div>
-              <div className="status-meta-stat">
-                <Wifi size={13} />
-                <span className="status-meta-label">Latency</span>
-                <strong>{backendMeta.latencyMs} ms</strong>
-              </div>
-            </div>
-          </article>
-        )}
-
-        {serviceChecks.length > 0 && (
-          <section className="status-check-section" aria-labelledby="service-status-heading">
-            <div className="status-section-heading">
+        <div className="status-service-layout">
+          <section className="status-panel status-service-panel" aria-labelledby="service-status-heading">
+            <div className="status-panel-head">
               <div>
-                <span>Core service</span>
-                <h2 id="service-status-heading">Planner API</h2>
+                <span className="status-panel-kicker">Core infrastructure</span>
+                <h2 id="service-status-heading">Planner services</h2>
               </div>
-              <p>Availability and response time from this device.</p>
+              <span className="status-panel-summary">
+                {serviceChecks.length > 0 ? `${operationalServiceCount}/${serviceChecks.length} operational` : 'Awaiting checks'}
+              </span>
             </div>
-            <div className="status-grid status-grid--service">{serviceChecks.map(renderCheck)}</div>
+            <div className="status-service-list">
+              {serviceChecks.map((check) => renderCheck(check, 'service'))}
+              {healthLoading && serviceChecks.length === 0 && (
+                <div className="status-panel-empty" role="status">
+                  <RefreshCw size={18} className="spin-icon" />
+                  <span>Checking planner services&hellip;</span>
+                </div>
+              )}
+              {!healthLoading && serviceChecks.length === 0 && !healthError && (
+                <div className="status-panel-empty">
+                  <ShieldCheck size={18} />
+                  <span>Run checks to verify planner services.</span>
+                </div>
+              )}
+              {healthError && serviceChecks.length === 0 && (
+                <div className="status-panel-empty status-panel-empty--error">
+                  <XCircle size={18} />
+                  <span>Service details are unavailable.</span>
+                </div>
+              )}
+            </div>
           </section>
-        )}
 
-        {browserChecks.length > 0 && (
+          <aside className="status-panel status-runtime-panel" aria-label="Runtime details">
+            <div className="status-panel-head">
+              <div>
+                <span className="status-panel-kicker">Live diagnostics</span>
+                <h2>Runtime</h2>
+              </div>
+              <Activity size={18} aria-hidden />
+            </div>
+            {backendMeta ? (
+              <div className="status-meta-grid">
+                <div className="status-meta-stat"><span className="status-meta-label">Environment</span><strong>{backendMeta.env}</strong></div>
+                <div className="status-meta-stat"><span className="status-meta-label">Version</span><strong>{backendMeta.version}</strong></div>
+                <div className="status-meta-stat"><span className="status-meta-label">Uptime</span><strong>{formatUptime(backendMeta.uptime)}</strong></div>
+                <div className="status-meta-stat"><span className="status-meta-label">Node</span><strong>{backendMeta.nodeVersion}</strong></div>
+                <div className="status-meta-stat"><span className="status-meta-label">Heap</span><strong>{backendMeta.heapUsedMb} MB</strong></div>
+                <div className="status-meta-stat"><span className="status-meta-label">RSS</span><strong>{backendMeta.rssMb} MB</strong></div>
+                <div className="status-meta-stat status-meta-stat--wide"><span className="status-meta-label">Measured latency</span><strong>{backendMeta.latencyMs} ms</strong></div>
+              </div>
+            ) : (
+              <div className="status-runtime-empty">
+                <HardDrive size={20} aria-hidden />
+                <p>Runtime diagnostics appear after a successful service check.</p>
+              </div>
+            )}
+          </aside>
+        </div>
+
+        {(browserChecks.length > 0 || healthLoading) && (
           <section className="status-check-section" aria-labelledby="browser-status-heading">
             <div className="status-section-heading">
               <div>
-                <span>Device readiness</span>
-                <h2 id="browser-status-heading">This browser</h2>
+                <span>Local compatibility</span>
+                <h2 id="browser-status-heading">This device</h2>
               </div>
-              <p>Local capabilities used for preferences, maps, and connectivity.</p>
+              <p>Browser capabilities used for settings, maps, and network access.</p>
             </div>
-            <div className="status-grid">{browserChecks.map(renderCheck)}</div>
+            <div className="status-grid">{browserChecks.map((check) => renderCheck(check, 'browser'))}</div>
           </section>
         )}
 
-        <div className="status-grid" aria-live="polite">
-          {healthLoading && healthChecks.length === 0 && (
-            <article className="settings-card status-card settings-card-full status-placeholder-card">
-              <div className="status-empty-state">
-                <RefreshCw size={24} className="spin-icon status-empty-icon" />
-                <h3>Running live checks</h3>
-                <p>This usually takes only a moment.</p>
-              </div>
-            </article>
-          )}
-          {!healthLoading && healthChecks.length === 0 && !healthError && (
-            <article className="settings-card status-card settings-card-full">
-              <div className="status-empty-state">
-                <ShieldCheck size={28} className="status-empty-icon" />
-                <h3>No checks run yet</h3>
-                <p>Refresh the page status to verify backend connectivity and browser capabilities.</p>
-              </div>
-            </article>
-          )}
-        </div>
-
-        <div className="settings-note status-checked-note">
-          <Clock size={13} aria-hidden />
-          <span>Last checked {healthCheckedAt ? formatPubTime(healthCheckedAt) : 'never'}</span>
-          {healthLoading && healthChecks.length > 0 && <span className="status-refresh-note">Refreshing now&hellip;</span>}
-        </div>
         <AppDisclaimer compact navigateToView={navigateToView} />
       </section>
     </div>
