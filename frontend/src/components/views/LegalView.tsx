@@ -104,7 +104,7 @@ function PrivacyPolicy() {
         <h2>Contact</h2>
         <p>
           For privacy questions or requests, email{' '}
-          <a href="mailto:support@backcountryconditions.app">support@backcountryconditions.app</a>.
+          <a href="mailto:weiranxiong@gmail.com">weiranxiong@gmail.com</a>.
         </p>
       </section>
     </>
@@ -200,7 +200,7 @@ function TermsOfUse() {
         <h2>Contact</h2>
         <p>
           Questions about these terms may be sent to{' '}
-          <a href="mailto:support@backcountryconditions.app">support@backcountryconditions.app</a>.
+          <a href="mailto:weiranxiong@gmail.com">weiranxiong@gmail.com</a>.
         </p>
       </section>
     </>
