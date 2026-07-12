@@ -1,4 +1,5 @@
 const { getAIStatus } = require('../utils/ai-client');
+const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 
 const MAX_REPORT_LENGTH = 60000;
@@ -107,10 +108,10 @@ const resolveStreamingModel = async () => {
   const modelId = provider === status.provider ? status.fastModel : status.fallbackFastModel;
   if (provider === 'anthropic') {
     const { createAnthropic } = await import('@ai-sdk/anthropic');
-    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId);
+    return { model: createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId), modelId, provider };
   }
   const { createOpenAI } = await import('@ai-sdk/openai');
-  return createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(modelId);
+  return { model: createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(modelId), modelId, provider };
 };
 
 const createContextualFollowUps = async ({
@@ -122,6 +123,8 @@ const createContextualFollowUps = async ({
   generateText,
   jsonSchema,
   Output,
+  provider,
+  modelId,
 }) => {
   const followUpSchema = jsonSchema({
     type: 'object',
@@ -160,9 +163,37 @@ const createContextualFollowUps = async ({
     maxOutputTokens: 300,
     abortSignal: followUpAbortSignal,
   };
+  const generateTracked = async (generationRequest) => {
+    const startedAt = Date.now();
+    try {
+      const result = await generateText(generationRequest);
+      if (provider && modelId) {
+        recordAIUsage({
+          provider,
+          model: modelId,
+          feature: 'report-chat-suggestions',
+          status: 'success',
+          usage: result.totalUsage ?? result.usage,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      return result;
+    } catch (error) {
+      if (provider && modelId) {
+        recordAIUsage({
+          provider,
+          model: modelId,
+          feature: 'report-chat-suggestions',
+          status: 'error',
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      throw error;
+    }
+  };
 
   try {
-    const { output } = await generateText({
+    const { output } = await generateTracked({
       ...request,
       output: Output.object({
         schema: followUpSchema,
@@ -176,7 +207,7 @@ const createContextualFollowUps = async ({
     if (followUpAbortSignal.aborted) throw error;
   }
 
-  const { text } = await generateText({
+  const { text } = await generateTracked({
     ...request,
     system: `${FOLLOW_UP_SYSTEM_PROMPT}\n\nReturn only three questions, one per line, with no numbering or commentary.`,
   });
@@ -199,18 +230,27 @@ const createReportChatStream = async ({
     streamText,
   } = await import('ai');
   const modelMessages = await convertToModelMessages(messages);
-  const model = await resolveStreamingModel();
+  const { model, modelId, provider } = await resolveStreamingModel();
   return createUIMessageStream({
     originalMessages: messages,
     onError,
     execute({ writer }) {
+      const startedAt = Date.now();
       const result = streamText({
         model,
         system: `${REPORT_CHAT_SYSTEM_PROMPT}\n\n<report_json>\n${reportJson}\n</report_json>`,
         messages: modelMessages,
         maxOutputTokens: 1200,
         abortSignal,
-        async onFinish({ text, finishReason }) {
+        async onFinish({ text, finishReason, totalUsage }) {
+          recordAIUsage({
+            provider,
+            model: modelId,
+            feature: 'report-chat',
+            status: ['error', 'content-filter'].includes(finishReason) ? 'error' : 'success',
+            usage: totalUsage,
+            durationMs: Date.now() - startedAt,
+          });
           if (!text.trim() || ['error', 'content-filter'].includes(finishReason)) return;
           try {
             const suggestions = await createContextualFollowUps({
@@ -222,6 +262,8 @@ const createReportChatStream = async ({
               generateText,
               jsonSchema,
               Output,
+              provider,
+              modelId,
             });
             if (suggestions.length > 0) {
               writer.write({

@@ -187,7 +187,7 @@ const registerRouteAnalysisRoutes = ({ app, askAI, invokeSafetyHandler, fetchWit
           `List all well-known hiking, climbing, and scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-          { maxTokens: 2048, tier: 'fast' }
+          { maxTokens: 2048, tier: 'fast', feature: 'route-suggestions' }
         );
         return parseJsonArrayFromAI(text);
       });
@@ -260,7 +260,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-              { maxTokens: 1024, tier: 'fast' }
+              { maxTokens: 1024, tier: 'fast', feature: 'route-waypoints' }
             ), 20000, 'Waypoint lookup');
             return parseJsonArrayFromAI(waypointText);
           });
@@ -380,7 +380,7 @@ GEAR CHECK: 2-4 short condition-specific items separated by semicolons, with no 
 BOTTOM LINE: 1 concise sentence stating go, go-with-caution, or no-go and why.
 
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
-        { maxTokens: 4096 }
+        { maxTokens: 4096, feature: 'route-analysis' }
       ), 60000, 'Route synthesis');
 
       return res.json({

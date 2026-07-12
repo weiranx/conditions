@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { logger } = require('../utils/logger');
+const { getAIUsageEntries } = require('../utils/ai-usage');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -133,16 +134,28 @@ const secretsMatch = (provided, expected) => {
 };
 
 const registerReportLogsRoute = (app) => {
-  app.get('/api/report-logs', (req, res) => {
+  const authorize = (req, res) => {
     if (!LOGS_SECRET) {
-      return res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
+      res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
+      return false;
     }
     const auth = req.headers['authorization'] ?? '';
     const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
     if (!secretsMatch(provided, LOGS_SECRET)) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return false;
     }
+    return true;
+  };
+
+  app.get('/api/report-logs', (req, res) => {
+    if (!authorize(req, res)) return;
     res.json(reportLogs.filter((entry) => !isRouteWaypointEntry(entry)).reverse());
+  });
+
+  app.get('/api/ai-usage', (req, res) => {
+    if (!authorize(req, res)) return;
+    res.json(getAIUsageEntries());
   });
 };
 

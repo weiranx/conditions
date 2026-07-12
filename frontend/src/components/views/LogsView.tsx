@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Sparkles,
   Users,
   X,
 } from 'lucide-react';
@@ -47,6 +48,18 @@ interface ReportLogEntry {
   name: string | null;
   ip: string | null;
   userAgent: string | null;
+}
+
+interface AIUsageEntry {
+  timestamp: string;
+  provider: string;
+  model: string;
+  feature: string;
+  status: 'success' | 'error';
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
 }
 
 const LOGS_SESSION_KEY = 'summitsafe:logs-key';
@@ -276,6 +289,54 @@ function buildTopLocations(entries: ReportLogEntry[]) {
     .slice(0, 6);
 }
 
+function buildAITrendData(entries: AIUsageEntry[], range: AnalyticsRange, now: number) {
+  const rangeDuration = ANALYTICS_RANGES.find((option) => option.value === range)?.durationMs ?? ANALYTICS_RANGES[1].durationMs;
+  const bucketDuration = range === '24h' ? 2 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000;
+  const start = now - rangeDuration;
+  const bucketCount = Math.ceil(rangeDuration / bucketDuration);
+  const buckets = Array.from({ length: bucketCount }, (_, index) => {
+    const bucketStart = start + index * bucketDuration;
+    const date = new Date(bucketStart);
+    return {
+      timestamp: bucketStart,
+      label: range === '24h'
+        ? date.toLocaleTimeString([], { hour: 'numeric' })
+        : date.toLocaleDateString([], { weekday: 'short' }),
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+  });
+
+  entries.forEach((entry) => {
+    const timestamp = new Date(entry.timestamp).getTime();
+    if (!Number.isFinite(timestamp) || timestamp < start || timestamp > now) return;
+    const bucket = buckets[Math.min(bucketCount - 1, Math.floor((timestamp - start) / bucketDuration))];
+    if (!bucket) return;
+    bucket.inputTokens += Number.isFinite(entry.inputTokens) ? entry.inputTokens : 0;
+    bucket.outputTokens += Number.isFinite(entry.outputTokens) ? entry.outputTokens : 0;
+  });
+
+  return buckets;
+}
+
+function buildAIModels(entries: AIUsageEntry[]) {
+  const models = new Map<string, { provider: string; model: string; calls: number; tokens: number }>();
+  entries.forEach((entry) => {
+    const key = `${entry.provider}:${entry.model}`;
+    const current = models.get(key) ?? { provider: entry.provider, model: entry.model, calls: 0, tokens: 0 };
+    current.calls += 1;
+    current.tokens += Number.isFinite(entry.totalTokens) ? entry.totalTokens : 0;
+    models.set(key, current);
+  });
+  return [...models.values()].sort((left, right) => right.tokens - left.tokens || right.calls - left.calls);
+}
+
+function formatTokenCount(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  if (value < 1000) return value.toLocaleString();
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
 function escapeCsv(value: string | number | boolean | null): string {
   const text = value == null ? '' : String(value);
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -309,9 +370,11 @@ function SortButton({ sortKey, activeKey, ascending, onSort, children }: {
 
 function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
+  const [aiUsage, setAIUsage] = useState<AIUsageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiUsageError, setAIUsageError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
   const [sortAsc, setSortAsc] = useState(false);
@@ -323,22 +386,31 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
   const fetchLogs = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const { response, payload } = await fetchApi('/api/report-logs', {
-        headers: { Authorization: `Bearer ${secretKey}` },
-      });
-      if (response.status === 401 || response.status === 403) {
+      const headers = { Authorization: `Bearer ${secretKey}` };
+      const [logsResult, aiUsageResult] = await Promise.all([
+        fetchApi('/api/report-logs', { headers }),
+        fetchApi('/api/ai-usage', { headers }),
+      ]);
+      if ([logsResult.response.status, aiUsageResult.response.status].some((status) => status === 401 || status === 403)) {
         onUnauthorized();
         return;
       }
-      if (response.ok && Array.isArray(payload)) {
-        setLogs(payload as ReportLogEntry[]);
+      if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
+        setLogs(logsResult.payload as ReportLogEntry[]);
         setError(null);
         setLastRefreshed(new Date());
       } else {
         setError('The server could not load report logs.');
       }
+      if (aiUsageResult.response.ok && Array.isArray(aiUsageResult.payload)) {
+        setAIUsage(aiUsageResult.payload as AIUsageEntry[]);
+        setAIUsageError(null);
+      } else {
+        setAIUsageError('AI usage data is temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
+      setAIUsageError('AI usage data is temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -364,6 +436,14 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
       return Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= referenceTime;
     });
   }, [logs, referenceTime, selectedRange.durationMs]);
+
+  const rangeAIUsage = useMemo(() => {
+    const cutoff = referenceTime - selectedRange.durationMs;
+    return aiUsage.filter((entry) => {
+      const timestamp = new Date(entry.timestamp).getTime();
+      return Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= referenceTime;
+    });
+  }, [aiUsage, referenceTime, selectedRange.durationMs]);
 
   const metrics = useMemo(() => {
     const healthy = rangeLogs.filter(isHealthyResponse).length;
@@ -397,6 +477,20 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
   );
   const hourlyDistribution = useMemo(() => buildHourlyDistribution(rangeLogs), [rangeLogs]);
   const topLocations = useMemo(() => buildTopLocations(rangeLogs), [rangeLogs]);
+  const aiTrendData = useMemo(
+    () => buildAITrendData(rangeAIUsage, analyticsRange, referenceTime),
+    [analyticsRange, rangeAIUsage, referenceTime],
+  );
+  const aiModels = useMemo(() => buildAIModels(rangeAIUsage), [rangeAIUsage]);
+  const aiMetrics = useMemo(() => {
+    const successful = rangeAIUsage.filter((entry) => entry.status === 'success').length;
+    return {
+      calls: rangeAIUsage.length,
+      inputTokens: rangeAIUsage.reduce((sum, entry) => sum + (Number.isFinite(entry.inputTokens) ? entry.inputTokens : 0), 0),
+      outputTokens: rangeAIUsage.reduce((sum, entry) => sum + (Number.isFinite(entry.outputTokens) ? entry.outputTokens : 0), 0),
+      successRate: rangeAIUsage.length ? Math.round((successful / rangeAIUsage.length) * 1000) / 10 : null,
+    };
+  }, [rangeAIUsage]);
   const busiestHour = useMemo(
     () => hourlyDistribution.reduce((busiest, current) => current.requests > busiest.requests ? current : busiest, hourlyDistribution[0]),
     [hourlyDistribution],
@@ -588,6 +682,95 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
             </ResponsiveContainer>
           </div>
         </article>
+      </section>
+
+      <section className="logs-ai-section" aria-labelledby="logs-ai-title">
+        <div className="logs-section-head">
+          <div>
+            <span className="logs-section-icon"><Sparkles size={17} aria-hidden /></span>
+            <div>
+              <h2 id="logs-ai-title">AI usage</h2>
+              <p>Model calls and billed token volume for {selectedRange.label.toLowerCase()}</p>
+            </div>
+          </div>
+          <span>{rangeAIUsage.length.toLocaleString()} calls</span>
+        </div>
+
+        {aiUsageError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {aiUsageError}</div>}
+
+        <div className="logs-ai-metrics" aria-label="AI usage summary">
+          <article className="logs-metric-card">
+            <span className="logs-metric-icon"><Sparkles size={18} aria-hidden /></span>
+            <div><strong>{aiMetrics.calls.toLocaleString()}</strong><span>Model calls</span></div>
+          </article>
+          <article className="logs-metric-card">
+            <span className="logs-metric-icon"><Download size={18} aria-hidden /></span>
+            <div><strong title={aiMetrics.inputTokens.toLocaleString()}>{formatTokenCount(aiMetrics.inputTokens)}</strong><span>Input tokens</span></div>
+          </article>
+          <article className="logs-metric-card">
+            <span className="logs-metric-icon"><Activity size={18} aria-hidden /></span>
+            <div><strong title={aiMetrics.outputTokens.toLocaleString()}>{formatTokenCount(aiMetrics.outputTokens)}</strong><span>Output tokens</span></div>
+          </article>
+          <article className="logs-metric-card">
+            <span className="logs-metric-icon is-green"><CheckCircle2 size={18} aria-hidden /></span>
+            <div><strong>{aiMetrics.successRate == null ? '—' : `${aiMetrics.successRate}%`}</strong><span>Successful calls</span></div>
+          </article>
+        </div>
+
+        <div className="logs-ai-grid">
+          <article className="logs-chart-card">
+            <div className="logs-chart-head">
+              <div>
+                <h2>Token activity</h2>
+                <p>Input and output tokens · {analyticsRange === '24h' ? '2-hour' : '12-hour'} intervals</p>
+              </div>
+              <Activity size={18} aria-hidden />
+            </div>
+            {rangeAIUsage.length ? (
+              <div className="logs-chart-wrap logs-chart-wrap-compact">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 500, height: 205 }}>
+                  <BarChart data={aiTrendData} margin={{ top: 8, right: 6, bottom: 0, left: -8 }}>
+                    <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={28} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} tickFormatter={formatTokenCount} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value, name) => [Number(value).toLocaleString(), name]} cursor={{ fill: 'var(--ui-surface-subtle)' }} />
+                    <Legend iconType="square" iconSize={8} wrapperStyle={{ color: 'var(--ui-text-3)', fontSize: 11, paddingTop: 8 }} />
+                    <Bar dataKey="inputTokens" name="Input" stackId="tokens" fill="var(--ui-brand-strong)" />
+                    <Bar dataKey="outputTokens" name="Output" stackId="tokens" fill="var(--ui-risk-3)" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="logs-chart-empty">No AI calls in this period.</div>
+            )}
+          </article>
+
+          <article className="logs-chart-card">
+            <div className="logs-chart-head">
+              <div>
+                <h2>Models</h2>
+                <p>Call and token volume by provider</p>
+              </div>
+              <Sparkles size={18} aria-hidden />
+            </div>
+            {aiModels.length ? (
+              <ol className="logs-model-list">
+                {aiModels.map((model, index) => (
+                  <li key={`${model.provider}:${model.model}`}>
+                    <span className="logs-location-rank">{index + 1}</span>
+                    <div>
+                      <strong title={model.model}>{model.model}</strong>
+                      <span>{model.provider} · {model.calls.toLocaleString()} {model.calls === 1 ? 'call' : 'calls'}</span>
+                    </div>
+                    <span title={`${model.tokens.toLocaleString()} tokens`}>{formatTokenCount(model.tokens)}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="logs-chart-empty">No model activity in this period.</div>
+            )}
+          </article>
+        </div>
       </section>
 
       <section className="logs-panel">

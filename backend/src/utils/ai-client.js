@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 const { logger } = require('./logger');
+const { recordAIUsage } = require('./ai-usage');
 
 const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic']);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || 'openai').trim().toLowerCase();
@@ -94,63 +95,101 @@ const readAnthropicText = (message, { maxTokens, model, operation }) => {
 };
 
 const callTextProvider = async (provider, prompt, options, allowExplicitModel) => {
-  const { maxTokens, model, system, tier } = options;
+  const { maxTokens, model, system, tier, feature } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
-  if (provider === 'anthropic') {
+  const startedAt = Date.now();
+  let response;
+  const finish = (status) => recordAIUsage({
+    provider,
+    model: resolvedModel,
+    feature,
+    status,
+    durationMs: Date.now() - startedAt,
+    usage: response?.usage,
+  });
+  try {
+    if (provider === 'anthropic') {
+      const params = {
+        model: resolvedModel,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+      };
+      if (system) params.system = system;
+      response = await getAnthropicClient().messages.create(params, requestOptions(tier));
+      const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
+      finish('success');
+      return text;
+    }
+
     const params = {
       model: resolvedModel,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
+      max_output_tokens: maxTokens,
+      input: prompt,
     };
-    if (system) params.system = system;
-    const message = await getAnthropicClient().messages.create(params, requestOptions(tier));
-    return readAnthropicText(message, { maxTokens, model: resolvedModel, operation: 'askAI' });
+    if (system) params.instructions = system;
+    response = await getOpenAIClient().responses.create(params, requestOptions(tier));
+    const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
+    finish('success');
+    return text;
+  } catch (error) {
+    finish('error');
+    throw error;
   }
-
-  const params = {
-    model: resolvedModel,
-    max_output_tokens: maxTokens,
-    input: prompt,
-  };
-  if (system) params.instructions = system;
-  const response = await getOpenAIClient().responses.create(params, requestOptions(tier));
-  return readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
 };
 
 const callVisionProvider = async (provider, imageBase64, prompt, options, allowExplicitModel) => {
-  const { maxTokens, model, system, mediaType, tier } = options;
+  const { maxTokens, model, system, mediaType, tier, feature } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
-  if (provider === 'anthropic') {
+  const startedAt = Date.now();
+  let response;
+  const finish = (status) => recordAIUsage({
+    provider,
+    model: resolvedModel,
+    feature,
+    status,
+    durationMs: Date.now() - startedAt,
+    usage: response?.usage,
+  });
+  try {
+    if (provider === 'anthropic') {
+      const params = {
+        model: resolvedModel,
+        max_tokens: maxTokens,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+            { type: 'text', text: prompt },
+          ],
+        }],
+      };
+      if (system) params.system = system;
+      response = await getAnthropicClient().messages.create(params, requestOptions(tier));
+      const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
+      finish('success');
+      return text;
+    }
+
     const params = {
       model: resolvedModel,
-      max_tokens: maxTokens,
-      messages: [{
+      max_output_tokens: maxTokens,
+      input: [{
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-          { type: 'text', text: prompt },
+          { type: 'input_image', image_url: `data:${mediaType};base64,${imageBase64}`, detail: 'high' },
+          { type: 'input_text', text: prompt },
         ],
       }],
     };
-    if (system) params.system = system;
-    const message = await getAnthropicClient().messages.create(params, requestOptions(tier));
-    return readAnthropicText(message, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
+    if (system) params.instructions = system;
+    response = await getOpenAIClient().responses.create(params, requestOptions(tier));
+    const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
+    finish('success');
+    return text;
+  } catch (error) {
+    finish('error');
+    throw error;
   }
-
-  const params = {
-    model: resolvedModel,
-    max_output_tokens: maxTokens,
-    input: [{
-      role: 'user',
-      content: [
-        { type: 'input_image', image_url: `data:${mediaType};base64,${imageBase64}`, detail: 'high' },
-        { type: 'input_text', text: prompt },
-      ],
-    }],
-  };
-  if (system) params.instructions = system;
-  const response = await getOpenAIClient().responses.create(params, requestOptions(tier));
-  return readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
 };
 
 const errorMessage = (error) => error instanceof Error ? error.message : String(error);
@@ -180,15 +219,15 @@ const runWithFailover = async (operation, tier, invoke) => {
   }
 };
 
-const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary' } = {}) => {
-  const options = { maxTokens, model, system, tier };
+const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', feature = 'text-generation' } = {}) => {
+  const options = { maxTokens, model, system, tier, feature };
   return runWithFailover('askAI', tier, (provider, allowExplicitModel) => (
     callTextProvider(provider, prompt, options, allowExplicitModel)
   ));
 };
 
-const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary' } = {}) => {
-  const options = { maxTokens, model, system, mediaType, tier };
+const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary', feature = 'vision-analysis' } = {}) => {
+  const options = { maxTokens, model, system, mediaType, tier, feature };
   return runWithFailover('askAIVision', tier, (provider, allowExplicitModel) => (
     callVisionProvider(provider, imageBase64, prompt, options, allowExplicitModel)
   ));

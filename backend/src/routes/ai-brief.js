@@ -31,6 +31,7 @@ const registerAiBriefRoute = ({ app, askAI }) => {
         return askAI(userPrompt, {
           maxTokens: 4096,
           system: SYSTEM_PROMPT,
+          feature: 'report-brief',
         });
       });
 
