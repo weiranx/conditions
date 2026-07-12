@@ -51,6 +51,42 @@ export interface ElevationForecastBand {
   windGust: number;
 }
 
+export interface MeltFreezeAnalysis {
+  cycleDetected: boolean;
+  refreezeQuality: 'strong' | 'fair' | 'weak' | 'unknown';
+  refreezeLabel: string;
+  solarInput: 'none' | 'low' | 'moderate' | 'high' | 'unknown';
+  solarInputLabel: string;
+  meltPotential: 'low' | 'moderate' | 'high';
+  meltPotentialLabel: string;
+  phase: 'no_snow' | 'firm_refrozen' | 'transitioning' | 'corn_window' | 'wet_softening' | 'mixed';
+  phaseLabel: string;
+  summary: string;
+  reasons: string[];
+  signals?: {
+    travelWindowHours?: number | null;
+    travelWindowMinTempF?: number | null;
+    travelWindowMaxTempF?: number | null;
+    aboveFreezingHours?: number | null;
+    meltDegreeHours?: number | null;
+    averageCloudCover?: number | null;
+    effectiveSolarHours?: number | null;
+    sunrise?: string | null;
+    sunset?: string | null;
+    softeningStart?: string | null;
+    wetSnowStart?: string | null;
+  };
+}
+
+export interface SnowSurfaceProfile {
+  code?: string;
+  label?: string;
+  summary?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  reasons?: string[];
+  meltFreeze?: MeltFreezeAnalysis;
+}
+
 export interface SafetyData {
   generatedAt?: string;
   partialData?: boolean;
@@ -542,13 +578,7 @@ export interface SafetyData {
     impact?: 'low' | 'moderate' | 'high';
     recommendedTravel?: string;
     source?: string;
-    snowProfile?: {
-      code?: string;
-      label?: string;
-      summary?: string;
-      confidence?: 'high' | 'medium' | 'low';
-      reasons?: string[];
-    };
+    snowProfile?: SnowSurfaceProfile;
     confidence?: 'high' | 'medium' | 'low';
     summary?: string;
     reasons?: string[];
@@ -571,6 +601,21 @@ export interface SafetyData {
       maxSnowDepthIn?: number | null;
       maxSweIn?: number | null;
       snotelDistanceKm?: number | null;
+      cdecDistanceKm?: number | null;
+      snowpackSourceCount?: number | null;
+      tempContextWindowHours?: number | null;
+      tempContextMinF?: number | null;
+      tempContextMaxF?: number | null;
+      tempContextOvernightLowF?: number | null;
+      tempContextDaytimeHighF?: number | null;
+      freezeThawMinTempF?: number | null;
+      freezeThawMaxTempF?: number | null;
+      cloudCover?: number | null;
+      meltFreezeCycleDetected?: boolean;
+      refreezeQuality?: MeltFreezeAnalysis['refreezeQuality'];
+      solarInput?: MeltFreezeAnalysis['solarInput'];
+      meltPotential?: MeltFreezeAnalysis['meltPotential'];
+      snowSurfacePhase?: MeltFreezeAnalysis['phase'];
     };
   };
   /** Weather-comfort outlook only; never used for the safety decision. */
@@ -721,7 +766,13 @@ export interface TerrainConditionDetails {
   confidence: 'high' | 'medium' | 'low' | null;
   impact: string | null;
   recommendedTravel: string | null;
-  snowProfile: { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null;
+  snowProfile: {
+    label: string;
+    summary: string;
+    reasons: string[];
+    confidence: 'high' | 'medium' | 'low' | null;
+    meltFreeze: MeltFreezeAnalysis | null;
+  } | null;
 }
 
 export interface TargetElevationForecast {

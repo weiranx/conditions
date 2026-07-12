@@ -1,4 +1,4 @@
-import type { SafetyData, ElevationUnit, FireRiskAlertItem, HeatRiskMetrics } from './types';
+import type { SafetyData, ElevationUnit, FireRiskAlertItem, HeatRiskMetrics, MeltFreezeAnalysis } from './types';
 
 export type PillClass = 'go' | 'watch' | 'caution' | 'nogo';
 
@@ -108,7 +108,13 @@ export interface TerrainConditionDisplay {
   confidence: 'high' | 'medium' | 'low' | null;
   impact: string | null;
   recommendedTravel: string | null;
-  snowProfile: { label: string; summary: string; reasons: string[]; confidence: 'high' | 'medium' | 'low' | null } | null;
+  snowProfile: {
+    label: string;
+    summary: string;
+    reasons: string[];
+    confidence: 'high' | 'medium' | 'low' | null;
+    meltFreeze: MeltFreezeAnalysis | null;
+  } | null;
   pillClass: PillClass;
 }
 
@@ -120,6 +126,7 @@ export function buildTerrainConditionDisplay(safetyData: SafetyData | null): Ter
         summary: upstreamTerrain.snowProfile.summary || '',
         reasons: Array.isArray(upstreamTerrain.snowProfile.reasons) ? upstreamTerrain.snowProfile.reasons.slice(0, 4) : [],
         confidence: upstreamTerrain.snowProfile.confidence || null,
+        meltFreeze: upstreamTerrain.snowProfile.meltFreeze || null,
       }
     : null;
 

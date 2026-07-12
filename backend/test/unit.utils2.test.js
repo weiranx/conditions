@@ -616,6 +616,133 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
     expect(condition.label).toContain('Corn');
     expect(condition.snowProfile.code).toBe('spring_snow');
   });
+
+  test('combines refreeze, travel-window temperatures, cloud cover, and solar timing', () => {
+    const condition = deriveTerrainCondition(
+      makeWeatherData({
+        description: 'Sunny',
+        temp: 29,
+        precipChance: 5,
+        cloudCover: 10,
+        forecastStartTime: '2026-04-15T06:00:00-07:00',
+        trend: [29, 31, 34, 38, 42, 45].map((temp, index) => ({
+          temp,
+          precipChance: 5,
+          cloudCover: 10,
+          condition: 'Sunny',
+          isDaytime: index > 0,
+        })),
+        temperatureContext24h: {
+          windowHours: 24,
+          overnightLowF: 24,
+          daytimeHighF: 45,
+        },
+      }),
+      {
+        snotel: { snowDepthIn: 42, sweIn: 16, distanceKm: 8 },
+        nohrsc: { snowDepthIn: 38, sweIn: 14 },
+      },
+      { totals: { rainPast24hIn: 0, snowPast24hIn: 0 } },
+      {
+        solarData: { sunrise: '6:30 AM', sunset: '7:35 PM' },
+        selectedStartClock: '06:00',
+        selectedTravelWindowHours: 4,
+      },
+    );
+
+    expect(condition.code).toBe('spring_snow');
+    expect(condition.snowProfile.meltFreeze).toMatchObject({
+      cycleDetected: true,
+      refreezeQuality: 'strong',
+      solarInput: 'high',
+      phase: 'transitioning',
+    });
+    expect(condition.snowProfile.meltFreeze.signals).toMatchObject({
+      aboveFreezingHours: 2,
+      softeningStart: '08:00',
+    });
+    expect(condition.snowProfile.meltFreeze.summary).toMatch(/crosses a rough solar-softening onset/i);
+  });
+
+  test('classifies a late, sunny, warm start as wet-snow softening without requiring rain', () => {
+    const condition = deriveTerrainCondition(
+      makeWeatherData({
+        description: 'Sunny',
+        temp: 44,
+        precipChance: 5,
+        cloudCover: 5,
+        forecastStartTime: '2026-04-15T11:00:00-07:00',
+        trend: [44, 46, 48, 49].map((temp) => ({
+          temp,
+          precipChance: 5,
+          cloudCover: 5,
+          condition: 'Sunny',
+          isDaytime: true,
+        })),
+        temperatureContext24h: {
+          windowHours: 24,
+          overnightLowF: 25,
+          daytimeHighF: 49,
+        },
+      }),
+      {
+        snotel: { snowDepthIn: 36, sweIn: 13, distanceKm: 6 },
+        nohrsc: { snowDepthIn: 34, sweIn: 12 },
+      },
+      { totals: { rainPast24hIn: 0, snowPast24hIn: 0 } },
+      {
+        solarData: { sunrise: '6:30 AM', sunset: '7:35 PM' },
+        selectedStartClock: '11:00',
+        selectedTravelWindowHours: 4,
+      },
+    );
+
+    expect(condition.code).toBe('wet_snow');
+    expect(condition.snowProfile.meltFreeze.phase).toBe('wet_softening');
+    expect(condition.snowProfile.meltFreeze.meltPotential).toBe('high');
+    expect(condition.recommendedTravel).toMatch(/declining supportability/i);
+  });
+
+  test('cloud cover reduces effective solar input and delays the estimated softening onset', () => {
+    const makeCondition = (cloudCover) => deriveTerrainCondition(
+      makeWeatherData({
+        description: cloudCover > 80 ? 'Overcast' : 'Sunny',
+        temp: 35,
+        precipChance: 5,
+        cloudCover,
+        trend: [35, 37, 39, 41].map((temp) => ({
+          temp,
+          precipChance: 5,
+          cloudCover,
+          condition: cloudCover > 80 ? 'Overcast' : 'Sunny',
+          isDaytime: true,
+        })),
+        temperatureContext24h: {
+          windowHours: 24,
+          overnightLowF: 24,
+          daytimeHighF: 43,
+        },
+      }),
+      {
+        snotel: { snowDepthIn: 30, sweIn: 11, distanceKm: 10 },
+        nohrsc: { snowDepthIn: 28, sweIn: 10 },
+      },
+      { totals: { rainPast24hIn: 0, snowPast24hIn: 0 } },
+      {
+        solarData: { sunrise: '6:30 AM', sunset: '7:35 PM' },
+        selectedStartClock: '08:30',
+        selectedTravelWindowHours: 4,
+      },
+    );
+
+    const clear = makeCondition(5);
+    const overcast = makeCondition(95);
+
+    expect(clear.snowProfile.meltFreeze.solarInput).toBe('high');
+    expect(overcast.snowProfile.meltFreeze.solarInput).toBe('low');
+    expect(clear.snowProfile.meltFreeze.signals.softeningStart).toBe('08:00');
+    expect(overcast.snowProfile.meltFreeze.signals.softeningStart).toBe('09:45');
+  });
 });
 
 describe('deriveTerrainCondition — wet_snow (wet/slushy snow)', () => {
@@ -863,6 +990,27 @@ describe('deriveTerrainCondition — SNOTEL proximity gate', () => {
     expect(condition.code).toBe('dry_firm');
     // The distant SNOTEL note should appear in reasons
     expect(condition.reasons.join(' ')).toMatch(/km away/i);
+  });
+
+  test('uses nearby CDEC observations when SNOTEL is too distant and NOHRSC is unavailable', () => {
+    const condition = deriveTerrainCondition(
+      makeWeatherData({
+        description: 'Clear',
+        temp: 24,
+        precipChance: 5,
+      }),
+      {
+        snotel: { snowDepthIn: 40, sweIn: 14, distanceKm: 120 },
+        nohrsc: null,
+        cdec: { snowDepthIn: 16, sweIn: 5, distanceKm: 18 },
+      },
+      { totals: { snowPast24hIn: 0 } },
+    );
+
+    expect(condition.code).toBe('snow_ice');
+    expect(condition.signals.maxSnowDepthIn).toBe(16);
+    expect(condition.signals.snowpackSourceCount).toBe(1);
+    expect(condition.reasons.join(' ')).toMatch(/depth 16\.0 in/i);
   });
 });
 

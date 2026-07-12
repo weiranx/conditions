@@ -995,6 +995,9 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
 .ssr-callout { border-left: 3px solid var(--ssr-brand); background: var(--ssr-surface-2); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 12px 0; }
 .ssr-callout-k { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; color: var(--ssr-text-3); margin-bottom: 3px; }
 .ssr-callout p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ssr-text); }
+.ssr-snow-cycle { background: var(--ssr-surface-2); border: 1px solid var(--ssr-line); border-radius: 8px; padding: 11px 13px; margin: 12px 0; }
+.ssr-snow-cycle p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ssr-text); }
+.ssr-snow-cycle .ssr-chip-row { margin: 9px 0 0; }
 
 /* air quality — hero value + color scale + pollutants */
 .ssr-aqi-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }

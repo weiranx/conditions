@@ -18,8 +18,6 @@ const { normalizeWindDirection } = require('./src/utils/wind');
 const {
   parseStartClock,
   buildPlannedStartIso,
-  parseClockToMinutes,
-  formatMinutesToClock,
   clampTravelWindowHours,
 } = require('./src/utils/time');
 const {
@@ -499,19 +497,12 @@ const safetyHandler = async (req, res) => {
       logger.warn({ err: localConditionsResult.reason }, 'Local conditions fetch failed');
     }
 
-    terrainConditionData = deriveTerrainCondition(weatherData, snowpackData, rainfallData);
+    terrainConditionData = deriveTerrainCondition(weatherData, snowpackData, rainfallData, {
+      solarData,
+      selectedStartClock: requestedStartClock,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+    });
     trailStatus = terrainConditionData.label;
-
-    if (terrainConditionData?.code === 'spring_snow' && solarData?.sunrise) {
-      const sunriseMin = parseClockToMinutes(solarData.sunrise);
-      const startMin = parseClockToMinutes(requestedStartClock);
-      if (Number.isFinite(sunriseMin) && Number.isFinite(startMin) && startMin > sunriseMin + 120) {
-        terrainConditionData = {
-          ...terrainConditionData,
-          summary: terrainConditionData.summary + ` Start time is after the corn-snow window (valid ~sunrise to ${formatMinutesToClock(sunriseMin + 120)}). Surface may already be softening.`,
-        };
-      }
-    }
 
     fireRiskData = buildFireRiskData({
       weatherData,
@@ -642,7 +633,11 @@ const safetyHandler = async (req, res) => {
       heatRiskData && typeof heatRiskData === 'object'
         ? heatRiskData
         : createUnavailableHeatRiskData("unavailable");
-    const safeTerrainCondition = deriveTerrainCondition(safeWeatherData, safeSnowpackData, safeRainfallData);
+    const safeTerrainCondition = deriveTerrainCondition(safeWeatherData, safeSnowpackData, safeRainfallData, {
+      solarData,
+      selectedStartClock: requestedStartClock,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+    });
     const safeTrailStatus = safeTerrainCondition?.label || trailStatus || "⚠️ Data Partially Unavailable";
 
     const analysis = calculateSafetyScore({

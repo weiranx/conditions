@@ -1588,6 +1588,20 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
                 </div>
               )}
               {terrainConditionDetails.summary && <p className="ssr-body">{localizeUnitText(terrainConditionDetails.summary)}</p>}
+              {terrainConditionDetails.snowProfile?.meltFreeze && (
+                terrainConditionDetails.snowProfile.meltFreeze.cycleDetected ||
+                !['mixed', 'no_snow'].includes(terrainConditionDetails.snowProfile.meltFreeze.phase)
+              ) && (
+                <div className="ssr-snow-cycle">
+                  <span className="ssr-callout-k">Snow surface cycle · {terrainConditionDetails.snowProfile.meltFreeze.phaseLabel}</span>
+                  <p>{localizeUnitText(terrainConditionDetails.snowProfile.meltFreeze.summary)}</p>
+                  <div className="ssr-chip-row">
+                    <span className="ssr-chip">Refreeze · {terrainConditionDetails.snowProfile.meltFreeze.refreezeLabel}</span>
+                    <span className="ssr-chip">Solar input · {terrainConditionDetails.snowProfile.meltFreeze.solarInputLabel}</span>
+                    <span className="ssr-chip">Melt potential · {terrainConditionDetails.snowProfile.meltFreeze.meltPotentialLabel}</span>
+                  </div>
+                </div>
+              )}
               {terrainConditionDetails.recommendedTravel && (
                 <div className="ssr-callout">
                   <span className="ssr-callout-k">Recommended travel</span>

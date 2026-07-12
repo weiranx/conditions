@@ -1,9 +1,234 @@
+const {
+  clampTravelWindowHours,
+  formatMinutesToClock,
+  parseClockToMinutes,
+  parseIsoClockMinutes,
+} = require('./time');
+
 const toFinite = (value) => {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
     return null;
   }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const labelForLevel = (value) => {
+  if (value === 'strong') return 'Strong';
+  if (value === 'fair') return 'Fair';
+  if (value === 'weak') return 'Weak';
+  if (value === 'none') return 'None';
+  if (value === 'high') return 'High';
+  if (value === 'moderate') return 'Moderate';
+  if (value === 'low') return 'Low';
+  return 'Unknown';
+};
+
+const buildMeltFreezeAnalysis = ({
+  hasSnowCoverage,
+  tempF,
+  freezeThawMinTempF,
+  freezeThawMaxTempF,
+  trend,
+  cloudCover,
+  solarData,
+  selectedStartClock,
+  selectedTravelWindowHours,
+  forecastStartTime,
+}) => {
+  const requestedWindowHours = clampTravelWindowHours(
+    selectedTravelWindowHours,
+    Array.isArray(trend) && trend.length > 0 ? trend.length : 6,
+  );
+  const windowPoints = Array.isArray(trend) ? trend.slice(0, requestedWindowHours) : [];
+  const windowTemps = windowPoints
+    .map((point) => toFinite(point?.temp))
+    .filter((value) => value !== null);
+  if (windowTemps.length === 0 && tempF !== null) {
+    windowTemps.push(tempF);
+  }
+
+  const travelWindowMinTempF = windowTemps.length ? Math.min(...windowTemps) : tempF;
+  const travelWindowMaxTempF = windowTemps.length ? Math.max(...windowTemps) : tempF;
+  const aboveFreezingHours = windowTemps.filter((value) => value > 32).length;
+  const meltDegreeHours = windowTemps.reduce((sum, value) => sum + Math.max(0, value - 32), 0);
+
+  const cloudSamples = [cloudCover, ...windowPoints.map((point) => point?.cloudCover)]
+    .map(toFinite)
+    .filter((value) => value !== null);
+  const averageCloudCover = cloudSamples.length
+    ? cloudSamples.reduce((sum, value) => sum + value, 0) / cloudSamples.length
+    : null;
+
+  const sunriseMinutes = parseClockToMinutes(solarData?.sunrise);
+  const sunsetMinutes = parseClockToMinutes(solarData?.sunset);
+  const startMinutes = parseClockToMinutes(selectedStartClock) ?? parseIsoClockMinutes(forecastStartTime);
+  const endMinutes = startMinutes !== null ? startMinutes + requestedWindowHours * 60 : null;
+  const validSolarClock =
+    sunriseMinutes !== null && sunsetMinutes !== null && sunsetMinutes > sunriseMinutes;
+
+  let daylightHours = null;
+  if (validSolarClock && startMinutes !== null && endMinutes !== null) {
+    const overlapMinutes = Math.max(
+      0,
+      Math.min(endMinutes, sunsetMinutes) - Math.max(startMinutes, sunriseMinutes),
+    );
+    daylightHours = overlapMinutes / 60;
+  } else if (windowPoints.some((point) => typeof point?.isDaytime === 'boolean')) {
+    daylightHours = windowPoints.filter((point) => point?.isDaytime === true).length;
+  }
+
+  const cloudTransmission = averageCloudCover === null
+    ? 0.65
+    : Math.max(0.2, Math.min(1, 1 - (averageCloudCover * 0.008)));
+  const effectiveSolarHours = daylightHours === null ? null : daylightHours * cloudTransmission;
+  let solarInput = 'unknown';
+  if (daylightHours !== null && daylightHours <= 0) {
+    solarInput = 'none';
+  } else if (effectiveSolarHours !== null && effectiveSolarHours >= 3) {
+    solarInput = 'high';
+  } else if (effectiveSolarHours !== null && effectiveSolarHours >= 1) {
+    solarInput = 'moderate';
+  } else if (effectiveSolarHours !== null) {
+    solarInput = 'low';
+  }
+
+  let refreezeQuality = 'unknown';
+  if (freezeThawMinTempF !== null) {
+    if (freezeThawMinTempF <= 26) refreezeQuality = 'strong';
+    else if (freezeThawMinTempF <= 31) refreezeQuality = 'fair';
+    else refreezeQuality = 'weak';
+  }
+
+  const cycleDetected = Boolean(
+    hasSnowCoverage &&
+    (refreezeQuality === 'strong' || refreezeQuality === 'fair') &&
+    freezeThawMaxTempF !== null &&
+    freezeThawMaxTempF >= 35,
+  );
+
+  let meltPotential = 'low';
+  const warmestTempF = travelWindowMaxTempF;
+  if (
+    meltDegreeHours >= 18 ||
+    (Number.isFinite(warmestTempF) && warmestTempF >= 42 && (solarInput === 'high' || solarInput === 'moderate'))
+  ) {
+    meltPotential = 'high';
+  } else if (
+    meltDegreeHours >= 5 ||
+    (Number.isFinite(warmestTempF) && warmestTempF >= 35 && solarInput !== 'none')
+  ) {
+    meltPotential = 'moderate';
+  }
+
+  let softeningStartMinutes = null;
+  let wetSnowStartMinutes = null;
+  if (cycleDetected && sunriseMinutes !== null) {
+    const baseDelay = solarInput === 'high' ? 60 : solarInput === 'moderate' ? 105 : 165;
+    const refreezeDelay = refreezeQuality === 'strong' ? 30 : 0;
+    softeningStartMinutes = sunriseMinutes + baseDelay + refreezeDelay;
+    wetSnowStartMinutes = softeningStartMinutes + (meltPotential === 'high' ? 120 : meltPotential === 'moderate' ? 180 : 240);
+  }
+
+  let phase = 'mixed';
+  if (!hasSnowCoverage) {
+    phase = 'no_snow';
+  } else if (cycleDetected && startMinutes !== null && softeningStartMinutes !== null && wetSnowStartMinutes !== null) {
+    if (startMinutes >= wetSnowStartMinutes || (endMinutes !== null && endMinutes > wetSnowStartMinutes)) {
+      phase = 'wet_softening';
+    } else if (endMinutes !== null && startMinutes < softeningStartMinutes && endMinutes > softeningStartMinutes) {
+      phase = 'transitioning';
+    } else if (startMinutes < softeningStartMinutes) {
+      phase = 'firm_refrozen';
+    } else if (startMinutes < wetSnowStartMinutes) {
+      phase = 'corn_window';
+    }
+  } else if (
+    refreezeQuality === 'weak' &&
+    (meltPotential === 'high' || (travelWindowMaxTempF !== null && travelWindowMaxTempF >= 38))
+  ) {
+    phase = 'wet_softening';
+  } else if (tempF !== null && tempF <= 31 && (refreezeQuality === 'strong' || refreezeQuality === 'fair')) {
+    phase = 'firm_refrozen';
+  } else if (cycleDetected) {
+    phase = 'transitioning';
+  }
+
+  const phaseLabels = {
+    no_snow: 'No broad snow cover',
+    firm_refrozen: 'Firm / refrozen',
+    transitioning: 'Softening during window',
+    corn_window: 'Corn window possible',
+    wet_softening: 'Wet-snow softening',
+    mixed: 'Variable snow surface',
+  };
+
+  const reasons = [];
+  if (freezeThawMinTempF !== null) {
+    reasons.push(
+      `${Math.round(freezeThawMinTempF)}F overnight low indicates ${labelForLevel(refreezeQuality).toLowerCase()} refreeze potential.`,
+    );
+  }
+  if (travelWindowMinTempF !== null && travelWindowMaxTempF !== null) {
+    reasons.push(
+      `Travel-window temperatures run ${Math.round(travelWindowMinTempF)}F to ${Math.round(travelWindowMaxTempF)}F with ${aboveFreezingHours} forecast hour(s) above freezing.`,
+    );
+  }
+  if (effectiveSolarHours !== null) {
+    reasons.push(
+      `${effectiveSolarHours.toFixed(1)} effective solar hour(s) in the travel window${averageCloudCover !== null ? ` after about ${Math.round(averageCloudCover)}% cloud cover` : ''}.`,
+    );
+  }
+
+  let summary = 'Snow surface timing remains variable; use aspect-specific field checks for crust, supportability, and free water.';
+  if (cycleDetected && softeningStartMinutes !== null && wetSnowStartMinutes !== null) {
+    const softeningClock = formatMinutesToClock(softeningStartMinutes);
+    const wetClock = formatMinutesToClock(wetSnowStartMinutes);
+    if (phase === 'firm_refrozen') {
+      summary = `${labelForLevel(refreezeQuality)} overnight refreeze should favor firm early travel. Solar-facing slopes may begin softening around ${softeningClock}; shaded and north-facing terrain can lag.`;
+    } else if (phase === 'transitioning') {
+      summary = `The selected window crosses a rough solar-softening onset near ${softeningClock}. Expect firm snow first, then a short corn window on solar-facing slopes.`;
+    } else if (phase === 'corn_window') {
+      summary = `The start overlaps a rough corn-snow window (${softeningClock}-${wetClock}) on solar-facing slopes. Shaded aspects may stay firm longer.`;
+    } else if (startMinutes !== null && startMinutes < wetSnowStartMinutes) {
+      summary = `The selected window extends beyond a rough wet-snow transition near ${wetClock} on solar-facing slopes. Supportability may decline before the trip is over.`;
+    } else {
+      summary = `The start is after a rough wet-snow transition near ${wetClock} on solar-facing slopes. Expect declining supportability as warming continues.`;
+    }
+  } else if (refreezeQuality === 'weak' && hasSnowCoverage) {
+    summary = `The forecast low near ${Math.round(freezeThawMinTempF)}F suggests a weak overnight refreeze. Existing snow may soften early, especially with ${labelForLevel(solarInput).toLowerCase()} solar input.`;
+  } else if (phase === 'firm_refrozen') {
+    summary = 'Cold temperatures and an overnight refreeze signal favor firm or icy snow at the selected start.';
+  } else if (cycleDetected) {
+    summary = 'A freeze-thaw cycle is present, but solar timing is incomplete; expect aspect-dependent firm-to-soft transitions.';
+  }
+
+  return {
+    cycleDetected,
+    refreezeQuality,
+    refreezeLabel: labelForLevel(refreezeQuality),
+    solarInput,
+    solarInputLabel: labelForLevel(solarInput),
+    meltPotential,
+    meltPotentialLabel: labelForLevel(meltPotential),
+    phase,
+    phaseLabel: phaseLabels[phase] || phaseLabels.mixed,
+    summary,
+    reasons: reasons.slice(0, 4),
+    signals: {
+      travelWindowHours: requestedWindowHours,
+      travelWindowMinTempF,
+      travelWindowMaxTempF,
+      aboveFreezingHours,
+      meltDegreeHours: Number(meltDegreeHours.toFixed(1)),
+      averageCloudCover: averageCloudCover === null ? null : Math.round(averageCloudCover),
+      effectiveSolarHours: effectiveSolarHours === null ? null : Number(effectiveSolarHours.toFixed(1)),
+      sunrise: solarData?.sunrise || null,
+      sunset: solarData?.sunset || null,
+      softeningStart: softeningStartMinutes === null ? null : formatMinutesToClock(softeningStartMinutes),
+      wetSnowStart: wetSnowStartMinutes === null ? null : formatMinutesToClock(wetSnowStartMinutes),
+    },
+  };
 };
 
 const deriveSnowProfile = ({
@@ -21,6 +246,7 @@ const deriveSnowProfile = ({
   tempContextWindowHours,
   maxDepthIn,
   maxSweIn,
+  meltFreeze,
 }) => {
   const hasAnySnowSignal =
     hasSnowCoverage ||
@@ -75,12 +301,42 @@ const deriveSnowProfile = ({
       summary: 'Fresh, cold snowfall signal suggests powder-like surface conditions.',
       confidence: hasSnowCoverage && hasFreshSnowSignal ? 'high' : 'medium',
       reasons: reasons.slice(0, 4),
+      meltFreeze,
+    };
+  }
+
+  const hasSolarMeltSignal =
+    hasSnowCoverage &&
+    meltFreeze?.phase === 'wet_softening' &&
+    meltFreeze?.meltPotential === 'high';
+
+  if (
+    hasSnowCoverage &&
+    (((tempF !== null && tempF >= 34) || (freezeThawMaxTempF !== null && freezeThawMaxTempF >= 36)) &&
+      (hasRainAccumulationSignal || wetTrendHours >= 1 || (precipChance !== null && precipChance >= 45)) ||
+      hasSolarMeltSignal)
+  ) {
+    addReason(
+      hasSolarMeltSignal
+        ? 'Temperature and solar loading indicate wet-snow softening during the selected travel window.'
+        : 'Warm/wet signal on top of snowpack supports wet, heavy, or slushy surface snow.',
+    );
+    if (precipChance !== null && !hasSolarMeltSignal) {
+      addReason(`Precipitation chance (${Math.round(precipChance)}%) increases wet-snow likelihood.`);
+    }
+    return {
+      code: 'wet_slushy_snow',
+      label: '💧 Wet / Slushy Snow',
+      summary: meltFreeze?.summary || 'Warm and/or wet signal over existing snowpack suggests slushy, heavy surface conditions.',
+      confidence: hasSolarMeltSignal && meltFreeze?.solarInput !== 'unknown' ? 'high' : 'medium',
+      reasons: reasons.slice(0, 4),
+      meltFreeze,
     };
   }
 
   if (
     hasSnowCoverage &&
-    hasFreezeThawSignal &&
+    (meltFreeze?.cycleDetected || hasFreezeThawSignal) &&
     freezeThawMinTempF !== null &&
     freezeThawMaxTempF !== null &&
     freezeThawMinTempF <= 31 &&
@@ -97,27 +353,10 @@ const deriveSnowProfile = ({
     return {
       code: 'spring_snow',
       label: '🌤️ Corn-Snow Cycle',
-      summary: 'Freeze-thaw cycle indicates a corn-snow window with rapid daytime softening potential.',
-      confidence: 'medium',
+      summary: meltFreeze?.summary || 'Freeze-thaw cycle indicates a corn-snow window with rapid daytime softening potential.',
+      confidence: meltFreeze?.solarInput && meltFreeze.solarInput !== 'unknown' ? 'high' : 'medium',
       reasons: reasons.slice(0, 4),
-    };
-  }
-
-  if (
-    hasSnowCoverage &&
-    ((tempF !== null && tempF >= 34) || (freezeThawMaxTempF !== null && freezeThawMaxTempF >= 36)) &&
-    (hasRainAccumulationSignal || wetTrendHours >= 1 || (precipChance !== null && precipChance >= 45))
-  ) {
-    addReason('Warm/wet signal on top of snowpack supports wet, heavy, or slushy surface snow.');
-    if (precipChance !== null) {
-      addReason(`Precipitation chance (${Math.round(precipChance)}%) increases wet-snow likelihood.`);
-    }
-    return {
-      code: 'wet_slushy_snow',
-      label: '💧 Wet / Slushy Snow',
-      summary: 'Warm and/or wet signal over existing snowpack suggests slushy, heavy surface conditions.',
-      confidence: 'medium',
-      reasons: reasons.slice(0, 4),
+      meltFreeze,
     };
   }
 
@@ -137,6 +376,7 @@ const deriveSnowProfile = ({
       summary: 'Snowpack appears firm/refrozen with icy travel potential.',
       confidence: 'medium',
       reasons: reasons.slice(0, 4),
+      meltFreeze,
     };
   }
 
@@ -147,10 +387,11 @@ const deriveSnowProfile = ({
     summary: 'Mixed snow profile with variable firmness and moisture across terrain/aspects.',
     confidence: hasSnowCoverage ? 'medium' : 'low',
     reasons: reasons.slice(0, 4),
+    meltFreeze,
   };
 };
 
-const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData = null) => {
+const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData = null, options = {}) => {
 
   const description = String(weatherData?.description || '').toLowerCase();
   const precipChance = toFinite(weatherData?.precipChance);
@@ -158,6 +399,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   const tempF = toFinite(weatherData?.temp);
   const windMph = toFinite(weatherData?.windSpeed);
   const gustMph = toFinite(weatherData?.windGust);
+  const cloudCover = toFinite(weatherData?.cloudCover);
 
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
   const nearTermTrend = trend.slice(0, 6);
@@ -189,21 +431,29 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
   const freezeThawMaxTempF = tempContextDaytimeHighF ?? tempContextMaxF ?? contextTrendMaxTemp ?? trendMaxTemp;
 
   const snotel = snowpackData?.snotel || null;
+  const snotelConsensus = snowpackData?.snotelConsensus || null;
   const nohrsc = snowpackData?.nohrsc || null;
+  const cdec = snowpackData?.cdec || null;
   const snotelDistanceKm = toFinite(snotel?.distanceKm);
   const snotelNearby = snotelDistanceKm === null || snotelDistanceKm <= 80;
+  const cdecDistanceKm = toFinite(cdec?.distanceKm);
+  const cdecNearby = cdecDistanceKm === null || cdecDistanceKm <= 80;
 
   const depthSamples = [];
   const sweSamples = [];
-  const snotelDepth = toFinite(snotel?.snowDepthIn);
-  const snotelSwe = toFinite(snotel?.sweIn);
+  const snotelDepth = toFinite(snotelConsensus?.medianDepthIn ?? snotel?.snowDepthIn);
+  const snotelSwe = toFinite(snotelConsensus?.medianSweIn ?? snotel?.sweIn);
   const nohrscDepth = toFinite(nohrsc?.snowDepthIn);
   const nohrscSwe = toFinite(nohrsc?.sweIn);
+  const cdecDepth = toFinite(cdec?.snowDepthIn);
+  const cdecSwe = toFinite(cdec?.sweIn);
 
   if (snotelNearby && snotelDepth !== null) depthSamples.push(snotelDepth);
   if (snotelNearby && snotelSwe !== null) sweSamples.push(snotelSwe);
   if (nohrscDepth !== null) depthSamples.push(nohrscDepth);
   if (nohrscSwe !== null) sweSamples.push(nohrscSwe);
+  if (cdecNearby && cdecDepth !== null) depthSamples.push(cdecDepth);
+  if (cdecNearby && cdecSwe !== null) sweSamples.push(cdecSwe);
 
   const maxDepthIn = depthSamples.length ? Math.max(...depthSamples) : null;
   const maxSweIn = sweSamples.length ? Math.max(...sweSamples) : null;
@@ -262,6 +512,19 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     !hasExpectedRainSignal &&
     wetTrendHours === 0;
 
+  const meltFreeze = buildMeltFreezeAnalysis({
+    hasSnowCoverage,
+    tempF,
+    freezeThawMinTempF,
+    freezeThawMaxTempF,
+    trend,
+    cloudCover,
+    solarData: options?.solarData || null,
+    selectedStartClock: options?.selectedStartClock || null,
+    selectedTravelWindowHours: options?.selectedTravelWindowHours,
+    forecastStartTime: weatherData?.forecastStartTime || null,
+  });
+
   const snowProfile = deriveSnowProfile({
     hasSnowCoverage,
     hasSnowWeatherSignal,
@@ -277,6 +540,7 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
     tempContextWindowHours,
     maxDepthIn,
     maxSweIn,
+    meltFreeze,
   });
 
   let code = 'variable_surface';
@@ -329,12 +593,12 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       code = 'spring_snow';
       label = '🌤️ Corn-Snow Cycle';
       impact = 'moderate';
-      recommendedTravel = 'Time travel for the firm corn window; expect rapid surface softening and increased avalanche risk in afternoon heat.';
+      recommendedTravel = `${meltFreeze.summary} Reassess boot penetration and surface water before committing to steep solar terrain.`;
     } else if (snowProfile.code === 'wet_slushy_snow') {
       code = 'wet_snow';
       label = '💧 Wet / Slushy Snow';
       impact = 'high';
-      recommendedTravel = 'Deep wet snow creates high drag and unstable footing; shorten exposure windows and avoid avalanche paths.';
+      recommendedTravel = `${meltFreeze.summary} Shorten exposure windows and avoid avalanche paths as supportability declines.`;
     } else if (snowProfile.code === 'icy_hardpack') {
       code = 'snow_ice';
       label = '🧊 Icy / Firm Snow';
@@ -487,6 +751,12 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       maxSnowDepthIn: maxDepthIn,
       maxSweIn,
       snotelDistanceKm,
+      cdecDistanceKm,
+      snowpackSourceCount: [
+        snotelNearby && (snotelDepth !== null || snotelSwe !== null),
+        nohrscDepth !== null || nohrscSwe !== null,
+        cdecNearby && (cdecDepth !== null || cdecSwe !== null),
+      ].filter(Boolean).length,
       tempContextWindowHours,
       tempContextMinF,
       tempContextMaxF,
@@ -494,6 +764,12 @@ const deriveTerrainCondition = (weatherData, snowpackData = null, rainfallData =
       tempContextDaytimeHighF,
       freezeThawMinTempF,
       freezeThawMaxTempF,
+      cloudCover,
+      meltFreezeCycleDetected: meltFreeze.cycleDetected,
+      refreezeQuality: meltFreeze.refreezeQuality,
+      solarInput: meltFreeze.solarInput,
+      meltPotential: meltFreeze.meltPotential,
+      snowSurfacePhase: meltFreeze.phase,
     },
   };
 };
