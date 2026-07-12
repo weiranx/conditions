@@ -1,15 +1,19 @@
 import React from 'react';
 import {
+  BarChart3,
   ArrowRight,
+  CalendarRange,
   CalendarDays,
   Check,
   ChevronDown,
   CloudSun,
   Clock,
   Compass,
+  Database,
   Info,
   Layers3,
   LoaderCircle,
+  MapPinned,
   MapPin,
   Mountain,
   Route,
@@ -285,6 +289,129 @@ export function HomeView({
                 <span>Winds strengthen after 11 am; exposed ridges deserve a firm turnaround time.</span>
               </div>
             </article>
+          </div>
+        </section>
+
+        <section className="ssr-h-report" aria-labelledby="home-report-title">
+          <div className="ssr-h-report-copy">
+            <span className="ssr-h-eyebrow">A brief you can use</span>
+            <h2 id="home-report-title">The answer first.<br />The evidence close behind.</h2>
+            <p>
+              Your report opens with the decision, the timing, and the reasons that matter most. Dig
+              deeper when you need to—without hunting through six different forecasts first.
+            </p>
+
+            <div className="ssr-h-report-points">
+              <div>
+                <span>01</span>
+                <p><strong>Know what changes the plan.</strong> Conditions are ranked by their real effect on your objective and travel window.</p>
+              </div>
+              <div>
+                <span>02</span>
+                <p><strong>See where uncertainty lives.</strong> Source age, gaps, and confidence reasons stay visible instead of being hidden.</p>
+              </div>
+              <div>
+                <span>03</span>
+                <p><strong>Leave with next steps.</strong> Get specific checks, timing adjustments, and route considerations before departure.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="ssr-h-report-preview" aria-label="Example conditions brief for Mount Rainier">
+            <div className="ssr-h-preview-head">
+              <div>
+                <span>Conditions brief</span>
+                <h3>Mount Rainier</h3>
+                <p>Paradise to Camp Muir · 4:00 am–4:00 pm</p>
+              </div>
+              <div className="ssr-h-preview-score"><b>72</b><span>/ 100</span></div>
+            </div>
+
+            <div className="ssr-h-preview-verdict">
+              <div className="ssr-h-preview-status"><ShieldCheck size={15} aria-hidden /> Caution</div>
+              <span className="ssr-h-preview-confidence">High confidence · updated 18 min ago</span>
+              <h4>Earlier is the better window.</h4>
+              <p>Firm overnight snow and light early winds support the plan. Exposed travel becomes less favorable after late morning.</p>
+            </div>
+
+            <div className="ssr-h-preview-window">
+              <div className="ssr-h-preview-window-top"><span>Your travel window</span><b>4 am</b><b>8 am</b><b>12 pm</b><b>4 pm</b></div>
+              <div className="ssr-h-preview-chart" aria-hidden="true">
+                <span className="good" /><span className="good" /><span className="fair" /><span className="poor" />
+                <i className="sunrise-marker" /><i className="wind-marker" />
+              </div>
+              <div className="ssr-h-preview-markers"><span><Sunrise size={12} /> Sunrise 5:24</span><span><Wind size={12} /> Gusts rise 11:00</span></div>
+            </div>
+
+            <div className="ssr-h-preview-factors">
+              <div><span className="positive"><Check size={13} /></span><p><strong>Overnight freeze</strong><small>Good surface refreeze expected above 8,000 ft</small></p><b>Supports</b></div>
+              <div><span className="caution"><Wind size={13} /></span><p><strong>Ridgetop wind</strong><small>Gusts build from 18 to 37 mph by noon</small></p><b>Watch</b></div>
+              <div><span className="neutral"><TriangleAlert size={13} /></span><p><strong>Avalanche problem</strong><small>Wet loose becomes relevant on sun-exposed slopes</small></p><b>Verify</b></div>
+            </div>
+
+            <div className="ssr-h-preview-action"><Compass size={16} aria-hidden /><span><strong>Plan adjustment</strong> Set an 11 am turnaround for exposed upper-mountain travel.</span></div>
+          </div>
+        </section>
+
+        <section className="ssr-h-tools" aria-labelledby="home-tools-title">
+          <div className="ssr-h-tools-head">
+            <span className="ssr-h-eyebrow">Beyond the first brief</span>
+            <h2 id="home-tools-title">Keep planning as the questions get sharper.</h2>
+            <p>Move from “Is Saturday viable?” to the route, start time, and fallback that make the most sense.</p>
+          </div>
+
+          <div className="ssr-h-tools-grid">
+            <article>
+              <div className="ssr-h-tool-icon"><CalendarRange aria-hidden /></div>
+              <span>Compare days</span>
+              <h3>Find the best day in the window.</h3>
+              <p>Run the same objective and travel assumptions across several days, then carry your choice directly into Planner.</p>
+              <button type="button" onClick={openTripToolView}>Open Trip tool <ArrowRight size={14} aria-hidden /></button>
+            </article>
+            <article>
+              <div className="ssr-h-tool-icon"><MapPinned aria-hidden /></div>
+              <span>Inspect the route</span>
+              <h3>Put the forecast on your line.</h3>
+              <p>Upload a GPX track to see elevation, slope, aspect, and condition changes along the route—not just at one point.</p>
+              <button type="button" onClick={openPlannerView}>Explore route analysis <ArrowRight size={14} aria-hidden /></button>
+            </article>
+            <article>
+              <div className="ssr-h-tool-icon"><BarChart3 aria-hidden /></div>
+              <span>Compare start times</span>
+              <h3>See what an hour changes.</h3>
+              <p>Test earlier and later departures against daylight, precipitation, heat, wind, and time-sensitive hazards.</p>
+              <button type="button" onClick={openPlannerView}>Open Planner <ArrowRight size={14} aria-hidden /></button>
+            </article>
+            <article>
+              <div className="ssr-h-tool-icon"><Sparkles aria-hidden /></div>
+              <span>Ask the report</span>
+              <h3>Follow the question that matters.</h3>
+              <p>Ask focused follow-ups about timing, terrain, gear, or alternatives with your actual report kept in context.</p>
+              <button type="button" onClick={openPlannerView}>Build a report first <ArrowRight size={14} aria-hidden /></button>
+            </article>
+          </div>
+        </section>
+
+        <section className="ssr-h-sources" aria-labelledby="home-sources-title">
+          <div className="ssr-h-sources-title">
+            <div className="ssr-h-sources-icon"><Database aria-hidden /></div>
+            <div>
+              <span className="ssr-h-eyebrow">Transparent by design</span>
+              <h2 id="home-sources-title">Built on sources you already trust.</h2>
+              <p>Every brief keeps source age, coverage, and limitations visible so you know what the result is—and what it isn’t.</p>
+            </div>
+          </div>
+          <div className="ssr-h-source-names" aria-label="Example data providers">
+            <span><b>NWS</b> Weather</span>
+            <span><b>Avalanche.org</b> Bulletins</span>
+            <span><b>NRCS</b> Snowpack</span>
+            <span><b>NOAA</b> Snow & climate</span>
+            <span><b>OpenStreetMap</b> Search & terrain</span>
+          </div>
+          <div className="ssr-h-source-standards">
+            <span><Check size={14} aria-hidden /> Source timestamps on every brief</span>
+            <span><Check size={14} aria-hidden /> Visible partial-data warnings</span>
+            <span><Check size={14} aria-hidden /> Confidence factors explained</span>
           </div>
         </section>
 
