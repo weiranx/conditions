@@ -253,6 +253,10 @@
 }
 .ssr-trip-ov-best { display: flex; flex-direction: column; gap: 4px; }
 .ssr-trip-ov-best-day { font-size: 15px; font-weight: 700; color: var(--ssr-go-ink); }
+.ssr-trip-ov-watch-day { font-size: 15px; font-weight: 700; }
+.ssr-trip-ov-watch-day.go { color: var(--ssr-go-ink); }
+.ssr-trip-ov-watch-day.caution { color: var(--ssr-caution-ink); }
+.ssr-trip-ov-watch-day.nogo { color: var(--ssr-nogo-ink); }
 .ssr-trip-ov-best-note { font-size: 12px; color: var(--ssr-text-2); line-height: 1.4; }
 
 /* ---------- TREND ARC ---------- */
@@ -301,7 +305,30 @@
 .ssr-trip-day-band.go { background: var(--ssr-go); }
 .ssr-trip-day-band.caution { background: var(--ssr-caution); }
 .ssr-trip-day-band.nogo { background: var(--ssr-nogo); }
+.ssr-trip-day-flags {
+  display: flex;
+  min-height: 25px;
+  padding: 7px 16px 0;
+}
+.ssr-trip-day-flags span {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.ssr-trip-day-flags .best {
+  color: var(--ssr-go-ink);
+  background: color-mix(in oklch, var(--ssr-go) 18%, transparent);
+}
+.ssr-trip-day-flags .watch {
+  color: var(--ssr-nogo-ink);
+  background: color-mix(in oklch, var(--ssr-nogo) 14%, transparent);
+}
 .ssr-trip-day-top { padding: 14px 16px 12px; border-bottom: 1px solid var(--ssr-line); }
+.ssr-trip-day-flags + .ssr-trip-day-top { padding-top: 8px; }
 .ssr-trip-day-date { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .ssr-trip-day-wd { font-size: 13px; font-weight: 600; color: var(--ssr-text); }
 .ssr-trip-day-wd b { display: block; font-size: 11px; font-weight: 500; color: var(--ssr-text-3); }

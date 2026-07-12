@@ -116,6 +116,21 @@ function levelClass(level: DecisionLevel): string {
   return level.toLowerCase().replace('-', '');
 }
 
+const DECISION_PRIORITY: Record<DecisionLevel, number> = {
+  GO: 2,
+  CAUTION: 1,
+  'NO-GO': 0,
+};
+
+function compareForecastDays(
+  left: MultiDayTripForecastDay,
+  right: MultiDayTripForecastDay,
+): number {
+  const decisionDifference = DECISION_PRIORITY[left.decisionLevel] - DECISION_PRIORITY[right.decisionLevel];
+  if (decisionDifference !== 0) return decisionDifference;
+  return (left.score ?? -Infinity) - (right.score ?? -Infinity);
+}
+
 /* Inline day-over-day delta marker for a trip metric. */
 function renderMetricDelta(delta: number | null | undefined, unit = '') {
   if (typeof delta !== 'number' || delta === 0) return null;
@@ -141,10 +156,17 @@ function TrendArc({
   const n = days.length;
   const x = (i: number) => (n <= 1 ? W / 2 : pad.l + (i / (n - 1)) * (W - pad.l - pad.r));
   const y = (s: number) => H - pad.b - (Math.max(0, Math.min(100, s)) / 100) * (H - pad.t - pad.b);
-  const scoreOf = (d: MultiDayTripForecastDay) => (typeof d.score === 'number' ? d.score : 0);
-
-  const linePts = days.map((d, i) => `${x(i)},${y(scoreOf(d))}`);
-  const areaD = `M ${x(0)} ${H - pad.b} L ${linePts.join(' L ')} L ${x(n - 1)} ${H - pad.b} Z`;
+  const scoreSegments: string[][] = [];
+  let currentSegment: string[] = [];
+  days.forEach((day, index) => {
+    if (typeof day.score === 'number') {
+      currentSegment.push(`${x(index)},${y(day.score)}`);
+      return;
+    }
+    if (currentSegment.length > 1) scoreSegments.push(currentSegment);
+    currentSegment = [];
+  });
+  if (currentSegment.length > 1) scoreSegments.push(currentSegment);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Conditions score trend by trip day">
@@ -154,14 +176,21 @@ function TrendArc({
           <text x={pad.l - 6} y={y(g) + 3} textAnchor="end" fontSize="9" fill="var(--ssr-text-4)" fontFamily="var(--ssr-mono)">{g}</text>
         </g>
       ))}
-      {n > 1 && <path d={areaD} fill="var(--ssr-brand)" opacity="0.06" />}
-      {n > 1 && <polyline points={linePts.join(' ')} fill="none" stroke="var(--ssr-brand)" strokeWidth="2" />}
+      {scoreSegments.map((points) => (
+        <polyline key={points[0]} points={points.join(' ')} fill="none" stroke="var(--ssr-brand)" strokeWidth="2" />
+      ))}
       {days.map((d, i) => (
         <g key={i}>
-          <circle cx={x(i)} cy={y(scoreOf(d))} r="6" fill={getScoreColor(scoreOf(d))} stroke="var(--ssr-surface)" strokeWidth="2.5" />
-          <text x={x(i)} y={y(scoreOf(d)) - 13} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--ssr-text)" fontFamily="var(--ssr-sans)">
-            {typeof d.score === 'number' ? d.score : '—'}
-          </text>
+          {typeof d.score === 'number' ? (
+            <>
+              <circle cx={x(i)} cy={y(d.score)} r="6" fill={getScoreColor(d.score)} stroke="var(--ssr-surface)" strokeWidth="2.5" />
+              <text x={x(i)} y={y(d.score) - 13} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--ssr-text)" fontFamily="var(--ssr-sans)">
+                {d.score}
+              </text>
+            </>
+          ) : (
+            <text x={x(i)} y={H / 2} textAnchor="middle" fontSize="11" fill="var(--ssr-text-4)" fontFamily="var(--ssr-sans)">No score</text>
+          )}
           <text x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--ssr-text-3)" fontFamily="var(--ssr-sans)">
             {weekdayLabel(d.date)} {monthDayLabel(d.date).replace(/^\w+\s/, '')}
           </text>
@@ -237,11 +266,8 @@ export function TripView({
       return;
     }
     let bestIdx = 0;
-    let bestScore = -Infinity;
     tripForecastRows.forEach((row, i) => {
-      const s = typeof row.score === 'number' ? row.score : -Infinity;
-      if (s > bestScore) {
-        bestScore = s;
+      if (compareForecastDays(row, tripForecastRows[bestIdx]) > 0) {
         bestIdx = i;
       }
     });
@@ -252,7 +278,6 @@ export function TripView({
   const goCount = tripForecastRows.filter((row) => row.decisionLevel === 'GO').length;
   const cautionCount = tripForecastRows.filter((row) => row.decisionLevel === 'CAUTION').length;
   const noGoCount = tripForecastRows.filter((row) => row.decisionLevel === 'NO-GO').length;
-  const worst = noGoCount > 0 ? 'NO-GO' : cautionCount > 0 ? 'CAUTION' : tripForecastRows.length > 0 ? 'GO' : 'N/A';
   const objectiveSummary = hasObjective
     ? objectiveName || `${position.lat.toFixed(4)}°, ${position.lng.toFixed(4)}°`
     : 'No objective selected';
@@ -260,10 +285,25 @@ export function TripView({
 
   const best = tripForecastRows.reduce<MultiDayTripForecastDay | null>((acc, row) => {
     if (!acc) return row;
-    return (row.score ?? -Infinity) > (acc.score ?? -Infinity) ? row : acc;
+    return compareForecastDays(row, acc) > 0 ? row : acc;
+  }, null);
+  const watchDay = tripForecastRows.reduce<MultiDayTripForecastDay | null>((acc, row) => {
+    if (!acc) return row;
+    return compareForecastDays(row, acc) < 0 ? row : acc;
   }, null);
   const bestIndex = best ? tripForecastRows.findIndex((row) => row.date === best.date) : -1;
-  const hasClearGoDay = goCount > 0;
+  const watchDayIndex = watchDay ? tripForecastRows.findIndex((row) => row.date === watchDay.date) : -1;
+  const scoredValues = tripForecastRows.flatMap((row) => (typeof row.score === 'number' ? [row.score] : []));
+  const scoreRange = scoredValues.length > 1
+    ? `${Math.min(...scoredValues)}–${Math.max(...scoredValues)} / 100 · ${Math.max(...scoredValues) - Math.min(...scoredValues)} point swing`
+    : scoredValues.length === 1
+      ? `${scoredValues[0]} / 100`
+      : 'Scores unavailable';
+  const recommendationEyebrow = best?.decisionLevel === 'GO'
+    ? 'Most favorable go day'
+    : best?.decisionLevel === 'CAUTION'
+      ? 'Most favorable — use caution'
+      : 'Least unfavorable — still no-go';
 
   const clearForecastState = () => {
     setTripForecastRows([]);
@@ -426,7 +466,7 @@ export function TripView({
                 </div>
                 <div className="ssr-trip-recommendation-copy">
                   <span className="ssr-trip-recommendation-eyebrow">
-                    {hasClearGoDay ? 'Most favorable go day' : 'Most favorable — still use caution'}
+                    {recommendationEyebrow}
                   </span>
                   <h2 id="trip-recommendation-title">{weekdayLabel(best.date)}, {monthDayLabel(best.date)}</h2>
                   <p>{localizeUnitText(best.decisionHeadline)}</p>
@@ -464,13 +504,13 @@ export function TripView({
                 <div className="ssr-trip-ov-count-k">No-go</div>
               </div>
               <div className="ssr-trip-ov">
-                <div className="ssr-trip-ov-k">Best day</div>
-                {best && (
+                <div className="ssr-trip-ov-k">Watch day</div>
+                {watchDay && (
                   <div className="ssr-trip-ov-best">
-                    <span className="ssr-trip-ov-best-day">
-                      {weekdayLabel(best.date)} {monthDayLabel(best.date)}{best.score !== null ? ` · ${best.score}/100` : ''}
+                    <span className={`ssr-trip-ov-watch-day ${levelClass(watchDay.decisionLevel)}`}>
+                      {weekdayLabel(watchDay.date)} {monthDayLabel(watchDay.date)} · {watchDay.decisionLevel}
                     </span>
-                    <span className="ssr-trip-ov-best-note">{localizeUnitText(best.decisionHeadline)}</span>
+                    <span className="ssr-trip-ov-best-note">{localizeUnitText(watchDay.decisionHeadline)}</span>
                   </div>
                 )}
               </div>
@@ -480,7 +520,7 @@ export function TripView({
             <div className="ssr-trip-trend">
               <div className="ssr-trip-trend-h">
                 <h2>Conditions score across the trip</h2>
-                <span>Worst day · {worst}{tripForecastNote ? ` · ${tripForecastNote}` : ''}</span>
+                <span>{scoreRange}{tripForecastNote ? ` · ${tripForecastNote}` : ''}</span>
               </div>
               <TrendArc days={tripForecastRows} getScoreColor={getScoreColor} />
             </div>
@@ -498,6 +538,8 @@ export function TripView({
                 const dlv = levelClass(day.decisionLevel);
                 const gustWarn = typeof day.windGustMph === 'number' && day.windGustMph >= 35;
                 const precipWarn = typeof day.precipChance === 'number' && day.precipChance >= 30;
+                const isBestDay = i === bestIndex;
+                const isWatchDay = i === watchDayIndex && watchDayIndex !== bestIndex;
                 return (
                   <button
                     type="button"
@@ -523,6 +565,11 @@ export function TripView({
                     aria-pressed={sel === i}
                   >
                     <div className={`ssr-trip-day-band ${dlv}`} />
+                    {(isBestDay || isWatchDay) && (
+                      <div className="ssr-trip-day-flags" aria-label={isBestDay ? 'Best option in this forecast' : 'Day needing the most scrutiny'}>
+                        <span className={isBestDay ? 'best' : 'watch'}>{isBestDay ? 'Best option' : 'Watch closely'}</span>
+                      </div>
+                    )}
                     <div className="ssr-trip-day-top">
                       <div className="ssr-trip-day-date">
                         <span className="ssr-trip-day-wd">{weekdayLabel(day.date)}<b>{monthDayLabel(day.date)}</b></span>
