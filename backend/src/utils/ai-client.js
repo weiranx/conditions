@@ -44,7 +44,7 @@ let openAIClient;
 let anthropicClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
 let aiEnabled = DEFAULT_AI_ENABLED;
-let aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, true]));
+let aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, DEFAULT_AI_ENABLED]));
 
 const fallbackProviderFor = (provider) => provider === 'openai' ? 'anthropic' : 'openai';
 
@@ -78,6 +78,9 @@ const loadPersistedAISettings = () => {
       });
     } else if (persisted.features !== undefined) {
       logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI feature settings');
+    }
+    if (!aiEnabled) {
+      aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, false]));
     }
     logger.info(
       { file: AI_SETTINGS_FILE, enabled: aiEnabled, provider: activeProvider, features: aiFeatures },
@@ -397,7 +400,10 @@ const updateAISettings = ({ enabled, provider, features } = {}) => {
   }
 
   const previous = { enabled: aiEnabled, provider: activeProvider, features: { ...aiFeatures } };
-  if (enabled !== undefined) aiEnabled = enabled;
+  if (enabled !== undefined) {
+    aiEnabled = enabled;
+    aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, enabled]));
+  }
   if (provider !== undefined) activeProvider = provider;
   if (features !== undefined) aiFeatures = { ...aiFeatures, ...features };
   try {

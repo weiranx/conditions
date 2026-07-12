@@ -194,7 +194,16 @@ describe('AI provider client wrapper', () => {
     process.env.AI_ENABLED = 'false';
     const { getAIStatus, isAIAvailable } = loadClient('openai');
 
-    expect(getAIStatus()).toEqual(expect.objectContaining({ enabled: false, persistent: false }));
+    expect(getAIStatus()).toEqual(expect.objectContaining({
+      enabled: false,
+      persistent: false,
+      features: {
+        aiBrief: { enabled: false, available: false },
+        reportChat: { enabled: false, available: false },
+        routeAnalysis: { enabled: false, available: false },
+        snowVision: { enabled: false, available: false },
+      },
+    }));
     expect(isAIAvailable()).toBe(false);
   });
 
@@ -213,10 +222,10 @@ describe('AI provider client wrapper', () => {
         enabled: false,
         provider: 'anthropic',
         features: {
-          aiBrief: true,
+          aiBrief: false,
           reportChat: false,
-          routeAnalysis: true,
-          snowVision: true,
+          routeAnalysis: false,
+          snowVision: false,
         },
       });
       expect(fs.statSync(settingsFile).mode & 0o777).toBe(0o600);
@@ -228,7 +237,10 @@ describe('AI provider client wrapper', () => {
         defaultProvider: 'openai',
         persistent: true,
         features: expect.objectContaining({
+          aiBrief: { enabled: false, available: false },
           reportChat: { enabled: false, available: false },
+          routeAnalysis: { enabled: false, available: false },
+          snowVision: { enabled: false, available: false },
         }),
       }));
     } finally {
@@ -251,7 +263,7 @@ describe('AI provider client wrapper', () => {
     expect(getAIStatus().fallbackProvider).toBe('openai');
   });
 
-  test('kill switch blocks text and vision calls before reaching a provider', async () => {
+  test('kill switch synchronizes every feature flag and blocks provider calls', async () => {
     const { askAI, askAIVision, getAIStatus, isAIAvailable, updateAISettings } = loadClient('openai');
 
     updateAISettings({ enabled: false });
@@ -260,8 +272,25 @@ describe('AI provider client wrapper', () => {
     await expect(askAIVision('YWJj', 'analyze')).rejects.toMatchObject({ code: 'AI_DISABLED', message: 'AI features are unavailable' });
     expect(mockOpenAICreate).not.toHaveBeenCalled();
     expect(mockAnthropicCreate).not.toHaveBeenCalled();
-    expect(getAIStatus()).toEqual(expect.objectContaining({ enabled: false, available: false }));
+    expect(getAIStatus()).toEqual(expect.objectContaining({
+      enabled: false,
+      available: false,
+      features: {
+        aiBrief: { enabled: false, available: false },
+        reportChat: { enabled: false, available: false },
+        routeAnalysis: { enabled: false, available: false },
+        snowVision: { enabled: false, available: false },
+      },
+    }));
     expect(isAIAvailable()).toBe(false);
+
+    updateAISettings({ enabled: true });
+    expect(getAIStatus().features).toEqual({
+      aiBrief: { enabled: true, available: true },
+      reportChat: { enabled: true, available: true },
+      routeAnalysis: { enabled: true, available: true },
+      snowVision: { enabled: true, available: true },
+    });
   });
 
   test('individual feature switches only block the selected feature', () => {

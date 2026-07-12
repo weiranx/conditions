@@ -669,7 +669,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
 
   const toggleAIEnabled = () => {
     if (!aiSettings) return;
-    if (aiSettings.enabled && !window.confirm('Stop all AI features? New AI requests will fail until you turn them back on.')) return;
+    if (aiSettings.enabled && !window.confirm('Stop all AI features and switch every individual AI feature off?')) return;
     void updateAIControl({ enabled: !aiSettings.enabled });
   };
 
@@ -1109,7 +1109,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <span className="admin-ai-setting-icon"><Power size={18} aria-hidden /></span>
             <div>
               <strong>AI feature kill switch</strong>
-              <p>{aiSettings?.enabled ? 'AI briefs, chat, route analysis, and vision features can make model calls.' : 'All new text and vision model calls are blocked by the backend.'}</p>
+              <p>{aiSettings?.enabled ? 'AI briefs, chat, route analysis, and vision features can make model calls.' : 'All model calls and individual AI feature flags are switched off.'}</p>
             </div>
             <button
               type="button"
@@ -1167,12 +1167,12 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                   type="button"
                   className={enabled ? 'admin-kill-switch is-enabled' : 'admin-kill-switch is-stopped'}
                   onClick={() => toggleAIFeature(feature.key)}
-                  disabled={!featureSettings || aiSettingsPending}
+                  disabled={!featureSettings || !aiSettings?.enabled || aiSettingsPending}
                   role="switch"
                   aria-checked={enabled}
                   aria-label={`${enabled ? 'Disable' : 'Enable'} ${feature.label}`}
                 >
-                  {aiSettingsPending ? 'Saving…' : enabled ? 'Disable' : 'Enable'}
+                  {aiSettingsPending ? 'Saving…' : enabled ? 'Disable' : aiSettings?.enabled ? 'Enable' : 'Off'}
                 </button>
               </div>
             );
