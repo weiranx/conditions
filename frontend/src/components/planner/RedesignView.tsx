@@ -920,9 +920,13 @@ function RedesignViewComponent(props: PlannerViewProps) {
                 <div className={`ssr-wx-priority-item ${visibilityTone}`}>
                   <span className="ssr-wx-priority-icon"><Eye size={15} /></span>
                   <span className="ssr-wx-priority-copy">
-                    <span className="ssr-k">Visibility</span>
+                    <span className="ssr-k">Low-visibility risk</span>
                     <span className="ssr-v">{weatherVisibilityRisk.level || 'Unknown'}</span>
-                    <span className="ssr-wx-sub">{weatherVisibilityScoreLabel || 'No elevated signal'}</span>
+                    <span className="ssr-wx-sub">
+                      {weatherVisibilityScoreLabel && weatherVisibilityScoreLabel !== 'N/A'
+                        ? `Risk score ${weatherVisibilityScoreLabel}`
+                        : 'Risk score unavailable'}
+                    </span>
                   </span>
                 </div>
               </div>

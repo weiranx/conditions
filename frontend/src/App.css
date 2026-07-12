@@ -2976,6 +2976,10 @@ input {
   box-shadow: 0 2px 8px rgba(94, 160, 208, 0.3);
 }
 
+:root[data-theme='dark'] .weather-hour-pill.selected .weather-hour-pill-wind {
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .sat-line-preview {
   margin: 0;
   padding: 8px 10px;
