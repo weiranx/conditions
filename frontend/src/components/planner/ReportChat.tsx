@@ -12,6 +12,7 @@ import {
   MessageContent,
   MessageResponse,
 } from '../ai-elements/message';
+import { Suggestion, Suggestions } from '../ai-elements/suggestion';
 import { buildApiUrl } from '../../lib/api-client';
 import '../../styles/report-chat.css';
 
@@ -20,6 +21,45 @@ const STARTER_QUESTIONS = [
   'What should I verify before leaving?',
   'How does the timing affect this plan?',
 ];
+
+const FOLLOW_UP_QUESTIONS = {
+  avalanche: [
+    'Which avalanche details matter most?',
+    'What terrain should I avoid?',
+    'What should I confirm in the official forecast?',
+  ],
+  weather: [
+    'When is the safest travel window?',
+    'Which weather threshold is closest?',
+    'What should I recheck before leaving?',
+  ],
+  uncertainty: [
+    'What is the biggest uncertainty?',
+    'Which missing data matters most?',
+    'Where should I verify it?',
+  ],
+  general: [
+    'What could change this recommendation?',
+    'What should I check in the field?',
+    'What would make this a no-go?',
+  ],
+} as const;
+
+const AVALANCHE_TERMS = ['avalanche', 'slab', 'snowpack', 'aspect', 'slope', 'terrain trap'];
+const WEATHER_TERMS = ['weather', 'wind', 'gust', 'precipitation', 'storm', 'temperature', 'travel window'];
+const UNCERTAINTY_TERMS = ['unknown', 'missing', 'unavailable', 'stale', 'conflict', 'uncertain'];
+
+function includesAny(text: string, terms: readonly string[]) {
+  return terms.some((term) => text.includes(term));
+}
+
+function getFollowUpQuestions(answer: string): readonly string[] {
+  const normalizedAnswer = answer.toLowerCase();
+  if (includesAny(normalizedAnswer, AVALANCHE_TERMS)) return FOLLOW_UP_QUESTIONS.avalanche;
+  if (includesAny(normalizedAnswer, WEATHER_TERMS)) return FOLLOW_UP_QUESTIONS.weather;
+  if (includesAny(normalizedAnswer, UNCERTAINTY_TERMS)) return FOLLOW_UP_QUESTIONS.uncertainty;
+  return FOLLOW_UP_QUESTIONS.general;
+}
 
 export interface ReportChatProps {
   reportPayload: string;
@@ -42,6 +82,16 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
     stop,
   } = useChat({ transport });
   const isBusy = status === 'submitted' || status === 'streaming';
+  const latestMessage = messages[messages.length - 1];
+  const latestAssistantAnswer = latestMessage?.role === 'assistant'
+    ? latestMessage.parts
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    : '';
+  const followUpQuestions = !isBusy && !error && latestAssistantAnswer
+    ? getFollowUpQuestions(latestAssistantAnswer)
+    : [];
 
   React.useEffect(() => {
     setMessages([]);
@@ -117,6 +167,21 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
               {status === 'submitted' && (
                 <div className="report-chat-thinking" role="status" aria-live="polite">
                   <span /><span /><span /> Reading the report…
+                </div>
+              )}
+              {followUpQuestions.length > 0 && (
+                <div className="report-chat-follow-ups" role="group" aria-label="Suggested replies">
+                  <p>Suggested replies</p>
+                  <Suggestions className="report-chat-follow-up-list">
+                    {followUpQuestions.map((question) => (
+                      <Suggestion
+                        key={question}
+                        className="report-chat-follow-up"
+                        suggestion={question}
+                        onClick={submitQuestion}
+                      />
+                    ))}
+                  </Suggestions>
                 </div>
               )}
               {error && (
