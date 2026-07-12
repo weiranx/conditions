@@ -1,19 +1,25 @@
 import React from 'react';
 import {
-  CalendarDays,
-  Clock,
-  Clock3,
-  Mountain,
-  Activity,
   ArrowRight,
+  CalendarDays,
   Check,
+  ChevronDown,
+  CloudSun,
+  Clock,
+  Compass,
   Info,
   Layers3,
   LoaderCircle,
-  RadioTower,
+  MapPin,
+  Mountain,
   Route,
   ShieldCheck,
+  Snowflake,
   Sparkles,
+  Sunrise,
+  Timer,
+  TriangleAlert,
+  Wind,
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
 import type { Suggestion } from '../../lib/search';
@@ -26,22 +32,11 @@ const FEATURED_PEAKS: Suggestion[] = [
   { name: 'Grand Teton, Wyoming', lat: 43.7417, lon: -110.8024, class: 'popular', type: 'peak' },
   { name: 'Mount Whitney, California', lat: 36.5786, lon: -118.2923, class: 'popular', type: 'peak' },
   { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular', type: 'peak' },
-  { name: 'Longs Peak, Colorado', lat: 40.2549, lon: -105.615, class: 'popular', type: 'peak' },
 ];
-
-const PEAK_ELEVATIONS: Record<string, string> = {
-  'Mount Rainier': "WA · 14,411'",
-  'Grand Teton': "WY · 13,775'",
-  'Mount Whitney': "CA · 14,505'",
-  'Mount Hood': "OR · 11,249'",
-  'Longs Peak': "CO · 14,259'",
-};
 
 export interface HomeViewProps {
   appShellClassName: string;
   isViewPending: boolean;
-
-  // Search state
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   searchQuery: string;
@@ -51,8 +46,6 @@ export interface HomeViewProps {
   suggestions: Suggestion[];
   activeSuggestionIndex: number;
   canUseCoordinates: boolean;
-
-  // Search handlers
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleFocus: () => void;
   handleSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -61,8 +54,6 @@ export interface HomeViewProps {
   handleUseTypedCoordinates: (value: string) => void;
   selectSuggestion: (suggestion: Suggestion) => void;
   setActiveSuggestionIndex: (index: number) => void;
-
-  // Trip defaults (shown in the search console, editable)
   todayDate: string;
   maxForecastDate: string;
   forecastDate: string;
@@ -73,8 +64,6 @@ export interface HomeViewProps {
   travelWindowHoursDraft: string | number;
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTravelWindowHoursDraftBlur: () => void;
-
-  // Navigation
   navigateToPlanner: () => void;
   navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
   openPlannerView: () => void;
@@ -129,195 +118,201 @@ export function HomeView({
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
-      <div className="ssr-home">
-        <section className="ssr-h-hero">
-          <div className="ssr-h-hero-inner">
-            <div className="ssr-h-workspace">
-              <div className="ssr-h-kicker">
-                <span className="ssr-h-kicker-mark" aria-hidden><Sparkles size={12} /></span>
-                Mountain intelligence, on your clock
-              </div>
-              <h1>Know the mountain <br />before you move.</h1>
-              <p className="ssr-lede">
-                Build a time-aware conditions brief for the exact place and window you plan to travel.
-              </p>
 
-              <div className="ssr-h-console">
-                <div className="ssr-h-console-head">
-                  <div>
-                    <span className="ssr-h-live-dot" aria-hidden />
-                    Conditions brief
-                  </div>
-                  <span>6 signal families · one decision view</span>
-                </div>
-                <div className="ssr-h-console-search">
-                  <SearchBox
-                    searchWrapperRef={searchWrapperRef}
-                    searchInputRef={searchInputRef}
-                    searchQuery={searchQuery}
-                    trimmedSearchQuery={trimmedSearchQuery}
-                    showSuggestions={showSuggestions}
-                    searchLoading={searchLoading}
-                    suggestions={suggestions}
-                    activeSuggestionIndex={activeSuggestionIndex}
-                    canUseCoordinates={canUseCoordinates}
-                    onInputChange={handleInputChange}
-                    onFocus={handleFocus}
-                    onKeyDown={handleSearchKeyDown}
-                    onClear={handleSearchClear}
-                    onUseCoordinates={handleUseTypedCoordinates}
-                    onSelectSuggestion={selectSuggestion}
-                    onHoverSuggestion={setActiveSuggestionIndex}
-                  />
-                  <button
-                    type="button"
-                    className="ssr-h-go"
-                    onClick={submitSearch}
-                    disabled={!trimmedSearchQuery || searchLoading}
-                    aria-busy={searchLoading}
-                  >
-                    {searchLoading ? (
-                      <><LoaderCircle size={16} className="spin" aria-hidden /> Finding location…</>
-                    ) : (
-                      <>Build brief <ArrowRight size={16} aria-hidden /></>
-                    )}
-                  </button>
-                </div>
-                <div className="ssr-h-params">
-                  <label className="ssr-h-param">
-                    <span className="ssr-h-param-k"><CalendarDays size={12} /> Date</span>
-                    <input
-                      type="date"
-                      className="ssr-h-param-v ssr-h-param-input"
-                      value={forecastDate}
-                      min={todayDate}
-                      max={maxForecastDate}
-                      onChange={handleDateChange}
-                    />
-                  </label>
-                  <label className="ssr-h-param">
-                    <span className="ssr-h-param-k"><Clock size={12} /> Start</span>
-                    <input
-                      type="time"
-                      className="ssr-h-param-v ssr-h-param-input"
-                      aria-label="Start time"
-                      value={alpineStartTime}
-                      onChange={handlePlannerTimeChange(setAlpineStartTime)}
-                    />
-                  </label>
-                  <label className="ssr-h-param">
-                    <span className="ssr-h-param-k"><Activity size={12} /> Window</span>
-                    <span className="ssr-h-param-window">
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        className="ssr-h-param-v ssr-h-param-input"
-                        aria-label="Trip duration in hours"
-                        min={MIN_TRAVEL_WINDOW_HOURS}
-                        max={MAX_TRAVEL_WINDOW_HOURS}
-                        step={1}
-                        value={travelWindowHoursDraft}
-                        onChange={handleTravelWindowHoursDraftChange}
-                        onBlur={handleTravelWindowHoursDraftBlur}
-                      />
-                      hours
-                    </span>
-                  </label>
-                  <div className="ssr-h-param-note">Conditions are scored for your exact timing.</div>
-                </div>
-                <div className="ssr-h-confidence" aria-label="Brief qualities">
-                  <span><RadioTower size={12} aria-hidden /> Official forecast feeds</span>
-                  <span><Layers3 size={12} aria-hidden /> Cross-signal synthesis</span>
-                  <span><Check size={12} aria-hidden /> Decision-ready summary</span>
-                </div>
+      <main className="ssr-home">
+        <section className="ssr-h-hero" aria-labelledby="home-hero-title">
+          <div className="ssr-h-hero-coordinates" aria-hidden="true">46.8523° N&nbsp;&nbsp; 121.7603° W</div>
+          <div className="ssr-h-hero-inner">
+            <div className="ssr-h-hero-copy">
+              <div className="ssr-h-kicker"><Sparkles size={13} aria-hidden /> Backcountry planning intelligence</div>
+              <h1 id="home-hero-title">Move with the mountain,<br /><em>not against it.</em></h1>
+              <p>
+                One time-aware brief that connects weather, snow, avalanche, terrain, and daylight—so
+                you can choose the right objective, route, and window.
+              </p>
+              <div className="ssr-h-proof" aria-label="Data sources included">
+                <span><Check size={13} aria-hidden /> Official forecast feeds</span>
+                <span><Check size={13} aria-hidden /> Hour-by-hour context</span>
+                <span><Check size={13} aria-hidden /> One decision view</span>
               </div>
+            </div>
+
+            <div className="ssr-h-builder" id="build-brief">
+              <div className="ssr-h-builder-head">
+                <div>
+                  <span className="ssr-h-builder-step">Start here</span>
+                  <h2>Build your conditions brief</h2>
+                </div>
+                <span className="ssr-h-builder-time"><Timer size={13} aria-hidden /> 30 seconds</span>
+              </div>
+
+              <div className="ssr-h-search-block">
+                <label className="ssr-h-field-label" htmlFor="location-search-input">
+                  <MapPin size={13} aria-hidden /> Objective or coordinates
+                </label>
+                <SearchBox
+                  searchWrapperRef={searchWrapperRef}
+                  searchInputRef={searchInputRef}
+                  searchQuery={searchQuery}
+                  trimmedSearchQuery={trimmedSearchQuery}
+                  showSuggestions={showSuggestions}
+                  searchLoading={searchLoading}
+                  suggestions={suggestions}
+                  activeSuggestionIndex={activeSuggestionIndex}
+                  canUseCoordinates={canUseCoordinates}
+                  onInputChange={handleInputChange}
+                  onFocus={handleFocus}
+                  onKeyDown={handleSearchKeyDown}
+                  onClear={handleSearchClear}
+                  onUseCoordinates={handleUseTypedCoordinates}
+                  onSelectSuggestion={selectSuggestion}
+                  onHoverSuggestion={setActiveSuggestionIndex}
+                />
+              </div>
+
+              <div className="ssr-h-params">
+                <label className="ssr-h-param">
+                  <span><CalendarDays size={13} aria-hidden /> Date</span>
+                  <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} />
+                </label>
+                <label className="ssr-h-param">
+                  <span><Clock size={13} aria-hidden /> Start</span>
+                  <input
+                    type="time"
+                    aria-label="Start time"
+                    value={alpineStartTime}
+                    onChange={handlePlannerTimeChange(setAlpineStartTime)}
+                  />
+                </label>
+                <label className="ssr-h-param">
+                  <span><Route size={13} aria-hidden /> Travel window</span>
+                  <span className="ssr-h-window-input">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      aria-label="Trip duration in hours"
+                      min={MIN_TRAVEL_WINDOW_HOURS}
+                      max={MAX_TRAVEL_WINDOW_HOURS}
+                      step={1}
+                      value={travelWindowHoursDraft}
+                      onChange={handleTravelWindowHoursDraftChange}
+                      onBlur={handleTravelWindowHoursDraftBlur}
+                    />
+                    hr
+                  </span>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                className="ssr-h-go"
+                onClick={submitSearch}
+                disabled={!trimmedSearchQuery || searchLoading}
+                aria-busy={searchLoading}
+              >
+                {searchLoading ? (
+                  <><LoaderCircle size={17} className="spin" aria-hidden /> Finding your objective…</>
+                ) : (
+                  <>See my conditions <ArrowRight size={17} aria-hidden /></>
+                )}
+              </button>
 
               <div className="ssr-h-popular">
-                <span className="ssr-h-popular-label">Start with</span>
-                {FEATURED_PEAKS.map((peak) => {
-                  const shortName = peak.name.split(',')[0];
-                  return (
-                    <button
-                      type="button"
-                      className="ssr-h-chip"
-                      key={peak.name}
-                      onClick={() => selectSuggestion(peak)}
-                    >
-                      <Mountain size={13} aria-hidden />
-                      {shortName}
-                      {PEAK_ELEVATIONS[shortName] && <span className="ssr-st">{PEAK_ELEVATIONS[shortName]}</span>}
-                    </button>
-                  );
-                })}
+                <span>Or explore</span>
+                {FEATURED_PEAKS.map((peak) => (
+                  <button type="button" key={peak.name} onClick={() => selectSuggestion(peak)}>
+                    {peak.name.split(',')[0]}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
+
+          <a className="ssr-h-scroll" href="#how-it-works">
+            See how it works <ChevronDown size={14} aria-hidden />
+          </a>
         </section>
 
-        <section className="ssr-h-intro" aria-labelledby="home-features-title">
-          <div className="ssr-h-intro-copy">
-            <p className="ssr-h-eyebrow">One brief. The whole picture.</p>
-            <h2 id="home-features-title">Know the window before you go.</h2>
+        <section className="ssr-h-story" id="how-it-works" aria-labelledby="home-story-title">
+          <div className="ssr-h-story-head">
+            <div>
+              <span className="ssr-h-eyebrow">Signal → window → decision</span>
+              <h2 id="home-story-title">The mountain doesn’t change<br />one variable at a time.</h2>
+            </div>
             <p>
-              Backcountry Conditions turns scattered forecasts into a decision-ready view of your
-              objective, matched to when and where you plan to move.
+              A forecast tells you what may happen. Backcountry Conditions shows how those changes
+              overlap across your exact travel window—and what deserves your attention first.
             </p>
           </div>
 
-          <div className="ssr-h-feature-grid">
-            <article className="ssr-h-feature">
-              <div className="ssr-h-feature-icon"><Clock3 aria-hidden /></div>
-              <div>
-                <span className="ssr-h-feature-label"><b>01</b> Your timing</span>
-                <h3>Conditions for your exact window</h3>
-                <p>See hourly weather, daylight, and changing hazards from your start through your return.</p>
+          <div className="ssr-h-story-grid">
+            <article className="ssr-h-story-card ssr-h-signals-card">
+              <div className="ssr-h-card-number">01 / Gather</div>
+              <div className="ssr-h-card-icon"><Layers3 aria-hidden /></div>
+              <h3>Every signal, in context</h3>
+              <p>Official sources are gathered around your objective, then checked for freshness and relevance.</p>
+              <div className="ssr-h-signal-list" aria-label="Signals gathered">
+                <span><CloudSun size={15} aria-hidden /> Weather <b>Hourly</b></span>
+                <span><Snowflake size={15} aria-hidden /> Snowpack <b>Latest</b></span>
+                <span><TriangleAlert size={15} aria-hidden /> Avalanche <b>Official</b></span>
+                <span><Wind size={15} aria-hidden /> Wind loading <b>Modeled</b></span>
               </div>
             </article>
 
-            <article className="ssr-h-feature">
-              <div className="ssr-h-feature-icon"><ShieldCheck aria-hidden /></div>
-              <div>
-                <span className="ssr-h-feature-label"><b>02</b> Your risk picture</span>
-                <h3>Critical signals, weighed together</h3>
-                <p>Weather, avalanche, snowpack, alerts, air quality, and terrain become one prioritized brief.</p>
+            <article className="ssr-h-story-card ssr-h-window-card">
+              <div className="ssr-h-card-number">02 / Time</div>
+              <div className="ssr-h-card-icon"><Sunrise aria-hidden /></div>
+              <h3>Your day, not the daily average</h3>
+              <p>Conditions are aligned to when you expect to move, climb, summit, and return.</p>
+              <div className="ssr-h-timeline" aria-label="Example trip timeline">
+                <div className="ssr-h-timeline-labels"><span>4 am</span><span>9 am</span><span>2 pm</span></div>
+                <div className="ssr-h-timeline-track"><i /><i /><i /><b /></div>
+                <div className="ssr-h-timeline-events">
+                  <span><Sunrise size={14} aria-hidden /> Alpine start</span>
+                  <span><Wind size={14} aria-hidden /> Gusts rise</span>
+                </div>
               </div>
             </article>
 
-            <article className="ssr-h-feature">
-              <div className="ssr-h-feature-icon"><Route aria-hidden /></div>
-              <div>
-                <span className="ssr-h-feature-label"><b>03</b> Your next move</span>
-                <h3>Planning that leads to action</h3>
-                <p>Compare start times, inspect route exposure, and carry the same context into a multi-day plan.</p>
+            <article className="ssr-h-story-card ssr-h-decision-card">
+              <div className="ssr-h-card-number">03 / Decide</div>
+              <div className="ssr-h-card-icon"><Compass aria-hidden /></div>
+              <h3>A brief built to act on</h3>
+              <p>The result is prioritized: what supports the plan, what could change it, and what to verify.</p>
+              <div className="ssr-h-sample-decision">
+                <div className="ssr-h-sample-top"><span>Example outlook</span><b><ShieldCheck size={14} aria-hidden /> Caution</b></div>
+                <strong>Earlier is the better window.</strong>
+                <span>Winds strengthen after 11 am; exposed ridges deserve a firm turnaround time.</span>
               </div>
             </article>
-          </div>
-
-          <div className="ssr-h-signal-band" aria-label="Conditions included in every brief">
-            <span>Every brief considers</span>
-            <div>
-              <b>Weather</b>
-              <b>Avalanche</b>
-              <b>Snowpack</b>
-              <b>Alerts</b>
-              <b>Air quality</b>
-              <b>Terrain</b>
-            </div>
           </div>
         </section>
 
-        {/* FOOTER */}
+        <section className="ssr-h-cta" aria-labelledby="home-cta-title">
+          <div className="ssr-h-cta-mark" aria-hidden><Mountain /></div>
+          <div>
+            <span className="ssr-h-eyebrow">Your plan starts here</span>
+            <h2 id="home-cta-title">Choose the window before<br />the window chooses for you.</h2>
+          </div>
+          <div className="ssr-h-cta-actions">
+            <button type="button" onClick={() => searchInputRef.current?.focus()}>
+              Build a conditions brief <ArrowRight size={16} aria-hidden />
+            </button>
+            <button type="button" className="secondary" onClick={openTripToolView}>Compare multiple days</button>
+          </div>
+        </section>
+
         <footer className="ssr-h-foot">
+          <div className="ssr-h-foot-brand"><Mountain size={17} aria-hidden /> Backcountry Conditions</div>
           <div className="ssr-h-disclaimer">
-            <Info size={16} aria-hidden />
+            <Info size={15} aria-hidden />
             <span>
-              This is a planning aid, not a safety guarantee. Data can be delayed, incomplete, or
-              incorrect. Always verify official avalanche forecasts and field observations before
-              committing to terrain.
+              Planning aid only—not a safety guarantee. Always verify official forecasts and field
+              observations before committing to terrain.
             </span>
           </div>
         </footer>
-      </div>
+      </main>
     </div>
   );
 }
