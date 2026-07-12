@@ -5,7 +5,7 @@ const { clampTravelWindowHours } = require('./time');
 // forecast comfort across the selected travel window; it must never be used as a
 // go/no-go signal or allowed to offset a hazard.
 const PLEASANTNESS_CONFIG = {
-  scoreVersion: '1.1.0',
+  scoreVersion: '1.2.0',
   weights: {
     temperature: 30,
     wind: 25,
@@ -345,14 +345,15 @@ const calculatePleasantnessScore = ({
   ];
 
   const availableComponents = componentInputs.filter((component) => Number.isFinite(component.score));
-  const coreWeatherAvailable = availableComponents.some((component) => component.weight >= 15);
-  if (!coreWeatherAvailable || (/weather data unavailable/i.test(weatherDescription) && trend.length === 0)) {
+  const coreComponentNames = ['Temperature', 'Wind', 'Precipitation'];
+  const availableCoreComponents = availableComponents.filter((component) => coreComponentNames.includes(component.factor));
+  if (availableCoreComponents.length < 2 || (/weather data unavailable/i.test(weatherDescription) && trend.length === 0)) {
     return {
       scoreVersion: PLEASANTNESS_CONFIG.scoreVersion,
       score: null,
       confidence: 0,
       label: 'Unknown',
-      summary: 'Pleasantness is unavailable because the report has no usable weather forecast.',
+      summary: 'Pleasantness is unavailable because the report lacks enough core temperature, wind, and precipitation data.',
       factors: [],
       disclaimer: 'Weather comfort only; this score does not change the safety score or go/no-go decision.',
     };
@@ -380,6 +381,26 @@ const calculatePleasantnessScore = ({
   if (worstContextScore < 25) score = Math.min(score, 74);
   else if (worstContextScore < 50) score = Math.min(score, 84);
   else if (worstContextScore < 70) score = Math.min(score, 89);
+
+  // Do not let missing core inputs or a short severe period disappear inside
+  // the weighted average. Forecast qualifiers get a less restrictive cap than
+  // explicit severe conditions, while blizzard/icing conditions remain Harsh.
+  if (availableCoreComponents.length < coreComponentNames.length) {
+    score = Math.min(score, 74);
+  }
+  const windowConditions = [weatherDescription, ...trend.map((row) => String(row?.condition || ''))]
+    .map((condition) => condition.toLowerCase())
+    .filter(Boolean);
+  const hasHarshCondition = windowConditions.some((condition) => /blizzard|freezing rain|ice pellet/.test(condition));
+  const hasConvectiveCondition = windowConditions.some((condition) => /thunder|lightning/.test(condition));
+  const hasQualifiedConvectiveCondition = windowConditions.some((condition) =>
+    /thunder|lightning/.test(condition) && /slight chance|chance|isolated|scattered/.test(condition));
+  const hasExplicitConvectiveCondition = hasConvectiveCondition && windowConditions.some((condition) =>
+    /thunder|lightning/.test(condition) && !/slight chance|chance|isolated|scattered/.test(condition));
+  const hasSeverePrecipitation = windowConditions.some((condition) => /heavy rain|heavy snow|downpour/.test(condition));
+  if (hasHarshCondition) score = Math.min(score, 39);
+  else if (hasExplicitConvectiveCondition || hasSeverePrecipitation) score = Math.min(score, 59);
+  else if (hasQualifiedConvectiveCondition) score = Math.min(score, 74);
   const factors = availableComponents
     .map((component) => ({
       factor: component.factor,

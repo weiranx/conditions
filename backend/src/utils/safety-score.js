@@ -9,7 +9,7 @@ const { normalizeAlertSeverity } = require('./alerts');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.5.0',
+  scoreVersion: '2.6.0',
   maxScore: 100,
 
   // Group scales intentionally sum to well over maxScore. Avalanche and
@@ -39,6 +39,21 @@ const SCORING_CONFIG = {
   confidenceTierShift: {
     threshold: 70,
     rate: 0.3,
+  },
+
+  // Decisive hazards enforce a minimum effective group impact after normal
+  // diminishing returns. This prevents a severe single-source hazard from
+  // being averaged into a reassuring tier simply because no other group is
+  // active. Values line up with the upper edge of each displayed risk tier.
+  effectiveImpactFloors: {
+    avalanche: { extreme: 61, high: 46, considerable: 31, moderate: 16 },
+    weather: { high: 46, elevated: 31, caution: 16 },
+    alerts: { extreme: 61, severe: 46, moderate: 31 },
+    airQuality: [
+      { min: 201, effective: 46 },
+      { min: 151, effective: 31 },
+      { min: 101, effective: 16 },
+    ],
   },
 
   // --- Declarative hazard thresholds ---
@@ -738,16 +753,14 @@ const calculateSafetyScore = ({
     visibility: factors.some((f) => f.group === 'weather' && /^visibility$/i.test(f.hazard)),
   };
   const activeWeatherCategories = Object.values(weatherCats).filter(Boolean).length;
+  const hasDangerousWeatherPair =
+    (weatherCats.wind && weatherCats.coldHeat) ||
+    (weatherCats.wind && weatherCats.precipStorm) ||
+    (weatherCats.coldHeat && weatherCats.precipStorm);
   if (activeWeatherCategories >= 3) {
     applyFactor('Combined Exposure', T.combinedExposure.tripleImpact, `${activeWeatherCategories} weather hazard categories are active simultaneously, compounding exposure risk.`, 'Safety score synthesis');
-  } else if (activeWeatherCategories >= 2) {
-    const hasDangerousPair =
-      (weatherCats.wind && weatherCats.coldHeat) ||
-      (weatherCats.wind && weatherCats.precipStorm) ||
-      (weatherCats.coldHeat && weatherCats.precipStorm);
-    if (hasDangerousPair) {
-      applyFactor('Combined Exposure', T.combinedExposure.pairImpact, 'Co-occurring weather hazards increase exposure risk.', 'Safety score synthesis');
-    }
+  } else if (activeWeatherCategories >= 2 && hasDangerousWeatherPair) {
+    applyFactor('Combined Exposure', T.combinedExposure.pairImpact, 'Co-occurring weather hazards increase exposure risk.', 'Safety score synthesis');
   }
 
   // Condition trajectory: deteriorating conditions are riskier than improving
@@ -853,18 +866,78 @@ const calculateSafetyScore = ({
     applyFactor('Avalanche Visibility', T.crossGroup.avalancheVisibility, 'Low visibility in avalanche terrain reduces ability to identify hazards.', 'Cross-group interaction');
   }
 
-  // --- Group impacts with diminishing returns ---
+  // --- Group impacts with diminishing returns and decisive-hazard floors ---
+  const impactFloors = SCORING_CONFIG.effectiveImpactFloors;
+  const groupImpactFloors = {};
+  const applyGroupImpactFloor = (group, effective, reason) => {
+    const current = groupImpactFloors[group];
+    if (!Number.isFinite(effective) || effective <= 0 || (current && current.effective >= effective)) return;
+    groupImpactFloors[group] = { effective, reason };
+  };
+
+  if (avalancheRelevant && !avalancheUnknown) {
+    if (avalancheDangerLevel >= 5 || normalizedRisk.includes('extreme')) {
+      applyGroupImpactFloor('avalanche', impactFloors.avalanche.extreme, 'Extreme avalanche danger');
+    } else if (avalancheDangerLevel >= 4 || normalizedRisk.includes('high')) {
+      applyGroupImpactFloor('avalanche', impactFloors.avalanche.high, 'High avalanche danger');
+    } else if (avalancheDangerLevel === 3 || normalizedRisk.includes('considerable')) {
+      applyGroupImpactFloor('avalanche', impactFloors.avalanche.considerable, 'Considerable avalanche danger');
+    } else if (avalancheDangerLevel === 2 || normalizedRisk.includes('moderate')) {
+      applyGroupImpactFloor('avalanche', impactFloors.avalanche.moderate, 'Moderate avalanche danger');
+    }
+  }
+
+  if (/blizzard|whiteout/.test(weatherDescription)) {
+    applyGroupImpactFloor('weather', impactFloors.weather.high, 'Blizzard or whiteout conditions');
+  } else if (
+    convectiveFromTrend
+    || (convectiveFromDescription && !/slight chance|chance|isolated|scattered/.test(weatherDescription))
+    || effectiveWind >= T.wind.severeEffective
+    || (Number.isFinite(wind) && wind >= T.wind.severeStart)
+    || (visibilityRiskScore !== null && visibilityRiskScore >= 80)
+  ) {
+    applyGroupImpactFloor('weather', impactFloors.weather.elevated, 'Severe weather exposure');
+  }
+  if (hasDangerousWeatherPair) {
+    applyGroupImpactFloor('weather', impactFloors.weather.caution, 'Compounding weather hazards');
+  }
+
+  if (alertsRelevantForSelectedTime && Number.isFinite(alertsCount) && alertsCount > 0) {
+    const alertFloor = impactFloors.alerts[highestAlertSeverity];
+    if (Number.isFinite(alertFloor)) {
+      applyGroupImpactFloor('alerts', alertFloor, `${highestAlertSeverity} official alert`);
+    }
+  }
+
+  if (airQualityRelevantForScoring && Number.isFinite(usAqi)) {
+    const airQualityFloor = impactFloors.airQuality.find((entry) => usAqi >= entry.min);
+    if (airQualityFloor) {
+      applyGroupImpactFloor('airQuality', airQualityFloor.effective, `US AQI ${Math.round(usAqi)}`);
+    }
+  }
+
   const rawGroupImpacts = factors.reduce((acc, factor) => {
     const group = factor.group || 'weather';
     acc[group] = (acc[group] || 0) + Number(factor.impact || 0);
     return acc;
   }, {});
-  const groupImpacts = Object.entries(rawGroupImpacts).reduce((acc, [group, rawImpact]) => {
-    const scale = Number(SCORING_CONFIG.groupScales[group] || 100);
+  const groupsToAggregate = [...new Set([...Object.keys(rawGroupImpacts), ...Object.keys(groupImpactFloors)])];
+  const groupImpacts = groupsToAggregate.reduce((acc, group) => {
+    const rawImpact = rawGroupImpacts[group] || 0;
+    const configuredScale = Number(SCORING_CONFIG.groupScales[group] || 100);
     const raw = Number.isFinite(rawImpact) ? Math.round(rawImpact) : 0;
-    const effective = Math.round(diminishingReturn(raw, scale));
+    const floor = groupImpactFloors[group] || null;
+    const effective = Math.max(Math.round(diminishingReturn(raw, configuredScale)), Number(floor?.effective || 0));
+    const scale = Math.max(configuredScale, effective);
     // Keep capped/cap as aliases for backward compatibility
-    acc[group] = { raw, effective, scale, capped: effective, cap: scale };
+    acc[group] = {
+      raw,
+      effective,
+      scale,
+      capped: effective,
+      cap: scale,
+      ...(floor ? { floor: floor.effective, floorReason: floor.reason } : {}),
+    };
     return acc;
   }, {});
   const totalEffectiveImpact = Object.values(groupImpacts).reduce((sum, entry) => sum + Number(entry.effective || 0), 0);
