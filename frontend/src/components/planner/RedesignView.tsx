@@ -1994,24 +1994,53 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             watch: 'Situational',
             go: 'Standard',
           };
-          const GEAR_CATEGORY_ORDER: Array<{ key: string; label: string; icon: React.ReactNode; warn?: boolean }> = [
-            { key: 'Safety', label: 'Safety essentials', icon: <ShieldAlert size={13} />, warn: true },
-            { key: 'Conditions', label: 'Layering & traction', icon: <Layers size={13} /> },
-            { key: 'Exposure', label: 'Sun & heat', icon: <Sun size={13} /> },
-            { key: 'General', label: 'Other', icon: <Compass size={13} /> },
+          const GEAR_TONE_ORDER: Record<string, number> = {
+            nogo: 0,
+            caution: 1,
+            watch: 2,
+            go: 3,
+          };
+          const GEAR_CATEGORY_ORDER: Array<{ key: string; label: string; detail: string; icon: React.ReactNode }> = [
+            { key: 'Safety', label: 'Safety essentials', detail: 'Rescue, communication, and emergency backup', icon: <ShieldAlert size={15} /> },
+            { key: 'Conditions', label: 'Layers & traction', detail: 'Protection matched to weather and surface conditions', icon: <Layers size={15} /> },
+            { key: 'Exposure', label: 'Sun, heat & air', detail: 'Manage environmental exposure through the day', icon: <Sun size={15} /> },
+            { key: 'General', label: 'Navigation & other', detail: 'Useful additions for this objective', icon: <Compass size={15} /> },
           ];
           const gearGroups = GEAR_CATEGORY_ORDER
-            .map((g) => ({ ...g, items: gearRecommendations.filter((item) => item.category === g.key) }))
+            .map((g) => ({
+              ...g,
+              items: gearRecommendations
+                .filter((item) => item.category === g.key)
+                .sort((a, b) => (GEAR_TONE_ORDER[a.tone] ?? 4) - (GEAR_TONE_ORDER[b.tone] ?? 4)),
+            }))
             .filter((g) => g.items.length > 0);
+          const essentialGearCount = gearRecommendations.filter((item) => item.tone === 'nogo').length;
+          const recommendedGearCount = gearRecommendations.filter((item) => item.tone === 'caution').length;
+          const priorityGearCount = essentialGearCount + recommendedGearCount;
+          const overviewTone = essentialGearCount > 0 ? 'urgent' : recommendedGearCount > 0 ? 'attention' : 'standard';
+          const overviewTitle = essentialGearCount > 0
+            ? `${essentialGearCount} essential item${essentialGearCount === 1 ? '' : 's'} for this plan`
+            : recommendedGearCount > 0
+              ? `${recommendedGearCount} condition-driven priorit${recommendedGearCount === 1 ? 'y' : 'ies'}`
+              : 'Standard additions for this window';
+          const gearMarker = (tone: string) => {
+            if (tone === 'nogo') return <ShieldAlert size={14} />;
+            if (tone === 'caution') return <AlertTriangle size={14} />;
+            if (tone === 'watch') return <Compass size={14} />;
+            return <CheckCircle2 size={14} />;
+          };
           const gearList = (items: typeof gearRecommendations) => (
             <div className="ssr-gear">
               {items.map((g, i) => (
-                <div className="ssr-gear-item" key={`${g.title}-${i}`}>
-                  <div className="ssr-gear-head">
-                    <span className="ssr-gear-title">{g.title}</span>
-                    <span className={`ssr-pill ${g.tone}`}>{GEAR_TONE_LABEL[g.tone] || g.tone}</span>
+                <div className={`ssr-gear-item ${g.tone}`} key={`${g.title}-${i}`}>
+                  <span className="ssr-gear-marker" aria-hidden="true">{gearMarker(g.tone)}</span>
+                  <div className="ssr-gear-copy">
+                    <div className="ssr-gear-head">
+                      <span className="ssr-gear-title">{g.title}</span>
+                      <span className={`ssr-pill ${g.tone}`}>{GEAR_TONE_LABEL[g.tone] || g.tone}</span>
+                    </div>
+                    <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
                   </div>
-                  <p className="ssr-gear-detail">{localizeUnitText(g.detail)}</p>
                 </div>
               ))}
             </div>
@@ -2026,14 +2055,33 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 <span className="ssr-h-meta">{gearRecommendations.length} item{gearRecommendations.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="ssr-card-b">
-                {gearGroups.length > 1 ? (
-                  gearGroups.map((g) => (
-                    <div className="ssr-cc-group" key={g.key}>
-                      <div className={`ssr-cc-group-h${g.warn ? ' warn' : ''}`}>{g.icon} {g.label} <span className="ssr-cc-count">{g.items.length}</span></div>
+                <div className={`ssr-gear-overview ${overviewTone}`}>
+                  <span className="ssr-gear-overview-icon" aria-hidden="true"><Package size={18} /></span>
+                  <div className="ssr-gear-overview-copy">
+                    <span>Conditions-matched packing plan</span>
+                    <strong>{overviewTitle}</strong>
+                    <p>Start with the highest-urgency items in each category. This supplements, rather than replaces, your normal trip checklist.</p>
+                  </div>
+                  <dl className="ssr-gear-stats">
+                    <div><dt>Pack first</dt><dd>{priorityGearCount}</dd></div>
+                    <div><dt>Categories</dt><dd>{gearGroups.length}</dd></div>
+                  </dl>
+                </div>
+                <div className="ssr-gear-groups">
+                  {gearGroups.map((g) => (
+                    <section className="ssr-gear-group" key={g.key}>
+                      <div className="ssr-gear-group-h">
+                        <span className="ssr-gear-group-icon" aria-hidden="true">{g.icon}</span>
+                        <div>
+                          <h3>{g.label}</h3>
+                          <p>{g.detail}</p>
+                        </div>
+                        <span className="ssr-cc-count">{g.items.length}</span>
+                      </div>
                       {gearList(g.items)}
-                    </div>
-                  ))
-                ) : gearList(gearRecommendations)}
+                    </section>
+                  ))}
+                </div>
               </div>
             </section>
           );

@@ -1047,11 +1047,41 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
 .ssr-precip-row .ssr-precip-k { text-align: left; font-weight: 600; color: var(--ssr-text-2); }
 
 /* gear */
-.ssr-gear { display: grid; gap: 12px; }
-.ssr-gear-item { border: 1px solid var(--ssr-line); border-radius: 6px; padding: 12px 14px; }
+.ssr-gear-overview { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 16px; border: 1px solid var(--ssr-line); border-radius: 8px; background: var(--ssr-surface-2); }
+.ssr-gear-overview.attention { border-color: color-mix(in oklch, var(--ssr-caution) 38%, var(--ssr-line)); background: color-mix(in oklch, var(--ssr-caution) 6%, var(--ssr-surface)); }
+.ssr-gear-overview.urgent { border-color: color-mix(in oklch, var(--ssr-nogo) 34%, var(--ssr-line)); background: color-mix(in oklch, var(--ssr-nogo) 5%, var(--ssr-surface)); }
+.ssr-gear-overview-icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 9px; background: var(--ssr-brand-bg); color: var(--ssr-brand-dark); }
+.ssr-gear-overview.attention .ssr-gear-overview-icon { background: color-mix(in oklch, var(--ssr-caution) 18%, transparent); color: var(--ssr-caution-ink); }
+.ssr-gear-overview.urgent .ssr-gear-overview-icon { background: color-mix(in oklch, var(--ssr-nogo) 15%, transparent); color: var(--ssr-nogo-ink); }
+.ssr-gear-overview-copy { min-width: 0; display: grid; gap: 2px; }
+.ssr-gear-overview-copy > span { color: var(--ssr-text-3); font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.ssr-gear-overview-copy strong { color: var(--ssr-text); font-size: 14px; line-height: 1.35; }
+.ssr-gear-overview-copy p { margin: 1px 0 0; color: var(--ssr-text-2); font-size: 11.5px; line-height: 1.45; }
+.ssr-gear-stats { display: grid; grid-template-columns: repeat(2, auto); gap: 8px; margin: 0; }
+.ssr-gear-stats div { display: grid; justify-items: center; min-width: 58px; padding-left: 8px; border-left: 1px solid var(--ssr-line); }
+.ssr-gear-stats dt { color: var(--ssr-text-3); font-size: 9px; font-weight: 650; text-transform: uppercase; }
+.ssr-gear-stats dd { margin: 0; color: var(--ssr-text); font-family: var(--ssr-mono); font-size: 17px; font-weight: 700; }
+.ssr-gear-groups { display: grid; gap: 20px; margin-top: 20px; }
+.ssr-gear-group { min-width: 0; }
+.ssr-gear-group-h { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; margin-bottom: 8px; }
+.ssr-gear-group-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; background: var(--ssr-surface-3); color: var(--ssr-brand-dark); }
+.ssr-gear-group-h h3 { margin: 0; color: var(--ssr-text); font-size: 12.5px; line-height: 1.3; }
+.ssr-gear-group-h p { margin: 1px 0 0; color: var(--ssr-text-3); font-size: 10.5px; line-height: 1.35; }
+.ssr-gear { display: grid; gap: 7px; }
+.ssr-gear-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; border: 1px solid var(--ssr-line); border-left-width: 3px; border-radius: 7px; padding: 11px 12px; background: var(--ssr-surface); }
+.ssr-gear-item.nogo { border-left-color: var(--ssr-nogo); }
+.ssr-gear-item.caution { border-left-color: var(--ssr-caution); }
+.ssr-gear-item.watch { border-left-color: var(--ssr-risk-2); }
+.ssr-gear-item.go { border-left-color: var(--ssr-go); }
+.ssr-gear-marker { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 1px; border-radius: 50%; background: var(--ssr-surface-3); color: var(--ssr-text-2); }
+.ssr-gear-item.nogo .ssr-gear-marker { background: color-mix(in oklch, var(--ssr-nogo) 14%, transparent); color: var(--ssr-nogo-ink); }
+.ssr-gear-item.caution .ssr-gear-marker { background: color-mix(in oklch, var(--ssr-caution) 16%, transparent); color: var(--ssr-caution-ink); }
+.ssr-gear-item.watch .ssr-gear-marker { background: color-mix(in oklch, var(--ssr-risk-2) 20%, transparent); color: var(--ssr-watch-ink); }
+.ssr-gear-item.go .ssr-gear-marker { background: color-mix(in oklch, var(--ssr-go) 14%, transparent); color: var(--ssr-go-ink); }
+.ssr-gear-copy { min-width: 0; }
 .ssr-gear-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 5px; }
-.ssr-gear-title { font-size: 13.5px; font-weight: 600; color: var(--ssr-text); }
-.ssr-gear-detail { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ssr-text-2); }
+.ssr-gear-title { font-size: 13px; font-weight: 650; color: var(--ssr-text); }
+.ssr-gear-detail { margin: 0; font-size: 12px; line-height: 1.48; color: var(--ssr-text-2); }
 
 /* daylight bar */
 .ssr-day-bar { position: relative; height: 10px; border-radius: 999px; margin: 4px 0 10px; background: linear-gradient(90deg, oklch(82% 0.07 250), oklch(88% 0.10 90), oklch(82% 0.07 60)); }
@@ -1118,6 +1148,10 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
   .ssr-snow-confidence { justify-items: start; text-align: left; }
   .ssr-snow-foot { grid-template-columns: 1fr 1fr; }
   .ssr-src-health-copy { align-items: flex-start; flex-direction: column; }
+  .ssr-gear-overview { align-items: start; grid-template-columns: auto minmax(0, 1fr); }
+  .ssr-gear-stats { grid-column: 1 / -1; width: 100%; padding-top: 10px; border-top: 1px solid var(--ssr-line); }
+  .ssr-gear-stats div { padding-left: 0; border-left: 0; }
+  .ssr-gear-head { align-items: flex-start; flex-direction: column; gap: 5px; }
 }
 
 /* ── Action plan: ranked plan levers ── */
