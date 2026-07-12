@@ -11,6 +11,8 @@ import {
 import type { DecisionLevel, TimeStyle } from '../../app/types';
 import { formatClockForStyle } from '../../app/core';
 import { weatherConditionEmoji } from '../../app/weather-display';
+import type { Suggestion } from '../../lib/search';
+import { SearchBox } from '../planner/SearchBox';
 import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
 
@@ -54,6 +56,25 @@ export interface TripViewProps {
   todayDate: string;
   maxForecastDate: string;
   timeStyle: TimeStyle;
+
+  // Location search
+  searchWrapperRef: React.RefObject<HTMLDivElement | null>;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  searchQuery: string;
+  trimmedSearchQuery: string;
+  showSuggestions: boolean;
+  searchLoading: boolean;
+  suggestions: Suggestion[];
+  activeSuggestionIndex: number;
+  canUseCoordinates: boolean;
+  objectiveDraftDirty: boolean;
+  handleInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  handleFocus: () => void;
+  handleSearchKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  handleSearchClear: () => void;
+  handleUseTypedCoordinates: (value: string) => void;
+  selectSuggestion: (suggestion: Suggestion) => void;
+  setActiveSuggestionIndex: (index: number) => void;
 
   // Formatting functions
   formatIsoDateLabel: (isoDate: string) => string;
@@ -166,6 +187,23 @@ export function TripView({
   todayDate,
   maxForecastDate,
   timeStyle,
+  searchWrapperRef,
+  searchInputRef,
+  searchQuery,
+  trimmedSearchQuery,
+  showSuggestions,
+  searchLoading,
+  suggestions,
+  activeSuggestionIndex,
+  canUseCoordinates,
+  objectiveDraftDirty,
+  handleInputChange,
+  handleFocus,
+  handleSearchKeyDown,
+  handleSearchClear,
+  handleUseTypedCoordinates,
+  selectSuggestion,
+  setActiveSuggestionIndex,
   formatTempDisplay,
   formatWindDisplay,
   formatPubTime,
@@ -212,6 +250,7 @@ export function TripView({
   const objectiveSummary = hasObjective
     ? objectiveName || `${position.lat.toFixed(4)}°, ${position.lng.toFixed(4)}°`
     : 'No objective selected';
+  const objectiveReady = hasObjective && !objectiveDraftDirty;
 
   const best = tripForecastRows.reduce<MultiDayTripForecastDay | null>((acc, row) => {
     if (!acc) return row;
@@ -257,10 +296,34 @@ export function TripView({
             <p>Compare daily decision gates for one objective and find the most favorable weather and travel window.</p>
           </div>
           <div className="ssr-trip-setup" aria-label="Multi-day forecast setup">
-            <div className="ssr-trip-setup-context">
-              <span>Objective</span>
-              <strong>{objectiveSummary}</strong>
-              <small>{hasObjective ? `${travelWindowHoursLabel} travel window` : 'Choose one in Planner'}</small>
+            <div className="ssr-trip-setup-location">
+              <span>Location</span>
+              <SearchBox
+                searchWrapperRef={searchWrapperRef}
+                searchInputRef={searchInputRef}
+                searchQuery={searchQuery}
+                trimmedSearchQuery={trimmedSearchQuery}
+                showSuggestions={showSuggestions}
+                searchLoading={searchLoading}
+                suggestions={suggestions}
+                activeSuggestionIndex={activeSuggestionIndex}
+                canUseCoordinates={canUseCoordinates}
+                disabled={tripForecastLoading}
+                onInputChange={handleInputChange}
+                onFocus={handleFocus}
+                onKeyDown={handleSearchKeyDown}
+                onClear={handleSearchClear}
+                onUseCoordinates={handleUseTypedCoordinates}
+                onSelectSuggestion={selectSuggestion}
+                onHoverSuggestion={setActiveSuggestionIndex}
+              />
+              <small>
+                {objectiveDraftDirty
+                  ? 'Select a result to change the objective'
+                  : hasObjective
+                    ? `${objectiveSummary} · ${travelWindowHoursLabel} travel window`
+                    : 'Search for an objective'}
+              </small>
             </div>
             <label className="ssr-trip-setup-field">
               <span>Start date</span>
@@ -304,7 +367,7 @@ export function TripView({
               type="button"
               className="ssr-trip-setup-run"
               onClick={() => void runTripForecast()}
-              disabled={tripForecastLoading || !hasObjective}
+              disabled={tripForecastLoading || !objectiveReady}
             >
               <RefreshCw size={15} /> {tripForecastLoading ? 'Loading…' : 'Run forecast'}
             </button>
@@ -329,7 +392,7 @@ export function TripView({
               <h3>Multi-day forecast unavailable</h3>
               <p>{tripForecastError}</p>
             </div>
-            {hasObjective && (
+            {objectiveReady && (
               <button type="button" className="ssr-trip-banner-action" onClick={() => void runTripForecast()}>
                 <RefreshCw size={15} aria-hidden /> Try again
               </button>

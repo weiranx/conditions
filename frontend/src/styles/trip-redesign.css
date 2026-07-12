@@ -31,7 +31,7 @@
 
 .ssr-trip-setup {
   display: grid;
-  grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(130px, 0.7fr)) auto;
+  grid-template-columns: minmax(300px, 1.6fr) repeat(3, minmax(130px, 0.7fr)) auto;
   border: 1px solid var(--ssr-line-strong);
   border-radius: 10px;
   overflow: hidden;
@@ -39,28 +39,47 @@
   box-shadow: var(--ui-shadow-sm);
   min-width: 0;
 }
-.ssr-trip-setup-context {
-  padding: 12px 16px;
+.ssr-trip-setup-location {
+  padding: 9px 12px 8px;
   border-right: 1px solid var(--ssr-line);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 4px;
   min-width: 0;
+  position: relative;
 }
-.ssr-trip-setup-context > span,
+.ssr-trip-setup-location > span,
 .ssr-trip-setup-field > span {
   font-size: 10px;
   text-transform: uppercase;
   color: var(--ssr-text-3);
   font-weight: 650;
 }
-.ssr-trip-setup-context strong {
-  font-size: 14px;
+.ssr-trip-setup-location small {
+  color: var(--ssr-text-3);
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ssr-trip-setup-context small { color: var(--ssr-text-3); font-size: 11px; margin-top: 2px; }
+.ssr-trip-setup-location .search-wrapper { width: 100%; min-width: 0; max-width: none; }
+.ssr-trip-setup-location .search-bar {
+  min-height: 34px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.ssr-trip-setup-location .search-wrapper:focus-within .search-bar {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ssr-trip-setup-location .search-bar input { font-size: 14px; font-weight: 600; }
+.ssr-trip-setup-location .search-clear-btn { width: 28px; height: 28px; border: 0; }
+.ssr-trip-setup-location .suggestions-list { min-width: min(420px, calc(100vw - 48px)); }
 .ssr-trip-setup-field {
   padding: 10px 14px;
   border-right: 1px solid var(--ssr-line);
@@ -412,7 +431,7 @@
   .ssr-trip-head { padding-top: 28px; }
   .ssr-trip-head h1 { font-size: 34px; }
   .ssr-trip-setup { display: grid; grid-template-columns: 1fr 1fr; }
-  .ssr-trip-setup-context { grid-column: 1 / -1; border-bottom: 1px solid var(--ssr-line); border-right: 0; }
+  .ssr-trip-setup-location { grid-column: 1 / -1; border-bottom: 1px solid var(--ssr-line); border-right: 0; }
   .ssr-trip-setup-field { min-width: 0; border-bottom: 1px solid var(--ssr-line); }
   .ssr-trip-setup-field:nth-child(3) { border-right: 0; }
   .ssr-trip-setup-field:nth-child(4) { grid-column: 1 / -1; border-right: 0; }
