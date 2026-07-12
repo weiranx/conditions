@@ -76,7 +76,12 @@ export function useUrlState({
 
   const navigateToView = useCallback(
     (nextView: AppView) => {
-      startViewChange(() => setView(nextView));
+      startViewChange(() => {
+        setView(nextView);
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+      });
     },
     [startViewChange],
   );
