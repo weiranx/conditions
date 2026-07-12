@@ -602,8 +602,10 @@ enum PlannerCardType: Int, CaseIterable, Identifiable {
     /// Whether this card should be visible given the current data.
     func isVisible(for data: SafetyData) -> Bool {
         switch self {
-        case .decision, .safetyScore, .travelWindow, .weather, .usefulLinks, .sourceFreshness:
+        case .decision, .safetyScore, .travelWindow, .weather, .sourceFreshness:
             return true
+        case .usefulLinks:
+            return false
         case .windLoading:
             return true // always show — relevance handled inline
         case .visibilityRisk:

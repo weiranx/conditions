@@ -1,4 +1,4 @@
-import { Activity, CalendarRange, FileClock, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
+import { CalendarRange, FileClock, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import '../../styles/page-chrome.css';
 
@@ -19,7 +19,6 @@ export function ProductNav({
     { id: 'home', label: 'Home', icon: House, action: () => navigateToView('home') },
     { id: 'planner', label: 'Planner', icon: Map, action: openPlannerView || (() => navigateToView('planner')) },
     { id: 'trip', label: 'Trip', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) },
-    { id: 'status', label: 'Status', icon: Activity, action: () => navigateToView('status') },
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
   ];
   if (active === 'logs') {
