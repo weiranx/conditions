@@ -230,6 +230,7 @@ function App() {
   const aiPromptCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawCopyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBasemap = MAP_STYLE_OPTIONS[mapStyle];
+  const hasVisitedTripRef = useRef(initialLinkState.view === 'trip');
 
   const tripHook = useTripForecast({
     hasObjective,
@@ -248,6 +249,15 @@ function App() {
     tripForecastNote, setTripForecastNote: setTripForecastNoteDirect,
     runTripForecast,
   } = tripHook;
+
+  const initializeTripView = useCallback((startDate: string, startTime: string) => {
+    if (hasVisitedTripRef.current) {
+      return;
+    }
+    hasVisitedTripRef.current = true;
+    setTripStartDate(startDate);
+    setTripStartTime(startTime);
+  }, [setTripStartDate, setTripStartTime]);
 
   const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
     clearWakeRetry();
@@ -308,11 +318,7 @@ function App() {
     isApplyingPopStateRef,
     onPopState: useCallback((linkState: ReturnType<typeof parseLinkState>) => {
       if (linkState.view === 'trip') {
-        setTripStartDate(linkState.forecastDate);
-        setTripStartTime(linkState.alpineStartTime);
-        setTripForecastRowsDirect([]);
-        setTripForecastErrorDirect(null);
-        setTripForecastNoteDirect(null);
+        initializeTripView(linkState.forecastDate, linkState.alpineStartTime);
       }
       // Back/forward within the same plan (e.g. report → Settings → Back) should not
       // throw away the generated report — only a genuinely different plan state resets.
@@ -354,7 +360,7 @@ function App() {
         setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
       }
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, setTripStartDate, setTripStartTime, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
@@ -703,11 +709,7 @@ function App() {
   };
 
   const openTripToolView = () => {
-    setTripStartDate(forecastDate);
-    setTripStartTime(alpineStartTime);
-    setTripForecastRowsDirect([]);
-    setTripForecastErrorDirect(null);
-    setTripForecastNoteDirect(null);
+    initializeTripView(forecastDate, alpineStartTime);
     startViewChange(() => setView('trip'));
   };
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
