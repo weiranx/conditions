@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { fetchApi, readApiErrorMessage } from '../lib/api-client';
 import type { HealthCheckResult, BackendMeta, BackendAIStatus } from '../app/types';
+import { AI_AVAILABILITY_EVENT } from './useAiAvailability';
 
 export interface UseHealthChecksReturn {
   healthChecks: HealthCheckResult[];
@@ -194,6 +195,12 @@ export function useHealthChecks(): UseHealthChecksReturn {
       setHealthLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const refreshAfterAISettingsChange = () => void runHealthChecks();
+    window.addEventListener(AI_AVAILABILITY_EVENT, refreshAfterAISettingsChange);
+    return () => window.removeEventListener(AI_AVAILABILITY_EVENT, refreshAfterAISettingsChange);
+  }, [runHealthChecks]);
 
   return {
     healthChecks,

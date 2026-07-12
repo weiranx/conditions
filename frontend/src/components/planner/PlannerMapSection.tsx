@@ -26,6 +26,7 @@ import {
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const MAP_STYLE_CYCLE: MapStyle[] = ['topo', 'street', 'satellite'];
 import type { MapStyle, SafetyData, UserPreferences } from '../../app/types';
@@ -93,6 +94,12 @@ export function PlannerMapSection({
   timezoneMismatch, deviceTimezone,
   locked, onEditPlan, onGenerateReport,
 }: PlannerMapSectionProps) {
+  const featureFlags = useProductFeatureFlags();
+  React.useEffect(() => {
+    if (!featureFlags.satelliteImagery && mapStyle === 'satellite') {
+      setMapStyle('topo');
+    }
+  }, [featureFlags.satelliteImagery, mapStyle, setMapStyle]);
   const objectiveReady = hasObjective && !objectiveDraftDirty;
   let workflowTitle = 'Choose an objective';
   let workflowDetail = 'Search above or tap the map to place a pin.';
@@ -275,8 +282,9 @@ export function PlannerMapSection({
             type="button"
             className={`map-overlay-btn ${mapStyle !== 'topo' ? 'is-active' : ''}`}
             onClick={() => {
-              const currentIndex = MAP_STYLE_CYCLE.indexOf(mapStyle as MapStyle);
-              const nextStyle = MAP_STYLE_CYCLE[(currentIndex + 1) % MAP_STYLE_CYCLE.length];
+              const availableStyles = featureFlags.satelliteImagery ? MAP_STYLE_CYCLE : MAP_STYLE_CYCLE.slice(0, 2);
+              const currentIndex = availableStyles.indexOf(mapStyle as MapStyle);
+              const nextStyle = availableStyles[(currentIndex + 1) % availableStyles.length];
               setMapStyle(nextStyle);
             }}
             title={`Basemap: ${MAP_STYLE_OPTIONS[mapStyle as MapStyle].label} (tap to switch)`}
@@ -393,9 +401,9 @@ export function PlannerMapSection({
         {objectiveReady && (
           <div className="map-actions-footer is-utilities-only">
           <div className="map-actions-utils">
-            <button type="button" className="settings-btn" onClick={openTripToolView}>
+            {featureFlags.tripPlanning && <button type="button" className="settings-btn" onClick={openTripToolView}>
               <CalendarDays size={14} /> Multi-day
-            </button>
+            </button>}
 
             <div className="map-ext-links">
               <a href={`https://caltopo.com/map.html#ll=${position.lat},${position.lng}&z=14&b=mbt`} target="_blank" rel="noreferrer" className="map-ext-link-btn" title="Open in CalTopo" aria-label="Open objective in CalTopo (new tab)">

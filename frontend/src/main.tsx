@@ -5,6 +5,7 @@ import './styles/tokens.css'
 import App from './App.tsx'
 import './styles/mobile-experience.css'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')!).render(
           </main>
         )}
       >
-        <App />
+        <FeatureFlagsProvider>
+          <App />
+        </FeatureFlagsProvider>
       </Suspense>
     </ErrorBoundary>
   </StrictMode>,

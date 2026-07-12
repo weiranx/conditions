@@ -34,6 +34,7 @@ import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
 import { StartTimeScenarioCard } from './StartTimeScenarioCard';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -249,6 +250,7 @@ function ReportJumpNav({
 }
 
 function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability }) {
+  const featureFlags = useProductFeatureFlags();
   const {
     safetyData,
     aiAvailability,
@@ -684,7 +686,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         />
         </div>
 
-        <StartTimeScenarioCard
+        {featureFlags.startTimeComparisons && <StartTimeScenarioCard
           comparison={startTimeScenarioComparison}
           loading={startTimeScenariosLoading}
           error={startTimeScenariosError}
@@ -696,7 +698,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           onUseForNewReport={useStartTimeForNewReport}
           canGenerateMore={canGenerateMoreStartTimeScenarios}
           onGenerateMore={generateMoreStartTimeScenarios}
-        />
+        />}
 
         {/* ACTION PLAN */}
         <section className="ssr-card ssr-actions" id="planner-section-actions">
@@ -1267,7 +1269,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               {safetyData.snowpack.viirs?.observedTime && (
                 <p className="ssr-muted">Latest NASA VIIRS 375 m snow-cover granule: {formatPubTime(safetyData.snowpack.viirs.observedTime)}. Used as freshness/corroboration metadata; pixel-level NDSI is not treated as a depth measurement.</p>
               )}
-              {aiAvailability.snowVision && (
+              {featureFlags.satelliteImagery && aiAvailability.snowVision && (
                 <div style={{ marginTop: '14px' }}>
                   {snowVisionAnalysis ? (
                     <AiInsightBriefing

@@ -48,6 +48,7 @@ const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terra
 const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
+const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -779,6 +780,7 @@ registerSearchRoutes({
   defaultFetchHeaders: DEFAULT_FETCH_HEADERS,
   peaks: POPULAR_PEAKS,
 });
+registerFeatureFlagRoutes(app);
 registerHealthRoutes(app, {
   caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, avalancheForecastCache, satelliteTileCache],
   ai: getAIStatus,

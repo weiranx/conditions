@@ -31,6 +31,7 @@ import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../../app/cons
 import '../../styles/home-redesign.css';
 import { ProductNav } from './ProductNav';
 import { LegalLinks } from '../../app/legal-links';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const FEATURED_PEAKS: Suggestion[] = [
   { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular', type: 'peak' },
@@ -110,6 +111,7 @@ export function HomeView({
   openPlannerView,
   openTripToolView,
 }: HomeViewProps) {
+  const featureFlags = useProductFeatureFlags();
   const submitSearch = async () => {
     const didSelectObjective = await handleSearchSubmit();
     if (didSelectObjective) navigateToPlanner();
@@ -392,13 +394,13 @@ export function HomeView({
           </div>
 
           <div className="ssr-h-tools-grid">
-            <article>
+            {featureFlags.tripPlanning && <article>
               <div className="ssr-h-tool-icon"><CalendarRange aria-hidden /></div>
               <span>Compare days</span>
               <h3>Find the best day in the window.</h3>
               <p>Run the same objective and travel assumptions across several days, then carry your choice directly into Planner.</p>
               <button type="button" onClick={openTripToolView}>Open Trip tool <ArrowRight size={14} aria-hidden /></button>
-            </article>
+            </article>}
             <article>
               <div className="ssr-h-tool-icon"><MapPinned aria-hidden /></div>
               <span>Inspect the route</span>
@@ -406,13 +408,13 @@ export function HomeView({
               <p>Upload a GPX track to see elevation, slope, aspect, and condition changes along the route—not just at one point.</p>
               <button type="button" onClick={openPlannerView}>Explore route analysis <ArrowRight size={14} aria-hidden /></button>
             </article>
-            <article>
+            {featureFlags.startTimeComparisons && <article>
               <div className="ssr-h-tool-icon"><BarChart3 aria-hidden /></div>
               <span>Compare start times</span>
               <h3>See what an hour changes.</h3>
               <p>Test earlier and later departures against daylight, precipitation, heat, wind, and time-sensitive hazards.</p>
               <button type="button" onClick={openPlannerView}>Open Planner <ArrowRight size={14} aria-hidden /></button>
-            </article>
+            </article>}
             <article>
               <div className="ssr-h-tool-icon"><Sparkles aria-hidden /></div>
               <span>Ask the report</span>
@@ -456,7 +458,7 @@ export function HomeView({
             <button type="button" onClick={() => searchInputRef.current?.focus()}>
               Build a conditions brief <ArrowRight size={16} aria-hidden />
             </button>
-            <button type="button" className="secondary" onClick={openTripToolView}>Compare multiple days</button>
+            {featureFlags.tripPlanning && <button type="button" className="secondary" onClick={openTripToolView}>Compare multiple days</button>}
           </div>
         </section>
 

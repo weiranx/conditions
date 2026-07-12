@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bot,
+  CalendarRange,
   CheckCircle2,
   Clock3,
   Cpu,
@@ -14,6 +15,7 @@ import {
   KeyRound,
   LoaderCircle,
   Lock,
+  Layers,
   MessageCircleQuestion,
   Pause,
   Play,
@@ -44,6 +46,11 @@ import {
 import { fetchApi } from '../../lib/api-client';
 import type { AppView } from '../../hooks/useUrlState';
 import { publishAiAvailability } from '../../hooks/useAiAvailability';
+import {
+  publishProductFeatureFlags,
+  type ProductFeatureFlags,
+  type ProductFeatureKey,
+} from '../../contexts/feature-flags';
 import { ProductNav } from './ProductNav';
 
 interface ReportLogEntry {
@@ -145,6 +152,37 @@ const AI_FEATURE_CONTROLS = [
     icon: Satellite,
   },
 ] as const;
+
+interface ProductFeatureFlagStatus {
+  persistent: boolean;
+  flags: ProductFeatureFlags;
+}
+
+const PRODUCT_FEATURE_CONTROLS = [
+  {
+    key: 'tripPlanning',
+    label: 'Multi-day trip planning',
+    description: 'Shows the Trip tool and its multi-day forecast entry points.',
+    icon: CalendarRange,
+  },
+  {
+    key: 'satelliteImagery',
+    label: 'Satellite imagery',
+    description: 'Enables the satellite basemap, imagery tiles, and satellite snow analysis.',
+    icon: Layers,
+  },
+  {
+    key: 'startTimeComparisons',
+    label: 'Start-time comparisons',
+    description: 'Runs and displays earlier and later departure scenarios in planner reports.',
+    icon: Clock3,
+  },
+] as const satisfies ReadonlyArray<{
+  key: ProductFeatureKey;
+  label: string;
+  description: string;
+  icon: typeof Clock3;
+}>;
 
 const ADMIN_SESSION_KEY = 'summitsafe:admin-key';
 const LEGACY_LOGS_SESSION_KEY = 'summitsafe:logs-key';
@@ -507,6 +545,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [aiUsage, setAIUsage] = useState<AIUsageEntry[]>([]);
   const [aiSettings, setAISettings] = useState<AIAdminSettings | null>(null);
+  const [featureFlagStatus, setFeatureFlagStatus] = useState<ProductFeatureFlagStatus | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -514,6 +553,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [aiUsageError, setAIUsageError] = useState<string | null>(null);
   const [aiSettingsError, setAISettingsError] = useState<string | null>(null);
   const [aiSettingsPending, setAISettingsPending] = useState(false);
+  const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
+  const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
@@ -530,13 +571,14 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     if (background) setRefreshing(true);
     try {
       const headers = { Authorization: `Bearer ${secretKey}` };
-      const [logsResult, aiUsageResult, healthResult, aiSettingsResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult] = await Promise.all([
         fetchApi('/api/report-logs', { headers }),
         fetchApi('/api/ai-usage', { headers }),
         fetchApi('/api/healthz'),
         fetchApi('/api/admin/ai-settings', { headers }),
+        fetchApi('/api/admin/feature-flags', { headers }),
       ]);
-      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status].some((status) => status === 401 || status === 403)) {
+      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status, featureFlagsResult.response.status].some((status) => status === 401 || status === 403)) {
         onUnauthorized();
         return;
       }
@@ -565,11 +607,18 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       } else {
         setAISettingsError('AI controls are temporarily unavailable.');
       }
+      if (featureFlagsResult.response.ok && featureFlagsResult.payload && typeof featureFlagsResult.payload === 'object') {
+        setFeatureFlagStatus(featureFlagsResult.payload as ProductFeatureFlagStatus);
+        setFeatureFlagsError(null);
+      } else {
+        setFeatureFlagsError('Product feature flags are temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
       setHealthError('System details are temporarily unavailable.');
       setAISettingsError('AI controls are temporarily unavailable.');
+      setFeatureFlagsError('Product feature flags are temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -623,6 +672,41 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     const current = aiSettings?.features?.[feature]?.enabled;
     if (typeof current !== 'boolean') return;
     void updateAIControl({ features: { [feature]: !current } });
+  };
+
+  const toggleProductFeature = async (feature: ProductFeatureKey) => {
+    const current = featureFlagStatus?.flags[feature];
+    if (typeof current !== 'boolean') return;
+    setFeatureFlagsPending(true);
+    setFeatureFlagsError(null);
+    try {
+      const result = await fetchApi('/api/admin/feature-flags', {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ flags: { [feature]: !current } }),
+      });
+      if (result.response.status === 401 || result.response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (result.response.ok && result.payload && typeof result.payload === 'object') {
+        const nextStatus = result.payload as ProductFeatureFlagStatus;
+        setFeatureFlagStatus(nextStatus);
+        publishProductFeatureFlags(nextStatus.flags);
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : 'The server could not update product feature flags.';
+      setFeatureFlagsError(message);
+    } catch {
+      setFeatureFlagsError('Could not reach the server to update product feature flags.');
+    } finally {
+      setFeatureFlagsPending(false);
+    }
   };
 
   useEffect(() => {
@@ -957,6 +1041,46 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                   aria-label={`${enabled ? 'Disable' : 'Enable'} ${feature.label}`}
                 >
                   {aiSettingsPending ? 'Saving…' : enabled ? 'Disable' : 'Enable'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-feature-flags-title">
+        <div className="logs-chart-head">
+          <div>
+            <h2 id="admin-feature-flags-title">Product feature flags</h2>
+            <p>{featureFlagStatus?.persistent === false
+              ? 'Changes apply immediately but persistence is unavailable in this environment'
+              : 'Changes apply immediately and persist across backend restarts'}</p>
+          </div>
+        </div>
+
+        {featureFlagsError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {featureFlagsError}</div>}
+
+        <div className="admin-ai-control-grid">
+          {PRODUCT_FEATURE_CONTROLS.map((feature) => {
+            const enabled = featureFlagStatus?.flags[feature.key] ?? false;
+            const Icon = feature.icon;
+            return (
+              <div className="admin-ai-setting" key={feature.key}>
+                <span className="admin-ai-setting-icon"><Icon size={18} aria-hidden /></span>
+                <div>
+                  <strong>{feature.label}</strong>
+                  <p>{feature.description}</p>
+                </div>
+                <button
+                  type="button"
+                  className={enabled ? 'admin-kill-switch is-enabled' : 'admin-kill-switch is-stopped'}
+                  onClick={() => void toggleProductFeature(feature.key)}
+                  disabled={!featureFlagStatus || featureFlagsPending}
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={`${enabled ? 'Disable' : 'Enable'} ${feature.label}`}
+                >
+                  {featureFlagsPending ? 'Saving…' : enabled ? 'Disable' : 'Enable'}
                 </button>
               </div>
             );

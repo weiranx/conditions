@@ -1,11 +1,18 @@
 const { fetchSentinelTile } = require('../utils/sentinel-tiles');
+const { assertFeatureEnabled } = require('../utils/feature-flags');
 
-const registerSatelliteTileRoute = ({ app, fetchWithTimeout, tileCache }) => {
+const registerSatelliteTileRoute = ({
+  app,
+  fetchWithTimeout,
+  tileCache,
+  ensureFeatureEnabled = () => assertFeatureEnabled('satelliteImagery'),
+}) => {
   app.get('/api/satellite-tile/:z/:x/:y.png', async (req, res) => {
     const { z, x, y } = req.params;
     const cacheKey = `${z}/${x}/${y}`;
 
     try {
+      ensureFeatureEnabled();
       const tile = await tileCache.getOrFetch(cacheKey, () => fetchSentinelTile({ z, x, y, fetchWithTimeout }));
       const png = tile?.buffer || tile;
       res.setHeader('Content-Type', 'image/png');

@@ -113,6 +113,7 @@ import { useDayComparisons } from './hooks/useDayComparisons';
 import { useStartTimeScenarios } from './hooks/useStartTimeScenarios';
 import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePreferenceHandlers';
 import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
+import { useProductFeatureFlags } from './contexts/feature-flags';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -156,6 +157,7 @@ function formatIsoDateLabel(isoDate: string): string {
 }
 
 function App() {
+  const featureFlags = useProductFeatureFlags();
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
   const maxForecastDate = formatDateInput(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7));
@@ -412,6 +414,12 @@ function App() {
     }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
+
+  useEffect(() => {
+    if (!featureFlags.tripPlanning && view === 'trip') {
+      startViewChange(() => setView('planner'));
+    }
+  }, [featureFlags.tripPlanning, setView, startViewChange, view]);
 
   useEffect(() => {
     if (!hasObjective || !safetyData) {
@@ -778,6 +786,10 @@ function App() {
   };
 
   const openTripToolView = () => {
+    if (!featureFlags.tripPlanning) {
+      openPlannerView();
+      return;
+    }
     initializeTripView(forecastDate, alpineStartTime);
     startViewChange(() => setView('trip'));
   };
@@ -955,7 +967,7 @@ function App() {
   });
   const { dayOverDay } = dayComparisonsHook;
   const startTimeScenarios = useStartTimeScenarios({
-    enabled: hasObjective && view === 'planner' && Boolean(safetyData),
+    enabled: featureFlags.startTimeComparisons && hasObjective && view === 'planner' && Boolean(safetyData),
     forecastDate,
     position: { lat: position.lat, lng: position.lng },
     preferences,
@@ -1543,7 +1555,7 @@ function App() {
       />
       </React.Activity>
 
-      <React.Activity name="trip-page" mode={view === 'trip' ? 'visible' : 'hidden'}>
+      <React.Activity name="trip-page" mode={featureFlags.tripPlanning && view === 'trip' ? 'visible' : 'hidden'}>
       <TripView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}

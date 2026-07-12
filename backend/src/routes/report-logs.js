@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { logger } = require('../utils/logger');
 const { getAIUsageEntries } = require('../utils/ai-usage');
 const { getAIStatus, updateAISettings } = require('../utils/ai-client');
+const { getFeatureFlagStatus, updateFeatureFlags } = require('../utils/feature-flags');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -180,6 +181,22 @@ const registerReportLogsRoute = (app) => {
           ? 500
           : 400;
       res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid AI settings' });
+    }
+  });
+
+  app.get('/api/admin/feature-flags', (req, res) => {
+    if (!authorize(req, res)) return;
+    res.json(getFeatureFlagStatus());
+  });
+
+  app.patch('/api/admin/feature-flags', (req, res) => {
+    if (!authorize(req, res)) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    try {
+      res.json(updateFeatureFlags(body.flags));
+    } catch (error) {
+      const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
+      res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid feature flags' });
     }
   });
 };

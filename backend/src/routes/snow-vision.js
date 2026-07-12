@@ -1,5 +1,6 @@
 const { createCache } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
+const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { fetchSentinelTile } = require('../utils/sentinel-tiles');
 const { logger } = require('../utils/logger');
 
@@ -49,7 +50,10 @@ const registerSnowVisionRoute = ({
   app,
   fetchWithTimeout,
   askAIVision,
-  ensureFeatureEnabled = () => assertAIFeatureEnabled('snowVision'),
+  ensureFeatureEnabled = () => {
+    assertFeatureEnabled('satelliteImagery');
+    assertAIFeatureEnabled('snowVision');
+  },
 }) => {
   app.post('/api/snow-vision', async (req, res) => {
     const { lat, lon, snowpack, units } = req.body || {};

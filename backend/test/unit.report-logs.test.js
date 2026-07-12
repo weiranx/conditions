@@ -13,7 +13,10 @@ test('authorized AI admin routes read and update runtime settings', () => {
 
   const getAIStatus = jest.fn(() => ({ enabled: true, provider: 'openai' }));
   const updateAISettings = jest.fn((settings) => ({ enabled: settings.enabled, provider: 'openai' }));
+  const getFeatureFlagStatus = jest.fn(() => ({ persistent: true, flags: { tripPlanning: true } }));
+  const updateFeatureFlags = jest.fn((flags) => ({ persistent: true, flags }));
   jest.doMock('../src/utils/ai-client', () => ({ getAIStatus, updateAISettings }));
+  jest.doMock('../src/utils/feature-flags', () => ({ getFeatureFlagStatus, updateFeatureFlags }));
 
   const routes = { get: new Map(), patch: new Map() };
   const app = {
@@ -47,7 +50,20 @@ test('authorized AI admin routes read and update runtime settings', () => {
   });
   expect(patchResponse.payload).toEqual({ enabled: false, provider: 'openai' });
 
+  const getFlagsResponse = createResponse();
+  routes.get.get('/api/admin/feature-flags')({ headers }, getFlagsResponse);
+  expect(getFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
+
+  const patchFlagsResponse = createResponse();
+  routes.patch.get('/api/admin/feature-flags')({
+    headers,
+    body: { flags: { tripPlanning: false } },
+  }, patchFlagsResponse);
+  expect(updateFeatureFlags).toHaveBeenCalledWith({ tripPlanning: false });
+  expect(patchFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: false } });
+
   jest.dontMock('../src/utils/ai-client');
+  jest.dontMock('../src/utils/feature-flags');
   if (originalSecret === undefined) delete process.env.LOGS_SECRET;
   else process.env.LOGS_SECRET = originalSecret;
   jest.resetModules();
