@@ -192,6 +192,8 @@ export interface PlannerViewProps {
   startTimeScenarioComparison: StartTimeScenarioComparison | null;
   startTimeScenariosLoading: boolean;
   startTimeScenariosError: string | null;
+  canGenerateMoreStartTimeScenarios: boolean;
+  generateMoreStartTimeScenarios: () => void;
   localizeUnitText: (text: string) => string;
   formatIsoDateLabel: (isoDate: string) => string;
   setForecastDate: React.Dispatch<React.SetStateAction<string>>;

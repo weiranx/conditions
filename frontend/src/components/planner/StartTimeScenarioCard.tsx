@@ -1,4 +1,4 @@
-import { Clock3, LoaderCircle, Sparkles } from 'lucide-react';
+import { Clock3, LoaderCircle, Plus, Sparkles } from 'lucide-react';
 import type { UserPreferences } from '../../app/types';
 import type { StartTimeScenarioComparison } from '../../app/start-time-scenarios';
 
@@ -12,6 +12,8 @@ interface StartTimeScenarioCardProps {
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatTempDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   onUseForNewReport: (startTime: string) => void;
+  canGenerateMore: boolean;
+  onGenerateMore: () => void;
 }
 
 function formatDaylight(minutes: number | null): string {
@@ -55,6 +57,8 @@ export function StartTimeScenarioCard({
   formatWindDisplay,
   formatTempDisplay,
   onUseForNewReport,
+  canGenerateMore,
+  onGenerateMore,
 }: StartTimeScenarioCardProps) {
   const best = comparison?.scenarios.find((scenario) => scenario.startTime === comparison.bestStartTime) ?? null;
 
@@ -82,14 +86,14 @@ export function StartTimeScenarioCard({
             </div>
           </div>
           <div className="ssr-scenario-grid">
-            {comparison.scenarios.map((scenario) => {
+            {comparison.scenarios.map((scenario, index) => {
               const isBest = scenario.startTime === comparison.bestStartTime;
               const isCurrent = scenario.startTime === currentStartTime;
               return (
                 <article key={scenario.startTime} className={`ssr-scenario ${isBest ? 'is-best' : ''}`}>
                   <div className="ssr-scenario-head">
                     <div>
-                      <span>Departure</span>
+                      <span>Rank #{index + 1} · Score {Math.round(scenario.score)}</span>
                       <strong>{formatClockForStyle(scenario.startTime, preferences.timeStyle)}</strong>
                     </div>
                     <span className={`status-pill ${scenario.decision.level === 'GO' ? 'good' : scenario.decision.level === 'CAUTION' ? 'warn' : 'bad'}`}>
@@ -118,6 +122,15 @@ export function StartTimeScenarioCard({
             })}
           </div>
           <p className="ssr-scenario-note">Summit is estimated at the midpoint of your {preferences.travelWindowHours}h travel window. Deltas are relative to the recommended start.</p>
+          {(canGenerateMore || loading) && (
+            <div className="ssr-scenario-more">
+              <button type="button" onClick={onGenerateMore} disabled={loading}>
+                {loading ? <LoaderCircle size={14} className="spin" aria-hidden /> : <Plus size={14} aria-hidden />}
+                {loading ? 'Generating more scenarios…' : 'Generate 5 more scenarios'}
+              </button>
+              <span>Add hourly departures from 3 AM through 10 AM, then re-rank every option.</span>
+            </div>
+          )}
         </>
       )}
 

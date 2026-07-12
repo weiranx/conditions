@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SafetyData, UserPreferences } from '../app/types';
 import { evaluateBackcountryDecision } from '../app/decision';
 import {
+  EXTENDED_START_TIME_SCENARIO_TIMES,
   START_TIME_SCENARIO_TIMES,
   buildStartTimeScenario,
   compareStartTimeScenarios,
@@ -24,8 +25,12 @@ export function useStartTimeScenarios({
   preferences,
 }: UseStartTimeScenariosParams) {
   const [scenarioPayloads, setScenarioPayloads] = useState<Array<{ startTime: string; data: SafetyData }>>([]);
+  const [includeMoreScenarios, setIncludeMoreScenarios] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scenarioTimes = includeMoreScenarios
+    ? EXTENDED_START_TIME_SCENARIO_TIMES
+    : START_TIME_SCENARIO_TIMES;
 
   useEffect(() => {
     if (!enabled) {
@@ -42,7 +47,7 @@ export function useStartTimeScenarios({
       setLoading(true);
       setError(null);
       const results = await Promise.all(
-        START_TIME_SCENARIO_TIMES.map(async (startTime) => {
+        scenarioTimes.map(async (startTime) => {
           try {
             const { response, payload } = await fetchApi(
               `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(forecastDate)}&start=${encodeURIComponent(startTime)}&travel_window_hours=${safeTravelWindowHours}`,
@@ -59,7 +64,7 @@ export function useStartTimeScenarios({
       if (cancelled) return;
       const valid = results.filter((scenario): scenario is NonNullable<(typeof results)[number]> => scenario !== null);
       setScenarioPayloads(valid);
-      setError(valid.length === START_TIME_SCENARIO_TIMES.length ? null : 'Some departure scenarios could not be evaluated.');
+      setError(valid.length === scenarioTimes.length ? null : 'Some departure scenarios could not be evaluated.');
     })().finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -74,6 +79,7 @@ export function useStartTimeScenarios({
     position.lat,
     position.lng,
     preferences.travelWindowHours,
+    scenarioTimes,
   ]);
 
   const scenarios = useMemo<StartTimeScenario[]>(() => scenarioPayloads.map(({ startTime, data }) => {
@@ -88,6 +94,13 @@ export function useStartTimeScenarios({
     () => compareStartTimeScenarios(scenarios, preferences),
     [scenarios, preferences],
   );
+  const generateMore = useCallback(() => setIncludeMoreScenarios(true), []);
 
-  return { comparison, loading, error };
+  return {
+    comparison,
+    loading,
+    error,
+    canGenerateMore: !includeMoreScenarios,
+    generateMore,
+  };
 }

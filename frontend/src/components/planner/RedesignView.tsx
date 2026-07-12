@@ -268,6 +268,8 @@ function RedesignViewComponent(props: PlannerViewProps) {
     startTimeScenarioComparison,
     startTimeScenariosLoading,
     startTimeScenariosError,
+    canGenerateMoreStartTimeScenarios,
+    generateMoreStartTimeScenarios,
     decisionActionLine,
     travelWindowRows,
     travelWindowHoursLabel,
@@ -676,6 +678,8 @@ function RedesignViewComponent(props: PlannerViewProps) {
           formatWindDisplay={formatWindDisplay}
           formatTempDisplay={formatTempDisplay}
           onUseForNewReport={useStartTimeForNewReport}
+          canGenerateMore={canGenerateMoreStartTimeScenarios}
+          onGenerateMore={generateMoreStartTimeScenarios}
         />
 
         {/* ACTION PLAN */}

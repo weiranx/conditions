@@ -1711,6 +1711,8 @@ function App() {
       startTimeScenarioComparison={startTimeScenarios.comparison}
       startTimeScenariosLoading={startTimeScenarios.loading}
       startTimeScenariosError={startTimeScenarios.error}
+      canGenerateMoreStartTimeScenarios={startTimeScenarios.canGenerateMore}
+      generateMoreStartTimeScenarios={startTimeScenarios.generateMore}
       localizeUnitText={localizeUnitText}
       formatIsoDateLabel={formatIsoDateLabel}
       setForecastDate={setForecastDate}

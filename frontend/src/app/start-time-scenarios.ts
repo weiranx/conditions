@@ -4,6 +4,16 @@ import { parseSolarClockMinutes, parseTimeInputMinutes } from './core';
 import { computeFeelsLikeF } from './planner-helpers';
 
 export const START_TIME_SCENARIO_TIMES = ['04:00', '06:00', '08:00'] as const;
+export const EXTENDED_START_TIME_SCENARIO_TIMES = [
+  '03:00',
+  '04:00',
+  '05:00',
+  '06:00',
+  '07:00',
+  '08:00',
+  '09:00',
+  '10:00',
+] as const;
 
 export type StartTimeScenarioRisk = 'Wind' | 'Heat' | 'Precipitation' | 'Avalanche';
 
@@ -142,7 +152,7 @@ export function compareStartTimeScenarios(
     : `${drivingRisk} is the leading shared constraint; ${best.startTime} preserves the best score and daylight margin.`;
 
   return {
-    scenarios,
+    scenarios: sorted,
     bestStartTime: best.startTime,
     drivingRisk,
     recommendationReason,
