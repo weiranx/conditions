@@ -1,6 +1,6 @@
 const { version } = require('../../package.json');
 
-const registerHealthRoutes = (app, { caches = [] } = {}) => {
+const registerHealthRoutes = (app, { caches = [], ai = null } = {}) => {
   const respond = (_req, res) => {
     const mem = process.memoryUsage();
     res.json({
@@ -14,6 +14,7 @@ const registerHealthRoutes = (app, { caches = [] } = {}) => {
         heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
         rssMb: Math.round(mem.rss / 1024 / 1024),
       },
+      ...(ai ? { ai } : {}),
       caches: caches.map((c) => c.stats()),
       timestamp: new Date().toISOString(),
     });

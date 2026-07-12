@@ -72,6 +72,11 @@ struct StatusView: View {
             if let env = health.env { metricRow("Environment", env.capitalized) }
             if let uptime = health.uptime { metricRow("Uptime", formatUptime(uptime)) }
             if let node = health.nodeVersion { metricRow("Node.js", node) }
+            if let ai = health.ai {
+                metricRow("AI provider", ai.provider == "anthropic" ? "Anthropic" : "OpenAI")
+                metricRow("AI primary", ai.primaryModel)
+                metricRow("AI fast", ai.fastModel)
+            }
             if let heap = health.heapUsedMb { metricRow("Memory", String(format: "%.1f MB", heap)) }
             if let latency = health.latencyMs { metricRow("Latency", String(format: "%.0f ms", latency)) }
         }

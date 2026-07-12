@@ -13,6 +13,14 @@ struct HealthCheckResponse: Decodable, Sendable {
     var latencyMs: Double?
     var checks: [HealthCheckItem]?
     var caches: [CacheHealth]?
+    var ai: AIStatus?
+
+    struct AIStatus: Codable, Sendable {
+        var provider: String
+        var primaryModel: String
+        var fastModel: String
+        var configured: Bool
+    }
 
     struct CacheHealth: Codable, Sendable, Identifiable {
         var name: String
@@ -25,7 +33,7 @@ struct HealthCheckResponse: Decodable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case ok, service, version, env, uptime, nodeVersion, memory, caches
+        case ok, service, version, env, uptime, nodeVersion, memory, caches, ai
     }
 
     enum MemoryKeys: String, CodingKey { case heapUsedMb, rssMb }
@@ -39,6 +47,7 @@ struct HealthCheckResponse: Decodable, Sendable {
         uptime = try values.decodeIfPresent(Double.self, forKey: .uptime)
         nodeVersion = try values.decodeIfPresent(String.self, forKey: .nodeVersion)
         caches = try values.decodeIfPresent([CacheHealth].self, forKey: .caches)
+        ai = try values.decodeIfPresent(AIStatus.self, forKey: .ai)
         status = ok == true ? "ok" : "down"
         checks = nil
         latencyMs = nil

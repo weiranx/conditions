@@ -7,6 +7,10 @@ test('GET /healthz returns healthy payload', async () => {
   expect(res.status).toBe(200);
   expect(res.body.ok).toBe(true);
   expect(res.body.service).toBe('backcountry-conditions-backend');
+  expect(['openai', 'anthropic']).toContain(res.body.ai.provider);
+  expect(typeof res.body.ai.primaryModel).toBe('string');
+  expect(typeof res.body.ai.fastModel).toBe('string');
+  expect(typeof res.body.ai.configured).toBe('boolean');
   expect(typeof res.body.timestamp).toBe('string');
   expect(res.body.timestamp.length).toBeGreaterThan(0);
   expect(typeof res.headers['x-request-id']).toBe('string');
@@ -198,7 +202,7 @@ test('POST /api/ai-brief rejects missing decisionLevel', async () => {
 });
 
 test('POST /api/ai-brief accepts a well-formed report', async () => {
-  // The call will reach the AI layer and likely fail in test (no real Claude), so we
+  // The call will reach the AI layer and fail in test (no provider API key), so we
   // only assert it gets past validation (not a 400).
   const res = await request(app)
     .post('/api/ai-brief')

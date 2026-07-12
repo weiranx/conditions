@@ -84,7 +84,7 @@ Persisted in browser local storage under `summitsafe:user-preferences:v1`. Unit 
 - Some center-specific avalanche handling exists as explicit hotfix logic in `backend/index.js` — check before modifying avalanche parsing.
 - Backend module system is **CommonJS** (`require`/`module.exports`). Frontend is **ES modules** (`import`/`export`).
 - Backend test suite (`test/unit.helpers.test.js`) is extremely large; run targeted tests during development.
-- `ANTHROPIC_API_KEY` is required in `backend/.env` for AI-powered features (`/api/route-suggestions`, `/api/route-analysis`, `/api/ai-brief`); those endpoints return `500` without it.
+- `AI_PROVIDER` selects `openai` (default) or `anthropic` for AI-powered features. The selected provider's key is required. OpenAI defaults to `gpt-5.6-terra`/`gpt-5.6-luna`; Anthropic defaults to `claude-sonnet-5`/`claude-haiku-4-5-20251001`. The `/api/healthz` response exposes the active provider and model IDs without exposing credentials.
 - Set `DEBUG_AVY=true` in `backend/.env` to enable verbose avalanche pipeline debug logs.
 
 ## iOS App

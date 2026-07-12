@@ -17,7 +17,7 @@ const withTimeout = (promise, ms, label) => {
 };
 
 // Bounds the combined raw per-waypoint report JSON before it's interpolated into the
-// Claude prompt, so a route with several waypoints can't blow up prompt size.
+// AI prompt, so a route with several waypoints can't blow up prompt size.
 const MAX_WAYPOINT_REPORTS_LENGTH = 30000;
 const MAX_SUPPLIED_WAYPOINTS = 8;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
@@ -34,8 +34,8 @@ const pick = (obj, keys) => {
   }, {});
 };
 
-const parseJsonArrayFromClaude = (text) => {
-  // Strip markdown code fences and XML-like tags that Claude sometimes wraps around JSON
+const parseJsonArrayFromAI = (text) => {
+  // Strip markdown code fences and XML-like tags that models sometimes wrap around JSON
   let cleaned = text
     .replace(/```(?:json)?\s*/gi, '')
     .replace(/```/g, '')
@@ -44,7 +44,7 @@ const parseJsonArrayFromClaude = (text) => {
   const start = cleaned.indexOf('[');
   const end = cleaned.lastIndexOf(']');
   if (start === -1 || end === -1 || end < start) {
-    throw new Error(`No JSON array found in Claude response: ${text.slice(0, 200)}`);
+    throw new Error(`No JSON array found in AI response: ${text.slice(0, 200)}`);
   }
   let raw = cleaned.slice(start, end + 1);
 
@@ -54,7 +54,7 @@ const parseJsonArrayFromClaude = (text) => {
   try {
     return JSON.parse(raw);
   } catch (e) {
-    throw new Error(`Failed to parse JSON from Claude: ${e.message}\nRaw: ${raw.slice(0, 300)}`);
+    throw new Error(`Failed to parse JSON from AI: ${e.message}\nRaw: ${raw.slice(0, 300)}`);
   }
 };
 
@@ -160,7 +160,7 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
   }).catch(() => null);
 };
 
-const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders }) => {
+const registerRouteAnalysisRoutes = ({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders }) => {
   // GET /api/route-suggestions?peak=Mt+Whitney&lat=36.578&lon=-118.292
   app.get('/api/route-suggestions', async (req, res) => {
     const { peak, lat, lon } = req.query;
@@ -177,13 +177,13 @@ const registerRouteAnalysisRoutes = ({ app, askClaude, invokeSafetyHandler, fetc
     try {
       const suggestCacheKey = `${normalizeTextKey(safePeak)}|${normalizeCoordKey(safeLat, safeLon)}`;
       const routes = await routeSuggestionsCache.getOrFetch(suggestCacheKey, async () => {
-        const text = await askClaude(
+        const text = await askAI(
           `List all well-known hiking, climbing, and scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-          { maxTokens: 2048, model: 'claude-haiku-4-5-20251001' }
+          { maxTokens: 2048, tier: 'fast' }
         );
-        return parseJsonArrayFromClaude(text);
+        return parseJsonArrayFromAI(text);
       });
       return res.json(routes);
     } catch (err) {
@@ -232,14 +232,14 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       } else {
         const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
         const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
-          const waypointText = await withTimeout(askClaude(
+          const waypointText = await withTimeout(askAI(
             `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-            { maxTokens: 1024, model: 'claude-haiku-4-5-20251001' }
+            { maxTokens: 1024, tier: 'fast' }
           ), 20000, 'Waypoint lookup');
-          return parseJsonArrayFromClaude(waypointText);
+          return parseJsonArrayFromAI(waypointText);
         });
         // Clone so summit pinning doesn't mutate the cached array.
         waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
@@ -306,7 +306,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         };
       });
 
-      // Step 4: Synthesize — feed Claude the raw safety report per waypoint (bounded),
+      // Step 4: Synthesize — feed the AI the raw safety report per waypoint (bounded),
       // the same raw-data approach used for the score card's AI analysis, instead of
       // pre-summarizing which signals matter.
       const rawWaypointReports = waypointsCopy.map((wp, i) => {
@@ -325,7 +325,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const partialData = failedWaypointNames.length > 0;
       const reportsJson = JSON.stringify(rawWaypointReports).slice(0, MAX_WAYPOINT_REPORTS_LENGTH);
 
-      const analysis = await withTimeout(askClaude(
+      const analysis = await withTimeout(askAI(
         `${describeUnitsInstruction(units)}
 
 You are analyzing backcountry conditions for a trip on ${safePeak}.
@@ -345,7 +345,7 @@ Write a thorough route-wide briefing covering:
 5. Overall go / go-with-caution / no-go recommendation with one-line reasoning, in prose
 
 Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it helps scannability), and only use a bullet list for section 4. Do not add a title or heading at the start.`,
-        { maxTokens: 4096, model: 'claude-sonnet-5' }
+        { maxTokens: 4096 }
       ), 60000, 'Route synthesis');
 
       return res.json({

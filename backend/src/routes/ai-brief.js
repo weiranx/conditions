@@ -8,10 +8,10 @@ const SYSTEM_PROMPT =
 const aiBriefCache = createCache({ name: 'ai-brief', ttlMs: 60 * 60 * 1000, staleTtlMs: 60 * 60 * 1000, maxEntries: 200 });
 
 // Bounds the raw report JSON before it's used as a cache key or interpolated into the
-// Claude prompt, so an unusually large payload can't blow up prompt size or cache memory.
+// AI prompt, so an unusually large payload can't blow up prompt size or cache memory.
 const MAX_REPORT_LENGTH = 12000;
 
-const registerAiBriefRoute = ({ app, askClaude }) => {
+const registerAiBriefRoute = ({ app, askAI }) => {
   app.post('/api/ai-brief', async (req, res) => {
     const { report, decisionLevel, units } = req.body || {};
 
@@ -26,8 +26,7 @@ const registerAiBriefRoute = ({ app, askClaude }) => {
       const userPrompt = `${describeUnitsInstruction(units)}\n\nDecision level: ${decisionLevel}\n\nFull report data (JSON):\n${reportJson}`;
 
       const narrative = await aiBriefCache.getOrFetch(cacheKey, async () => {
-        return askClaude(userPrompt, {
-          model: 'claude-sonnet-5',
+        return askAI(userPrompt, {
           maxTokens: 4096,
           system: SYSTEM_PROMPT,
         });

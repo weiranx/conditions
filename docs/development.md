@@ -47,7 +47,13 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `RATE_LIMIT_WINDOW_MS` | — | API rate-limit window (ms) |
 | `RATE_LIMIT_MAX_REQUESTS` | — | Max requests per rate-limit window |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
-| `ANTHROPIC_API_KEY` | — | Required for AI-powered features: route analysis (`/api/route-suggestions`, `/api/route-analysis`) and AI field brief (`/api/ai-brief`). Without this key, those endpoints return `500`. |
+| `AI_PROVIDER` | `openai` | Active AI provider: `openai` or `anthropic`. |
+| `OPENAI_API_KEY` | — | Required when `AI_PROVIDER=openai`. |
+| `OPENAI_MODEL` | `gpt-5.6-terra` | Model for route synthesis, field briefs, and snow-image analysis. |
+| `OPENAI_FAST_MODEL` | `gpt-5.6-luna` | Lower-cost model for route suggestions and waypoint extraction. |
+| `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=anthropic`. |
+| `ANTHROPIC_MODEL` | `claude-sonnet-5` | Claude model for route synthesis, field briefs, and snow-image analysis. |
+| `ANTHROPIC_FAST_MODEL` | `claude-haiku-4-5-20251001` | Claude model for route suggestions and waypoint extraction. |
 
 ### Frontend (`frontend/.env`)
 
@@ -101,7 +107,7 @@ Do not mix module systems within each tier.
 
 - New backend domain logic goes in `backend/index.js` or a new utility in `backend/src/utils/`.
 - New backend routes go in `backend/src/routes/`.
-- AI/Claude integration code uses `backend/src/utils/ai-client.js` as the shared client.
+- OpenAI and Anthropic integrations use `backend/src/utils/ai-client.js` as the shared provider-switching client.
 - Caching logic uses `backend/src/utils/cache.js` for tiered in-memory caches.
 - New frontend utilities go in `frontend/src/app/` or `frontend/src/lib/`.
 - New frontend UI components go in `frontend/src/components/`. Domain-specific cards go in `frontend/src/components/planner/cards/`.

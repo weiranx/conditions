@@ -18,7 +18,7 @@
     "node": ">=20.19.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.111.0",
     "@turf/turf": "^7.3.4",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
@@ -27,6 +27,7 @@
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "node-fetch": "^2.7.0",
+    "openai": "^6.46.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3"
   },

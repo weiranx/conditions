@@ -56,7 +56,7 @@ const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
-const { askClaude, askClaudeVision } = require('./src/utils/ai-client');
+const { askAI, askAIVision, getAIStatus } = require('./src/utils/ai-client');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
@@ -744,12 +744,15 @@ registerSearchRoutes({
   defaultFetchHeaders: DEFAULT_FETCH_HEADERS,
   peaks: POPULAR_PEAKS,
 });
-registerHealthRoutes(app, { caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, avalancheForecastCache, satelliteTileCache] });
+registerHealthRoutes(app, {
+  caches: [noaaPointsCache, elevationCache, solarCache, noaaForecastCache, avalancheForecastCache, satelliteTileCache],
+  ai: getAIStatus(),
+});
 registerReportLogsRoute(app);
-registerRouteAnalysisRoutes({ app, askClaude, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
-registerAiBriefRoute({ app, askClaude });
+registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
+registerAiBriefRoute({ app, askAI });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
-registerSnowVisionRoute({ app, fetchWithTimeout, askClaudeVision });
+registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision });
 
 const startServer = () => startBackendServer({ app, port: PORT });
 

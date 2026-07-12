@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { fetchApi, readApiErrorMessage } from '../lib/api-client';
-import type { HealthCheckResult, BackendMeta } from '../app/types';
+import type { HealthCheckResult, BackendMeta, BackendAIStatus } from '../app/types';
 
 export interface UseHealthChecksReturn {
   healthChecks: HealthCheckResult[];
@@ -39,6 +39,7 @@ export function useHealthChecks(): UseHealthChecksReturn {
         uptime?: number;
         nodeVersion?: string;
         memory?: { heapUsedMb?: number; rssMb?: number };
+        ai?: { provider?: string; primaryModel?: string; fastModel?: string; configured?: boolean };
       };
 
       const backendOk = Boolean(p.ok);
@@ -49,6 +50,14 @@ export function useHealthChecks(): UseHealthChecksReturn {
       const backendNodeVersion = String(p.nodeVersion || '?');
       const heapUsedMb = p.memory?.heapUsedMb ?? null;
       const rssMb = p.memory?.rssMb ?? null;
+      const ai: BackendAIStatus | null = p.ai?.provider && p.ai?.primaryModel && p.ai?.fastModel
+        ? {
+            provider: String(p.ai.provider),
+            primaryModel: String(p.ai.primaryModel),
+            fastModel: String(p.ai.fastModel),
+            configured: Boolean(p.ai.configured),
+          }
+        : null;
 
       const nowIso = new Date().toISOString();
 
@@ -95,6 +104,7 @@ export function useHealthChecks(): UseHealthChecksReturn {
           heapUsedMb,
           rssMb,
           latencyMs,
+          ai,
         });
       }
 
@@ -118,6 +128,14 @@ export function useHealthChecks(): UseHealthChecksReturn {
                 : `Response in ${latencyMs} ms — very slow, possible network issue.`,
           meta: `Measured round-trip to /api/healthz`,
         },
+        ...(ai ? [{
+          label: 'AI Provider',
+          status: ai.configured ? 'ok' as const : 'warn' as const,
+          detail: ai.configured
+            ? `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is configured for AI-powered planning features.`
+            : `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is selected, but its API key is not configured.`,
+          meta: `Primary: ${ai.primaryModel} · Fast: ${ai.fastModel}`,
+        }] : []),
         {
           label: 'Browser Network',
           status: typeof navigator !== 'undefined' && navigator.onLine ? 'ok' : 'warn',

@@ -36,7 +36,7 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 - Snowpack snapshot from NRCS SNOTEL + NOAA NOHRSC
 - Rainfall/snowfall rolling totals (12h / 24h / 48h)
 - NWS alerts, air quality, fire-risk synthesis, and source freshness indicators
-- Claude-powered route suggestions and multi-waypoint route analysis
+- Configurable OpenAI- or Claude-powered route suggestions and multi-waypoint route analysis
 - On-demand AI field brief narrative
 - Shareable planner URLs, printable report, and SAT one-liner output
 - Multi-day trip risk view and built-in app status checks
@@ -122,9 +122,13 @@ The backend runs against free public data sources out of the box. A couple of fe
 | Variable | Enables | How to get it |
 |---|---|---|
 | `NPS_API_KEY` | The **Access & Closures** sub-section of the Local Conditions card — nearest national-park alerts and closures via the National Park Service API. Without it the section is hidden; the rest of the report is unaffected. | Free, instant — request at [nps.gov developer get-started](https://www.nps.gov/subjects/developer/get-started.htm). |
-| `ANTHROPIC_API_KEY` | AI-powered features (`/api/route-suggestions`, `/api/route-analysis`, `/api/ai-brief`). These endpoints return `500` without it. | [console.anthropic.com](https://console.anthropic.com) |
+| `AI_PROVIDER` | Selects `openai` (default) or `anthropic` for AI-powered features. | — |
+| `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. | [OpenAI API keys](https://platform.openai.com/api-keys) |
+| `OPENAI_MODEL` / `OPENAI_FAST_MODEL` | OpenAI primary and extraction models; defaults to Terra and Luna. | — |
+| `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=anthropic`. | [Anthropic Console](https://console.anthropic.com/) |
+| `ANTHROPIC_MODEL` / `ANTHROPIC_FAST_MODEL` | Claude primary and extraction models; defaults to Sonnet and Haiku. | — |
 
-Both keys are optional and free to omit — every other signal in the report works without configuration.
+All API keys are optional to omit — features that do not depend on the missing key continue to work.
 
 ## API Endpoints
 
@@ -133,7 +137,7 @@ Both keys are optional and free to omit — every other signal in the report wor
 | GET | `/api/safety` | Full synthesized planning report for a coordinate + date/time |
 | GET | `/api/search` | Objective search using local peak catalog + Nominatim |
 | GET | `/api/sat-oneliner` | Satellite-friendly one-line condition summary |
-| GET | `/api/route-suggestions` | Claude-generated routes for a named peak |
+| GET | `/api/route-suggestions` | AI-generated routes for a named peak |
 | POST | `/api/route-analysis` | Multi-waypoint route analysis with go/no-go briefing |
 | POST | `/api/ai-brief` | On-demand AI narrative field brief |
 | GET | `/api/report-logs` | Retrieve logged reports (requires `LOGS_SECRET`) |

@@ -561,6 +561,14 @@ export interface BackendMeta {
   heapUsedMb: number;
   rssMb: number;
   latencyMs: number;
+  ai: BackendAIStatus | null;
+}
+
+export interface BackendAIStatus {
+  provider: string;
+  primaryModel: string;
+  fastModel: string;
+  configured: boolean;
 }
 
 export type CriticalRiskLevel = 'stable' | 'watch' | 'high';

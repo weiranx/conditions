@@ -128,6 +128,18 @@ RATE_LIMIT_MAX_REQUESTS=300
 LOGS_SECRET=changeit
 
 DEBUG_AVY=false
+
+# Choose one provider. Keep both keys available if you want to switch providers
+# without another secret-management step, but only the selected key is used.
+AI_PROVIDER=openai
+
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6-terra
+OPENAI_FAST_MODEL=gpt-5.6-luna
+
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-5
+ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
 ```
 
 ---

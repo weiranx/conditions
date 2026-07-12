@@ -98,7 +98,7 @@ export function StatusView({
     },
   }[overallStatus];
 
-  const serviceChecks = healthChecks.filter((check) => check.label === 'Backend API' || check.label === 'API Latency');
+  const serviceChecks = healthChecks.filter((check) => ['Backend API', 'API Latency', 'AI Provider'].includes(check.label));
   const browserChecks = healthChecks.filter((check) => !serviceChecks.includes(check));
 
   const renderCheck = (check: HealthCheckResult) => {
@@ -106,7 +106,9 @@ export function StatusView({
     const StatusIcon = check.status === 'ok' ? CheckCircle2 : check.status === 'warn' ? AlertTriangle : XCircle;
     const CheckIcon = check.label === 'Backend API'
       ? Server
-      : check.label === 'API Latency' || check.label === 'Browser Network'
+      : check.label === 'AI Provider'
+        ? Cpu
+        : check.label === 'API Latency' || check.label === 'Browser Network'
         ? Wifi
         : check.label === 'Browser Storage'
           ? Database

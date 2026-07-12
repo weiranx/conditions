@@ -1,8 +1,8 @@
 'use strict';
 
-// Report/waypoint data handed to Claude is always in the backend's native imperial
+// Report/waypoint data handed to the AI is always in the backend's native imperial
 // units (°F, mph, ft, inches) regardless of what the user has selected for display.
-// This builds a instruction telling Claude which units to render its prose in, so
+// This builds an instruction telling the AI which units to render its prose in, so
 // AI narratives match what's shown elsewhere in the report.
 function describeUnitsInstruction(units) {
   const temperature = units?.temperature === 'c' ? 'Celsius (°C)' : 'Fahrenheit (°F)';

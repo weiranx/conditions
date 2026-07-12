@@ -40,7 +40,7 @@ const MAX_SNOWPACK_LENGTH = 4000;
 
 const snowVisionCache = createCache({ name: 'snow-vision', ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 24 * 60 * 60 * 1000, maxEntries: 300 });
 
-const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => {
+const registerSnowVisionRoute = ({ app, fetchWithTimeout, askAIVision }) => {
   app.post('/api/snow-vision', async (req, res) => {
     const { lat, lon, snowpack, units } = req.body || {};
     const parsedLat = Number(lat);
@@ -65,12 +65,12 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askClaudeVision }) => 
         const promptText = snowpackJson
           ? `Analyze the snow conditions visible in this satellite image, using this ground-station snowpack data (JSON) as supplemental context:\n${snowpackJson}\n\nThe snow depth and SWE values in that JSON are in inches. In your response, convert every depth/SWE value you mention to ${depthUnit} and do not mix unit systems.`
           : 'Analyze the snow conditions visible in this satellite image.';
-        const analysis = await askClaudeVision(
+        const analysis = await askAIVision(
           base64,
           promptText,
-          { model: 'claude-sonnet-5', maxTokens: 4096, system: SYSTEM_PROMPT },
+          { maxTokens: 4096, system: SYSTEM_PROMPT },
         );
-        // Return the same tile shown to Claude so the UI can display exactly what was
+        // Return the same tile shown to the AI so the UI can display exactly what was
         // analyzed, alongside a note pointing users at the app's live satellite basemap.
         return { analysis, zoom: SNOW_VISION_ZOOM, image: `data:image/png;base64,${base64}` };
       });

@@ -13,6 +13,29 @@ test('withTimeout clears its timer when work finishes before the deadline', asyn
   }
 });
 
+test('route suggestions use the fast model tier', async () => {
+  const app = express();
+  const calls = [];
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => {
+      calls.push({ prompt, options });
+      return '[{"name":"Test Route","distance_rt_miles":4,"elev_gain_ft":1200,"class":"Class 1","description":"Test."}]';
+    },
+    invokeSafetyHandler: jest.fn(),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+  });
+
+  const response = await request(app)
+    .get('/api/route-suggestions')
+    .query({ peak: 'Cost Test Peak', lat: 39.1234, lon: -106.5678 });
+
+  expect(response.status).toBe(200);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].options).toMatchObject({ tier: 'fast', maxTokens: 2048 });
+});
+
 test('GPX route analysis uses supplied coordinates without generating or geocoding waypoints', async () => {
   const app = express();
   app.use(express.json());
@@ -21,7 +44,7 @@ test('GPX route analysis uses supplied coordinates without generating or geocodi
 
   registerRouteAnalysisRoutes({
     app,
-    askClaude: async (prompt) => {
+    askAI: async (prompt) => {
       aiPrompts.push(prompt);
       return 'GPX route briefing';
     },
