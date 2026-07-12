@@ -3527,8 +3527,13 @@ const calmWeather = (overrides = {}) => ({
 
 test('calculateSafetyScore stamps the scoring model version', () => {
   const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
-  expect(typeof result.scoreVersion).toBe('string');
-  expect(result.scoreVersion.length).toBeGreaterThan(0);
+  expect(result.scoreVersion).toBe('2.3.0');
+});
+
+test('calculateSafetyScore gives benign conditions the full 100-point baseline', () => {
+  const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
+  expect(result.factors).toHaveLength(0);
+  expect(result.score).toBe(100);
 });
 
 test('calculateSafetyScore adds a Snowpack factor when snowpack is above seasonal average', () => {

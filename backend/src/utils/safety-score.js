@@ -9,8 +9,8 @@ const { normalizeAlertSeverity } = require('./alerts');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.2.0',
-  maxScore: 95,
+  scoreVersion: '2.3.0',
+  maxScore: 100,
 
   // Group scales intentionally sum to well over maxScore. Avalanche and
   // weather are kept at full strength because either alone can legitimately
