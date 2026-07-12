@@ -21,6 +21,15 @@ const MODEL_CONFIG = {
   },
 };
 
+const parseTimeout = (value, fallback) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 1000 ? Math.min(parsed, 120000) : fallback;
+};
+
+const PRIMARY_TIMEOUT_MS = parseTimeout(process.env.AI_PRIMARY_TIMEOUT_MS, 28000);
+const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
+const FALLBACK_PROVIDER = AI_PROVIDER === 'openai' ? 'anthropic' : 'openai';
+
 let openAIClient;
 let anthropicClient;
 
@@ -40,10 +49,15 @@ const getAnthropicClient = () => {
   return anthropicClient;
 };
 
-const resolveModel = ({ model, tier = 'primary' } = {}) => {
-  if (model) return model;
-  return tier === 'fast' ? MODEL_CONFIG[AI_PROVIDER].fast : MODEL_CONFIG[AI_PROVIDER].primary;
+const resolveModel = (provider, { model, tier = 'primary' } = {}, allowExplicitModel = true) => {
+  if (allowExplicitModel && model) return model;
+  return tier === 'fast' ? MODEL_CONFIG[provider].fast : MODEL_CONFIG[provider].primary;
 };
+
+const requestOptions = (tier) => ({
+  timeout: tier === 'fast' ? FAST_TIMEOUT_MS : PRIMARY_TIMEOUT_MS,
+  maxRetries: 0,
+});
 
 const readOpenAIText = (response, { maxTokens, model, operation }) => {
   const text = response.output_text?.trim();
@@ -79,16 +93,17 @@ const readAnthropicText = (message, { maxTokens, model, operation }) => {
   return text;
 };
 
-const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary' } = {}) => {
-  const resolvedModel = resolveModel({ model, tier });
-  if (AI_PROVIDER === 'anthropic') {
+const callTextProvider = async (provider, prompt, options, allowExplicitModel) => {
+  const { maxTokens, model, system, tier } = options;
+  const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
+  if (provider === 'anthropic') {
     const params = {
       model: resolvedModel,
       max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
     };
     if (system) params.system = system;
-    const message = await getAnthropicClient().messages.create(params);
+    const message = await getAnthropicClient().messages.create(params, requestOptions(tier));
     return readAnthropicText(message, { maxTokens, model: resolvedModel, operation: 'askAI' });
   }
 
@@ -98,13 +113,14 @@ const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary'
     input: prompt,
   };
   if (system) params.instructions = system;
-  const response = await getOpenAIClient().responses.create(params);
+  const response = await getOpenAIClient().responses.create(params, requestOptions(tier));
   return readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
 };
 
-const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary' } = {}) => {
-  const resolvedModel = resolveModel({ model, tier });
-  if (AI_PROVIDER === 'anthropic') {
+const callVisionProvider = async (provider, imageBase64, prompt, options, allowExplicitModel) => {
+  const { maxTokens, model, system, mediaType, tier } = options;
+  const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
+  if (provider === 'anthropic') {
     const params = {
       model: resolvedModel,
       max_tokens: maxTokens,
@@ -117,7 +133,7 @@ const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, syste
       }],
     };
     if (system) params.system = system;
-    const message = await getAnthropicClient().messages.create(params);
+    const message = await getAnthropicClient().messages.create(params, requestOptions(tier));
     return readAnthropicText(message, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
   }
 
@@ -133,8 +149,49 @@ const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, syste
     }],
   };
   if (system) params.instructions = system;
-  const response = await getOpenAIClient().responses.create(params);
+  const response = await getOpenAIClient().responses.create(params, requestOptions(tier));
   return readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
+};
+
+const errorMessage = (error) => error instanceof Error ? error.message : String(error);
+
+const runWithFailover = async (operation, tier, invoke) => {
+  try {
+    return await invoke(AI_PROVIDER, true);
+  } catch (primaryError) {
+    if (!MODEL_CONFIG[FALLBACK_PROVIDER].configured) throw primaryError;
+
+    logger.warn(
+      { err: primaryError, primaryProvider: AI_PROVIDER, fallbackProvider: FALLBACK_PROVIDER, tier },
+      `${operation}: preferred AI provider failed; retrying with fallback`,
+    );
+    try {
+      return await invoke(FALLBACK_PROVIDER, false);
+    } catch (fallbackError) {
+      logger.error(
+        { err: fallbackError, primaryProvider: AI_PROVIDER, fallbackProvider: FALLBACK_PROVIDER, tier },
+        `${operation}: fallback AI provider also failed`,
+      );
+      throw new Error(
+        `Both AI providers failed (${AI_PROVIDER}: ${errorMessage(primaryError)}; ${FALLBACK_PROVIDER}: ${errorMessage(fallbackError)})`,
+        { cause: fallbackError },
+      );
+    }
+  }
+};
+
+const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary' } = {}) => {
+  const options = { maxTokens, model, system, tier };
+  return runWithFailover('askAI', tier, (provider, allowExplicitModel) => (
+    callTextProvider(provider, prompt, options, allowExplicitModel)
+  ));
+};
+
+const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary' } = {}) => {
+  const options = { maxTokens, model, system, mediaType, tier };
+  return runWithFailover('askAIVision', tier, (provider, allowExplicitModel) => (
+    callVisionProvider(provider, imageBase64, prompt, options, allowExplicitModel)
+  ));
 };
 
 const getAIStatus = () => ({
@@ -142,6 +199,12 @@ const getAIStatus = () => ({
   primaryModel: MODEL_CONFIG[AI_PROVIDER].primary,
   fastModel: MODEL_CONFIG[AI_PROVIDER].fast,
   configured: MODEL_CONFIG[AI_PROVIDER].configured,
+  fallbackProvider: FALLBACK_PROVIDER,
+  fallbackPrimaryModel: MODEL_CONFIG[FALLBACK_PROVIDER].primary,
+  fallbackFastModel: MODEL_CONFIG[FALLBACK_PROVIDER].fast,
+  fallbackConfigured: MODEL_CONFIG[FALLBACK_PROVIDER].configured,
+  primaryTimeoutMs: PRIMARY_TIMEOUT_MS,
+  fastTimeoutMs: FAST_TIMEOUT_MS,
 });
 
 module.exports = { askAI, askAIVision, getAIStatus };

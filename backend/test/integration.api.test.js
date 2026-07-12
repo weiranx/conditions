@@ -10,6 +10,10 @@ test('GET /healthz returns healthy payload', async () => {
   expect(['openai', 'anthropic']).toContain(res.body.ai.provider);
   expect(typeof res.body.ai.primaryModel).toBe('string');
   expect(typeof res.body.ai.fastModel).toBe('string');
+  expect(typeof res.body.ai.fallbackProvider).toBe('string');
+  expect(typeof res.body.ai.fallbackPrimaryModel).toBe('string');
+  expect(typeof res.body.ai.fallbackFastModel).toBe('string');
+  expect(typeof res.body.ai.fallbackConfigured).toBe('boolean');
   expect(typeof res.body.ai.configured).toBe('boolean');
   expect(typeof res.body.timestamp).toBe('string');
   expect(res.body.timestamp.length).toBeGreaterThan(0);

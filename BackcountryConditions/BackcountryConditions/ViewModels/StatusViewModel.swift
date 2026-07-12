@@ -27,12 +27,14 @@ final class StatusViewModel {
             ]
             if let ai = response.ai {
                 let provider = ai.provider == "anthropic" ? "Anthropic" : "OpenAI"
+                let fallbackProvider = ai.fallbackProvider == "anthropic" ? "Anthropic" : "OpenAI"
+                let fallbackReady = ai.fallbackConfigured == true
                 checks.insert(
                     HealthCheckItem(
                         label: "AI Provider",
-                        status: ai.configured ? "ok" : "warn",
-                        detail: ai.configured ? "\(provider) is configured for AI-powered planning features." : "\(provider) is selected, but its API key is not configured.",
-                        meta: "Primary: \(ai.primaryModel) · Fast: \(ai.fastModel)"
+                        status: ai.configured || fallbackReady ? "ok" : "warn",
+                        detail: ai.configured ? "\(provider) is preferred; \(fallbackReady ? "automatic failover is ready" : "the fallback key is not configured")." : (fallbackReady ? "\(provider) is preferred but unavailable; requests will use \(fallbackProvider)." : "Neither AI provider has an API key configured."),
+                        meta: "Preferred: \(ai.primaryModel) · Fallback: \(ai.fallbackPrimaryModel ?? "not reported")"
                     ),
                     at: 2
                 )

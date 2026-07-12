@@ -569,6 +569,10 @@ export interface BackendAIStatus {
   primaryModel: string;
   fastModel: string;
   configured: boolean;
+  fallbackProvider: string;
+  fallbackPrimaryModel: string;
+  fallbackFastModel: string;
+  fallbackConfigured: boolean;
 }
 
 export type CriticalRiskLevel = 'stable' | 'watch' | 'high';

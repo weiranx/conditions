@@ -39,7 +39,16 @@ export function useHealthChecks(): UseHealthChecksReturn {
         uptime?: number;
         nodeVersion?: string;
         memory?: { heapUsedMb?: number; rssMb?: number };
-        ai?: { provider?: string; primaryModel?: string; fastModel?: string; configured?: boolean };
+        ai?: {
+          provider?: string;
+          primaryModel?: string;
+          fastModel?: string;
+          configured?: boolean;
+          fallbackProvider?: string;
+          fallbackPrimaryModel?: string;
+          fallbackFastModel?: string;
+          fallbackConfigured?: boolean;
+        };
       };
 
       const backendOk = Boolean(p.ok);
@@ -51,11 +60,16 @@ export function useHealthChecks(): UseHealthChecksReturn {
       const heapUsedMb = p.memory?.heapUsedMb ?? null;
       const rssMb = p.memory?.rssMb ?? null;
       const ai: BackendAIStatus | null = p.ai?.provider && p.ai?.primaryModel && p.ai?.fastModel
+        && p.ai?.fallbackProvider && p.ai?.fallbackPrimaryModel && p.ai?.fallbackFastModel
         ? {
             provider: String(p.ai.provider),
             primaryModel: String(p.ai.primaryModel),
             fastModel: String(p.ai.fastModel),
             configured: Boolean(p.ai.configured),
+            fallbackProvider: String(p.ai.fallbackProvider),
+            fallbackPrimaryModel: String(p.ai.fallbackPrimaryModel),
+            fallbackFastModel: String(p.ai.fallbackFastModel),
+            fallbackConfigured: Boolean(p.ai.fallbackConfigured),
           }
         : null;
 
@@ -130,11 +144,13 @@ export function useHealthChecks(): UseHealthChecksReturn {
         },
         ...(ai ? [{
           label: 'AI Provider',
-          status: ai.configured ? 'ok' as const : 'warn' as const,
+          status: ai.configured || ai.fallbackConfigured ? 'ok' as const : 'warn' as const,
           detail: ai.configured
-            ? `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is configured for AI-powered planning features.`
-            : `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is selected, but its API key is not configured.`,
-          meta: `Primary: ${ai.primaryModel} · Fast: ${ai.fastModel}`,
+            ? `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is preferred; ${ai.fallbackConfigured ? 'automatic failover is ready' : 'the fallback key is not configured'}.`
+            : ai.fallbackConfigured
+              ? `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is preferred but unavailable; requests will use ${ai.fallbackProvider === 'anthropic' ? 'Anthropic' : 'OpenAI'}.`
+              : 'Neither AI provider has an API key configured.',
+          meta: `Preferred: ${ai.primaryModel} · Fallback: ${ai.fallbackPrimaryModel}`,
         }] : []),
         {
           label: 'Browser Network',

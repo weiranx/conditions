@@ -47,11 +47,13 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `RATE_LIMIT_WINDOW_MS` | — | API rate-limit window (ms) |
 | `RATE_LIMIT_MAX_REQUESTS` | — | Max requests per rate-limit window |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
-| `AI_PROVIDER` | `openai` | Active AI provider: `openai` or `anthropic`. |
-| `OPENAI_API_KEY` | — | Required when `AI_PROVIDER=openai`. |
+| `AI_PROVIDER` | `openai` | Preferred AI provider: `openai` or `anthropic`; a failed request retries through the other configured provider. |
+| `AI_PRIMARY_TIMEOUT_MS` | `28000` | Per-provider timeout for synthesis, briefs, and vision before failover. |
+| `AI_FAST_TIMEOUT_MS` | `8000` | Per-provider timeout for route suggestions and extraction before failover. |
+| `OPENAI_API_KEY` | — | Enables OpenAI as preferred provider or fallback. |
 | `OPENAI_MODEL` | `gpt-5.6-terra` | Model for route synthesis, field briefs, and snow-image analysis. |
 | `OPENAI_FAST_MODEL` | `gpt-5.6-luna` | Lower-cost model for route suggestions and waypoint extraction. |
-| `ANTHROPIC_API_KEY` | — | Required when `AI_PROVIDER=anthropic`. |
+| `ANTHROPIC_API_KEY` | — | Enables Anthropic as preferred provider or fallback. |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5` | Claude model for route synthesis, field briefs, and snow-image analysis. |
 | `ANTHROPIC_FAST_MODEL` | `claude-haiku-4-5-20251001` | Claude model for route suggestions and waypoint extraction. |
 

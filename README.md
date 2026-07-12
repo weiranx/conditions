@@ -122,13 +122,14 @@ The backend runs against free public data sources out of the box. A couple of fe
 | Variable | Enables | How to get it |
 |---|---|---|
 | `NPS_API_KEY` | The **Access & Closures** sub-section of the Local Conditions card — nearest national-park alerts and closures via the National Park Service API. Without it the section is hidden; the rest of the report is unaffected. | Free, instant — request at [nps.gov developer get-started](https://www.nps.gov/subjects/developer/get-started.htm). |
-| `AI_PROVIDER` | Selects `openai` (default) or `anthropic` for AI-powered features. | — |
-| `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. | [OpenAI API keys](https://platform.openai.com/api-keys) |
+| `AI_PROVIDER` | Selects the preferred provider (`openai` by default); failures retry once through the other configured provider. | — |
+| `AI_PRIMARY_TIMEOUT_MS` / `AI_FAST_TIMEOUT_MS` | Per-provider attempt limits before failover; defaults to 28000/8000 ms. | — |
+| `OPENAI_API_KEY` | Enables OpenAI as the preferred provider or automatic fallback. | [OpenAI API keys](https://platform.openai.com/api-keys) |
 | `OPENAI_MODEL` / `OPENAI_FAST_MODEL` | OpenAI primary and extraction models; defaults to Terra and Luna. | — |
-| `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=anthropic`. | [Anthropic Console](https://console.anthropic.com/) |
+| `ANTHROPIC_API_KEY` | Enables Anthropic as the preferred provider or automatic fallback. | [Anthropic Console](https://console.anthropic.com/) |
 | `ANTHROPIC_MODEL` / `ANTHROPIC_FAST_MODEL` | Claude primary and extraction models; defaults to Sonnet and Haiku. | — |
 
-All API keys are optional to omit — features that do not depend on the missing key continue to work.
+Set both AI provider keys to enable automatic failover in either direction. All API keys are optional to omit — features that do not depend on a missing key continue to work.
 
 ## API Endpoints
 

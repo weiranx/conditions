@@ -16,6 +16,8 @@ const ENV_KEYS = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_MODEL',
   'ANTHROPIC_FAST_MODEL',
+  'AI_PRIMARY_TIMEOUT_MS',
+  'AI_FAST_TIMEOUT_MS',
 ];
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
@@ -35,6 +37,8 @@ describe('AI provider client wrapper', () => {
     delete process.env.OPENAI_FAST_MODEL;
     delete process.env.ANTHROPIC_MODEL;
     delete process.env.ANTHROPIC_FAST_MODEL;
+    delete process.env.AI_PRIMARY_TIMEOUT_MS;
+    delete process.env.AI_FAST_TIMEOUT_MS;
   });
 
   afterAll(() => {
@@ -54,7 +58,7 @@ describe('AI provider client wrapper', () => {
       max_output_tokens: 900,
       input: 'conditions',
       instructions: 'Be concise.',
-    });
+    }, { timeout: 28000, maxRetries: 0 });
   });
 
   test('uses the OpenAI fast model for fast-tier requests', async () => {
@@ -62,7 +66,10 @@ describe('AI provider client wrapper', () => {
     const { askAI } = loadClient('openai');
 
     await askAI('routes', { tier: 'fast' });
-    expect(mockOpenAICreate).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-5.6-luna' }));
+    expect(mockOpenAICreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-luna' }),
+      { timeout: 8000, maxRetries: 0 },
+    );
   });
 
   test('sends base64 images as OpenAI vision input', async () => {
@@ -79,7 +86,7 @@ describe('AI provider client wrapper', () => {
           { type: 'input_text', text: 'analyze' },
         ],
       }],
-    }));
+    }), { timeout: 28000, maxRetries: 0 });
   });
 
   test('sends text prompts through Anthropic Messages API', async () => {
@@ -95,7 +102,7 @@ describe('AI provider client wrapper', () => {
       max_tokens: 800,
       messages: [{ role: 'user', content: 'conditions' }],
       system: 'Be precise.',
-    });
+    }, { timeout: 28000, maxRetries: 0 });
   });
 
   test('uses the Anthropic fast model for fast-tier requests', async () => {
@@ -103,7 +110,10 @@ describe('AI provider client wrapper', () => {
     const { askAI } = loadClient('anthropic');
 
     await askAI('routes', { tier: 'fast' });
-    expect(mockAnthropicCreate).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-4-5-20251001' }));
+    expect(mockAnthropicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'claude-haiku-4-5-20251001' }),
+      { timeout: 8000, maxRetries: 0 },
+    );
   });
 
   test('sends base64 images through Anthropic vision input', async () => {
@@ -120,7 +130,7 @@ describe('AI provider client wrapper', () => {
           { type: 'text', text: 'analyze' },
         ],
       }],
-    }));
+    }), { timeout: 28000, maxRetries: 0 });
   });
 
   test('reports the selected provider and models without exposing keys', () => {
@@ -131,16 +141,70 @@ describe('AI provider client wrapper', () => {
       primaryModel: 'claude-sonnet-5',
       fastModel: 'claude-haiku-4-5-20251001',
       configured: true,
+      fallbackProvider: 'openai',
+      fallbackPrimaryModel: 'gpt-5.6-terra',
+      fallbackFastModel: 'gpt-5.6-luna',
+      fallbackConfigured: true,
+      primaryTimeoutMs: 28000,
+      fastTimeoutMs: 8000,
     });
     expect(JSON.stringify(getAIStatus())).not.toContain('test-key');
   });
 
-  test('requires the selected provider API key', async () => {
+  test('falls back when the selected provider API key is missing', async () => {
     delete process.env.ANTHROPIC_API_KEY;
+    mockOpenAICreate.mockResolvedValue({ status: 'completed', output_text: 'fallback brief' });
     const { askAI } = loadClient('anthropic');
 
-    await expect(askAI('conditions')).rejects.toThrow('ANTHROPIC_API_KEY is not set');
+    await expect(askAI('conditions')).resolves.toBe('fallback brief');
     expect(mockAnthropicCreate).not.toHaveBeenCalled();
+    expect(mockOpenAICreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-terra' }),
+      { timeout: 28000, maxRetries: 0 },
+    );
+  });
+
+  test('fails over from OpenAI to Anthropic using the matching tier', async () => {
+    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
+    mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'fallback routes' }] });
+    const { askAI } = loadClient('openai');
+
+    await expect(askAI('routes', { tier: 'fast' })).resolves.toBe('fallback routes');
+    expect(mockAnthropicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'claude-haiku-4-5-20251001' }),
+      { timeout: 8000, maxRetries: 0 },
+    );
+  });
+
+  test('fails over from Anthropic to OpenAI', async () => {
+    mockAnthropicCreate.mockRejectedValue(new Error('Anthropic unavailable'));
+    mockOpenAICreate.mockResolvedValue({ status: 'completed', output_text: 'fallback brief' });
+    const { askAI } = loadClient('anthropic');
+
+    await expect(askAI('conditions')).resolves.toBe('fallback brief');
+    expect(mockOpenAICreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-terra' }),
+      { timeout: 28000, maxRetries: 0 },
+    );
+  });
+
+  test('preserves the original error when no fallback key is configured', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
+    const { askAI } = loadClient('openai');
+
+    await expect(askAI('conditions')).rejects.toThrow('OpenAI unavailable');
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+  });
+
+  test('reports both provider failures', async () => {
+    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
+    mockAnthropicCreate.mockRejectedValue(new Error('Anthropic unavailable'));
+    const { askAI } = loadClient('openai');
+
+    await expect(askAI('conditions')).rejects.toThrow('Both AI providers failed');
+    expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
+    expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
   });
 
   test('rejects unsupported providers at startup', () => {

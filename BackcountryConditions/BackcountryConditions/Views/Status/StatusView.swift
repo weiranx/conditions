@@ -76,6 +76,11 @@ struct StatusView: View {
                 metricRow("AI provider", ai.provider == "anthropic" ? "Anthropic" : "OpenAI")
                 metricRow("AI primary", ai.primaryModel)
                 metricRow("AI fast", ai.fastModel)
+                if let fallbackProvider = ai.fallbackProvider {
+                    metricRow("AI fallback", fallbackProvider == "anthropic" ? "Anthropic" : "OpenAI")
+                }
+                if let fallbackPrimaryModel = ai.fallbackPrimaryModel { metricRow("Fallback primary", fallbackPrimaryModel) }
+                if let fallbackFastModel = ai.fallbackFastModel { metricRow("Fallback fast", fallbackFastModel) }
             }
             if let heap = health.heapUsedMb { metricRow("Memory", String(format: "%.1f MB", heap)) }
             if let latency = health.latencyMs { metricRow("Latency", String(format: "%.0f ms", latency)) }

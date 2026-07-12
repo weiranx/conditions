@@ -20,6 +20,10 @@ struct HealthCheckResponse: Decodable, Sendable {
         var primaryModel: String
         var fastModel: String
         var configured: Bool
+        var fallbackProvider: String?
+        var fallbackPrimaryModel: String?
+        var fallbackFastModel: String?
+        var fallbackConfigured: Bool?
     }
 
     struct CacheHealth: Codable, Sendable, Identifiable {

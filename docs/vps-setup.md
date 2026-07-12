@@ -129,9 +129,11 @@ LOGS_SECRET=changeit
 
 DEBUG_AVY=false
 
-# Choose one provider. Keep both keys available if you want to switch providers
-# without another secret-management step, but only the selected key is used.
+# Choose the preferred provider. Configure both keys for automatic per-request
+# failover when the preferred provider errors or times out.
 AI_PROVIDER=openai
+AI_PRIMARY_TIMEOUT_MS=28000
+AI_FAST_TIMEOUT_MS=8000
 
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6-terra
