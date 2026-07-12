@@ -200,7 +200,7 @@ function App() {
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
-  const initialSafetyData = React.useMemo(() => {
+  const initialRestoredReport = React.useMemo(() => {
     if (!initialPersistedReport || !initialLinkState.hasObjective) {
       return null;
     }
@@ -212,7 +212,7 @@ function App() {
       alpineStartTime: initialLinkState.alpineStartTime,
       travelWindowHours,
     })
-      ? initialPersistedReport.safetyData
+      ? initialPersistedReport
       : null;
   }, [initialPersistedReport, initialLinkState, initialPreferences.travelWindowHours]);
 
@@ -232,7 +232,10 @@ function App() {
     preferences,
     isProductionBuild,
     objectiveNameRef,
-    initialSafetyData,
+    initialSafetyData: initialRestoredReport?.safetyData,
+    initialAiBriefNarrative: initialRestoredReport?.ai.aiBriefNarrative,
+    initialSnowVisionAnalysis: initialRestoredReport?.ai.snowVisionAnalysis,
+    initialSnowVisionImage: initialRestoredReport?.ai.snowVisionImage,
   });
   const {
     safetyData, setSafetyData, loading, error, setError,
@@ -523,7 +526,11 @@ function App() {
         MIN_TRAVEL_WINDOW_HOURS,
         Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
       ),
-    }, safetyData);
+    }, safetyData, {
+      aiBriefNarrative,
+      snowVisionAnalysis,
+      snowVisionImage,
+    });
   }, [
     hasObjective,
     safetyData,
@@ -534,6 +541,9 @@ function App() {
     alpineStartTime,
     targetElevationInput,
     preferences.travelWindowHours,
+    aiBriefNarrative,
+    snowVisionAnalysis,
+    snowVisionImage,
   ]);
 
   const handleRecenterMap = () => {
@@ -725,7 +735,7 @@ function App() {
   // The home page's "Get conditions" button re-arms it on click; selecting the objective
   // there is async (it may resolve via a search lookup), so that flow can't fetch immediately
   // with the click handler's stale position and instead relies on this same deferred effect.
-  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective && !initialSafetyData);
+  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective && !initialRestoredReport);
   useEffect(() => {
     if (!pendingAutoGenerate || !hasObjective || view !== 'planner') {
       return;

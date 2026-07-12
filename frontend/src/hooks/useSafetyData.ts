@@ -17,6 +17,9 @@ export interface UseSafetyDataParams {
   isProductionBuild: boolean;
   objectiveNameRef: React.RefObject<string>;
   initialSafetyData?: SafetyData | null;
+  initialAiBriefNarrative?: string | null;
+  initialSnowVisionAnalysis?: string | null;
+  initialSnowVisionImage?: string | null;
 }
 
 export interface UseSafetyDataReturn {
@@ -61,15 +64,18 @@ export function useSafetyData({
   isProductionBuild,
   objectiveNameRef,
   initialSafetyData = null,
+  initialAiBriefNarrative = null,
+  initialSnowVisionAnalysis = null,
+  initialSnowVisionImage = null,
 }: UseSafetyDataParams): UseSafetyDataReturn {
   const [safetyData, setSafetyData] = useState<SafetyData | null>(initialSafetyData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(null);
+  const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(initialAiBriefNarrative);
   const [aiBriefLoading, setAiBriefLoading] = useState(false);
   const [aiBriefError, setAiBriefError] = useState<string | null>(null);
-  const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(null);
-  const [snowVisionImage, setSnowVisionImage] = useState<string | null>(null);
+  const [snowVisionAnalysis, setSnowVisionAnalysis] = useState<string | null>(initialSnowVisionAnalysis);
+  const [snowVisionImage, setSnowVisionImage] = useState<string | null>(initialSnowVisionImage);
   const [snowVisionLoading, setSnowVisionLoading] = useState(false);
   const [snowVisionError, setSnowVisionError] = useState<string | null>(null);
 

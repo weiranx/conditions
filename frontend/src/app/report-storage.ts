@@ -21,11 +21,18 @@ export interface PersistedReportPlan {
   travelWindowHours: number;
 }
 
+export interface PersistedReportAiFields {
+  aiBriefNarrative: string | null;
+  snowVisionAnalysis: string | null;
+  snowVisionImage: string | null;
+}
+
 export interface PersistedReport {
   version: typeof PERSISTED_REPORT_VERSION;
   savedAt: string;
   plan: PersistedReportPlan;
   safetyData: SafetyData;
+  ai: PersistedReportAiFields;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,6 +90,17 @@ function parsePersistedReport(value: unknown): PersistedReport | null {
       travelWindowHours,
     },
     safetyData: value.safetyData,
+    ai: {
+      aiBriefNarrative: isRecord(value.ai) && typeof value.ai.aiBriefNarrative === 'string'
+        ? value.ai.aiBriefNarrative
+        : null,
+      snowVisionAnalysis: isRecord(value.ai) && typeof value.ai.snowVisionAnalysis === 'string'
+        ? value.ai.snowVisionAnalysis
+        : null,
+      snowVisionImage: isRecord(value.ai) && typeof value.ai.snowVisionImage === 'string'
+        ? value.ai.snowVisionImage
+        : null,
+    },
   };
 }
 
@@ -111,7 +129,11 @@ export function loadPersistedReport(): PersistedReport | null {
   }
 }
 
-export function persistReport(plan: PersistedReportPlan, safetyData: SafetyData): void {
+export function persistReport(
+  plan: PersistedReportPlan,
+  safetyData: SafetyData,
+  ai: PersistedReportAiFields,
+): void {
   if (typeof window === 'undefined') {
     return;
   }
@@ -121,6 +143,7 @@ export function persistReport(plan: PersistedReportPlan, safetyData: SafetyData)
     savedAt: new Date().toISOString(),
     plan,
     safetyData,
+    ai,
   };
   try {
     window.localStorage.setItem(PERSISTED_REPORT_KEY, JSON.stringify(report));
