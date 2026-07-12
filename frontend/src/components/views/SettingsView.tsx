@@ -22,6 +22,7 @@ import {
 } from '../../app/constants';
 import '../../styles/settings-redesign.css';
 import { ProductNav } from './ProductNav';
+import type { AppView } from '../../hooks/useUrlState';
 
 export interface SettingsViewProps {
   appShellClassName: string;
@@ -77,7 +78,7 @@ export interface SettingsViewProps {
   // Actions
   applyPreferencesToPlanner: () => void;
   resetPreferences: () => void;
-  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
+  navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
 }

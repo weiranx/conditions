@@ -362,6 +362,7 @@
 .ssr-h-cta-actions button.secondary { border-color: rgba(225, 241, 230, .2); background: rgba(225, 241, 230, .05); color: #d9e8dc; }
 .ssr-h-cta-actions button.secondary:hover { background: rgba(225, 241, 230, .11); }
 .ssr-h-foot { width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 20px 0 48px; display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; color: var(--ssr-text-3); }
+.ssr-h-foot-meta { display: grid; gap: 12px; }
 .ssr-h-foot-brand { display: flex; align-items: center; gap: 8px; color: var(--ssr-text-2); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .ssr-h-disclaimer { max-width: 650px; display: flex; align-items: flex-start; gap: 9px; font-size: 11px; line-height: 1.55; }
 .ssr-h-disclaimer svg { flex: 0 0 auto; margin-top: 1px; color: var(--ssr-caution-ink); }

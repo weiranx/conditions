@@ -8447,6 +8447,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
   line-height: 1.5;
 }
 
+.app-disclaimer-legal {
+  margin-top: 2px;
+}
+
 :root[data-theme='dark'] .settings-shell {
   background: transparent;
   -webkit-backdrop-filter: none;

@@ -65,6 +65,8 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const hasExplicitStatusView = viewParam === 'status';
   const hasExplicitTripView = viewParam === 'trip';
   const hasExplicitLogsView = viewParam === 'logs';
+  const hasExplicitPrivacyView = viewParam === 'privacy';
+  const hasExplicitTermsView = viewParam === 'terms';
 
   return {
     view: hasExplicitSettingsView
@@ -75,9 +77,13 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
           ? 'trip'
           : hasExplicitLogsView
             ? 'logs'
-            : viewParam === 'planner' || hasCoords
-              ? 'planner'
-              : 'home',
+            : hasExplicitPrivacyView
+              ? 'privacy'
+              : hasExplicitTermsView
+                ? 'terms'
+                : viewParam === 'planner' || hasCoords
+                  ? 'planner'
+                  : 'home',
     activity: 'backcountry',
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
     hasObjective: hasCoords,
@@ -91,7 +97,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 }
 
 export function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs' | 'privacy' | 'terms';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;

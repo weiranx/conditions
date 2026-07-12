@@ -30,6 +30,7 @@ import type { Suggestion } from '../../lib/search';
 import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../../app/constants';
 import '../../styles/home-redesign.css';
 import { ProductNav } from './ProductNav';
+import { LegalLinks } from '../../app/legal-links';
 
 const FEATURED_PEAKS: Suggestion[] = [
   { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular', type: 'peak' },
@@ -69,7 +70,7 @@ export interface HomeViewProps {
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTravelWindowHoursDraftBlur: () => void;
   navigateToPlanner: () => void;
-  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
+  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs' | 'privacy' | 'terms') => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
 }
@@ -445,7 +446,10 @@ export function HomeView({
         </section>
 
         <footer className="ssr-h-foot">
-          <div className="ssr-h-foot-brand"><Mountain size={17} aria-hidden /> Backcountry Conditions</div>
+          <div className="ssr-h-foot-meta">
+            <div className="ssr-h-foot-brand"><Mountain size={17} aria-hidden /> Backcountry Conditions</div>
+            <LegalLinks navigateToView={navigateToView} />
+          </div>
           <div className="ssr-h-disclaimer">
             <Info size={15} aria-hidden />
             <span>

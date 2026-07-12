@@ -644,7 +644,7 @@ export interface SnowpackSnapshotInsights {
 }
 
 export interface LinkState {
-  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs' | 'privacy' | 'terms';
   activity: ActivityType;
   position: L.LatLng;
   hasObjective: boolean;

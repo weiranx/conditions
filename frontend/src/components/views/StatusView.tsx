@@ -280,7 +280,7 @@ export function StatusView({
           <span>Last checked {healthCheckedAt ? formatPubTime(healthCheckedAt) : 'never'}</span>
           {healthLoading && healthChecks.length > 0 && <span className="status-refresh-note">Refreshing now&hellip;</span>}
         </div>
-        <AppDisclaimer compact />
+        <AppDisclaimer compact navigateToView={navigateToView} />
       </section>
     </div>
   );

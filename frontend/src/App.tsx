@@ -99,6 +99,7 @@ import {
   persistReport,
 } from './app/report-storage';
 import { HomeView } from './components/views/HomeView';
+import { LegalView } from './components/views/LegalView';
 import { useHealthChecks } from './hooks/useHealthChecks';
 import { useRouteAnalysis } from './hooks/useRouteAnalysis';
 import type { RouteAnalysisOptions } from './hooks/useRouteAnalysis';
@@ -448,6 +449,16 @@ function App() {
 
     if (view === 'trip') {
       document.title = 'Multi-Day Trip Tool - Backcountry Conditions';
+      return;
+    }
+
+    if (view === 'privacy') {
+      document.title = 'Privacy Policy - Backcountry Conditions';
+      return;
+    }
+
+    if (view === 'terms') {
+      document.title = 'Terms of Use - Backcountry Conditions';
       return;
     }
 
@@ -1627,6 +1638,28 @@ function App() {
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
+      </React.Activity>
+
+      <React.Activity name="privacy-page" mode={view === 'privacy' ? 'visible' : 'hidden'}>
+        <LegalView
+          kind="privacy"
+          appShellClassName={appShellClassName}
+          isViewPending={isViewPending}
+          navigateToView={navigateToView}
+          openPlannerView={openPlannerView}
+          openTripToolView={openTripToolView}
+        />
+      </React.Activity>
+
+      <React.Activity name="terms-page" mode={view === 'terms' ? 'visible' : 'hidden'}>
+        <LegalView
+          kind="terms"
+          appShellClassName={appShellClassName}
+          isViewPending={isViewPending}
+          navigateToView={navigateToView}
+          openPlannerView={openPlannerView}
+          openTripToolView={openTripToolView}
+        />
       </React.Activity>
 
       {/* Leaflet cannot reconnect its imperative map instance after Activity

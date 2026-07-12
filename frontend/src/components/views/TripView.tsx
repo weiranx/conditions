@@ -15,6 +15,7 @@ import type { Suggestion } from '../../lib/search';
 import { SearchBox } from '../planner/SearchBox';
 import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
+import type { AppView } from '../../hooks/useUrlState';
 
 export type MultiDayTripForecastDay = {
   date: string;
@@ -92,7 +93,7 @@ export interface TripViewProps {
   setTripForecastError: (error: string | null) => void;
   setTripForecastNote: (note: string | null) => void;
   runTripForecast: () => Promise<void>;
-  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs') => void;
+  navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   onUseDayInPlanner: (date: string, startTime: string) => void;
 }

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, useMap, useMapEvents } from 'react-leaflet';
 import { AlertTriangle } from 'lucide-react';
 import { APP_DISCLAIMER_TEXT } from './constants';
+import { LegalLinks } from './legal-links';
+import type { AppView } from '../hooks/useUrlState';
 import type L from 'leaflet';
 
 export function LocationMarker({ position, setPosition, locked = false }: { position: L.LatLng; setPosition: (p: L.LatLng) => void; locked?: boolean }) {
@@ -92,13 +94,14 @@ export function CtrlScrollZoom() {
   );
 }
 
-export function AppDisclaimer({ compact = false }: { compact?: boolean }) {
+export function AppDisclaimer({ compact = false, navigateToView }: { compact?: boolean; navigateToView?: (view: AppView) => void }) {
   return (
     <aside className={`app-disclaimer ${compact ? 'compact' : ''}`} role="note" aria-label="Safety disclaimer">
       <div className="app-disclaimer-title">
         <AlertTriangle size={14} /> Disclaimer
       </div>
       <p>{APP_DISCLAIMER_TEXT}</p>
+      <LegalLinks navigateToView={navigateToView} className="app-disclaimer-legal" />
     </aside>
   );
 }
