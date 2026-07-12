@@ -8174,11 +8174,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
   color: var(--text-dark);
 }
 
-.route-analysis-text p {
+.route-analysis-text > p {
   margin: 0 0 14px;
 }
 
-.route-analysis-text p:last-child {
+.route-analysis-text > p:last-child {
   margin-bottom: 0;
 }
 

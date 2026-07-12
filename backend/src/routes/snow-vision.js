@@ -12,16 +12,20 @@ const SYSTEM_PROMPT = [
   'centered on the requested coordinates and covering about 5x5 km).',
   'You may also be given raw ground-station snowpack data (SNOTEL/CDEC/NOHRSC snow depth and SWE readings,',
   'and a comparison to the historical average for this date) as JSON.',
-  'In 4-6 sentences, describe snow coverage relevant to backcountry travel: rough percent coverage,',
+  'Turn the evidence into a quick, friendly briefing for a backcountry traveler. In 4-6 sentences, describe snow coverage: rough percent coverage,',
   'how patchy/continuous it is, and any obvious bare or rocky terrain — then cross-reference that with',
   'the ground-station data if provided, noting whether the visual coverage and the measured depth/SWE agree,',
   'and what the historical comparison implies about how the snowpack got here. If ground-station data is absent',
   'or from a station far from the imaged area, say so and rely on the image alone.',
   'Be direct and concrete. This resolution cannot resolve small features like cornices, crevasses, or thin ice —',
-  'do not speculate about them. Structure the response as 2-3 short paragraphs separated by a single blank line',
-  '(e.g. visual coverage, then ground-station cross-reference). Plain prose only: no markdown of any kind —',
-  'no headings, no "#" characters, no bold/italic asterisks, no bullet lists, no title at the start.',
+  'do not speculate about them. Return exactly these three labeled sections, each on its own line, with no other introduction or closing:',
+  'SNOW COVERAGE: 1-2 sentences describing what is visibly snow-covered, patchy, bare, or rocky.',
+  'GROUND CHECK: 1-2 sentences cross-referencing station measurements and imagery freshness, including uncertainty or missing data.',
+  'TRAVEL TAKEAWAY: 1 concise sentence explaining the practical planning implication without inventing small-scale hazards.',
+  'Plain text only: no markdown, bullets, numbered lists, "#" characters, or bold/italic asterisks.',
 ].join(' ');
+
+const SNOW_VISION_PROMPT_VERSION = '2';
 
 const lonLatToTile = (lon, lat, zoom) => {
   const latRad = (lat * Math.PI) / 180;
@@ -55,7 +59,7 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askAIVision }) => {
     // Keying by tile (not raw lat/lon) means nearby requests within the same ~5km tile
     // share one Sentinel Hub fetch. The snowpack payload and unit preference are appended
     // to the key so a changed ground-station reading or unit switch busts the cache.
-    const cacheKey = `${SNOW_VISION_ZOOM}/${x}/${y}|${metric ? 'm' : 'ft'}|${snowpackJson}`;
+    const cacheKey = `${SNOW_VISION_PROMPT_VERSION}|${SNOW_VISION_ZOOM}/${x}/${y}|${metric ? 'm' : 'ft'}|${snowpackJson}`;
 
     try {
       const result = await snowVisionCache.getOrFetch(cacheKey, async () => {

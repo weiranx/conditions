@@ -180,6 +180,109 @@ export function formatAiNarrativeParagraphs(input: string | null | undefined): s
   return paragraphs;
 }
 
+export type AiBriefSectionKind = 'overview' | 'watch' | 'comfort' | 'evidence' | 'gear' | 'action' | 'note';
+
+export interface AiBriefSection {
+  kind: AiBriefSectionKind;
+  label: string;
+  text: string;
+}
+
+interface AiBriefSectionDefinition {
+  prefix: string;
+  kind: AiBriefSectionKind;
+  label: string;
+}
+
+const SUMMARY_SECTION_DEFINITIONS: AiBriefSectionDefinition[] = [
+  { prefix: 'big picture', kind: 'overview', label: 'Big picture' },
+  { prefix: 'watch closely', kind: 'watch', label: 'Watch closely' },
+  { prefix: 'comfort check', kind: 'comfort', label: 'Comfort check' },
+  { prefix: 'best move', kind: 'action', label: 'Best move' },
+];
+
+const SNOW_SECTION_DEFINITIONS: AiBriefSectionDefinition[] = [
+  { prefix: 'snow coverage', kind: 'overview', label: 'Snow coverage' },
+  { prefix: 'ground check', kind: 'evidence', label: 'Ground check' },
+  { prefix: 'travel takeaway', kind: 'action', label: 'Travel takeaway' },
+];
+
+const ROUTE_SECTION_DEFINITIONS: AiBriefSectionDefinition[] = [
+  { prefix: 'hazard zones', kind: 'overview', label: 'Hazard zones' },
+  { prefix: 'weather window', kind: 'watch', label: 'Weather window' },
+  { prefix: 'other concerns', kind: 'evidence', label: 'Other concerns' },
+  { prefix: 'gear check', kind: 'gear', label: 'Gear check' },
+  { prefix: 'bottom line', kind: 'action', label: 'Bottom line' },
+];
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function formatAiSections(
+  input: string | null | undefined,
+  definitions: AiBriefSectionDefinition[],
+  fallbackDefinitions: AiBriefSectionDefinition[],
+): AiBriefSection[] {
+  const paragraphs = formatAiNarrativeParagraphs(input);
+  if (paragraphs.length === 0) {
+    return [];
+  }
+
+  const labeledSections: AiBriefSection[] = [];
+  const prefixes = definitions.map(({ prefix }) => escapeRegExp(prefix)).join('|');
+  const sectionBoundary = new RegExp(`\\s+(?=(?:${prefixes})\\s*:)`, 'i');
+  const normalizedLines = paragraphs.flatMap((paragraph) =>
+    paragraph
+      .split(sectionBoundary)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
+
+  normalizedLines.forEach((line) => {
+    const definition = definitions.find(({ prefix }) =>
+      new RegExp(`^${escapeRegExp(prefix)}\\s*:\\s*`, 'i').test(line),
+    );
+    if (!definition) {
+      return;
+    }
+    const sectionText = line.replace(new RegExp(`^${escapeRegExp(definition.prefix)}\\s*:\\s*`, 'i'), '').trim();
+    if (sectionText) {
+      labeledSections.push({ kind: definition.kind, label: definition.label, text: sectionText });
+    }
+  });
+
+  if (labeledSections.length >= 2) {
+    return labeledSections;
+  }
+
+  return paragraphs.map((text, index) => {
+    const isLastParagraph = index === paragraphs.length - 1 && paragraphs.length > 1;
+    const definition = isLastParagraph
+      ? fallbackDefinitions[fallbackDefinitions.length - 1]
+      : fallbackDefinitions[Math.min(index, fallbackDefinitions.length - 1)];
+    return { kind: definition?.kind || 'note', label: definition?.label || 'Field note', text };
+  });
+}
+
+// The AI prompts emit labeled lines. These formatters also support legacy
+// paragraph responses so cached or imperfect model output still becomes cards.
+export function formatAiBriefSections(input: string | null | undefined): AiBriefSection[] {
+  return formatAiSections(input, SUMMARY_SECTION_DEFINITIONS, [
+    SUMMARY_SECTION_DEFINITIONS[0],
+    { prefix: '', kind: 'note', label: 'Field note' },
+    SUMMARY_SECTION_DEFINITIONS[3],
+  ]);
+}
+
+export function formatSnowVisionSections(input: string | null | undefined): AiBriefSection[] {
+  return formatAiSections(input, SNOW_SECTION_DEFINITIONS, SNOW_SECTION_DEFINITIONS);
+}
+
+export function formatRouteAnalysisSections(input: string | null | undefined): AiBriefSection[] {
+  return formatAiSections(input, ROUTE_SECTION_DEFINITIONS, ROUTE_SECTION_DEFINITIONS);
+}
+
 export function escapeHtml(input: string): string {
   return input
     .replace(/&/g, '&amp;')

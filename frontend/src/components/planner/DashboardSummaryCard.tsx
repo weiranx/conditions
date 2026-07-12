@@ -10,13 +10,13 @@ import {
   Sun,
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
-import { formatAiNarrativeParagraphs } from '../../app/text-utils';
+import { formatAiBriefSections } from '../../app/text-utils';
+import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
 
 const GAUGE_R = 56;
 const GAUGE_C = 2 * Math.PI * GAUGE_R; // ≈ 351.86
-
 export interface DashboardSummaryCardProps {
   aiAvailable: boolean;
   safetyData: SafetyData;
@@ -85,6 +85,7 @@ export function DashboardSummaryCard({
         : 'poor';
   const dashOffset = GAUGE_C * (1 - Math.max(0, Math.min(100, score)) / 100);
   const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : `${decision.level} risk`;
+  const aiBriefSections = formatAiBriefSections(aiBriefNarrative);
   const maxGustMph = preferences.maxWindGustMph || 35;
 
   const gustValues = travelWindowRows.map((r) => r.gust).filter((n) => Number.isFinite(n));
@@ -220,12 +221,12 @@ export function DashboardSummaryCard({
         {aiAvailable && (
           <div className="ssr-dash-ai">
           {aiBriefNarrative ? (
-            <div className="ssr-dash-ai-text">
-              <div className="ssr-dash-ai-label"><Sparkles size={14} aria-hidden /> AI field analysis</div>
-              {formatAiNarrativeParagraphs(aiBriefNarrative).map((para, idx) => (
-                <p key={idx}>{para}</p>
-              ))}
-            </div>
+            <AiInsightBriefing
+              title="Your field briefing"
+              subtitle="The quick read on what matters most for this plan."
+              sections={aiBriefSections}
+              formatText={localizeUnitText}
+            />
           ) : aiBriefError ? (
             <div className="ssr-dash-ai-error">
               <span>{aiBriefError}</span>

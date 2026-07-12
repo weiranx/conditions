@@ -370,14 +370,16 @@ ${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNam
 Raw safety report per waypoint, trailhead to summit (JSON):
 ${reportsJson}
 
-Write a thorough route-wide briefing covering:
-1. Key hazard zones by elevation and where conditions change significantly — reference the specific waypoint names, in prose
-2. Weather windows — when storms arrive, when winds intensify, or when conditions deteriorate (do NOT assume pace or method of travel), in prose
-3. Any secondary hazards worth flagging from the reports (avalanche, terrain surface, fire/heat risk, air quality, freezing level, thunderstorm timing) — only discuss what's actually present in the data, in prose
-4. Gear needs specific to current route conditions, as a short bullet list (- item)
-5. Overall go / go-with-caution / no-go recommendation with one-line reasoning, in prose
+Turn the route data into a concise, friendly field briefing rather than a long essay. Reference specific waypoint names and actual values. Do not assume pace or method of travel. Only discuss hazards present in the reports, and clearly note unavailable waypoint data.
 
-Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it helps scannability), and only use a bullet list for section 4. Do not add a title or heading at the start.`,
+Return exactly these five labeled sections, each on its own line, with no other introduction or closing:
+HAZARD ZONES: 1-2 sentences explaining where conditions change significantly by waypoint or elevation.
+WEATHER WINDOW: 1-2 sentences explaining when storms, winds, or other weather conditions deteriorate.
+OTHER CONCERNS: 1-2 sentences covering only relevant secondary hazards such as avalanche conditions, terrain surface, freezing level, heat, fire, air quality, or thunderstorms.
+GEAR CHECK: 2-4 short condition-specific items separated by semicolons, with no bullets.
+BOTTOM LINE: 1 concise sentence stating go, go-with-caution, or no-go and why.
+
+Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
         { maxTokens: 4096 }
       ), 60000, 'Route synthesis');
 

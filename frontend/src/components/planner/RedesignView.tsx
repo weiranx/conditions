@@ -26,8 +26,9 @@ import {
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
-import { formatAiNarrativeParagraphs } from '../../app/text-utils';
+import { formatSnowVisionSections } from '../../app/text-utils';
 import { getTemperatureBand } from '../../app/weather-display';
+import { AiInsightBriefing } from './AiInsightBriefing';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
@@ -1272,29 +1273,30 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
               {aiAvailable && (
                 <div style={{ marginTop: '14px' }}>
                   {snowVisionAnalysis ? (
-                    <div className="ssr-dash-ai-text">
-                    <div className="ssr-dash-ai-label"><Satellite size={14} aria-hidden /> Satellite snow analysis</div>
-                    {snowVisionImage && (
-                      <img
-                        src={snowVisionImage}
-                        alt="Satellite view of the terrain analyzed above"
-                        className="ssr-snow-vision-img"
-                      />
-                    )}
-                    {formatAiNarrativeParagraphs(snowVisionAnalysis).map((para, idx) => (
-                      <p key={idx}>{para}</p>
-                    ))}
-                    <button
-                      type="button"
-                      className="ssr-snow-vision-map-btn"
-                      onClick={() => {
-                        setMapStyle('satellite');
-                        document.getElementById('planner-main-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }}
-                    >
-                      <Layers size={12} aria-hidden /> View live on the map — toggle to Satellite above
-                    </button>
-                    </div>
+                    <AiInsightBriefing
+                      title="Satellite snow briefing"
+                      subtitle="What the image and nearby measurements suggest."
+                      sections={formatSnowVisionSections(snowVisionAnalysis)}
+                      media={snowVisionImage ? (
+                        <img
+                          src={snowVisionImage}
+                          alt="Satellite view of the terrain analyzed in this briefing"
+                          className="ssr-snow-vision-img"
+                        />
+                      ) : undefined}
+                      footer={(
+                        <button
+                          type="button"
+                          className="ssr-snow-vision-map-btn"
+                          onClick={() => {
+                            setMapStyle('satellite');
+                            document.getElementById('planner-main-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                        >
+                          <Layers size={12} aria-hidden /> View live on the map — toggle to Satellite above
+                        </button>
+                      )}
+                    />
                   ) : snowVisionError ? (
                     <div className="ssr-dash-ai-error">
                     <span>{snowVisionError}</span>

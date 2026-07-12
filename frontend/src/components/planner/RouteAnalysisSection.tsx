@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { ExternalLink, FileCheck2, Upload } from 'lucide-react';
-import { renderSimpleMarkdown } from '../../app/markdown';
+import { formatRouteAnalysisSections } from '../../app/text-utils';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
+import { AiInsightBriefing } from './AiInsightBriefing';
 
 const RouteConditionsProfile = lazy(() =>
   import('./cards/RouteConditionsProfile').then((module) => ({ default: module.RouteConditionsProfile })),
@@ -319,7 +320,11 @@ export function RouteAnalysisSection({
             />
           </Suspense>
           <div className="route-analysis-text">
-            {renderSimpleMarkdown(routeAnalysis.analysis)}
+            <AiInsightBriefing
+              title="Route field briefing"
+              subtitle="Where conditions change and what that means for the route."
+              sections={formatRouteAnalysisSections(routeAnalysis.analysis)}
+            />
           </div>
         </div>
       )}
