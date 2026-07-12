@@ -715,6 +715,53 @@ input {
 
 .logs-dashboard { display: grid; gap: 18px; }
 
+.logs-dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.logs-dashboard-toolbar h2,
+.logs-chart-head h2 { margin: 0 0 3px; color: var(--ui-text); font-size: 15px; }
+.logs-dashboard-toolbar p,
+.logs-chart-head p { margin: 0; color: var(--ui-text-3); font-size: 11.5px; }
+
+.logs-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logs-range-control {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+}
+
+.logs-range-control button {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-3);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.logs-range-control button:hover { color: var(--ui-text); }
+.logs-range-control button.is-active {
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-xs);
+  color: var(--ui-brand-strong);
+}
+
 .logs-state-card,
 .logs-alert {
   display: flex;
@@ -742,7 +789,7 @@ input {
 
 .logs-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -773,7 +820,108 @@ input {
 .logs-metric-icon.is-amber { background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface)); color: var(--ui-caution-ink); }
 .logs-metric-card div { display: grid; min-width: 0; }
 .logs-metric-card strong { color: var(--ui-text); font-size: 20px; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.logs-metric-card span:last-child { overflow: hidden; color: var(--ui-text-3); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.logs-metric-card span:last-child { color: var(--ui-text-3); font-size: 11.5px; line-height: 1.35; }
+
+.logs-analytics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
+  gap: 12px;
+}
+
+.logs-chart-card {
+  min-width: 0;
+  padding: 17px 18px 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 9px;
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.logs-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 43px;
+}
+
+.logs-chart-head > svg { flex: none; color: var(--ui-text-4); }
+.logs-chart-wrap { height: 238px; margin-top: 8px; }
+.logs-chart-wrap-compact { height: 205px; }
+.logs-chart-wrap .recharts-surface { overflow: visible; }
+.logs-chart-wrap .recharts-tooltip-wrapper { outline: none; }
+
+.logs-location-list {
+  display: grid;
+  gap: 13px;
+  margin: 16px 0 3px;
+  padding: 0;
+  list-style: none;
+}
+
+.logs-location-list li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 9px;
+}
+
+.logs-location-rank {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-3);
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.logs-location-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.logs-location-label strong {
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logs-location-label span,
+.logs-location-share {
+  color: var(--ui-text-3);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.logs-location-track {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ui-surface-subtle);
+}
+
+.logs-location-track > span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+  background: var(--ui-brand-strong);
+}
+
+.logs-location-share { text-align: right; }
+.logs-chart-empty { display: grid; place-items: center; min-height: 205px; color: var(--ui-text-4); font-size: 12px; }
 
 .logs-panel {
   overflow: hidden;
@@ -10406,7 +10554,15 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-page { padding-top: 28px; }
   .logs-page-head { margin-bottom: 22px; }
   .logs-page-head > .logs-btn { flex: none; }
+  .logs-dashboard-toolbar { align-items: flex-start; flex-direction: column; }
+  .logs-toolbar-actions { width: 100%; flex-wrap: wrap; }
+  .logs-toolbar-actions .logs-refresh-status { width: 100%; text-align: left; }
+  .logs-range-control { flex: 1; }
+  .logs-range-control button { flex: 1; }
   .logs-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .logs-analytics-grid { grid-template-columns: minmax(0, 1fr); }
+  .logs-chart-card { padding-inline: 14px; }
+  .logs-chart-wrap { height: 220px; }
   .logs-controls { align-items: stretch; flex-direction: column; }
   .logs-search { width: 100%; }
   .logs-filter-tabs { width: 100%; margin-left: 0; overflow-x: auto; }

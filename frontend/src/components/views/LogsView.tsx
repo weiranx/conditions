@@ -1,20 +1,35 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  Activity,
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   Clock3,
   Download,
   ExternalLink,
-  FileClock,
+  Gauge,
   KeyRound,
   LoaderCircle,
   Lock,
+  MapPinned,
   RefreshCw,
   Search,
   ShieldCheck,
   Users,
   X,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { fetchApi } from '../../lib/api-client';
 import type { AppView } from '../../hooks/useUrlState';
 import { ProductNav } from './ProductNav';
@@ -74,9 +89,9 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
       <main className="logs-page">
         <header className="logs-page-head">
           <div>
-            <div className="logs-kicker"><FileClock size={14} aria-hidden /> Operations</div>
-            <h1>Report logs</h1>
-            <p>Monitor safety report traffic, response health, and processing time from the last seven days.</p>
+            <div className="logs-kicker"><BarChart3 size={14} aria-hidden /> Analytics</div>
+            <h1>Report analytics</h1>
+            <p>Understand report demand, response health, and processing performance across the last seven days.</p>
           </div>
           {secretKey && (
             <button type="button" className="logs-btn logs-btn-quiet" onClick={() => lockLogs()}>
@@ -123,6 +138,21 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
 
 type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' | 'durationMs' | 'ip';
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial';
+type AnalyticsRange = '24h' | '7d';
+
+const ANALYTICS_RANGES: Array<{ value: AnalyticsRange; label: string; durationMs: number }> = [
+  { value: '24h', label: 'Last 24 hours', durationMs: 24 * 60 * 60 * 1000 },
+  { value: '7d', label: 'Last 7 days', durationMs: 7 * 24 * 60 * 60 * 1000 },
+];
+
+const CHART_TOOLTIP_STYLE: React.CSSProperties = {
+  border: '1px solid var(--ui-line-strong)',
+  borderRadius: 8,
+  background: 'var(--ui-surface)',
+  boxShadow: 'var(--ui-shadow-md)',
+  color: 'var(--ui-text)',
+  fontSize: 12,
+};
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: 'All' },
@@ -152,8 +182,8 @@ function matchesStatus(entry: ReportLogEntry, filter: StatusFilter): boolean {
   return true;
 }
 
-function formatDuration(durationMs: number): string {
-  if (!Number.isFinite(durationMs)) return '—';
+function formatDuration(durationMs: number | null): string {
+  if (durationMs == null || !Number.isFinite(durationMs)) return '—';
   return durationMs >= 1000 ? `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s` : `${durationMs}ms`;
 }
 
@@ -166,6 +196,84 @@ function formatLogTime(timestamp: string): { primary: string; secondary: string 
     primary: date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
     secondary: sameDay ? 'Today' : date.toLocaleDateString([], { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' }),
   };
+}
+
+function percentile(values: number[], percentileValue: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(percentileValue * sorted.length) - 1));
+  return sorted[index];
+}
+
+function isHealthyResponse(entry: ReportLogEntry): boolean {
+  return entry.statusCode === 200 && entry.partialData !== true;
+}
+
+function buildTrendData(entries: ReportLogEntry[], range: AnalyticsRange, now: number) {
+  const rangeDuration = ANALYTICS_RANGES.find((option) => option.value === range)?.durationMs ?? ANALYTICS_RANGES[1].durationMs;
+  const bucketDuration = range === '24h' ? 2 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000;
+  const start = now - rangeDuration;
+  const bucketCount = Math.ceil(rangeDuration / bucketDuration);
+  const buckets = Array.from({ length: bucketCount }, (_, index) => {
+    const bucketStart = start + index * bucketDuration;
+    const date = new Date(bucketStart);
+    return {
+      timestamp: bucketStart,
+      label: range === '24h'
+        ? date.toLocaleTimeString([], { hour: 'numeric' })
+        : date.toLocaleDateString([], { weekday: 'short' }),
+      period: range === '24h'
+        ? date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric' })
+        : date.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric' }),
+      healthy: 0,
+      partial: 0,
+      errors: 0,
+      durations: [] as number[],
+    };
+  });
+
+  entries.forEach((entry) => {
+    const timestamp = new Date(entry.timestamp).getTime();
+    if (!Number.isFinite(timestamp) || timestamp < start || timestamp > now) return;
+    const bucket = buckets[Math.min(bucketCount - 1, Math.floor((timestamp - start) / bucketDuration))];
+    if (!bucket) return;
+    if (entry.statusCode !== 200) bucket.errors += 1;
+    else if (entry.partialData === true) bucket.partial += 1;
+    else bucket.healthy += 1;
+    if (Number.isFinite(entry.durationMs)) bucket.durations.push(entry.durationMs);
+  });
+
+  return buckets.map(({ durations, ...bucket }) => ({
+    ...bucket,
+    total: bucket.healthy + bucket.partial + bucket.errors,
+    medianSeconds: durations.length ? percentile(durations, 0.5) / 1000 : null,
+    p95Seconds: durations.length ? percentile(durations, 0.95) / 1000 : null,
+  }));
+}
+
+function buildHourlyDistribution(entries: ReportLogEntry[]) {
+  const hours = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: new Date(2026, 0, 1, hour).toLocaleTimeString([], { hour: 'numeric' }),
+    requests: 0,
+  }));
+  entries.forEach((entry) => {
+    const date = new Date(entry.timestamp);
+    if (!Number.isNaN(date.getTime())) hours[date.getHours()].requests += 1;
+  });
+  return hours;
+}
+
+function buildTopLocations(entries: ReportLogEntry[]) {
+  const counts = new Map<string, number>();
+  entries.forEach((entry) => {
+    const location = entry.name?.trim() || 'Unnamed report';
+    counts.set(location, (counts.get(location) ?? 0) + 1);
+  });
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count, share: entries.length ? (count / entries.length) * 100 : 0 }))
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+    .slice(0, 6);
 }
 
 function escapeCsv(value: string | number | boolean | null): string {
@@ -209,6 +317,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
   const [sortAsc, setSortAsc] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
   const hasLoadedRef = useRef(false);
 
   const fetchLogs = useCallback(async (background = false) => {
@@ -245,21 +354,57 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
     return () => window.clearInterval(interval);
   }, [fetchLogs]);
 
+  const referenceTime = lastRefreshed?.getTime() ?? Date.now();
+  const selectedRange = ANALYTICS_RANGES.find((option) => option.value === analyticsRange) ?? ANALYTICS_RANGES[1];
+
+  const rangeLogs = useMemo(() => {
+    const cutoff = referenceTime - selectedRange.durationMs;
+    return logs.filter((entry) => {
+      const timestamp = new Date(entry.timestamp).getTime();
+      return Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= referenceTime;
+    });
+  }, [logs, referenceTime, selectedRange.durationMs]);
+
   const metrics = useMemo(() => {
-    const completed = logs.filter((entry) => entry.statusCode === 200).length;
-    const partial = logs.filter((entry) => entry.partialData === true).length;
-    const durations = logs.map((entry) => entry.durationMs).filter(Number.isFinite);
+    const healthy = rangeLogs.filter(isHealthyResponse).length;
+    const issues = rangeLogs.length - healthy;
+    const durations = rangeLogs.map((entry) => entry.durationMs).filter(Number.isFinite);
+    const previousStart = referenceTime - selectedRange.durationMs * 2;
+    const previousEnd = referenceTime - selectedRange.durationMs;
+    const previousCount = analyticsRange === '24h'
+      ? logs.filter((entry) => {
+        const timestamp = new Date(entry.timestamp).getTime();
+        return Number.isFinite(timestamp) && timestamp >= previousStart && timestamp < previousEnd;
+      }).length
+      : null;
+    const volumeDelta = previousCount && previousCount > 0
+      ? Math.round(((rangeLogs.length - previousCount) / previousCount) * 100)
+      : null;
     return {
-      successRate: logs.length ? Math.round((completed / logs.length) * 100) : 0,
-      partial,
-      averageDuration: durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : 0,
-      uniqueVisitors: new Set(logs.map((entry) => entry.ip).filter(Boolean)).size,
+      total: rangeLogs.length,
+      healthyRate: rangeLogs.length ? Math.round((healthy / rangeLogs.length) * 1000) / 10 : null,
+      p95Duration: durations.length ? percentile(durations, 0.95) : null,
+      medianDuration: durations.length ? percentile(durations, 0.5) : null,
+      uniqueVisitors: new Set(rangeLogs.map((entry) => entry.ip).filter(Boolean)).size,
+      issues,
+      volumeDelta,
     };
-  }, [logs]);
+  }, [analyticsRange, logs, rangeLogs, referenceTime, selectedRange.durationMs]);
+
+  const trendData = useMemo(
+    () => buildTrendData(rangeLogs, analyticsRange, referenceTime),
+    [analyticsRange, rangeLogs, referenceTime],
+  );
+  const hourlyDistribution = useMemo(() => buildHourlyDistribution(rangeLogs), [rangeLogs]);
+  const topLocations = useMemo(() => buildTopLocations(rangeLogs), [rangeLogs]);
+  const busiestHour = useMemo(
+    () => hourlyDistribution.reduce((busiest, current) => current.requests > busiest.requests ? current : busiest, hourlyDistribution[0]),
+    [hourlyDistribution],
+  );
 
   const filteredAndSorted = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const result = logs.filter((entry) => {
+    const result = rangeLogs.filter((entry) => {
       if (!matchesStatus(entry, statusFilter)) return false;
       if (!normalizedQuery) return true;
       return [entry.name, entry.lat, entry.lon, entry.date, entry.startTime, entry.statusCode, entry.safetyScore, entry.durationMs, entry.ip, entry.userAgent]
@@ -271,7 +416,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
       const comparison = left < right ? -1 : left > right ? 1 : 0;
       return sortAsc ? comparison : -comparison;
     });
-  }, [logs, query, statusFilter, sortKey, sortAsc]);
+  }, [query, rangeLogs, statusFilter, sortKey, sortAsc]);
 
   const handleSort = (key: LogSortKey) => {
     if (key === sortKey) setSortAsc((current) => !current);
@@ -295,22 +440,153 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
         </div>
       )}
 
-      <section className="logs-metrics" aria-label="Log summary">
+      <section className="logs-dashboard-toolbar" aria-label="Analytics controls">
+        <div>
+          <h2>Overview</h2>
+          <p>{rangeLogs.length.toLocaleString()} reports in the selected period</p>
+        </div>
+        <div className="logs-toolbar-actions">
+          <span className="logs-refresh-status" aria-live="polite">
+            {refreshing ? 'Refreshing…' : lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+          </span>
+          <div className="logs-range-control" aria-label="Analytics date range">
+            {ANALYTICS_RANGES.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                className={analyticsRange === option.value ? 'is-active' : ''}
+                onClick={() => setAnalyticsRange(option.value)}
+                aria-pressed={analyticsRange === option.value}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="logs-icon-btn" onClick={() => void fetchLogs(true)} disabled={refreshing} title="Refresh analytics" aria-label="Refresh analytics">
+            <RefreshCw className={refreshing ? 'logs-spin' : ''} size={16} aria-hidden />
+          </button>
+        </div>
+      </section>
+
+      <section className="logs-metrics" aria-label="Report analytics summary">
+        <article className="logs-metric-card">
+          <span className="logs-metric-icon"><Activity size={18} aria-hidden /></span>
+          <div>
+            <strong>{metrics.total.toLocaleString()}</strong>
+            <span>Total reports{metrics.volumeDelta != null ? ` · ${metrics.volumeDelta >= 0 ? '+' : ''}${metrics.volumeDelta}% vs prior 24h` : ''}</span>
+          </div>
+        </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon is-green"><CheckCircle2 size={18} aria-hidden /></span>
-          <div><strong>{metrics.successRate}%</strong><span>Successful responses</span></div>
+          <div><strong>{metrics.healthyRate == null ? '—' : `${metrics.healthyRate}%`}</strong><span>Fully healthy responses</span></div>
         </article>
         <article className="logs-metric-card">
-          <span className="logs-metric-icon"><Clock3 size={18} aria-hidden /></span>
-          <div><strong>{formatDuration(metrics.averageDuration)}</strong><span>Average duration</span></div>
-        </article>
-        <article className="logs-metric-card">
-          <span className="logs-metric-icon is-amber"><AlertTriangle size={18} aria-hidden /></span>
-          <div><strong>{metrics.partial}</strong><span>Partial responses</span></div>
+          <span className="logs-metric-icon"><Gauge size={18} aria-hidden /></span>
+          <div><strong>{formatDuration(metrics.p95Duration)}</strong><span>P95 response time · median {formatDuration(metrics.medianDuration)}</span></div>
         </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon"><Users size={18} aria-hidden /></span>
-          <div><strong>{metrics.uniqueVisitors}</strong><span>Unique networks</span></div>
+          <div><strong>{metrics.uniqueVisitors}</strong><span>Unique masked networks</span></div>
+        </article>
+        <article className="logs-metric-card">
+          <span className="logs-metric-icon is-amber"><AlertTriangle size={18} aria-hidden /></span>
+          <div><strong>{metrics.issues}</strong><span>Partial or failed responses</span></div>
+        </article>
+      </section>
+
+      <section className="logs-analytics-grid" aria-label="Report activity charts">
+        <article className="logs-chart-card logs-chart-card-wide">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Request health over time</h2>
+              <p>Report volume by response outcome · {analyticsRange === '24h' ? '2-hour' : '12-hour'} intervals</p>
+            </div>
+            <Activity size={18} aria-hidden />
+          </div>
+          <div className="logs-chart-wrap">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 500, height: 238 }}>
+              <BarChart data={trendData} margin={{ top: 8, right: 6, bottom: 0, left: -18 }}>
+                <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={28} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
+                <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} cursor={{ fill: 'var(--ui-surface-subtle)' }} />
+                <Legend iconType="square" iconSize={8} wrapperStyle={{ color: 'var(--ui-text-3)', fontSize: 11, paddingTop: 8 }} />
+                <Bar dataKey="healthy" name="Healthy" stackId="responses" fill="var(--ui-brand-strong)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="partial" name="Partial" stackId="responses" fill="var(--ui-risk-3)" />
+                <Bar dataKey="errors" name="Failed" stackId="responses" fill="var(--ui-risk-4)" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+
+        <article className="logs-chart-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Response time</h2>
+              <p>Median and 95th percentile · seconds</p>
+            </div>
+            <Clock3 size={18} aria-hidden />
+          </div>
+          <div className="logs-chart-wrap">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 360, height: 238 }}>
+              <LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -14 }}>
+                <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={28} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} tickFormatter={(value) => `${value}s`} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value, name) => [`${Number(value).toFixed(1)}s`, name]} />
+                <Legend iconType="plainline" wrapperStyle={{ color: 'var(--ui-text-3)', fontSize: 11, paddingTop: 8 }} />
+                <Line type="monotone" dataKey="p95Seconds" name="P95" stroke="var(--ui-risk-3)" strokeWidth={2} dot={false} connectNulls />
+                <Line type="monotone" dataKey="medianSeconds" name="Median" stroke="var(--ui-brand-strong)" strokeWidth={2} dot={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+
+        <article className="logs-chart-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Top report locations</h2>
+              <p>Highest request volume in the selected period</p>
+            </div>
+            <MapPinned size={18} aria-hidden />
+          </div>
+          {topLocations.length ? (
+            <ol className="logs-location-list">
+              {topLocations.map((location, index) => (
+                <li key={location.name}>
+                  <span className="logs-location-rank">{index + 1}</span>
+                  <div>
+                    <div className="logs-location-label"><strong>{location.name}</strong><span>{location.count.toLocaleString()}</span></div>
+                    <span className="logs-location-track"><span style={{ width: `${location.share}%` }} /></span>
+                  </div>
+                  <span className="logs-location-share">{Math.round(location.share)}%</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="logs-chart-empty">No location activity in this period.</div>
+          )}
+        </article>
+
+        <article className="logs-chart-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Requests by hour</h2>
+              <p>{rangeLogs.length ? `Local request time · busiest at ${busiestHour.label}` : 'Local request time · no requests in this period'}</p>
+            </div>
+            <BarChart3 size={18} aria-hidden />
+          </div>
+          <div className="logs-chart-wrap logs-chart-wrap-compact">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 360, height: 205 }}>
+              <BarChart data={hourlyDistribution} margin={{ top: 8, right: 6, bottom: 0, left: -18 }}>
+                <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" interval={2} axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
+                <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} cursor={{ fill: 'var(--ui-surface-subtle)' }} />
+                <Bar dataKey="requests" name="Reports" fill="var(--ui-brand-strong)" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </article>
       </section>
 
@@ -318,15 +594,9 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
         <div className="logs-panel-head">
           <div>
             <h2>Request activity</h2>
-            <p>{logs.length} retained request{logs.length === 1 ? '' : 's'} · up to seven days</p>
+            <p>Raw report details for {selectedRange.label.toLowerCase()}</p>
           </div>
           <div className="logs-panel-actions">
-            <span className="logs-refresh-status" aria-live="polite">
-              {refreshing ? 'Refreshing…' : lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
-            </span>
-            <button type="button" className="logs-icon-btn" onClick={() => void fetchLogs(true)} disabled={refreshing} title="Refresh logs" aria-label="Refresh logs">
-              <RefreshCw className={refreshing ? 'logs-spin' : ''} size={16} aria-hidden />
-            </button>
             <button type="button" className="logs-btn logs-btn-quiet" onClick={() => downloadCsv(filteredAndSorted)} disabled={filteredAndSorted.length === 0}>
               <Download size={15} aria-hidden /> Export CSV
             </button>
@@ -357,6 +627,8 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
 
         {logs.length === 0 ? (
           <div className="logs-empty"><ShieldCheck size={26} aria-hidden /><h3>No report requests yet</h3><p>New safety reports will appear here automatically.</p></div>
+        ) : rangeLogs.length === 0 ? (
+          <div className="logs-empty"><Clock3 size={26} aria-hidden /><h3>No requests in this period</h3><p>Choose a longer date range to see retained report activity.</p></div>
         ) : filteredAndSorted.length === 0 ? (
           <div className="logs-empty"><Search size={26} aria-hidden /><h3>No matching requests</h3><p>Try a different search or status filter.</p><button type="button" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Clear filters</button></div>
         ) : (
@@ -402,7 +674,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
           </div>
         )}
         <footer className="logs-panel-foot">
-          <span>Showing {filteredAndSorted.length} of {logs.length}</span>
+          <span>Showing {filteredAndSorted.length} of {rangeLogs.length} in this period</span>
           <span>Auto-refreshes every 30 seconds</span>
         </footer>
       </section>

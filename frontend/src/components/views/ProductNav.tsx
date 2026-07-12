@@ -1,4 +1,4 @@
-import { CalendarRange, FileClock, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, CalendarRange, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import '../../styles/page-chrome.css';
 
@@ -22,7 +22,7 @@ export function ProductNav({
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
   ];
   if (active === 'logs') {
-    items.push({ id: 'logs', label: 'Logs', icon: FileClock, action: () => navigateToView('logs') });
+    items.push({ id: 'logs', label: 'Analytics', icon: BarChart3, action: () => navigateToView('logs') });
   }
 
   return (
