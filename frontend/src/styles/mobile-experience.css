@@ -1,0 +1,431 @@
+/*
+ * Mobile interaction layer.
+ *
+ * Component styles own the visual system. This file only normalizes the
+ * small-screen behavior shared across views: comfortable tap targets,
+ * iOS-safe form sizing, touch-friendly horizontal rails, and denser layouts
+ * that stay readable without overflowing the viewport.
+ */
+
+@media (max-width: 640px) {
+  html {
+    scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+
+  body {
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  /* Avoid Safari zooming the page when a compact form field receives focus. */
+  .search-bar input,
+  .ssr-trip .ssr-trip-setup-location .search-bar input,
+  .ssr-h-param input,
+  .ssr-trip-setup-field input,
+  .ssr-trip-setup-field select,
+  .ssr-settings .ssr-set-time-input,
+  .ssr-settings .ssr-set-thresh-val input,
+  .date-control input,
+  .date-control select,
+  .ssr-report .report-chat-form textarea,
+  .route-analysis-section input,
+  .route-analysis-section select,
+  .route-analysis-section textarea {
+    font-size: 16px;
+  }
+
+  /* Shared search: full-width, thumb-friendly, and bounded by the viewport. */
+  .search-wrapper {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .search-bar {
+    min-height: 52px;
+  }
+
+  .search-clear-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .suggestions-list {
+    max-height: min(52dvh, 360px);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .suggestion-item {
+    min-height: 48px;
+    padding-block: 12px;
+  }
+
+  /* Fixed bottom navigation remains legible above the home indicator. */
+  .ssr-product-nav {
+    padding-bottom: max(env(safe-area-inset-bottom), 4px);
+  }
+
+  .ssr-product-links button {
+    min-height: 60px;
+    font-size: 11px;
+  }
+
+  .ssr-product-links button svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  /* Landing-page builder: keep inputs stable and popular places swipeable. */
+  .ssr-h-hero-inner {
+    padding-top: max(44px, env(safe-area-inset-top));
+  }
+
+  .ssr-h-param {
+    min-height: 62px;
+  }
+
+  .ssr-h-go {
+    min-height: 52px;
+  }
+
+  .ssr-h-popular {
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-inline: -16px;
+    padding: 2px 16px 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 16px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ssr-h-popular::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ssr-h-popular > span {
+    flex: 0 0 auto;
+    align-self: center;
+  }
+
+  .ssr-h-popular button,
+  .ssr-h-popular button:nth-of-type(n) {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 0 12px;
+    border: 1px solid rgba(72, 99, 82, .32);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .72);
+    font-size: 12px;
+    scroll-snap-align: start;
+  }
+
+  /* Planner controls: preserve context while making every action tappable. */
+  .ssr-shell .header-section .header-nav > .secondary-btn,
+  .ssr-shell .planner-flowbar .map-report-actions .action-btn,
+  .ssr-shell .map-actions-utils .action-btn,
+  .ssr-shell .map-actions-utils .settings-btn,
+  .mobile-map-controls-btn,
+  .now-control-btn {
+    min-height: 48px;
+  }
+
+  .ssr-shell .planner-flow-summary strong,
+  .ssr-shell .planner-flow-summary span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ssr-shell .planner-flowbar .map-report-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ssr-shell .planner-flowbar .map-report-actions .plan-view-report,
+  .ssr-shell .planner-flowbar .map-report-actions .plan-action-primary:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .ssr-shell .map-actions-flat {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ssr-shell .map-actions-flat .date-control,
+  .ssr-shell .map-actions-flat .now-control-btn {
+    min-width: 0;
+  }
+
+  .ssr-shell .map-actions-utils {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .ssr-shell .map-actions-utils .settings-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .ssr-shell .map-ext-links {
+    display: flex;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .ssr-shell .map-actions .map-ext-link-btn,
+  .ssr-shell .map-overlay-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Report cards: tighter rhythm, readable summaries, swipeable detail rails. */
+  .ssr-report.ssr-report,
+  .ssr-report .ssr-main,
+  .ssr-report .ssr-side,
+  .ssr-report .ssr-report-footer {
+    gap: 14px;
+  }
+
+  .ssr-report .ssr-hdr {
+    padding: 17px;
+  }
+
+  .ssr-report .ssr-hdr-title {
+    align-items: flex-start;
+  }
+
+  .ssr-report .ssr-hdr-stats {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .ssr-report .ssr-hdr-stat {
+    min-width: 0;
+    padding: 9px 12px;
+  }
+
+  .ssr-report .ssr-jump-nav {
+    scroll-padding-inline: 8px;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+  }
+
+  .ssr-report .ssr-jump-chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    scroll-snap-align: start;
+  }
+
+  .ssr-strip-rows,
+  .ssr-precip-grid {
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ssr-precip-grid {
+    overflow-x: auto;
+  }
+
+  .ssr-precip-row {
+    min-width: 340px;
+  }
+
+  .ssr-scenario-use,
+  .ssr-scenario-more button,
+  .ssr-dash-ai-btn,
+  .ssr-snow-vision-map-btn {
+    min-height: 44px;
+  }
+
+  /* Multi-day cards become a deliberate, snap-scrolling carousel. */
+  .ssr-trip .ssr-trip-setup-location .search-bar {
+    min-height: 44px;
+  }
+
+  .ssr-trip .ssr-trip-setup-location .search-clear-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ssr-trip-banner-action,
+  .ssr-trip-recommendation-action,
+  .ssr-trip .ssr-btn {
+    min-height: 48px;
+  }
+
+  .ssr-trip-days {
+    scroll-padding-inline: 2px;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ssr-trip-days::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ssr-trip-day {
+    scroll-snap-stop: always;
+  }
+
+  /* Settings section rail stays reachable while moving through a long page. */
+  .ssr-settings .ssr-set-rail {
+    position: sticky;
+    z-index: 45;
+    top: 0;
+    margin-inline: -16px;
+    padding: 8px 16px;
+    border-block: 1px solid color-mix(in oklch, var(--ssr-line) 84%, transparent);
+    background: color-mix(in oklch, var(--ssr-bg) 92%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(16px) saturate(120%);
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 16px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ssr-settings .ssr-set-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ssr-settings .ssr-set-rail a,
+  .ssr-settings .ssr-set-rail button {
+    min-height: 44px;
+    scroll-snap-align: start;
+  }
+
+  .ssr-settings .ssr-set-card-h,
+  .ssr-settings .ssr-set-row,
+  .ssr-settings .ssr-set-thresh,
+  .ssr-settings .ssr-set-actions,
+  .ssr-settings .ssr-set-note {
+    padding-inline: 16px;
+  }
+
+  .ssr-settings .ssr-set-row .ssr-seg,
+  .ssr-settings .ssr-set-row .ssr-set-time-input {
+    width: 100%;
+  }
+
+  .ssr-settings .ssr-seg button {
+    min-height: 44px;
+    flex: 1 1 0;
+    padding-inline: 10px;
+  }
+
+  .ssr-settings .ssr-set-time-input {
+    min-height: 44px;
+  }
+
+  .ssr-settings .ssr-set-thresh-val input {
+    min-height: 44px;
+  }
+
+  .ssr-settings .ssr-set-thresh-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+
+  .ssr-settings .ssr-set-thresh-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+
+  .ssr-settings .ssr-set-actions .ssr-btn {
+    min-height: 48px;
+    flex: 1 1 calc(50% - 5px);
+    justify-content: center;
+  }
+
+  .ssr-settings .ssr-set-actions .ssr-btn.primary {
+    flex-basis: 100%;
+  }
+
+  /* Keep report chat usable above the bottom navigation and soft keyboard. */
+  .ssr-report .report-chat-conversation {
+    height: clamp(240px, 42dvh, 360px);
+  }
+
+  .ssr-report .report-chat-suggestions button,
+  .ssr-report .report-chat-submit,
+  .ssr-report .report-chat-scroll {
+    min-height: 44px;
+  }
+
+  .ssr-report .report-chat-submit,
+  .ssr-report .report-chat-scroll {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 390px) {
+  .ssr-h-params,
+  .ssr-shell .map-actions-flat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssr-h-param:last-child {
+    grid-column: auto;
+  }
+
+  .ssr-shell .planner-flow-steps li {
+    font-size: 9.5px;
+  }
+
+  .ssr-shell .planner-flow-step-marker {
+    width: 21px;
+    height: 21px;
+  }
+
+  .ssr-report .ssr-action {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ssr-report .ssr-action-tag {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .ssr-report .ssr-aqi-pollutants,
+  .ssr-report .ssr-meta-grid,
+  .ssr-report .ssr-snow-source-metrics,
+  .ssr-report .ssr-snow-foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssr-report .ssr-meta-wide {
+    grid-column: auto;
+  }
+
+  .ssr-trip .ssr-trip-recommendation-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssr-h-popular,
+  .ssr-jump-nav,
+  .ssr-trip-days,
+  .ssr-set-rail {
+    scroll-behavior: auto;
+  }
+}
