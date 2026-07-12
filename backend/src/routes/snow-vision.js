@@ -59,12 +59,13 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askAIVision }) => {
 
     try {
       const result = await snowVisionCache.getOrFetch(cacheKey, async () => {
-        const png = await fetchSentinelTile({ z: SNOW_VISION_ZOOM, x, y, fetchWithTimeout });
+        const tile = await fetchSentinelTile({ z: SNOW_VISION_ZOOM, x, y, fetchWithTimeout });
+        const png = tile?.buffer || tile;
         const base64 = png.toString('base64');
         const depthUnit = metric ? 'centimeters (cm)' : 'inches (in)';
         const promptText = snowpackJson
-          ? `Analyze the snow conditions visible in this satellite image, using this ground-station snowpack data (JSON) as supplemental context:\n${snowpackJson}\n\nThe snow depth and SWE values in that JSON are in inches. In your response, convert every depth/SWE value you mention to ${depthUnit} and do not mix unit systems.`
-          : 'Analyze the snow conditions visible in this satellite image.';
+          ? `Analyze the snow conditions visible in this satellite image. Imagery metadata: ${JSON.stringify(tile?.metadata || {})}. Use the acquisition time to discuss freshness and do not describe the image as current when it is old. Ground-station/snow-cover context (JSON):\n${snowpackJson}\n\nThe snow depth and SWE values in that JSON are in inches. In your response, convert every depth/SWE value you mention to ${depthUnit} and do not mix unit systems.`
+          : `Analyze the snow conditions visible in this satellite image. Imagery metadata: ${JSON.stringify(tile?.metadata || {})}. Use the acquisition time to discuss freshness and do not describe the image as current when it is old.`;
         const analysis = await askAIVision(
           base64,
           promptText,
@@ -72,7 +73,7 @@ const registerSnowVisionRoute = ({ app, fetchWithTimeout, askAIVision }) => {
         );
         // Return the same tile shown to the AI so the UI can display exactly what was
         // analyzed, alongside a note pointing users at the app's live satellite basemap.
-        return { analysis, zoom: SNOW_VISION_ZOOM, image: `data:image/png;base64,${base64}` };
+        return { analysis, zoom: SNOW_VISION_ZOOM, image: `data:image/png;base64,${base64}`, imagery: tile?.metadata || null };
       });
 
       return res.json({ ...result, generatedAt: new Date().toISOString() });

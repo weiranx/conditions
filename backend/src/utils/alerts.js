@@ -180,7 +180,7 @@ const resolveNwsAlertSourceLink = ({ feature, props, lat, lon }) => {
   return `https://api.weather.gov/alerts/active?point=${lat},${lon}`;
 };
 
-const createAlertsService = ({ fetchWithTimeout }) => {
+const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
   // Cache the provider payload, not the target-time-filtered result. The same active-alert
   // response can then serve different planned start times without returning a result that was
   // filtered for a previous request. createCache also coalesces simultaneous requests for the
@@ -311,8 +311,8 @@ const createAlertsService = ({ fetchWithTimeout }) => {
     const ozone = Number(hourly?.ozone?.[timeIdx]);
     const measuredTime = withExplicitTimezone(timeArray[timeIdx] || null, aqiJson?.timezone || 'UTC');
 
-    return {
-      source: 'Open-Meteo Air Quality API',
+    const openMeteoResult = {
+      source: 'Open-Meteo Air Quality API (modeled hourly conditions)',
       status: 'ok',
       usAqi: Number.isFinite(usAqi) ? Math.round(usAqi) : null,
       category: classifyUsAqi(usAqi),
@@ -320,7 +320,80 @@ const createAlertsService = ({ fetchWithTimeout }) => {
       pm10: Number.isFinite(pm10) ? Number(pm10.toFixed(1)) : null,
       ozone: Number.isFinite(ozone) ? Number(ozone.toFixed(1)) : null,
       measuredTime,
+      validTime: measuredTime,
+      dataType: 'modeled_forecast',
     };
+
+    if (!airNowApiKey) {
+      return {
+        ...openMeteoResult,
+        note: 'Modeled hourly air quality. Configure AIRNOW_API_KEY to add EPA monitor observations.',
+      };
+    }
+
+    try {
+      const params = new URLSearchParams({
+        format: 'application/json',
+        latitude: String(lat),
+        longitude: String(lon),
+        distance: '75',
+        API_KEY: airNowApiKey,
+      });
+      const response = await fetchWithTimeout(
+        `https://www.airnowapi.org/aq/observation/latLong/current/?${params.toString()}`,
+        fetchOptions,
+      );
+      if (!response.ok) throw new Error(`AirNow request failed with status ${response.status}`);
+      const rows = await response.json();
+      const observations = (Array.isArray(rows) ? rows : []).map((row) => ({
+        parameter: row?.ParameterName || null,
+        aqi: Number.isFinite(Number(row?.AQI)) ? Math.round(Number(row.AQI)) : null,
+        category: row?.Category?.Name || null,
+        reportingArea: row?.ReportingArea || null,
+        latitude: Number.isFinite(Number(row?.Latitude)) ? Number(row.Latitude) : null,
+        longitude: Number.isFinite(Number(row?.Longitude)) ? Number(row.Longitude) : null,
+        observedDate: row?.DateObserved || null,
+        observedHour: Number.isFinite(Number(row?.HourObserved)) ? Number(row.HourObserved) : null,
+        localTimeZone: row?.LocalTimeZone || null,
+      })).filter((row) => row.aqi !== null);
+      if (!observations.length) return openMeteoResult;
+      const dominant = observations.reduce((best, row) => (!best || row.aqi > best.aqi ? row : best), null);
+      const targetMs = parseIsoTimeToMs(targetForecastTimeIso) ?? Date.now();
+      const useObservationAsHeadline = Math.abs(targetMs - Date.now()) <= 2 * 60 * 60 * 1000;
+      return {
+        ...openMeteoResult,
+        source: useObservationAsHeadline
+          ? 'EPA AirNow monitor observations + Open-Meteo hourly outlook'
+          : 'Open-Meteo hourly outlook + EPA AirNow current observations',
+        usAqi: useObservationAsHeadline ? dominant.aqi : openMeteoResult.usAqi,
+        category: useObservationAsHeadline ? dominant.category || classifyUsAqi(dominant.aqi) : openMeteoResult.category,
+        dataType: useObservationAsHeadline ? 'observed_nowcast' : 'modeled_forecast',
+        observation: {
+          available: true,
+          dominant,
+          pollutants: observations,
+          source: 'EPA AirNow',
+          note: 'Preliminary quality-controlled observations intended for real-time AQI reporting.',
+        },
+        forecast: {
+          usAqi: openMeteoResult.usAqi,
+          category: openMeteoResult.category,
+          pm25: openMeteoResult.pm25,
+          pm10: openMeteoResult.pm10,
+          ozone: openMeteoResult.ozone,
+          validTime: openMeteoResult.validTime,
+          source: 'Open-Meteo Air Quality API',
+        },
+        note: useObservationAsHeadline
+          ? 'Headline AQI is the highest nearby EPA AirNow observation; hourly pollutant outlook remains modeled.'
+          : 'Headline AQI is modeled for the selected hour; current EPA AirNow observations are included separately.',
+      };
+    } catch (error) {
+      return {
+        ...openMeteoResult,
+        note: `EPA AirNow observation unavailable; using modeled hourly air quality. ${error.message}`,
+      };
+    }
   };
 
   return { fetchWeatherAlertsData, fetchAirQualityData };

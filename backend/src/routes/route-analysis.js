@@ -1,6 +1,7 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
+const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
 
 const withTimeout = (promise, ms, label) => {
   let timeout = null;
@@ -161,6 +162,11 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
 };
 
 const registerRouteAnalysisRoutes = ({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders }) => {
+  const routeDataService = createRouteDataService({
+    fetchWithTimeout,
+    fetchHeaders,
+    haversineKm,
+  });
   // GET /api/route-suggestions?peak=Mt+Whitney&lat=36.578&lon=-118.292
   app.get('/api/route-suggestions', async (req, res) => {
     const { peak, lat, lon } = req.query;
@@ -225,42 +231,60 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       // Step 1: Use authoritative GPX checkpoints when provided. Otherwise retain
       // the existing generated-waypoint workflow for named routes.
       let routeSource = 'generated';
+      let routeSourceDetails = null;
       let waypointsCopy;
       if (suppliedWaypoints) {
         routeSource = 'gpx';
         waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
       } else {
-        const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
-        const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
-          const waypointText = await withTimeout(askAI(
-            `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
+        const mappedRoute = await routeDataService.resolveMappedRoute({
+          peak: safePeak,
+          route: safeRoute,
+          lat: safeLat,
+          lon: safeLon,
+        });
+        if (mappedRoute?.waypoints?.length >= 2) {
+          routeSource = mappedRoute.source;
+          routeSourceDetails = {
+            sourceLabel: mappedRoute.sourceLabel,
+            matchedName: mappedRoute.matchedName,
+            matchScore: mappedRoute.matchScore,
+            metadata: mappedRoute.metadata,
+          };
+          waypointsCopy = mappedRoute.waypoints.map((waypoint) => ({ ...waypoint }));
+        } else {
+          const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
+          const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
+            const waypointText = await withTimeout(askAI(
+              `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-            { maxTokens: 1024, tier: 'fast' }
-          ), 20000, 'Waypoint lookup');
-          return parseJsonArrayFromAI(waypointText);
-        });
-        // Clone so summit pinning doesn't mutate the cached array.
-        waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
-        if (waypointsCopy.length > 0) {
-          const summit = waypointsCopy[waypointsCopy.length - 1];
-          summit.lat = safeLat;
-          summit.lon = safeLon;
-        }
+              { maxTokens: 1024, tier: 'fast' }
+            ), 20000, 'Waypoint lookup');
+            return parseJsonArrayFromAI(waypointText);
+          });
+          // Clone so summit pinning doesn't mutate the cached array.
+          waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
+          if (waypointsCopy.length > 0) {
+            const summit = waypointsCopy[waypointsCopy.length - 1];
+            summit.lat = safeLat;
+            summit.lon = safeLon;
+          }
 
-        await Promise.all(
-          waypointsCopy.slice(0, -1).map(async (wp) => {
-            const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
-            if (geo) {
-              wp.lat = geo.lat;
-              wp.lon = geo.lon;
-              wp.geocodingVerified = true;
-            } else {
-              wp.geocodingVerified = false;
-            }
-          })
-        );
+          await Promise.all(
+            waypointsCopy.slice(0, -1).map(async (wp) => {
+              const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
+              if (geo) {
+                wp.lat = geo.lat;
+                wp.lon = geo.lon;
+                wp.geocodingVerified = true;
+              } else {
+                wp.geocodingVerified = false;
+              }
+            })
+          );
+        }
       }
 
       // Step 2: Run safety checks for each waypoint in parallel
@@ -305,6 +329,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           ...(hasSnow ? { snowDepthIn } : {}),
         };
       });
+      const terrainProfile = buildRouteTerrainProfile(waypointsCopy, haversineKm);
 
       // Step 4: Synthesize — feed the AI the raw safety report per waypoint (bounded),
       // the same raw-data approach used for the score card's AI analysis, instead of
@@ -330,8 +355,16 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 
 You are analyzing backcountry conditions for a trip on ${safePeak}.
 Route: ${safeRoute}
-Route source: ${routeSource === 'gpx' ? 'user-supplied GPX track with authoritative checkpoint coordinates' : 'generated named-route waypoints'}
+Route source: ${routeSource === 'gpx'
+          ? 'user-supplied GPX track with authoritative checkpoint coordinates'
+          : routeSource === 'nps'
+            ? 'National Park Service public trail geometry'
+            : routeSource === 'openstreetmap'
+              ? 'OpenStreetMap mapped trail geometry'
+              : 'generated named-route waypoints'}
+${routeSourceDetails ? `Mapped route match: ${JSON.stringify(routeSourceDetails)}` : ''}
 ${routeMetadata ? `Recorded GPX metadata: ${JSON.stringify(routeMetadata)}` : ''}
+${terrainProfile ? `Sampled terrain profile: ${JSON.stringify(terrainProfile)}` : ''}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
 ${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
 Raw safety report per waypoint, trailhead to summit (JSON):
@@ -354,6 +387,8 @@ Use plain paragraphs for 1-3 and 5 (**bold** a key phrase per paragraph if it he
         analysis,
         partialData,
         routeSource,
+        ...(routeSourceDetails ? { routeSourceDetails } : {}),
+        ...(terrainProfile ? { terrainProfile } : {}),
         ...(routeMetadata ? { routeMetadata } : {}),
       });
     } catch (err) {

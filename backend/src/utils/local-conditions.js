@@ -3,7 +3,10 @@
  *   - River / streamflow (USGS NWIS)
  *   - Smoke / PM2.5 outlook (Open-Meteo Air Quality, forward-looking)
  *   - Tides (NOAA CO-OPS)
- *   - Road / trailhead closures (NPS alerts)
+ *   - Road / trailhead closures (NPS alerts + USFS road status)
+ *   - Nearby quality-controlled surface observations (NOAA/NWS/MADIS)
+ *   - Radar/QPE nowcast (NOAA MRMS + NWS RFC)
+ *   - Current wildfire activity (NIFC WFIGS + optional NASA FIRMS)
  *
  * This module holds the pure classification + assembly helpers (no network).
  * Fetching lives in local-conditions-fetch.js.
@@ -118,16 +121,34 @@ const filterClosureAlerts = (alerts, { limit = 6 } = {}) => {
  * Bundle the four provider results into one `localConditions` payload section.
  * Each provider degrades to null independently.
  */
-const buildLocalConditions = ({ streamflow, smoke, tides, closures, generatedTime } = {}) => ({
+const buildLocalConditions = ({
+  streamflow,
+  smoke,
+  tides,
+  closures,
+  weatherObservation,
+  radar,
+  access,
+  wildfire,
+  generatedTime,
+} = {}) => ({
   streamflow: streamflow || null,
   smoke: smoke || null,
   tides: tides || null,
   closures: closures || null,
+  weatherObservation: weatherObservation || null,
+  radar: radar || null,
+  access: access || null,
+  wildfire: wildfire || null,
   hasAnySignal: Boolean(
     (streamflow && streamflow.available) ||
       (smoke && smoke.available) ||
       (tides && tides.available) ||
-      (closures && closures.available),
+      (closures && closures.available) ||
+      (weatherObservation && weatherObservation.available) ||
+      (radar && radar.available) ||
+      (access && access.available) ||
+      (wildfire && wildfire.available),
   ),
   generatedTime: generatedTime || new Date().toISOString(),
 });

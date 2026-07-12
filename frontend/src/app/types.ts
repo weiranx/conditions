@@ -180,6 +180,16 @@ export interface SafetyData {
     pm10?: number | null;
     ozone?: number | null;
     measuredTime?: string | null;
+    validTime?: string | null;
+    dataType?: 'observed_nowcast' | 'modeled_forecast';
+    observation?: {
+      available?: boolean;
+      dominant?: { parameter?: string | null; aqi?: number | null; category?: string | null; reportingArea?: string | null } | null;
+      pollutants?: Array<{ parameter?: string | null; aqi?: number | null; category?: string | null; reportingArea?: string | null }>;
+      source?: string;
+      note?: string;
+    } | null;
+    forecast?: { usAqi?: number | null; category?: string | null; pm25?: number | null; pm10?: number | null; ozone?: number | null; validTime?: string | null; source?: string } | null;
     note?: string | null;
     generatedTime?: string | null;
   };
@@ -247,6 +257,25 @@ export interface SafetyData {
       link?: string | null;
       note?: string | null;
     } | null;
+    snotelStations?: Array<{
+      stationTriplet?: string;
+      stationName?: string;
+      distanceKm?: number | null;
+      elevationFt?: number | null;
+      observedDate?: string | null;
+      snowDepthIn?: number | null;
+      sweIn?: number | null;
+      obsTempF?: number | null;
+    }>;
+    snotelConsensus?: {
+      stationCount?: number;
+      medianDepthIn?: number | null;
+      minDepthIn?: number | null;
+      maxDepthIn?: number | null;
+      medianSweIn?: number | null;
+      minSweIn?: number | null;
+      maxSweIn?: number | null;
+    } | null;
     nohrsc?: {
       source?: string;
       status?: string;
@@ -259,6 +288,13 @@ export interface SafetyData {
       sweDataset?: string | null;
       link?: string | null;
       note?: string | null;
+      sampleCount?: number | null;
+      spatialRange?: {
+        depthMinIn?: number | null;
+        depthMaxIn?: number | null;
+        sweMinIn?: number | null;
+        sweMaxIn?: number | null;
+      } | null;
     } | null;
     cdec?: {
       source?: string;
@@ -302,6 +338,17 @@ export interface SafetyData {
         percentOfAverage?: number | null;
       } | null;
       summary?: string | null;
+    } | null;
+    viirs?: {
+      source?: string;
+      status?: string;
+      observedTime?: string | null;
+      updatedTime?: string | null;
+      granuleId?: string | null;
+      spatialResolutionM?: number | null;
+      metadataLink?: string | null;
+      coverageOnly?: boolean;
+      note?: string | null;
     } | null;
     generatedTime?: string | null;
   };
@@ -376,6 +423,16 @@ export interface SafetyData {
       trend?: 'rising' | 'falling' | 'steady' | 'unknown';
       observedTime?: string | null;
       source?: string;
+      forecast?: {
+        available?: boolean;
+        issuedTime?: string | null;
+        peakTime?: string | null;
+        peakFlowCfs?: number | null;
+        peakStageFt?: number | null;
+        pointCount?: number | null;
+        source?: string;
+        note?: string;
+      } | null;
     } | null;
     smoke?: {
       available?: boolean;
@@ -405,6 +462,73 @@ export interface SafetyData {
       alerts?: Array<{ title?: string; category?: string; description?: string; url?: string | null }>;
       alertCount?: number;
       source?: string;
+      note?: string;
+      matchedBy?: 'boundary' | 'nearest_park_reference_point';
+    } | null;
+    weatherObservation?: {
+      available?: boolean;
+      stationId?: string | null;
+      stationName?: string | null;
+      distanceKm?: number | null;
+      elevationFt?: number | null;
+      observedTime?: string | null;
+      tempF?: number | null;
+      dewPointF?: number | null;
+      humidityPct?: number | null;
+      windMph?: number | null;
+      gustMph?: number | null;
+      windDirectionDeg?: number | null;
+      visibilityMi?: number | null;
+      precipLastHourIn?: number | null;
+      textDescription?: string | null;
+      source?: string;
+      sourceLink?: string | null;
+      nearbyStationCount?: number;
+    } | null;
+    radar?: {
+      available?: boolean;
+      status?: 'echo_detected' | 'no_echo_detected' | 'unavailable';
+      echoDetected?: boolean;
+      reflectivityPixelValue?: number | null;
+      observedTime?: string | null;
+      rain1hIn?: number | null;
+      rain6hIn?: number | null;
+      rain24hIn?: number | null;
+      source?: string;
+      sourceLink?: string | null;
+      note?: string;
+      lightning?: {
+        available?: boolean;
+        satellite?: string | null;
+        productTime?: string | null;
+        productKey?: string | null;
+        source?: string;
+        sourceLink?: string | null;
+        detectionAtObjective?: boolean | null;
+        note?: string;
+      } | null;
+    } | null;
+    access?: {
+      available?: boolean;
+      closedRoadCount?: number;
+      searchRadiusKm?: number;
+      roads?: Array<{ id?: string | null; name?: string | null; operatingLevel?: string | null; routeStatus?: string | null; symbolName?: string | null; county?: string | null }>;
+      caltransClosureCount?: number;
+      caltransClosures?: Array<{ name?: string | null; summary?: string | null; details?: string | null }>;
+      source?: string;
+      sourceLink?: string | null;
+      note?: string;
+    } | null;
+    wildfire?: {
+      available?: boolean;
+      nearbyIncidentCount?: number;
+      incidents?: Array<{ name?: string; type?: string | null; acres?: number | null; percentContained?: number | null; distanceKm?: number | null; discoveredTime?: string | null; perimeterUpdatedTime?: string | null }>;
+      firmsConfigured?: boolean;
+      firmsDetectionCount?: number;
+      firmsDetections?: Array<{ latitude?: number | null; longitude?: number | null; confidence?: string | null; distanceKm?: number | null; acquiredDate?: string | null; acquiredTimeUtc?: string | null }>;
+      searchRadiusKm?: number;
+      source?: string;
+      sourceLink?: string | null;
       note?: string;
     } | null;
     hasAnySignal?: boolean;

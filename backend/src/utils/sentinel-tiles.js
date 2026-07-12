@@ -4,6 +4,7 @@ const { logger } = require('./logger');
 
 const SH_TOKEN_URL = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token';
 const SH_PROCESS_URL = 'https://sh.dataspace.copernicus.eu/api/v1/process';
+const SH_CATALOG_URL = 'https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search';
 
 const TILE_SIZE = 256;
 const EARTH_CIRCUMFERENCE_M = 40075016.6855785;
@@ -80,6 +81,47 @@ const tileToBbox3857 = (z, x, y) => {
   return [minX, minY, maxX, maxY];
 };
 
+const mercatorToLonLat = (x, y) => [
+  (x / ORIGIN_SHIFT) * 180,
+  (Math.atan(Math.sinh((y / ORIGIN_SHIFT) * Math.PI)) * 180) / Math.PI,
+];
+
+const bbox3857To4326 = ([minX, minY, maxX, maxY]) => {
+  const [minLon, minLat] = mercatorToLonLat(minX, minY);
+  const [maxLon, maxLat] = mercatorToLonLat(maxX, maxY);
+  return [minLon, minLat, maxLon, maxLat];
+};
+
+const findBestAcquisition = async ({ token, bbox3857, fetchWithTimeout }) => {
+  const now = new Date();
+  const from = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const response = await fetchWithTimeout(SH_CATALOG_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      bbox: bbox3857To4326(bbox3857),
+      datetime: `${from.toISOString()}/${now.toISOString()}`,
+      collections: ['sentinel-2-l2a'],
+      limit: 50,
+      filter: { op: '<=', args: [{ property: 'eo:cloud_cover' }, 60] },
+    }),
+  }, 12000);
+  if (!response.ok) return null;
+  const payload = await response.json();
+  const candidates = (payload?.features || []).map((feature) => ({
+    id: feature?.id || null,
+    acquiredAt: feature?.properties?.datetime || feature?.properties?.start_datetime || null,
+    cloudCover: Number.isFinite(Number(feature?.properties?.['eo:cloud_cover']))
+      ? Number(feature.properties['eo:cloud_cover'])
+      : null,
+  })).filter((candidate) => candidate.acquiredAt && Number.isFinite(Date.parse(candidate.acquiredAt)));
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => Date.parse(b.acquiredAt) - Date.parse(a.acquiredAt));
+  const newestTime = Date.parse(candidates[0].acquiredAt);
+  const recent = candidates.filter((candidate) => newestTime - Date.parse(candidate.acquiredAt) <= 3 * 24 * 60 * 60 * 1000);
+  return recent.sort((a, b) => (a.cloudCover ?? 100) - (b.cloudCover ?? 100))[0] || candidates[0];
+};
+
 const fetchSentinelTile = async ({ z, x, y, fetchWithTimeout }) => {
   const zoom = Number(z);
   const tileX = Number(x);
@@ -94,6 +136,15 @@ const fetchSentinelTile = async ({ z, x, y, fetchWithTimeout }) => {
   const bbox = tileToBbox3857(zoom, tileX, tileY);
   const now = new Date();
   const from = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  let acquisition = null;
+  try {
+    acquisition = await findBestAcquisition({ token, bbox3857: bbox, fetchWithTimeout });
+  } catch (error) {
+    logger.warn({ err: error, z: zoom, x: tileX, y: tileY }, 'Sentinel catalog lookup failed; using bounded mosaic fallback');
+  }
+  const acquisitionMs = acquisition?.acquiredAt ? Date.parse(acquisition.acquiredAt) : NaN;
+  const processFrom = Number.isFinite(acquisitionMs) ? new Date(acquisitionMs - 5 * 60 * 1000) : from;
+  const processTo = Number.isFinite(acquisitionMs) ? new Date(acquisitionMs + 5 * 60 * 1000) : now;
 
   const requestBody = {
     input: {
@@ -104,9 +155,9 @@ const fetchSentinelTile = async ({ z, x, y, fetchWithTimeout }) => {
       data: [{
         type: 'sentinel-2-l2a',
         dataFilter: {
-          timeRange: { from: from.toISOString(), to: now.toISOString() },
+          timeRange: { from: processFrom.toISOString(), to: processTo.toISOString() },
           maxCloudCoverage: 60,
-          mosaickingOrder: 'leastCC',
+          mosaickingOrder: acquisition ? 'mostRecent' : 'leastCC',
         },
       }],
     },
@@ -141,7 +192,17 @@ const fetchSentinelTile = async ({ z, x, y, fetchWithTimeout }) => {
   }
 
   const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    metadata: {
+      acquiredAt: acquisition?.acquiredAt || null,
+      cloudCover: acquisition?.cloudCover ?? null,
+      acquisitionId: acquisition?.id || null,
+      lookbackDays: LOOKBACK_DAYS,
+      selection: acquisition ? 'recent_low_cloud_acquisition' : 'least_cloudy_mosaic_fallback',
+      source: 'Copernicus Sentinel-2 L2A via Sentinel Hub',
+    },
+  };
 };
 
 module.exports = {
@@ -149,4 +210,6 @@ module.exports = {
   tileToBbox3857,
   MIN_ZOOM,
   MAX_ZOOM,
+  bbox3857To4326,
+  findBestAcquisition,
 };

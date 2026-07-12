@@ -13,6 +13,7 @@ const {
   filterClosureAlerts,
   buildLocalConditions,
 } = require('./local-conditions');
+const { createEnvironmentalObservationService } = require('./environmental-observations');
 
 const yyyymmdd = (dateLike) => {
   const d = dateLike ? new Date(dateLike) : new Date();
@@ -25,9 +26,16 @@ const createLocalConditionsService = ({
   haversineKm,
   requestTimeoutMs = 10000,
   npsApiKey = null,
+  firmsMapKey = null,
   tideStationCache = null,
   npsParkCache = null,
 } = {}) => {
+  const environmentalObservations = createEnvironmentalObservationService({
+    fetchWithTimeout,
+    haversineKm,
+    requestTimeoutMs,
+    firmsMapKey,
+  });
   // ── USGS NWIS streamflow ────────────────────────────────────────────────
   const fetchStreamflow = async ({ lat, lon, fetchOptions }) => {
     const pad = 0.25;
@@ -89,7 +97,7 @@ const createLocalConditionsService = ({
     const latestGage = latest(gageSeries);
     const trendSeries = dischargeSeries.length >= 4 ? dischargeSeries : gageSeries;
 
-    return {
+    const result = {
       available: true,
       siteName: nearest.siteName,
       siteId: nearest.siteId,
@@ -100,6 +108,54 @@ const createLocalConditionsService = ({
       observedTime: (latestDischarge || latestGage)?.dateTime || null,
       source: 'USGS NWIS',
     };
+
+    // NWPS can add an official forecast or National Water Model guidance to the
+    // same USGS identifier. A missing forecast is not a failure of the observed
+    // gauge signal.
+    try {
+      const nwpsRes = await fetchWithTimeout(
+        `https://api.water.noaa.gov/nwps/v1/gauges/${encodeURIComponent(nearest.siteId)}/stageflow`,
+        fetchOptions,
+        Math.max(requestTimeoutMs, 12000),
+      );
+      if (nwpsRes.ok) {
+        const nwps = await nwpsRes.json();
+        const forecast = nwps?.forecast || {};
+        const rows = Array.isArray(forecast?.data)
+          ? forecast.data.filter((row) => Number.isFinite(Number(row?.primary)) || Number.isFinite(Number(row?.secondary)))
+          : [];
+        if (rows.length) {
+          const primaryIsFlow = /flow|discharge/i.test(String(forecast?.primaryName || ''));
+          const secondaryIsFlow = /flow|discharge/i.test(String(forecast?.secondaryName || ''));
+          const flowMultiplier = /kcfs/i.test(primaryIsFlow ? forecast?.primaryUnits : forecast?.secondaryUnits) ? 1000 : 1;
+          const normalizedRows = rows.map((row) => ({
+            validTime: row?.validTime || null,
+            stageFt: primaryIsFlow ? Number(row?.secondary) : Number(row?.primary),
+            flowCfs: (primaryIsFlow ? Number(row?.primary) : secondaryIsFlow ? Number(row?.secondary) : NaN) * flowMultiplier,
+          }));
+          const peak = normalizedRows.reduce((best, row) => {
+            const candidate = Number.isFinite(row.flowCfs) ? row.flowCfs : Number.isFinite(row.stageFt) ? row.stageFt : -Infinity;
+            const previous = best && (Number.isFinite(best.flowCfs) ? best.flowCfs : best.stageFt);
+            return !best || candidate > previous ? row : best;
+          }, null);
+          result.forecast = {
+            available: true,
+            issuedTime: forecast?.issuedTime && !String(forecast.issuedTime).startsWith('0001-') ? forecast.issuedTime : null,
+            peakTime: peak?.validTime || null,
+            peakFlowCfs: Number.isFinite(peak?.flowCfs) ? Math.round(peak.flowCfs) : null,
+            peakStageFt: Number.isFinite(peak?.stageFt) ? Math.round(peak.stageFt * 100) / 100 : null,
+            pointCount: normalizedRows.length,
+            source: 'NOAA National Water Prediction Service',
+            note: 'Forecast applies to the selected gauge. Confirm that the gauge is on the route-crossed drainage.',
+          };
+          result.source = 'USGS NWIS observations + NOAA NWPS forecast';
+        }
+      }
+    } catch (error) {
+      logger.warn({ err: error, siteId: nearest.siteId }, 'NWPS stream forecast enrichment failed');
+    }
+
+    return result;
   };
 
   // ── Smoke / PM2.5 outlook (forward-looking) ─────────────────────────────
@@ -226,9 +282,38 @@ const createLocalConditionsService = ({
     const parks = await loadNpsParks(fetchOptions);
     if (!parks.length) return { available: false };
     let nearest = null;
+    try {
+      const boundaryParams = new URLSearchParams({
+        f: 'json',
+        geometry: `${lon},${lat}`,
+        geometryType: 'esriGeometryPoint',
+        inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects',
+        outFields: 'UNIT_CODE,UNIT_NAME,PARKNAME',
+        returnGeometry: 'false',
+      });
+      const boundaryRes = await fetchWithTimeout(
+        `https://services.arcgis.com/xOi1kZaI0eWDREZv/ArcGIS/rest/services/NPS_Regional_and_Park_Boundary/FeatureServer/1/query?${boundaryParams.toString()}`,
+        fetchOptions,
+        requestTimeoutMs,
+      );
+      if (boundaryRes.ok) {
+        const boundaryJson = await boundaryRes.json();
+        const boundary = boundaryJson?.features?.[0]?.attributes || null;
+        const unitCode = String(boundary?.UNIT_CODE || '').toLowerCase();
+        if (unitCode) {
+          const matchedPark = parks.find((park) => String(park.parkCode || '').toLowerCase() === unitCode);
+          nearest = matchedPark
+            ? { ...matchedPark, distanceKm: 0, matchedBy: 'boundary' }
+            : { parkCode: unitCode, fullName: boundary?.UNIT_NAME || boundary?.PARKNAME || unitCode.toUpperCase(), distanceKm: 0, matchedBy: 'boundary' };
+        }
+      }
+    } catch (error) {
+      logger.warn({ err: error }, 'NPS boundary lookup failed; falling back to nearest park');
+    }
     for (const park of parks) {
       const distanceKm = haversineKm(lat, lon, park.lat, park.lon);
-      if (!nearest || distanceKm < nearest.distanceKm) {
+      if (!nearest || (nearest.matchedBy !== 'boundary' && distanceKm < nearest.distanceKm)) {
         nearest = { ...park, distanceKm };
       }
     }
@@ -251,15 +336,20 @@ const createLocalConditionsService = ({
       alerts,
       alertCount: alerts.length,
       source: 'National Park Service',
+      matchedBy: nearest.matchedBy || 'nearest_park_reference_point',
     };
   };
 
   const fetchLocalConditions = async ({ lat, lon, selectedDate, fetchOptions }) => {
-    const [streamflow, smoke, tides, closures] = await Promise.allSettled([
+    const [streamflow, smoke, tides, closures, weatherObservation, radar, access, wildfire] = await Promise.allSettled([
       fetchStreamflow({ lat, lon, fetchOptions }),
       fetchSmokeOutlook({ lat, lon, fetchOptions }),
       fetchTides({ lat, lon, selectedDate, fetchOptions }),
       fetchClosures({ lat, lon, fetchOptions }),
+      environmentalObservations.fetchWeatherObservation({ lat, lon, fetchOptions }),
+      environmentalObservations.fetchRadarNowcast({ lat, lon, fetchOptions }),
+      environmentalObservations.fetchAccessStatus({ lat, lon, fetchOptions }),
+      environmentalObservations.fetchWildfireActivity({ lat, lon, fetchOptions }),
     ]);
 
     const unwrap = (result, label) => {
@@ -273,6 +363,10 @@ const createLocalConditionsService = ({
       smoke: unwrap(smoke, 'Smoke outlook'),
       tides: unwrap(tides, 'Tides'),
       closures: closures.status === 'fulfilled' ? closures.value : { available: false },
+      weatherObservation: unwrap(weatherObservation, 'Weather observation'),
+      radar: unwrap(radar, 'Radar nowcast'),
+      access: unwrap(access, 'Access status'),
+      wildfire: unwrap(wildfire, 'Wildfire activity'),
     });
   };
 

@@ -131,7 +131,10 @@ const { createUnavailableWeatherData, fetchOpenMeteoWeatherFallback } = createWe
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
 
-const { fetchWeatherAlertsData, fetchAirQualityData } = createAlertsService({ fetchWithTimeout });
+const { fetchWeatherAlertsData, fetchAirQualityData } = createAlertsService({
+  fetchWithTimeout,
+  airNowApiKey: process.env.AIRNOW_API_KEY || null,
+});
 
 const { fetchRecentRainfallData } = createPrecipitationService({
   fetchWithTimeout,
@@ -151,6 +154,7 @@ const { fetchLocalConditions } = createLocalConditionsService({
   haversineKm,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
   npsApiKey: process.env.NPS_API_KEY || null,
+  firmsMapKey: process.env.NASA_FIRMS_MAP_KEY || null,
   tideStationCache,
   npsParkCache,
 });
@@ -513,6 +517,7 @@ const safetyHandler = async (req, res) => {
       weatherData,
       alertsData,
       airQualityData,
+      localConditionsData,
     });
     heatRiskData = buildHeatRiskData({ weatherData });
 
@@ -552,6 +557,7 @@ const safetyHandler = async (req, res) => {
       rainfallData,
       snowpackData,
       terrainConditionData,
+      localConditionsData,
       selectedDate: selectedForecastDate,
       solarData,
       selectedStartClock: requestedStartClock,

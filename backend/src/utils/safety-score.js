@@ -9,7 +9,7 @@ const { normalizeAlertSeverity } = require('./alerts');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.4.0',
+  scoreVersion: '2.5.0',
   maxScore: 100,
 
   // Group scales intentionally sum to well over maxScore. Avalanche and
@@ -235,6 +235,7 @@ const calculateSafetyScore = ({
   rainfallData,
   snowpackData,
   terrainConditionData,
+  localConditionsData,
   selectedDate,
   solarData,
   selectedStartClock,
@@ -275,6 +276,12 @@ const calculateSafetyScore = ({
   const visibilityRiskLevel = String(weatherData?.visibilityRisk?.level || '').trim();
   const visibilityActiveHoursRaw = Number(weatherData?.visibilityRisk?.activeHours);
   const visibilityActiveHours = Number.isFinite(visibilityActiveHoursRaw) ? visibilityActiveHoursRaw : null;
+  const radarEchoDetected = localConditionsData?.radar?.echoDetected === true;
+  const observedRain24hIn = Number(localConditionsData?.radar?.rain24hIn);
+  const streamflowForecast = localConditionsData?.streamflow?.forecast || null;
+  const streamPeakFlowCfs = Number(streamflowForecast?.peakFlowCfs);
+  const currentStreamflowCfs = Number(localConditionsData?.streamflow?.dischargeCfs);
+  const observedStation = localConditionsData?.weatherObservation || null;
 
   const normalizedRisk = String(avalancheData?.risk || '').toLowerCase();
   const avalancheRelevant = avalancheData?.relevant !== false;
@@ -579,6 +586,10 @@ const calculateSafetyScore = ({
     applyFactor('Winter Weather', T.storm.winterImpact, `Frozen precipitation in forecast ("${weatherData.description}") increases travel hazard.`, 'NOAA short forecast');
   }
 
+  if (radarEchoDetected && (convectiveFromDescription || convectiveFromTrend)) {
+    applyFactor('Storm', 4, 'NOAA MRMS radar currently detects precipitation at the objective, confirming the forecast convective/storm signal.', localConditionsData?.radar?.source || 'NOAA MRMS radar');
+  }
+
   if (visibilityRiskScore !== null) {
     const visibilityTier = findTier(visibilityRiskScore, T.visibility, 'min');
     const visibilityImpact = visibilityTier ? visibilityTier.impact : 0;
@@ -645,6 +656,19 @@ const calculateSafetyScore = ({
     applyFactor('Surface Conditions', T.surface.rainHeavyImpact, `Recent rainfall is heavy (${rainPast24hIn.toFixed(2)} in in 24h), increasing slick/trail-softening risk.`, rainfallData?.source || 'Open-Meteo precipitation history');
   } else if (Number.isFinite(rainPast24hIn) && rainPast24hIn >= T.surface.rainModerate) {
     applyFactor('Surface Conditions', T.surface.rainModerateImpact, `Recent rainfall (${rainPast24hIn.toFixed(2)} in in 24h) can create slippery or muddy travel.`, rainfallData?.source || 'Open-Meteo precipitation history');
+  }
+
+  if (Number.isFinite(observedRain24hIn) && observedRain24hIn >= T.surface.rainHeavy) {
+    applyFactor('Surface Conditions', 3, `NWS RFC radar/gauge analysis observed ${observedRain24hIn.toFixed(2)} in of rain in the last 24h.`, localConditionsData?.radar?.source || 'NWS RFC QPE');
+  }
+
+  if (
+    Number.isFinite(streamPeakFlowCfs)
+    && Number.isFinite(currentStreamflowCfs)
+    && currentStreamflowCfs > 0
+    && streamPeakFlowCfs >= currentStreamflowCfs * 1.5
+  ) {
+    applyFactor('Stream Crossing', 4, `Nearby gauge flow is forecast to rise from about ${Math.round(currentStreamflowCfs)} to ${Math.round(streamPeakFlowCfs)} cfs. Verify that this gauge represents the route-crossed drainage.`, streamflowForecast?.source || 'NOAA NWPS');
   }
 
   if (Number.isFinite(snowPast24hIn) && snowPast24hIn >= T.surface.snowHeavy) {
@@ -784,7 +808,7 @@ const calculateSafetyScore = ({
         : aqiTier.min >= 151 ? `Air quality is unhealthy (US AQI ${Math.round(usAqi)}).`
         : aqiTier.min >= 101 ? `Air quality is unhealthy for sensitive groups (US AQI ${Math.round(usAqi)}).`
         : `Air quality is moderate (US AQI ${Math.round(usAqi)}). Consider reducing intensity for sustained exertion.`;
-      applyFactor('Air Quality', aqiTier.impact, aqiMessage, 'Open-Meteo Air Quality');
+      applyFactor('Air Quality', aqiTier.impact, aqiMessage, airQualityData?.source || 'Open-Meteo Air Quality');
     }
   }
 
@@ -879,6 +903,15 @@ const calculateSafetyScore = ({
 
   if (trend.length < 6) {
     applyConfidencePenalty(6, 'Limited hourly trend depth (<6 points).');
+  }
+
+  const observedTempF = Number(observedStation?.tempF);
+  const observedWindMph = Number(observedStation?.windMph);
+  if (observedStation?.available && Number.isFinite(observedTempF) && Number.isFinite(tempF) && Math.abs(observedTempF - tempF) >= 15) {
+    applyConfidencePenalty(5, `Nearby station temperature differs from the forecast by ${Math.round(Math.abs(observedTempF - tempF))}F; mountain microclimates may be significant.`);
+  }
+  if (observedStation?.available && Number.isFinite(observedWindMph) && Number.isFinite(wind) && Math.abs(observedWindMph - wind) >= 15) {
+    applyConfidencePenalty(5, `Nearby station wind differs from the forecast by ${Math.round(Math.abs(observedWindMph - wind))} mph; exposed terrain may vary further.`);
   }
 
   if (avalancheRelevant) {

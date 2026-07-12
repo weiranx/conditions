@@ -105,6 +105,7 @@ describe('buildLocalConditions', () => {
       smoke: { available: true, peakPm25: 40 },
       tides: null,
       closures: { available: false },
+      radar: { available: true, echoDetected: false },
     });
     expect(built.hasAnySignal).toBe(true);
     expect(built.smoke.peakPm25).toBe(40);
@@ -117,6 +118,10 @@ describe('buildLocalConditions', () => {
       smoke: { available: false },
       tides: { available: false },
       closures: { available: false },
+      weatherObservation: { available: false },
+      radar: { available: false },
+      access: { available: false },
+      wildfire: { available: false },
     });
     expect(built.hasAnySignal).toBe(false);
   });

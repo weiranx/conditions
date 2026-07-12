@@ -234,6 +234,19 @@ const createSnowpackService = ({
     };
   };
 
+  const findNearestSnotelStations = (lat, lon, stations, maxDistanceKm = 140, limit = 3) => (
+    (Array.isArray(stations) ? stations : [])
+      .map((station) => {
+        const stationLat = Number(station?.latitude);
+        const stationLon = Number(station?.longitude);
+        if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) return null;
+        return { station, distanceKm: haversineKm(lat, lon, stationLat, stationLon) };
+      })
+      .filter((candidate) => candidate && candidate.distanceKm <= maxDistanceKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, limit)
+  );
+
   const parseNohrscPixelValue = (resultEntry) => {
     const raw = resultEntry?.attributes?.['Service Pixel Value'];
     const numeric = Number(raw);
@@ -285,29 +298,33 @@ const createSnowpackService = ({
   const sampleNohrscSnowAnalysis = async (lat, lon, fetchOptions) => {
     const extentPaddingDeg = 0.6;
 
-    // Try the target point first; if pixel values are implausible (common near glaciated peaks),
-    // try a ring of offsets in parallel (~3–5 km away)
-    let best = await _sampleNohrscPoint(lat, lon, extentPaddingDeg, fetchOptions);
-
-    if (best && !Number.isFinite(best.depthMeters) && !Number.isFinite(best.sweMillimeters)) {
-      // Primary pixel was implausible — fan out to nearby offsets in parallel
-      const FALLBACK_OFFSETS = [
-        [0.03, 0], [-0.03, 0], [0, 0.03], [0, -0.03],
-        [0.05, 0], [-0.05, 0], [0, 0.05], [0, -0.05],
-      ];
-      const fallbackResults = await Promise.allSettled(
-        FALLBACK_OFFSETS.map(([dlat, dlon]) =>
-          _sampleNohrscPoint(lat + dlat, lon + dlon, extentPaddingDeg, fetchOptions),
-        ),
-      );
-      for (const result of fallbackResults) {
-        if (result.status !== 'fulfilled' || !result.value) continue;
-        const sample = result.value;
-        if (Number.isFinite(sample.depthMeters) || Number.isFinite(sample.sweMillimeters)) {
-          best = sample;
-          break;
-        }
-      }
+    // Sample a small terrain neighborhood every time. A single mountain-grid
+    // pixel is often unrepresentative near ridges, glaciers, and sharp snowline
+    // transitions; the median is more stable and the range exposes variability.
+    const OFFSETS = [
+      [0, 0],
+      [0.03, 0], [-0.03, 0], [0, 0.03], [0, -0.03],
+      [0.05, 0], [-0.05, 0], [0, 0.05], [0, -0.05],
+    ];
+    const settled = await Promise.allSettled(
+      OFFSETS.map(([dlat, dlon]) => _sampleNohrscPoint(lat + dlat, lon + dlon, extentPaddingDeg, fetchOptions)),
+    );
+    const samples = settled.filter((result) => result.status === 'fulfilled' && result.value)
+      .map((result) => result.value)
+      .filter((sample) => Number.isFinite(sample.depthMeters) || Number.isFinite(sample.sweMillimeters));
+    const median = (values) => {
+      const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+      if (!sorted.length) return null;
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+    const targetSample = settled[0]?.status === 'fulfilled' ? settled[0].value : null;
+    let best = targetSample && (Number.isFinite(targetSample.depthMeters) || Number.isFinite(targetSample.sweMillimeters))
+      ? { ...targetSample }
+      : samples[0] ? { ...samples[0] } : null;
+    if (best && samples.length) {
+      best.depthMeters = median(samples.map((sample) => sample.depthMeters));
+      best.sweMillimeters = median(samples.map((sample) => sample.sweMillimeters));
     }
 
     if (!best) return null;
@@ -337,10 +354,62 @@ const createSnowpackService = ({
       depthDataset: snowDepthResult?.attributes?.name || null,
       sweDataset: sweResult?.attributes?.name || null,
       link: 'https://www.nohrsc.noaa.gov/nsa/',
+      sampleCount: samples.length,
+      spatialRange: {
+        depthMinIn: (() => {
+          const values = samples.map((sample) => sample.depthMeters).filter(Number.isFinite);
+          return values.length ? Number((Math.min(...values) * 39.3701).toFixed(1)) : null;
+        })(),
+        depthMaxIn: (() => {
+          const values = samples.map((sample) => sample.depthMeters).filter(Number.isFinite);
+          return values.length ? Number((Math.max(...values) * 39.3701).toFixed(1)) : null;
+        })(),
+        sweMinIn: (() => {
+          const values = samples.map((sample) => sample.sweMillimeters).filter(Number.isFinite);
+          return values.length ? Number((Math.min(...values) * 0.0393701).toFixed(1)) : null;
+        })(),
+        sweMaxIn: (() => {
+          const values = samples.map((sample) => sample.sweMillimeters).filter(Number.isFinite);
+          return values.length ? Number((Math.max(...values) * 0.0393701).toFixed(1)) : null;
+        })(),
+      },
       note:
         filteredSignals.length > 0
-          ? `Point sample from NOAA National Snow Analysis raster. Implausible ${filteredSignals.join(' + ')} value(s) were discarded.`
-          : 'Point sample from NOAA National Snow Analysis raster (depth converted from meters; SWE converted from millimeters).',
+          ? `Median of ${samples.length} nearby NOAA National Snow Analysis samples. Implausible ${filteredSignals.join(' + ')} value(s) were discarded.`
+          : `Median of ${samples.length} nearby NOAA National Snow Analysis samples (depth converted from meters; SWE converted from millimeters).`,
+    };
+  };
+
+  const fetchViirsSnowCoverMetadata = async (lat, lon, selectedDate, fetchOptions) => {
+    const requestedEnd = selectedDate && isValidIsoDate(selectedDate) && selectedDate <= formatIsoDateUtc(new Date())
+      ? `${selectedDate}T23:59:59Z`
+      : new Date().toISOString();
+    const endMs = Date.parse(requestedEnd);
+    const start = new Date(endMs - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const pad = 0.15;
+    const params = new URLSearchParams({
+      short_name: 'VNP10A1F',
+      page_size: '5',
+      bounding_box: `${lon - pad},${lat - pad},${lon + pad},${lat + pad}`,
+      temporal: `${start},${requestedEnd}`,
+      sort_key: '-start_date',
+    });
+    const response = await fetchWithTimeout(`https://cmr.earthdata.nasa.gov/search/granules.json?${params.toString()}`, fetchOptions);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const granule = payload?.feed?.entry?.[0] || null;
+    if (!granule) return null;
+    const metadataLink = (granule.links || []).find((link) => /\.xml(?:$|\?)/i.test(String(link?.href || '')))?.href || null;
+    return {
+      source: 'NASA/NOAA VIIRS daily snow-cover product (VNP10A1F v2)',
+      status: 'metadata_available',
+      observedTime: granule.time_start || null,
+      updatedTime: granule.updated || null,
+      granuleId: granule.title || null,
+      spatialResolutionM: 375,
+      metadataLink,
+      coverageOnly: true,
+      note: 'Latest daily VIIRS snow-cover granule covering the objective. Pixel-level NDSI requires Earthdata-authenticated granule access; this metadata is used for freshness and corroboration only.',
     };
   };
 
@@ -548,13 +617,54 @@ const createSnowpackService = ({
       };
     })();
 
+    const nearbySnotelTask = (async () => {
+      const stations = await getSnotelStations(fetchOptions);
+      const nearestStations = findNearestSnotelStations(lat, lon, stations, 140, 3);
+      const rows = await Promise.allSettled(nearestStations.map(async ({ station, distanceKm }) => {
+        const stationTriplet = String(station?.stationTriplet || '');
+        if (!stationTriplet) return null;
+        const url = `https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=${encodeURIComponent(stationTriplet)}`
+          + `&elements=WTEQ,SNWD,TOBS&duration=DAILY&beginDate=${encodeURIComponent(shiftIsoDateUtc(targetDate || todayIso, -3))}`
+          + `&endDate=${encodeURIComponent(targetDate || todayIso)}&periodRef=END`;
+        const response = await fetchWithTimeout(url, fetchOptions);
+        if (!response.ok) return null;
+        const json = await response.json();
+        const elementData = Array.isArray(json?.[0]?.data) ? json[0].data : [];
+        const values = {};
+        for (const entry of elementData) {
+          const code = String(entry?.stationElement?.elementCode || '').toUpperCase();
+          values[code] = extractLatestAwdbValue(entry?.values, targetDate || todayIso);
+        }
+        return {
+          stationTriplet,
+          stationName: station?.name || stationTriplet,
+          distanceKm: Number(distanceKm.toFixed(1)),
+          elevationFt: Number.isFinite(Number(station?.elevation)) ? Math.round(Number(station.elevation)) : null,
+          observedDate: values.SNWD?.date || values.WTEQ?.date || values.TOBS?.date || null,
+          snowDepthIn: Number.isFinite(Number(values.SNWD?.value)) ? Number(values.SNWD.value) : null,
+          sweIn: Number.isFinite(Number(values.WTEQ?.value)) ? Number(values.WTEQ.value) : null,
+          obsTempF: Number.isFinite(Number(values.TOBS?.value)) ? Number(values.TOBS.value) : null,
+        };
+      }));
+      return rows.filter((result) => result.status === 'fulfilled' && result.value).map((result) => result.value);
+    })();
+
     const nohrscTask = sampleNohrscSnowAnalysis(lat, lon, fetchOptions);
     const cdecTask = sampleCdecStationData(lat, lon, selectedDate, fetchOptions);
-    const [snotelResult, nohrscResult, cdecResult] = await Promise.allSettled([snotelTask, nohrscTask, cdecTask]);
+    const viirsTask = fetchViirsSnowCoverMetadata(lat, lon, selectedDate, fetchOptions);
+    const [snotelResult, nearbySnotelResult, nohrscResult, cdecResult, viirsResult] = await Promise.allSettled([
+      snotelTask,
+      nearbySnotelTask,
+      nohrscTask,
+      cdecTask,
+      viirsTask,
+    ]);
 
     const snotelData = snotelResult.status === 'fulfilled' ? snotelResult.value : null;
+    const snotelStations = nearbySnotelResult.status === 'fulfilled' ? nearbySnotelResult.value : [];
     const nohrscData = nohrscResult.status === 'fulfilled' ? nohrscResult.value : null;
     const cdecData = cdecResult.status === 'fulfilled' ? cdecResult.value : null;
+    const viirsData = viirsResult.status === 'fulfilled' ? viirsResult.value : null;
 
     if (!snotelData && !nohrscData && !cdecData) {
       return createUnavailableSnowpackData('unavailable');
@@ -595,8 +705,29 @@ const createSnowpackService = ({
       status: sourcesOk === totalSources ? 'ok' : 'partial',
       summary: summaryParts.join(' '),
       snotel: snotelData,
+      snotelStations,
+      snotelConsensus: (() => {
+        const median = (values) => {
+          const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+          if (!sorted.length) return null;
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+        const depths = snotelStations.map((station) => Number(station?.snowDepthIn)).filter(Number.isFinite);
+        const swes = snotelStations.map((station) => Number(station?.sweIn)).filter(Number.isFinite);
+        return {
+          stationCount: snotelStations.length,
+          medianDepthIn: median(depths),
+          minDepthIn: depths.length ? Math.min(...depths) : null,
+          maxDepthIn: depths.length ? Math.max(...depths) : null,
+          medianSweIn: median(swes),
+          minSweIn: swes.length ? Math.min(...swes) : null,
+          maxSweIn: swes.length ? Math.max(...swes) : null,
+        };
+      })(),
       nohrsc: nohrscData,
       cdec: cdecData,
+      viirs: viirsData,
       historical: snotelData?.historical || null,
     };
   };

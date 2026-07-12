@@ -412,6 +412,19 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
   const region = safetyData.location
     ? `${safetyData.location.lat.toFixed(4)}°, ${safetyData.location.lon.toFixed(4)}°`
     : `${position.lat.toFixed(4)}°, ${position.lng.toFixed(4)}°`;
+  const localConditions = safetyData.localConditions || null;
+  const nearbyObservation = localConditions?.weatherObservation || null;
+  const radarObservation = localConditions?.radar || null;
+  const streamflowObservation = localConditions?.streamflow || null;
+  const accessObservation = localConditions?.access || null;
+  const wildfireObservation = localConditions?.wildfire || null;
+  const hasLocalObservations = Boolean(
+    nearbyObservation?.available
+      || radarObservation?.available
+      || streamflowObservation?.available
+      || accessObservation?.available
+      || wildfireObservation?.available,
+  );
 
   // ── Avalanche ──
   const avyLevel = avalancheUnknown ? 0 : overallAvalancheLevel ?? 0;
@@ -575,6 +588,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
     { id: 'planner-section-wind', label: 'Wind', present: Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
     { id: 'planner-section-avalanche', label: 'Avalanche', present: true },
     { id: 'planner-section-snowpack', label: 'Snowpack', present: Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
+    { id: 'planner-section-observations', label: 'Observations', present: hasLocalObservations },
     { id: 'planner-section-alerts', label: 'Alerts', present: true },
     { id: 'planner-section-score', label: 'Score', present: Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
     { id: 'planner-section-gear', label: 'Gear', present: Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
@@ -1220,7 +1234,11 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
                   <div className={`ssr-snow-source ${snowpackBestDepthSource?.includes('SNOTEL') ? 'best' : ''}`}>
                     <div className="ssr-snow-source-h">
                       <strong>SNOTEL</strong>
-                      <span>{[safetyData.snowpack.snotel.stationName, snotelDistanceDisplay !== 'N/A' ? snotelDistanceDisplay : ''].filter(Boolean).join(' · ')}</span>
+                      <span>{[
+                        safetyData.snowpack.snotel.stationName,
+                        snotelDistanceDisplay !== 'N/A' ? snotelDistanceDisplay : '',
+                        Number(safetyData.snowpack.snotelConsensus?.stationCount || 0) > 1 ? `${safetyData.snowpack.snotelConsensus?.stationCount} stations sampled` : '',
+                      ].filter(Boolean).join(' · ')}</span>
                     </div>
                     <div className="ssr-snow-source-metrics">
                       <span><small>Depth</small>{snotelDepthDisplay}</span>
@@ -1245,6 +1263,12 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
                 {safetyData.snowpack.snotel?.elevationFt != null && <span><small>Station elev.</small>{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>}
               </div>
               {snowpackHistoricalComparisonLine && <p className="ssr-snow-history">{snowpackHistoricalComparisonLine}</p>}
+              {Number(safetyData.snowpack.nohrsc?.sampleCount || 0) > 1 && (
+                <p className="ssr-muted">NOHRSC depth/SWE is the median of {safetyData.snowpack.nohrsc?.sampleCount} nearby terrain-grid samples; the spatial range remains available in the report data.</p>
+              )}
+              {safetyData.snowpack.viirs?.observedTime && (
+                <p className="ssr-muted">Latest NASA VIIRS 375 m snow-cover granule: {formatPubTime(safetyData.snowpack.viirs.observedTime)}. Used as freshness/corroboration metadata; pixel-level NDSI is not treated as a depth measurement.</p>
+              )}
               {aiAvailable && (
                 <div style={{ marginTop: '14px' }}>
                   {snowVisionAnalysis ? (
@@ -1283,6 +1307,98 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
                       : <><Satellite size={14} aria-hidden /> Analyze snow from satellite</>}
                     </button>
                   )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* LIVE OBSERVATIONS & ACCESS */}
+        {hasLocalObservations && (
+          <section className="ssr-card" id="planner-section-observations">
+            <div className="ssr-card-h">
+              <h2>
+                <span className="ssr-h-icon icon-blue"><Radio size={16} /></span>
+                Observations &amp; Access
+              </h2>
+              {radarObservation?.available && (
+                <span className={`ssr-pill ${radarObservation.echoDetected ? 'caution' : 'go'}`}>
+                  {radarObservation.echoDetected ? 'Radar echo' : 'No radar echo'}
+                </span>
+              )}
+            </div>
+            <div className="ssr-card-b">
+              {nearbyObservation?.available && (
+                <>
+                  <p className="ssr-muted">
+                    {[nearbyObservation.stationName, Number.isFinite(Number(nearbyObservation.distanceKm)) ? `${nearbyObservation.distanceKm} km away` : null].filter(Boolean).join(' · ')}
+                  </p>
+                  <div className="ssr-meta-grid">
+                    {Number.isFinite(Number(nearbyObservation.tempF)) && <div className="ssr-meta"><span className="ssr-k">Observed temp</span><span className="ssr-v">{formatTempDisplay(Number(nearbyObservation.tempF))}</span></div>}
+                    {Number.isFinite(Number(nearbyObservation.windMph)) && <div className="ssr-meta"><span className="ssr-k">Observed wind</span><span className="ssr-v">{formatWindDisplay(Number(nearbyObservation.windMph))}</span></div>}
+                    {Number.isFinite(Number(nearbyObservation.gustMph)) && <div className="ssr-meta"><span className="ssr-k">Observed gust</span><span className="ssr-v">{formatWindDisplay(Number(nearbyObservation.gustMph))}</span></div>}
+                    {Number.isFinite(Number(nearbyObservation.visibilityMi)) && <div className="ssr-meta"><span className="ssr-k">Visibility</span><span className="ssr-v">{localizeUnitText(`${nearbyObservation.visibilityMi} mi`)}</span></div>}
+                  </div>
+                </>
+              )}
+
+              {radarObservation?.available && (
+                <div className="ssr-callout">
+                  <span className="ssr-callout-k">Observed precipitation · NOAA radar/gauge analysis</span>
+                  <p>{[
+                    Number.isFinite(Number(radarObservation.rain1hIn)) ? `1h ${Number(radarObservation.rain1hIn).toFixed(2)} in` : null,
+                    Number.isFinite(Number(radarObservation.rain6hIn)) ? `6h ${Number(radarObservation.rain6hIn).toFixed(2)} in` : null,
+                    Number.isFinite(Number(radarObservation.rain24hIn)) ? `24h ${Number(radarObservation.rain24hIn).toFixed(2)} in` : null,
+                  ].filter(Boolean).map(String).map(localizeUnitText).join(' · ') || 'Accumulation unavailable'}</p>
+                </div>
+              )}
+              {radarObservation?.lightning?.available && (
+                <div className="ssr-snow-kv">
+                  <span className="ssr-k">GOES lightning feed</span>
+                  <span className="ssr-v">{radarObservation.lightning.satellite || 'GOES-R'}{radarObservation.lightning.productTime ? ` · ${formatPubTime(radarObservation.lightning.productTime)}` : ''}</span>
+                </div>
+              )}
+
+              {streamflowObservation?.available && (
+                <>
+                  <div className="ssr-snow-kv"><span className="ssr-k">Nearby stream gauge</span><span className="ssr-v">{streamflowObservation.siteName || streamflowObservation.siteId || 'USGS gauge'}</span></div>
+                  <div className="ssr-snow-kv"><span className="ssr-k">Observed flow</span><span className="ssr-v">{Number.isFinite(Number(streamflowObservation.dischargeCfs)) ? `${Math.round(Number(streamflowObservation.dischargeCfs))} cfs · ${streamflowObservation.trend || 'trend unknown'}` : streamflowObservation.trend || 'N/A'}</span></div>
+                  {streamflowObservation.forecast?.available && (
+                    <div className="ssr-snow-kv"><span className="ssr-k">Forecast peak</span><span className="ssr-v">{Number.isFinite(Number(streamflowObservation.forecast.peakFlowCfs)) ? `${Math.round(Number(streamflowObservation.forecast.peakFlowCfs))} cfs` : Number.isFinite(Number(streamflowObservation.forecast.peakStageFt)) ? `${streamflowObservation.forecast.peakStageFt} ft stage` : 'Available'}</span></div>
+                  )}
+                </>
+              )}
+
+              {accessObservation?.available && Number(accessObservation.closedRoadCount || 0) > 0 && (
+                <div className="ssr-cc-group">
+                  <div className="ssr-cc-group-h warn"><Route size={13} /> Forest Service road status <span className="ssr-cc-count">{accessObservation.closedRoadCount}</span></div>
+                  <ul className="ssr-bullets">
+                    {(accessObservation.roads || []).slice(0, 4).map((road, index) => (
+                      <li key={`${road.id || road.name}-${index}`}>{road.name || road.id || 'Unnamed road'}{road.operatingLevel ? ` — ${road.operatingLevel}` : ''}</li>
+                    ))}
+                  </ul>
+                  {accessObservation.note && <p className="ssr-muted">{accessObservation.note}</p>}
+                </div>
+              )}
+              {accessObservation?.available && Number(accessObservation.caltransClosureCount || 0) > 0 && (
+                <div className="ssr-cc-group">
+                  <div className="ssr-cc-group-h warn"><Route size={13} /> Caltrans closures <span className="ssr-cc-count">{accessObservation.caltransClosureCount}</span></div>
+                  <ul className="ssr-bullets">
+                    {(accessObservation.caltransClosures || []).slice(0, 4).map((closure, index) => (
+                      <li key={`${closure.name}-${index}`}>{closure.name || 'Caltrans closure'}{closure.summary ? ` — ${closure.summary}` : ''}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {wildfireObservation?.available && Number(wildfireObservation.nearbyIncidentCount || 0) > 0 && (
+                <div className="ssr-cc-group">
+                  <div className="ssr-cc-group-h nogo"><Flame size={13} /> Current fire activity <span className="ssr-cc-count">{wildfireObservation.nearbyIncidentCount}</span></div>
+                  <ul className="ssr-bullets">
+                    {(wildfireObservation.incidents || []).slice(0, 4).map((incident, index) => (
+                      <li key={`${incident.name}-${index}`}>{incident.name || 'Unnamed incident'}{Number.isFinite(Number(incident.distanceKm)) ? ` · ${localizeUnitText(`${incident.distanceKm} km away`)}` : ''}{Number.isFinite(Number(incident.percentContained)) ? ` · ${incident.percentContained}% contained` : ''}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -1437,6 +1553,10 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean 
                           </div>
                         ))}
                       </div>
+                    )}
+                    <p className="ssr-muted">{safetyData.airQuality?.dataType === 'observed_nowcast' ? 'Headline from nearby EPA AirNow observations.' : 'Headline modeled for the selected hour.'}</p>
+                    {safetyData.airQuality?.observation?.dominant?.reportingArea && safetyData.airQuality?.dataType !== 'observed_nowcast' && (
+                      <p className="ssr-muted">Current AirNow reporting area: {safetyData.airQuality.observation.dominant.reportingArea} · AQI {safetyData.airQuality.observation.dominant.aqi ?? 'N/A'}</p>
                     )}
                     {safetyData.airQuality?.note && <p className="ssr-muted">{safetyData.airQuality.note}</p>}
                   </>

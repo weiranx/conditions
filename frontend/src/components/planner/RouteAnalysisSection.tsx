@@ -227,12 +227,27 @@ export function RouteAnalysisSection({
           <div className="route-analysis-header">
             Route Analysis <span className="route-ai-badge">AI Advisory</span>
             {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
+            {routeAnalysis.routeSource === 'nps' && <span className="route-gpx-badge">NPS Trail</span>}
+            {routeAnalysis.routeSource === 'openstreetmap' && <span className="route-gpx-badge">Mapped Trail</span>}
           </div>
           <p className="route-analysis-disclaimer">
             {routeAnalysis.routeSource === 'gpx'
               ? 'Checkpoint coordinates come from your GPX track; conditions and recommendations remain model-derived. Verify the track and official sources before committing.'
-              : 'Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.'}
+              : routeAnalysis.routeSource === 'nps'
+                ? `Waypoint coordinates follow National Park Service public trail geometry${routeAnalysis.routeSourceDetails?.matchedName ? ` (${routeAnalysis.routeSourceDetails.matchedName})` : ''}; conditions and recommendations remain model-derived.`
+                : routeAnalysis.routeSource === 'openstreetmap'
+                  ? `Waypoint coordinates follow OpenStreetMap trail geometry${routeAnalysis.routeSourceDetails?.matchedName ? ` (${routeAnalysis.routeSourceDetails.matchedName})` : ''}. Community mapping may be incomplete; verify before committing.`
+                  : 'Waypoint locations and recommendations are AI-estimated. Cross-reference against CalTopo or Gaia GPS before committing.'}
           </p>
+          {routeAnalysis.terrainProfile && (
+            <div className="route-gpx-result-meta">
+              <strong>Sampled terrain</strong>
+              {Number.isFinite(Number(routeAnalysis.terrainProfile.sampledDistanceMiles)) && <span>{formatDistanceDisplay(Number(routeAnalysis.terrainProfile.sampledDistanceMiles))}</span>}
+              {Number.isFinite(Number(routeAnalysis.terrainProfile.sampledElevationGainFt)) && <span>{formatElevationDisplay(Number(routeAnalysis.terrainProfile.sampledElevationGainFt))} gain</span>}
+              {Number.isFinite(Number(routeAnalysis.terrainProfile.maxSampledGradePct)) && <span>max sampled grade {routeAnalysis.terrainProfile.maxSampledGradePct}%</span>}
+              {(routeAnalysis.terrainProfile.dominantTravelAspects || []).length > 0 && <span>travel aspects {(routeAnalysis.terrainProfile.dominantTravelAspects || []).join(', ')}</span>}
+            </div>
+          )}
           {routeAnalysis.routeMetadata && (
             <div className="route-gpx-result-meta">
               <strong>{routeAnalysis.routeMetadata.fileName}</strong>

@@ -41,7 +41,21 @@ export interface RouteAnalysisResult {
   summaries: RouteWaypointSummary[];
   analysis: string;
   partialData: boolean;
-  routeSource?: 'generated' | 'gpx';
+  routeSource?: 'generated' | 'gpx' | 'nps' | 'openstreetmap';
+  routeSourceDetails?: {
+    sourceLabel?: string;
+    matchedName?: string;
+    matchScore?: number;
+    metadata?: Record<string, unknown>;
+  };
+  terrainProfile?: {
+    sampledPointCount?: number;
+    sampledDistanceMiles?: number;
+    sampledElevationGainFt?: number;
+    maxSampledGradePct?: number | null;
+    dominantTravelAspects?: string[];
+    note?: string;
+  };
   routeMetadata?: GpxRouteMetadata;
 }
 

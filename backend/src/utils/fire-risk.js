@@ -9,7 +9,7 @@ const createUnavailableFireRiskData = (status = 'unavailable') => ({
   alertsUsed: 0,
 });
 
-const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
+const buildFireRiskData = ({ weatherData, alertsData, airQualityData, localConditionsData }) => {
   const weatherDescription = String(weatherData?.description || '').toLowerCase();
   const tempF = parseFloat(weatherData?.temp);
   const humidity = parseFloat(weatherData?.humidity);
@@ -18,6 +18,12 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
   const usAqi = parseFloat(airQualityData?.usAqi);
   const alerts = Array.isArray(alertsData?.alerts) ? alertsData.alerts : [];
   const alertsRelevant = String(alertsData?.status || '') !== 'future_time_not_supported';
+  const nearbyIncidents = Array.isArray(localConditionsData?.wildfire?.incidents)
+    ? localConditionsData.wildfire.incidents
+    : [];
+  const firmsDetections = Array.isArray(localConditionsData?.wildfire?.firmsDetections)
+    ? localConditionsData.wildfire.firmsDetections
+    : [];
 
   const fireAlertEvents = alertsRelevant
     ? alerts.filter((alert) => /red flag|fire weather|wildfire|smoke|air quality/i.test(String(alert?.event || '')))
@@ -59,6 +65,24 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
     reasons.push('Moderate AQI could affect exertion tolerance in exposed terrain.');
   }
 
+  const nearestIncident = nearbyIncidents.find((incident) => Number.isFinite(Number(incident?.distanceKm))) || nearbyIncidents[0];
+  const nearestIncidentKm = Number(nearestIncident?.distanceKm);
+  const nearestDetectionKm = Number(firmsDetections.find((detection) => Number.isFinite(Number(detection?.distanceKm)))?.distanceKm);
+  if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= 15) {
+    level = Math.max(level, 4);
+    reasons.push(`Current WFIGS fire perimeter/incident is approximately ${Math.round(nearestIncidentKm)} km away (${nearestIncident?.name || 'unnamed incident'}).`);
+  } else if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= 50) {
+    level = Math.max(level, 3);
+    reasons.push(`Current WFIGS fire activity is approximately ${Math.round(nearestIncidentKm)} km away (${nearestIncident?.name || 'unnamed incident'}).`);
+  } else if (nearbyIncidents.length > 0) {
+    level = Math.max(level, 2);
+    reasons.push(`${nearbyIncidents.length} current WFIGS fire incident/perimeter signal(s) are within 150 km.`);
+  }
+  if (Number.isFinite(nearestDetectionKm) && nearestDetectionKm <= 25) {
+    level = Math.max(level, 3);
+    reasons.push(`NASA FIRMS detected recent thermal activity approximately ${Math.round(nearestDetectionKm)} km away.`);
+  }
+
   const labelMap = ['Low', 'Caution', 'Elevated', 'High', 'Extreme'];
   const guidanceMap = [
     'No strong fire-weather signal from current sources.',
@@ -69,7 +93,9 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData }) => {
   ];
 
   return {
-    source: 'Derived from NOAA weather, NWS alerts, and air-quality signals',
+    source: nearbyIncidents.length || firmsDetections.length
+      ? 'Derived from NOAA weather, NWS alerts, air quality, NIFC WFIGS, and NASA FIRMS signals'
+      : 'Derived from NOAA weather, NWS alerts, and air-quality signals',
     status: 'ok',
     level,
     label: labelMap[level] || 'Low',
