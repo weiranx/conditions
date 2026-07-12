@@ -132,6 +132,11 @@ DEBUG_AVY=false
 # Choose the preferred provider. Configure both keys for automatic per-request
 # failover when the preferred provider errors or times out.
 AI_PROVIDER=openai
+# Used when no persisted admin setting exists. Admin changes are written to
+# backend/data/ai-settings.json by default and survive process restarts.
+AI_ENABLED=true
+# Optional absolute path override for the persisted runtime settings file.
+AI_SETTINGS_FILE=
 AI_PRIMARY_TIMEOUT_MS=28000
 AI_FAST_TIMEOUT_MS=8000
 

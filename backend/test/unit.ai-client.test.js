@@ -1,3 +1,7 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
 const mockOpenAICreate = jest.fn();
 const mockAnthropicCreate = jest.fn();
 
@@ -10,6 +14,8 @@ jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
 
 const ENV_KEYS = [
   'AI_PROVIDER',
+  'AI_ENABLED',
+  'AI_SETTINGS_FILE',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
   'OPENAI_FAST_MODEL',
@@ -39,6 +45,8 @@ describe('AI provider client wrapper', () => {
     delete process.env.ANTHROPIC_FAST_MODEL;
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
+    delete process.env.AI_ENABLED;
+    delete process.env.AI_SETTINGS_FILE;
   });
 
   afterAll(() => {
@@ -139,6 +147,7 @@ describe('AI provider client wrapper', () => {
     expect(getAIStatus()).toEqual({
       enabled: true,
       available: true,
+      persistent: false,
       provider: 'anthropic',
       defaultProvider: 'anthropic',
       primaryModel: 'claude-sonnet-5',
@@ -173,6 +182,39 @@ describe('AI provider client wrapper', () => {
     const { isAIAvailable } = loadClient('openai');
 
     expect(isAIAvailable()).toBe(false);
+  });
+
+  test('uses AI_ENABLED as the startup fallback when no settings file exists', () => {
+    process.env.AI_ENABLED = 'false';
+    const { getAIStatus, isAIAvailable } = loadClient('openai');
+
+    expect(getAIStatus()).toEqual(expect.objectContaining({ enabled: false, persistent: false }));
+    expect(isAIAvailable()).toBe(false);
+  });
+
+  test('persists runtime settings across module reloads', () => {
+    const settingsFile = path.join(os.tmpdir(), `conditions-ai-settings-${process.pid}-${Date.now()}.json`);
+    process.env.AI_SETTINGS_FILE = settingsFile;
+    try {
+      const firstClient = loadClient('openai');
+      firstClient.updateAISettings({ enabled: false, provider: 'anthropic' });
+
+      expect(JSON.parse(fs.readFileSync(settingsFile, 'utf8'))).toEqual({
+        enabled: false,
+        provider: 'anthropic',
+      });
+      expect(fs.statSync(settingsFile).mode & 0o777).toBe(0o600);
+
+      const reloadedClient = loadClient('openai');
+      expect(reloadedClient.getAIStatus()).toEqual(expect.objectContaining({
+        enabled: false,
+        provider: 'anthropic',
+        defaultProvider: 'openai',
+        persistent: true,
+      }));
+    } finally {
+      fs.rmSync(settingsFile, { force: true });
+    }
   });
 
   test('switches the preferred provider at runtime', async () => {

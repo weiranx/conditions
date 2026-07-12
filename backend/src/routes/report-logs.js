@@ -174,7 +174,11 @@ const registerReportLogsRoute = (app) => {
     try {
       res.json(updateAISettings({ enabled: body.enabled, provider: body.provider }));
     } catch (error) {
-      const status = error?.code === 'AI_PROVIDER_NOT_CONFIGURED' ? 409 : 400;
+      const status = error?.code === 'AI_PROVIDER_NOT_CONFIGURED'
+        ? 409
+        : error?.code === 'AI_SETTINGS_PERSIST_FAILED'
+          ? 500
+          : 400;
       res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid AI settings' });
     }
   });

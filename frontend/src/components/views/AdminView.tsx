@@ -94,6 +94,7 @@ type AIProvider = 'openai' | 'anthropic';
 interface AIAdminSettings {
   enabled: boolean;
   available: boolean;
+  persistent: boolean;
   provider: AIProvider;
   defaultProvider: AIProvider;
   primaryModel: string;
@@ -827,7 +828,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-ai-controls-title">AI controls</h2>
-            <p>Runtime settings apply immediately and reset to environment defaults after a backend restart</p>
+            <p>{aiSettings?.persistent === false
+              ? 'Changes apply immediately but persistence is unavailable in this environment'
+              : 'Changes apply immediately and persist across backend restarts'}</p>
           </div>
           <span className={aiSettings?.enabled ? 'admin-ai-status is-enabled' : 'admin-ai-status is-stopped'}>
             <span aria-hidden /> {aiSettings ? (aiSettings.enabled ? 'AI enabled' : 'AI stopped') : 'Status unavailable'}

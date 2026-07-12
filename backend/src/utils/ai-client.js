@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 const { logger } = require('./logger');
@@ -8,6 +10,12 @@ const DEFAULT_AI_PROVIDER = String(process.env.AI_PROVIDER || 'openai').trim().t
 if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
   throw new Error(`AI_PROVIDER must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
 }
+const DEFAULT_AI_ENABLED = String(process.env.AI_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
+const AI_SETTINGS_FILE = process.env.AI_SETTINGS_FILE
+  ? path.resolve(process.env.AI_SETTINGS_FILE)
+  : process.env.NODE_ENV === 'test'
+    ? null
+    : path.resolve(__dirname, '../../data/ai-settings.json');
 
 const MODEL_CONFIG = {
   openai: {
@@ -33,9 +41,61 @@ const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
 let openAIClient;
 let anthropicClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
-let aiEnabled = true;
+let aiEnabled = DEFAULT_AI_ENABLED;
 
 const fallbackProviderFor = (provider) => provider === 'openai' ? 'anthropic' : 'openai';
+
+const loadPersistedAISettings = () => {
+  if (!AI_SETTINGS_FILE || !fs.existsSync(AI_SETTINGS_FILE)) return;
+  try {
+    const persisted = JSON.parse(fs.readFileSync(AI_SETTINGS_FILE, 'utf8'));
+    if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
+      throw new TypeError('Persisted AI settings must be an object');
+    }
+    if (typeof persisted.enabled === 'boolean') {
+      aiEnabled = persisted.enabled;
+    } else if (persisted.enabled !== undefined) {
+      logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI enabled value');
+    }
+    if (SUPPORTED_PROVIDERS.has(persisted.provider) && MODEL_CONFIG[persisted.provider].configured) {
+      activeProvider = persisted.provider;
+    } else if (persisted.provider !== undefined) {
+      logger.warn(
+        { file: AI_SETTINGS_FILE, provider: persisted.provider },
+        'Ignoring unavailable persisted AI provider',
+      );
+    }
+    logger.info(
+      { file: AI_SETTINGS_FILE, enabled: aiEnabled, provider: activeProvider },
+      'Loaded persisted AI runtime settings',
+    );
+  } catch (error) {
+    logger.error({ err: error, file: AI_SETTINGS_FILE }, 'Failed to load persisted AI settings; using environment defaults');
+  }
+};
+
+const persistAISettings = () => {
+  if (!AI_SETTINGS_FILE) return;
+  const tempFile = `${AI_SETTINGS_FILE}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(AI_SETTINGS_FILE), { recursive: true });
+    fs.writeFileSync(
+      tempFile,
+      `${JSON.stringify({ enabled: aiEnabled, provider: activeProvider }, null, 2)}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+    fs.renameSync(tempFile, AI_SETTINGS_FILE);
+  } catch (error) {
+    try {
+      fs.rmSync(tempFile, { force: true });
+    } catch {
+      // Best-effort cleanup; preserve the original persistence failure below.
+    }
+    throw error;
+  }
+};
+
+loadPersistedAISettings();
 
 const getOpenAIClient = () => {
   if (!openAIClient) {
@@ -254,6 +314,7 @@ const getAIStatus = () => {
   return {
     enabled: aiEnabled,
     available: aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured),
+    persistent: Boolean(AI_SETTINGS_FILE),
     provider: activeProvider,
     defaultProvider: DEFAULT_AI_PROVIDER,
     primaryModel: MODEL_CONFIG[activeProvider].primary,
@@ -289,6 +350,17 @@ const updateAISettings = ({ enabled, provider } = {}) => {
   const previous = { enabled: aiEnabled, provider: activeProvider };
   if (enabled !== undefined) aiEnabled = enabled;
   if (provider !== undefined) activeProvider = provider;
+  try {
+    persistAISettings();
+  } catch (error) {
+    aiEnabled = previous.enabled;
+    activeProvider = previous.provider;
+    logger.error({ err: error, file: AI_SETTINGS_FILE }, 'Failed to persist AI runtime settings');
+    const persistenceError = new Error('AI settings could not be saved');
+    persistenceError.code = 'AI_SETTINGS_PERSIST_FAILED';
+    persistenceError.cause = error;
+    throw persistenceError;
+  }
   logger.warn(
     { previous, current: { enabled: aiEnabled, provider: activeProvider } },
     'AI runtime settings changed by administrator',
