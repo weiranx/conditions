@@ -1,85 +1,157 @@
 import React from 'react';
 
-const CHUNK_RELOAD_GUARD_KEY = 'summitsafe:chunk-reload-attempt:v1';
-const CHUNK_RELOAD_GUARD_MS = 30_000;
+const CHUNK_RECOVERY_GUARD_KEY = 'summitsafe:chunk-recovery-attempts:v2';
+const CHUNK_RECOVERY_WINDOW_MS = 2 * 60_000;
+const CHUNK_RECOVERY_STABLE_MS = 15_000;
+const CHUNK_RECOVERY_MAX_RELOADS = 3;
+const CHUNK_RECOVERY_PROBE_DELAYS_MS = [750, 1_500, 3_000, 5_000, 8_000, 13_000, 20_000];
+
+interface ChunkRecoveryHistory {
+  location: string;
+  attemptedAt: number[];
+}
 
 function isRecoverableChunkLoadError(error: Error): boolean {
   const message = `${error.name}: ${error.message}`;
   return /ChunkLoadError|Loading chunk .* failed|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Expected a JavaScript-or-Wasm module script/i.test(message);
 }
 
-function reloadAfterChunkLoadError(): void {
+function readChunkRecoveryHistory(): ChunkRecoveryHistory | null {
   const locationKey = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
   try {
-    const rawAttempt = window.sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY);
-    if (rawAttempt) {
-      try {
-        const previousAttempt = JSON.parse(rawAttempt) as { location?: unknown; attemptedAt?: unknown };
-        const attemptedAt = Number(previousAttempt.attemptedAt);
-        const elapsed = Date.now() - attemptedAt;
-        if (
-          previousAttempt.location === locationKey &&
-          Number.isFinite(attemptedAt) &&
-          elapsed >= 0 &&
-          elapsed < CHUNK_RELOAD_GUARD_MS
-        ) {
-          return;
-        }
-      } catch {
-        // Replace a malformed guard value below.
-      }
+    const rawHistory = window.sessionStorage.getItem(CHUNK_RECOVERY_GUARD_KEY);
+    if (!rawHistory) return { location: locationKey, attemptedAt: [] };
+
+    const parsed = JSON.parse(rawHistory) as { location?: unknown; attemptedAt?: unknown };
+    if (parsed.location !== locationKey || !Array.isArray(parsed.attemptedAt)) {
+      return { location: locationKey, attemptedAt: [] };
     }
 
-    window.sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, JSON.stringify({
-      location: locationKey,
-      attemptedAt: Date.now(),
-    }));
-    window.location.reload();
+    const cutoff = Date.now() - CHUNK_RECOVERY_WINDOW_MS;
+    const attemptedAt = parsed.attemptedAt
+      .map(Number)
+      .filter((timestamp) => Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= Date.now());
+    return { location: locationKey, attemptedAt };
   } catch {
-    // Without session storage, reloading could create an unrecoverable loop.
+    // Without session storage, an automatic reload could create an unrecoverable loop.
+    return null;
   }
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
+function getChunkRecoveryProbe(error: Error): { url: string; expectsJavaScript: boolean } {
+  const message = `${error.name}: ${error.message}`;
+  const failedAsset = message.match(/(?:https?:\/\/[^\s)"']+|\/assets\/[^\s)"']+)/i)?.[0];
+  if (!failedAsset) return { url: window.location.href, expectsJavaScript: false };
+
+  return { url: new URL(failedAsset, window.location.href).href, expectsJavaScript: true };
+}
+
+async function reloadWhenAppIsAvailable(error: Error): Promise<boolean> {
+  const history = readChunkRecoveryHistory();
+  if (!history || history.attemptedAt.length >= CHUNK_RECOVERY_MAX_RELOADS) return false;
+  const probe = getChunkRecoveryProbe(error);
+
+  for (const delayMs of CHUNK_RECOVERY_PROBE_DELAYS_MS) {
+    await wait(delayMs);
+
+    try {
+      const response = await window.fetch(probe.url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) continue;
+      if (probe.expectsJavaScript && response.headers.get('content-type')?.includes('text/html')) continue;
+
+      window.sessionStorage.setItem(CHUNK_RECOVERY_GUARD_KEY, JSON.stringify({
+        ...history,
+        attemptedAt: [...history.attemptedAt, Date.now()],
+      }));
+      window.location.reload();
+      return true;
+    } catch {
+      // The frontend is still restarting. Try again after the next backoff.
+    }
+  }
+
+  return false;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  recoveryExhausted: boolean;
 }
 
 export class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   ErrorBoundaryState
 > {
+  private recoveryStarted = false;
+
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, recoveryExhausted: false };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+    return { hasError: true, error, recoveryExhausted: false };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('Backcountry Conditions crashed:', error, info.componentStack);
-    if (isRecoverableChunkLoadError(error)) {
-      reloadAfterChunkLoadError();
+    if (isRecoverableChunkLoadError(error) && !this.recoveryStarted) {
+      this.recoveryStarted = true;
+      void reloadWhenAppIsAvailable(error).then((willReload) => {
+        if (!willReload) this.setState({ recoveryExhausted: true });
+      });
     }
+  }
+
+  componentDidMount() {
+    window.setTimeout(() => {
+      if (!this.state.hasError) {
+        try {
+          window.sessionStorage.removeItem(CHUNK_RECOVERY_GUARD_KEY);
+        } catch {
+          // Recovery remains disabled when session storage is unavailable.
+        }
+      }
+    }, CHUNK_RECOVERY_STABLE_MS);
+  }
+
+  private handleReload = () => {
+    try {
+      window.sessionStorage.removeItem(CHUNK_RECOVERY_GUARD_KEY);
+    } catch {
+      // A user-requested reload is safe even when session storage is unavailable.
+    }
+    window.location.reload();
   }
 
   render() {
     if (this.state.hasError) {
+      const recovering = Boolean(this.state.error && isRecoverableChunkLoadError(this.state.error));
       return (
         <div style={{ padding: '2rem', maxWidth: '600px', margin: '4rem auto', fontFamily: 'system-ui, sans-serif' }}>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Something went wrong</h1>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
+            {recovering && !this.state.recoveryExhausted ? 'Reconnecting…' : 'Something went wrong'}
+          </h1>
           <p style={{ marginBottom: '1rem', color: '#666' }}>
-            An unexpected error occurred. Refreshing the page usually resolves this.
+            {recovering && !this.state.recoveryExhausted
+              ? 'The app was briefly unavailable. It will reload automatically when the server is ready.'
+              : 'An unexpected error occurred. Refreshing the page usually resolves this.'}
           </p>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={this.handleReload}
             style={{ marginTop: '1rem', padding: '0.5rem 1.25rem', background: '#222', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}
           >
-            Reload
+            Reload now
           </button>
         </div>
       );
