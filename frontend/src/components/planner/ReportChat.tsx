@@ -12,6 +12,7 @@ import {
   MessageContent,
   MessageResponse,
 } from '../ai-elements/message';
+import { buildApiUrl } from '../../lib/api-client';
 import '../../styles/report-chat.css';
 
 const STARTER_QUESTIONS = [
@@ -29,7 +30,7 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
   const [input, setInput] = React.useState('');
   const conversationId = React.useId();
   const transport = React.useMemo(
-    () => new DefaultChatTransport({ api: '/api/report-chat' }),
+    () => new DefaultChatTransport({ api: buildApiUrl('/api/report-chat') }),
     [],
   );
   const {
