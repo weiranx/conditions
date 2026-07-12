@@ -1,4 +1,4 @@
-import { BarChart3, CalendarRange, House, Map, Mountain, SlidersHorizontal } from 'lucide-react';
+import { CalendarRange, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import '../../styles/page-chrome.css';
 
@@ -21,8 +21,8 @@ export function ProductNav({
     { id: 'trip', label: 'Trip', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) },
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
   ];
-  if (active === 'logs') {
-    items.push({ id: 'logs', label: 'Analytics', icon: BarChart3, action: () => navigateToView('logs') });
+  if (active === 'admin') {
+    items.push({ id: 'admin', label: 'Admin', icon: ShieldCheck, action: () => navigateToView('admin') });
   }
 
   return (

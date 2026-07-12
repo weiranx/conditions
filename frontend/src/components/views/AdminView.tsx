@@ -3,17 +3,23 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Bot,
   CheckCircle2,
   Clock3,
+  Cpu,
+  Database,
   Download,
   ExternalLink,
   Gauge,
   KeyRound,
   LoaderCircle,
   Lock,
+  Pause,
+  Play,
   MapPinned,
   RefreshCw,
   Search,
+  Server,
   ShieldCheck,
   Sparkles,
   Users,
@@ -62,21 +68,51 @@ interface AIUsageEntry {
   totalTokens: number;
 }
 
-const LOGS_SESSION_KEY = 'summitsafe:logs-key';
+interface AdminHealthSnapshot {
+  ok: boolean;
+  version: string;
+  env: string;
+  uptime: number;
+  nodeVersion: string;
+  memory: {
+    heapUsedMb: number;
+    rssMb: number;
+  };
+  ai?: {
+    provider: string;
+    primaryModel: string;
+    configured: boolean;
+    fallbackConfigured: boolean;
+  };
+  caches: Array<{
+    name: string;
+    size: number;
+    hits: number;
+    misses: number;
+    staleHits: number;
+  }>;
+  timestamp: string;
+}
 
-interface LogsViewProps {
+const ADMIN_SESSION_KEY = 'summitsafe:admin-key';
+const LEGACY_LOGS_SESSION_KEY = 'summitsafe:logs-key';
+
+interface AdminViewProps {
   navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
 }
 
-export function LogsView({ navigateToView, openPlannerView, openTripToolView }: LogsViewProps) {
-  const [secretKey, setSecretKey] = useState<string>(() => sessionStorage.getItem(LOGS_SESSION_KEY) ?? '');
+export function AdminView({ navigateToView, openPlannerView, openTripToolView }: AdminViewProps) {
+  const [secretKey, setSecretKey] = useState<string>(() => (
+    sessionStorage.getItem(ADMIN_SESSION_KEY) ?? sessionStorage.getItem(LEGACY_LOGS_SESSION_KEY) ?? ''
+  ));
   const [draft, setDraft] = useState('');
   const [rejected, setRejected] = useState(false);
 
-  const lockLogs = useCallback((wasRejected = false) => {
-    sessionStorage.removeItem(LOGS_SESSION_KEY);
+  const lockAdmin = useCallback((wasRejected = false) => {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    sessionStorage.removeItem(LEGACY_LOGS_SESSION_KEY);
     setSecretKey('');
     setRejected(wasRejected);
   }, []);
@@ -85,7 +121,8 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
     event.preventDefault();
     const trimmed = draft.trim();
     if (!trimmed) return;
-    sessionStorage.setItem(LOGS_SESSION_KEY, trimmed);
+    sessionStorage.setItem(ADMIN_SESSION_KEY, trimmed);
+    sessionStorage.removeItem(LEGACY_LOGS_SESSION_KEY);
     setSecretKey(trimmed);
     setRejected(false);
     setDraft('');
@@ -94,7 +131,7 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
   return (
     <>
       <ProductNav
-        active="logs"
+        active="admin"
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
@@ -102,25 +139,25 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
       <main className="logs-page">
         <header className="logs-page-head">
           <div>
-            <div className="logs-kicker"><BarChart3 size={14} aria-hidden /> Analytics</div>
-            <h1>Report analytics</h1>
-            <p>Understand report demand, response health, and processing performance across the last seven days.</p>
+            <div className="logs-kicker"><ShieldCheck size={14} aria-hidden /> Administration</div>
+            <h1>Admin console</h1>
+            <p>Monitor system health, investigate report issues, and understand AI and request usage from one protected workspace.</p>
           </div>
           {secretKey && (
-            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => lockLogs()}>
+            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => lockAdmin()}>
               <Lock size={15} aria-hidden /> Lock
             </button>
           )}
         </header>
 
         {secretKey ? (
-          <ReportLogsDashboard secretKey={secretKey} onUnauthorized={() => lockLogs(true)} />
+          <AdminDashboard secretKey={secretKey} onUnauthorized={() => lockAdmin(true)} />
         ) : (
-          <section className="logs-unlock-card" aria-labelledby="logs-unlock-title">
+          <section className="logs-unlock-card" aria-labelledby="admin-unlock-title">
             <div className="logs-unlock-icon"><KeyRound size={22} aria-hidden /></div>
             <div className="logs-unlock-copy">
-              <h2 id="logs-unlock-title">Restricted access</h2>
-              <p>Enter the server’s logs key. It is stored only for this browser session.</p>
+              <h2 id="admin-unlock-title">Admin access</h2>
+              <p>Enter the server’s admin key. It is stored only for this browser session.</p>
             </div>
             <form onSubmit={handleSubmit} className="logs-unlock-form">
               <label htmlFor="logs-key-input">Access key</label>
@@ -150,7 +187,7 @@ export function LogsView({ navigateToView, openPlannerView, openTripToolView }: 
 }
 
 type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' | 'durationMs' | 'ip';
-type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial';
+type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow';
 type AnalyticsRange = '24h' | '7d';
 
 const ANALYTICS_RANGES: Array<{ value: AnalyticsRange; label: string; durationMs: number }> = [
@@ -173,6 +210,7 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'issues', label: 'Needs attention' },
   { value: 'errors', label: 'Errors' },
   { value: 'partial', label: 'Partial data' },
+  { value: 'slow', label: 'Slow (10s+)' },
 ];
 
 function getLogSortValue(entry: ReportLogEntry, key: LogSortKey): string | number {
@@ -192,6 +230,7 @@ function matchesStatus(entry: ReportLogEntry, filter: StatusFilter): boolean {
   if (filter === 'issues') return entry.statusCode !== 200 || entry.partialData === true;
   if (filter === 'errors') return entry.statusCode !== 200;
   if (filter === 'partial') return entry.partialData === true;
+  if (filter === 'slow') return entry.durationMs >= 10_000;
   return true;
 }
 
@@ -331,6 +370,33 @@ function buildAIModels(entries: AIUsageEntry[]) {
   return [...models.values()].sort((left, right) => right.tokens - left.tokens || right.calls - left.calls);
 }
 
+function buildAIFeatures(entries: AIUsageEntry[]) {
+  const features = new Map<string, { feature: string; calls: number; errors: number; tokens: number; totalDurationMs: number }>();
+  entries.forEach((entry) => {
+    const feature = entry.feature?.trim() || 'unknown';
+    const current = features.get(feature) ?? { feature, calls: 0, errors: 0, tokens: 0, totalDurationMs: 0 };
+    current.calls += 1;
+    current.errors += entry.status === 'error' ? 1 : 0;
+    current.tokens += Number.isFinite(entry.totalTokens) ? entry.totalTokens : 0;
+    current.totalDurationMs += Number.isFinite(entry.durationMs) ? entry.durationMs : 0;
+    features.set(feature, current);
+  });
+  return [...features.values()]
+    .map((feature) => ({ ...feature, averageDurationMs: feature.calls ? feature.totalDurationMs / feature.calls : 0 }))
+    .sort((left, right) => right.calls - left.calls || right.tokens - left.tokens);
+}
+
+function formatUptime(seconds: number | undefined): string {
+  if (!Number.isFinite(seconds)) return '—';
+  const totalMinutes = Math.floor((seconds ?? 0) / 60);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function formatTokenCount(value: number): string {
   if (!Number.isFinite(value)) return '—';
   if (value < 1000) return value.toLocaleString();
@@ -342,15 +408,32 @@ function escapeCsv(value: string | number | boolean | null): string {
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-function downloadCsv(entries: ReportLogEntry[]) {
-  const keys: Array<keyof ReportLogEntry> = ['timestamp', 'name', 'lat', 'lon', 'date', 'startTime', 'statusCode', 'safetyScore', 'partialData', 'durationMs', 'ip', 'userAgent'];
-  const csv = [keys.join(','), ...entries.map((entry) => keys.map((key) => escapeCsv(entry[key])).join(','))].join('\n');
+function triggerCsvDownload(filename: string, headers: string[], rows: Array<Array<string | number | boolean | null>>) {
+  const csv = [headers.join(','), ...rows.map((row) => row.map(escapeCsv).join(','))].join('\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `report-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadReportCsv(entries: ReportLogEntry[]) {
+  const keys: Array<keyof ReportLogEntry> = ['timestamp', 'name', 'lat', 'lon', 'date', 'startTime', 'statusCode', 'safetyScore', 'partialData', 'durationMs', 'ip', 'userAgent'];
+  triggerCsvDownload(
+    `report-logs-${new Date().toISOString().slice(0, 10)}.csv`,
+    keys,
+    entries.map((entry) => keys.map((key) => entry[key])),
+  );
+}
+
+function downloadAIUsageCsv(entries: AIUsageEntry[]) {
+  const keys: Array<keyof AIUsageEntry> = ['timestamp', 'provider', 'model', 'feature', 'status', 'durationMs', 'inputTokens', 'outputTokens', 'totalTokens'];
+  triggerCsvDownload(
+    `ai-usage-${new Date().toISOString().slice(0, 10)}.csv`,
+    keys,
+    entries.map((entry) => keys.map((key) => entry[key])),
+  );
 }
 
 function SortButton({ sortKey, activeKey, ascending, onSort, children }: {
@@ -368,28 +451,34 @@ function SortButton({ sortKey, activeKey, ascending, onSort, children }: {
   );
 }
 
-function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
+function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [aiUsage, setAIUsage] = useState<AIUsageEntry[]>([]);
+  const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiUsageError, setAIUsageError] = useState<string | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
   const [sortAsc, setSortAsc] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const hasLoadedRef = useRef(false);
+  const requestActivityRef = useRef<HTMLElement>(null);
+  const aiUsageRef = useRef<HTMLElement>(null);
 
-  const fetchLogs = useCallback(async (background = false) => {
+  const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
       const headers = { Authorization: `Bearer ${secretKey}` };
-      const [logsResult, aiUsageResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult] = await Promise.all([
         fetchApi('/api/report-logs', { headers }),
         fetchApi('/api/ai-usage', { headers }),
+        fetchApi('/api/healthz'),
       ]);
       if ([logsResult.response.status, aiUsageResult.response.status].some((status) => status === 401 || status === 403)) {
         onUnauthorized();
@@ -408,9 +497,16 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
       } else {
         setAIUsageError('AI usage data is temporarily unavailable.');
       }
+      if (healthResult.response.ok && healthResult.payload && typeof healthResult.payload === 'object') {
+        setHealth(healthResult.payload as AdminHealthSnapshot);
+        setHealthError(null);
+      } else {
+        setHealthError('System details are temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
+      setHealthError('System details are temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -420,11 +516,12 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
   useEffect(() => {
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true;
-      void fetchLogs();
+      void fetchAdminData();
     }
-    const interval = window.setInterval(() => void fetchLogs(true), 30_000);
+    if (!autoRefresh) return undefined;
+    const interval = window.setInterval(() => void fetchAdminData(true), 30_000);
     return () => window.clearInterval(interval);
-  }, [fetchLogs]);
+  }, [autoRefresh, fetchAdminData]);
 
   const referenceTime = lastRefreshed?.getTime() ?? Date.now();
   const selectedRange = ANALYTICS_RANGES.find((option) => option.value === analyticsRange) ?? ANALYTICS_RANGES[1];
@@ -482,6 +579,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
     [analyticsRange, rangeAIUsage, referenceTime],
   );
   const aiModels = useMemo(() => buildAIModels(rangeAIUsage), [rangeAIUsage]);
+  const aiFeatures = useMemo(() => buildAIFeatures(rangeAIUsage), [rangeAIUsage]);
   const aiMetrics = useMemo(() => {
     const successful = rangeAIUsage.filter((entry) => entry.status === 'success').length;
     return {
@@ -489,8 +587,20 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
       inputTokens: rangeAIUsage.reduce((sum, entry) => sum + (Number.isFinite(entry.inputTokens) ? entry.inputTokens : 0), 0),
       outputTokens: rangeAIUsage.reduce((sum, entry) => sum + (Number.isFinite(entry.outputTokens) ? entry.outputTokens : 0), 0),
       successRate: rangeAIUsage.length ? Math.round((successful / rangeAIUsage.length) * 1000) / 10 : null,
+      failures: rangeAIUsage.length - successful,
     };
   }, [rangeAIUsage]);
+  const slowReports = useMemo(() => rangeLogs.filter((entry) => entry.durationMs >= 10_000).length, [rangeLogs]);
+  const cacheMetrics = useMemo(() => {
+    const caches = health?.caches ?? [];
+    const hits = caches.reduce((sum, cache) => sum + cache.hits + cache.staleHits, 0);
+    const misses = caches.reduce((sum, cache) => sum + cache.misses, 0);
+    const requests = hits + misses;
+    return {
+      entries: caches.reduce((sum, cache) => sum + cache.size, 0),
+      hitRate: requests ? Math.round((hits / requests) * 100) : null,
+    };
+  }, [health]);
   const busiestHour = useMemo(
     () => hourlyDistribution.reduce((busiest, current) => current.requests > busiest.requests ? current : busiest, hourlyDistribution[0]),
     [hourlyDistribution],
@@ -520,6 +630,11 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
     }
   };
 
+  const showRequestFilter = (filter: StatusFilter) => {
+    setStatusFilter(filter);
+    window.requestAnimationFrame(() => requestActivityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
   if (loading) {
     return <div className="logs-state-card"><LoaderCircle className="logs-spin" size={20} aria-hidden /><span>Loading report activity…</span></div>;
   }
@@ -530,11 +645,11 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
         <div className="logs-alert" role="alert">
           <AlertTriangle size={17} aria-hidden />
           <span>{error}</span>
-          <button type="button" onClick={() => void fetchLogs()}>Try again</button>
+          <button type="button" onClick={() => void fetchAdminData()}>Try again</button>
         </div>
       )}
 
-      <section className="logs-dashboard-toolbar" aria-label="Analytics controls">
+      <section className="logs-dashboard-toolbar" aria-label="Admin dashboard controls">
         <div>
           <h2>Overview</h2>
           <p>{rangeLogs.length.toLocaleString()} reports in the selected period</p>
@@ -556,10 +671,94 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
               </button>
             ))}
           </div>
-          <button type="button" className="logs-icon-btn" onClick={() => void fetchLogs(true)} disabled={refreshing} title="Refresh analytics" aria-label="Refresh analytics">
+          <button
+            type="button"
+            className={autoRefresh ? 'logs-icon-btn is-active' : 'logs-icon-btn'}
+            onClick={() => setAutoRefresh((current) => !current)}
+            title={autoRefresh ? 'Pause auto-refresh' : 'Resume auto-refresh'}
+            aria-label={autoRefresh ? 'Pause auto-refresh' : 'Resume auto-refresh'}
+            aria-pressed={autoRefresh}
+          >
+            {autoRefresh ? <Pause size={15} aria-hidden /> : <Play size={15} aria-hidden />}
+          </button>
+          <button type="button" className="logs-icon-btn" onClick={() => void fetchAdminData(true)} disabled={refreshing} title="Refresh admin data" aria-label="Refresh admin data">
             <RefreshCw className={refreshing ? 'logs-spin' : ''} size={16} aria-hidden />
           </button>
         </div>
+      </section>
+
+      <section className="admin-operations-grid" aria-label="System operations">
+        <article className="logs-chart-card admin-system-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>System snapshot</h2>
+              <p>Live backend runtime and cache status</p>
+            </div>
+            <Server size={18} aria-hidden />
+          </div>
+          {healthError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {healthError}</div>}
+          <div className="admin-system-grid">
+            <div>
+              <span><Server size={14} aria-hidden /> Service</span>
+              <strong className={health?.ok ? 'is-healthy' : 'is-unavailable'}>{health?.ok ? 'Online' : 'Unavailable'}</strong>
+              <small>{health ? `${health.env} · v${health.version}` : 'Waiting for health data'}</small>
+            </div>
+            <div>
+              <span><Clock3 size={14} aria-hidden /> Uptime</span>
+              <strong>{formatUptime(health?.uptime)}</strong>
+              <small>{health?.timestamp ? `Checked ${new Date(health.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '—'}</small>
+            </div>
+            <div>
+              <span><Cpu size={14} aria-hidden /> Runtime</span>
+              <strong>{health?.nodeVersion ?? '—'}</strong>
+              <small>{health ? `${health.memory.rssMb} MB RSS · ${health.memory.heapUsedMb} MB heap` : 'Memory unavailable'}</small>
+            </div>
+            <div>
+              <span><Database size={14} aria-hidden /> Cache</span>
+              <strong>{cacheMetrics.hitRate == null ? '—' : `${cacheMetrics.hitRate}% hit rate`}</strong>
+              <small>{cacheMetrics.entries.toLocaleString()} active entries</small>
+            </div>
+            <div>
+              <span><Bot size={14} aria-hidden /> AI provider</span>
+              <strong>{health?.ai?.provider ?? '—'}</strong>
+              <small>{health?.ai ? `${health.ai.primaryModel} · ${health.ai.configured ? 'configured' : 'key missing'}` : 'Provider unavailable'}</small>
+            </div>
+          </div>
+        </article>
+
+        <article className="logs-chart-card admin-action-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Action center</h2>
+              <p>Signals that may need investigation</p>
+            </div>
+            <AlertTriangle size={18} aria-hidden />
+          </div>
+          <div className="admin-action-list">
+            <button type="button" onClick={() => showRequestFilter('issues')} disabled={metrics.issues === 0}>
+              <span className="is-amber"><AlertTriangle size={15} aria-hidden /></span>
+              <span><strong>Report issues</strong><small>Failed or partial responses</small></span>
+              <b>{metrics.issues}</b>
+            </button>
+            <button type="button" onClick={() => showRequestFilter('slow')} disabled={slowReports === 0}>
+              <span><Clock3 size={15} aria-hidden /></span>
+              <span><strong>Slow reports</strong><small>Responses taking 10 seconds or longer</small></span>
+              <b>{slowReports}</b>
+            </button>
+            <button
+              type="button"
+              onClick={() => aiUsageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              disabled={aiMetrics.failures === 0}
+            >
+              <span className="is-amber"><Bot size={15} aria-hidden /></span>
+              <span><strong>AI failures</strong><small>Unsuccessful model calls</small></span>
+              <b>{aiMetrics.failures}</b>
+            </button>
+          </div>
+          {metrics.issues === 0 && slowReports === 0 && aiMetrics.failures === 0 && (
+            <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
+          )}
+        </article>
       </section>
 
       <section className="logs-metrics" aria-label="Report analytics summary">
@@ -684,7 +883,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
         </article>
       </section>
 
-      <section className="logs-ai-section" aria-labelledby="logs-ai-title">
+      <section ref={aiUsageRef} className="logs-ai-section" aria-labelledby="logs-ai-title">
         <div className="logs-section-head">
           <div>
             <span className="logs-section-icon"><Sparkles size={17} aria-hidden /></span>
@@ -693,7 +892,12 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
               <p>Model calls and billed token volume for {selectedRange.label.toLowerCase()}</p>
             </div>
           </div>
-          <span>{rangeAIUsage.length.toLocaleString()} calls</span>
+          <div className="logs-section-actions">
+            <span>{rangeAIUsage.length.toLocaleString()} calls</span>
+            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => downloadAIUsageCsv(rangeAIUsage)} disabled={rangeAIUsage.length === 0}>
+              <Download size={15} aria-hidden /> Export AI CSV
+            </button>
+          </div>
         </div>
 
         {aiUsageError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {aiUsageError}</div>}
@@ -770,17 +974,45 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
               <div className="logs-chart-empty">No model activity in this period.</div>
             )}
           </article>
+
+          <article className="logs-chart-card logs-ai-feature-card">
+            <div className="logs-chart-head">
+              <div>
+                <h2>Features</h2>
+                <p>Reliability, latency, and tokens by AI workflow</p>
+              </div>
+              <Bot size={18} aria-hidden />
+            </div>
+            {aiFeatures.length ? (
+              <ul className="logs-feature-list">
+                {aiFeatures.map((feature) => (
+                  <li key={feature.feature}>
+                    <div>
+                      <strong>{feature.feature.replaceAll('-', ' ')}</strong>
+                      <span>{feature.calls.toLocaleString()} {feature.calls === 1 ? 'call' : 'calls'} · avg {formatDuration(feature.averageDurationMs)}</span>
+                    </div>
+                    <div>
+                      <strong>{formatTokenCount(feature.tokens)} tokens</strong>
+                      <span className={feature.errors ? 'has-errors' : ''}>{feature.errors ? `${feature.errors} failed` : '100% successful'}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="logs-chart-empty">No AI feature activity in this period.</div>
+            )}
+          </article>
         </div>
       </section>
 
-      <section className="logs-panel">
+      <section ref={requestActivityRef} className="logs-panel">
         <div className="logs-panel-head">
           <div>
             <h2>Request activity</h2>
             <p>Raw report details for {selectedRange.label.toLowerCase()}</p>
           </div>
           <div className="logs-panel-actions">
-            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => downloadCsv(filteredAndSorted)} disabled={filteredAndSorted.length === 0}>
+            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => downloadReportCsv(filteredAndSorted)} disabled={filteredAndSorted.length === 0}>
               <Download size={15} aria-hidden /> Export CSV
             </button>
           </div>
@@ -858,7 +1090,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
         )}
         <footer className="logs-panel-foot">
           <span>Showing {filteredAndSorted.length} of {rangeLogs.length} in this period</span>
-          <span>Auto-refreshes every 30 seconds</span>
+          <span>{autoRefresh ? 'Auto-refreshes every 30 seconds' : 'Auto-refresh paused'}</span>
         </footer>
       </section>
     </div>

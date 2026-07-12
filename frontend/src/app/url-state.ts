@@ -58,13 +58,14 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 
   const objectiveName = (params.get('name') || '').trim();
   const searchQuery = (params.get('q') || objectiveName).trim();
-  // Support path-based routing (/logs, /settings, etc.) with legacy ?view= fallback
+  // Support path-based routing (/admin, /settings, etc.) with legacy ?view= fallback.
+  // Keep /logs working as an alias for existing bookmarks.
   const pathSegment = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
   const viewParam = pathSegment || params.get('view') || '';
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitStatusView = viewParam === 'status';
   const hasExplicitTripView = viewParam === 'trip';
-  const hasExplicitLogsView = viewParam === 'logs';
+  const hasExplicitAdminView = viewParam === 'admin' || viewParam === 'logs';
   const hasExplicitPrivacyView = viewParam === 'privacy';
   const hasExplicitTermsView = viewParam === 'terms';
 
@@ -75,8 +76,8 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
         ? 'status'
         : hasExplicitTripView
           ? 'trip'
-          : hasExplicitLogsView
-            ? 'logs'
+          : hasExplicitAdminView
+            ? 'admin'
             : hasExplicitPrivacyView
               ? 'privacy'
               : hasExplicitTermsView
@@ -97,7 +98,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 }
 
 export function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs' | 'privacy' | 'terms';
+  view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;

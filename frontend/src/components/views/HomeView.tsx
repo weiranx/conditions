@@ -70,7 +70,7 @@ export interface HomeViewProps {
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTravelWindowHoursDraftBlur: () => void;
   navigateToPlanner: () => void;
-  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'logs' | 'privacy' | 'terms') => void;
+  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms') => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
 }

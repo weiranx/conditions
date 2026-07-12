@@ -120,8 +120,8 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const PlannerView = React.lazy(() =>
   import('./components/planner/PlannerView').then((module) => ({ default: module.PlannerView })),
 );
-const LogsView = React.lazy(() =>
-  import('./components/views/LogsView').then((module) => ({ default: module.LogsView })),
+const AdminView = React.lazy(() =>
+  import('./components/views/AdminView').then((module) => ({ default: module.AdminView })),
 );
 const StatusView = React.lazy(() =>
   import('./components/views/StatusView').then((module) => ({ default: module.StatusView })),
@@ -1482,10 +1482,10 @@ function App() {
       />
       </React.Activity>
 
-      <React.Activity name="logs-page" mode={view === 'logs' ? 'visible' : 'hidden'}>
-      <div key="view-logs" className={appShellClassName} aria-busy={isViewPending}>
+      <React.Activity name="admin-page" mode={view === 'admin' ? 'visible' : 'hidden'}>
+      <div key="view-admin" className={appShellClassName} aria-busy={isViewPending}>
         <section className="settings-shell">
-          <LogsView
+          <AdminView
             navigateToView={navigateToView}
             openPlannerView={openPlannerView}
             openTripToolView={openTripToolView}
