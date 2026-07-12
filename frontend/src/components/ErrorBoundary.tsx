@@ -1,5 +1,46 @@
 import React from 'react';
 
+const CHUNK_RELOAD_GUARD_KEY = 'summitsafe:chunk-reload-attempt:v1';
+const CHUNK_RELOAD_GUARD_MS = 30_000;
+
+function isRecoverableChunkLoadError(error: Error): boolean {
+  const message = `${error.name}: ${error.message}`;
+  return /ChunkLoadError|Loading chunk .* failed|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Expected a JavaScript-or-Wasm module script/i.test(message);
+}
+
+function reloadAfterChunkLoadError(): void {
+  const locationKey = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+  try {
+    const rawAttempt = window.sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY);
+    if (rawAttempt) {
+      try {
+        const previousAttempt = JSON.parse(rawAttempt) as { location?: unknown; attemptedAt?: unknown };
+        const attemptedAt = Number(previousAttempt.attemptedAt);
+        const elapsed = Date.now() - attemptedAt;
+        if (
+          previousAttempt.location === locationKey &&
+          Number.isFinite(attemptedAt) &&
+          elapsed >= 0 &&
+          elapsed < CHUNK_RELOAD_GUARD_MS
+        ) {
+          return;
+        }
+      } catch {
+        // Replace a malformed guard value below.
+      }
+    }
+
+    window.sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, JSON.stringify({
+      location: locationKey,
+      attemptedAt: Date.now(),
+    }));
+    window.location.reload();
+  } catch {
+    // Without session storage, reloading could create an unrecoverable loop.
+  }
+}
+
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
@@ -20,6 +61,9 @@ export class ErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('Backcountry Conditions crashed:', error, info.componentStack);
+    if (isRecoverableChunkLoadError(error)) {
+      reloadAfterChunkLoadError();
+    }
   }
 
   render() {
