@@ -92,6 +92,12 @@ import { buildReportCardOrder } from './app/card-ordering';
 import { buildWindLoadingDisplay } from './app/wind-loading-display';
 import { buildRainfallDisplay } from './app/rainfall-display';
 import { buildSourceFreshnessDisplay } from './app/source-freshness-display';
+import {
+  clearPersistedReport,
+  loadPersistedReport,
+  persistedReportMatchesPlan,
+  persistReport,
+} from './app/report-storage';
 import { HomeView } from './components/views/HomeView';
 import { useHealthChecks } from './hooks/useHealthChecks';
 import { useRouteAnalysis } from './hooks/useRouteAnalysis';
@@ -153,7 +159,33 @@ function App() {
   const todayDate = formatDateInput(new Date());
   const maxForecastDate = formatDateInput(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7));
   const initialPreferences = React.useMemo(() => loadUserPreferences(), []);
-  const initialLinkState = React.useMemo(() => parseLinkState(todayDate, maxForecastDate, initialPreferences), [todayDate, maxForecastDate, initialPreferences]);
+  const initialPersistedReport = React.useMemo(() => loadPersistedReport(), []);
+  const parsedInitialLinkState = React.useMemo(
+    () => parseLinkState(todayDate, maxForecastDate, initialPreferences),
+    [todayDate, maxForecastDate, initialPreferences],
+  );
+  const initialLinkState = React.useMemo(() => {
+    if (
+      !initialPersistedReport ||
+      parsedInitialLinkState.hasObjective ||
+      (parsedInitialLinkState.view !== 'home' && parsedInitialLinkState.view !== 'planner')
+    ) {
+      return parsedInitialLinkState;
+    }
+    const plan = initialPersistedReport.plan;
+    return {
+      ...parsedInitialLinkState,
+      view: 'planner' as const,
+      position: new L.LatLng(plan.lat, plan.lon),
+      hasObjective: true,
+      objectiveName: plan.objectiveName,
+      searchQuery: plan.searchQuery,
+      forecastDate: plan.forecastDate,
+      alpineStartTime: plan.alpineStartTime,
+      targetElevationInput: plan.targetElevationInput,
+      travelWindowHours: plan.travelWindowHours,
+    };
+  }, [initialPersistedReport, parsedInitialLinkState]);
 
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
     if (initialLinkState.travelWindowHours) {
@@ -167,6 +199,22 @@ function App() {
   const [objectiveName, setObjectiveName] = useState(initialLinkState.objectiveName);
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
+
+  const initialSafetyData = React.useMemo(() => {
+    if (!initialPersistedReport || !initialLinkState.hasObjective) {
+      return null;
+    }
+    const travelWindowHours = initialLinkState.travelWindowHours || initialPreferences.travelWindowHours;
+    return persistedReportMatchesPlan(initialPersistedReport, {
+      lat: initialLinkState.position.lat,
+      lon: initialLinkState.position.lng,
+      forecastDate: initialLinkState.forecastDate,
+      alpineStartTime: initialLinkState.alpineStartTime,
+      travelWindowHours,
+    })
+      ? initialPersistedReport.safetyData
+      : null;
+  }, [initialPersistedReport, initialLinkState, initialPreferences.travelWindowHours]);
 
   // --- Extracted hooks ---
   const {
@@ -184,6 +232,7 @@ function App() {
     preferences,
     isProductionBuild,
     objectiveNameRef,
+    initialSafetyData,
   });
   const {
     safetyData, setSafetyData, loading, error, setError,
@@ -458,6 +507,35 @@ function App() {
     setTravelWindowExpanded(false);
   }, [safetyData?.forecast?.selectedDate, safetyData?.forecast?.selectedStartTime]);
 
+  useEffect(() => {
+    if (!hasObjective || !safetyData) {
+      return;
+    }
+    persistReport({
+      lat: position.lat,
+      lon: position.lng,
+      objectiveName,
+      searchQuery: committedSearchQuery,
+      forecastDate,
+      alpineStartTime,
+      targetElevationInput,
+      travelWindowHours: Math.max(
+        MIN_TRAVEL_WINDOW_HOURS,
+        Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+      ),
+    }, safetyData);
+  }, [
+    hasObjective,
+    safetyData,
+    position,
+    objectiveName,
+    committedSearchQuery,
+    forecastDate,
+    alpineStartTime,
+    targetElevationInput,
+    preferences.travelWindowHours,
+  ]);
+
   const handleRecenterMap = () => {
     setMapFocusNonce((prev) => prev + 1);
   };
@@ -647,7 +725,7 @@ function App() {
   // The home page's "Get conditions" button re-arms it on click; selecting the objective
   // there is async (it may resolve via a search lookup), so that flow can't fetch immediately
   // with the click handler's stale position and instead relies on this same deferred effect.
-  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective);
+  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective && !initialSafetyData);
   useEffect(() => {
     if (!pendingAutoGenerate || !hasObjective || view !== 'planner') {
       return;
@@ -658,6 +736,7 @@ function App() {
   }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, fetchSafetyData, collapseMobilePlanControls]);
 
   const handleEditPlan = useCallback(() => {
+    clearPersistedReport();
     setSafetyData(null);
     setError(null);
     setAiBriefNarrative(null);

@@ -16,6 +16,7 @@ export interface UseSafetyDataParams {
   preferences: UserPreferences;
   isProductionBuild: boolean;
   objectiveNameRef: React.RefObject<string>;
+  initialSafetyData?: SafetyData | null;
 }
 
 export interface UseSafetyDataReturn {
@@ -59,8 +60,9 @@ export function useSafetyData({
   preferences,
   isProductionBuild,
   objectiveNameRef,
+  initialSafetyData = null,
 }: UseSafetyDataParams): UseSafetyDataReturn {
-  const [safetyData, setSafetyData] = useState<SafetyData | null>(null);
+  const [safetyData, setSafetyData] = useState<SafetyData | null>(initialSafetyData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiBriefNarrative, setAiBriefNarrative] = useState<string | null>(null);
