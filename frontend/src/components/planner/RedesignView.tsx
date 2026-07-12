@@ -35,6 +35,7 @@ import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WindDirectionArrow } from './WindDirectionArrow';
 import { StartTimeScenarioCard } from './StartTimeScenarioCard';
+import { HeatRiskSection } from './HeatRiskSection';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const DANGER_COLORS = [
@@ -1533,28 +1534,17 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* HEAT RISK */}
         {shouldRenderRankedCard('heatRisk') && (
-          <section className="ssr-card">
-            <div className="ssr-card-h">
-              <h2>
-                <span className="ssr-h-icon icon-orange"><Sun size={16} /></span>
-                Heat Risk
-              </h2>
-              <span className={`ssr-pill ${heatRiskPillClass}`}>{String(heatRiskLabel || 'Low').toUpperCase()}</span>
-            </div>
-            <div className="ssr-card-b">
-              {heatRiskGuidance && <p className="ssr-body">{localizeUnitText(heatRiskGuidance)}</p>}
-              {lowerTerrainHeatLabel && <p className="ssr-muted">{localizeUnitText(lowerTerrainHeatLabel)}</p>}
-              {(() => {
-                const g = (heatRiskGuidance || '').trim().toLowerCase();
-                const reasons = (Array.isArray(heatRiskReasons) ? heatRiskReasons : []).filter((r) => r && r.trim().toLowerCase() !== g);
-                return reasons.length > 0 ? (
-                  <ul className="ssr-bullets">
-                    {reasons.map((r, i) => <li key={`hr-${i}`}>{localizeUnitText(r)}</li>)}
-                  </ul>
-                ) : null;
-              })()}
-            </div>
-          </section>
+          <HeatRiskSection
+            level={safetyData.heatRisk?.level}
+            label={heatRiskLabel}
+            pillClass={heatRiskPillClass}
+            guidance={heatRiskGuidance}
+            reasons={heatRiskReasons}
+            metrics={props.heatRiskMetrics}
+            lowerTerrainLabel={lowerTerrainHeatLabel}
+            formatTempDisplay={formatTempDisplay}
+            localizeUnitText={localizeUnitText}
+          />
         )}
 
         {/* FIRE RISK */}
