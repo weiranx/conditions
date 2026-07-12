@@ -223,9 +223,14 @@ export function TripView({
   const [sel, setSel] = React.useState(0);
   const dayRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const detailRef = React.useRef<HTMLDivElement | null>(null);
+  const anchoredRowsRef = React.useRef<MultiDayTripForecastDay[] | null>(null);
 
   // Re-anchor selection to the best day whenever a fresh forecast lands.
   React.useEffect(() => {
+    if (anchoredRowsRef.current === tripForecastRows) {
+      return;
+    }
+    anchoredRowsRef.current = tripForecastRows;
     if (tripForecastRows.length === 0) {
       setSel(0);
       return;

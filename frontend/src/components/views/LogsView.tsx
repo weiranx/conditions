@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -209,6 +209,7 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
   const [sortAsc, setSortAsc] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const hasLoadedRef = useRef(false);
 
   const fetchLogs = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
@@ -236,7 +237,10 @@ function ReportLogsDashboard({ secretKey, onUnauthorized }: { secretKey: string;
   }, [secretKey, onUnauthorized]);
 
   useEffect(() => {
-    void fetchLogs();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      void fetchLogs();
+    }
     const interval = window.setInterval(() => void fetchLogs(true), 30_000);
     return () => window.clearInterval(interval);
   }, [fetchLogs]);

@@ -412,13 +412,6 @@ function App() {
     }
   }, [view, objectiveName, committedSearchQuery]);
 
-  useEffect(() => {
-    if (view !== 'status') {
-      return;
-    }
-    void runHealthChecks();
-  }, [view, runHealthChecks]);
-
   useSyncUrlEffect({
     view,
     hasObjective,
@@ -1389,8 +1382,14 @@ function App() {
     [],
   );
 
-  if (view === 'status') {
-    return (
+  const navigateHomeToPlanner = () => {
+    setPendingAutoGenerate(true);
+    startViewChange(() => setView('planner'));
+  };
+
+  return (
+    <>
+      <React.Activity name="status-page" mode={view === 'status' ? 'visible' : 'hidden'}>
       <StatusView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
@@ -1405,11 +1404,9 @@ function App() {
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
-    );
-  }
+      </React.Activity>
 
-  if (view === 'logs') {
-    return (
+      <React.Activity name="logs-page" mode={view === 'logs' ? 'visible' : 'hidden'}>
       <div key="view-logs" className={appShellClassName} aria-busy={isViewPending}>
         <section className="settings-shell">
           <LogsView
@@ -1419,11 +1416,9 @@ function App() {
           />
         </section>
       </div>
-    );
-  }
+      </React.Activity>
 
-  if (view === 'settings') {
-    return (
+      <React.Activity name="settings-page" mode={view === 'settings' ? 'visible' : 'hidden'}>
       <SettingsView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
@@ -1470,11 +1465,9 @@ function App() {
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
-    );
-  }
+      </React.Activity>
 
-  if (view === 'trip') {
-    return (
+      <React.Activity name="trip-page" mode={view === 'trip' ? 'visible' : 'hidden'}>
       <TripView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
@@ -1531,16 +1524,9 @@ function App() {
           startViewChange(() => setView('planner'));
         }}
       />
-    );
-  }
+      </React.Activity>
 
-  if (view === 'home') {
-    const navigateToPlanner = () => {
-      setPendingAutoGenerate(true);
-      startViewChange(() => setView('planner'));
-    };
-
-    return (
+      <React.Activity name="home-page" mode={view === 'home' ? 'visible' : 'hidden'}>
       <HomeView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
@@ -1571,15 +1557,14 @@ function App() {
         travelWindowHoursDraft={travelWindowHoursDraft}
         handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
         handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
-        navigateToPlanner={navigateToPlanner}
+        navigateToPlanner={navigateHomeToPlanner}
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
-    );
-  }
+      </React.Activity>
 
-  return (
+      <React.Activity name="planner-page" mode={view === 'planner' ? 'visible' : 'hidden'}>
     <PlannerView
       // Shell / layout
       appShellClassName={appShellClassName}
@@ -1952,6 +1937,8 @@ function App() {
       // Footer
       formatGeneratedAt={formatGeneratedAt}
     />
+      </React.Activity>
+    </>
   );
 
 }
