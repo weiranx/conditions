@@ -995,6 +995,32 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
 .ssr-callout { border-left: 3px solid var(--ssr-brand); background: var(--ssr-surface-2); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 12px 0; }
 .ssr-callout-k { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; color: var(--ssr-text-3); margin-bottom: 3px; }
 .ssr-callout p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ssr-text); }
+.ssr-obs-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin-bottom: 18px; }
+.ssr-obs-status { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 11px 12px; border: 1px solid var(--ssr-line); border-radius: 7px; background: var(--ssr-surface-2); }
+.ssr-obs-status.good { border-color: color-mix(in oklch, var(--ssr-go) 28%, var(--ssr-line)); }
+.ssr-obs-status.warn { border-color: color-mix(in oklch, var(--ssr-caution) 42%, var(--ssr-line)); background: color-mix(in oklch, var(--ssr-caution) 7%, var(--ssr-surface)); }
+.ssr-obs-status.danger { border-color: color-mix(in oklch, var(--ssr-nogo) 38%, var(--ssr-line)); background: color-mix(in oklch, var(--ssr-nogo) 6%, var(--ssr-surface)); }
+.ssr-obs-status .ssr-k,
+.ssr-obs-eyebrow { font-size: 9.5px; font-weight: 700; letter-spacing: .035em; text-transform: uppercase; color: var(--ssr-text-3); }
+.ssr-obs-status strong { color: var(--ssr-text); font-size: 13px; line-height: 1.3; }
+.ssr-obs-status.warn strong { color: var(--ssr-caution-ink); }
+.ssr-obs-status.danger strong { color: var(--ssr-nogo-ink); }
+.ssr-obs-status small { color: var(--ssr-text-3); font-size: 10.5px; line-height: 1.35; }
+.ssr-obs-section { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--ssr-line); }
+.ssr-obs-status-grid + .ssr-obs-section { padding-top: 0; margin-top: 0; border-top: 0; }
+.ssr-obs-section-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+.ssr-obs-section-h > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ssr-obs-section-h strong { color: var(--ssr-text); font-size: 13.5px; line-height: 1.35; }
+.ssr-obs-section-h > span { flex: none; max-width: 48%; color: var(--ssr-text-3); font-size: 10.5px; line-height: 1.35; text-align: right; }
+.ssr-obs-source-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; color: var(--ssr-brand-dark); font-size: 11.5px; font-weight: 650; text-decoration: none; }
+.ssr-obs-source-link:hover { text-decoration: underline; }
+.ssr-obs-source-link svg { flex: none; }
+.ssr-obs-radar small { display: block; margin-top: 6px; color: var(--ssr-text-3); font-size: 11px; line-height: 1.45; }
+.ssr-obs-radar.warn { border-left-color: var(--ssr-caution); background: color-mix(in oklch, var(--ssr-caution) 7%, var(--ssr-surface)); }
+.ssr-obs-caveat { margin: 8px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--ssr-surface-2); color: var(--ssr-text-2); font-size: 12px; line-height: 1.5; }
+.ssr-obs-list li { display: flex; flex-direction: column; gap: 2px; }
+.ssr-obs-list li strong { color: var(--ssr-text); font-size: 12.5px; }
+.ssr-obs-list li span { color: var(--ssr-text-3); font-size: 11.5px; }
 .ssr-snow-cycle { background: var(--ssr-surface-2); border: 1px solid var(--ssr-line); border-radius: 8px; padding: 11px 13px; margin: 12px 0; }
 .ssr-snow-cycle p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ssr-text); }
 .ssr-snow-cycle .ssr-chip-row { margin: 9px 0 0; }
@@ -1061,6 +1087,9 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
   .ssr-card:hover { transform: none; }
   .ssr-card-h { min-height: 52px; padding: 12px 15px; }
   .ssr-card-b { padding: 17px; }
+  .ssr-obs-status-grid { grid-template-columns: 1fr; }
+  .ssr-obs-section-h { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .ssr-obs-section-h > span { max-width: none; text-align: left; }
   .ssr-jump-nav { top: 0; padding: 6px; border-radius: 10px; }
   .ssr-quick { grid-template-columns: repeat(2, 1fr); }
   .ssr-q:nth-child(3n) { border-right: 1px solid var(--ssr-line); }

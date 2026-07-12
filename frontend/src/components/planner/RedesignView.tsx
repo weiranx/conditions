@@ -23,6 +23,7 @@ import {
   Compass,
   Satellite,
   LoaderCircle,
+  ExternalLink,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
@@ -1315,96 +1316,185 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* LIVE OBSERVATIONS & ACCESS */}
-        {hasLocalObservations && (
-          <section className="ssr-card" id="planner-section-observations">
-            <div className="ssr-card-h">
-              <h2>
-                <span className="ssr-h-icon icon-blue"><Radio size={16} /></span>
-                Observations &amp; Access
-              </h2>
-              {radarObservation?.available && (
-                <span className={`ssr-pill ${radarObservation.echoDetected ? 'caution' : 'go'}`}>
-                  {radarObservation.echoDetected ? 'Radar echo' : 'No radar echo'}
+        {hasLocalObservations && (() => {
+          const forestRoadCount = Number(accessObservation?.closedRoadCount || 0);
+          const stateRoadCount = Number(accessObservation?.caltransClosureCount || 0);
+          const accessIssueCount = forestRoadCount + stateRoadCount;
+          const wildfireCount = Number(wildfireObservation?.nearbyIncidentCount || 0);
+          const streamTrend = String(streamflowObservation?.trend || '').toLowerCase();
+          const needsAttention = accessIssueCount > 0 || wildfireCount > 0 || radarObservation?.echoDetected === true || streamTrend === 'rising';
+          const hasNumericValue = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+
+          return (
+            <section className="ssr-card" id="planner-section-observations">
+              <div className="ssr-card-h">
+                <h2>
+                  <span className="ssr-h-icon icon-blue"><Radio size={16} /></span>
+                  Observations &amp; Access
+                </h2>
+                <span className={`ssr-pill ${needsAttention ? 'caution' : 'go'}`}>
+                  {needsAttention ? 'Review before travel' : 'No flagged signal'}
                 </span>
-              )}
-            </div>
-            <div className="ssr-card-b">
-              {nearbyObservation?.available && (
-                <>
-                  <p className="ssr-muted">
-                    {[nearbyObservation.stationName, Number.isFinite(Number(nearbyObservation.distanceKm)) ? `${nearbyObservation.distanceKm} km away` : null].filter(Boolean).join(' · ')}
-                  </p>
-                  <div className="ssr-meta-grid">
-                    {Number.isFinite(Number(nearbyObservation.tempF)) && <div className="ssr-meta"><span className="ssr-k">Observed temp</span><span className="ssr-v">{formatTempDisplay(Number(nearbyObservation.tempF))}</span></div>}
-                    {Number.isFinite(Number(nearbyObservation.windMph)) && <div className="ssr-meta"><span className="ssr-k">Observed wind</span><span className="ssr-v">{formatWindDisplay(Number(nearbyObservation.windMph))}</span></div>}
-                    {Number.isFinite(Number(nearbyObservation.gustMph)) && <div className="ssr-meta"><span className="ssr-k">Observed gust</span><span className="ssr-v">{formatWindDisplay(Number(nearbyObservation.gustMph))}</span></div>}
-                    {Number.isFinite(Number(nearbyObservation.visibilityMi)) && <div className="ssr-meta"><span className="ssr-k">Visibility</span><span className="ssr-v">{localizeUnitText(`${nearbyObservation.visibilityMi} mi`)}</span></div>}
-                  </div>
-                </>
-              )}
-
-              {radarObservation?.available && (
-                <div className="ssr-callout">
-                  <span className="ssr-callout-k">Observed precipitation · NOAA radar/gauge analysis</span>
-                  <p>{[
-                    Number.isFinite(Number(radarObservation.rain1hIn)) ? `1h ${Number(radarObservation.rain1hIn).toFixed(2)} in` : null,
-                    Number.isFinite(Number(radarObservation.rain6hIn)) ? `6h ${Number(radarObservation.rain6hIn).toFixed(2)} in` : null,
-                    Number.isFinite(Number(radarObservation.rain24hIn)) ? `24h ${Number(radarObservation.rain24hIn).toFixed(2)} in` : null,
-                  ].filter(Boolean).map(String).map(localizeUnitText).join(' · ') || 'Accumulation unavailable'}</p>
-                </div>
-              )}
-              {radarObservation?.lightning?.available && (
-                <div className="ssr-snow-kv">
-                  <span className="ssr-k">GOES lightning feed</span>
-                  <span className="ssr-v">{radarObservation.lightning.satellite || 'GOES-R'}{radarObservation.lightning.productTime ? ` · ${formatPubTime(radarObservation.lightning.productTime)}` : ''}</span>
-                </div>
-              )}
-
-              {streamflowObservation?.available && (
-                <>
-                  <div className="ssr-snow-kv"><span className="ssr-k">Nearby stream gauge</span><span className="ssr-v">{streamflowObservation.siteName || streamflowObservation.siteId || 'USGS gauge'}</span></div>
-                  <div className="ssr-snow-kv"><span className="ssr-k">Observed flow</span><span className="ssr-v">{Number.isFinite(Number(streamflowObservation.dischargeCfs)) ? `${Math.round(Number(streamflowObservation.dischargeCfs))} cfs · ${streamflowObservation.trend || 'trend unknown'}` : streamflowObservation.trend || 'N/A'}</span></div>
-                  {streamflowObservation.forecast?.available && (
-                    <div className="ssr-snow-kv"><span className="ssr-k">Forecast peak</span><span className="ssr-v">{Number.isFinite(Number(streamflowObservation.forecast.peakFlowCfs)) ? `${Math.round(Number(streamflowObservation.forecast.peakFlowCfs))} cfs` : Number.isFinite(Number(streamflowObservation.forecast.peakStageFt)) ? `${streamflowObservation.forecast.peakStageFt} ft stage` : 'Available'}</span></div>
+              </div>
+              <div className="ssr-card-b">
+                <div className="ssr-obs-status-grid" aria-label="Current observations and access summary">
+                  {accessObservation?.available && (
+                    <div className={`ssr-obs-status ${accessIssueCount > 0 ? 'warn' : 'good'}`}>
+                      <span className="ssr-k">Trailhead access</span>
+                      <strong>{accessIssueCount > 0 ? `${accessIssueCount} mapped issue${accessIssueCount === 1 ? '' : 's'}` : 'No mapped issues'}</strong>
+                      <small>{hasNumericValue(accessObservation.searchRadiusKm) ? `Checked within ${localizeUnitText(`${accessObservation.searchRadiusKm} km`)}` : 'Available road feeds checked'}</small>
+                    </div>
                   )}
-                </>
-              )}
+                  {radarObservation?.available && (
+                    <div className={`ssr-obs-status ${radarObservation.echoDetected ? 'warn' : 'good'}`}>
+                      <span className="ssr-k">Precipitation now</span>
+                      <strong>{radarObservation.echoDetected ? 'Radar echo detected' : 'No radar echo'}</strong>
+                      <small>{radarObservation.observedTime ? formatAgeFromNow(radarObservation.observedTime) : 'Latest available radar scan'}</small>
+                    </div>
+                  )}
+                  {wildfireObservation?.available && (
+                    <div className={`ssr-obs-status ${wildfireCount > 0 ? 'danger' : 'good'}`}>
+                      <span className="ssr-k">Nearby fire activity</span>
+                      <strong>{wildfireCount > 0 ? `${wildfireCount} incident${wildfireCount === 1 ? '' : 's'}` : 'None in feed'}</strong>
+                      <small>{hasNumericValue(wildfireObservation.searchRadiusKm) ? `Checked within ${localizeUnitText(`${wildfireObservation.searchRadiusKm} km`)}` : 'Current perimeter feed'}</small>
+                    </div>
+                  )}
+                </div>
 
-              {accessObservation?.available && Number(accessObservation.closedRoadCount || 0) > 0 && (
-                <div className="ssr-cc-group">
-                  <div className="ssr-cc-group-h warn"><Route size={13} /> Forest Service road status <span className="ssr-cc-count">{accessObservation.closedRoadCount}</span></div>
-                  <ul className="ssr-bullets">
-                    {(accessObservation.roads || []).slice(0, 4).map((road, index) => (
-                      <li key={`${road.id || road.name}-${index}`}>{road.name || road.id || 'Unnamed road'}{road.operatingLevel ? ` — ${road.operatingLevel}` : ''}</li>
-                    ))}
-                  </ul>
-                  {accessObservation.note && <p className="ssr-muted">{accessObservation.note}</p>}
-                </div>
-              )}
-              {accessObservation?.available && Number(accessObservation.caltransClosureCount || 0) > 0 && (
-                <div className="ssr-cc-group">
-                  <div className="ssr-cc-group-h warn"><Route size={13} /> Caltrans closures <span className="ssr-cc-count">{accessObservation.caltransClosureCount}</span></div>
-                  <ul className="ssr-bullets">
-                    {(accessObservation.caltransClosures || []).slice(0, 4).map((closure, index) => (
-                      <li key={`${closure.name}-${index}`}>{closure.name || 'Caltrans closure'}{closure.summary ? ` — ${closure.summary}` : ''}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                {nearbyObservation?.available && (
+                  <div className="ssr-obs-section">
+                    <div className="ssr-obs-section-h">
+                      <div>
+                        <span className="ssr-obs-eyebrow">Latest station observation</span>
+                        <strong>{nearbyObservation.stationName || nearbyObservation.stationId || 'Nearby NWS station'}</strong>
+                      </div>
+                      <span>{[
+                        nearbyObservation.observedTime ? formatAgeFromNow(nearbyObservation.observedTime) : null,
+                        hasNumericValue(nearbyObservation.distanceKm) ? localizeUnitText(`${nearbyObservation.distanceKm} km away`) : null,
+                      ].filter(Boolean).join(' · ')}</span>
+                    </div>
+                    <div className="ssr-meta-grid">
+                      {nearbyObservation.textDescription && <div className="ssr-meta ssr-meta-wide"><span className="ssr-k">Observed conditions</span><span className="ssr-v">{nearbyObservation.textDescription}</span></div>}
+                      {hasNumericValue(nearbyObservation.tempF) && <div className="ssr-meta"><span className="ssr-k">Temperature</span><span className="ssr-v">{formatTempDisplay(Number(nearbyObservation.tempF))}</span></div>}
+                      {hasNumericValue(nearbyObservation.windMph) && <div className="ssr-meta"><span className="ssr-k">Sustained wind</span><span className="ssr-v">{formatWindDisplay(Number(nearbyObservation.windMph))}</span></div>}
+                      {hasNumericValue(nearbyObservation.gustMph) && <div className="ssr-meta"><span className="ssr-k">Wind gust</span><span className="ssr-v">{formatWindDisplay(Number(nearbyObservation.gustMph))}</span></div>}
+                      {hasNumericValue(nearbyObservation.visibilityMi) && <div className="ssr-meta"><span className="ssr-k">Visibility</span><span className="ssr-v">{localizeUnitText(`${nearbyObservation.visibilityMi} mi`)}</span></div>}
+                      {hasNumericValue(nearbyObservation.humidityPct) && <div className="ssr-meta"><span className="ssr-k">Humidity</span><span className="ssr-v">{Math.round(Number(nearbyObservation.humidityPct))}%</span></div>}
+                      {hasNumericValue(nearbyObservation.elevationFt) && <div className="ssr-meta"><span className="ssr-k">Station elevation</span><span className="ssr-v">{formatElevationDisplay(Number(nearbyObservation.elevationFt))}</span></div>}
+                    </div>
+                    {nearbyObservation.sourceLink && (
+                      <a className="ssr-obs-source-link" href={nearbyObservation.sourceLink} target="_blank" rel="noreferrer">
+                        Open latest station report <ExternalLink size={12} aria-hidden />
+                      </a>
+                    )}
+                  </div>
+                )}
 
-              {wildfireObservation?.available && Number(wildfireObservation.nearbyIncidentCount || 0) > 0 && (
-                <div className="ssr-cc-group">
-                  <div className="ssr-cc-group-h nogo"><Flame size={13} /> Current fire activity <span className="ssr-cc-count">{wildfireObservation.nearbyIncidentCount}</span></div>
-                  <ul className="ssr-bullets">
-                    {(wildfireObservation.incidents || []).slice(0, 4).map((incident, index) => (
-                      <li key={`${incident.name}-${index}`}>{incident.name || 'Unnamed incident'}{Number.isFinite(Number(incident.distanceKm)) ? ` · ${localizeUnitText(`${incident.distanceKm} km away`)}` : ''}{Number.isFinite(Number(incident.percentContained)) ? ` · ${incident.percentContained}% contained` : ''}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
+                {radarObservation?.available && (
+                  <div className={`ssr-callout ssr-obs-radar ${radarObservation.echoDetected ? 'warn' : ''}`}>
+                    <span className="ssr-callout-k">Observed precipitation · NOAA radar/gauge analysis</span>
+                    <p>{[
+                      hasNumericValue(radarObservation.rain1hIn) ? `1h ${Number(radarObservation.rain1hIn).toFixed(2)} in` : null,
+                      hasNumericValue(radarObservation.rain6hIn) ? `6h ${Number(radarObservation.rain6hIn).toFixed(2)} in` : null,
+                      hasNumericValue(radarObservation.rain24hIn) ? `24h ${Number(radarObservation.rain24hIn).toFixed(2)} in` : null,
+                    ].filter(Boolean).map(String).map(localizeUnitText).join(' · ') || 'Accumulation unavailable'}</p>
+                    {radarObservation.note && <small>{radarObservation.note}</small>}
+                    {radarObservation.sourceLink && (
+                      <a className="ssr-obs-source-link" href={radarObservation.sourceLink} target="_blank" rel="noreferrer">
+                        Open live NOAA radar <ExternalLink size={12} aria-hidden />
+                      </a>
+                    )}
+                  </div>
+                )}
+                {radarObservation?.lightning?.available && (
+                  <div className="ssr-snow-kv">
+                    <span className="ssr-k">GOES lightning feed</span>
+                    <span className="ssr-v">{radarObservation.lightning.satellite || 'GOES-R'}{radarObservation.lightning.productTime ? ` · ${formatPubTime(radarObservation.lightning.productTime)}` : ''}</span>
+                  </div>
+                )}
+
+                {streamflowObservation?.available && (
+                  <div className="ssr-obs-section">
+                    <div className="ssr-obs-section-h">
+                      <div><span className="ssr-obs-eyebrow">Water crossing context</span><strong>{streamflowObservation.siteName || streamflowObservation.siteId || 'Nearby USGS gauge'}</strong></div>
+                      {streamTrend && <span className={`ssr-pill ${streamTrend === 'rising' ? 'caution' : 'neutral'}`}>{streamTrend}</span>}
+                    </div>
+                    <div className="ssr-snow-kv"><span className="ssr-k">Observed flow</span><span className="ssr-v">{hasNumericValue(streamflowObservation.dischargeCfs) ? `${Math.round(Number(streamflowObservation.dischargeCfs))} cfs` : 'Flow unavailable'}</span></div>
+                    {streamflowObservation.forecast?.available && (
+                      <div className="ssr-snow-kv"><span className="ssr-k">Forecast peak</span><span className="ssr-v">{hasNumericValue(streamflowObservation.forecast.peakFlowCfs) ? `${Math.round(Number(streamflowObservation.forecast.peakFlowCfs))} cfs` : hasNumericValue(streamflowObservation.forecast.peakStageFt) ? `${streamflowObservation.forecast.peakStageFt} ft stage` : 'Available'}</span></div>
+                    )}
+                    <p className="ssr-muted">A nearby gauge is context, not a crossing assessment. Recheck the actual crossing and keep a turnaround option.</p>
+                  </div>
+                )}
+
+                {accessObservation?.available && (
+                  <div className="ssr-obs-section">
+                    <div className="ssr-obs-section-h">
+                      <div><span className="ssr-obs-eyebrow">Trailhead access check</span><strong>{accessIssueCount > 0 ? 'Confirm the approach before departure' : 'No mapped closure found'}</strong></div>
+                      <span className={`ssr-pill ${accessIssueCount > 0 ? 'caution' : 'go'}`}>{accessIssueCount > 0 ? `${accessIssueCount} issue${accessIssueCount === 1 ? '' : 's'}` : 'Feeds clear'}</span>
+                    </div>
+                    {accessIssueCount === 0 && (
+                      <p className="ssr-obs-caveat">This is not an access guarantee. Seasonal gates, temporary orders, county roads, and trailhead parking restrictions may not appear in these feeds.</p>
+                    )}
+                    {forestRoadCount > 0 && (
+                      <div className="ssr-cc-group">
+                        <div className="ssr-cc-group-h warn"><Route size={13} /> Forest Service road status <span className="ssr-cc-count">{forestRoadCount}</span></div>
+                        <ul className="ssr-bullets ssr-obs-list">
+                          {(accessObservation.roads || []).slice(0, 4).map((road, index) => (
+                            <li key={`${road.id || road.name}-${index}`}>
+                              <strong>{road.name || road.id || 'Unnamed road'}</strong>
+                              <span>{[road.routeStatus, road.operatingLevel, road.county].filter(Boolean).join(' · ') || 'Closure listed in Forest Service feed'}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        {forestRoadCount > 4 && <p className="ssr-muted">Showing 4 of {forestRoadCount} mapped roads.</p>}
+                      </div>
+                    )}
+                    {stateRoadCount > 0 && (
+                      <div className="ssr-cc-group">
+                        <div className="ssr-cc-group-h warn"><Route size={13} /> Caltrans closures <span className="ssr-cc-count">{stateRoadCount}</span></div>
+                        <ul className="ssr-bullets ssr-obs-list">
+                          {(accessObservation.caltransClosures || []).slice(0, 4).map((closure, index) => (
+                            <li key={`${closure.name}-${index}`}>
+                              <strong>{closure.name || 'Caltrans closure'}</strong>
+                              {(closure.summary || closure.details) && <span>{summarizeText(toPlainText(closure.summary || closure.details || ''), 220)}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                        {stateRoadCount > 4 && <p className="ssr-muted">Showing 4 of {stateRoadCount} mapped closures.</p>}
+                      </div>
+                    )}
+                    {accessObservation.note && <p className="ssr-muted">{accessObservation.note}</p>}
+                    {accessObservation.sourceLink && (
+                      <a className="ssr-obs-source-link" href={accessObservation.sourceLink} target="_blank" rel="noreferrer">
+                        Open official road-status source <ExternalLink size={12} aria-hidden />
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {wildfireObservation?.available && wildfireCount > 0 && (
+                  <div className="ssr-obs-section">
+                    <div className="ssr-cc-group-h nogo"><Flame size={13} /> Current fire activity <span className="ssr-cc-count">{wildfireCount}</span></div>
+                    <ul className="ssr-bullets ssr-obs-list">
+                      {(wildfireObservation.incidents || []).slice(0, 4).map((incident, index) => (
+                        <li key={`${incident.name}-${index}`}>
+                          <strong>{incident.name || 'Unnamed incident'}</strong>
+                          <span>{[
+                            hasNumericValue(incident.distanceKm) ? localizeUnitText(`${incident.distanceKm} km away`) : null,
+                            hasNumericValue(incident.acres) ? `${Math.round(Number(incident.acres)).toLocaleString()} acres` : null,
+                            hasNumericValue(incident.percentContained) ? `${incident.percentContained}% contained` : null,
+                          ].filter(Boolean).join(' · ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="ssr-obs-caveat">Check current evacuation, closure, and smoke information before committing to the approach.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* DAYLIGHT */}
         {shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
