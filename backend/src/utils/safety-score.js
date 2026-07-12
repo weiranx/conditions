@@ -9,7 +9,7 @@ const { normalizeAlertSeverity } = require('./alerts');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.3.0',
+  scoreVersion: '2.4.0',
   maxScore: 100,
 
   // Group scales intentionally sum to well over maxScore. Avalanche and
@@ -46,6 +46,9 @@ const SCORING_CONFIG = {
   // reads as data-driven ladders rather than inline magic numbers. Values are
   // intentionally identical to the historical inline constants.
   thresholds: {
+    weather: {
+      unavailableImpact: 20,
+    },
     avalanche: {
       unknown: 16,
       // avalancheUnknown penalty is scaled by snowpack signal when available
@@ -259,6 +262,7 @@ const calculateSafetyScore = ({
   };
 
   const weatherDescription = String(weatherData?.description || '').toLowerCase();
+  const weatherDataUnavailable = weatherDescription.includes('weather data unavailable');
   const wind = parseFloat(weatherData?.windSpeed);
   const gust = parseFloat(weatherData?.windGust);
   const precipChance = parseFloat(weatherData?.precipChance);
@@ -793,14 +797,19 @@ const calculateSafetyScore = ({
     applyFactor('Fire Danger', T.fire.level2, 'Elevated fire risk signal from weather, smoke, or alert context.', fireRiskData?.source || 'Fire risk synthesis');
   }
 
-  // --- Cross-group interaction penalties ---
-  // Compute preliminary raw group impacts to check thresholds
-  const prelimGroupRaw = factors.reduce((acc, factor) => {
-    const group = factor.group || 'weather';
-    acc[group] = (acc[group] || 0) + Number(factor.impact || 0);
-    return acc;
-  }, {});
+  // Unknown core weather conditions must affect both the score and confidence.
+  // Apply this before group aggregation so the returned score, tier, factors,
+  // and group breakdown cannot contradict one another during an upstream outage.
+  if (weatherDataUnavailable) {
+    applyFactor(
+      'Weather Unavailable',
+      T.weather.unavailableImpact,
+      'All weather data is unavailable — wind, precipitation, and temperature conditions are unknown.',
+      'System',
+    );
+  }
 
+  // --- Cross-group interaction penalties ---
   const hasWindFactor = factors.some((f) => /^wind$/i.test(f.hazard));
   const hasStormOrWinterWeather = factors.some((f) => /^(storm|winter weather)$/i.test(f.hazard));
   const hasVisibilityFactor = factors.some((f) => /^visibility$/i.test(f.hazard));
@@ -849,9 +858,7 @@ const calculateSafetyScore = ({
     }
   };
 
-  const weatherDataUnavailable = weatherDescription.includes('weather data unavailable');
   if (weatherDataUnavailable) {
-    applyFactor('Weather Unavailable', 20, 'All weather data is unavailable — wind, precipitation, and temperature conditions are unknown.', 'System');
     applyConfidencePenalty(30, 'Complete weather data unavailable — do not rely on this report for go/no-go decisions.');
   }
 
@@ -939,7 +946,7 @@ const calculateSafetyScore = ({
   const factorsSorted = [...factors].sort((a, b) => b.impact - a.impact);
   const primaryHazard = factorsSorted[0]?.hazard || 'None';
   const sourcesUsed = [
-    'NOAA/NWS hourly forecast',
+    !weatherDataUnavailable ? 'NOAA/NWS hourly forecast' : null,
     avalancheRelevant ? 'Avalanche center forecast' : null,
     alertsRelevantForSelectedTime && (alertsData?.status === 'ok' || alertsData?.status === 'none' || alertsData?.status === 'none_for_selected_start')
       ? 'NOAA/NWS active alerts'

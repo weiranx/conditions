@@ -120,3 +120,19 @@ test('scenario: stale weather issuance + unknown avalanche coverage degrades con
   expect(result.confidence).toBeLessThan(80);
   expect(result.confidenceReasons.length).toBeGreaterThan(0);
 });
+
+test('scenario: complete weather outage cannot report a Low-risk score', () => {
+  const result = calculateSafetyScore({
+    ...safetyScoreBaseInput(),
+    weatherData: {
+      description: 'Weather data unavailable',
+      windSpeed: null, windGust: null, precipChance: null, humidity: null,
+      temp: null, feelsLike: null, isDaytime: null, issuedTime: null, trend: [],
+    },
+  });
+
+  expect(result.score).toBeLessThan(85);
+  expect(result.tier).toBe('Caution');
+  expect(result.primaryHazard).toBe('Weather Unavailable');
+  expect(result.groupImpacts.weather.raw).toBeGreaterThan(0);
+});

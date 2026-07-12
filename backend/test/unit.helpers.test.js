@@ -3482,9 +3482,15 @@ test('calculateSafetyScore applies confidence penalty when weather data is compl
       isDaytime: null, issuedTime: null, trend: [],
     },
   });
-  expect(result.factors.some((f) => f.hazard === 'Weather Unavailable')).toBe(true);
+  const unavailableFactor = result.factors.find((f) => f.hazard === 'Weather Unavailable');
+  expect(unavailableFactor).toBeDefined();
+  expect(unavailableFactor.impact).toBe(20);
+  expect(result.groupImpacts.weather).toMatchObject({ raw: 20, effective: 16, scale: 42 });
+  expect(result.score).toBe(84);
+  expect(result.tier).toBe('Caution');
   expect(result.confidenceReasons.join(' ')).toMatch(/weather data unavailable/i);
   expect(result.confidence).toBeLessThan(80);
+  expect(result.sourcesUsed).not.toContain('NOAA/NWS hourly forecast');
 });
 
 test('calculateSafetyScore applies visibility impact for fog in description when no visibilityRisk object', () => {
@@ -3527,7 +3533,7 @@ const calmWeather = (overrides = {}) => ({
 
 test('calculateSafetyScore stamps the scoring model version', () => {
   const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
-  expect(result.scoreVersion).toBe('2.3.0');
+  expect(result.scoreVersion).toBe('2.4.0');
 });
 
 test('calculateSafetyScore gives benign conditions the full 100-point baseline', () => {
