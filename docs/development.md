@@ -57,6 +57,8 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `ANTHROPIC_MODEL` | `claude-sonnet-5` | Claude model for route synthesis, field briefs, and snow-image analysis. |
 | `ANTHROPIC_FAST_MODEL` | `claude-haiku-4-5-20251001` | Claude model for route suggestions and waypoint extraction. |
 
+The safety response exposes `capabilities.ai`. Web and iOS clients hide AI-powered planner controls when neither provider key is configured.
+
 ### Frontend (`frontend/.env`)
 
 | Variable | Default | Description |

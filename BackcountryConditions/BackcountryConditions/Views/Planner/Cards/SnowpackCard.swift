@@ -22,7 +22,9 @@ struct SnowpackCard: View {
 
                     stationReadings(snowpack)
                     historicalNote(snowpack)
-                    satelliteAnalysis
+                    if data.capabilities?.ai == true {
+                        satelliteAnalysis
+                    }
                 }
             } else {
                 Text("Snowpack data not available")

@@ -134,7 +134,7 @@ describe('AI provider client wrapper', () => {
   });
 
   test('reports the selected provider and models without exposing keys', () => {
-    const { getAIStatus } = loadClient('anthropic');
+    const { getAIStatus, isAIAvailable } = loadClient('anthropic');
 
     expect(getAIStatus()).toEqual({
       provider: 'anthropic',
@@ -149,6 +149,15 @@ describe('AI provider client wrapper', () => {
       fastTimeoutMs: 8000,
     });
     expect(JSON.stringify(getAIStatus())).not.toContain('test-key');
+    expect(isAIAvailable()).toBe(true);
+  });
+
+  test('reports AI unavailable when neither provider key is configured', () => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    const { isAIAvailable } = loadClient('openai');
+
+    expect(isAIAvailable()).toBe(false);
   });
 
   test('falls back when the selected provider API key is missing', async () => {

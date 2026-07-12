@@ -67,6 +67,7 @@ curl "http://localhost:3001/api/safety?lat=46.8523&lon=-121.7603&date=2026-02-21
 | Field | Description |
 |---|---|
 | `generatedAt` | ISO timestamp of backend response generation |
+| `capabilities.ai` | `true` when at least one configured AI provider can power planner AI controls |
 | `location` | `{ lat, lon }` — echoed request coordinates |
 | `forecast` | Selected date/start/end times and available forecast range |
 | `weather` | Weather snapshot, hourly trend, and source metadata |

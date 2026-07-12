@@ -56,7 +56,7 @@ const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
-const { askAI, askAIVision, getAIStatus } = require('./src/utils/ai-client');
+const { askAI, askAIVision, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
@@ -241,6 +241,9 @@ const buildSafetyResponsePayload = ({
 
   const payload = {
     generatedAt,
+    capabilities: {
+      ai: isAIAvailable(),
+    },
     location: { lat: parsedLat, lon: parsedLon },
     forecast: {
       selectedDate,

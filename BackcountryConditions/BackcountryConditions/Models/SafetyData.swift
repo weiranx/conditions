@@ -6,6 +6,7 @@ struct SafetyData: Codable, Sendable {
     var generatedAt: String?
     var partialData: Bool?
     var apiWarning: String?
+    var capabilities: Capabilities?
     var location: Location
     var forecast: Forecast?
     var weather: Weather
@@ -22,6 +23,10 @@ struct SafetyData: Codable, Sendable {
     var terrainCondition: TerrainCondition?
     var pleasantness: Pleasantness?
     var safety: Safety
+}
+
+struct Capabilities: Codable, Sendable {
+    var ai: Bool?
 }
 
 // MARK: - Location

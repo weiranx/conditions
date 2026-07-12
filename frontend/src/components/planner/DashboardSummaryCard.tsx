@@ -17,6 +17,7 @@ const GAUGE_R = 56;
 const GAUGE_C = 2 * Math.PI * GAUGE_R; // ≈ 351.86
 
 export interface DashboardSummaryCardProps {
+  aiAvailable: boolean;
   safetyData: SafetyData;
   decision: SummitDecision;
   preferences: UserPreferences;
@@ -41,6 +42,7 @@ export interface DashboardSummaryCardProps {
 }
 
 export function DashboardSummaryCard({
+  aiAvailable,
   safetyData,
   decision,
   preferences,
@@ -212,7 +214,8 @@ export function DashboardSummaryCard({
           </div>
         )}
 
-        <div className="ssr-dash-ai">
+        {aiAvailable && (
+          <div className="ssr-dash-ai">
           {aiBriefNarrative ? (
             <div className="ssr-dash-ai-text">
               <div className="ssr-dash-ai-label"><Sparkles size={14} aria-hidden /> AI field analysis</div>
@@ -243,7 +246,8 @@ export function DashboardSummaryCard({
               ? <><Check size={14} aria-hidden /> Prompt copied</>
               : <><Copy size={14} aria-hidden /> Copy prompt for an AI agent</>}
           </button>
-        </div>
+          </div>
+        )}
       </section>
     </div>
   );

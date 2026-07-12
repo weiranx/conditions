@@ -207,4 +207,6 @@ const getAIStatus = () => ({
   fastTimeoutMs: FAST_TIMEOUT_MS,
 });
 
-module.exports = { askAI, askAIVision, getAIStatus };
+const isAIAvailable = () => MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured;
+
+module.exports = { askAI, askAIVision, getAIStatus, isAIAvailable };

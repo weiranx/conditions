@@ -55,6 +55,9 @@ export interface SafetyData {
   generatedAt?: string;
   partialData?: boolean;
   apiWarning?: string;
+  capabilities?: {
+    ai?: boolean;
+  };
   location: { lat: number; lon: number };
   forecast?: {
     selectedDate?: string;

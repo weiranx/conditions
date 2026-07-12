@@ -25,19 +25,21 @@ struct RouteAnalysisCard: View {
     private let routeService = RouteService()
 
     var body: some View {
-        CollapsibleSection(title: "Route Analysis", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill", headerColor: .purple, initiallyExpanded: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                routeSuggestionsSection
-                importedGPXSection
-                errorSection
-                analysisSection
+        if data.capabilities?.ai == true {
+            CollapsibleSection(title: "Route Analysis", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill", headerColor: .purple, initiallyExpanded: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    routeSuggestionsSection
+                    importedGPXSection
+                    errorSection
+                    analysisSection
+                }
+                .fileImporter(
+                    isPresented: $showingGPXImporter,
+                    allowedContentTypes: [UTType(filenameExtension: "gpx") ?? .xml],
+                    allowsMultipleSelection: false,
+                    onCompletion: importGPX
+                )
             }
-            .fileImporter(
-                isPresented: $showingGPXImporter,
-                allowedContentTypes: [UTType(filenameExtension: "gpx") ?? .xml],
-                allowsMultipleSelection: false,
-                onCompletion: importGPX
-            )
         }
     }
 

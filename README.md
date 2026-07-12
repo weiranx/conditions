@@ -130,6 +130,7 @@ The backend runs against free public data sources out of the box. A couple of fe
 | `ANTHROPIC_MODEL` / `ANTHROPIC_FAST_MODEL` | Claude primary and extraction models; defaults to Sonnet and Haiku. | — |
 
 Set both AI provider keys to enable automatic failover in either direction. All API keys are optional to omit — features that do not depend on a missing key continue to work.
+When neither AI provider key is configured, AI-powered controls are hidden in the web and iOS planners.
 
 ## API Endpoints
 

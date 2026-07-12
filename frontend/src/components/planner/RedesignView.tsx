@@ -246,9 +246,10 @@ function ReportJumpNav({
   );
 }
 
-function RedesignViewComponent(props: PlannerViewProps) {
+function RedesignViewComponent(props: PlannerViewProps & { aiAvailable: boolean }) {
   const {
     safetyData,
+    aiAvailable,
     decision,
     preferences,
     objectiveName,
@@ -644,6 +645,7 @@ function RedesignViewComponent(props: PlannerViewProps) {
         {/* VERDICT */}
         <div id="planner-section-decision" className="ssr-jump-anchor">
         <DashboardSummaryCard
+          aiAvailable={aiAvailable}
           safetyData={safetyData}
           decision={decision}
           preferences={preferences}
@@ -1241,9 +1243,10 @@ function RedesignViewComponent(props: PlannerViewProps) {
                 {safetyData.snowpack.snotel?.elevationFt != null && <span><small>Station elev.</small>{formatElevationDisplay(safetyData.snowpack.snotel.elevationFt)}</span>}
               </div>
               {snowpackHistoricalComparisonLine && <p className="ssr-snow-history">{snowpackHistoricalComparisonLine}</p>}
-              <div style={{ marginTop: '14px' }}>
-                {snowVisionAnalysis ? (
-                  <div className="ssr-dash-ai-text">
+              {aiAvailable && (
+                <div style={{ marginTop: '14px' }}>
+                  {snowVisionAnalysis ? (
+                    <div className="ssr-dash-ai-text">
                     <div className="ssr-dash-ai-label"><Satellite size={14} aria-hidden /> Satellite snow analysis</div>
                     {snowVisionImage && (
                       <img
@@ -1265,20 +1268,21 @@ function RedesignViewComponent(props: PlannerViewProps) {
                     >
                       <Layers size={12} aria-hidden /> View live on the map — toggle to Satellite above
                     </button>
-                  </div>
-                ) : snowVisionError ? (
-                  <div className="ssr-dash-ai-error">
+                    </div>
+                  ) : snowVisionError ? (
+                    <div className="ssr-dash-ai-error">
                     <span>{snowVisionError}</span>
                     <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction}>Retry</button>
-                  </div>
-                ) : (
-                  <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction} disabled={snowVisionLoading}>
+                    </div>
+                  ) : (
+                    <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction} disabled={snowVisionLoading}>
                     {snowVisionLoading
                       ? <><LoaderCircle size={14} className="spin" aria-hidden /> Analyzing satellite view…</>
                       : <><Satellite size={14} aria-hidden /> Analyze snow from satellite</>}
-                  </button>
-                )}
-              </div>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         )}

@@ -15,8 +15,10 @@ struct SafetyScoreCard: View {
                 pleasantnessOutlook
                 factorBreakdown
                 explanationsList
-                aiBriefSection
-                copyPromptButton
+                if data.capabilities?.ai == true {
+                    aiBriefSection
+                    copyPromptButton
+                }
             }
         }
     }

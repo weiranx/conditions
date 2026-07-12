@@ -455,6 +455,7 @@ export interface PlannerViewProps {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 function PlannerViewComponent(props: PlannerViewProps) {
+  const aiAvailable = props.safetyData?.capabilities?.ai === true;
   const {
     // Shell
     appShellClassName,
@@ -743,7 +744,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         <section className="data-grid" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
 
-          {objectiveName && (
+          {aiAvailable && objectiveName && (
             <React.Suspense
               fallback={(
                 <div
@@ -798,7 +799,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
                 </div>
               )}
             >
-              <RedesignView {...props} />
+              <RedesignView {...props} aiAvailable={aiAvailable} />
             </React.Suspense>
           </div>
 
