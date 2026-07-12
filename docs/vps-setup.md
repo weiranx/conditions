@@ -257,6 +257,21 @@ Push to `main` to trigger the deploy workflow. Monitor progress in the
 
 ## 10. Ongoing Operations
 
+Run the backend utility scripts from the production checkout:
+
+```bash
+cd /opt/summitsafe
+./scripts/backend-health.sh      # Show container status and check /healthz
+./scripts/backend-logs.sh        # Follow the latest 200 backend log lines
+./scripts/backend-restart.sh     # Restart the existing backend container
+./scripts/backend-reload-env.sh  # Recreate the container and reload .env
+```
+
+Additional Docker Compose log options can be passed through, for example
+`./scripts/backend-logs.sh --since 30m`. Use `backend-reload-env.sh` after
+editing `/opt/summitsafe/.env`; a normal container restart does not reload the
+Compose environment file.
+
 **View live logs:**
 ```bash
 docker compose -f /opt/summitsafe/docker-compose.yml logs -f backend
