@@ -34,11 +34,14 @@
   grid-template-columns: minmax(300px, 1.6fr) repeat(3, minmax(130px, 0.7fr)) auto;
   border: 1px solid var(--ssr-line-strong);
   border-radius: 10px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--ssr-surface);
   box-shadow: var(--ui-shadow-sm);
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
+.ssr-trip-setup:focus-within { z-index: 30; }
 .ssr-trip-setup-location {
   padding: 9px 12px 8px;
   border-right: 1px solid var(--ssr-line);
@@ -124,6 +127,7 @@
   transition: background 0.15s ease;
   min-height: 60px;
   justify-content: center;
+  border-radius: 0 9px 9px 0;
 }
 .ssr-trip-setup-run:hover:not(:disabled) {
   background: var(--ssr-brand);
@@ -420,7 +424,7 @@
   .ssr-trip-overview { grid-template-columns: 1fr 1fr; }
   .ssr-trip-ov { border-bottom: 1px solid var(--ssr-line); }
   .ssr-trip-setup { grid-template-columns: 1.3fr repeat(3, 1fr); }
-  .ssr-trip-setup-run { grid-column: 1 / -1; min-height: 46px; }
+  .ssr-trip-setup-run { grid-column: 1 / -1; min-height: 46px; border-radius: 0 0 9px 9px; }
   .ssr-trip-recommendation { grid-template-columns: auto 1fr auto; }
   .ssr-trip-recommendation-facts { grid-column: 2 / -1; grid-row: 2; }
   .ssr-trip-detail-body { grid-template-columns: 1fr; }
