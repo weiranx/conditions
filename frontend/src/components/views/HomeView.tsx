@@ -132,13 +132,19 @@ export function HomeView({
               <div className="ssr-h-kicker"><Sparkles size={13} aria-hidden /> Backcountry planning intelligence</div>
               <h1 id="home-hero-title">Move with the mountain,<br /><em>not against it.</em></h1>
               <p>
-                One time-aware brief that connects weather, snow, avalanche, terrain, and daylight—so
-                you can choose the right objective, route, and window.
+                Stop stitching together six different forecasts. Get one time-aware brief that shows
+                when conditions shift, what matters most, and what to verify before you go.
               </p>
               <div className="ssr-h-proof" aria-label="Data sources included">
-                <span><Check size={13} aria-hidden /> Official forecast feeds</span>
-                <span><Check size={13} aria-hidden /> Hour-by-hour context</span>
-                <span><Check size={13} aria-hidden /> One decision view</span>
+                <span><Check size={13} aria-hidden /> Official sources</span>
+                <span><Check size={13} aria-hidden /> Matched to your timing</span>
+                <span><Check size={13} aria-hidden /> Uncertainty made visible</span>
+              </div>
+              <div className="ssr-h-hero-actions">
+                <button type="button" onClick={() => searchInputRef.current?.focus()}>
+                  Start my brief <ArrowRight size={16} aria-hidden />
+                </button>
+                <a href="#home-report-title">Preview a sample brief</a>
               </div>
             </div>
 
@@ -218,12 +224,17 @@ export function HomeView({
                 {searchLoading ? (
                   <><LoaderCircle size={17} className="spin" aria-hidden /> Finding your objective…</>
                 ) : (
-                  <>See my conditions <ArrowRight size={17} aria-hidden /></>
+                  <>Build my conditions brief <ArrowRight size={17} aria-hidden /></>
                 )}
               </button>
 
+              <div className="ssr-h-builder-assurance" aria-label="Brief benefits">
+                <span><Check size={12} aria-hidden /> No account required</span>
+                <span><Check size={12} aria-hidden /> Source age and confidence included</span>
+              </div>
+
               <div className="ssr-h-popular">
-                <span>Or explore</span>
+                <span>Try a sample</span>
                 {FEATURED_PEAKS.map((peak) => (
                   <button type="button" key={peak.name} onClick={() => selectSuggestion(peak)}>
                     {peak.name.split(',')[0]}
@@ -331,6 +342,10 @@ export function HomeView({
                 <p><strong>Leave with next steps.</strong> Get specific checks, timing adjustments, and route considerations before departure.</p>
               </div>
             </div>
+
+            <button type="button" className="ssr-h-inline-cta" onClick={() => searchInputRef.current?.focus()}>
+              Build a brief for my objective <ArrowRight size={15} aria-hidden />
+            </button>
           </div>
 
           <div className="ssr-h-report-preview" aria-label="Example conditions brief for Mount Rainier">
