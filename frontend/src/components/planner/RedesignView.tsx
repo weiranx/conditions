@@ -2183,7 +2183,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* TERRAIN */}
         {shouldRenderRankedCard('terrainTrailCondition') && (
-          <section className="ssr-card">
+          <section className={`ssr-card ssr-terrain-card ${terrainConditionPillClass}`}>
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-amber"><Route size={16} /></span>
@@ -2191,42 +2191,97 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               </h2>
               <span className={`ssr-pill ${terrainConditionPillClass}`}>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown'}</span>
             </div>
-            <div className="ssr-card-b">
-              {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
-                <div className="ssr-chip-row">
-                  {terrainConditionDetails.impact && (
-                    <span className={`ssr-pill ${terrainConditionDetails.impact === 'high' ? 'nogo' : terrainConditionDetails.impact === 'low' ? 'go' : 'caution'}`}>
-                      {terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'} impact
-                    </span>
-                  )}
-                  {terrainConditionDetails.confidence && (
-                    <span className="ssr-chip">{terrainConditionDetails.confidence === 'high' ? 'High' : terrainConditionDetails.confidence === 'medium' ? 'Moderate' : 'Low'} confidence</span>
-                  )}
+            <div className="ssr-card-b ssr-terrain-body">
+              <div className={`ssr-terrain-overview ${terrainConditionPillClass}`}>
+                <span className="ssr-terrain-overview-icon" aria-hidden>
+                  {terrainConditionPillClass === 'go' ? <ShieldCheck size={20} /> : <AlertTriangle size={20} />}
+                </span>
+                <div className="ssr-terrain-overview-copy">
+                  <span className="ssr-terrain-eyebrow">Surface outlook</span>
+                  <strong>{safetyData.terrainCondition?.label || safetyData.trail || 'Unknown conditions'}</strong>
+                  {terrainConditionDetails.summary && <p>{localizeUnitText(terrainConditionDetails.summary)}</p>}
                 </div>
-              )}
-              {terrainConditionDetails.summary && <p className="ssr-body">{localizeUnitText(terrainConditionDetails.summary)}</p>}
-              {terrainConditionDetails.snowProfile?.meltFreeze && (
-                terrainConditionDetails.snowProfile.meltFreeze.cycleDetected ||
-                !['mixed', 'no_snow'].includes(terrainConditionDetails.snowProfile.meltFreeze.phase)
-              ) && (
-                <div className="ssr-snow-cycle">
-                  <span className="ssr-callout-k">Snow surface cycle · {terrainConditionDetails.snowProfile.meltFreeze.phaseLabel}</span>
-                  <p>{localizeUnitText(terrainConditionDetails.snowProfile.meltFreeze.summary)}</p>
-                  <div className="ssr-chip-row">
-                    <span className="ssr-chip">Refreeze · {terrainConditionDetails.snowProfile.meltFreeze.refreezeLabel}</span>
-                    <span className="ssr-chip">Solar input · {terrainConditionDetails.snowProfile.meltFreeze.solarInputLabel}</span>
-                    <span className="ssr-chip">Melt potential · {terrainConditionDetails.snowProfile.meltFreeze.meltPotentialLabel}</span>
+                {(terrainConditionDetails.impact || terrainConditionDetails.confidence) && (
+                  <dl className="ssr-terrain-meta">
+                    {terrainConditionDetails.impact && (
+                      <div>
+                        <dt>Travel impact</dt>
+                        <dd className={terrainConditionDetails.impact === 'high' ? 'nogo' : terrainConditionDetails.impact === 'low' ? 'go' : 'caution'}>
+                          {terrainConditionDetails.impact === 'high' ? 'High' : terrainConditionDetails.impact === 'low' ? 'Low' : 'Moderate'}
+                        </dd>
+                      </div>
+                    )}
+                    {terrainConditionDetails.confidence && (
+                      <div>
+                        <dt>Confidence</dt>
+                        <dd>{terrainConditionDetails.confidence === 'high' ? 'High' : terrainConditionDetails.confidence === 'medium' ? 'Moderate' : 'Low'}</dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+              </div>
+
+              {terrainConditionDetails.recommendedTravel && (
+                <div className="ssr-terrain-action">
+                  <span className="ssr-terrain-action-icon" aria-hidden><ArrowRight size={17} /></span>
+                  <div>
+                    <span className="ssr-terrain-eyebrow">Terrain decision</span>
+                    <p>{localizeUnitText(terrainConditionDetails.recommendedTravel)}</p>
                   </div>
                 </div>
               )}
-              {terrainConditionDetails.recommendedTravel && (
-                <div className="ssr-callout">
-                  <span className="ssr-callout-k">Recommended travel</span>
-                  <p>{localizeUnitText(terrainConditionDetails.recommendedTravel)}</p>
+
+              {(terrainConditionDetails.reasons.length > 0 || (terrainConditionDetails.snowProfile?.meltFreeze && (
+                terrainConditionDetails.snowProfile.meltFreeze.cycleDetected ||
+                !['mixed', 'no_snow'].includes(terrainConditionDetails.snowProfile.meltFreeze.phase)
+              ))) && (
+                <div className="ssr-terrain-detail-grid">
+                  {terrainConditionDetails.reasons.length > 0 && (
+                    <div className="ssr-terrain-panel">
+                      <div className="ssr-terrain-panel-h">
+                        <span><Layers size={15} aria-hidden /> Why this outlook</span>
+                        <small>{terrainConditionDetails.reasons.length} signal{terrainConditionDetails.reasons.length === 1 ? '' : 's'}</small>
+                      </div>
+                      <ul className="ssr-terrain-signals">
+                        {terrainConditionDetails.reasons.map((reason) => (
+                          <li key={reason}><CheckCircle2 size={13} aria-hidden /><span>{localizeUnitText(reason)}</span></li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {terrainConditionDetails.snowProfile?.meltFreeze && (
+                    terrainConditionDetails.snowProfile.meltFreeze.cycleDetected ||
+                    !['mixed', 'no_snow'].includes(terrainConditionDetails.snowProfile.meltFreeze.phase)
+                  ) && (
+                    <div className="ssr-terrain-panel snow-cycle">
+                      <div className="ssr-terrain-panel-h">
+                        <span><Snowflake size={15} aria-hidden /> Snow surface cycle</span>
+                        <small>{terrainConditionDetails.snowProfile.meltFreeze.phaseLabel}</small>
+                      </div>
+                      <p>{localizeUnitText(terrainConditionDetails.snowProfile.meltFreeze.summary)}</p>
+                      <div className="ssr-terrain-cycle-grid">
+                        <span><small>Refreeze</small><strong>{terrainConditionDetails.snowProfile.meltFreeze.refreezeLabel}</strong></span>
+                        <span><small>Solar input</small><strong>{terrainConditionDetails.snowProfile.meltFreeze.solarInputLabel}</strong></span>
+                        <span><small>Melt potential</small><strong>{terrainConditionDetails.snowProfile.meltFreeze.meltPotentialLabel}</strong></span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="ssr-snow-kv"><span className="ssr-k">Rain 24h</span><span className="ssr-v">{rainfall24hDisplay}</span></div>
-              {Number.isFinite(snowfall24hIn) && <div className="ssr-snow-kv"><span className="ssr-k">Snow 24h</span><span className="ssr-v">{snowfall24hDisplay}</span></div>}
+
+              <div className="ssr-terrain-inputs" aria-label="Recent precipitation affecting terrain surfaces">
+                <div>
+                  <span className="ssr-terrain-input-icon rain" aria-hidden><CloudRain size={15} /></span>
+                  <span><small>Rain · past 24h</small><strong>{rainfall24hDisplay}</strong></span>
+                </div>
+                {Number.isFinite(snowfall24hIn) && (
+                  <div>
+                    <span className="ssr-terrain-input-icon snow" aria-hidden><Snowflake size={15} /></span>
+                    <span><small>Snow · past 24h</small><strong>{snowfall24hDisplay}</strong></span>
+                  </div>
+                )}
+                <p>Recent moisture helps explain the surface outlook; local shade, drainage, use, and elevation can still change footing quickly.</p>
+              </div>
             </div>
           </section>
         )}
