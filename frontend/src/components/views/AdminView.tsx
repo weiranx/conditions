@@ -88,6 +88,7 @@ interface AIUsageEntry {
 
 interface AdminHealthSnapshot {
   ok: boolean;
+  service: string;
   version: string;
   env: string;
   uptime: number;
@@ -95,6 +96,12 @@ interface AdminHealthSnapshot {
   memory: {
     heapUsedMb: number;
     rssMb: number;
+  };
+  database?: {
+    configured: boolean;
+    connected: boolean;
+    latencyMs?: number;
+    error?: string;
   };
   caches: Array<{
     name: string;
@@ -136,6 +143,8 @@ interface ExternalDiagnosticsResult {
     message: string;
   }>;
 }
+
+type DiagnosticService = ExternalDiagnosticsResult['services'][number];
 
 type AIProvider = 'openai' | 'anthropic';
 
@@ -647,6 +656,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [aiModelCatalog, setAIModelCatalog] = useState<AIModelCatalog | null>(null);
   const [featureFlagStatus, setFeatureFlagStatus] = useState<ProductFeatureFlagStatus | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
+  const [healthHttpStatus, setHealthHttpStatus] = useState<number | null>(null);
+  const [backendLatencyMs, setBackendLatencyMs] = useState<number | null>(null);
   const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -681,6 +692,28 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const requestActivityRef = useRef<HTMLElement>(null);
   const aiUsageRef = useRef<HTMLElement>(null);
 
+  const fetchHealthSnapshot = useCallback(async () => {
+    const startedAt = performance.now();
+    const result = await fetchApi('/api/healthz');
+    return {
+      ...result,
+      latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+    };
+  }, []);
+
+  const applyHealthSnapshot = useCallback((result: Awaited<ReturnType<typeof fetchHealthSnapshot>>) => {
+    const payload = result.payload;
+    if (payload && typeof payload === 'object' && 'service' in payload && 'memory' in payload) {
+      setHealth(payload as AdminHealthSnapshot);
+      setHealthHttpStatus(result.response.status);
+      setBackendLatencyMs(result.latencyMs);
+      setHealthError(null);
+      return true;
+    }
+    setHealthError('System details are temporarily unavailable.');
+    return false;
+  }, []);
+
   const fetchAuditTrail = useCallback(async () => {
     try {
       const result = await fetchApi('/api/admin/audit-log', {
@@ -708,7 +741,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult] = await Promise.all([
         fetchApi('/api/report-logs', { headers }),
         fetchApi('/api/ai-usage', { headers }),
-        fetchApi('/api/healthz'),
+        fetchHealthSnapshot(),
         fetchApi('/api/admin/ai-settings', { headers }),
         fetchApi('/api/admin/feature-flags', { headers }),
         fetchApi('/api/admin/ai-models', { headers }),
@@ -731,12 +764,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       } else {
         setAIUsageError('AI usage data is temporarily unavailable.');
       }
-      if (healthResult.response.ok && healthResult.payload && typeof healthResult.payload === 'object') {
-        setHealth(healthResult.payload as AdminHealthSnapshot);
-        setHealthError(null);
-      } else {
-        setHealthError('System details are temporarily unavailable.');
-      }
+      applyHealthSnapshot(healthResult);
       if (aiSettingsResult.response.ok && aiSettingsResult.payload && typeof aiSettingsResult.payload === 'object') {
         setAISettings(aiSettingsResult.payload as AIAdminSettings);
         setAISettingsError(null);
@@ -773,7 +801,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       setLoading(false);
       setRefreshing(false);
     }
-  }, [secretKey, onUnauthorized]);
+  }, [applyHealthSnapshot, fetchHealthSnapshot, secretKey, onUnauthorized]);
 
   const refreshModelCatalog = useCallback(async () => {
     setAIModelCatalogPending(true);
@@ -911,14 +939,26 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     }
   };
 
-  const runExternalDiagnostics = async () => {
+  const runServiceDiagnostics = async () => {
     setDiagnosticsPending(true);
     setDiagnosticsError(null);
-    try {
-      const result = await fetchApi('/api/admin/diagnostics', {
+    const [healthResult, externalResult] = await Promise.allSettled([
+      fetchHealthSnapshot(),
+      fetchApi('/api/admin/diagnostics', {
         method: 'POST',
         headers: { Authorization: `Bearer ${secretKey}` },
-      });
+      }),
+    ]);
+
+    if (healthResult.status === 'fulfilled') {
+      applyHealthSnapshot(healthResult.value);
+    } else {
+      setHealthError('Could not reach the backend server to run its health check.');
+    }
+
+    try {
+      if (externalResult.status === 'rejected') throw externalResult.reason;
+      const result = externalResult.value;
       if (result.response.status === 401 || result.response.status === 403) {
         onUnauthorized();
         return;
@@ -930,10 +970,10 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       }
       const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
         ? String(result.payload.error)
-        : 'The server could not run external service diagnostics.';
+        : 'The server could not run provider diagnostics.';
       setDiagnosticsError(message);
     } catch {
-      setDiagnosticsError('Could not reach the server to run external service diagnostics.');
+      setDiagnosticsError('Could not reach the server to run provider diagnostics.');
     } finally {
       setDiagnosticsPending(false);
     }
@@ -1042,6 +1082,64 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       hitRate: requests ? Math.round((hits / requests) * 100) : null,
     };
   }, [health]);
+  const infrastructureDiagnostics = useMemo<DiagnosticService[]>(() => {
+    const backendMessage = health
+      ? `${health.env} · v${health.version} · ${formatUptime(health.uptime)} uptime`
+      : healthError || 'No health response received';
+    const databaseStatus = health?.database;
+    const databaseDiagnostic: DiagnosticService = !health
+      ? {
+        id: 'postgresql',
+        name: 'PostgreSQL database',
+        category: 'Infrastructure',
+        status: 'failed',
+        httpStatus: null,
+        latencyMs: null,
+        message: healthError || 'Waiting for backend health data',
+      }
+      : !databaseStatus || !databaseStatus.configured
+        ? {
+          id: 'postgresql',
+          name: 'PostgreSQL database',
+          category: 'Infrastructure',
+          status: 'not_configured',
+          httpStatus: null,
+          latencyMs: databaseStatus?.latencyMs ?? null,
+          message: databaseStatus ? 'DATABASE_URL is not configured' : 'Database health is not reported by this server',
+        }
+        : {
+          id: 'postgresql',
+          name: 'PostgreSQL database',
+          category: 'Infrastructure',
+          status: databaseStatus.connected ? 'operational' : 'failed',
+          httpStatus: null,
+          latencyMs: databaseStatus.latencyMs ?? null,
+          message: databaseStatus.connected ? 'Live query succeeded' : 'Live query failed',
+        };
+
+    return [
+      {
+        id: 'backend-server',
+        name: 'Backend server',
+        category: 'Infrastructure',
+        status: health ? 'operational' : 'failed',
+        httpStatus: healthHttpStatus,
+        latencyMs: backendLatencyMs,
+        message: backendMessage,
+      },
+      databaseDiagnostic,
+    ];
+  }, [backendLatencyMs, health, healthError, healthHttpStatus]);
+  const diagnosticServices = useMemo(
+    () => [...infrastructureDiagnostics, ...(diagnostics?.services ?? [])],
+    [diagnostics, infrastructureDiagnostics],
+  );
+  const diagnosticSummary = useMemo(() => ({
+    total: diagnosticServices.length,
+    operational: diagnosticServices.filter((service) => service.status === 'operational').length,
+    failed: diagnosticServices.filter((service) => service.status === 'failed').length,
+    notConfigured: diagnosticServices.filter((service) => service.status === 'not_configured').length,
+  }), [diagnosticServices]);
   const busiestHour = useMemo(
     () => hourlyDistribution.reduce((busiest, current) => current.requests > busiest.requests ? current : busiest, hourlyDistribution[0]),
     [hourlyDistribution],
@@ -1170,7 +1268,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
           <div className="logs-chart-head">
             <div>
               <h2>System snapshot</h2>
-              <p>Live backend runtime and cache status</p>
+              <p>Live backend, database, runtime, and cache status</p>
             </div>
             <Server size={18} aria-hidden />
           </div>
@@ -1178,8 +1276,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
           <div className="admin-system-grid">
             <div>
               <span><Server size={14} aria-hidden /> Service</span>
-              <strong className={health?.ok ? 'is-healthy' : 'is-unavailable'}>{health?.ok ? 'Online' : 'Unavailable'}</strong>
-              <small>{health ? `${health.env} · v${health.version}` : 'Waiting for health data'}</small>
+              <strong className={health ? 'is-healthy' : 'is-unavailable'}>{health ? 'Online' : 'Unavailable'}</strong>
+              <small>{health ? `${health.env} · v${health.version}${backendLatencyMs == null ? '' : ` · ${formatDuration(backendLatencyMs)}`}` : 'Waiting for health data'}</small>
             </div>
             <div>
               <span><Clock3 size={14} aria-hidden /> Uptime</span>
@@ -1192,7 +1290,14 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
               <small>{health ? `${health.memory.rssMb} MB RSS · ${health.memory.heapUsedMb} MB heap` : 'Memory unavailable'}</small>
             </div>
             <div>
-              <span><Database size={14} aria-hidden /> Cache</span>
+              <span><Database size={14} aria-hidden /> Database</span>
+              <strong className={health?.database?.connected ? 'is-healthy' : health?.database?.configured ? 'is-unavailable' : undefined}>
+                {!health ? '—' : health.database?.connected ? 'Connected' : health.database?.configured ? 'Unavailable' : 'Not configured'}
+              </strong>
+              <small>{health?.database?.latencyMs == null ? 'PostgreSQL' : `${formatDuration(health.database.latencyMs)} query latency`}</small>
+            </div>
+            <div>
+              <span><Layers size={14} aria-hidden /> Cache</span>
               <strong>{cacheMetrics.hitRate == null ? '—' : `${cacheMetrics.hitRate}% hit rate`}</strong>
               <small>{cacheMetrics.entries.toLocaleString()} active entries</small>
             </div>
@@ -1242,17 +1347,17 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title">
         <div className="logs-chart-head">
           <div>
-            <h2 id="admin-diagnostics-title">External API diagnostics</h2>
-            <p>Check weather, avalanche, snowpack, access, water, satellite, wildfire, search, and AI providers</p>
+            <h2 id="admin-diagnostics-title">Service diagnostics</h2>
+            <p>Check the backend server, PostgreSQL database, and all upstream data providers</p>
           </div>
           <button
             type="button"
             className="logs-btn logs-btn-primary"
-            onClick={() => void runExternalDiagnostics()}
+            onClick={() => void runServiceDiagnostics()}
             disabled={diagnosticsPending}
           >
             <RefreshCw className={diagnosticsPending ? 'logs-spin' : ''} size={15} aria-hidden />
-            {diagnosticsPending ? 'Running…' : diagnostics ? 'Run again' : 'Run diagnostics'}
+            {diagnosticsPending ? 'Running…' : diagnostics ? 'Run again' : 'Run all diagnostics'}
           </button>
         </div>
 
@@ -1263,13 +1368,13 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
         {diagnostics ? (
           <>
             <div className="admin-diagnostics-summary" aria-label="Diagnostic summary">
-              <span className="is-operational"><CheckCircle2 size={14} aria-hidden /><strong>{diagnostics.summary.operational}</strong> operational</span>
-              <span className={diagnostics.summary.failed ? 'is-failed' : ''}><AlertTriangle size={14} aria-hidden /><strong>{diagnostics.summary.failed}</strong> failed</span>
-              <span><KeyRound size={14} aria-hidden /><strong>{diagnostics.summary.notConfigured}</strong> not configured</span>
+              <span className="is-operational"><CheckCircle2 size={14} aria-hidden /><strong>{diagnosticSummary.operational}</strong> operational</span>
+              <span className={diagnosticSummary.failed ? 'is-failed' : ''}><AlertTriangle size={14} aria-hidden /><strong>{diagnosticSummary.failed}</strong> failed</span>
+              <span><KeyRound size={14} aria-hidden /><strong>{diagnosticSummary.notConfigured}</strong> not configured</span>
               <small>Completed in {formatDuration(diagnostics.durationMs)} at {new Date(diagnostics.completedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small>
             </div>
             <div className="admin-diagnostics-grid">
-              {diagnostics.services.map((service) => (
+              {diagnosticServices.map((service) => (
                 <article key={service.id} className={`admin-diagnostic-row is-${service.status.replace('_', '-')}`}>
                   <span className="admin-diagnostic-indicator" aria-hidden />
                   <div>
@@ -1284,9 +1389,34 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
               ))}
             </div>
           </>
-        ) : !diagnosticsPending && !diagnosticsError ? (
-          <p className="admin-diagnostics-empty"><Activity size={16} aria-hidden /> Run a live check when you need to verify upstream service availability.</p>
-        ) : null}
+        ) : (
+          <>
+            <div className="admin-diagnostics-summary" aria-label="Infrastructure diagnostic summary">
+              <span className="is-operational"><CheckCircle2 size={14} aria-hidden /><strong>{diagnosticSummary.operational}</strong> operational</span>
+              <span className={diagnosticSummary.failed ? 'is-failed' : ''}><AlertTriangle size={14} aria-hidden /><strong>{diagnosticSummary.failed}</strong> failed</span>
+              <span><KeyRound size={14} aria-hidden /><strong>{diagnosticSummary.notConfigured}</strong> not configured</span>
+              <small>{health?.timestamp ? `Checked ${new Date(health.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Waiting for a server response'}</small>
+            </div>
+            <div className="admin-diagnostics-grid">
+              {infrastructureDiagnostics.map((service) => (
+                <article key={service.id} className={`admin-diagnostic-row is-${service.status.replace('_', '-')}`}>
+                  <span className="admin-diagnostic-indicator" aria-hidden />
+                  <div>
+                    <strong>{service.name}</strong>
+                    <small>{service.category}</small>
+                  </div>
+                  <div className="admin-diagnostic-result">
+                    <strong>{service.status === 'operational' ? 'Operational' : service.status === 'failed' ? 'Failed' : 'Not configured'}</strong>
+                    <small>{service.latencyMs == null ? service.message : `${formatDuration(service.latencyMs)} · ${service.httpStatus == null ? service.message : `HTTP ${service.httpStatus}`}`}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {!diagnosticsPending && !diagnosticsError && (
+              <p className="admin-diagnostics-empty"><Activity size={16} aria-hidden /> Run all diagnostics to add live upstream provider checks.</p>
+            )}
+          </>
+        )}
       </section>
 
       <section className="logs-panel admin-audit-panel" aria-labelledby="admin-audit-title">
