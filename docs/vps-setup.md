@@ -313,6 +313,8 @@ cd /opt/summitsafe
 ./scripts/backend-maintenance.sh status  # Show backend and PostgreSQL health
 ./scripts/backend-maintenance.sh stop    # Stop backend, then PostgreSQL
 ./scripts/backend-maintenance.sh start   # Start PostgreSQL, then backend
+./scripts/backend-maintenance.sh start backend   # Start only the backend
+./scripts/backend-maintenance.sh stop database   # Stop only PostgreSQL
 ./scripts/backend-health.sh      # Show container status and check /healthz
 ./scripts/backend-logs.sh        # Follow the latest 200 backend log lines
 ./scripts/backend-restart.sh     # Restart the existing backend container

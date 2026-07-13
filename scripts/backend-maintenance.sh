@@ -10,11 +10,12 @@ DATABASE_HEALTH_ATTEMPTS="${DATABASE_HEALTH_ATTEMPTS:-60}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") <start|stop|status>
+Usage: $(basename "$0") <start|stop|status> [backend|database|all]
 
-  start   Start PostgreSQL, then start the backend after the database is ready.
-  stop    Gracefully stop the backend, then stop PostgreSQL.
-  status  Show the backend and PostgreSQL container health status.
+Targets:
+  backend   Manage only the backend API container.
+  database  Manage only PostgreSQL (aliases: db, postgres).
+  all       Manage both services in dependency-safe order (default).
 
 Environment overrides:
   BACKEND_HEALTH_URL       Health endpoint (default: $HEALTH_URL)
@@ -74,89 +75,153 @@ validate_positive_integer() {
   fi
 }
 
-if [ "$#" -ne 1 ]; then
+start_backend() {
+  validate_positive_integer BACKEND_HEALTH_ATTEMPTS "$HEALTH_ATTEMPTS"
+
+  if service_is_running backend; then
+    echo "==> Backend container is already running."
+  else
+    echo "==> Starting backend container..."
+    docker compose up -d --no-deps backend
+  fi
+  wait_for_backend
+}
+
+start_database() {
+  validate_positive_integer DATABASE_HEALTH_ATTEMPTS "$DATABASE_HEALTH_ATTEMPTS"
+
+  if service_is_running postgres; then
+    echo "==> PostgreSQL container is already running."
+  else
+    echo "==> Starting PostgreSQL container..."
+    docker compose up -d --no-deps postgres
+  fi
+  wait_for_database
+}
+
+stop_backend() {
+  if ! service_is_running backend; then
+    echo "==> Backend container is already stopped."
+    return 0
+  fi
+
+  echo "==> Gracefully stopping backend container..."
+  docker compose stop backend
+  if service_is_running backend; then
+    echo "Backend container is still running after stop completed." >&2
+    return 1
+  fi
+  echo "==> Backend is stopped."
+}
+
+stop_database() {
+  if ! service_is_running postgres; then
+    echo "==> PostgreSQL container is already stopped."
+    return 0
+  fi
+
+  echo "==> Gracefully stopping PostgreSQL container..."
+  docker compose stop postgres
+  if service_is_running postgres; then
+    echo "PostgreSQL container is still running after stop completed." >&2
+    return 1
+  fi
+  echo "==> PostgreSQL is stopped."
+}
+
+report_backend_status() {
+  if ! service_is_running backend; then
+    echo "==> Backend is stopped."
+    return 1
+  fi
+  if curl --fail --silent "$HEALTH_URL" | grep --quiet '"ok":true'; then
+    echo "==> Backend is healthy."
+    return 0
+  fi
+  echo "==> Backend is running but its health check is failing." >&2
+  return 1
+}
+
+report_database_status() {
+  if ! service_is_running postgres; then
+    echo "==> PostgreSQL is stopped."
+    return 1
+  fi
+  if docker compose exec -T postgres pg_isready >/dev/null 2>&1; then
+    echo "==> PostgreSQL is ready."
+    return 0
+  fi
+  echo "==> PostgreSQL is running but not ready." >&2
+  return 1
+}
+
+if [ "$#" -eq 1 ] && { [ "$1" = "-h" ] || [ "$1" = "--help" ]; }; then
+  usage
+  exit 0
+fi
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
   usage >&2
   exit 2
 fi
 
+ACTION="$1"
+TARGET="${2:-all}"
+
+case "$TARGET" in
+  backend|all) ;;
+  database|db|postgres) TARGET=database ;;
+  *)
+    echo "Unknown target: $TARGET" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 cd "$APP_DIR"
 
-case "$1" in
+case "$ACTION" in
   start)
-    validate_positive_integer BACKEND_HEALTH_ATTEMPTS "$HEALTH_ATTEMPTS"
-    validate_positive_integer DATABASE_HEALTH_ATTEMPTS "$DATABASE_HEALTH_ATTEMPTS"
-
-    if service_is_running postgres; then
-      echo "==> PostgreSQL container is already running."
-    else
-      echo "==> Starting PostgreSQL container..."
-      docker compose up -d --no-deps postgres
-    fi
-    wait_for_database
-
-    if service_is_running backend; then
-      echo "==> Backend container is already running."
-    else
-      echo "==> Starting backend container..."
-      docker compose up -d --no-deps backend
-    fi
-    wait_for_backend
+    case "$TARGET" in
+      backend) start_backend ;;
+      database) start_database ;;
+      all)
+        start_database
+        start_backend
+        ;;
+    esac
     ;;
   stop)
-    if service_is_running backend; then
-      echo "==> Gracefully stopping backend container..."
-      docker compose stop backend
-      if service_is_running backend; then
-        echo "Backend container is still running after stop completed." >&2
-        exit 1
-      fi
-      echo "==> Backend is stopped."
-    else
-      echo "==> Backend container is already stopped."
-    fi
-
-    if service_is_running postgres; then
-      echo "==> Gracefully stopping PostgreSQL container..."
-      docker compose stop postgres
-      if service_is_running postgres; then
-        echo "PostgreSQL container is still running after stop completed." >&2
-        exit 1
-      fi
-      echo "==> PostgreSQL is stopped."
-    else
-      echo "==> PostgreSQL container is already stopped."
-    fi
+    case "$TARGET" in
+      backend) stop_backend ;;
+      database) stop_database ;;
+      all)
+        stop_backend
+        stop_database
+        ;;
+    esac
     ;;
   status)
     result=0
-    docker compose ps backend postgres
-
-    if ! service_is_running postgres; then
-      echo "==> PostgreSQL is stopped."
-      result=1
-    elif docker compose exec -T postgres pg_isready >/dev/null 2>&1; then
-      echo "==> PostgreSQL is ready."
-    else
-      echo "==> PostgreSQL is running but not ready." >&2
-      result=1
-    fi
-
-    if ! service_is_running backend; then
-      echo "==> Backend is stopped."
-      result=1
-    elif curl --fail --silent "$HEALTH_URL" | grep --quiet '"ok":true'; then
-      echo "==> Backend is healthy."
-    else
-      echo "==> Backend is running but its health check is failing." >&2
-      result=1
-    fi
+    case "$TARGET" in
+      backend)
+        docker compose ps backend
+        report_backend_status || result=1
+        ;;
+      database)
+        docker compose ps postgres
+        report_database_status || result=1
+        ;;
+      all)
+        docker compose ps backend postgres
+        report_database_status || result=1
+        report_backend_status || result=1
+        ;;
+    esac
     exit "$result"
     ;;
-  -h|--help)
-    usage
-    ;;
   *)
-    echo "Unknown action: $1" >&2
+    echo "Unknown action: $ACTION" >&2
     usage >&2
     exit 2
     ;;
