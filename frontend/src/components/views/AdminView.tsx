@@ -12,7 +12,9 @@ import {
   DollarSign,
   Download,
   ExternalLink,
+  FileJson,
   Gauge,
+  History,
   KeyRound,
   LoaderCircle,
   Lock,
@@ -104,6 +106,16 @@ interface AdminHealthSnapshot {
     staleHits: number;
   }>;
   timestamp: string;
+}
+
+interface AdminAuditEntry {
+  timestamp: string;
+  action: string;
+  category: 'configuration' | 'maintenance' | 'diagnostics' | string;
+  status: 'success' | 'error';
+  summary: string;
+  actorNetwork: string | null;
+  details: Record<string, unknown> | null;
 }
 
 interface ExternalDiagnosticsResult {
@@ -315,12 +327,20 @@ export function AdminView({ navigateToView, openPlannerView, openTripToolView }:
 
 type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' | 'durationMs' | 'ip';
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow';
-type AnalyticsRange = '24h' | '7d';
+type AnalyticsRange = '6h' | '24h' | '7d';
+type AuditFilter = 'all' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
 type MaintenanceAction = 'reportLogs' | 'aiUsage' | 'caches' | 'featureFlags';
 
-const ANALYTICS_RANGES: Array<{ value: AnalyticsRange; label: string; durationMs: number }> = [
-  { value: '24h', label: 'Last 24 hours', durationMs: 24 * 60 * 60 * 1000 },
-  { value: '7d', label: 'Last 7 days', durationMs: 7 * 24 * 60 * 60 * 1000 },
+const ANALYTICS_RANGES: Array<{
+  value: AnalyticsRange;
+  label: string;
+  durationMs: number;
+  bucketDurationMs: number;
+  bucketLabel: string;
+}> = [
+  { value: '6h', label: 'Last 6 hours', durationMs: 6 * 60 * 60 * 1000, bucketDurationMs: 30 * 60 * 1000, bucketLabel: '30-minute' },
+  { value: '24h', label: 'Last 24 hours', durationMs: 24 * 60 * 60 * 1000, bucketDurationMs: 2 * 60 * 60 * 1000, bucketLabel: '2-hour' },
+  { value: '7d', label: 'Last 7 days', durationMs: 7 * 24 * 60 * 60 * 1000, bucketDurationMs: 12 * 60 * 60 * 1000, bucketLabel: '12-hour' },
 ];
 
 const CHART_TOOLTIP_STYLE: React.CSSProperties = {
@@ -340,6 +360,18 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'partial', label: 'Partial data' },
   { value: 'slow', label: 'Slow (10s+)' },
 ];
+
+const AUDIT_FILTERS: Array<{ value: AuditFilter; label: string }> = [
+  { value: 'all', label: 'All activity' },
+  { value: 'configuration', label: 'Configuration' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'diagnostics', label: 'Diagnostics' },
+  { value: 'errors', label: 'Failed' },
+];
+
+function getAnalyticsRange(range: AnalyticsRange) {
+  return ANALYTICS_RANGES.find((option) => option.value === range) ?? ANALYTICS_RANGES[1];
+}
 
 function getLogSortValue(entry: ReportLogEntry, key: LogSortKey): string | number {
   switch (key) {
@@ -364,7 +396,10 @@ function matchesStatus(entry: ReportLogEntry, filter: StatusFilter): boolean {
 
 function formatDuration(durationMs: number | null): string {
   if (durationMs == null || !Number.isFinite(durationMs)) return '—';
-  return durationMs >= 1000 ? `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s` : `${durationMs}ms`;
+  if (durationMs > 0 && durationMs < 1) return '<1ms';
+  return durationMs >= 1000
+    ? `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`
+    : `${Math.round(durationMs)}ms`;
 }
 
 function formatLogTime(timestamp: string): { primary: string; secondary: string } {
@@ -390,8 +425,9 @@ function isHealthyResponse(entry: ReportLogEntry): boolean {
 }
 
 function buildTrendData(entries: ReportLogEntry[], range: AnalyticsRange, now: number) {
-  const rangeDuration = ANALYTICS_RANGES.find((option) => option.value === range)?.durationMs ?? ANALYTICS_RANGES[1].durationMs;
-  const bucketDuration = range === '24h' ? 2 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000;
+  const rangeConfig = getAnalyticsRange(range);
+  const rangeDuration = rangeConfig.durationMs;
+  const bucketDuration = rangeConfig.bucketDurationMs;
   const start = now - rangeDuration;
   const bucketCount = Math.ceil(rangeDuration / bucketDuration);
   const buckets = Array.from({ length: bucketCount }, (_, index) => {
@@ -399,10 +435,10 @@ function buildTrendData(entries: ReportLogEntry[], range: AnalyticsRange, now: n
     const date = new Date(bucketStart);
     return {
       timestamp: bucketStart,
-      label: range === '24h'
-        ? date.toLocaleTimeString([], { hour: 'numeric' })
+      label: range !== '7d'
+        ? date.toLocaleTimeString([], { hour: 'numeric', minute: range === '6h' ? '2-digit' : undefined })
         : date.toLocaleDateString([], { weekday: 'short' }),
-      period: range === '24h'
+      period: range !== '7d'
         ? date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric' })
         : date.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric' }),
       healthy: 0,
@@ -457,8 +493,9 @@ function buildTopLocations(entries: ReportLogEntry[]) {
 }
 
 function buildAITrendData(entries: AIUsageEntry[], range: AnalyticsRange, now: number) {
-  const rangeDuration = ANALYTICS_RANGES.find((option) => option.value === range)?.durationMs ?? ANALYTICS_RANGES[1].durationMs;
-  const bucketDuration = range === '24h' ? 2 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000;
+  const rangeConfig = getAnalyticsRange(range);
+  const rangeDuration = rangeConfig.durationMs;
+  const bucketDuration = rangeConfig.bucketDurationMs;
   const start = now - rangeDuration;
   const bucketCount = Math.ceil(rangeDuration / bucketDuration);
   const buckets = Array.from({ length: bucketCount }, (_, index) => {
@@ -466,8 +503,8 @@ function buildAITrendData(entries: AIUsageEntry[], range: AnalyticsRange, now: n
     const date = new Date(bucketStart);
     return {
       timestamp: bucketStart,
-      label: range === '24h'
-        ? date.toLocaleTimeString([], { hour: 'numeric' })
+      label: range !== '7d'
+        ? date.toLocaleTimeString([], { hour: 'numeric', minute: range === '6h' ? '2-digit' : undefined })
         : date.toLocaleDateString([], { weekday: 'short' }),
       inputTokens: 0,
       outputTokens: 0,
@@ -556,6 +593,15 @@ function triggerCsvDownload(filename: string, headers: string[], rows: Array<Arr
   URL.revokeObjectURL(url);
 }
 
+function triggerJsonDownload(filename: string, value: unknown) {
+  const url = URL.createObjectURL(new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: 'application/json;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function downloadReportCsv(entries: ReportLogEntry[]) {
   const keys: Array<keyof ReportLogEntry> = ['timestamp', 'name', 'lat', 'lon', 'date', 'startTime', 'statusCode', 'safetyScore', 'partialData', 'durationMs', 'ip', 'userAgent'];
   triggerCsvDownload(
@@ -596,6 +642,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [aiModelCatalog, setAIModelCatalog] = useState<AIModelCatalog | null>(null);
   const [featureFlagStatus, setFeatureFlagStatus] = useState<ProductFeatureFlagStatus | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
+  const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -611,6 +658,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
@@ -621,25 +669,48 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [sortAsc, setSortAsc] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [auditFilter, setAuditFilter] = useState<AuditFilter>('all');
+  const [auditQuery, setAuditQuery] = useState('');
   const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const hasLoadedRef = useRef(false);
   const requestActivityRef = useRef<HTMLElement>(null);
   const aiUsageRef = useRef<HTMLElement>(null);
 
+  const fetchAuditTrail = useCallback(async () => {
+    try {
+      const result = await fetchApi('/api/admin/audit-log', {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      if (result.response.status === 401 || result.response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (result.response.ok && Array.isArray(result.payload)) {
+        setAuditEntries(result.payload as AdminAuditEntry[]);
+        setAuditError(null);
+      } else {
+        setAuditError('Administrative activity is temporarily unavailable.');
+      }
+    } catch {
+      setAuditError('Could not reach the server to load administrative activity.');
+    }
+  }, [onUnauthorized, secretKey]);
+
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
       const headers = { Authorization: `Bearer ${secretKey}` };
-      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult] = await Promise.all([
         fetchApi('/api/report-logs', { headers }),
         fetchApi('/api/ai-usage', { headers }),
         fetchApi('/api/healthz'),
         fetchApi('/api/admin/ai-settings', { headers }),
         fetchApi('/api/admin/feature-flags', { headers }),
         fetchApi('/api/admin/ai-models', { headers }),
+        fetchApi('/api/admin/audit-log', { headers }),
       ]);
-      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status, featureFlagsResult.response.status, aiModelsResult.response.status].some((status) => status === 401 || status === 403)) {
+      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status, featureFlagsResult.response.status, aiModelsResult.response.status, auditResult.response.status].some((status) => status === 401 || status === 403)) {
         onUnauthorized();
         return;
       }
@@ -680,6 +751,12 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       } else {
         setAIModelCatalogError('Provider model lists are temporarily unavailable.');
       }
+      if (auditResult.response.ok && Array.isArray(auditResult.payload)) {
+        setAuditEntries(auditResult.payload as AdminAuditEntry[]);
+        setAuditError(null);
+      } else {
+        setAuditError('Administrative activity is temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
@@ -687,6 +764,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       setAISettingsError('AI controls are temporarily unavailable.');
       setFeatureFlagsError('Product feature flags are temporarily unavailable.');
       setAIModelCatalogError('Provider model lists are temporarily unavailable.');
+      setAuditError('Administrative activity is temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -707,6 +785,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         setAIModelCatalog(result.payload as AIModelCatalog);
+        void fetchAuditTrail();
         return;
       }
       setAIModelCatalogError('Provider model lists could not be refreshed.');
@@ -715,7 +794,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     } finally {
       setAIModelCatalogPending(false);
     }
-  }, [onUnauthorized, secretKey]);
+  }, [fetchAuditTrail, onUnauthorized, secretKey]);
 
   const updateAIControl = useCallback(async (settings: {
     enabled?: boolean;
@@ -742,6 +821,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
         const nextSettings = result.payload as AIAdminSettings;
         setAISettings(nextSettings);
         publishAiAvailability(nextSettings);
+        void fetchAuditTrail();
         return nextSettings;
       }
       const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
@@ -755,7 +835,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     } finally {
       setAISettingsPending(false);
     }
-  }, [onUnauthorized, secretKey]);
+  }, [fetchAuditTrail, onUnauthorized, secretKey]);
 
   useEffect(() => {
     if (!aiSettings) return;
@@ -813,6 +893,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
         const nextStatus = result.payload as ProductFeatureFlagStatus;
         setFeatureFlagStatus(nextStatus);
         publishProductFeatureFlags(nextStatus.flags);
+        void fetchAuditTrail();
         return;
       }
       const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
@@ -889,6 +970,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
         publishProductFeatureFlags(nextStatus.flags);
       }
       setMaintenanceNotice({ message: selected.success, error: false });
+      void fetchAuditTrail();
     } catch {
       setMaintenanceNotice({ message: 'Could not reach the server to complete this maintenance action.', error: true });
     } finally {
@@ -910,6 +992,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         setDiagnostics(result.payload as ExternalDiagnosticsResult);
+        void fetchAuditTrail();
         return;
       }
       const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
@@ -934,7 +1017,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   }, [autoRefresh, fetchAdminData]);
 
   const referenceTime = lastRefreshed?.getTime() ?? Date.now();
-  const selectedRange = ANALYTICS_RANGES.find((option) => option.value === analyticsRange) ?? ANALYTICS_RANGES[1];
+  const selectedRange = getAnalyticsRange(analyticsRange);
 
   const rangeLogs = useMemo(() => {
     const cutoff = referenceTime - selectedRange.durationMs;
@@ -958,19 +1041,32 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     const durations = rangeLogs.map((entry) => entry.durationMs).filter(Number.isFinite);
     const previousStart = referenceTime - selectedRange.durationMs * 2;
     const previousEnd = referenceTime - selectedRange.durationMs;
-    const previousCount = analyticsRange === '24h'
+    const previousLogs = analyticsRange !== '7d'
       ? logs.filter((entry) => {
         const timestamp = new Date(entry.timestamp).getTime();
         return Number.isFinite(timestamp) && timestamp >= previousStart && timestamp < previousEnd;
-      }).length
-      : null;
-    const volumeDelta = previousCount && previousCount > 0
+      })
+      : [];
+    const previousCount = previousLogs.length;
+    const previousHealthy = previousLogs.filter(isHealthyResponse).length;
+    const previousDurations = previousLogs.map((entry) => entry.durationMs).filter(Number.isFinite);
+    const healthyRate = rangeLogs.length ? Math.round((healthy / rangeLogs.length) * 1000) / 10 : null;
+    const previousHealthyRate = previousCount ? Math.round((previousHealthy / previousCount) * 1000) / 10 : null;
+    const p95Duration = durations.length ? percentile(durations, 0.95) : null;
+    const previousP95Duration = previousDurations.length ? percentile(previousDurations, 0.95) : null;
+    const volumeDelta = previousCount > 0
       ? Math.round(((rangeLogs.length - previousCount) / previousCount) * 100)
       : null;
     return {
       total: rangeLogs.length,
-      healthyRate: rangeLogs.length ? Math.round((healthy / rangeLogs.length) * 1000) / 10 : null,
-      p95Duration: durations.length ? percentile(durations, 0.95) : null,
+      healthyRate,
+      healthyRateDelta: healthyRate != null && previousHealthyRate != null
+        ? Math.round((healthyRate - previousHealthyRate) * 10) / 10
+        : null,
+      p95Duration,
+      p95DurationDelta: p95Duration != null && previousP95Duration != null
+        ? p95Duration - previousP95Duration
+        : null,
       medianDuration: durations.length ? percentile(durations, 0.5) : null,
       uniqueVisitors: new Set(rangeLogs.map((entry) => entry.ip).filter(Boolean)).size,
       issues,
@@ -1034,6 +1130,31 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     });
   }, [query, rangeLogs, statusFilter, sortKey, sortAsc]);
 
+  const filteredAuditEntries = useMemo(() => {
+    const normalizedQuery = auditQuery.trim().toLowerCase();
+    return auditEntries.filter((entry) => {
+      if (auditFilter === 'errors' && entry.status !== 'error') return false;
+      if (auditFilter !== 'all' && auditFilter !== 'errors' && entry.category !== auditFilter) return false;
+      if (!normalizedQuery) return true;
+      return [entry.summary, entry.action, entry.category, entry.status, entry.actorNetwork]
+        .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery));
+    });
+  }, [auditEntries, auditFilter, auditQuery]);
+
+  const downloadOperationsSnapshot = () => {
+    triggerJsonDownload(`admin-snapshot-${new Date().toISOString().replaceAll(':', '-').slice(0, 19)}.json`, {
+      generatedAt: new Date().toISOString(),
+      range: { value: analyticsRange, label: selectedRange.label },
+      system: health,
+      reportMetrics: metrics,
+      aiMetrics,
+      aiStatus: aiSettings,
+      productFeatures: featureFlagStatus,
+      externalDiagnostics: diagnostics,
+      recentAdminActivity: auditEntries.slice(0, 50),
+    });
+  };
+
   const handleSort = (key: LogSortKey) => {
     if (key === sortKey) setSortAsc((current) => !current);
     else {
@@ -1083,6 +1204,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
               </button>
             ))}
           </div>
+          <button type="button" className="logs-btn logs-btn-quiet" onClick={downloadOperationsSnapshot} title="Export a JSON snapshot of current admin data">
+            <FileJson size={15} aria-hidden /> Export snapshot
+          </button>
           <button
             type="button"
             className={autoRefresh ? 'logs-icon-btn is-active' : 'logs-icon-btn'}
@@ -1278,6 +1402,79 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <b>{maintenancePending === 'featureFlags' ? 'Restoring…' : 'Reset'}</b>
           </button>
         </div>
+      </section>
+
+      <section className="logs-panel admin-audit-panel" aria-labelledby="admin-audit-title">
+        <div className="logs-panel-head">
+          <div className="admin-audit-heading">
+            <span className="logs-section-icon"><History size={17} aria-hidden /></span>
+            <div>
+              <h2 id="admin-audit-title">Administrative activity</h2>
+              <p>Protected record of configuration changes, maintenance actions, and diagnostic runs</p>
+            </div>
+          </div>
+          <div className="logs-panel-actions">
+            <button
+              type="button"
+              className="logs-btn logs-btn-quiet"
+              onClick={() => triggerCsvDownload(
+                `admin-activity-${new Date().toISOString().slice(0, 10)}.csv`,
+                ['timestamp', 'category', 'status', 'action', 'summary', 'actorNetwork'],
+                filteredAuditEntries.map((entry) => [entry.timestamp, entry.category, entry.status, entry.action, entry.summary, entry.actorNetwork]),
+              )}
+              disabled={filteredAuditEntries.length === 0}
+            >
+              <Download size={15} aria-hidden /> Export activity
+            </button>
+          </div>
+        </div>
+        <div className="logs-controls admin-audit-controls">
+          <label className="logs-search">
+            <Search size={16} aria-hidden />
+            <span className="sr-only">Search administrative activity</span>
+            <input value={auditQuery} onChange={(event) => setAuditQuery(event.target.value)} placeholder="Search changes, actions, or network…" />
+            {auditQuery && <button type="button" onClick={() => setAuditQuery('')} aria-label="Clear activity search"><X size={15} aria-hidden /></button>}
+          </label>
+          <div className="logs-filter-tabs" aria-label="Filter administrative activity">
+            {AUDIT_FILTERS.map((filter) => (
+              <button
+                type="button"
+                key={filter.value}
+                className={auditFilter === filter.value ? 'is-active' : ''}
+                onClick={() => setAuditFilter(filter.value)}
+                aria-pressed={auditFilter === filter.value}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {auditError && <div className="admin-audit-error" role="alert"><AlertTriangle size={15} aria-hidden /> {auditError}</div>}
+        {auditEntries.length === 0 ? (
+          <div className="logs-empty"><History size={26} aria-hidden /><h3>No administrative activity yet</h3><p>New changes and maintenance actions will appear here.</p></div>
+        ) : filteredAuditEntries.length === 0 ? (
+          <div className="logs-empty"><Search size={26} aria-hidden /><h3>No matching activity</h3><p>Try another activity type or search.</p><button type="button" onClick={() => { setAuditQuery(''); setAuditFilter('all'); }}>Clear filters</button></div>
+        ) : (
+          <ol className="admin-audit-list">
+            {filteredAuditEntries.slice(0, 100).map((entry, index) => {
+              const time = formatLogTime(entry.timestamp);
+              return (
+                <li key={`${entry.timestamp}-${entry.action}-${index}`} className={entry.status === 'error' ? 'is-error' : ''}>
+                  <span className="admin-audit-marker" aria-hidden>{entry.status === 'error' ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} />}</span>
+                  <div className="admin-audit-copy">
+                    <div><strong>{entry.summary}</strong><span>{entry.category}</span></div>
+                    <small>{entry.action.replaceAll('.', ' ')}{entry.actorNetwork ? ` · ${entry.actorNetwork}` : ''}</small>
+                  </div>
+                  <time dateTime={entry.timestamp}><strong>{time.primary}</strong><span>{time.secondary}</span></time>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        <footer className="logs-panel-foot">
+          <span>Showing {Math.min(filteredAuditEntries.length, 100)} of {filteredAuditEntries.length} matching events</span>
+          <span>Retained for up to 30 days</span>
+        </footer>
       </section>
 
       <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title">
@@ -1501,16 +1698,16 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
           <span className="logs-metric-icon"><Activity size={18} aria-hidden /></span>
           <div>
             <strong>{metrics.total.toLocaleString()}</strong>
-            <span>Total reports{metrics.volumeDelta != null ? ` · ${metrics.volumeDelta >= 0 ? '+' : ''}${metrics.volumeDelta}% vs prior 24h` : ''}</span>
+            <span>Total reports{metrics.volumeDelta != null ? ` · ${metrics.volumeDelta >= 0 ? '+' : ''}${metrics.volumeDelta}% vs prior period` : ''}</span>
           </div>
         </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon is-green"><CheckCircle2 size={18} aria-hidden /></span>
-          <div><strong>{metrics.healthyRate == null ? '—' : `${metrics.healthyRate}%`}</strong><span>Fully healthy responses</span></div>
+          <div><strong>{metrics.healthyRate == null ? '—' : `${metrics.healthyRate}%`}</strong><span>Fully healthy{metrics.healthyRateDelta != null ? ` · ${metrics.healthyRateDelta >= 0 ? '+' : ''}${metrics.healthyRateDelta} pts` : ''}</span></div>
         </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon"><Gauge size={18} aria-hidden /></span>
-          <div><strong>{formatDuration(metrics.p95Duration)}</strong><span>P95 response time · median {formatDuration(metrics.medianDuration)}</span></div>
+          <div><strong>{formatDuration(metrics.p95Duration)}</strong><span>P95 response · median {formatDuration(metrics.medianDuration)}{metrics.p95DurationDelta != null ? ` · ${formatDuration(Math.abs(metrics.p95DurationDelta))} ${metrics.p95DurationDelta <= 0 ? 'faster' : 'slower'}` : ''}</span></div>
         </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon"><Users size={18} aria-hidden /></span>
@@ -1527,7 +1724,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
           <div className="logs-chart-head">
             <div>
               <h2>Request health over time</h2>
-              <p>Report volume by response outcome · {analyticsRange === '24h' ? '2-hour' : '12-hour'} intervals</p>
+              <p>Report volume by response outcome · {selectedRange.bucketLabel} intervals</p>
             </div>
             <Activity size={18} aria-hidden />
           </div>
@@ -1666,7 +1863,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <div className="logs-chart-head">
               <div>
                 <h2>Token activity</h2>
-                <p>Input and output tokens · {analyticsRange === '24h' ? '2-hour' : '12-hour'} intervals</p>
+                <p>Input and output tokens · {selectedRange.bucketLabel} intervals</p>
               </div>
               <Activity size={18} aria-hidden />
             </div>

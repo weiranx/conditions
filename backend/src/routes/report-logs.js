@@ -5,6 +5,7 @@ const { logger } = require('../utils/logger');
 const { clearAIUsageEntries, getAIUsageEntries } = require('../utils/ai-usage');
 const { getAIStatus, updateAISettings } = require('../utils/ai-client');
 const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require('../utils/feature-flags');
+const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit');
 
 const MAX_LOG_ENTRIES = 500;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -151,6 +152,10 @@ const secretsMatch = (provided, expected) => {
 
 const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, loadModelCatalog = null } = {}) => {
   let diagnosticsInFlight = null;
+  const audit = (req, event) => recordAdminAudit({
+    ...event,
+    actorIp: req.headers['x-forwarded-for'] ?? req.ip ?? req.socket?.remoteAddress ?? null,
+  });
   const authorize = (req, res) => {
     if (!LOGS_SECRET) {
       res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
@@ -175,6 +180,11 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     res.json(getAIUsageEntries());
   });
 
+  app.get('/api/admin/audit-log', (req, res) => {
+    if (!authorize(req, res)) return;
+    res.json(getAdminAuditEntries());
+  });
+
   app.get('/api/admin/ai-settings', (req, res) => {
     if (!authorize(req, res)) return;
     res.json(getAIStatus());
@@ -188,19 +198,34 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       return;
     }
     try {
-      res.json(updateAISettings({
+      const updated = updateAISettings({
         enabled: body.enabled,
         provider: body.provider,
         features: body.features,
         models: body.models,
-      }));
+      });
+      const changed = ['enabled', 'provider', 'features', 'models'].filter((key) => body[key] !== undefined);
+      audit(req, {
+        action: 'ai.settings.updated',
+        category: 'configuration',
+        summary: `Updated AI ${changed.join(', ')}`,
+        details: { changed, enabled: updated.enabled, provider: updated.provider },
+      });
+      res.json(updated);
     } catch (error) {
       const status = error?.code === 'AI_PROVIDER_NOT_CONFIGURED'
         ? 409
         : error?.code === 'AI_SETTINGS_PERSIST_FAILED'
           ? 500
           : 400;
-      res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid AI settings' });
+      const message = error instanceof Error ? error.message : 'Invalid AI settings';
+      audit(req, {
+        action: 'ai.settings.updated',
+        category: 'configuration',
+        status: 'error',
+        summary: message,
+      });
+      res.status(status).json({ error: message });
     }
   });
 
@@ -211,8 +236,24 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       return;
     }
     try {
-      res.json(await loadModelCatalog({ force }));
-    } catch {
+      const catalog = await loadModelCatalog({ force });
+      if (force) {
+        audit(req, {
+          action: 'ai.models.refreshed',
+          category: 'diagnostics',
+          summary: 'Refreshed AI provider model catalogs',
+        });
+      }
+      res.json(catalog);
+    } catch (error) {
+      if (force) {
+        audit(req, {
+          action: 'ai.models.refreshed',
+          category: 'diagnostics',
+          status: 'error',
+          summary: 'AI provider model catalogs could not be refreshed',
+        });
+      }
       res.status(502).json({ error: 'AI model catalog could not be loaded' });
     }
   };
@@ -229,28 +270,61 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     if (!authorize(req, res)) return;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     try {
-      res.json(updateFeatureFlags(body.flags));
+      const updated = updateFeatureFlags(body.flags);
+      const changed = body.flags && typeof body.flags === 'object' ? Object.keys(body.flags) : [];
+      audit(req, {
+        action: 'product.flags.updated',
+        category: 'configuration',
+        summary: `Updated product feature ${changed.length === 1 ? 'flag' : 'flags'}: ${changed.join(', ') || 'none'}`,
+        details: { changed },
+      });
+      res.json(updated);
     } catch (error) {
       const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
-      res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid feature flags' });
+      const message = error instanceof Error ? error.message : 'Invalid feature flags';
+      audit(req, {
+        action: 'product.flags.updated',
+        category: 'configuration',
+        status: 'error',
+        summary: message,
+      });
+      res.status(status).json({ error: message });
     }
   });
 
   app.post('/api/admin/maintenance/report-logs', (req, res) => {
     if (!authorize(req, res)) return;
     try {
-      res.json({ cleared: clearReportLogs() });
+      const cleared = clearReportLogs();
+      audit(req, {
+        action: 'maintenance.report-logs.cleared',
+        category: 'maintenance',
+        summary: `Cleared ${cleared} report log ${cleared === 1 ? 'entry' : 'entries'}`,
+        details: { cleared },
+      });
+      res.json({ cleared });
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : 'Report activity could not be cleared' });
+      const message = error instanceof Error ? error.message : 'Report activity could not be cleared';
+      audit(req, { action: 'maintenance.report-logs.cleared', category: 'maintenance', status: 'error', summary: message });
+      res.status(500).json({ error: message });
     }
   });
 
   app.post('/api/admin/maintenance/ai-usage', (req, res) => {
     if (!authorize(req, res)) return;
     try {
-      res.json({ cleared: clearAIUsageEntries() });
+      const cleared = clearAIUsageEntries();
+      audit(req, {
+        action: 'maintenance.ai-usage.cleared',
+        category: 'maintenance',
+        summary: `Cleared ${cleared} AI usage ${cleared === 1 ? 'entry' : 'entries'}`,
+        details: { cleared },
+      });
+      res.json({ cleared });
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : 'AI usage history could not be cleared' });
+      const message = error instanceof Error ? error.message : 'AI usage history could not be cleared';
+      audit(req, { action: 'maintenance.ai-usage.cleared', category: 'maintenance', status: 'error', summary: message });
+      res.status(500).json({ error: message });
     }
   });
 
@@ -262,16 +336,30 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       cache.clear();
       return [stats?.name || 'unnamed-cache'];
     });
+    audit(req, {
+      action: 'maintenance.caches.cleared',
+      category: 'maintenance',
+      summary: `Cleared ${cleared.length} backend ${cleared.length === 1 ? 'cache' : 'caches'}`,
+      details: { caches: cleared },
+    });
     res.json({ cleared, count: cleared.length });
   });
 
   app.post('/api/admin/maintenance/feature-flags', (req, res) => {
     if (!authorize(req, res)) return;
     try {
-      res.json(resetFeatureFlags());
+      const updated = resetFeatureFlags();
+      audit(req, {
+        action: 'maintenance.feature-flags.restored',
+        category: 'maintenance',
+        summary: 'Restored product feature flags to defaults',
+      });
+      res.json(updated);
     } catch (error) {
       const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
-      res.status(status).json({ error: error instanceof Error ? error.message : 'Feature flags could not be reset' });
+      const message = error instanceof Error ? error.message : 'Feature flags could not be reset';
+      audit(req, { action: 'maintenance.feature-flags.restored', category: 'maintenance', status: 'error', summary: message });
+      res.status(status).json({ error: message });
     }
   });
 
@@ -287,8 +375,24 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
           .then(() => runDiagnostics())
           .finally(() => { diagnosticsInFlight = null; });
       }
-      res.json(await diagnosticsInFlight);
+      const result = await diagnosticsInFlight;
+      audit(req, {
+        action: 'diagnostics.external.completed',
+        category: 'diagnostics',
+        status: result?.summary?.failed > 0 ? 'error' : 'success',
+        summary: result?.summary?.failed > 0
+          ? `External diagnostics completed with ${result.summary.failed} failed service checks`
+          : 'External diagnostics completed successfully',
+        details: result?.summary ?? null,
+      });
+      res.json(result);
     } catch {
+      audit(req, {
+        action: 'diagnostics.external.completed',
+        category: 'diagnostics',
+        status: 'error',
+        summary: 'External diagnostics could not be completed',
+      });
       res.status(502).json({ error: 'External diagnostics could not be completed' });
     }
   });

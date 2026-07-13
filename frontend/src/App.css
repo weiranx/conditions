@@ -969,6 +969,76 @@ input {
 .admin-maintenance-grid b { grid-column: 1 / -1; color: var(--ui-text-3); font-family: var(--font-data); font-size: 9.5px; font-weight: 650; }
 .logs-inline-note.is-success { color: var(--ui-go-ink); }
 
+.admin-audit-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-audit-heading > div { min-width: 0; }
+
+.admin-audit-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--ui-line);
+  color: var(--ui-nogo-ink);
+  font-size: 11.5px;
+}
+
+.admin-audit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-audit-list li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.admin-audit-list li:last-child { border-bottom: 0; }
+.admin-audit-list li:hover { background: var(--ui-surface-subtle); }
+
+.admin-audit-marker {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--ui-brand-soft);
+  color: var(--ui-go-ink);
+}
+
+.admin-audit-list li.is-error .admin-audit-marker {
+  background: color-mix(in oklch, var(--ui-risk-4) 11%, var(--ui-surface));
+  color: var(--ui-nogo-ink);
+}
+
+.admin-audit-copy { display: grid; min-width: 0; }
+.admin-audit-copy > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admin-audit-copy strong { overflow: hidden; color: var(--ui-text); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-audit-copy > div > span {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-3);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-audit-copy small { overflow: hidden; margin-top: 3px; color: var(--ui-text-4); font: 9.5px var(--font-data); text-overflow: ellipsis; white-space: nowrap; }
+.admin-audit-list time { display: grid; justify-items: end; min-width: 82px; font-variant-numeric: tabular-nums; }
+.admin-audit-list time strong { color: var(--ui-text-2); font-size: 10.5px; }
+.admin-audit-list time span { margin-top: 2px; color: var(--ui-text-4); font-size: 9px; }
+
 .admin-ai-controls { display: grid; gap: 12px; }
 
 .admin-ai-status {
@@ -1403,7 +1473,7 @@ input {
 .logs-filter-tabs button:hover { background: var(--ui-surface); color: var(--ui-text); }
 .logs-filter-tabs button.is-active { background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
 
-.logs-table-scroll { overflow-x: auto; }
+.logs-table-scroll { max-width: 100%; overflow-x: auto; contain: inline-size; }
 
 .logs-table { width: 100%; min-width: 920px; border-collapse: collapse; font-size: 12.5px; }
 .logs-table th { padding: 0; border-bottom: 1px solid var(--ui-line); text-align: left; }
@@ -11277,6 +11347,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-toolbar-actions .logs-refresh-status { width: 100%; text-align: left; }
   .logs-range-control { flex: 1; }
   .logs-range-control button { flex: 1; }
+  .logs-toolbar-actions > .logs-btn { margin-left: auto; }
   .admin-operations-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -11574,6 +11645,14 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-maintenance-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .admin-audit-panel .logs-panel-head { align-items: stretch; flex-direction: column; }
+  .admin-audit-panel .logs-panel-actions { justify-content: flex-start; }
+  .admin-audit-panel .logs-panel-actions .logs-btn { width: 100%; justify-content: center; }
+  .admin-audit-list li { grid-template-columns: 28px minmax(0, 1fr); align-items: start; padding-inline: 13px; }
+  .admin-audit-copy > div { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .admin-audit-copy strong { white-space: normal; }
+  .admin-audit-list time { grid-column: 2; grid-row: 2; justify-items: start; min-width: 0; }
+  .admin-audit-list time span { display: none; }
 
   /* Coordinates stay available in the report header; the pill just adds clutter here */
   .map-overlay-coords {

@@ -310,11 +310,13 @@ test('AI admin settings endpoints reject access without the admin key', async ()
   const patchResponse = await request(app).patch('/api/admin/ai-settings').send({ enabled: false });
   const modelsResponse = await request(app).get('/api/admin/ai-models');
   const refreshModelsResponse = await request(app).post('/api/admin/ai-models/refresh');
+  const auditResponse = await request(app).get('/api/admin/audit-log');
 
   expect([401, 403]).toContain(getResponse.status);
   expect([401, 403]).toContain(patchResponse.status);
   expect([401, 403]).toContain(modelsResponse.status);
   expect([401, 403]).toContain(refreshModelsResponse.status);
+  expect([401, 403]).toContain(auditResponse.status);
 });
 
 test.each([
