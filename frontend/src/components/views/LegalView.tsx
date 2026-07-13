@@ -95,7 +95,7 @@ function PrivacyPolicy() {
         <p>
           You can decline device-location permission and enter an objective manually. You can clear saved browser
           data in the app or through your browser controls, and you can choose not to use optional AI features.
-          You can sign out from the account page or contact us to request deletion of your account.
+          You can sign out from the account section in Settings or contact us to request deletion of your account.
           The service does not currently use operator-controlled cross-site advertising trackers, so it does not
           respond differently to browser “Do Not Track” signals.
         </p>

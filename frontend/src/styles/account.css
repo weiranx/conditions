@@ -6,6 +6,49 @@
   color: var(--ui-text);
 }
 
+.account-settings-card-shell {
+  scroll-margin-top: 88px;
+}
+
+.account-settings-card {
+  display: grid;
+  grid-template-columns: minmax(0, .78fr) minmax(360px, 1fr);
+  align-items: stretch;
+}
+
+.account-settings-card .account-intro {
+  align-self: center;
+  padding: 36px 32px;
+}
+
+.account-settings-card .account-intro-icon {
+  width: 42px;
+  height: 42px;
+  margin-bottom: 20px;
+}
+
+.account-settings-card .account-intro h1 {
+  font-size: clamp(28px, 3.5vw, 38px);
+  line-height: 1.05;
+}
+
+.account-settings-card .account-lede {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.account-settings-card .account-benefits {
+  margin-top: 24px;
+}
+
+.account-settings-card .account-panel {
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid var(--ui-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .account-page {
   width: min(1060px, calc(100% - 48px));
   min-height: calc(100vh - 146px);
@@ -228,6 +271,13 @@
 .account-footer { width: min(1060px, calc(100% - 48px)); min-height: 72px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid var(--ui-line); color: var(--ui-text-3); font-size: 10.5px; }
 
 @media (max-width: 820px) {
+  .account-settings-card { grid-template-columns: 1fr; }
+  .account-settings-card .account-intro { padding: 30px 28px; text-align: left; }
+  .account-settings-card .account-intro-icon,
+  .account-settings-card .account-intro h1,
+  .account-settings-card .account-lede { margin-right: 0; margin-left: 0; }
+  .account-settings-card .account-benefits { width: auto; margin-right: 0; margin-left: 0; }
+  .account-settings-card .account-panel { width: 100%; border-top: 1px solid var(--ui-line); border-left: 0; }
   .account-page { padding-top: 48px; grid-template-columns: 1fr; gap: 36px; }
   .account-intro { text-align: center; }
   .account-intro-icon { margin-right: auto; margin-left: auto; }

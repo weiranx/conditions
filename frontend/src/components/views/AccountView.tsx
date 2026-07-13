@@ -24,6 +24,7 @@ interface AccountViewProps {
   openPlannerView: () => void;
   openTripToolView: () => void;
   preferences: UserPreferences;
+  embedded?: boolean;
 }
 
 type AuthMode = 'create' | 'signin';
@@ -42,6 +43,7 @@ export function AccountView({
   openPlannerView,
   openTripToolView,
   preferences,
+  embedded = false,
 }: AccountViewProps) {
   const account = useAccount();
   const [mode, setMode] = React.useState<AuthMode>('create');
@@ -97,15 +99,22 @@ export function AccountView({
   const errorMessage = formError || account.error;
 
   return (
-    <div key="view-account" className={`${appShellClassName} account-page-shell`} aria-busy={isViewPending || account.loading}>
-      <ProductNav
-        active="account"
-        navigateToView={navigateToView}
-        openPlannerView={openPlannerView}
-        openTripToolView={openTripToolView}
-      />
+    <div
+      key={embedded ? 'settings-account' : 'view-account'}
+      id={embedded ? 'ssr-set-account' : undefined}
+      className={embedded ? 'ssr-set-card account-settings-card-shell' : `${appShellClassName} account-page-shell`}
+      aria-busy={isViewPending || account.loading}
+    >
+      {!embedded && (
+        <ProductNav
+          active="account"
+          navigateToView={navigateToView}
+          openPlannerView={openPlannerView}
+          openTripToolView={openTripToolView}
+        />
+      )}
 
-      <main className="account-page">
+      <main className={embedded ? 'account-settings-card' : 'account-page'}>
         <section className="account-intro" aria-labelledby="account-title">
           <div className="account-intro-icon" aria-hidden><CircleUserRound /></div>
           <p className="account-eyebrow">Your account</p>
@@ -276,10 +285,12 @@ export function AccountView({
         </section>
       </main>
 
-      <footer className="account-footer">
-        <span>Backcountry Conditions</span>
-        <LegalLinks navigateToView={navigateToView} />
-      </footer>
+      {!embedded && (
+        <footer className="account-footer">
+          <span>Backcountry Conditions</span>
+          <LegalLinks navigateToView={navigateToView} />
+        </footer>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   Ruler,
   Gauge,
   Footprints,
+  CircleUserRound,
   Check,
   X,
   FlaskConical,
@@ -26,6 +27,7 @@ import '../../styles/settings-redesign.css';
 import { ProductNav } from './ProductNav';
 import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
+import { AccountView } from './AccountView';
 
 export interface SettingsViewProps {
   appShellClassName: string;
@@ -85,7 +87,10 @@ export interface SettingsViewProps {
   navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
+  initialSection?: 'timing' | 'account';
 }
+
+type SettingsSection = 'timing' | 'activity' | 'appearance' | 'units' | 'thresholds' | 'account';
 
 const THEME_OPTIONS: Array<[ThemeMode, string]> = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
 const TEMP_OPTIONS: Array<[TemperatureUnit, string]> = [['f', '°F'], ['c', '°C']];
@@ -196,11 +201,23 @@ export function SettingsView({
   navigateToView,
   openPlannerView,
   openTripToolView,
+  initialSection = 'timing',
 }: SettingsViewProps) {
   const account = useAccount();
-  const [activeSection, setActiveSection] = React.useState('timing');
+  const [activeSection, setActiveSection] = React.useState<SettingsSection>(initialSection);
 
-  const goToSection = (id: string) => {
+  React.useEffect(() => {
+    setActiveSection(initialSection);
+    if (initialSection !== 'account') {
+      return undefined;
+    }
+    const animationFrame = window.requestAnimationFrame(() => {
+      document.getElementById('ssr-set-account')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [initialSection]);
+
+  const goToSection = (id: SettingsSection) => {
     setActiveSection(id);
     document.getElementById(`ssr-set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -214,7 +231,7 @@ export function SettingsView({
     { label: 'Heat under ceiling', val: sample.heat, lim: preferences.maxFeelsLikeF, unit: '°F', ok: sample.heat < preferences.maxFeelsLikeF, cmp: '<' },
   ];
 
-  const railItem = (id: string, icon: React.ReactNode, label: string) => (
+  const railItem = (id: SettingsSection, icon: React.ReactNode, label: string) => (
     <button type="button" className={activeSection === id ? 'on' : ''} onClick={() => goToSection(id)}>
       {icon} {label}
     </button>
@@ -230,8 +247,8 @@ export function SettingsView({
           openTripToolView={openTripToolView}
         />
         <div className="ssr-set-head">
-          <div className="ssr-set-kicker">Planning preferences</div>
-          <h1>Settings</h1>
+          <div className="ssr-set-kicker">Preferences and profile</div>
+          <h1>Settings &amp; account</h1>
           <p>
             {account.user ? 'Defaults saved to your account.' : 'Defaults for this browser.'}
             {' '}Shared planner links can still override any value for a single report.
@@ -246,6 +263,8 @@ export function SettingsView({
             {railItem('appearance', <Eye />, 'Appearance')}
             {railItem('units', <Ruler />, 'Units & time')}
             {railItem('thresholds', <Gauge />, 'Thresholds')}
+            <div className="ssr-set-rail-sep" aria-hidden="true" />
+            {railItem('account', <CircleUserRound />, 'Account')}
             <div className="ssr-set-rail-foot" role="status" aria-live="polite">
               {account.preferenceSyncState === 'error' ? <X /> : <Check />}
               {account.user
@@ -477,6 +496,16 @@ export function SettingsView({
                 <b>Current defaults</b> · {ACTIVITY_PROFILES[preferences.defaultActivity].label} · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Route {preferences.runnerPaceMinutesPerMile} min/mi + {preferences.runnerAscentMinutesPer1000Ft} min/1k ft · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
               </div>
             </section>
+
+            <AccountView
+              appShellClassName={appShellClassName}
+              isViewPending={isViewPending}
+              navigateToView={navigateToView}
+              openPlannerView={openPlannerView}
+              openTripToolView={openTripToolView}
+              preferences={preferences}
+              embedded
+            />
           </div>
         </div>
       </div>

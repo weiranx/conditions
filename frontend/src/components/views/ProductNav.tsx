@@ -1,4 +1,4 @@
-import { CalendarRange, CircleUserRound, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { CalendarRange, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 import '../../styles/page-chrome.css';
@@ -24,7 +24,6 @@ export function ProductNav({
       ? [{ id: 'trip' as const, label: 'Compare', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) }]
       : []),
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
-    { id: 'account', label: 'Account', icon: CircleUserRound, action: () => navigateToView('account') },
   ];
   if (active === 'admin') {
     items.push({ id: 'admin', label: 'Admin', icon: ShieldCheck, action: () => navigateToView('admin') });

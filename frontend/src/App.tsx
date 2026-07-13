@@ -150,9 +150,6 @@ const StatusView = React.lazy(() =>
 const SettingsView = React.lazy(() =>
   import('./components/views/SettingsView').then((module) => ({ default: module.SettingsView })),
 );
-const AccountView = React.lazy(() =>
-  import('./components/views/AccountView').then((module) => ({ default: module.AccountView })),
-);
 const TripView = React.lazy(() =>
   import('./components/views/TripView').then((module) => ({ default: module.TripView })),
 );
@@ -579,13 +576,8 @@ function App() {
       return;
     }
 
-    if (view === 'settings') {
-      document.title = 'Settings - Backcountry Conditions';
-      return;
-    }
-
-    if (view === 'account') {
-      document.title = 'Account - Backcountry Conditions';
+    if (view === 'settings' || view === 'account') {
+      document.title = 'Settings & Account - Backcountry Conditions';
       return;
     }
 
@@ -1707,7 +1699,7 @@ function App() {
       ) : null}
       </React.Activity>
 
-      <React.Activity name="settings-page" mode={view === 'settings' ? 'visible' : 'hidden'}>
+      <React.Activity name="settings-page" mode={view === 'settings' || view === 'account' ? 'visible' : 'hidden'}>
       <SettingsView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
@@ -1754,18 +1746,8 @@ function App() {
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
+        initialSection={view === 'account' ? 'account' : 'timing'}
       />
-      </React.Activity>
-
-      <React.Activity name="account-page" mode={view === 'account' ? 'visible' : 'hidden'}>
-        <AccountView
-          appShellClassName={appShellClassName}
-          isViewPending={isViewPending}
-          navigateToView={navigateToView}
-          openPlannerView={openPlannerView}
-          openTripToolView={openTripToolView}
-          preferences={preferences}
-        />
       </React.Activity>
 
       <React.Activity name="trip-page" mode={featureFlags.tripPlanning && view === 'trip' ? 'visible' : 'hidden'}>
