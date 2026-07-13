@@ -821,14 +821,10 @@ function App() {
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
-  // Arms a one-shot report fetch the next time we're on the planner with an objective set,
-  // then clears itself so later field edits still require an explicit Generate/Refresh —
-  // this is the only path (besides those explicit actions) that triggers a fetch. It starts
-  // true when the page loads from a shared link (URL already carries lat/lon), so opening
-  // someone else's link shows a report immediately instead of an empty "tap Generate" state.
-  // The home page's "Get conditions" button re-arms it on click; selecting the objective
-  // there is async (it may resolve via a search lookup), so that flow can't fetch immediately
-  // with the click handler's stale position and instead relies on this same deferred effect.
+  // Arms a one-shot report fetch when the page loads from a shared link (URL already carries
+  // lat/lon), then clears itself so later field edits still require an explicit Generate/Refresh.
+  // Home-page selections intentionally do not arm this: users review their plan in the planner
+  // and confirm it with Generate Report before any report request is made.
   const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective && !initialRestoredReport);
   useEffect(() => {
     if (!pendingAutoGenerate || !hasObjective || view !== 'planner') {
@@ -1569,7 +1565,6 @@ function App() {
   );
 
   const navigateHomeToPlanner = () => {
-    setPendingAutoGenerate(true);
     startViewChange(() => setView('planner'));
   };
 
