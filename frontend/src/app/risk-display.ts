@@ -33,8 +33,9 @@ export interface FireRiskDisplay {
 }
 
 export function buildFireRiskDisplay(safetyData: SafetyData | null): FireRiskDisplay {
-  const level = Number(safetyData?.fireRisk?.level);
-  const label = safetyData?.fireRisk?.label || 'Low';
+  const rawLevel = safetyData?.fireRisk?.level;
+  const level = rawLevel == null ? Number.NaN : Number(rawLevel);
+  const label = safetyData?.fireRisk?.label || (Number.isFinite(level) ? 'Low' : 'Unknown');
   const pillClass = pillClassForLevel(level, { nogo: 4, caution: 3, watch: 2 }, 'caution');
   const alerts = safetyData?.fireRisk?.alertsConsidered || [];
   return { level, label, pillClass, alerts };

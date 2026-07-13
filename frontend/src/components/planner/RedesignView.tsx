@@ -28,7 +28,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
-import type { ElevationForecastBand, FireRiskAlertItem } from '../../app/types';
+import type { ElevationForecastBand } from '../../app/types';
 import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
 import { formatSnowVisionSections } from '../../app/text-utils';
 import { getTemperatureBand } from '../../app/weather-display';
@@ -39,6 +39,7 @@ import { WeatherTrendMiniChart } from './WeatherTrendMiniChart';
 import { WindDirectionArrow } from './WindDirectionArrow';
 import { StartTimeScenarioCard } from './StartTimeScenarioCard';
 import { HeatRiskSection } from './HeatRiskSection';
+import { FireRiskSection } from './FireRiskSection';
 import { CautionsAlertsSection } from './CautionsAlertsSection';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
@@ -2017,42 +2018,21 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* FIRE RISK */}
         {shouldRenderRankedCard('fireRisk') && (
-          <section className="ssr-card">
-            <div className="ssr-card-h">
-              <h2>
-                <span className="ssr-h-icon icon-orange"><Flame size={16} /></span>
-                Fire Risk
-              </h2>
-              <span className={`ssr-pill ${fireRiskPillClass}`}>{String(fireRiskLabel || 'Low').toUpperCase()}</span>
-            </div>
-            <div className="ssr-card-b">
-              {(() => {
-                const guidance = safetyData.fireRisk?.guidance || 'No fire-risk guidance available.';
-                const g = guidance.trim().toLowerCase();
-                const reasons = (Array.isArray(safetyData.fireRisk?.reasons) ? safetyData.fireRisk.reasons : []).filter((r: string) => r && r.trim().toLowerCase() !== g);
-                return (
-                  <>
-                    <p className="ssr-body">{localizeUnitText(guidance)}</p>
-                    {reasons.length > 0 && (
-                      <ul className="ssr-bullets">
-                        {reasons.map((r: string, i: number) => <li key={`fr-${i}`}>{localizeUnitText(r)}</li>)}
-                      </ul>
-                    )}
-                  </>
-                );
-              })()}
-              {Array.isArray(fireRiskAlerts) && fireRiskAlerts.length > 0 && (
-                <div className="ssr-mini-alerts">
-                  {fireRiskAlerts.map((a: FireRiskAlertItem, i: number) => (
-                    <div className="ssr-ac-item" key={`fra-${i}`}>
-                      <span className="ssr-ac-icon"><Flame size={12} /></span>
-                      <div><div className="ssr-ac-text">{a.event || 'Fire alert'}</div></div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <FireRiskSection
+            level={safetyData.fireRisk?.level}
+            label={fireRiskLabel}
+            pillClass={fireRiskPillClass}
+            guidance={safetyData.fireRisk?.guidance || 'Fire-risk guidance is unavailable. Check current closures, incident maps, and official fire-weather products before departure.'}
+            reasons={Array.isArray(safetyData.fireRisk?.reasons) ? safetyData.fireRisk.reasons : []}
+            alerts={fireRiskAlerts}
+            weather={safetyData.weather}
+            airQuality={safetyData.airQuality}
+            wildfire={wildfireObservation}
+            source={safetyData.fireRisk?.source || null}
+            formatTempDisplay={props.formatTempDisplay}
+            formatWindDisplay={props.formatWindDisplay}
+            localizeUnitText={localizeUnitText}
+          />
         )}
 
         {/* AIR QUALITY */}
