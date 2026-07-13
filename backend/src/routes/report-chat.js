@@ -2,6 +2,14 @@ const { assertAIEnabled, assertAIFeatureEnabled, getAIStatus } = require('../uti
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 
+const persistAIUsage = async (entry) => {
+  try {
+    await recordAIUsage(entry);
+  } catch (error) {
+    logger.error({ err: error, feature: entry.feature }, 'Report chat AI usage could not be persisted');
+  }
+};
+
 const MAX_REPORT_LENGTH = 60000;
 const MAX_MESSAGES = 16;
 const MAX_MESSAGE_LENGTH = 2000;
@@ -176,7 +184,7 @@ const createContextualFollowUps = async ({
     try {
       const result = await generateText(generationRequest);
       if (provider && modelId) {
-        recordAIUsage({
+        await persistAIUsage({
           provider,
           model: modelId,
           feature: 'report-chat-suggestions',
@@ -188,7 +196,7 @@ const createContextualFollowUps = async ({
       return result;
     } catch (error) {
       if (provider && modelId) {
-        recordAIUsage({
+        await persistAIUsage({
           provider,
           model: modelId,
           feature: 'report-chat-suggestions',
@@ -251,7 +259,7 @@ const createReportChatStream = async ({
         maxOutputTokens: REPORT_CHAT_MAX_OUTPUT_TOKENS,
         abortSignal,
         async onFinish({ text, finishReason, totalUsage }) {
-          recordAIUsage({
+          await persistAIUsage({
             provider,
             model: modelId,
             feature: 'report-chat',

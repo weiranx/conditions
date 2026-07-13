@@ -12,17 +12,17 @@ describe('admin audit trail', () => {
     else process.env.NODE_ENV = originalNodeEnv;
   });
 
-  test('records newest-first sanitized administrative events', () => {
+  test('records newest-first sanitized administrative events', async () => {
     const { getAdminAuditEntries, recordAdminAudit } = require('../src/utils/admin-audit');
 
-    recordAdminAudit({
+    await recordAdminAudit({
       action: 'ai.settings.updated',
       category: 'configuration',
       summary: 'AI controls updated',
       actorIp: '::ffff:203.0.113.42',
       details: { changed: ['enabled'] },
     });
-    recordAdminAudit({
+    await recordAdminAudit({
       action: 'diagnostics.completed',
       category: 'diagnostics',
       status: 'error',
@@ -30,7 +30,7 @@ describe('admin audit trail', () => {
       actorIp: '2001:db8:1234:5678:90ab:cdef:1234:5678',
     });
 
-    const entries = getAdminAuditEntries();
+    const entries = await getAdminAuditEntries();
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
       action: 'diagnostics.completed',

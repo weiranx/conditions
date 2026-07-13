@@ -1,13 +1,11 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { logger } = require('./logger');
+'use strict';
+
+const { appDataStore } = require('../db/app-data-store');
 const { estimateAIUsageCost } = require('./ai-pricing');
 
 const MAX_AI_USAGE_ENTRIES = 2000;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const USAGE_FILE = path.resolve(__dirname, '../../data/ai-usage.ndjson');
-
-const aiUsageEntries = [];
+const memoryEntries = [];
 
 const asNonNegativeInteger = (value) => {
   const number = Number(value);
@@ -25,54 +23,14 @@ const normalizeTokenUsage = (usage = {}) => {
   };
 };
 
-const isWithinOneWeek = (entry) =>
-  Date.now() - new Date(entry.timestamp).getTime() <= ONE_WEEK_MS;
+const isWithinOneWeek = (entry) => Date.now() - new Date(entry.timestamp).getTime() <= ONE_WEEK_MS;
 
-const rewriteFile = () => {
-  try {
-    const content = aiUsageEntries.length
-      ? `${aiUsageEntries.map((entry) => JSON.stringify(entry)).join('\n')}\n`
-      : '';
-    fs.writeFileSync(USAGE_FILE, content, 'utf8');
-    return true;
-  } catch (error) {
-    logger.error({ err: error }, 'ai-usage rewrite failed');
-    return false;
-  }
+const trimMemory = () => {
+  const recent = memoryEntries.filter(isWithinOneWeek).slice(-MAX_AI_USAGE_ENTRIES);
+  memoryEntries.splice(0, memoryEntries.length, ...recent);
 };
 
-const trimOldEntries = () => {
-  const before = aiUsageEntries.length;
-  if (before === 0) return;
-  const firstRecent = aiUsageEntries.findIndex(isWithinOneWeek);
-  if (firstRecent === -1) aiUsageEntries.splice(0);
-  else if (firstRecent > 0) aiUsageEntries.splice(0, firstRecent);
-  if (aiUsageEntries.length !== before) rewriteFile();
-};
-
-try {
-  fs.mkdirSync(path.dirname(USAGE_FILE), { recursive: true });
-  if (fs.existsSync(USAGE_FILE)) {
-    const parsed = fs.readFileSync(USAGE_FILE, 'utf8')
-      .split('\n')
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          return [JSON.parse(line)];
-        } catch {
-          return [];
-        }
-      });
-    aiUsageEntries.push(...parsed.filter(isWithinOneWeek).slice(-MAX_AI_USAGE_ENTRIES));
-    if (aiUsageEntries.length !== parsed.length) rewriteFile();
-  }
-} catch (error) {
-  logger.error({ err: error }, 'ai-usage initialization failed');
-}
-
-setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
-
-const recordAIUsage = ({ provider, model, feature, status = 'success', usage, durationMs }) => {
+const recordAIUsage = async ({ provider, model, feature, status = 'success', usage, durationMs }) => {
   const tokens = normalizeTokenUsage(usage);
   const timestamp = new Date().toISOString();
   const normalizedProvider = String(provider || 'unknown').slice(0, 40);
@@ -92,41 +50,25 @@ const recordAIUsage = ({ provider, model, feature, status = 'success', usage, du
       timestamp,
     }),
   };
-  if (aiUsageEntries.length >= MAX_AI_USAGE_ENTRIES) aiUsageEntries.shift();
-  aiUsageEntries.push(record);
-  try {
-    fs.appendFileSync(USAGE_FILE, `${JSON.stringify(record)}\n`, 'utf8');
-  } catch (error) {
-    logger.error({ err: error }, 'ai-usage append failed');
+  if (appDataStore.configured) await appDataStore.insertAIUsage(record);
+  else {
+    if (memoryEntries.length >= MAX_AI_USAGE_ENTRIES) memoryEntries.shift();
+    memoryEntries.push(record);
   }
+  return record;
 };
 
-const getAIUsageEntries = () => {
-  trimOldEntries();
-  return [...aiUsageEntries].reverse().map((entry) => {
-    if (Object.hasOwn(entry, 'estimatedCostUsd')) return entry;
-    return {
-      ...entry,
-      ...estimateAIUsageCost({
-        provider: entry.provider,
-        model: entry.model,
-        usage: entry,
-        timestamp: entry.timestamp,
-      }),
-    };
-  });
+const getAIUsageEntries = async () => {
+  if (appDataStore.configured) return appDataStore.listAIUsage();
+  trimMemory();
+  return [...memoryEntries].reverse();
 };
 
-const clearAIUsageEntries = () => {
-  const previous = [...aiUsageEntries];
-  aiUsageEntries.splice(0);
-  if (!rewriteFile()) {
-    aiUsageEntries.push(...previous);
-    const error = new Error('AI usage history could not be cleared');
-    error.code = 'AI_USAGE_CLEAR_FAILED';
-    throw error;
-  }
-  return previous.length;
+const clearAIUsageEntries = async () => {
+  if (appDataStore.configured) return appDataStore.clearAIUsage();
+  const cleared = memoryEntries.length;
+  memoryEntries.splice(0);
+  return cleared;
 };
 
 module.exports = { clearAIUsageEntries, getAIUsageEntries, normalizeTokenUsage, recordAIUsage };

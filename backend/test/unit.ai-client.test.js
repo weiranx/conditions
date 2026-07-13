@@ -1,7 +1,3 @@
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-
 const mockOpenAICreate = jest.fn();
 const mockAnthropicCreate = jest.fn();
 
@@ -213,41 +209,29 @@ describe('AI provider client wrapper', () => {
     expect(isAIAvailable()).toBe(false);
   });
 
-  test('persists runtime settings across module reloads', () => {
-    const settingsFile = path.join(os.tmpdir(), `conditions-ai-settings-${process.pid}-${Date.now()}.json`);
-    process.env.AI_SETTINGS_FILE = settingsFile;
+  test('loads runtime settings from PostgreSQL', async () => {
+    const getAdminSetting = jest.fn().mockResolvedValue({
+      enabled: false,
+      provider: 'anthropic',
+      features: {
+        aiBrief: false,
+        reportChat: false,
+        routeAnalysis: false,
+        snowVision: false,
+      },
+      models: {
+        openai: { primary: 'gpt-5.6-terra', fast: 'gpt-5.6-luna' },
+        anthropic: { primary: 'claude-sonnet-5', fast: 'claude-haiku-4-5-20251001' },
+      },
+    });
+    jest.doMock('../src/db/app-data-store', () => ({
+      appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
+    }));
     try {
-      const firstClient = loadClient('openai');
-      firstClient.updateAISettings({
-        enabled: false,
-        provider: 'anthropic',
-        features: { reportChat: false },
-      });
-
-      expect(JSON.parse(fs.readFileSync(settingsFile, 'utf8'))).toEqual({
-        enabled: false,
-        provider: 'anthropic',
-        features: {
-          aiBrief: false,
-          reportChat: false,
-          routeAnalysis: false,
-          snowVision: false,
-        },
-        models: {
-          openai: {
-            primary: 'gpt-5.6-terra',
-            fast: 'gpt-5.6-luna',
-          },
-          anthropic: {
-            primary: 'claude-sonnet-5',
-            fast: 'claude-haiku-4-5-20251001',
-          },
-        },
-      });
-      expect(fs.statSync(settingsFile).mode & 0o777).toBe(0o600);
-
-      const reloadedClient = loadClient('openai');
-      expect(reloadedClient.getAIStatus()).toEqual(expect.objectContaining({
+      const client = loadClient('openai');
+      await client.initializeAISettings();
+      expect(getAdminSetting).toHaveBeenCalledWith('ai_settings');
+      expect(client.getAIStatus()).toEqual(expect.objectContaining({
         enabled: false,
         provider: 'anthropic',
         defaultProvider: 'openai',
@@ -260,7 +244,8 @@ describe('AI provider client wrapper', () => {
         }),
       }));
     } finally {
-      fs.rmSync(settingsFile, { force: true });
+      jest.dontMock('../src/db/app-data-store');
+      jest.resetModules();
     }
   });
 
@@ -268,7 +253,7 @@ describe('AI provider client wrapper', () => {
     mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'runtime switch' }] });
     const { askAI, getAIStatus, updateAISettings } = loadClient('openai');
 
-    expect(updateAISettings({ provider: 'anthropic' })).toEqual(expect.objectContaining({
+    expect(await updateAISettings({ provider: 'anthropic' })).toEqual(expect.objectContaining({
       enabled: true,
       provider: 'anthropic',
       defaultProvider: 'openai',
@@ -286,7 +271,7 @@ describe('AI provider client wrapper', () => {
     mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'custom claude' }] });
     const { askAI, getAIStatus, updateAISettings } = loadClient('openai');
 
-    const status = updateAISettings({
+    const status = await updateAISettings({
       models: {
         openai: { primary: 'gpt-custom-primary', fast: 'gpt-custom-fast' },
         anthropic: { primary: 'claude-custom-primary', fast: 'claude-custom-fast' },
@@ -331,7 +316,7 @@ describe('AI provider client wrapper', () => {
   test('kill switch synchronizes every feature flag and blocks provider calls', async () => {
     const { askAI, askAIVision, getAIStatus, isAIAvailable, updateAISettings } = loadClient('openai');
 
-    updateAISettings({ enabled: false });
+    await updateAISettings({ enabled: false });
 
     await expect(askAI('conditions')).rejects.toMatchObject({ code: 'AI_DISABLED', message: 'AI features are unavailable' });
     await expect(askAIVision('YWJj', 'analyze')).rejects.toMatchObject({ code: 'AI_DISABLED', message: 'AI features are unavailable' });
@@ -349,7 +334,7 @@ describe('AI provider client wrapper', () => {
     }));
     expect(isAIAvailable()).toBe(false);
 
-    updateAISettings({ enabled: true });
+    await updateAISettings({ enabled: true });
     expect(getAIStatus().features).toEqual({
       aiBrief: { enabled: true, available: true },
       reportChat: { enabled: true, available: true },
@@ -358,7 +343,7 @@ describe('AI provider client wrapper', () => {
     });
   });
 
-  test('individual feature switches only block the selected feature', () => {
+  test('individual feature switches only block the selected feature', async () => {
     const {
       assertAIFeatureEnabled,
       getAIStatus,
@@ -366,7 +351,7 @@ describe('AI provider client wrapper', () => {
       updateAISettings,
     } = loadClient('openai');
 
-    updateAISettings({ features: { aiBrief: false } });
+    await updateAISettings({ features: { aiBrief: false } });
 
     expect(() => assertAIFeatureEnabled('aiBrief')).toThrow(expect.objectContaining({
       code: 'AI_FEATURE_DISABLED',

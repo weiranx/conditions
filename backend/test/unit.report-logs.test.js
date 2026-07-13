@@ -50,7 +50,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const headers = { authorization: 'Bearer admin-test-secret' };
 
   const auditResponse = createResponse();
-  routes.get.get('/api/admin/audit-log')({ headers }, auditResponse);
+  await routes.get.get('/api/admin/audit-log')({ headers }, auditResponse);
   expect(auditResponse.payload).toEqual(auditEntries);
 
   const getResponse = createResponse();
@@ -58,7 +58,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(getResponse.payload).toEqual({ enabled: true, provider: 'openai' });
 
   const patchResponse = createResponse();
-  routes.patch.get('/api/admin/ai-settings')({
+  await routes.patch.get('/api/admin/ai-settings')({
     headers,
     body: { enabled: false, features: { aiBrief: false } },
   }, patchResponse);
@@ -76,7 +76,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }));
 
   const patchModelsResponse = createResponse();
-  routes.patch.get('/api/admin/ai-settings')({
+  await routes.patch.get('/api/admin/ai-settings')({
     headers,
     body: { models: { anthropic: { primary: 'claude-model', fast: 'claude-fast' } } },
   }, patchModelsResponse);
@@ -102,7 +102,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(getFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
 
   const patchFlagsResponse = createResponse();
-  routes.patch.get('/api/admin/feature-flags')({
+  await routes.patch.get('/api/admin/feature-flags')({
     headers,
     body: { flags: { tripPlanning: false } },
   }, patchFlagsResponse);
@@ -114,12 +114,12 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }));
 
   const aiUsageResponse = createResponse();
-  routes.post.get('/api/admin/maintenance/ai-usage')({ headers }, aiUsageResponse);
+  await routes.post.get('/api/admin/maintenance/ai-usage')({ headers }, aiUsageResponse);
   expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
   expect(aiUsageResponse.payload).toEqual({ cleared: 7 });
 
   const cachesResponse = createResponse();
-  routes.post.get('/api/admin/maintenance/caches')({ headers }, cachesResponse);
+  await routes.post.get('/api/admin/maintenance/caches')({ headers }, cachesResponse);
   expect(firstCache.clear).toHaveBeenCalledTimes(1);
   expect(secondCache.clear).toHaveBeenCalledTimes(1);
   expect(cachesResponse.payload).toEqual({ cleared: ['weather', 'imagery'], count: 2 });
@@ -129,12 +129,12 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }));
 
   const resetFlagsResponse = createResponse();
-  routes.post.get('/api/admin/maintenance/feature-flags')({ headers }, resetFlagsResponse);
+  await routes.post.get('/api/admin/maintenance/feature-flags')({ headers }, resetFlagsResponse);
   expect(resetFeatureFlags).toHaveBeenCalledTimes(1);
   expect(resetFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
 
   const unauthorizedResponse = createResponse();
-  routes.post.get('/api/admin/maintenance/ai-usage')({ headers: {} }, unauthorizedResponse);
+  await routes.post.get('/api/admin/maintenance/ai-usage')({ headers: {} }, unauthorizedResponse);
   expect(unauthorizedResponse.statusCode).toBe(401);
   expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
 

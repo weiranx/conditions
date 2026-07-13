@@ -51,6 +51,22 @@ const createDatabase = ({
 
   const query = (text, params) => getPool().query(text, params);
 
+  const transaction = async (callback) => {
+    if (typeof callback !== 'function') throw new TypeError('transaction callback is required');
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback((text, params) => client.query(text, params));
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  };
+
   const connect = async () => {
     if (!configured) {
       log.warn('DATABASE_URL is not configured; persistent database features are disabled');
@@ -101,6 +117,7 @@ const createDatabase = ({
   return {
     configured,
     query,
+    transaction,
     connect,
     health,
     close,

@@ -59,6 +59,34 @@ describe('database client', () => {
     }));
   });
 
+  test('runs transactions on one client and commits', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValue({ rows: [] }),
+      release: jest.fn(),
+    };
+    const PoolClass = jest.fn(() => ({
+      connect: jest.fn().mockResolvedValue(client),
+      end: jest.fn(),
+      on: jest.fn(),
+    }));
+    const database = createDatabase({
+      connectionString: 'postgresql://user:password@postgres:5432/summitsafe',
+      PoolClass,
+      log: createLog(),
+    });
+
+    await database.transaction(async (query) => {
+      await query('SELECT $1::integer', [1]);
+    });
+
+    expect(client.query.mock.calls).toEqual([
+      ['BEGIN'],
+      ['SELECT $1::integer', [1]],
+      ['COMMIT'],
+    ]);
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
   test('enables strict TLS by default when requested', () => {
     expect(buildSslConfig('require')).toEqual({ rejectUnauthorized: true });
     expect(buildSslConfig('true', 'false')).toEqual({ rejectUnauthorized: false });

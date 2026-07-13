@@ -56,11 +56,13 @@ const { registerAiBriefRoute } = require('./src/routes/ai-brief');
 const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
-const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
+const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable } = require('./src/utils/ai-client');
+const { initializeFeatureFlags } = require('./src/utils/feature-flags');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
 const { database } = require('./src/db/database');
+const { appDataStore } = require('./src/db/app-data-store');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
@@ -295,27 +297,31 @@ const safetyHandler = async (req, res) => {
   const logIp = req.ip || null;
   const logUserAgent = req.headers['user-agent'] || null;
   const baseLogFields = { ip: logIp, userAgent: logUserAgent, name: logName };
-  const writeReportLog = (entry) => {
+  const writeReportLog = async (entry) => {
     if (req.internal?.suppressReportLog !== true) {
-      logReportRequest(entry);
+      try {
+        await logReportRequest(entry);
+      } catch (error) {
+        logger.error({ err: error }, 'Report activity could not be persisted');
+      }
     }
   };
 
   if (!lat || !lon) {
-    writeReportLog({ statusCode: 400, lat: lat || null, lon: lon || null, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
+    await writeReportLog({ statusCode: 400, lat: lat || null, lon: lon || null, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude and longitude are required' });
   }
 
   const parsedLat = Number(lat);
   const parsedLon = Number(lon);
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
-    writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
+    await writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: date || null, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
   }
 
   const requestedDate = typeof date === 'string' ? date.trim() : '';
   if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
-    writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
+    await writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
   }
   const requestedStartClock = parseStartClock(typeof start === 'string' ? start : '');
@@ -411,7 +417,7 @@ const safetyHandler = async (req, res) => {
       gridDataUrl = weatherResult.gridDataUrl || null;
     } catch (dateRangeErr) {
       if (dateRangeErr instanceof ForecastDateOutOfRangeError) {
-        writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
+        await writeReportLog({ statusCode: 400, lat: parsedLat, lon: parsedLon, date: requestedDate, durationMs: Date.now() - startedAt, ...baseLogFields });
         return res.status(400).json({
           error: 'Requested forecast date is outside NOAA forecast range',
           details: `Choose a date between ${dateRangeErr.forecastDateRange.start} and ${dateRangeErr.forecastDateRange.end}.`,
@@ -626,7 +632,7 @@ const safetyHandler = async (req, res) => {
     if (req.safetySignal?.aborted || res.headersSent) {
       return;
     }
-    writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
+    await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: selectedForecastDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: false, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.json(responsePayload);
   } catch (error) {
     if (req.safetySignal?.aborted || res.headersSent) {
@@ -725,7 +731,7 @@ const safetyHandler = async (req, res) => {
       pleasantness,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     });
-    writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
+    await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });
     res.status(200).json(fallbackResponsePayload);
   }
 };
@@ -812,6 +818,9 @@ registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision });
 
 const startServer = async () => {
   await database.connect();
+  await appDataStore.initialize();
+  await initializeFeatureFlags();
+  await initializeAISettings();
   return startBackendServer({ app, port: PORT, onShutdown: () => database.close() });
 };
 

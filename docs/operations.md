@@ -112,7 +112,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 | SNOTEL/NOHRSC variability | Snowpack section sparse or unavailable | Availability varies by location, elevation, and season |
 | Nominatim rate limiting | Search returns only local results | Nominatim enforces usage policies; heavy automated use will be throttled |
 | Preferred AI provider key missing | Requests use the configured fallback, or AI-powered endpoints fail if neither key is set | Set both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` for automatic failover |
-| AI admin setting does not survive restart | Backend cannot write its runtime settings file | Ensure `backend/data/` is writable, or set `AI_SETTINGS_FILE` to a persistent writable path |
+| Admin setting does not survive restart | PostgreSQL is unavailable or its admin migration was not applied | Check `/healthz`, run `npm run db:migrate`, and inspect the `admin_settings` table |
 | Both AI providers fail during route analysis | Route analysis returns `500` | Check both providers' key validity, model access, quota, and the configured AI timeouts. |
 | Rate limiting (`429`) | Clients receive `429 Too Many Requests` | Configurable via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX_REQUESTS` |
 | Avalanche zone not found | `avalanche.zone` null, score confidence reduced | Polygon match failed; nearest fallback attempted before returning null |
@@ -126,7 +126,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 3. **Inspect the response** for `partialData`, `apiWarning`, and per-section `status` fields to identify which upstream feed failed.
 4. **Correlate backend logs** using the `X-Request-Id` from the response header.
 5. **Enable avalanche debug logging** with `DEBUG_AVY=true` if the issue is in avalanche zone matching or bulletin parsing.
-6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `LOGS_SECRET`, `AI_PROVIDER`, `AI_ENABLED`, `AI_SETTINGS_FILE`, and both provider API keys.
+6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `LOGS_SECRET`, `DATABASE_URL`, `AI_PROVIDER`, `AI_ENABLED`, and both provider API keys.
 7. **Check network egress** — confirm the backend can reach all upstream providers (NOAA, Avalanche.org, NRCS, Open-Meteo).
 8. **Check the frontend proxy** — verify the frontend is pointing to the expected backend origin or proxy target.
 

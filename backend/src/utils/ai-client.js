@@ -1,7 +1,6 @@
-const fs = require('node:fs');
-const path = require('node:path');
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
+const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
 
@@ -16,11 +15,6 @@ if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
   throw new Error(`AI_PROVIDER must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
 }
 const DEFAULT_AI_ENABLED = String(process.env.AI_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
-const AI_SETTINGS_FILE = process.env.AI_SETTINGS_FILE
-  ? path.resolve(process.env.AI_SETTINGS_FILE)
-  : process.env.NODE_ENV === 'test'
-    ? null
-    : path.resolve(__dirname, '../../data/ai-settings.json');
 
 const parseModelOptions = (value, defaults) => [...new Set([
   ...defaults,
@@ -63,23 +57,31 @@ let aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, D
 
 const fallbackProviderFor = (provider) => provider === 'openai' ? 'anthropic' : 'openai';
 
-const loadPersistedAISettings = () => {
-  if (!AI_SETTINGS_FILE || !fs.existsSync(AI_SETTINGS_FILE)) return;
+const snapshotAISettings = () => ({
+  enabled: aiEnabled,
+  provider: activeProvider,
+  features: { ...aiFeatures },
+  models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, {
+    primary: MODEL_CONFIG[provider].primary,
+    fast: MODEL_CONFIG[provider].fast,
+  }])),
+});
+
+const applyPersistedAISettings = (persisted) => {
   try {
-    const persisted = JSON.parse(fs.readFileSync(AI_SETTINGS_FILE, 'utf8'));
     if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
       throw new TypeError('Persisted AI settings must be an object');
     }
     if (typeof persisted.enabled === 'boolean') {
       aiEnabled = persisted.enabled;
     } else if (persisted.enabled !== undefined) {
-      logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI enabled value');
+      logger.warn('Ignoring invalid PostgreSQL AI enabled value');
     }
     if (SUPPORTED_PROVIDERS.has(persisted.provider) && MODEL_CONFIG[persisted.provider].configured) {
       activeProvider = persisted.provider;
     } else if (persisted.provider !== undefined) {
       logger.warn(
-        { file: AI_SETTINGS_FILE, provider: persisted.provider },
+        { provider: persisted.provider },
         'Ignoring unavailable persisted AI provider',
       );
     }
@@ -88,71 +90,45 @@ const loadPersistedAISettings = () => {
         if (typeof persisted.features[feature] === 'boolean') {
           aiFeatures[feature] = persisted.features[feature];
         } else if (persisted.features[feature] !== undefined) {
-          logger.warn({ file: AI_SETTINGS_FILE, feature }, 'Ignoring invalid persisted AI feature value');
+          logger.warn({ feature }, 'Ignoring invalid PostgreSQL AI feature value');
         }
       });
     } else if (persisted.features !== undefined) {
-      logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI feature settings');
+      logger.warn('Ignoring invalid PostgreSQL AI feature settings');
     }
     if (persisted.models && typeof persisted.models === 'object' && !Array.isArray(persisted.models)) {
       Object.entries(persisted.models).forEach(([provider, tiers]) => {
         if (!SUPPORTED_PROVIDERS.has(provider) || !tiers || typeof tiers !== 'object' || Array.isArray(tiers)) {
-          logger.warn({ file: AI_SETTINGS_FILE, provider }, 'Ignoring invalid persisted AI model settings');
+          logger.warn({ provider }, 'Ignoring invalid PostgreSQL AI model settings');
           return;
         }
         MODEL_TIER_KEYS.forEach((tier) => {
           const model = typeof tiers[tier] === 'string' ? tiers[tier].trim() : '';
           if (MODEL_ID_PATTERN.test(model)) MODEL_CONFIG[provider][tier] = model;
           else if (tiers[tier] !== undefined) {
-            logger.warn({ file: AI_SETTINGS_FILE, provider, tier }, 'Ignoring invalid persisted AI model ID');
+            logger.warn({ provider, tier }, 'Ignoring invalid PostgreSQL AI model ID');
           }
         });
       });
     } else if (persisted.models !== undefined) {
-      logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI models');
+      logger.warn('Ignoring invalid PostgreSQL AI models');
     }
     if (!aiEnabled) {
       aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, false]));
     }
     logger.info(
-      { file: AI_SETTINGS_FILE, enabled: aiEnabled, provider: activeProvider, features: aiFeatures },
-      'Loaded persisted AI runtime settings',
+      { enabled: aiEnabled, provider: activeProvider, features: aiFeatures },
+      'Loaded AI runtime settings from PostgreSQL',
     );
   } catch (error) {
-    logger.error({ err: error, file: AI_SETTINGS_FILE }, 'Failed to load persisted AI settings; using environment defaults');
+    logger.error({ err: error }, 'Failed to load PostgreSQL AI settings; using environment defaults');
   }
 };
 
-const persistAISettings = () => {
-  if (!AI_SETTINGS_FILE) return;
-  const tempFile = `${AI_SETTINGS_FILE}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    fs.mkdirSync(path.dirname(AI_SETTINGS_FILE), { recursive: true });
-    fs.writeFileSync(
-      tempFile,
-      `${JSON.stringify({
-        enabled: aiEnabled,
-        provider: activeProvider,
-        features: aiFeatures,
-        models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, {
-          primary: MODEL_CONFIG[provider].primary,
-          fast: MODEL_CONFIG[provider].fast,
-        }])),
-      }, null, 2)}\n`,
-      { encoding: 'utf8', mode: 0o600 },
-    );
-    fs.renameSync(tempFile, AI_SETTINGS_FILE);
-  } catch (error) {
-    try {
-      fs.rmSync(tempFile, { force: true });
-    } catch {
-      // Best-effort cleanup; preserve the original persistence failure below.
-    }
-    throw error;
-  }
+const initializeAISettings = async () => {
+  const persisted = await appDataStore.getAdminSetting('ai_settings');
+  if (persisted) applyPersistedAISettings(persisted);
 };
-
-loadPersistedAISettings();
 
 const getOpenAIClient = () => {
   if (!openAIClient) {
@@ -219,14 +195,20 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
   const startedAt = Date.now();
   let response;
-  const finish = (status) => recordAIUsage({
-    provider,
-    model: resolvedModel,
-    feature,
-    status,
-    durationMs: Date.now() - startedAt,
-    usage: response?.usage,
-  });
+  const finish = async (status) => {
+    try {
+      await recordAIUsage({
+        provider,
+        model: resolvedModel,
+        feature,
+        status,
+        durationMs: Date.now() - startedAt,
+        usage: response?.usage,
+      });
+    } catch (error) {
+      logger.error({ err: error, provider, model: resolvedModel, feature }, 'AI usage could not be persisted');
+    }
+  };
   try {
     if (provider === 'anthropic') {
       const params = {
@@ -237,7 +219,7 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
       if (system) params.system = system;
       response = await getAnthropicClient().messages.create(params, requestOptions(tier));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
-      finish('success');
+      await finish('success');
       return text;
     }
 
@@ -249,10 +231,10 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
     if (system) params.instructions = system;
     response = await getOpenAIClient().responses.create(params, requestOptions(tier));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
-    finish('success');
+    await finish('success');
     return text;
   } catch (error) {
-    finish('error');
+    await finish('error');
     throw error;
   }
 };
@@ -262,14 +244,20 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
   const startedAt = Date.now();
   let response;
-  const finish = (status) => recordAIUsage({
-    provider,
-    model: resolvedModel,
-    feature,
-    status,
-    durationMs: Date.now() - startedAt,
-    usage: response?.usage,
-  });
+  const finish = async (status) => {
+    try {
+      await recordAIUsage({
+        provider,
+        model: resolvedModel,
+        feature,
+        status,
+        durationMs: Date.now() - startedAt,
+        usage: response?.usage,
+      });
+    } catch (error) {
+      logger.error({ err: error, provider, model: resolvedModel, feature }, 'AI usage could not be persisted');
+    }
+  };
   try {
     if (provider === 'anthropic') {
       const params = {
@@ -286,7 +274,7 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
       if (system) params.system = system;
       response = await getAnthropicClient().messages.create(params, requestOptions(tier));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
-      finish('success');
+      await finish('success');
       return text;
     }
 
@@ -304,10 +292,10 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
     if (system) params.instructions = system;
     response = await getOpenAIClient().responses.create(params, requestOptions(tier));
     const text = readOpenAIText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
-    finish('success');
+    await finish('success');
     return text;
   } catch (error) {
-    finish('error');
+    await finish('error');
     throw error;
   }
 };
@@ -383,7 +371,7 @@ const getAIStatus = () => {
   return {
     enabled: aiEnabled,
     available,
-    persistent: Boolean(AI_SETTINGS_FILE),
+    persistent: appDataStore.configured,
     provider: activeProvider,
     defaultProvider: DEFAULT_AI_PROVIDER,
     primaryModel: MODEL_CONFIG[activeProvider].primary,
@@ -494,55 +482,39 @@ const updateAISettings = ({ enabled, provider, features, models } = {}) => {
     });
   }
 
-  const previous = {
-    enabled: aiEnabled,
-    provider: activeProvider,
-    features: { ...aiFeatures },
-    models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((modelProvider) => [modelProvider, {
-      primary: MODEL_CONFIG[modelProvider].primary,
-      fast: MODEL_CONFIG[modelProvider].fast,
-    }])),
+  const previous = snapshotAISettings();
+  const next = {
+    enabled: enabled ?? previous.enabled,
+    provider: provider ?? previous.provider,
+    features: enabled === undefined
+      ? { ...previous.features }
+      : Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, enabled])),
+    models: Object.fromEntries(Object.entries(previous.models).map(([modelProvider, tiers]) => [
+      modelProvider,
+      { ...tiers },
+    ])),
   };
-  if (enabled !== undefined) {
-    aiEnabled = enabled;
-    aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, enabled]));
-  }
-  if (provider !== undefined) activeProvider = provider;
-  if (features !== undefined) aiFeatures = { ...aiFeatures, ...features };
+  if (features !== undefined) next.features = { ...next.features, ...features };
   Object.entries(normalizedModels).forEach(([modelProvider, tiers]) => {
-    MODEL_CONFIG[modelProvider] = { ...MODEL_CONFIG[modelProvider], ...tiers };
+    next.models[modelProvider] = { ...next.models[modelProvider], ...tiers };
   });
-  try {
-    persistAISettings();
-  } catch (error) {
-    aiEnabled = previous.enabled;
-    activeProvider = previous.provider;
-    aiFeatures = previous.features;
-    Object.entries(previous.models).forEach(([modelProvider, tiers]) => {
+
+  return appDataStore.setAdminSetting('ai_settings', next).then(() => {
+    aiEnabled = next.enabled;
+    activeProvider = next.provider;
+    aiFeatures = next.features;
+    Object.entries(next.models).forEach(([modelProvider, tiers]) => {
       MODEL_CONFIG[modelProvider] = { ...MODEL_CONFIG[modelProvider], ...tiers };
     });
-    logger.error({ err: error, file: AI_SETTINGS_FILE }, 'Failed to persist AI runtime settings');
+    logger.warn({ previous, current: next }, 'AI runtime settings changed by administrator');
+    return getAIStatus();
+  }).catch((error) => {
+    logger.error({ err: error }, 'Failed to persist AI runtime settings to PostgreSQL');
     const persistenceError = new Error('AI settings could not be saved');
     persistenceError.code = 'AI_SETTINGS_PERSIST_FAILED';
     persistenceError.cause = error;
     throw persistenceError;
-  }
-  logger.warn(
-    {
-      previous,
-      current: {
-        enabled: aiEnabled,
-        provider: activeProvider,
-        features: aiFeatures,
-        models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((modelProvider) => [modelProvider, {
-          primary: MODEL_CONFIG[modelProvider].primary,
-          fast: MODEL_CONFIG[modelProvider].fast,
-        }])),
-      },
-    },
-    'AI runtime settings changed by administrator',
-  );
-  return getAIStatus();
+  });
 };
 
 const isAIAvailable = () => aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured);
@@ -558,6 +530,7 @@ module.exports = {
   assertAIFeatureEnabled,
   getAIFeatureAvailability,
   getAIStatus,
+  initializeAISettings,
   isAIAvailable,
   isAIFeatureAvailable,
   updateAISettings,

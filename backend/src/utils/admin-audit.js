@@ -1,16 +1,8 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { logger } = require('./logger');
+const { appDataStore } = require('../db/app-data-store');
 
 const MAX_ADMIN_AUDIT_ENTRIES = 500;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-const AUDIT_FILE = process.env.ADMIN_AUDIT_FILE
-  ? path.resolve(process.env.ADMIN_AUDIT_FILE)
-  : process.env.NODE_ENV === 'test'
-    ? null
-    : path.resolve(__dirname, '../../data/admin-audit.ndjson');
-
-const adminAuditEntries = [];
+const memoryEntries = [];
 
 const maskNetwork = (ip) => {
   if (typeof ip !== 'string' || !ip) return null;
@@ -42,54 +34,12 @@ const isWithinRetention = (entry) => {
   return Number.isFinite(timestamp) && age >= 0 && age <= RETENTION_MS;
 };
 
-const rewriteFile = () => {
-  if (!AUDIT_FILE) return true;
-  try {
-    const content = adminAuditEntries.length
-      ? `${adminAuditEntries.map((entry) => JSON.stringify(entry)).join('\n')}\n`
-      : '';
-    fs.writeFileSync(AUDIT_FILE, content, { encoding: 'utf8', mode: 0o600 });
-    return true;
-  } catch (error) {
-    logger.error({ err: error }, 'admin-audit rewrite failed');
-    return false;
-  }
+const trimMemory = () => {
+  const recent = memoryEntries.filter(isWithinRetention).slice(-MAX_ADMIN_AUDIT_ENTRIES);
+  memoryEntries.splice(0, memoryEntries.length, ...recent);
 };
 
-const trimOldEntries = () => {
-  const before = adminAuditEntries.length;
-  if (before === 0) return;
-  const recent = adminAuditEntries.filter(isWithinRetention).slice(-MAX_ADMIN_AUDIT_ENTRIES);
-  if (recent.length === before) return;
-  adminAuditEntries.splice(0, adminAuditEntries.length, ...recent);
-  rewriteFile();
-};
-
-try {
-  if (AUDIT_FILE) {
-    fs.mkdirSync(path.dirname(AUDIT_FILE), { recursive: true });
-    if (fs.existsSync(AUDIT_FILE)) {
-      const parsed = fs.readFileSync(AUDIT_FILE, 'utf8')
-        .split('\n')
-        .filter(Boolean)
-        .flatMap((line) => {
-          try {
-            return [JSON.parse(line)];
-          } catch {
-            return [];
-          }
-        });
-      adminAuditEntries.push(...parsed.filter(isWithinRetention).slice(-MAX_ADMIN_AUDIT_ENTRIES));
-      if (adminAuditEntries.length !== parsed.length) rewriteFile();
-    }
-  }
-} catch (error) {
-  logger.error({ err: error }, 'admin-audit initialization failed');
-}
-
-setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
-
-const recordAdminAudit = ({ action, category, status = 'success', summary, actorIp, details = null }) => {
+const recordAdminAudit = async ({ action, category, status = 'success', summary, actorIp, details = null }) => {
   const record = {
     timestamp: new Date().toISOString(),
     action: String(action || 'admin.unknown').slice(0, 100),
@@ -99,21 +49,18 @@ const recordAdminAudit = ({ action, category, status = 'success', summary, actor
     actorNetwork: maskNetwork(actorIp),
     details: details && typeof details === 'object' && !Array.isArray(details) ? details : null,
   };
-  if (adminAuditEntries.length >= MAX_ADMIN_AUDIT_ENTRIES) adminAuditEntries.shift();
-  adminAuditEntries.push(record);
-  if (AUDIT_FILE) {
-    try {
-      fs.appendFileSync(AUDIT_FILE, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 });
-    } catch (error) {
-      logger.error({ err: error }, 'admin-audit append failed');
-    }
+  if (appDataStore.configured) await appDataStore.insertAdminAudit(record);
+  else {
+    if (memoryEntries.length >= MAX_ADMIN_AUDIT_ENTRIES) memoryEntries.shift();
+    memoryEntries.push(record);
   }
   return record;
 };
 
-const getAdminAuditEntries = () => {
-  trimOldEntries();
-  return [...adminAuditEntries].reverse();
+const getAdminAuditEntries = async () => {
+  if (appDataStore.configured) return appDataStore.listAdminAudit();
+  trimMemory();
+  return [...memoryEntries].reverse();
 };
 
 module.exports = { getAdminAuditEntries, maskNetwork, recordAdminAudit };

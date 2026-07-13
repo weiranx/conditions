@@ -1,23 +1,16 @@
-const fs = require('node:fs');
-const path = require('node:path');
 const crypto = require('node:crypto');
+const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('../utils/logger');
 const { clearAIUsageEntries, getAIUsageEntries } = require('../utils/ai-usage');
 const { getAIStatus, updateAISettings } = require('../utils/ai-client');
 const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require('../utils/feature-flags');
 const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit');
 
-const MAX_LOG_ENTRIES = 500;
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const LOG_FILE = path.resolve(__dirname, '../../data/report-logs.ndjson');
-
-const reportLogs = [];
-
 const isRouteWaypointEntry = (entry) =>
   typeof entry?.name === 'string' && entry.name.startsWith('Route waypoint:');
 
 // Privacy/retention policy: report-log entries (including the requester IP below) are kept
-// for at most 7 days (ONE_WEEK_MS, enforced by isWithinOneWeek/trimOldEntries) and are only
+// for at most 7 days (enforced by the PostgreSQL application data store) and are only
 // readable via the bearer-secret-gated /api/report-logs endpoint. Even within that 7-day
 // window we don't need precise per-host IPs — coarse network-level buckets are enough for
 // abuse detection — so we mask the host portion before it's ever written to memory or disk.
@@ -52,88 +45,29 @@ const maskIp = (ip) => {
   return ip;
 };
 
-const isWithinOneWeek = (entry) =>
-  Date.now() - new Date(entry.timestamp).getTime() <= ONE_WEEK_MS;
+const memoryReportLogs = [];
 
-const rewriteFile = () => {
-  try {
-    const content = reportLogs.length
-      ? reportLogs.map((r) => JSON.stringify(r)).join('\n') + '\n'
-      : '';
-    fs.writeFileSync(LOG_FILE, content, 'utf8');
-    return true;
-  } catch (err) {
-    logger.error({ err }, 'report-logs rewrite failed');
-    return false;
-  }
-};
-
-const trimOldEntries = () => {
-  const before = reportLogs.length;
-  if (before === 0) return;
-  const firstRecent = reportLogs.findIndex(isWithinOneWeek);
-  if (firstRecent === -1) {
-    reportLogs.splice(0);
-  } else if (firstRecent > 0) {
-    reportLogs.splice(0, firstRecent);
-  }
-  if (reportLogs.length !== before) rewriteFile();
-};
-
-// Ensure data directory exists
-try {
-  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-} catch (err) {
-  logger.error({ err }, 'report-logs mkdir failed');
-}
-logger.info({ file: LOG_FILE }, 'report-logs initialized');
-
-// Load existing logs on startup — filter to last week, rewrite file if any were pruned
-try {
-  if (fs.existsSync(LOG_FILE)) {
-    const lines = fs.readFileSync(LOG_FILE, 'utf8').split('\n').filter(Boolean);
-    const parsed = lines.flatMap((line) => {
-      try {
-        return [JSON.parse(line)];
-      } catch {
-        return [];
-      }
-    });
-    const recent = parsed
-      .filter((entry) => isWithinOneWeek(entry) && !isRouteWaypointEntry(entry))
-      .slice(-MAX_LOG_ENTRIES);
-    reportLogs.push(...recent);
-    if (recent.length !== parsed.length) rewriteFile();
-  }
-} catch (err) {
-  logger.error({ err }, 'report-logs load failed');
-}
-
-// Daily trim to evict entries that aged out during a long-running process
-setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
-
-const logReportRequest = (entry) => {
+const logReportRequest = async (entry) => {
   if (!entry.name || isRouteWaypointEntry(entry)) return;
   const record = { ...entry, ip: maskIp(entry.ip), timestamp: new Date().toISOString() };
-  if (reportLogs.length >= MAX_LOG_ENTRIES) reportLogs.shift();
-  reportLogs.push(record);
-  try {
-    fs.appendFileSync(LOG_FILE, JSON.stringify(record) + '\n', 'utf8');
-  } catch (err) {
-    logger.error({ err }, 'report-logs append failed');
+  if (appDataStore.configured) await appDataStore.insertReportActivity(record);
+  else {
+    if (memoryReportLogs.length >= 500) memoryReportLogs.shift();
+    memoryReportLogs.push(record);
   }
+  return record;
 };
 
-const clearReportLogs = () => {
-  const previous = [...reportLogs];
-  reportLogs.splice(0);
-  if (!rewriteFile()) {
-    reportLogs.push(...previous);
-    const error = new Error('Report activity could not be cleared');
-    error.code = 'REPORT_LOGS_CLEAR_FAILED';
-    throw error;
-  }
-  return previous.length;
+const getReportLogs = async () => {
+  if (appDataStore.configured) return appDataStore.listReportActivity();
+  return [...memoryReportLogs].reverse();
+};
+
+const clearReportLogs = async () => {
+  if (appDataStore.configured) return appDataStore.clearReportActivity();
+  const cleared = memoryReportLogs.length;
+  memoryReportLogs.splice(0);
+  return cleared;
 };
 
 const LOGS_SECRET = process.env.LOGS_SECRET || '';
@@ -152,10 +86,16 @@ const secretsMatch = (provided, expected) => {
 
 const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, loadModelCatalog = null } = {}) => {
   let diagnosticsInFlight = null;
-  const audit = (req, event) => recordAdminAudit({
-    ...event,
-    actorIp: req.headers['x-forwarded-for'] ?? req.ip ?? req.socket?.remoteAddress ?? null,
-  });
+  const audit = async (req, event) => {
+    try {
+      await recordAdminAudit({
+        ...event,
+        actorIp: req.headers['x-forwarded-for'] ?? req.ip ?? req.socket?.remoteAddress ?? null,
+      });
+    } catch (error) {
+      logger.error({ err: error, action: event.action }, 'Admin audit event could not be persisted');
+    }
+  };
   const authorize = (req, res) => {
     if (!LOGS_SECRET) {
       res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
@@ -170,19 +110,20 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     return true;
   };
 
-  app.get('/api/report-logs', (req, res) => {
+  app.get('/api/report-logs', async (req, res) => {
     if (!authorize(req, res)) return;
-    res.json(reportLogs.filter((entry) => !isRouteWaypointEntry(entry)).reverse());
+    const entries = await getReportLogs();
+    res.json(entries.filter((entry) => !isRouteWaypointEntry(entry)));
   });
 
-  app.get('/api/ai-usage', (req, res) => {
+  app.get('/api/ai-usage', async (req, res) => {
     if (!authorize(req, res)) return;
-    res.json(getAIUsageEntries());
+    res.json(await getAIUsageEntries());
   });
 
-  app.get('/api/admin/audit-log', (req, res) => {
+  app.get('/api/admin/audit-log', async (req, res) => {
     if (!authorize(req, res)) return;
-    res.json(getAdminAuditEntries());
+    res.json(await getAdminAuditEntries());
   });
 
   app.get('/api/admin/ai-settings', (req, res) => {
@@ -190,7 +131,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     res.json(getAIStatus());
   });
 
-  app.patch('/api/admin/ai-settings', (req, res) => {
+  app.patch('/api/admin/ai-settings', async (req, res) => {
     if (!authorize(req, res)) return;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     if (body.enabled === undefined && body.provider === undefined && body.features === undefined && body.models === undefined) {
@@ -198,14 +139,14 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       return;
     }
     try {
-      const updated = updateAISettings({
+      const updated = await updateAISettings({
         enabled: body.enabled,
         provider: body.provider,
         features: body.features,
         models: body.models,
       });
       const changed = ['enabled', 'provider', 'features', 'models'].filter((key) => body[key] !== undefined);
-      audit(req, {
+      await audit(req, {
         action: 'ai.settings.updated',
         category: 'configuration',
         summary: `Updated AI ${changed.join(', ')}`,
@@ -219,7 +160,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
           ? 500
           : 400;
       const message = error instanceof Error ? error.message : 'Invalid AI settings';
-      audit(req, {
+      await audit(req, {
         action: 'ai.settings.updated',
         category: 'configuration',
         status: 'error',
@@ -238,7 +179,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     try {
       const catalog = await loadModelCatalog({ force });
       if (force) {
-        audit(req, {
+        await audit(req, {
           action: 'ai.models.refreshed',
           category: 'diagnostics',
           summary: 'Refreshed AI provider model catalogs',
@@ -247,7 +188,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       res.json(catalog);
     } catch (error) {
       if (force) {
-        audit(req, {
+        await audit(req, {
           action: 'ai.models.refreshed',
           category: 'diagnostics',
           status: 'error',
@@ -266,13 +207,13 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     res.json(getFeatureFlagStatus());
   });
 
-  app.patch('/api/admin/feature-flags', (req, res) => {
+  app.patch('/api/admin/feature-flags', async (req, res) => {
     if (!authorize(req, res)) return;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     try {
-      const updated = updateFeatureFlags(body.flags);
+      const updated = await updateFeatureFlags(body.flags);
       const changed = body.flags && typeof body.flags === 'object' ? Object.keys(body.flags) : [];
-      audit(req, {
+      await audit(req, {
         action: 'product.flags.updated',
         category: 'configuration',
         summary: `Updated product feature ${changed.length === 1 ? 'flag' : 'flags'}: ${changed.join(', ') || 'none'}`,
@@ -282,7 +223,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     } catch (error) {
       const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
       const message = error instanceof Error ? error.message : 'Invalid feature flags';
-      audit(req, {
+      await audit(req, {
         action: 'product.flags.updated',
         category: 'configuration',
         status: 'error',
@@ -292,11 +233,11 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     }
   });
 
-  app.post('/api/admin/maintenance/report-logs', (req, res) => {
+  app.post('/api/admin/maintenance/report-logs', async (req, res) => {
     if (!authorize(req, res)) return;
     try {
-      const cleared = clearReportLogs();
-      audit(req, {
+      const cleared = await clearReportLogs();
+      await audit(req, {
         action: 'maintenance.report-logs.cleared',
         category: 'maintenance',
         summary: `Cleared ${cleared} report log ${cleared === 1 ? 'entry' : 'entries'}`,
@@ -305,16 +246,16 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       res.json({ cleared });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Report activity could not be cleared';
-      audit(req, { action: 'maintenance.report-logs.cleared', category: 'maintenance', status: 'error', summary: message });
+      await audit(req, { action: 'maintenance.report-logs.cleared', category: 'maintenance', status: 'error', summary: message });
       res.status(500).json({ error: message });
     }
   });
 
-  app.post('/api/admin/maintenance/ai-usage', (req, res) => {
+  app.post('/api/admin/maintenance/ai-usage', async (req, res) => {
     if (!authorize(req, res)) return;
     try {
-      const cleared = clearAIUsageEntries();
-      audit(req, {
+      const cleared = await clearAIUsageEntries();
+      await audit(req, {
         action: 'maintenance.ai-usage.cleared',
         category: 'maintenance',
         summary: `Cleared ${cleared} AI usage ${cleared === 1 ? 'entry' : 'entries'}`,
@@ -323,12 +264,12 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       res.json({ cleared });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI usage history could not be cleared';
-      audit(req, { action: 'maintenance.ai-usage.cleared', category: 'maintenance', status: 'error', summary: message });
+      await audit(req, { action: 'maintenance.ai-usage.cleared', category: 'maintenance', status: 'error', summary: message });
       res.status(500).json({ error: message });
     }
   });
 
-  app.post('/api/admin/maintenance/caches', (req, res) => {
+  app.post('/api/admin/maintenance/caches', async (req, res) => {
     if (!authorize(req, res)) return;
     const cleared = caches.flatMap((cache) => {
       if (!cache || typeof cache.clear !== 'function') return [];
@@ -336,7 +277,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       cache.clear();
       return [stats?.name || 'unnamed-cache'];
     });
-    audit(req, {
+    await audit(req, {
       action: 'maintenance.caches.cleared',
       category: 'maintenance',
       summary: `Cleared ${cleared.length} backend ${cleared.length === 1 ? 'cache' : 'caches'}`,
@@ -345,11 +286,11 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     res.json({ cleared, count: cleared.length });
   });
 
-  app.post('/api/admin/maintenance/feature-flags', (req, res) => {
+  app.post('/api/admin/maintenance/feature-flags', async (req, res) => {
     if (!authorize(req, res)) return;
     try {
-      const updated = resetFeatureFlags();
-      audit(req, {
+      const updated = await resetFeatureFlags();
+      await audit(req, {
         action: 'maintenance.feature-flags.restored',
         category: 'maintenance',
         summary: 'Restored product feature flags to defaults',
@@ -358,7 +299,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
     } catch (error) {
       const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
       const message = error instanceof Error ? error.message : 'Feature flags could not be reset';
-      audit(req, { action: 'maintenance.feature-flags.restored', category: 'maintenance', status: 'error', summary: message });
+      await audit(req, { action: 'maintenance.feature-flags.restored', category: 'maintenance', status: 'error', summary: message });
       res.status(status).json({ error: message });
     }
   });
@@ -376,7 +317,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
           .finally(() => { diagnosticsInFlight = null; });
       }
       const result = await diagnosticsInFlight;
-      audit(req, {
+      await audit(req, {
         action: 'diagnostics.external.completed',
         category: 'diagnostics',
         status: result?.summary?.failed > 0 ? 'error' : 'success',
@@ -387,7 +328,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       });
       res.json(result);
     } catch {
-      audit(req, {
+      await audit(req, {
         action: 'diagnostics.external.completed',
         category: 'diagnostics',
         status: 'error',
