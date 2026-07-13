@@ -2,6 +2,7 @@ import React from 'react';
 import { FileText, KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
 import type { UserPreferences } from '../app/types';
 import { useAccount } from '../hooks/useAccount';
+import { GoogleSignInButton } from './account/GoogleSignInButton';
 import '../styles/ai-access-prompt.css';
 
 export type AccountAccessReason = 'ai' | 'report-limit';
@@ -84,6 +85,16 @@ export function AiAccessPrompt({
     }
   };
 
+  const handleGoogleCredential = async (credential: string) => {
+    setFormError(null);
+    try {
+      await account.signInWithGoogle({ credential, preferences });
+      onClose();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Google sign-in failed.');
+    }
+  };
+
   if (!open) return null;
 
   const errorMessage = formError || account.error;
@@ -149,6 +160,19 @@ export function AiAccessPrompt({
                   Sign up
                 </button>
               </div>
+
+              {account.google.available && account.google.clientId && account.google.nonce && (
+                <div className="ai-access-google-auth">
+                  <GoogleSignInButton
+                    busy={account.busy}
+                    clientId={account.google.clientId}
+                    nonce={account.google.nonce}
+                    onCredential={handleGoogleCredential}
+                    onError={setFormError}
+                  />
+                  <div className="ai-access-divider"><span>or use email</span></div>
+                </div>
+              )}
 
               <form className="ai-access-form" onSubmit={handleSubmit}>
                 {mode === 'create' && (
@@ -232,9 +256,9 @@ export function AiAccessPrompt({
                 </div>
               </form>
 
-              {mode === 'create' && (
+              {(mode === 'create' || account.google.available) && (
                 <p className="ai-access-legal">
-                  By signing up, you agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms of Use</a>
+                  By signing up or continuing with Google, you agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms of Use</a>
                   {' '}and acknowledge the <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
                 </p>
               )}

@@ -115,6 +115,34 @@
   background: var(--ui-brand);
 }
 
+.ai-access-google-auth {
+  margin-bottom: 20px;
+}
+
+.ai-access-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  color: var(--ui-text-3);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ai-access-divider::before,
+.ai-access-divider::after {
+  height: 1px;
+  flex: 1;
+  background: var(--ui-line);
+  content: '';
+}
+
+.ai-access-divider span {
+  flex: none;
+}
+
 .ai-access-form {
   display: grid;
   gap: 15px;
