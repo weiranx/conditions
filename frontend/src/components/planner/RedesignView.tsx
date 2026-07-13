@@ -571,6 +571,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     // Wind loading
     windLoadingHintsRelevant,
     windLoadingLevel,
+    windLoadingConfidence,
     windLoadingPillClass,
     windLoadingSummary,
     windLoadingActionLine,
@@ -1405,7 +1406,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* WIND LOADING */}
         {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
-          <section className="ssr-card" id="planner-section-wind">
+          <section className={`ssr-card ssr-wl-card ssr-wl-${windLoadingPillClass}`} id="planner-section-wind">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-cyan"><Wind size={16} /></span>
@@ -1415,41 +1416,73 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             </div>
             <div className="ssr-card-b">
               {avalancheUnknown && (
-                <p className="ssr-wl-note">No official forecast available — use wind loading as your primary terrain-selection signal.</p>
+                <div className="ssr-wl-note"><AlertTriangle size={15} aria-hidden /><span>No official forecast is available. Use wind loading as a primary terrain-selection signal.</span></div>
               )}
-              {windLoadingSummary && <p className="ssr-body">{localizeUnitText(windLoadingSummary)}</p>}
-              {windLoadingActionLine && <p className="ssr-action-line">{localizeUnitText(windLoadingActionLine)}</p>}
-              <div className="ssr-meta-grid">
-                <div className="ssr-meta"><span className="ssr-k">Transport level</span><span className="ssr-v">{windLoadingLevel}</span></div>
-                <div className="ssr-meta"><span className="ssr-k">Active window</span><span className="ssr-v">{windLoadingActiveWindowLabel}</span></div>
-                <div className="ssr-meta"><span className="ssr-k">Direction source</span><span className="ssr-v">{resolvedWindDirectionSource}</span></div>
-                <div className="ssr-meta"><span className="ssr-k">Trend agreement</span><span className="ssr-v">{trendAgreementRatio !== null ? `${Math.round(trendAgreementRatio * 100)}%` : 'N/A'}</span></div>
-                <div className="ssr-meta ssr-meta-wide"><span className="ssr-k">Active hours</span><span className="ssr-v">{windLoadingActiveHoursDetail}</span></div>
-                <div className="ssr-meta ssr-meta-wide"><span className="ssr-k">Elevation focus</span><span className="ssr-v">{windLoadingElevationFocus}</span></div>
+
+              <div className="ssr-wl-decision">
+                <span className="ssr-wl-decision-icon"><Route size={18} aria-hidden /></span>
+                <div>
+                  <span className="ssr-wl-eyebrow">Terrain decision</span>
+                  <p>{localizeUnitText(windLoadingActionLine)}</p>
+                </div>
               </div>
-              {leewardAspectHints.length > 0 && (
-                <div className="ssr-aspect-block">
-                  <span className="ssr-k">Likely lee aspects</span>
+
+              {windLoadingSummary && <p className="ssr-wl-summary">{localizeUnitText(windLoadingSummary)}</p>}
+
+              <div className="ssr-wl-status" aria-label="Wind-loading status">
+                <div>
+                  <span className="ssr-wl-status-icon"><Wind size={15} aria-hidden /></span>
+                  <span><small>Transport</small><strong>{windLoadingLevel}</strong></span>
+                </div>
+                <div>
+                  <span className="ssr-wl-status-icon"><Clock size={15} aria-hidden /></span>
+                  <span><small>Active window</small><strong>{windLoadingActiveWindowLabel}</strong></span>
+                </div>
+                <div>
+                  <span className="ssr-wl-status-icon"><Radio size={15} aria-hidden /></span>
+                  <span><small>Confidence</small><strong>{windLoadingConfidence}</strong></span>
+                </div>
+              </div>
+
+              <div className="ssr-wl-terrain">
+                <div className="ssr-wl-terrain-head">
+                  <div>
+                    <span className="ssr-wl-eyebrow">Where snow may collect</span>
+                    <strong>Likely lee terrain</strong>
+                  </div>
+                  <span className="ssr-wl-direction"><Compass size={14} aria-hidden /> Wind basis: {resolvedWindDirectionSource}</span>
+                </div>
+                {leewardAspectHints.length > 0 && (
                   <div className="ssr-aspect-chips">
                     {leewardAspectHints.map((a) => <span key={a} className="ssr-aspect-chip">{a}</span>)}
                   </div>
-                </div>
-              )}
-              {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
-                <div className="ssr-aspect-block">
-                  <span className="ssr-k">Secondary cross-loading</span>
-                  <div className="ssr-aspect-chips">
-                    {secondaryWindAspects.map((a) => <span key={`s-${a}`} className="ssr-aspect-chip secondary">{a}</span>)}
+                )}
+                {secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20 && (
+                  <div className="ssr-wl-secondary">
+                    <span>Also watch cross-loaded</span>
+                    <div className="ssr-aspect-chips">
+                      {secondaryWindAspects.map((a) => <span key={`s-${a}`} className="ssr-aspect-chip secondary">{a}</span>)}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                <p className="ssr-wl-elevation"><Mountain size={14} aria-hidden /><span>{localizeUnitText(windLoadingElevationFocus)}</span></p>
+                {aspectOverlapProblems.length > 0 && (
+                  <p className="ssr-wl-overlap"><AlertTriangle size={15} aria-hidden /><span><strong>Problem overlap:</strong> Wind loading aligns with {aspectOverlapProblems.join(', ')}.</span></p>
+                )}
+              </div>
+
+              <div className="ssr-wl-evidence">
+                <div><span>Active hours</span><strong>{windLoadingActiveHoursDetail}</strong></div>
+                <div><span>Trend agreement</span><strong>{trendAgreementRatio !== null ? `${Math.round(trendAgreementRatio * 100)}%` : 'N/A'}</strong></div>
+              </div>
+
               {windLoadingNotes.length > 0 && (
-                <ul className="ssr-bullets">
-                  {windLoadingNotes.map((n, i) => <li key={`wln-${i}`}>{localizeUnitText(n)}</li>)}
-                </ul>
-              )}
-              {aspectOverlapProblems.length > 0 && (
-                <p className="ssr-wl-overlap">Wind loading aligns with active avalanche problem aspects: {aspectOverlapProblems.join(', ')}.</p>
+                <details className="ssr-wl-details">
+                  <summary>How this assessment was built <span>{windLoadingNotes.length} signals</span></summary>
+                  <ul className="ssr-bullets">
+                    {windLoadingNotes.map((n, i) => <li key={`wln-${i}`}>{localizeUnitText(n)}</li>)}
+                  </ul>
+                </details>
               )}
             </div>
           </section>
