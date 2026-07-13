@@ -1017,6 +1017,67 @@ input {
 .admin-user-summary article span svg { flex: none; }
 .admin-user-summary article strong { color: var(--ui-text); font: 700 15px var(--font-data); }
 
+.admin-usage-policy {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, auto) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ui-line);
+  background: color-mix(in oklch, var(--ui-brand-soft) 28%, var(--ui-surface));
+}
+
+.admin-usage-policy-copy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.admin-usage-policy-copy > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--ui-brand-soft);
+  color: var(--ui-brand-strong);
+}
+
+.admin-usage-policy-copy > div { display: grid; min-width: 0; }
+.admin-usage-policy-copy strong { color: var(--ui-text); font-size: 11.5px; }
+.admin-usage-policy-copy small { margin-top: 2px; color: var(--ui-text-4); font-size: 9.5px; }
+
+.admin-usage-policy-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.admin-usage-limit-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text-4);
+  font-size: 9.5px;
+}
+
+.admin-usage-limit-field:focus-within { border-color: var(--ui-brand); box-shadow: 0 0 0 3px var(--ui-brand-soft); }
+.admin-usage-limit-field > span:first-child { color: var(--ui-text-3); font-weight: 700; }
+.admin-usage-limit-field input { width: 92px; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ui-text); font: 700 11px var(--font-data); }
+.admin-usage-limit-field input:disabled { opacity: 0.6; }
+
+.admin-usage-policy-actions { display: flex; align-items: center; gap: 6px; }
+.admin-usage-policy-actions .logs-btn { min-height: 32px; padding-inline: 9px; font-size: 10px; white-space: nowrap; }
+.admin-usage-reset-all { color: var(--ui-nogo-ink); }
+.admin-usage-policy-error { display: flex; grid-column: 1 / -1; align-items: center; gap: 6px; margin: 0; color: var(--ui-nogo-ink); font-size: 10.5px; }
+
 .admin-users-error {
   display: flex;
   align-items: center;
@@ -1035,7 +1096,7 @@ input {
 
 .admin-users-table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1180px;
   border-collapse: collapse;
   font-size: 12px;
 }
@@ -1103,6 +1164,70 @@ input {
 }
 
 .admin-user-primary { display: block; color: var(--ui-text); font-size: 11px; font-weight: 600; text-transform: capitalize; }
+
+.admin-user-usage { display: grid; gap: 6px; min-width: 285px; }
+.admin-user-usage > small { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--ui-caution-ink); font-size: 9.5px; }
+
+.admin-user-usage-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  color: var(--ui-text-2);
+  font: 600 10px var(--font-data);
+}
+
+.admin-user-usage-metrics strong { color: var(--ui-text-4); font: 750 8px var(--font-sans); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.admin-user-quota-controls { display: grid; gap: 4px; }
+
+.admin-user-quota-row {
+  display: grid;
+  grid-template-columns: 45px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+}
+
+.admin-user-quota-row > span { color: var(--ui-text-4); font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.admin-user-limit-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-user-limit-controls input {
+  width: 88px;
+  min-height: 25px;
+  padding: 0 6px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 6px;
+  outline: 0;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: 650 9.5px var(--font-data);
+}
+
+.admin-user-limit-controls input:focus { border-color: var(--ui-brand); box-shadow: 0 0 0 2px var(--ui-brand-soft); }
+.admin-user-limit-controls input:disabled { opacity: 0.6; }
+.admin-user-limit-controls button {
+  min-height: 25px;
+  padding: 0 6px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-3);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-user-limit-controls button:hover:not(:disabled) { border-color: var(--ui-brand); color: var(--ui-brand-strong); }
+.admin-user-limit-controls button:disabled { cursor: default; opacity: 0.5; }
+
+.admin-user-usage-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.admin-user-usage-foot small { margin: 0; color: var(--ui-text-4); font-size: 9px; white-space: nowrap; }
+.admin-user-usage-foot .logs-icon-btn { width: 25px; min-height: 25px; color: var(--ui-text-3); }
 
 .admin-user-tier {
   display: inline-flex;
@@ -11995,6 +12120,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-toolbar-actions > .logs-btn { width: 100%; margin-left: 0; }
   .admin-operations-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-user-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px 12px; }
+  .admin-usage-policy { grid-template-columns: minmax(0, 1fr); align-items: stretch; padding: 12px; }
+  .admin-usage-limit-field { justify-content: space-between; }
+  .admin-usage-limit-field input { width: min(160px, 55%); }
+  .admin-usage-policy-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-usage-policy-actions .logs-btn { justify-content: center; min-width: 0; white-space: normal; }
   .admin-users-table-scroll { overflow: visible; }
   .admin-users-table,
   .admin-users-table tbody { display: block; min-width: 0; }
@@ -12023,6 +12153,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-users-table td:first-child::before,
   .admin-users-table td:last-child::before { display: none; }
   .admin-user-person strong { white-space: normal; }
+  .admin-user-usage { min-width: 0; }
   .admin-user-actions { justify-content: flex-start; }
   .admin-user-protected { justify-content: flex-start; }
   .admin-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -12375,6 +12506,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-users-panel .logs-panel-head { align-items: stretch; flex-direction: column; }
   .admin-users-total { align-self: flex-start; }
   .admin-user-summary article { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .admin-usage-policy-fields { grid-template-columns: minmax(0, 1fr); }
+  .admin-usage-policy-actions { grid-template-columns: minmax(0, 1fr); }
+  .admin-user-quota-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .admin-user-limit-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+  .admin-user-limit-controls input { width: 100%; min-width: 0; }
   .admin-user-actions .logs-btn { flex: 1; }
 
   /* Coordinates stay available in the report header; the pill just adds clutter here */

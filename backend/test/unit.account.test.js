@@ -279,6 +279,7 @@ describe('password accounts', () => {
         saved_reports: '4',
         ai_calls: '9',
         ai_tokens: '12500',
+        usage_limit_override: '75',
         total_count: '1',
         active_count: '1',
         suspended_count: '0',
@@ -305,6 +306,7 @@ describe('password accounts', () => {
         savedReports: 4,
         aiCalls: 9,
         aiTokens: 12500,
+        usageLimitOverride: 75,
       }],
       total: 1,
       summary: { active: 1, suspended: 0, free: 0, premium: 1, activeSessions: 2 },
@@ -312,6 +314,9 @@ describe('password accounts', () => {
     });
     expect(query.mock.calls[0][0]).toContain('COUNT(*) FILTER (WHERE expires_at > NOW())');
     expect(query.mock.calls[0][0]).toContain("provider = 'admin'");
+    expect(query.mock.calls[0][0]).toContain("feature_key = 'ai_usage'");
+    expect(query.mock.calls[0][0]).toContain("feature_key = 'report_usage'");
+    expect(query.mock.calls[0][0]).toContain("DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')");
     expect(query.mock.calls[0][1]).toEqual([500]);
   });
 
@@ -363,6 +368,127 @@ describe('password accounts', () => {
       actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
     })).rejects.toMatchObject({ code: 'INVALID_ACCOUNT_TIER' });
     expect(transaction).not.toHaveBeenCalled();
+  });
+
+  test('sets and restores a managed account monthly usage limit', async () => {
+    const actorUserId = 'f39db25c-3498-41f9-9448-7c8004b8f688';
+    const account = {
+      ...USER_ROW,
+      auth_provider: 'password',
+      status: 'active',
+      updated_at: new Date('2026-07-13T08:00:00.000Z'),
+    };
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [account] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [account] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    await expect(service.updateUserUsageLimit({
+      userId: USER_ROW.id,
+      limit: 75,
+      actorUserId,
+    })).resolves.toMatchObject({
+      user: { id: USER_ROW.id, usageLimitOverride: 75 },
+      limit: 75,
+    });
+    expect(query.mock.calls[1][0]).toContain('INSERT INTO entitlements');
+    expect(query.mock.calls[1][1]).toEqual([
+      USER_ROW.id,
+      JSON.stringify({ monthlyUsageLimit: 75, limitActorUserId: actorUserId }),
+    ]);
+
+    await expect(service.updateUserUsageLimit({
+      userId: USER_ROW.id,
+      limit: null,
+      actorUserId,
+    })).resolves.toMatchObject({
+      user: { id: USER_ROW.id, usageLimitOverride: null },
+      limit: null,
+    });
+    expect(query.mock.calls[3][0]).toContain("limits - 'monthlyUsageLimit'");
+  });
+
+  test('rejects an invalid managed account monthly usage limit before writing', async () => {
+    const transaction = jest.fn();
+    const service = createAccountService({
+      database: { configured: true, query: jest.fn(), transaction },
+    });
+
+    await expect(service.updateUserUsageLimit({
+      userId: USER_ROW.id,
+      limit: 0,
+      actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+    })).rejects.toMatchObject({ code: 'INVALID_USAGE_LIMIT' });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  test('resets current-month AI and report usage for one account or every account', async () => {
+    const actorUserId = 'f39db25c-3498-41f9-9448-7c8004b8f688';
+    const account = {
+      ...USER_ROW,
+      auth_provider: 'password',
+      status: 'active',
+      updated_at: new Date('2026-07-13T08:00:00.000Z'),
+    };
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [account] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ user_id: USER_ROW.id }, { user_id: actorUserId }], rowCount: 2 })
+      .mockResolvedValueOnce({ rows: [{ user_id: USER_ROW.id }, { user_id: actorUserId }], rowCount: 2 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({
+      database: { configured: true, query, transaction },
+      now: () => Date.parse('2026-07-13T08:00:00.000Z'),
+    });
+
+    await expect(service.resetUserUsage({ userId: USER_ROW.id, actorUserId })).resolves.toMatchObject({
+      user: { id: USER_ROW.id },
+      resetAI: true,
+      resetReports: true,
+      periodStart: '2026-07-01T00:00:00.000Z',
+      periodEnd: '2026-08-01T00:00:00.000Z',
+    });
+    expect(query.mock.calls[1][0]).toContain("'ai_usage'");
+    expect(query.mock.calls[1][1]).toEqual([
+      USER_ROW.id,
+      JSON.stringify({
+        resetAt: '2026-07-13T08:00:00.000Z',
+        resetActorUserId: actorUserId,
+      }),
+    ]);
+    expect(query.mock.calls[2][0]).toContain("'report_usage'");
+    expect(query.mock.calls[2][1]).toEqual([
+      USER_ROW.id,
+      JSON.stringify({
+        resetAt: '2026-07-13T08:00:00.000Z',
+        resetActorUserId: actorUserId,
+      }),
+    ]);
+
+    await expect(service.resetAllUserUsage({ actorUserId })).resolves.toMatchObject({
+      resetAIAccounts: 2,
+      resetReportAccounts: 2,
+      periodStart: '2026-07-01T00:00:00.000Z',
+      periodEnd: '2026-08-01T00:00:00.000Z',
+    });
+    expect(query.mock.calls[3][0]).toContain("'ai_usage'");
+    expect(query.mock.calls[3][1]).toEqual([
+      JSON.stringify({
+        resetAt: '2026-07-13T08:00:00.000Z',
+        resetActorUserId: actorUserId,
+      }),
+    ]);
+    expect(query.mock.calls[4][0]).toContain('FROM users');
+    expect(query.mock.calls[4][1]).toEqual([
+      JSON.stringify({
+        resetAt: '2026-07-13T08:00:00.000Z',
+        resetActorUserId: actorUserId,
+      }),
+    ]);
   });
 
   test('suspends an account and revokes every active session atomically', async () => {

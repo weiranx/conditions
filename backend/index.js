@@ -799,8 +799,8 @@ registerSearchRoutes({
 });
 registerFeatureFlagRoutes(app);
 const accountTierService = createAccountTierService({ database });
-const aiUsageLimitService = createAIUsageLimitService({ database });
-const reportUsageLimitService = createReportUsageLimitService({ database });
+const aiUsageLimitService = createAIUsageLimitService({ database, settingsStore: appDataStore });
+const reportUsageLimitService = createReportUsageLimitService({ database, settingsStore: appDataStore });
 const accountService = registerAccountRoutes({
   app,
   database,
@@ -836,6 +836,8 @@ registerHealthRoutes(app, {
 });
 registerReportLogsRoute(app, {
   accountService,
+  usageService: aiUsageLimitService,
+  reportUsageService: reportUsageLimitService,
   caches: observableCaches,
   runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
   loadModelCatalog: (options) => aiModelCatalog.load(options),
@@ -856,6 +858,8 @@ registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAcces
 const startServer = async () => {
   await database.connect();
   await appDataStore.initialize();
+  await aiUsageLimitService.initializeSettings();
+  await reportUsageLimitService.initializeSettings();
   await initializeFeatureFlags();
   await initializeAISettings();
   return startBackendServer({ app, port: PORT, onShutdown: () => database.close() });

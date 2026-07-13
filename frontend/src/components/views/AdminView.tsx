@@ -159,6 +159,7 @@ interface AdminUserRecord {
   savedReports: number;
   aiCalls: number;
   aiTokens: number;
+  usageLimitOverride: number | null;
   isOwner: boolean;
 }
 
@@ -173,6 +174,13 @@ interface AdminUserDirectory {
     activeSessions: number;
   };
   limit: number;
+}
+
+interface AdminUsageSettings {
+  persistent: boolean;
+  freeMonthlyUsageLimit: number;
+  environmentFreeMonthlyUsageLimit: number;
+  maxFreeMonthlyUsageLimit: number;
 }
 
 interface ExternalDiagnosticsResult {
@@ -804,6 +812,9 @@ function AdminDashboard() {
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
   const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, activeSessions: 0 });
+  const [usageSettings, setUsageSettings] = useState<AdminUsageSettings | null>(null);
+  const [usageLimitDraft, setUsageLimitDraft] = useState('');
+  const [userUsageLimitDrafts, setUserUsageLimitDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -822,6 +833,8 @@ function AdminDashboard() {
   const [systemResourcesError, setSystemResourcesError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [usageSettingsError, setUsageSettingsError] = useState<string | null>(null);
+  const [usageSettingsPending, setUsageSettingsPending] = useState(false);
   const [userActionPending, setUserActionPending] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
@@ -911,7 +924,7 @@ function AdminDashboard() {
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
@@ -921,6 +934,7 @@ function AdminDashboard() {
         fetchApi('/api/admin/ai-models'),
         fetchApi('/api/admin/audit-log'),
         fetchApi('/api/admin/users?limit=500'),
+        fetchApi('/api/admin/usage-settings'),
       ]);
       if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
         setLogs(logsResult.payload as ReportLogEntry[]);
@@ -969,6 +983,14 @@ function AdminDashboard() {
       if (!usersResult.response.ok || !applyUserDirectory(usersResult.payload)) {
         setUsersError('The account directory is temporarily unavailable.');
       }
+      if (usageSettingsResult.response.ok && usageSettingsResult.payload && typeof usageSettingsResult.payload === 'object') {
+        const nextUsageSettings = usageSettingsResult.payload as AdminUsageSettings;
+        setUsageSettings(nextUsageSettings);
+        setUsageLimitDraft(String(nextUsageSettings.freeMonthlyUsageLimit));
+        setUsageSettingsError(null);
+      } else {
+        setUsageSettingsError('Usage limits are temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
@@ -979,6 +1001,7 @@ function AdminDashboard() {
       setAIModelCatalogError('Provider model lists are temporarily unavailable.');
       setAuditError('Administrative activity is temporarily unavailable.');
       setUsersError('The account directory is temporarily unavailable.');
+      setUsageSettingsError('Usage limits are temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1128,6 +1151,121 @@ function AdminDashboard() {
       void fetchAuditTrail();
     } catch {
       setUsersError('Could not reach the server to update this account tier.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const updateDefaultUsageLimit = async (rawLimit: string | number = usageLimitDraft) => {
+    const limit = Number(rawLimit);
+    const maxLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
+    if (!Number.isFinite(limit) || limit <= 0 || limit > maxLimit) {
+      setUsageSettingsError(`Enter a monthly limit between 1 and ${maxLimit.toLocaleString()}.`);
+      return;
+    }
+    setUsageSettingsPending(true);
+    setUsageSettingsError(null);
+    try {
+      const result = await fetchApi('/api/admin/usage-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ freeMonthlyUsageLimit: Math.round(limit) }),
+      });
+      if (!result.response.ok || !result.payload || typeof result.payload !== 'object') {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The default monthly limits could not be updated.';
+        setUsageSettingsError(message);
+        return;
+      }
+      const nextSettings = result.payload as AdminUsageSettings;
+      setUsageSettings(nextSettings);
+      setUsageLimitDraft(String(nextSettings.freeMonthlyUsageLimit));
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsageSettingsError('Could not reach the server to update usage limits.');
+    } finally {
+      setUsageSettingsPending(false);
+    }
+  };
+
+  const updateManagedUserUsageLimit = async (user: AdminUserRecord, limit: number | null) => {
+    const maxLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
+    if (limit !== null && (!Number.isFinite(limit) || limit <= 0 || limit > maxLimit)) {
+      setUsersError(`Enter a monthly limit between 1 and ${maxLimit.toLocaleString()}.`);
+      return;
+    }
+    setUserActionPending(`${user.id}:usage-limit`);
+    setUsersError(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}/usage-limit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: limit === null ? null : Math.round(limit) }),
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The account usage limit could not be updated.';
+        setUsersError(message);
+        return;
+      }
+      setUserUsageLimitDrafts((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to update this account usage limit.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const resetManagedUserUsage = async (user: AdminUserRecord) => {
+    if (!window.confirm(`Reset ${user.displayName}'s AI and report usage for the current month? Saved reports will not be deleted.`)) return;
+    setUserActionPending(`${user.id}:usage-reset`);
+    setUsersError(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}/reset-usage`, {
+        method: 'POST',
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The account usage meter could not be reset.';
+        setUsersError(message);
+        return;
+      }
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to reset this account usage.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const resetAllManagedUserUsage = async () => {
+    if (!window.confirm('Reset current-month AI and report usage for every account? Saved reports will not be deleted.')) return;
+    setUserActionPending('all:usage-reset');
+    setUsersError(null);
+    try {
+      const result = await fetchApi('/api/admin/users/reset-usage', { method: 'POST' });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'Monthly usage could not be reset.';
+        setUsersError(message);
+        return;
+      }
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to reset monthly usage.');
     } finally {
       setUserActionPending(null);
     }
@@ -1726,7 +1864,7 @@ function AdminDashboard() {
             <span className="logs-section-icon"><Users size={17} aria-hidden /></span>
             <div>
               <h2 id="admin-users-title">User management</h2>
-              <p>Assign Free or Premium, control access, and end active sessions</p>
+              <p>Manage tiers, monthly allowances, access, and active sessions</p>
             </div>
           </div>
           <span className="admin-users-total">{usersTotal.toLocaleString()} {usersTotal === 1 ? 'account' : 'accounts'}</span>
@@ -1757,6 +1895,59 @@ function AdminDashboard() {
             <span><KeyRound size={15} aria-hidden /> Active sessions</span>
             <strong>{userSummary.activeSessions.toLocaleString()}</strong>
           </article>
+        </div>
+
+        <div className="admin-usage-policy">
+          <div className="admin-usage-policy-copy">
+            <span><Gauge size={16} aria-hidden /></span>
+            <div>
+              <strong>Default Free monthly usage limit</strong>
+              <small>{usageSettings?.persistent ? 'Saved in PostgreSQL and applied immediately' : 'Applied for this server session'}</small>
+            </div>
+          </div>
+          <label className="admin-usage-limit-field">
+            <span>Uses</span>
+            <input
+              type="number"
+              min="1"
+              max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
+              step="1"
+              inputMode="numeric"
+              value={usageLimitDraft}
+              onChange={(event) => setUsageLimitDraft(event.target.value)}
+              disabled={usageSettingsPending || !usageSettings}
+              aria-label="Default Free monthly usage limit"
+            />
+          </label>
+          <div className="admin-usage-policy-actions">
+            <button
+              type="button"
+              className="logs-btn"
+              onClick={() => void updateDefaultUsageLimit()}
+              disabled={usageSettingsPending || !usageSettings || Number(usageLimitDraft) === usageSettings.freeMonthlyUsageLimit}
+            >
+              {usageSettingsPending ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <Gauge size={14} aria-hidden />}
+              Save limit
+            </button>
+            <button
+              type="button"
+              className="logs-btn"
+              onClick={() => usageSettings && void updateDefaultUsageLimit(usageSettings.environmentFreeMonthlyUsageLimit)}
+              disabled={usageSettingsPending || !usageSettings || usageSettings.freeMonthlyUsageLimit === usageSettings.environmentFreeMonthlyUsageLimit}
+            >
+              Restore default
+            </button>
+            <button
+              type="button"
+              className="logs-btn admin-usage-reset-all"
+              onClick={() => void resetAllManagedUserUsage()}
+              disabled={Boolean(userActionPending)}
+            >
+              {userActionPending === 'all:usage-reset' ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <RefreshCw size={14} aria-hidden />}
+              Reset everyone
+            </button>
+          </div>
+          {usageSettingsError && <p className="admin-usage-policy-error" role="alert"><AlertTriangle size={14} aria-hidden /> {usageSettingsError}</p>}
         </div>
 
         <div className="logs-controls admin-users-controls">
@@ -1804,7 +1995,7 @@ function AdminDashboard() {
                   <th>Account</th>
                   <th>Access</th>
                   <th>Tier</th>
-                  <th>Usage</th>
+                  <th>Monthly usage</th>
                   <th>Recent activity</th>
                   <th>Status</th>
                   <th><span className="sr-only">Actions</span></th>
@@ -1815,8 +2006,15 @@ function AdminDashboard() {
                   const statusPending = userActionPending === `${user.id}:status`;
                   const sessionsPending = userActionPending === `${user.id}:sessions`;
                   const tierPending = userActionPending === `${user.id}:tier`;
+                  const usageLimitPending = userActionPending === `${user.id}:usage-limit`;
+                  const usageResetPending = userActionPending === `${user.id}:usage-reset`;
                   const isActive = user.status === 'active';
                   const tier = user.tier === 'premium' ? 'premium' : 'free';
+                  const effectiveUsageLimit = tier === 'premium'
+                    ? null
+                    : user.usageLimitOverride ?? usageSettings?.freeMonthlyUsageLimit ?? 50;
+                  const usageLimitDraftForUser = userUsageLimitDrafts[user.id] ?? String(effectiveUsageLimit ?? '');
+                  const parsedUsageLimitDraft = Number(usageLimitDraftForUser);
                   return (
                     <tr key={user.id}>
                       <td data-label="Account">
@@ -1848,9 +2046,63 @@ function AdminDashboard() {
                           {tierPending && <LoaderCircle className="logs-spin" size={13} aria-label="Saving tier" />}
                         </label>
                       </td>
-                      <td data-label="Usage">
-                        <span className="admin-user-primary">{user.savedReports.toLocaleString()} generated {user.savedReports === 1 ? 'report' : 'reports'}</span>
-                        <small>{user.aiCalls.toLocaleString()} AI calls · {formatTokenCount(user.aiTokens)} tokens</small>
+                      <td data-label="Monthly usage">
+                        <div className="admin-user-usage">
+                          <div className="admin-user-usage-metrics">
+                            <span><strong>AI</strong> {user.aiCalls.toLocaleString()}{effectiveUsageLimit === null ? ' requests' : ` / ${effectiveUsageLimit.toLocaleString()}`}</span>
+                            <span><strong>Reports</strong> {user.savedReports.toLocaleString()}{effectiveUsageLimit === null ? ' generated' : ` / ${effectiveUsageLimit.toLocaleString()}`}</span>
+                          </div>
+                          {tier === 'premium' ? (
+                            <small><Crown size={11} aria-hidden /> Unlimited on Premium</small>
+                          ) : (
+                            <div className="admin-user-limit-controls">
+                              <input
+                                type="number"
+                                min="1"
+                                max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
+                                step="1"
+                                inputMode="numeric"
+                                value={usageLimitDraftForUser}
+                                onChange={(event) => setUserUsageLimitDrafts((current) => ({ ...current, [user.id]: event.target.value }))}
+                                disabled={Boolean(userActionPending)}
+                                aria-label={`${user.displayName} monthly usage limit`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void updateManagedUserUsageLimit(user, parsedUsageLimitDraft)}
+                                disabled={Boolean(userActionPending) || !Number.isFinite(parsedUsageLimitDraft) || parsedUsageLimitDraft <= 0 || parsedUsageLimitDraft === effectiveUsageLimit}
+                              >
+                                {usageLimitPending ? <LoaderCircle className="logs-spin" size={12} aria-hidden /> : 'Set'}
+                              </button>
+                              {user.usageLimitOverride != null && (
+                                <button
+                                  type="button"
+                                  onClick={() => void updateManagedUserUsageLimit(user, null)}
+                                  disabled={Boolean(userActionPending)}
+                                  title="Use the default Free usage limit"
+                                >
+                                  Default
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          <div className="admin-user-usage-foot">
+                            <small>
+                              {formatTokenCount(user.aiTokens)} AI tokens
+                              {user.usageLimitOverride != null && tier !== 'premium' ? ' · Custom limit' : ''}
+                            </small>
+                            <button
+                              type="button"
+                              className="logs-icon-btn"
+                              onClick={() => void resetManagedUserUsage(user)}
+                              disabled={Boolean(userActionPending) || (user.aiTokens === 0 && user.savedReports === 0)}
+                              title={user.aiTokens === 0 && user.savedReports === 0 ? 'Usage is already at zero' : 'Reset current-month AI and report usage'}
+                              aria-label={`Reset ${user.displayName} current-month AI and report usage`}
+                            >
+                              {usageResetPending ? <LoaderCircle className="logs-spin" size={13} aria-hidden /> : <RefreshCw size={13} aria-hidden />}
+                            </button>
+                          </div>
+                        </div>
                       </td>
                       <td data-label="Recent activity">
                         <span className="admin-user-primary" title={user.lastActivityAt ? new Date(user.lastActivityAt).toLocaleString() : undefined}>{formatAccountDate(user.lastActivityAt)}</span>
@@ -1895,7 +2147,7 @@ function AdminDashboard() {
         )}
         <footer className="logs-panel-foot">
           <span>Showing {filteredUsers.length.toLocaleString()} of {users.length.toLocaleString()} loaded accounts</span>
-          <span>Tier changes apply immediately · suspending an account revokes active sessions</span>
+          <span>Tier and usage-limit changes apply immediately · resets affect the current month</span>
         </footer>
       </section>
 

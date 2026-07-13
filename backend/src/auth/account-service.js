@@ -6,6 +6,10 @@ const {
   hashSessionToken,
   verifyPassword,
 } = require('./password');
+const {
+  MAX_FREE_MONTHLY_USAGE_LIMIT,
+  getMonthlyWindow,
+} = require('./monthly-usage-limit');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -168,6 +172,11 @@ const asNonNegativeNumber = (value) => {
   return Number.isFinite(number) && number >= 0 ? number : 0;
 };
 
+const asOptionalPositiveNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
+};
+
 const serializeAdminUser = (row) => ({
   id: row.id,
   email: row.email || null,
@@ -185,6 +194,7 @@ const serializeAdminUser = (row) => ({
   savedReports: asNonNegativeNumber(row.saved_reports),
   aiCalls: asNonNegativeNumber(row.ai_calls),
   aiTokens: asNonNegativeNumber(row.ai_tokens),
+  usageLimitOverride: asOptionalPositiveNumber(row.usage_limit_override),
 });
 
 const createAdminAccountError = (message, code) => Object.assign(new Error(message), { code });
@@ -211,6 +221,18 @@ const validateAdminAccountTier = (value) => {
     throw createAdminAccountError('Tier must be free or premium.', 'INVALID_ACCOUNT_TIER');
   }
   return tier;
+};
+
+const validateAdminUsageLimit = (value) => {
+  if (value === null) return null;
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || limit <= 0 || limit > MAX_FREE_MONTHLY_USAGE_LIMIT) {
+    throw createAdminAccountError(
+      `Monthly usage limit must be between 1 and ${MAX_FREE_MONTHLY_USAGE_LIMIT.toLocaleString()}.`,
+      'INVALID_USAGE_LIMIT',
+    );
+  }
+  return Math.round(limit);
 };
 
 const createDatabaseUnavailableError = () => {
@@ -418,7 +440,11 @@ const createAccountService = ({
                 COALESCE(session_activity.active_sessions, 0) AS active_sessions,
                 COALESCE(report_activity.saved_reports, 0) AS saved_reports,
                 COALESCE(ai_activity.ai_calls, 0) AS ai_calls,
-                COALESCE(ai_activity.ai_tokens, 0) AS ai_tokens
+                COALESCE(ai_activity.ai_tokens, 0) AS ai_tokens,
+                COALESCE(
+                  usage_limit.usage_limit_override,
+                  report_usage_limit.usage_limit_override
+                ) AS usage_limit_override
          FROM users
          LEFT JOIN LATERAL (
            SELECT COUNT(*) FILTER (WHERE expires_at > NOW()) AS active_sessions,
@@ -427,14 +453,56 @@ const createAccountService = ({
            WHERE user_id = users.id
          ) session_activity ON TRUE
          LEFT JOIN LATERAL (
-           SELECT COUNT(*) AS saved_reports,
+           SELECT limits ->> 'monthlyUsageLimit' AS usage_limit_override,
+                  limits ->> 'resetAt' AS usage_reset_at
+           FROM entitlements
+           WHERE user_id = users.id
+             AND feature_key = 'report_usage'
+             AND (valid_until IS NULL OR valid_until > NOW())
+           LIMIT 1
+         ) report_usage_limit ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) FILTER (
+                    WHERE created_at >= GREATEST(
+                      DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC',
+                      COALESCE(
+                        NULLIF(report_usage_limit.usage_reset_at, '')::timestamptz,
+                        DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+                      )
+                    )
+                  ) AS saved_reports,
                   MAX(updated_at) AS last_report_at
            FROM saved_reports
            WHERE user_id = users.id
          ) report_activity ON TRUE
          LEFT JOIN LATERAL (
-           SELECT COUNT(*) AS ai_calls,
-                  COALESCE(SUM(total_tokens), 0) AS ai_tokens,
+           SELECT limits ->> 'monthlyUsageLimit' AS usage_limit_override,
+                  limits ->> 'resetAt' AS usage_reset_at
+           FROM entitlements
+           WHERE user_id = users.id
+             AND feature_key = 'ai_usage'
+             AND (valid_until IS NULL OR valid_until > NOW())
+           LIMIT 1
+         ) usage_limit ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) FILTER (
+                    WHERE created_at >= GREATEST(
+                      DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC',
+                      COALESCE(
+                        NULLIF(usage_limit.usage_reset_at, '')::timestamptz,
+                        DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+                      )
+                    )
+                  ) AS ai_calls,
+                  COALESCE(SUM(total_tokens) FILTER (
+                    WHERE created_at >= GREATEST(
+                      DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC',
+                      COALESCE(
+                        NULLIF(usage_limit.usage_reset_at, '')::timestamptz,
+                        DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+                      )
+                    )
+                  ), 0) AS ai_tokens,
                   MAX(created_at) AS last_ai_at
            FROM ai_usage_events
            WHERE user_id = users.id
@@ -550,6 +618,146 @@ const createAccountService = ({
       return {
         user: serializeAdminUser({ ...account.rows[0], account_tier: tier }),
         tier,
+      };
+    });
+  };
+
+  const updateUserUsageLimit = async ({
+    userId: rawUserId,
+    limit: rawLimit,
+    actorUserId: rawActorUserId,
+  } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    const limit = validateAdminUsageLimit(rawLimit);
+
+    return runInTransaction(async (query) => {
+      const account = await query(
+        `SELECT id, email, display_name, auth_provider, status, created_at, updated_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId],
+      );
+      if (!account.rows[0]) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+
+      if (limit === null) {
+        await query(
+          `UPDATE entitlements
+           SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
+               updated_at = NOW()
+           WHERE user_id = $1
+             AND feature_key IN ('ai_usage', 'report_usage')`,
+          [userId],
+        );
+      } else {
+        await query(
+          `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
+           VALUES ($1, 'ai_usage', 'admin', $2::jsonb, NOW()),
+                  ($1, 'report_usage', 'admin', $2::jsonb, NOW())
+           ON CONFLICT (user_id, feature_key) DO UPDATE
+           SET source = 'admin',
+               valid_until = NULL,
+               limits = entitlements.limits || EXCLUDED.limits,
+               updated_at = NOW()`,
+          [userId, JSON.stringify({ monthlyUsageLimit: limit, limitActorUserId: actorUserId })],
+        );
+      }
+
+      return {
+        user: serializeAdminUser({
+          ...account.rows[0],
+          usage_limit_override: limit,
+        }),
+        limit,
+      };
+    });
+  };
+
+  const resetUserUsage = async ({ userId: rawUserId, actorUserId: rawActorUserId } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    const resetAt = new Date(now()).toISOString();
+    const window = getMonthlyWindow(resetAt);
+
+    return runInTransaction(async (query) => {
+      const account = await query(
+        `SELECT id, email, display_name, auth_provider, status, created_at, updated_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId],
+      );
+      if (!account.rows[0]) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+      await query(
+        `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
+         VALUES ($1, 'ai_usage', 'admin', $2::jsonb, NOW())
+         ON CONFLICT (user_id, feature_key) DO UPDATE
+         SET source = 'admin',
+             valid_until = NULL,
+             limits = entitlements.limits || EXCLUDED.limits,
+             updated_at = NOW()`,
+        [userId, JSON.stringify({ resetAt, resetActorUserId: actorUserId })],
+      );
+      await query(
+        `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
+         VALUES ($1, 'report_usage', 'admin', $2::jsonb, NOW())
+         ON CONFLICT (user_id, feature_key) DO UPDATE
+         SET source = 'admin',
+             valid_until = NULL,
+             limits = entitlements.limits || EXCLUDED.limits,
+             updated_at = NOW()`,
+        [userId, JSON.stringify({ resetAt, resetActorUserId: actorUserId })],
+      );
+      return {
+        user: serializeAdminUser(account.rows[0]),
+        resetAI: true,
+        resetReports: true,
+        ...window,
+      };
+    });
+  };
+
+  const resetAllUserUsage = async ({ actorUserId: rawActorUserId } = {}) => {
+    ensureAvailable();
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    const resetAt = new Date(now()).toISOString();
+    const window = getMonthlyWindow(resetAt);
+    return runInTransaction(async (query) => {
+      const resetAI = await query(
+        `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
+         SELECT id, 'ai_usage', 'admin', $1::jsonb, NOW()
+         FROM users
+         ON CONFLICT (user_id, feature_key) DO UPDATE
+         SET source = 'admin',
+             valid_until = NULL,
+             limits = entitlements.limits || EXCLUDED.limits,
+             updated_at = NOW()
+         RETURNING user_id`,
+        [JSON.stringify({ resetAt, resetActorUserId: actorUserId })],
+      );
+      const resetReports = await query(
+        `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
+         SELECT id, 'report_usage', 'admin', $1::jsonb, NOW()
+         FROM users
+         ON CONFLICT (user_id, feature_key) DO UPDATE
+         SET source = 'admin',
+             valid_until = NULL,
+             limits = entitlements.limits || EXCLUDED.limits,
+             updated_at = NOW()
+         RETURNING user_id`,
+        [JSON.stringify({ resetAt, resetActorUserId: actorUserId })],
+      );
+      return {
+        resetAIAccounts: asNonNegativeNumber(resetAI.rowCount ?? resetAI.rows?.length),
+        resetReportAccounts: asNonNegativeNumber(resetReports.rowCount ?? resetReports.rows?.length),
+        ...window,
       };
     });
   };
@@ -710,10 +918,13 @@ const createAccountService = ({
     login,
     loginWithGoogle,
     logout,
+    resetAllUserUsage,
+    resetUserUsage,
     register,
     revokeUserSessions,
     updatePreferences,
     updateUserTier,
+    updateUserUsageLimit,
     updateUserStatus,
   };
 };
