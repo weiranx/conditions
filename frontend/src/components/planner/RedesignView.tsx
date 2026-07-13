@@ -191,6 +191,7 @@ function ElevationProfileSection({
   bands,
   maxGustMph,
   note,
+  forecastPeriodLabel,
   targetElevationInput,
   handleTargetElevationChange,
   elevationUnitLabel,
@@ -204,6 +205,7 @@ function ElevationProfileSection({
   bands: ElevationForecastBand[];
   maxGustMph: number;
   note?: string | null;
+  forecastPeriodLabel: string;
   targetElevationInput: string;
   handleTargetElevationChange: PlannerViewProps['handleTargetElevationChange'];
   elevationUnitLabel: string;
@@ -270,6 +272,15 @@ function ElevationProfileSection({
         <span className="ssr-h-meta">
           {manualTarget ? `Target ${formatElevationDisplay(manualTarget.elevationFt)}` : `${formatElevationDisplay(spanFt)} vertical span`}
         </span>
+      </div>
+
+      <div className="ssr-elev-time-context">
+        <Clock size={16} aria-hidden />
+        <div>
+          <span>Conditions at</span>
+          <strong>{forecastPeriodLabel}</strong>
+        </div>
+        <p>Every elevation band uses this same forecast hour.</p>
       </div>
 
       <div className="ssr-elev-input-row">
@@ -517,6 +528,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     formatWindDisplay,
     formatElevationDisplay,
     formatElevationDeltaDisplay,
+    formatForecastPeriodLabel,
     alpineStartTime,
     setAlpineStartTime,
     setMobileMapControlsExpanded,
@@ -1490,6 +1502,10 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             bands={bands}
             maxGustMph={maxGustMph}
             note={safetyData.weather.elevationForecastNote}
+            forecastPeriodLabel={formatForecastPeriodLabel(
+              safetyData.weather.forecastStartTime,
+              safetyData.weather.timezone || null,
+            )}
             targetElevationInput={targetElevationInput}
             handleTargetElevationChange={handleTargetElevationChange}
             elevationUnitLabel={elevationUnitLabel}
