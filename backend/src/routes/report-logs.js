@@ -7,6 +7,7 @@ const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit
 const { getSystemResources } = require('../utils/system-resources');
 const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
+const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
 
 const ADMIN_ACCOUNT_EMAIL = 'weiranxiong@gmail.com';
 
@@ -87,6 +88,7 @@ const getUserManagementError = (error, fallback) => {
     || error?.code === 'INVALID_ACCOUNT_STATUS'
     || error?.code === 'INVALID_ACCOUNT_TIER'
     || error?.code === 'INVALID_USAGE_LIMIT'
+    || error?.code === 'INVALID_AI_USAGE_LIMIT'
   ) {
     return { status: 400, message: error.message };
   }
@@ -199,7 +201,7 @@ const registerReportLogsRoute = (
 
   const updateUsageSettings = async (req, res) => {
     if (!await authorize(req, res)) return;
-    const updateAI = req.body?.freeMonthlyAIUsageLimit !== undefined;
+    const updateAI = req.body?.freeMonthlyAITokenLimit !== undefined;
     const updateReports = req.body?.freeMonthlyReportUsageLimit !== undefined;
     if (!updateAI && !updateReports) {
       res.status(400).json({ error: 'Provide an AI usage limit or generated report limit.' });
@@ -214,13 +216,13 @@ const registerReportLogsRoute = (
     }
     try {
       const validatedAILimit = updateAI
-        ? validateFreeMonthlyUsageLimit(req.body.freeMonthlyAIUsageLimit)
+        ? validateMonthlyTokenLimit(req.body.freeMonthlyAITokenLimit)
         : null;
       const validatedReportLimit = updateReports
         ? validateFreeMonthlyUsageLimit(req.body.freeMonthlyReportUsageLimit)
         : null;
       if (updateAI) {
-        await usageService.updateSettings({ freeMonthlyAIUsageLimit: validatedAILimit });
+        await usageService.updateSettings({ freeMonthlyAITokenLimit: validatedAILimit });
       }
       if (updateReports) {
         await reportUsageService.updateSettings({ freeMonthlyReportUsageLimit: validatedReportLimit });
@@ -237,13 +239,15 @@ const registerReportLogsRoute = (
         category: 'configuration',
         summary: `Changed the default Free monthly ${[updateAI ? 'AI usage' : null, updateReports ? 'generated report' : null].filter(Boolean).join(' and ')} limit${updateAI && updateReports ? 's' : ''}`,
         details: {
-          freeMonthlyAIUsageLimit: updated.freeMonthlyAIUsageLimit,
+          freeMonthlyAITokenLimit: updated.freeMonthlyAITokenLimit,
           freeMonthlyReportUsageLimit: updated.freeMonthlyReportUsageLimit,
         },
       });
       res.json(updated);
     } catch (error) {
-      const status = error?.code === 'INVALID_USAGE_LIMIT' ? 400 : 500;
+      const status = error?.code === 'INVALID_USAGE_LIMIT' || error?.code === 'INVALID_AI_USAGE_LIMIT'
+        ? 400
+        : 500;
       const message = error instanceof Error ? error.message : 'Usage limits could not be updated.';
       await audit(req, {
         action: 'usage.limits.update-failed',
@@ -358,7 +362,7 @@ const registerReportLogsRoute = (
         category: 'accounts',
         summary: result.limit === null
           ? `Restored the default AI usage limit for ${targetName}`
-          : `Changed ${targetName}'s monthly AI usage limit to ${result.limit.toLocaleString()}`,
+          : `Changed ${targetName}'s monthly AI usage limit to ${result.limit.toLocaleString()} tokens`,
         details: {
           targetUserId: result.user.id,
           targetEmail: result.user.email,

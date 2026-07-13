@@ -10,6 +10,7 @@ const {
   MAX_FREE_MONTHLY_USAGE_LIMIT,
   getMonthlyWindow,
 } = require('./monthly-usage-limit');
+const { MAX_MONTHLY_TOKEN_LIMIT } = require('./ai-usage-limit');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -194,7 +195,7 @@ const serializeAdminUser = (row) => ({
   savedReports: asNonNegativeNumber(row.saved_reports),
   aiCalls: asNonNegativeNumber(row.ai_calls),
   aiTokens: asNonNegativeNumber(row.ai_tokens),
-  aiUsageLimitOverride: asOptionalPositiveNumber(row.ai_usage_limit_override),
+  aiTokenLimitOverride: asOptionalPositiveNumber(row.ai_token_limit_override),
   reportUsageLimitOverride: asOptionalPositiveNumber(row.report_usage_limit_override),
 });
 
@@ -224,12 +225,24 @@ const validateAdminAccountTier = (value) => {
   return tier;
 };
 
-const validateAdminUsageLimit = (value) => {
+const validateAdminAIUsageLimit = (value) => {
+  if (value === null) return null;
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || limit <= 0 || limit > MAX_MONTHLY_TOKEN_LIMIT) {
+    throw createAdminAccountError(
+      `Monthly AI token limit must be between 1 and ${MAX_MONTHLY_TOKEN_LIMIT.toLocaleString()}.`,
+      'INVALID_AI_USAGE_LIMIT',
+    );
+  }
+  return Math.round(limit);
+};
+
+const validateAdminReportUsageLimit = (value) => {
   if (value === null) return null;
   const limit = Number(value);
   if (!Number.isFinite(limit) || limit <= 0 || limit > MAX_FREE_MONTHLY_USAGE_LIMIT) {
     throw createAdminAccountError(
-      `Monthly usage limit must be between 1 and ${MAX_FREE_MONTHLY_USAGE_LIMIT.toLocaleString()}.`,
+      `Monthly generated report limit must be between 1 and ${MAX_FREE_MONTHLY_USAGE_LIMIT.toLocaleString()}.`,
       'INVALID_USAGE_LIMIT',
     );
   }
@@ -442,7 +455,7 @@ const createAccountService = ({
                 COALESCE(report_activity.saved_reports, 0) AS saved_reports,
                 COALESCE(ai_activity.ai_calls, 0) AS ai_calls,
                 COALESCE(ai_activity.ai_tokens, 0) AS ai_tokens,
-                usage_limit.ai_usage_limit_override,
+                usage_limit.ai_token_limit_override,
                 report_usage_limit.report_usage_limit_override
          FROM users
          LEFT JOIN LATERAL (
@@ -475,7 +488,7 @@ const createAccountService = ({
            WHERE user_id = users.id
          ) report_activity ON TRUE
          LEFT JOIN LATERAL (
-           SELECT limits ->> 'monthlyUsageLimit' AS ai_usage_limit_override,
+           SELECT limits ->> 'monthlyTokenLimit' AS ai_token_limit_override,
                   limits ->> 'resetAt' AS usage_reset_at
            FROM entitlements
            WHERE user_id = users.id
@@ -630,7 +643,7 @@ const createAccountService = ({
     ensureAvailable();
     const userId = validateAdminUserId(rawUserId);
     const actorUserId = validateAdminUserId(rawActorUserId);
-    const limit = validateAdminUsageLimit(rawLimit);
+    const limit = validateAdminAIUsageLimit(rawLimit);
 
     return runInTransaction(async (query) => {
       const account = await query(
@@ -647,7 +660,7 @@ const createAccountService = ({
       if (limit === null) {
         await query(
           `UPDATE entitlements
-           SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
+           SET limits = limits - 'monthlyTokenLimit' - 'monthlyUsageLimit' - 'limitActorUserId',
                updated_at = NOW()
            WHERE user_id = $1
              AND feature_key = 'ai_usage'`,
@@ -660,16 +673,16 @@ const createAccountService = ({
            ON CONFLICT (user_id, feature_key) DO UPDATE
            SET source = 'admin',
                valid_until = NULL,
-               limits = entitlements.limits || EXCLUDED.limits,
+               limits = (entitlements.limits - 'monthlyUsageLimit') || EXCLUDED.limits,
                updated_at = NOW()`,
-          [userId, JSON.stringify({ monthlyUsageLimit: limit, limitActorUserId: actorUserId })],
+          [userId, JSON.stringify({ monthlyTokenLimit: limit, limitActorUserId: actorUserId })],
         );
       }
 
       return {
         user: serializeAdminUser({
           ...account.rows[0],
-          ai_usage_limit_override: limit,
+          ai_token_limit_override: limit,
         }),
         limit,
       };
@@ -684,7 +697,7 @@ const createAccountService = ({
     ensureAvailable();
     const userId = validateAdminUserId(rawUserId);
     const actorUserId = validateAdminUserId(rawActorUserId);
-    const limit = validateAdminUsageLimit(rawLimit);
+    const limit = validateAdminReportUsageLimit(rawLimit);
 
     return runInTransaction(async (query) => {
       const account = await query(
@@ -736,10 +749,10 @@ const createAccountService = ({
     return runInTransaction(async (query) => {
       const resetAI = await query(
         `UPDATE entitlements
-         SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
+         SET limits = limits - 'monthlyTokenLimit' - 'monthlyUsageLimit' - 'limitActorUserId',
              updated_at = NOW()
          WHERE feature_key = 'ai_usage'
-           AND limits ? 'monthlyUsageLimit'
+           AND (limits ? 'monthlyTokenLimit' OR limits ? 'monthlyUsageLimit')
          RETURNING user_id`,
       );
       const resetReports = await query(

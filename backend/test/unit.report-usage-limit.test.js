@@ -17,14 +17,14 @@ const makeDatabase = (query) => ({
   transaction: jest.fn((callback) => callback(query)),
 });
 
-test('uses the shared bounded monthly Free allowance', () => {
+test('uses separate bounded monthly AI-token and report-count allowances', () => {
   expect(parseFreeMonthlyUsageLimit('75')).toBe(75);
   expect(parseFreeMonthlyUsageLimit('0')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
   expect(parseFreeMonthlyUsageLimit('not-a-number')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
   expect(parseFreeMonthlyUsageLimit('10001')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
 
   const database = makeDatabase(jest.fn());
-  expect(createAIUsageLimitService({ database, freeMonthlyUsageLimit: 75 }).freeLimitRequests).toBe(75);
+  expect(createAIUsageLimitService({ database, freeMonthlyTokenLimit: 400_000 }).freeLimitTokens).toBe(400_000);
   expect(createReportUsageLimitService({ database, freeMonthlyUsageLimit: 75 }).freeLimitReports).toBe(75);
 });
 

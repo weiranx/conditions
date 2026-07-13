@@ -220,9 +220,6 @@ export function AccountView({
   const errorMessage = formError || account.error;
   const isPremium = account.tier?.key === 'premium';
   const reportUsage = account.reportUsage;
-  const freeMonthlyLimit = !isPremium
-    ? reportUsage?.limitReports ?? account.aiUsage?.limitRequests ?? null
-    : null;
   const planPeriodEnd = account.tier?.currentPeriodEnd
     ? formatPlanPeriod(account.tier.currentPeriodEnd)
     : null;
@@ -300,9 +297,7 @@ export function AccountView({
                 <p>
                   {isPremium
                     ? 'All Free features, with unlimited AI tools and report generation.'
-                    : freeMonthlyLimit
-                      ? `The same ${freeMonthlyLimit.toLocaleString()}-use monthly allowance applies separately to generated reports and AI requests.`
-                      : 'The same monthly allowance applies separately to generated reports and AI requests.'}
+                    : 'Generated reports use a monthly count allowance, while AI tools use a separate token allowance.'}
                 </p>
                 <ul aria-label={`${account.tier?.label || 'Free'} plan features`}>
                   <li>
@@ -317,9 +312,9 @@ export function AccountView({
                     <Check aria-hidden />
                     {isPremium
                       ? 'Unlimited AI usage'
-                      : account.aiUsage?.limitRequests != null
-                        ? `${account.aiUsage.limitRequests.toLocaleString()} AI requests each month`
-                        : 'Standard monthly AI allowance'}
+                      : account.aiUsage?.limitTokens != null
+                        ? `${account.aiUsage.limitTokens.toLocaleString()} AI tokens each month`
+                        : 'Monthly AI token allowance'}
                   </li>
                 </ul>
                 {isPremium && planPeriodEnd && (
@@ -345,15 +340,15 @@ export function AccountView({
                 <MonthlyUsageMeter
                   icon={<Sparkles aria-hidden />}
                   label="AI usage"
-                  singularUnit="request"
-                  pluralUnit="requests"
-                  used={account.aiUsage?.usedRequests ?? null}
-                  limit={account.aiUsage?.limitRequests ?? null}
-                  remaining={account.aiUsage?.remainingRequests ?? null}
+                  singularUnit="token"
+                  pluralUnit="tokens"
+                  used={account.aiUsage?.usedTokens ?? null}
+                  limit={account.aiUsage?.limitTokens ?? null}
+                  remaining={account.aiUsage?.remainingTokens ?? null}
                   percentUsed={account.aiUsage?.percentUsed ?? null}
                   resetAt={account.aiUsage?.resetAt ?? null}
                   unlimited={account.aiUsage?.unlimited ?? false}
-                  note="Each successful AI brief, chat reply, imagery insight, or AI-assisted analysis counts once."
+                  note="Input and output tokens from AI briefs, chat replies, imagery insights, and AI-assisted analysis count toward this allowance."
                 />
               </section>
               {errorMessage && <p className="account-error" role="alert">{errorMessage}</p>}

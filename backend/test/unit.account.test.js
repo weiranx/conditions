@@ -48,9 +48,9 @@ const AI_USAGE = {
   unlimited: false,
   usedRequests: 12,
   usedTokens: 12500,
-  limitRequests: 50,
-  remainingRequests: 38,
-  percentUsed: 24,
+  limitTokens: 250_000,
+  remainingTokens: 237_500,
+  percentUsed: 5,
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',
   resetAt: '2026-08-01T00:00:00.000Z',
@@ -279,7 +279,7 @@ describe('password accounts', () => {
         saved_reports: '4',
         ai_calls: '9',
         ai_tokens: '12500',
-        ai_usage_limit_override: '75',
+        ai_token_limit_override: '500000',
         report_usage_limit_override: '60',
         total_count: '1',
         active_count: '1',
@@ -307,7 +307,7 @@ describe('password accounts', () => {
         savedReports: 4,
         aiCalls: 9,
         aiTokens: 12500,
-        aiUsageLimitOverride: 75,
+        aiTokenLimitOverride: 500000,
         reportUsageLimitOverride: 60,
       }],
       total: 1,
@@ -390,16 +390,16 @@ describe('password accounts', () => {
 
     await expect(service.updateUserUsageLimit({
       userId: USER_ROW.id,
-      limit: 75,
+      limit: 500_000,
       actorUserId,
     })).resolves.toMatchObject({
-      user: { id: USER_ROW.id, aiUsageLimitOverride: 75 },
-      limit: 75,
+      user: { id: USER_ROW.id, aiTokenLimitOverride: 500_000 },
+      limit: 500_000,
     });
     expect(query.mock.calls[1][0]).toContain('INSERT INTO entitlements');
     expect(query.mock.calls[1][1]).toEqual([
       USER_ROW.id,
-      JSON.stringify({ monthlyUsageLimit: 75, limitActorUserId: actorUserId }),
+      JSON.stringify({ monthlyTokenLimit: 500_000, limitActorUserId: actorUserId }),
     ]);
 
     await expect(service.updateUserUsageLimit({
@@ -407,10 +407,10 @@ describe('password accounts', () => {
       limit: null,
       actorUserId,
     })).resolves.toMatchObject({
-      user: { id: USER_ROW.id, aiUsageLimitOverride: null },
+      user: { id: USER_ROW.id, aiTokenLimitOverride: null },
       limit: null,
     });
-    expect(query.mock.calls[3][0]).toContain("limits - 'monthlyUsageLimit'");
+    expect(query.mock.calls[3][0]).toContain("limits - 'monthlyTokenLimit'");
   });
 
   test('rejects an invalid managed account monthly usage limit before writing', async () => {
@@ -423,7 +423,7 @@ describe('password accounts', () => {
       userId: USER_ROW.id,
       limit: 0,
       actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
-    })).rejects.toMatchObject({ code: 'INVALID_USAGE_LIMIT' });
+    })).rejects.toMatchObject({ code: 'INVALID_AI_USAGE_LIMIT' });
     expect(transaction).not.toHaveBeenCalled();
   });
 
@@ -941,8 +941,8 @@ describe('AI account access', () => {
       ...AI_USAGE,
       tierKey: 'premium',
       unlimited: true,
-      limitRequests: null,
-      remainingRequests: null,
+      limitTokens: null,
+      remainingTokens: null,
       percentUsed: null,
       exhausted: false,
     });
@@ -967,8 +967,8 @@ describe('AI account access', () => {
   });
 
   test('blocks AI work when the account has exhausted its monthly allowance', async () => {
-    const usage = { ...AI_USAGE, usedRequests: 50, remainingRequests: 0, percentUsed: 100, exhausted: true };
-    const limitError = Object.assign(new Error('Monthly AI request limit reached.'), {
+    const usage = { ...AI_USAGE, usedTokens: 250_000, remainingTokens: 0, percentUsed: 100, exhausted: true };
+    const limitError = Object.assign(new Error('Monthly AI token limit reached.'), {
       code: 'AI_USAGE_LIMIT_REACHED',
       statusCode: 429,
       usage,
@@ -982,7 +982,7 @@ describe('AI account access', () => {
 
     expect(response.status).toBe(429);
     expect(response.body).toEqual({
-      error: 'Monthly AI request limit reached.',
+      error: 'Monthly AI token limit reached.',
       code: 'AI_USAGE_LIMIT_REACHED',
       aiUsage: usage,
     });

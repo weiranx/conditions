@@ -32,15 +32,15 @@ interface AccountAIUsageBase {
 export type AccountAIUsage = AccountAIUsageBase & (
   | {
     unlimited: true;
-    limitRequests: null;
-    remainingRequests: null;
+    limitTokens: null;
+    remainingTokens: null;
     percentUsed: null;
     exhausted: false;
   }
   | {
     unlimited: false;
-    limitRequests: number;
-    remainingRequests: number;
+    limitTokens: number;
+    remainingTokens: number;
     percentUsed: number;
   }
 );

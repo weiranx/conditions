@@ -159,7 +159,7 @@ interface AdminUserRecord {
   savedReports: number;
   aiCalls: number;
   aiTokens: number;
-  aiUsageLimitOverride: number | null;
+  aiTokenLimitOverride: number | null;
   reportUsageLimitOverride: number | null;
   isOwner: boolean;
 }
@@ -179,10 +179,11 @@ interface AdminUserDirectory {
 
 interface AdminUsageSettings {
   persistent: boolean;
-  freeMonthlyAIUsageLimit: number;
-  environmentFreeMonthlyAIUsageLimit: number;
+  freeMonthlyAITokenLimit: number;
+  environmentFreeMonthlyAITokenLimit: number;
   freeMonthlyReportUsageLimit: number;
   environmentFreeMonthlyReportUsageLimit: number;
+  maxMonthlyAITokenLimit: number;
   maxFreeMonthlyUsageLimit: number;
 }
 
@@ -991,7 +992,7 @@ function AdminDashboard() {
       if (usageSettingsResult.response.ok && usageSettingsResult.payload && typeof usageSettingsResult.payload === 'object') {
         const nextUsageSettings = usageSettingsResult.payload as AdminUsageSettings;
         setUsageSettings(nextUsageSettings);
-        setUsageLimitDraft(String(nextUsageSettings.freeMonthlyAIUsageLimit));
+        setUsageLimitDraft(String(nextUsageSettings.freeMonthlyAITokenLimit));
         setReportLimitDraft(String(nextUsageSettings.freeMonthlyReportUsageLimit));
         setUsageSettingsError(null);
       } else {
@@ -1168,13 +1169,14 @@ function AdminDashboard() {
   ) => {
     const aiLimit = Number(rawAILimit);
     const reportLimit = Number(rawReportLimit);
-    const maxLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
-    if (!Number.isFinite(aiLimit) || aiLimit <= 0 || aiLimit > maxLimit) {
-      setUsageSettingsError(`Enter an AI request limit between 1 and ${maxLimit.toLocaleString()}.`);
+    const maxAITokenLimit = usageSettings?.maxMonthlyAITokenLimit ?? 100_000_000;
+    const maxReportLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
+    if (!Number.isFinite(aiLimit) || aiLimit <= 0 || aiLimit > maxAITokenLimit) {
+      setUsageSettingsError(`Enter an AI token limit between 1 and ${maxAITokenLimit.toLocaleString()}.`);
       return;
     }
-    if (!Number.isFinite(reportLimit) || reportLimit <= 0 || reportLimit > maxLimit) {
-      setUsageSettingsError(`Enter a generated report limit between 1 and ${maxLimit.toLocaleString()}.`);
+    if (!Number.isFinite(reportLimit) || reportLimit <= 0 || reportLimit > maxReportLimit) {
+      setUsageSettingsError(`Enter a generated report limit between 1 and ${maxReportLimit.toLocaleString()}.`);
       return;
     }
     setUsageSettingsPending(true);
@@ -1184,7 +1186,7 @@ function AdminDashboard() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          freeMonthlyAIUsageLimit: Math.round(aiLimit),
+          freeMonthlyAITokenLimit: Math.round(aiLimit),
           freeMonthlyReportUsageLimit: Math.round(reportLimit),
         }),
       });
@@ -1197,7 +1199,7 @@ function AdminDashboard() {
       }
       const nextSettings = result.payload as AdminUsageSettings;
       setUsageSettings(nextSettings);
-      setUsageLimitDraft(String(nextSettings.freeMonthlyAIUsageLimit));
+      setUsageLimitDraft(String(nextSettings.freeMonthlyAITokenLimit));
       setReportLimitDraft(String(nextSettings.freeMonthlyReportUsageLimit));
       await fetchUserDirectory();
       void fetchAuditTrail();
@@ -1209,9 +1211,9 @@ function AdminDashboard() {
   };
 
   const updateManagedUserUsageLimit = async (user: AdminUserRecord, limit: number | null) => {
-    const maxLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
+    const maxLimit = usageSettings?.maxMonthlyAITokenLimit ?? 100_000_000;
     if (limit !== null && (!Number.isFinite(limit) || limit <= 0 || limit > maxLimit)) {
-      setUsersError(`Enter a monthly limit between 1 and ${maxLimit.toLocaleString()}.`);
+      setUsersError(`Enter a monthly AI token limit between 1 and ${maxLimit.toLocaleString()}.`);
       return;
     }
     setUserActionPending(`${user.id}:usage-limit`);
@@ -1988,15 +1990,15 @@ function AdminDashboard() {
               <input
                 type="number"
                 min="1"
-                max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
-                step="1"
+                max={usageSettings?.maxMonthlyAITokenLimit ?? 100_000_000}
+                step="10000"
                 inputMode="numeric"
                 value={usageLimitDraft}
                 onChange={(event) => setUsageLimitDraft(event.target.value)}
                 disabled={usageSettingsPending || !usageSettings}
-                aria-label="Default Free monthly AI request limit"
+                aria-label="Default Free monthly AI token limit"
               />
-              <span>requests</span>
+              <span>tokens</span>
             </label>
             <label className="admin-usage-limit-field">
               <span>Reports</span>
@@ -2019,7 +2021,7 @@ function AdminDashboard() {
               className="logs-btn"
               onClick={() => void updateDefaultUsageLimits()}
               disabled={usageSettingsPending || !usageSettings || (
-                Number(usageLimitDraft) === usageSettings.freeMonthlyAIUsageLimit
+                Number(usageLimitDraft) === usageSettings.freeMonthlyAITokenLimit
                 && Number(reportLimitDraft) === usageSettings.freeMonthlyReportUsageLimit
               )}
             >
@@ -2030,11 +2032,11 @@ function AdminDashboard() {
               type="button"
               className="logs-btn"
               onClick={() => usageSettings && void updateDefaultUsageLimits(
-                usageSettings.environmentFreeMonthlyAIUsageLimit,
+                usageSettings.environmentFreeMonthlyAITokenLimit,
                 usageSettings.environmentFreeMonthlyReportUsageLimit,
               )}
               disabled={usageSettingsPending || !usageSettings || (
-                usageSettings.freeMonthlyAIUsageLimit === usageSettings.environmentFreeMonthlyAIUsageLimit
+                usageSettings.freeMonthlyAITokenLimit === usageSettings.environmentFreeMonthlyAITokenLimit
                 && usageSettings.freeMonthlyReportUsageLimit === usageSettings.environmentFreeMonthlyReportUsageLimit
               )}
             >
@@ -2127,7 +2129,7 @@ function AdminDashboard() {
                   const tier = user.tier === 'premium' ? 'premium' : 'free';
                   const effectiveAIUsageLimit = tier === 'premium'
                     ? null
-                    : user.aiUsageLimitOverride ?? usageSettings?.freeMonthlyAIUsageLimit ?? 50;
+                    : user.aiTokenLimitOverride ?? usageSettings?.freeMonthlyAITokenLimit ?? 250_000;
                   const usageLimitDraftForUser = userUsageLimitDrafts[user.id] ?? String(effectiveAIUsageLimit ?? '');
                   const parsedUsageLimitDraft = Number(usageLimitDraftForUser);
                   const effectiveReportUsageLimit = tier === 'premium'
@@ -2169,7 +2171,7 @@ function AdminDashboard() {
                       <td data-label="Monthly usage">
                         <div className="admin-user-usage">
                           <div className="admin-user-usage-metrics">
-                            <span><strong>AI</strong> {user.aiCalls.toLocaleString()}{effectiveAIUsageLimit === null ? ' requests' : ` / ${effectiveAIUsageLimit.toLocaleString()}`}</span>
+                            <span><strong>AI</strong> {formatTokenCount(user.aiTokens)}{effectiveAIUsageLimit === null ? ' tokens' : ` / ${formatTokenCount(effectiveAIUsageLimit)}`}</span>
                             <span><strong>Reports</strong> {user.savedReports.toLocaleString()}{effectiveReportUsageLimit === null ? ' generated' : ` / ${effectiveReportUsageLimit.toLocaleString()}`}</span>
                           </div>
                           {tier === 'premium' ? (
@@ -2182,13 +2184,13 @@ function AdminDashboard() {
                                   <input
                                     type="number"
                                     min="1"
-                                    max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
-                                    step="1"
+                                    max={usageSettings?.maxMonthlyAITokenLimit ?? 100_000_000}
+                                    step="10000"
                                     inputMode="numeric"
                                     value={usageLimitDraftForUser}
                                     onChange={(event) => setUserUsageLimitDrafts((current) => ({ ...current, [user.id]: event.target.value }))}
                                     disabled={Boolean(userActionPending)}
-                                    aria-label={`${user.displayName} monthly AI request limit`}
+                                    aria-label={`${user.displayName} monthly AI token limit`}
                                   />
                                   <button
                                     type="button"
@@ -2197,12 +2199,12 @@ function AdminDashboard() {
                                   >
                                     {usageLimitPending ? <LoaderCircle className="logs-spin" size={12} aria-hidden /> : 'Set'}
                                   </button>
-                                  {user.aiUsageLimitOverride != null && (
+                                  {user.aiTokenLimitOverride != null && (
                                     <button
                                       type="button"
                                       onClick={() => void updateManagedUserUsageLimit(user, null)}
                                       disabled={Boolean(userActionPending)}
-                                      title="Use the default Free AI request limit"
+                                      title="Use the default Free AI token limit"
                                     >
                                       Default
                                     </button>
@@ -2247,14 +2249,14 @@ function AdminDashboard() {
                           <div className="admin-user-usage-foot">
                             <small>
                               {formatTokenCount(user.aiTokens)} AI tokens
-                              {(user.aiUsageLimitOverride != null || user.reportUsageLimitOverride != null) && tier !== 'premium' ? ' · Custom limits' : ''}
+                              {(user.aiTokenLimitOverride != null || user.reportUsageLimitOverride != null) && tier !== 'premium' ? ' · Custom limits' : ''}
                             </small>
                             <button
                               type="button"
                               className="logs-icon-btn"
                               onClick={() => void resetManagedUserUsage(user)}
-                              disabled={Boolean(userActionPending) || (user.aiCalls === 0 && user.savedReports === 0)}
-                              title={user.aiCalls === 0 && user.savedReports === 0 ? 'Usage is already at zero' : 'Reset current-month AI and generated report usage'}
+                              disabled={Boolean(userActionPending) || (user.aiTokens === 0 && user.savedReports === 0)}
+                              title={user.aiTokens === 0 && user.savedReports === 0 ? 'Usage is already at zero' : 'Reset current-month AI and generated report usage'}
                               aria-label={`Reset ${user.displayName} current-month AI and report usage`}
                             >
                               {usageResetPending ? <LoaderCircle className="logs-spin" size={13} aria-hidden /> : <RefreshCw size={13} aria-hidden />}

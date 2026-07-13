@@ -77,12 +77,12 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     || (record.unlimited !== undefined && typeof record.unlimited !== 'boolean')
     || (unlimited && record.tierKey !== 'premium')
     || (unlimited && (
-      record.limitRequests !== null
-      || record.remainingRequests !== null
+      record.limitTokens !== null
+      || record.remainingTokens !== null
       || record.percentUsed !== null
       || record.exhausted
     ))
-    || (!unlimited && [record.limitRequests, record.remainingRequests, record.percentUsed]
+    || (!unlimited && [record.limitTokens, record.remainingTokens, record.percentUsed]
       .some((field) => typeof field !== 'number' || !Number.isFinite(field)))
   ) {
     return null;
@@ -100,8 +100,8 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     return {
       ...baseUsage,
       unlimited: true,
-      limitRequests: null,
-      remainingRequests: null,
+      limitTokens: null,
+      remainingTokens: null,
       percentUsed: null,
       exhausted: false,
     };
@@ -109,8 +109,8 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
   return {
     ...baseUsage,
     unlimited: false,
-    limitRequests: record.limitRequests as number,
-    remainingRequests: record.remainingRequests as number,
+    limitTokens: record.limitTokens as number,
+    remainingTokens: record.remainingTokens as number,
     percentUsed: record.percentUsed as number,
     exhausted: record.exhausted,
   };

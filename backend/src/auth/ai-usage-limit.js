@@ -1,20 +1,35 @@
 'use strict';
 
 const {
-  DEFAULT_FREE_MONTHLY_USAGE_LIMIT,
-  MAX_FREE_MONTHLY_USAGE_LIMIT,
   getMonthlyWindow,
-  parseFreeMonthlyUsageLimit,
-  resolveFreeMonthlyUsageLimit,
-  validateFreeMonthlyUsageLimit,
 } = require('./monthly-usage-limit');
 
+const DEFAULT_FREE_MONTHLY_TOKEN_LIMIT = 250_000;
+const MAX_MONTHLY_TOKEN_LIMIT = 100_000_000;
 const AI_USAGE_SETTINGS_KEY = 'ai_usage_limits';
-const LEGACY_USAGE_SETTINGS_KEY = 'monthly_usage_limits';
+
+const parseMonthlyTokenLimit = (value, fallback = DEFAULT_FREE_MONTHLY_TOKEN_LIMIT) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_MONTHLY_TOKEN_LIMIT
+    ? Math.round(parsed)
+    : fallback;
+};
+
+const validateMonthlyTokenLimit = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_MONTHLY_TOKEN_LIMIT) {
+    const error = new TypeError(
+      `Monthly AI token limit must be between 1 and ${MAX_MONTHLY_TOKEN_LIMIT.toLocaleString()}.`,
+    );
+    error.code = 'INVALID_AI_USAGE_LIMIT';
+    throw error;
+  }
+  return Math.round(parsed);
+};
 
 class AIUsageLimitError extends Error {
   constructor(usage) {
-    super('Monthly AI request limit reached. Your allowance resets at the start of next month.');
+    super('Monthly AI token limit reached. Your allowance resets at the start of next month.');
     this.name = 'AIUsageLimitError';
     this.code = 'AI_USAGE_LIMIT_REACHED';
     this.statusCode = 429;
@@ -33,44 +48,44 @@ class AIUsageUnavailableError extends Error {
 
 const createAIUsageLimitService = ({
   database,
-  freeMonthlyUsageLimit,
+  freeMonthlyTokenLimit = process.env.AI_FREE_MONTHLY_TOKEN_LIMIT
+    || process.env.AI_USER_MONTHLY_TOKEN_LIMIT,
   settingsStore = null,
   now = Date.now,
 } = {}) => {
-  const environmentFreeLimitRequests = resolveFreeMonthlyUsageLimit(freeMonthlyUsageLimit);
-  let freeLimitRequests = environmentFreeLimitRequests;
+  const environmentFreeLimitTokens = parseMonthlyTokenLimit(freeMonthlyTokenLimit);
+  let freeLimitTokens = environmentFreeLimitTokens;
   const available = Boolean(database?.configured && typeof database.query === 'function');
 
-  const getLimitRequests = (tierKey = 'free', overrideRequests = null) => (
+  const getLimitTokens = (tierKey = 'free', overrideTokens = null) => (
     tierKey === 'premium'
       ? null
-      : parseFreeMonthlyUsageLimit(overrideRequests, freeLimitRequests)
+      : parseMonthlyTokenLimit(overrideTokens, freeLimitTokens)
   );
 
   const getSettings = () => ({
     persistent: Boolean(settingsStore?.configured),
-    freeMonthlyAIUsageLimit: freeLimitRequests,
-    environmentFreeMonthlyAIUsageLimit: environmentFreeLimitRequests,
-    maxFreeMonthlyUsageLimit: MAX_FREE_MONTHLY_USAGE_LIMIT,
+    freeMonthlyAITokenLimit: freeLimitTokens,
+    environmentFreeMonthlyAITokenLimit: environmentFreeLimitTokens,
+    maxMonthlyAITokenLimit: MAX_MONTHLY_TOKEN_LIMIT,
   });
 
   const initializeSettings = async () => {
     if (typeof settingsStore?.getAdminSetting !== 'function') return getSettings();
-    const persisted = await settingsStore.getAdminSetting(AI_USAGE_SETTINGS_KEY)
-      ?? await settingsStore.getAdminSetting(LEGACY_USAGE_SETTINGS_KEY);
-    const persistedLimit = persisted?.freeMonthlyAIUsageLimit ?? persisted?.freeMonthlyUsageLimit;
+    const persisted = await settingsStore.getAdminSetting(AI_USAGE_SETTINGS_KEY);
+    const persistedLimit = persisted?.freeMonthlyAITokenLimit ?? persisted?.freeMonthlyTokenLimit;
     if (persistedLimit !== undefined) {
-      freeLimitRequests = parseFreeMonthlyUsageLimit(
+      freeLimitTokens = parseMonthlyTokenLimit(
         persistedLimit,
-        environmentFreeLimitRequests,
+        environmentFreeLimitTokens,
       );
     }
     return getSettings();
   };
 
-  const updateSettings = async ({ freeMonthlyAIUsageLimit: nextLimit } = {}) => {
-    const validatedLimit = validateFreeMonthlyUsageLimit(nextLimit);
-    const next = { freeMonthlyAIUsageLimit: validatedLimit };
+  const updateSettings = async ({ freeMonthlyAITokenLimit: nextLimit } = {}) => {
+    const validatedLimit = validateMonthlyTokenLimit(nextLimit);
+    const next = { freeMonthlyAITokenLimit: validatedLimit };
     try {
       if (typeof settingsStore?.setAdminSetting === 'function') {
         await settingsStore.setAdminSetting(AI_USAGE_SETTINGS_KEY, next);
@@ -81,7 +96,7 @@ const createAIUsageLimitService = ({
       persistenceError.cause = error;
       throw persistenceError;
     }
-    freeLimitRequests = validatedLimit;
+    freeLimitTokens = validatedLimit;
     return getSettings();
   };
 
@@ -95,7 +110,7 @@ const createAIUsageLimitService = ({
     let result;
     try {
       policy = await database.query(`
-        SELECT limits ->> 'monthlyUsageLimit' AS limit_override_requests,
+        SELECT limits ->> 'monthlyTokenLimit' AS limit_override_tokens,
                limits ->> 'resetAt' AS usage_reset_at
         FROM entitlements
         WHERE user_id = $1
@@ -124,26 +139,26 @@ const createAIUsageLimitService = ({
 
     const usedRequests = Math.max(0, Math.round(Number(result?.rows?.[0]?.used_requests) || 0));
     const usedTokens = Math.max(0, Math.round(Number(result?.rows?.[0]?.used_tokens) || 0));
-    const limitOverrideRequests = parseFreeMonthlyUsageLimit(
-      policy?.rows?.[0]?.limit_override_requests,
+    const limitOverrideTokens = parseMonthlyTokenLimit(
+      policy?.rows?.[0]?.limit_override_tokens,
       null,
     );
     const unlimited = resolvedTierKey === 'premium';
-    const limitRequests = getLimitRequests(resolvedTierKey, limitOverrideRequests);
-    const remainingRequests = unlimited ? null : Math.max(0, limitRequests - usedRequests);
+    const limitTokens = getLimitTokens(resolvedTierKey, limitOverrideTokens);
+    const remainingTokens = unlimited ? null : Math.max(0, limitTokens - usedTokens);
     return {
       tierKey: resolvedTierKey,
       unlimited,
       usedRequests,
       usedTokens,
-      limitRequests,
-      limitSource: unlimited ? 'unlimited' : limitOverrideRequests ? 'custom' : 'default',
-      remainingRequests,
+      limitTokens,
+      limitSource: unlimited ? 'unlimited' : limitOverrideTokens ? 'custom' : 'default',
+      remainingTokens,
       percentUsed: unlimited
         ? null
-        : Math.min(100, Math.round((usedRequests / limitRequests) * 1000) / 10),
+        : Math.min(100, Math.round((usedTokens / limitTokens) * 1000) / 10),
       ...window,
-      exhausted: unlimited ? false : usedRequests >= limitRequests,
+      exhausted: unlimited ? false : usedTokens >= limitTokens,
     };
   };
 
@@ -155,9 +170,9 @@ const createAIUsageLimitService = ({
 
   return {
     available,
-    get freeLimitRequests() { return freeLimitRequests; },
-    getLimitRequests,
-    get limitRequests() { return freeLimitRequests; },
+    get freeLimitTokens() { return freeLimitTokens; },
+    getLimitTokens,
+    get limitTokens() { return freeLimitTokens; },
     assertUserCanGenerate,
     getSettings,
     getUserUsage,
@@ -169,10 +184,10 @@ const createAIUsageLimitService = ({
 module.exports = {
   AIUsageLimitError,
   AIUsageUnavailableError,
-  DEFAULT_FREE_MONTHLY_USAGE_LIMIT,
-  MAX_FREE_MONTHLY_USAGE_LIMIT,
+  DEFAULT_FREE_MONTHLY_TOKEN_LIMIT,
+  MAX_MONTHLY_TOKEN_LIMIT,
   createAIUsageLimitService,
   getMonthlyWindow,
-  parseFreeMonthlyUsageLimit,
-  validateFreeMonthlyUsageLimit,
+  parseMonthlyTokenLimit,
+  validateMonthlyTokenLimit,
 };
