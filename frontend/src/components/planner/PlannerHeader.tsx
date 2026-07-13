@@ -7,7 +7,9 @@ import {
   Compass,
 } from 'lucide-react';
 import { SearchBox } from './SearchBox';
+import { GpxObjectiveInput } from './GpxObjectiveInput';
 import type { Suggestion } from '../../lib/search';
+import type { ParsedGpxRoute } from '../../lib/gpx';
 
 export interface PlannerHeaderProps {
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
@@ -33,6 +35,8 @@ export interface PlannerHeaderProps {
   handleToggleSaveObjective: () => void;
   copiedLink: boolean;
   handleCopyLink: () => void;
+  importedGpxRoute: ParsedGpxRoute | null;
+  handleImportGpxObjective: (route: ParsedGpxRoute) => void;
 }
 
 export function PlannerHeader({
@@ -44,6 +48,7 @@ export function PlannerHeader({
   disabled = false,
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
   copiedLink, handleCopyLink,
+  importedGpxRoute, handleImportGpxObjective,
 }: PlannerHeaderProps) {
   const [saveMessage, setSaveMessage] = React.useState('');
   const saveMessageTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -88,6 +93,11 @@ export function PlannerHeader({
           onUseCoordinates={handleUseTypedCoordinates}
           onSelectSuggestion={selectSuggestion}
           onHoverSuggestion={setActiveSuggestionIndex}
+        />
+        <GpxObjectiveInput
+          selectedRoute={importedGpxRoute}
+          onImport={handleImportGpxObjective}
+          disabled={disabled}
         />
 
         {hasObjective && (

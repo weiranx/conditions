@@ -32,6 +32,7 @@ export interface RouteAnalysisSectionProps {
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatElevationDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatDistanceDisplay: (miles: number | null | undefined) => string;
+  initialGpxRoute?: ParsedGpxRoute | null;
 }
 
 export function RouteAnalysisSection({
@@ -41,15 +42,16 @@ export function RouteAnalysisSection({
   fetchRouteSuggestions, fetchRouteAnalysis,
   customRouteName, setCustomRouteName, setRouteSuggestions, setRouteError,
   getScoreColor, formatTempDisplay, formatWindDisplay, formatElevationDisplay, formatDistanceDisplay,
+  initialGpxRoute = null,
 }: RouteAnalysisSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(null);
+  const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(initialGpxRoute);
   const [gpxParsing, setGpxParsing] = useState(false);
 
   useEffect(() => {
-    setGpxRoute(null);
+    setGpxRoute(initialGpxRoute);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [objectiveName, positionLat, positionLng]);
+  }, [initialGpxRoute, objectiveName, positionLat, positionLng]);
 
   const handleGpxFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

@@ -26,7 +26,9 @@ import {
   Wind,
 } from 'lucide-react';
 import { SearchBox } from '../planner/SearchBox';
+import { GpxObjectiveInput } from '../planner/GpxObjectiveInput';
 import type { Suggestion } from '../../lib/search';
+import type { ParsedGpxRoute } from '../../lib/gpx';
 import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../../app/constants';
 import '../../styles/home-redesign.css';
 import { ProductNav } from './ProductNav';
@@ -74,6 +76,8 @@ export interface HomeViewProps {
   navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found') => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
+  importedGpxRoute: ParsedGpxRoute | null;
+  handleImportGpxObjective: (route: ParsedGpxRoute) => void;
 }
 
 export function HomeView({
@@ -110,11 +114,18 @@ export function HomeView({
   navigateToView,
   openPlannerView,
   openTripToolView,
+  importedGpxRoute,
+  handleImportGpxObjective,
 }: HomeViewProps) {
   const featureFlags = useProductFeatureFlags();
   const submitSearch = async () => {
     const didSelectObjective = await handleSearchSubmit();
     if (didSelectObjective) navigateToPlanner();
+  };
+
+  const importGpxObjective = (route: ParsedGpxRoute) => {
+    handleImportGpxObjective(route);
+    navigateToPlanner();
   };
 
   return (
@@ -161,7 +172,7 @@ export function HomeView({
 
               <div className="ssr-h-search-block">
                 <label className="ssr-h-field-label" htmlFor="location-search-input">
-                  <MapPin size={13} aria-hidden /> Objective or coordinates
+                  <MapPin size={13} aria-hidden /> Location or route
                 </label>
                 <SearchBox
                   searchWrapperRef={searchWrapperRef}
@@ -180,6 +191,10 @@ export function HomeView({
                   onUseCoordinates={handleUseTypedCoordinates}
                   onSelectSuggestion={selectSuggestion}
                   onHoverSuggestion={setActiveSuggestionIndex}
+                />
+                <GpxObjectiveInput
+                  selectedRoute={importedGpxRoute}
+                  onImport={importGpxObjective}
                 />
               </div>
 

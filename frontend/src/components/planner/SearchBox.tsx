@@ -60,11 +60,11 @@ export function SearchBox({
   const searchStatus = disabled || !showSuggestions
     ? ''
     : searchLoading
-      ? 'Searching for locations.'
+      ? 'Searching for locations and routes.'
       : trimmedSearchQuery && optionCount === 0
-        ? 'No matching locations found.'
+        ? 'No matching locations or routes found.'
         : optionCount > 0
-          ? `${optionCount} location ${optionCount === 1 ? 'option' : 'options'} available.`
+          ? `${optionCount} objective ${optionCount === 1 ? 'option' : 'options'} available.`
           : '';
 
   return (
@@ -74,7 +74,7 @@ export function SearchBox({
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search by peak, trailhead, zone, town, or coordinates"
+          placeholder="Search by peak, trail, route, town, or coordinates"
           value={searchQuery}
           inputMode="search"
           enterKeyHint="search"
@@ -87,7 +87,7 @@ export function SearchBox({
           onKeyDown={onKeyDown}
           disabled={disabled}
           role="combobox"
-          aria-label="Search location"
+          aria-label="Search location or route"
           aria-autocomplete="list"
           aria-haspopup="listbox"
           aria-expanded={!disabled && showSuggestions}
@@ -111,7 +111,7 @@ export function SearchBox({
           className="suggestions-list"
           id="planner-suggestion-list"
           role="listbox"
-          aria-label="Search suggestions"
+          aria-label="Location and route suggestions"
           aria-busy={searchLoading}
         >
           {searchLoading && (
@@ -132,7 +132,7 @@ export function SearchBox({
             </button>
           )}
           {!searchLoading && suggestions.length === 0 && trimmedSearchQuery.length > 0 && (
-            <div className="suggestion-status">No matches found. Try “Mount Elbert”, “Mt Hood”, or “39.1178 -106.4452”.</div>
+            <div className="suggestion-status">No matches found. Try “Mount Elbert”, a trail or route name, or “39.1178 -106.4452”.</div>
           )}
           {!searchLoading &&
             suggestions.map((suggestion, index) => (

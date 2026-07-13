@@ -114,6 +114,7 @@ import { useTripForecast } from './hooks/useTripForecast';
 import { useSafetyData } from './hooks/useSafetyData';
 import { useSearchSuggestions } from './hooks/useSearchSuggestions';
 import { normalizeSuggestionText } from './lib/search';
+import type { ParsedGpxRoute } from './lib/gpx';
 import { useUrlState, useSyncUrlEffect } from './hooks/useUrlState';
 import type { AppView } from './hooks/useUrlState';
 import { useDayComparisons } from './hooks/useDayComparisons';
@@ -213,6 +214,7 @@ function App() {
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
   const [objectiveName, setObjectiveName] = useState(initialLinkState.objectiveName);
+  const [importedGpxRoute, setImportedGpxRoute] = useState<ParsedGpxRoute | null>(null);
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
@@ -351,6 +353,7 @@ function App() {
     setTripForecastErrorDirect(null);
     setTripForecastNoteDirect(null);
     resetRouteState();
+    setImportedGpxRoute(null);
     // When no explicit label is supplied (a raw map click/drag, as opposed to a search
     // selection or "use current location"), always relabel as "Dropped pin" rather than
     // silently keeping a stale name (e.g. "Mount Rainier") attached to brand-new coordinates.
@@ -375,6 +378,42 @@ function App() {
   } = searchHook;
   const objectiveDraftDirty = hasObjective
     && normalizeSuggestionText(searchQuery) !== normalizeSuggestionText(committedSearchQuery);
+
+  const handleImportGpxObjective = useCallback((route: ParsedGpxRoute) => {
+    const anchor = route.checkpoints.reduce((closest, checkpoint) => (
+      Math.abs(checkpoint.progress_percent - 50) < Math.abs(closest.progress_percent - 50)
+        ? checkpoint
+        : closest
+    ));
+    const label = route.name || route.fileName.replace(/\.gpx$/i, '') || 'Imported GPX route';
+
+    updateObjectivePosition(new L.LatLng(anchor.lat, anchor.lon), label);
+    setImportedGpxRoute(route);
+    setSearchInputValue(label);
+    setCommittedSearchQuery(label);
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+    if (typeof anchor.elev_ft === 'number' && Number.isFinite(anchor.elev_ft)) {
+      const displayElevation = convertElevationFeetToDisplayValue(anchor.elev_ft, preferences.elevationUnit);
+      setTargetElevationInput(String(Math.round(displayElevation)));
+      setTargetElevationManual(true);
+    }
+    recordRecentSuggestion({
+      name: label,
+      lat: anchor.lat,
+      lon: anchor.lon,
+      class: 'recent',
+      type: 'route',
+    });
+  }, [
+    preferences.elevationUnit,
+    recordRecentSuggestion,
+    setActiveSuggestionIndex,
+    setCommittedSearchQuery,
+    setSearchInputValue,
+    setShowSuggestions,
+    updateObjectivePosition,
+  ]);
 
   const handleToggleSaveObjective = useCallback(() => {
     handleToggleSaveObjectiveRaw({ hasObjective, objectiveName, position });
@@ -421,6 +460,7 @@ function App() {
       setPosition(linkState.position);
       setHasObjective(linkState.hasObjective);
       setObjectiveName(linkState.objectiveName);
+      setImportedGpxRoute(null);
       setSearchInputValue(linkState.searchQuery);
       setCommittedSearchQuery(linkState.searchQuery);
       setForecastDate(linkState.forecastDate);
@@ -1707,6 +1747,8 @@ function App() {
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
+        importedGpxRoute={importedGpxRoute}
+        handleImportGpxObjective={handleImportGpxObjective}
       />
       </React.Activity>
 
@@ -1771,6 +1813,8 @@ function App() {
       handleUseTypedCoordinates={handleUseTypedCoordinates}
       selectSuggestion={selectSuggestion}
       setActiveSuggestionIndex={setActiveSuggestionIndex}
+      importedGpxRoute={importedGpxRoute}
+      handleImportGpxObjective={handleImportGpxObjective}
       // Header controls
       hasObjective={hasObjective}
       objectiveDraftDirty={objectiveDraftDirty}

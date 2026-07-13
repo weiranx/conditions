@@ -34,6 +34,7 @@ import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../
 import type { AppView } from '../../hooks/useUrlState';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
 import type { Suggestion } from '../../lib/search';
+import type { ParsedGpxRoute } from '../../lib/gpx';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
 import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecast } from '../../app/types';
 import type { FreshnessRow as SourceFreshnessRow } from '../../app/source-freshness-display';
@@ -75,6 +76,8 @@ export interface PlannerViewProps {
   handleUseTypedCoordinates: (value: string) => void;
   selectSuggestion: (suggestion: Suggestion) => void;
   setActiveSuggestionIndex: (index: number) => void;
+  importedGpxRoute: ParsedGpxRoute | null;
+  handleImportGpxObjective: (route: ParsedGpxRoute) => void;
 
   // Header controls
   hasObjective: boolean;
@@ -479,6 +482,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
     handleUseTypedCoordinates,
     selectSuggestion,
     setActiveSuggestionIndex,
+    importedGpxRoute,
+    handleImportGpxObjective,
 
     // Header
     hasObjective,
@@ -636,6 +641,9 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleUseTypedCoordinates={handleUseTypedCoordinates}
         selectSuggestion={selectSuggestion}
         setActiveSuggestionIndex={setActiveSuggestionIndex}
+        importedGpxRoute={importedGpxRoute}
+        handleImportGpxObjective={handleImportGpxObjective}
+        disabled={reportLocked}
         hasObjective={objectiveReady}
         objectiveIsSaved={objectiveIsSaved}
         handleToggleSaveObjective={handleToggleSaveObjective}
@@ -783,6 +791,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
                 formatWindDisplay={formatWindDisplay}
                 formatElevationDisplay={formatElevationDisplay}
                 formatDistanceDisplay={formatDistanceDisplay}
+                initialGpxRoute={importedGpxRoute}
               />
             </React.Suspense>
           )}
