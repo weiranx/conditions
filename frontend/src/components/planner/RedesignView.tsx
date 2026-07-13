@@ -33,6 +33,7 @@ import { getTemperatureBand } from '../../app/weather-display';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
+import { WeatherTrendMiniChart } from './WeatherTrendMiniChart';
 import { WindDirectionArrow } from './WindDirectionArrow';
 import { StartTimeScenarioCard } from './StartTimeScenarioCard';
 import { HeatRiskSection } from './HeatRiskSection';
@@ -514,9 +515,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     weatherCardDewPoint,
     weatherCardPressureLabel,
     weatherPressureTrendSummary,
+    weatherPressureContextLine,
     weatherCardCloudCoverLabel,
     weatherCardWindDirection,
     weatherVisibilityScoreLabel,
+    weatherVisibilityActiveWindowText,
+    weatherVisibilityScoreMeaning,
+    weatherVisibilityContextLine,
     weatherVisibilityRisk,
     weatherForecastPeriodLabel,
     forecastLeadHoursDisplay,
@@ -526,6 +531,19 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     weatherConditionEmojiValue,
     weatherPreviewActive,
     weatherCardDisplayTime,
+    weatherTrendChartData,
+    weatherTrendHasData,
+    weatherTrendMetric,
+    weatherTrendMetricLabel,
+    weatherTrendMetricOptions,
+    weatherTrendLineColor,
+    weatherTrendTickFormatter,
+    formatWeatherTrendValue,
+    onTrendMetricChange,
+    selectedWeatherHourValue,
+    safeWeatherLink,
+    weatherLinkCta,
+    weatherSourceDisplay,
     // Heat risk
     heatRiskLabel,
     heatRiskPillClass,
@@ -1111,7 +1129,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* WEATHER */}
-        <section className="ssr-card" id="planner-section-weather">
+        <section className="ssr-card ssr-weather-card" id="planner-section-weather">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-blue"><Thermometer size={16} /></span>
@@ -1126,13 +1144,21 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           <div className="ssr-card-b">
             <div className="ssr-wx-overview">
               <div className={`ssr-wx-hero${temperatureBand ? ` temp-${temperatureBand.key}` : ''}`}>
-                <span className="ssr-wx-temp">{formatTempDisplay(weatherCardTemp)}</span>
-                <div className="ssr-wx-hero-meta">
-                  <span className="ssr-wx-cond">{weatherCardWithEmoji}</span>
-                  {temperatureBand && <span className="ssr-wx-temp-band">{temperatureBand.label}</span>}
-                  <span className="ssr-wx-feels">Feels like {formatTempDisplay(weatherCardFeelsLike)}</span>
-                  {weatherForecastPeriodLabel && <span className="ssr-wx-period">{weatherForecastPeriodLabel}</span>}
+                <span className="ssr-wx-moment">
+                  {weatherPreviewActive ? 'Previewing' : 'At planned start'}
+                  {weatherCardDisplayTime ? ` · ${weatherCardDisplayTime}` : ''}
+                </span>
+                <div className="ssr-wx-hero-reading">
+                  <span className="ssr-wx-temp">{formatTempDisplay(weatherCardTemp)}</span>
+                  <div className="ssr-wx-hero-meta">
+                    <span className="ssr-wx-cond">{weatherCardWithEmoji}</span>
+                    <div className="ssr-wx-hero-tags">
+                      {temperatureBand && <span className="ssr-wx-temp-band">{temperatureBand.label}</span>}
+                      <span className="ssr-wx-feels">Feels {formatTempDisplay(weatherCardFeelsLike)}</span>
+                    </div>
+                  </div>
                 </div>
+                {weatherForecastPeriodLabel && <span className="ssr-wx-period">{weatherForecastPeriodLabel}</span>}
               </div>
               <div className="ssr-wx-priority" aria-label="Weather at a glance">
                 <div className="ssr-wx-priority-item">
@@ -1167,6 +1193,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             </div>
             {weatherHourQuickOptions.length > 1 && (
               <div className="ssr-wx-hours">
+                <div className="ssr-wx-section-head">
+                  <div>
+                    <span className="ssr-wx-eyebrow">Hourly forecast</span>
+                    <strong>Select an hour to preview conditions</strong>
+                  </div>
+                  {weatherPreviewActive && <span className="ssr-wx-preview-badge">Preview active</span>}
+                </div>
                 <WeatherHourPillStrip
                   options={weatherHourQuickOptions}
                   selectedIndex={selectedWeatherHourIndex}
@@ -1175,6 +1208,19 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 />
               </div>
             )}
+            {weatherTrendHasData && (
+              <WeatherTrendMiniChart
+                data={weatherTrendChartData}
+                metric={weatherTrendMetric}
+                metricLabel={weatherTrendMetricLabel}
+                metricOptions={weatherTrendMetricOptions}
+                lineColor={weatherTrendLineColor}
+                selectedHourValue={selectedWeatherHourValue}
+                formatTick={weatherTrendTickFormatter}
+                formatValue={formatWeatherTrendValue}
+                onMetricChange={onTrendMetricChange}
+              />
+            )}
             <div className="ssr-wx-section-label">Supporting readings</div>
             <div className="ssr-wx-grid">
               <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
@@ -1182,12 +1228,34 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               <div className="ssr-wx-cell"><span className="ssr-k">Pressure</span><span className="ssr-v">{weatherCardPressureLabel || '—'}</span></div>
               <div className="ssr-wx-cell"><span className="ssr-k">Cloud cover</span><span className="ssr-v">{weatherCardCloudCoverLabel || '—'}</span></div>
             </div>
-            {weatherPressureTrendSummary && (
-              <p className="ssr-wx-note">{localizeUnitText(weatherPressureTrendSummary)}</p>
-            )}
-            {visibilityElevated && (
-              <p className="ssr-wx-vis"><Eye size={13} /> Visibility risk: <b>{weatherVisibilityRisk.level}</b>{weatherVisibilityScoreLabel ? ` · ${weatherVisibilityScoreLabel}` : ''}</p>
-            )}
+            <div className="ssr-wx-context" aria-label="Forecast context">
+              <div className="ssr-wx-context-item">
+                <span className="ssr-wx-context-icon"><Thermometer size={14} /></span>
+                <span>
+                  <strong>Pressure context</strong>
+                  <small>{localizeUnitText(weatherPressureTrendSummary || weatherPressureContextLine)}</small>
+                </span>
+              </div>
+              <div className={`ssr-wx-context-item ${visibilityTone}`}>
+                <span className="ssr-wx-context-icon"><Eye size={14} /></span>
+                <span>
+                  <strong>
+                    Visibility · {weatherVisibilityRisk.level || 'Unknown'}
+                    {weatherVisibilityScoreLabel && weatherVisibilityScoreLabel !== 'N/A' ? ` · ${weatherVisibilityScoreLabel}` : ''}
+                  </strong>
+                  <small>{weatherVisibilityContextLine || weatherVisibilityScoreMeaning}</small>
+                  {weatherVisibilityActiveWindowText && <em>{weatherVisibilityActiveWindowText}</em>}
+                </span>
+              </div>
+            </div>
+            <div className="ssr-wx-source">
+              <span>Forecast source · <strong>{weatherSourceDisplay}</strong></span>
+              {safeWeatherLink && (
+                <a href={safeWeatherLink} target="_blank" rel="noreferrer">
+                  {weatherLinkCta} <ExternalLink size={12} aria-hidden />
+                </a>
+              )}
+            </div>
           </div>
         </section>
 
