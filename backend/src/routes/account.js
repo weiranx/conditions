@@ -25,6 +25,7 @@ const registerAccountRoutes = ({
   service = createAccountService({ database }),
   tierService,
   usageService,
+  reportUsageService,
   googleVerifier = createGoogleIdentityVerifier(),
 } = {}) => {
   const cookieOptions = {
@@ -86,10 +87,20 @@ const registerAccountRoutes = ({
       return null;
     }
   };
+  const getReportUsage = async (req, user, accountTier) => {
+    if (!user || !reportUsageService?.available || typeof reportUsageService.getUserUsage !== 'function') return null;
+    try {
+      return await reportUsageService.getUserUsage(user.id, accountTier?.key);
+    } catch (error) {
+      req.log?.warn({ err: error, userId: user.id }, 'Account report usage could not be loaded');
+      return null;
+    }
+  };
   const accountResponse = async (req, user, available = true) => {
-    const [accountTier, reportCount] = await Promise.all([
-      getAccountTier(req, user),
+    const accountTier = await getAccountTier(req, user);
+    const [reportCount, reportUsage] = await Promise.all([
       getReportCount(req, user),
+      getReportUsage(req, user, accountTier),
     ]);
     return {
       available,
@@ -97,6 +108,7 @@ const registerAccountRoutes = ({
       user,
       accountTier,
       reportCount,
+      reportUsage,
       aiUsage: await getAIUsage(req, user, accountTier),
     };
   };
@@ -142,6 +154,7 @@ const registerAccountRoutes = ({
         user: null,
         accountTier: null,
         reportCount: null,
+        reportUsage: null,
         aiUsage: null,
       });
     }
@@ -232,6 +245,7 @@ const registerAccountRoutes = ({
         user: null,
         accountTier: null,
         reportCount: null,
+        reportUsage: null,
         aiUsage: null,
       });
     } catch (error) {

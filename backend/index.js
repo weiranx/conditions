@@ -53,6 +53,7 @@ const { registerAccountRoutes } = require('./src/routes/account');
 const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
+const { createReportUsageLimitService } = require('./src/auth/report-usage-limit');
 const { createAccountTierService } = require('./src/auth/account-tier');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
@@ -799,14 +800,22 @@ registerSearchRoutes({
 registerFeatureFlagRoutes(app);
 const accountTierService = createAccountTierService({ database });
 const aiUsageLimitService = createAIUsageLimitService({ database });
+const reportUsageLimitService = createReportUsageLimitService({ database });
 const accountService = registerAccountRoutes({
   app,
   database,
   isProduction: IS_PRODUCTION,
   tierService: accountTierService,
   usageService: aiUsageLimitService,
+  reportUsageService: reportUsageLimitService,
 });
-registerSavedReportRoutes({ app, database, accountService });
+registerSavedReportRoutes({
+  app,
+  database,
+  accountService,
+  tierService: accountTierService,
+  reportUsageService: reportUsageLimitService,
+});
 const ensureAccountAccess = createAccountAccessGuard({
   service: accountService,
   tierService: accountTierService,

@@ -135,6 +135,7 @@ export function AccountView({
 
   const errorMessage = formError || account.error;
   const isPremium = account.tier?.key === 'premium';
+  const reportUsage = account.reportUsage;
   const planPeriodEnd = account.tier?.currentPeriodEnd
     ? formatPlanPeriod(account.tier.currentPeriodEnd)
     : null;
@@ -163,7 +164,7 @@ export function AccountView({
           <p className="account-eyebrow">Your account</p>
           <h1 id="account-title">A secure home for your profile.</h1>
           <p className="account-lede">
-            Every account starts on Free, with saved preferences, report history, and AI tools. Premium adds a larger monthly AI allowance.
+            Every account starts on Free, with saved preferences, report history, and AI tools. Premium adds unlimited AI and reports.
           </p>
           <div className="account-benefits" aria-label="Account details">
             <span><ShieldCheck aria-hidden /> Verified Google or password sign-in</span>
@@ -197,10 +198,22 @@ export function AccountView({
               <section className="account-report-counter" aria-label="Generated report count">
                 <FileText aria-hidden />
                 <div>
-                  <strong>{account.reportCount?.toLocaleString() ?? '—'}</strong>
-                  <span>{account.reportCount === 1 ? 'Report generated' : 'Reports generated'}</span>
+                  <strong>
+                    {reportUsage?.unlimited
+                      ? account.reportCount?.toLocaleString() ?? '—'
+                      : reportUsage
+                        ? `${reportUsage.usedReports.toLocaleString()} / ${reportUsage.limitReports.toLocaleString()}`
+                        : account.reportCount?.toLocaleString() ?? '—'}
+                  </strong>
+                  <span>{reportUsage?.unlimited ? 'Reports generated' : 'Reports this month'}</span>
                 </div>
-                <small>{isPremium ? 'Unlimited reports' : 'Saved in history'}</small>
+                <small>
+                  {reportUsage?.unlimited
+                    ? 'Unlimited reports'
+                    : reportUsage
+                      ? `${reportUsage.remainingReports.toLocaleString()} remaining · resets ${formatUsageReset(reportUsage.resetAt)}`
+                      : 'Monthly allowance'}
+                </small>
               </section>
               <div className="account-profile-note">
                 <ShieldCheck aria-hidden />
@@ -220,14 +233,16 @@ export function AccountView({
                 <p>
                   {isPremium
                     ? 'All Free features, with unlimited AI tools and report generation.'
-                    : 'Account sync, report history, and a monthly allowance for AI-powered planning.'}
+                    : 'Account sync, report history, and monthly allowances for reports and AI-powered planning.'}
                 </p>
                 <ul aria-label={`${account.tier?.label || 'Free'} plan features`}>
                   <li>
                     <Check aria-hidden />
                     {isPremium
                       ? 'Unlimited report generation and history'
-                      : 'Preferences and reports saved to your account'}
+                      : reportUsage?.limitReports != null
+                        ? `${reportUsage.limitReports.toLocaleString()} generated reports each month with synced history`
+                        : 'Monthly report allowance with synced history'}
                   </li>
                   <li>
                     <Check aria-hidden />

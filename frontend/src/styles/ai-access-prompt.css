@@ -83,6 +83,66 @@
   border-top: 1px solid var(--ui-line);
 }
 
+.ai-access-limit {
+  display: grid;
+  gap: 14px;
+  padding-top: 20px;
+}
+
+.ai-access-limit-summary,
+.ai-access-limit-upgrade {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface-subtle);
+}
+
+.ai-access-limit-summary > svg,
+.ai-access-limit-upgrade > svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  color: var(--ui-brand);
+}
+
+.ai-access-limit-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-access-limit-summary strong {
+  font-size: 0.82rem;
+}
+
+.ai-access-limit-summary span,
+.ai-access-limit-upgrade span {
+  color: var(--ui-text-2);
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.ai-access-limit-upgrade {
+  border-color: color-mix(in oklch, var(--ui-brand) 40%, var(--ui-line));
+  background: color-mix(in oklch, var(--ui-brand-soft) 70%, var(--ui-surface));
+}
+
+.ai-access-limit-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.ai-access-limit-actions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font: 700 0.83rem/1 var(--font-sans);
+  cursor: pointer;
+}
+
 .ai-access-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -206,7 +206,9 @@ function App() {
   const featureFlags = useProductFeatureFlags();
   const {
     loading: accountLoading,
+    recordReportGenerated,
     refreshAccount,
+    reportUsage: accountReportUsage,
     savePreferences: saveAccountPreferences,
     user: accountUser,
   } = useAccount();
@@ -318,9 +320,12 @@ function App() {
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
   const handleNewReportGenerated = useCallback(() => {
-    if (accountUser) return;
+    if (accountUser) {
+      recordReportGenerated();
+      return;
+    }
     setGuestReportCount((currentCount) => incrementGuestReportCount(currentCount));
-  }, [accountUser]);
+  }, [accountUser, recordReportGenerated]);
 
   useEffect(() => {
     const syncGuestReportCount = (event: StorageEvent) => {
@@ -694,10 +699,15 @@ function App() {
     return false;
   }, [accountUser]);
   const requestNewReportAccess = useCallback(() => {
-    if (accountUser || guestReportCount < GUEST_REPORT_LIMIT) return true;
-    setAccountAccessReason('report-limit');
+    if (accountUser) {
+      if (!accountReportUsage?.exhausted) return true;
+      setAccountAccessReason('account-report-limit');
+      return false;
+    }
+    if (guestReportCount < GUEST_REPORT_LIMIT) return true;
+    setAccountAccessReason('guest-report-limit');
     return false;
-  }, [accountUser, guestReportCount]);
+  }, [accountReportUsage?.exhausted, accountUser, guestReportCount]);
   const aiAccessContextValue = useMemo(() => ({ requestAiAccess }), [requestAiAccess]);
   const closeAccountAccessPrompt = useCallback(() => setAccountAccessReason(null), []);
 
@@ -2722,6 +2732,10 @@ function App() {
       <AiAccessPrompt
         reason={accountAccessReason}
         onClose={closeAccountAccessPrompt}
+        onOpenAccount={() => {
+          closeAccountAccessPrompt();
+          navigateToView('account');
+        }}
         preferences={preferences}
       />
     </AiAccessContext.Provider>

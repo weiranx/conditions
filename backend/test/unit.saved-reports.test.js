@@ -13,6 +13,18 @@ const USER_ID = '8c696be4-e175-4b6a-965b-82bdf3758e0c';
 const REPORT_ID = '510b78d9-dae0-42aa-bad3-6be54a49625c';
 const SHARE_TOKEN = 'aB3dE5fG7hJ9kL2mN4pQ6rSt';
 const CREATED_AT = new Date('2026-07-13T08:00:00.000Z');
+const REPORT_USAGE = {
+  tierKey: 'free',
+  unlimited: false,
+  usedReports: 1,
+  limitReports: 50,
+  remainingReports: 49,
+  percentUsed: 2,
+  periodStart: '2026-07-01T00:00:00.000Z',
+  periodEnd: '2026-08-01T00:00:00.000Z',
+  resetAt: '2026-08-01T00:00:00.000Z',
+  exhausted: false,
+};
 const SNAPSHOT = {
   version: 2,
   savedAt: '2026-07-13T08:00:00.000Z',
@@ -41,9 +53,21 @@ const SNAPSHOT = {
   },
 };
 
-const makeApp = ({ query = jest.fn(), user = { id: USER_ID } } = {}) => {
+const makeApp = ({
+  query = jest.fn(),
+  user = { id: USER_ID },
+  reportUsageService,
+  tierService,
+} = {}) => {
   const app = express();
   app.use(express.json({ limit: '5mb' }));
+  const resolvedReportUsageService = reportUsageService || {
+    available: true,
+    consumeReportSlot: jest.fn(async (_userId, _tierKey, createReport) => ({
+      result: await createReport(query),
+      reportUsage: REPORT_USAGE,
+    })),
+  };
   registerSavedReportRoutes({
     app,
     database: { configured: true, query },
@@ -51,6 +75,8 @@ const makeApp = ({ query = jest.fn(), user = { id: USER_ID } } = {}) => {
       available: true,
       getUserForSession: jest.fn().mockResolvedValue(user),
     },
+    reportUsageService: resolvedReportUsageService,
+    tierService,
   });
   return app;
 };
@@ -91,6 +117,7 @@ test('saves a new report with every AI section under the signed-in user', async 
     createdAt: CREATED_AT.toISOString(),
     updatedAt: CREATED_AT.toISOString(),
   });
+  expect(response.body.reportUsage).toEqual(REPORT_USAGE);
   const [sql, params] = query.mock.calls[0];
   expect(sql).toContain('INSERT INTO saved_reports');
   expect(params[0]).toBe(USER_ID);
@@ -99,6 +126,51 @@ test('saves a new report with every AI section under the signed-in user', async 
   const stored = JSON.parse(params[3]);
   expect(stored.ai).toEqual(SNAPSHOT.ai);
   expect(stored.route.routeAnalysis.analysis).toBe('AI route analysis');
+});
+
+test('enforces the Free monthly report limit before inserting history', async () => {
+  const query = jest.fn();
+  const limitError = Object.assign(new Error('Monthly report limit reached.'), {
+    code: 'REPORT_USAGE_LIMIT_REACHED',
+    usage: { ...REPORT_USAGE, usedReports: 50, remainingReports: 0, percentUsed: 100, exhausted: true },
+  });
+  const consumeReportSlot = jest.fn().mockRejectedValue(limitError);
+  const response = await request(makeApp({
+    query,
+    reportUsageService: { available: true, consumeReportSlot },
+  }))
+    .post('/api/account/reports')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
+  expect(response.status).toBe(429);
+  expect(response.body).toEqual({
+    error: 'Monthly report limit reached.',
+    code: 'REPORT_USAGE_LIMIT_REACHED',
+    reportUsage: limitError.usage,
+  });
+  expect(query).not.toHaveBeenCalled();
+});
+
+test('keeps Premium report creation unlimited', async () => {
+  const query = jest.fn().mockResolvedValue({
+    rows: [{ id: REPORT_ID, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
+  });
+  const consumeReportSlot = jest.fn(async (_userId, _tierKey, createReport) => ({
+    result: await createReport(query),
+    reportUsage: { ...REPORT_USAGE, tierKey: 'premium', unlimited: true, limitReports: null, remainingReports: null },
+  }));
+  const response = await request(makeApp({
+    query,
+    reportUsageService: { available: true, consumeReportSlot },
+    tierService: { getAccountTier: jest.fn().mockResolvedValue({ key: 'premium' }) },
+  }))
+    .post('/api/account/reports')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
+  expect(response.status).toBe(201);
+  expect(consumeReportSlot).toHaveBeenCalledWith(USER_ID, 'premium', expect.any(Function));
 });
 
 test('lists compact report history without returning full snapshots', async () => {

@@ -2,6 +2,8 @@
 
 const { randomBytes } = require('crypto');
 const { readSessionToken } = require('../auth/account-access');
+const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
+const { createReportUsageLimitService } = require('../auth/report-usage-limit');
 
 const MAX_SAVED_REPORT_BYTES = 4 * 1024 * 1024;
 const SAVED_REPORT_LIST_LIMIT = 100;
@@ -59,7 +61,13 @@ const mapSavedReportSummary = (row) => ({
   updatedAt: normalizeTimestamp(row.updated_at),
 });
 
-const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
+const registerSavedReportRoutes = ({
+  app,
+  database,
+  accountService,
+  tierService,
+  reportUsageService = createReportUsageLimitService({ database }),
+} = {}) => {
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
 
   const requireUser = async (req, res) => {
@@ -88,9 +96,29 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
     return false;
   };
 
+  const getAccountTier = async (req, user) => {
+    if (typeof tierService?.getAccountTier !== 'function') return { ...FREE_ACCOUNT_TIER };
+    try {
+      return await tierService.getAccountTier(user.id);
+    } catch (error) {
+      req.log?.warn({ err: error, userId: user.id }, 'Saved report account tier could not be loaded');
+      return { ...FREE_ACCOUNT_TIER };
+    }
+  };
+
   const handleError = (req, res, error) => {
     if (error instanceof SavedReportValidationError) {
       return res.status(error.statusCode).json({ error: error.message });
+    }
+    if (error?.code === 'REPORT_USAGE_LIMIT_REACHED') {
+      return res.status(429).json({
+        error: error.message,
+        code: error.code,
+        reportUsage: error.usage,
+      });
+    }
+    if (error?.code === 'REPORT_USAGE_UNAVAILABLE') {
+      return res.status(503).json({ error: error.message, code: error.code });
     }
     req.log?.error({ err: error }, 'Saved report request failed');
     return res.status(500).json({ error: 'Report history request failed. Please try again.' });
@@ -191,12 +219,23 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
     if (!user || !ensureDatabase(res)) return;
     try {
       const normalized = normalizeSavedReport(req.body?.report);
+      if (!reportUsageService?.available || typeof reportUsageService.consumeReportSlot !== 'function') {
+        return res.status(503).json({
+          error: 'Report usage is temporarily unavailable. Please try again later.',
+          code: 'REPORT_USAGE_UNAVAILABLE',
+        });
+      }
+      const accountTier = await getAccountTier(req, user);
       const shareToken = createShareToken();
-      const result = await database.query(`
-        INSERT INTO saved_reports (user_id, share_token, title, report)
-        VALUES ($1, $2, $3, $4::jsonb)
-        RETURNING id, share_token, title, created_at, updated_at
-      `, [user.id, shareToken, normalized.title, normalized.serialized]);
+      const { result, reportUsage } = await reportUsageService.consumeReportSlot(
+        user.id,
+        accountTier.key,
+        (query) => query(`
+          INSERT INTO saved_reports (user_id, share_token, title, report)
+          VALUES ($1, $2, $3, $4::jsonb)
+          RETURNING id, share_token, title, created_at, updated_at
+        `, [user.id, shareToken, normalized.title, normalized.serialized]),
+      );
       const row = result.rows[0];
       return res.status(201).json({
         report: {
@@ -206,6 +245,7 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
           createdAt: normalizeTimestamp(row.created_at),
           updatedAt: normalizeTimestamp(row.updated_at),
         },
+        reportUsage,
       });
     } catch (error) {
       return handleError(req, res, error);

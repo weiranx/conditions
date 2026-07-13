@@ -1,23 +1,32 @@
 import React from 'react';
-import { FileText, KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
+import { Crown, FileText, KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
 import type { UserPreferences } from '../app/types';
 import { useAccount } from '../hooks/useAccount';
 import { GoogleSignInButton } from './account/GoogleSignInButton';
 import '../styles/ai-access-prompt.css';
 
-export type AccountAccessReason = 'ai' | 'report-limit';
+export type AccountAccessReason = 'ai' | 'guest-report-limit' | 'account-report-limit';
 
 interface AiAccessPromptProps {
   reason: AccountAccessReason | null;
   onClose: () => void;
+  onOpenAccount: () => void;
   preferences: UserPreferences;
 }
 
 type AuthMode = 'signin' | 'create';
 
+const formatReportReset = (value?: string) => {
+  const parsed = new Date(value || '');
+  return Number.isNaN(parsed.getTime())
+    ? 'at the start of next month'
+    : `on ${parsed.toLocaleDateString([], { month: 'long', day: 'numeric', timeZone: 'UTC' })}`;
+};
+
 export function AiAccessPrompt({
   reason,
   onClose,
+  onOpenAccount,
   preferences,
 }: AiAccessPromptProps) {
   const account = useAccount();
@@ -29,12 +38,21 @@ export function AiAccessPrompt({
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
   const open = reason !== null;
-  const reportLimitReached = reason === 'report-limit';
+  const guestReportLimitReached = reason === 'guest-report-limit';
+  const accountReportLimitReached = reason === 'account-report-limit';
+  const reportLimitReached = guestReportLimitReached || accountReportLimitReached;
+  const resetAt = formatReportReset(account.reportUsage?.resetAt);
   const eyebrow = reportLimitReached ? 'Free report limit reached' : 'Free with an account';
-  const title = reportLimitReached ? 'Sign in to create more reports' : 'AI is free to use';
-  const description = reportLimitReached
-    ? 'You have used the 10 reports available without an account in this browser. Sign in or create an account below to continue planning.'
-    : 'AI features are free to use, but you need an account. Sign in or create one below to use AI analysis, report chat, snow imagery insights, and route assistance.';
+  const title = accountReportLimitReached
+    ? 'You’ve reached this month’s report limit'
+    : guestReportLimitReached
+      ? 'Sign in to create more reports'
+      : 'AI is free to use';
+  const description = accountReportLimitReached
+    ? `Your Free report allowance resets ${resetAt}. Premium accounts can generate unlimited reports.`
+    : guestReportLimitReached
+      ? 'You have used the 10 reports available without an account in this browser. Sign in or create an account below to continue planning.'
+      : 'AI features are free to use, but you need an account. Sign in or create one below to use AI analysis, report chat, snow imagery insights, and route assistance.';
 
   React.useEffect(() => {
     if (!open) {
@@ -125,7 +143,31 @@ export function AiAccessPrompt({
         <p id="ai-access-description">{description}</p>
 
         <div className="ai-access-account" aria-live="polite">
-          {account.loading ? (
+          {accountReportLimitReached ? (
+            <div className="ai-access-limit">
+              <div className="ai-access-limit-summary">
+                <FileText aria-hidden />
+                <div>
+                  <strong>
+                    {account.reportUsage?.usedReports.toLocaleString() ?? 'All'}
+                    {account.reportUsage?.limitReports != null
+                      ? ` of ${account.reportUsage.limitReports.toLocaleString()}`
+                      : ''}
+                    {' '}reports used
+                  </strong>
+                  <span>Monthly usage resets {resetAt}.</span>
+                </div>
+              </div>
+              <div className="ai-access-limit-upgrade">
+                <Crown aria-hidden />
+                <span>Premium includes unlimited report generation and history.</span>
+              </div>
+              <div className="ai-access-limit-actions">
+                <button type="button" className="ai-access-primary" onClick={onOpenAccount}>View account</button>
+                <button type="button" className="ai-access-secondary" onClick={onClose}>Close</button>
+              </div>
+            </div>
+          ) : account.loading ? (
             <div className="ai-access-status" role="status">
               <LoaderCircle className="ai-access-spinner" aria-hidden />
               <span>Checking account availability…</span>

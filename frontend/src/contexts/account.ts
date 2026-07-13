@@ -44,6 +44,31 @@ export type AccountAIUsage = AccountAIUsageBase & (
   }
 );
 
+interface AccountReportUsageBase {
+  tierKey: AccountTierKey;
+  usedReports: number;
+  periodStart: string;
+  periodEnd: string;
+  resetAt: string;
+  exhausted: boolean;
+}
+
+export type AccountReportUsage = AccountReportUsageBase & (
+  | {
+    unlimited: true;
+    limitReports: null;
+    remainingReports: null;
+    percentUsed: null;
+    exhausted: false;
+  }
+  | {
+    unlimited: false;
+    limitReports: number;
+    remainingReports: number;
+    percentUsed: number;
+  }
+);
+
 export type PreferenceSyncState = 'idle' | 'saving' | 'saved' | 'error';
 
 export interface GoogleAuthConfig {
@@ -58,6 +83,7 @@ export interface AccountContextValue {
   user: AccountUser | null;
   tier: AccountTier | null;
   reportCount: number | null;
+  reportUsage: AccountReportUsage | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
@@ -78,6 +104,7 @@ export interface AccountContextValue {
   }) => Promise<AccountUser | null>;
   signOut: () => Promise<AccountUser | null>;
   refreshAccount: () => Promise<AccountUser | null>;
+  recordReportGenerated: () => void;
   savePreferences: (preferences: UserPreferences) => Promise<AccountUser>;
 }
 
