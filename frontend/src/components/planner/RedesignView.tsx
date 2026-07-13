@@ -546,8 +546,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     formatWeatherTrendValue,
     onTrendMetricChange,
     selectedWeatherHourValue,
-    safeWeatherLink,
-    weatherLinkCta,
     weatherSourceDisplay,
     // Heat risk
     heatRiskLabel,
@@ -608,6 +606,10 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   if (!safetyData || !decision) return null;
 
   const maxGustMph = preferences.maxWindGustMph || 35;
+  const weatherLinkLat = safetyData.location?.lat ?? position.lat;
+  const weatherLinkLon = safetyData.location?.lon ?? position.lng;
+  const weatherGovLink = `https://forecast.weather.gov/MapClick.php?lat=${weatherLinkLat.toFixed(5)}&lon=${weatherLinkLon.toFixed(5)}`;
+  const windyLink = `https://www.windy.com/?${weatherLinkLat.toFixed(5)},${weatherLinkLon.toFixed(5)},12`;
 
   const region = safetyData.location
     ? `${safetyData.location.lat.toFixed(4)}°, ${safetyData.location.lon.toFixed(4)}°`
@@ -1386,11 +1388,12 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             </div>
             <div className="ssr-wx-source">
               <span>Forecast source · <strong>{weatherSourceDisplay}</strong></span>
-              {safeWeatherLink && (
-                <a href={safeWeatherLink} target="_blank" rel="noreferrer">
-                  {weatherLinkCta} <ExternalLink size={12} aria-hidden />
-                </a>
-              )}
+              <a href={weatherGovLink} target="_blank" rel="noreferrer">
+                Weather.gov forecast <ExternalLink size={12} aria-hidden />
+              </a>
+              <a href={windyLink} target="_blank" rel="noreferrer">
+                Windy map <ExternalLink size={12} aria-hidden />
+              </a>
             </div>
           </div>
         </section>
