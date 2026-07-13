@@ -1,23 +1,66 @@
 import {
-  Thermometer,
-  Wind,
-  CloudRain,
   CheckCircle2,
-  Sparkles,
-  LoaderCircle,
-  Sun,
-  ShieldCheck,
+  CloudRain,
+  Compass,
   Database,
+  LoaderCircle,
+  ShieldCheck,
+  Snowflake,
+  Sparkles,
+  Sun,
+  Sunrise,
+  TriangleAlert,
+  Wind,
 } from 'lucide-react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
 import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
+import {
+  formatAgeFromNow,
+  parseSolarClockMinutes,
+  parseTimeInputMinutes,
+} from '../../app/core';
 import { formatAiBriefSections } from '../../app/text-utils';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
 
-const GAUGE_R = 56;
-const GAUGE_C = 2 * Math.PI * GAUGE_R; // ≈ 351.86
+type BriefSignalTone = 'positive' | 'caution' | 'neutral';
+
+interface BriefSignal {
+  title: string;
+  detail: string;
+  tag: string;
+  tone: BriefSignalTone;
+  icon: ReactNode;
+}
+
+function compactText(value: string | null | undefined, fallback: string, maxLength = 180): string {
+  const text = String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return fallback;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+}
+
+function clockMinutes(value: string | null | undefined): number | null {
+  const input = String(value || '').trim();
+  return parseTimeInputMinutes(input) ?? parseSolarClockMinutes(input || undefined);
+}
+
+function timelinePosition(value: string | null | undefined, rows: TravelWindowRow[]): number | null {
+  if (rows.length === 0) return null;
+  const start = clockMinutes(rows[0].time);
+  const target = clockMinutes(value);
+  if (start === null || target === null) return null;
+  let delta = target - start;
+  while (delta < 0) delta += 24 * 60;
+  const span = Math.max(60, rows.length * 60);
+  if (delta > span) return null;
+  return Math.max(0, Math.min(100, (delta / span) * 100));
+}
+
 export interface DashboardSummaryCardProps {
   aiAvailability: AiFeatureAvailability;
   safetyData: SafetyData;
@@ -53,7 +96,6 @@ export function DashboardSummaryCard({
   returnExtendsPastMidnight,
   formatClockForStyle,
   getScoreColor,
-  formatTempDisplay,
   formatWindDisplay,
   decisionActionLine,
   localizeUnitText,
@@ -65,10 +107,22 @@ export function DashboardSummaryCard({
   onRequestAiBrief,
   rawReportPayload,
 }: DashboardSummaryCardProps) {
-  const lvClass = decision.level.toLowerCase().replace('-', ''); // go | caution | nogo
+  const lvClass = decision.level.toLowerCase().replace('-', '');
   const score = Math.round(safetyData.safety.score);
   const scoreColor = getScoreColor(score, safetyData.safety.tier);
   const confidence = typeof safetyData.safety.confidence === 'number' ? Math.round(safetyData.safety.confidence) : null;
+  const confidenceLabel = confidence === null
+    ? null
+    : confidence >= 80
+      ? 'High confidence'
+      : confidence >= 60
+        ? 'Moderate confidence'
+        : 'Limited confidence';
+  const generatedAge = safetyData.generatedAt ? formatAgeFromNow(safetyData.generatedAt) : null;
+  const statusMeta = [confidenceLabel, generatedAge ? `updated ${generatedAge}` : null].filter(Boolean).join(' · ');
+  const returnLabel = returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : null;
+  const travelWindowLabel = `${displayStartTime}${returnLabel ? `–${returnLabel}` : ''}${returnExtendsPastMidnight ? ' (+1 day)' : ''}`;
+
   const pleasantness = safetyData.pleasantness;
   const pleasantnessScore = typeof pleasantness?.score === 'number' && Number.isFinite(pleasantness.score)
     ? Math.round(pleasantness.score)
@@ -80,198 +134,242 @@ export function DashboardSummaryCard({
       : pleasantnessScore >= 60
         ? 'mixed'
         : 'poor';
-  const dashOffset = GAUGE_C * (1 - Math.max(0, Math.min(100, score)) / 100);
-  const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : `${decision.level} risk`;
-  const confidenceLabel = confidence === null
-    ? null
-    : confidence >= 80
-      ? 'High confidence'
-      : confidence >= 60
-        ? 'Moderate confidence'
-        : 'Limited confidence';
-  const aiBriefSections = formatAiBriefSections(aiBriefNarrative);
+
   const maxGustMph = preferences.maxWindGustMph || 35;
-
-  const gustValues = travelWindowRows.map((r) => r.gust).filter((n) => Number.isFinite(n));
+  const gustValues = travelWindowRows.map((row) => row.gust).filter(Number.isFinite);
   const peakGust = gustValues.length ? Math.max(...gustValues) : safetyData.weather.windGust;
-  const precipValues = travelWindowRows.map((r) => r.precipChance).filter((n) => Number.isFinite(n));
-  const peakPrecip = precipValues.length ? Math.max(...precipValues) : safetyData.weather.precipChance;
-  const cleanHours = travelWindowInsights?.passHours ?? 0;
-  const bestWindow =
-    travelWindowInsights?.bestWindow != null
-      ? `${formatClockForStyle(travelWindowInsights.bestWindow.start, preferences.timeStyle)}–${formatClockForStyle(travelWindowInsights.bestWindow.end, preferences.timeStyle)}`
-      : 'none clear';
+  const peakPrecip = travelWindowRows.length
+    ? Math.max(...travelWindowRows.map((row) => row.precipChance).filter(Number.isFinite))
+    : safetyData.weather.precipChance;
+  const firstGust = travelWindowRows[0]?.gust;
+  const gustMarkerRow = travelWindowRows.find((row, index) => (
+    index > 0
+    && row.gust >= maxGustMph * 0.7
+    && row.gust > travelWindowRows[index - 1].gust
+  )) || travelWindowRows.reduce<TravelWindowRow | null>((peak, row) => (!peak || row.gust > peak.gust ? row : peak), null);
+  const gustMarkerPosition = timelinePosition(gustMarkerRow?.time, travelWindowRows);
+  const sunrisePosition = timelinePosition(safetyData.solar.sunrise, travelWindowRows);
+  const timelineLabelIndices = Array.from(new Set([
+    0,
+    Math.round((travelWindowRows.length - 1) / 3),
+    Math.round(((travelWindowRows.length - 1) * 2) / 3),
+    Math.max(0, travelWindowRows.length - 1),
+  ])).filter((index) => travelWindowRows[index]);
 
-  const returnLabel = returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : null;
+  const verdictSummary = compactText(
+    decision.blockers[0]
+      || decision.cautions[0]
+      || travelWindowInsights.summary
+      || safetyData.safety.explanations?.[0]
+      || decisionActionLine,
+    'Review the timing and the key conditions below before committing to the plan.',
+    220,
+  );
+
+  const terrain = safetyData.terrainCondition;
+  const meltFreeze = terrain?.snowProfile?.meltFreeze;
+  const surfaceTone: BriefSignalTone = meltFreeze?.refreezeQuality === 'strong' || meltFreeze?.refreezeQuality === 'fair'
+    ? 'positive'
+    : terrain?.impact === 'high' || meltFreeze?.refreezeQuality === 'weak'
+      ? 'caution'
+      : 'neutral';
+  const surfaceSignal: BriefSignal = terrain
+    ? {
+        title: meltFreeze ? 'Overnight refreeze' : (terrain.label || 'Surface conditions'),
+        detail: compactText(
+          meltFreeze?.summary || terrain.summary || terrain.snowProfile?.summary,
+          'Surface conditions need a field check at the trailhead.',
+        ),
+        tag: surfaceTone === 'positive' ? 'Supports' : surfaceTone === 'caution' ? 'Watch' : 'Verify',
+        tone: surfaceTone,
+        icon: <Snowflake size={16} aria-hidden />,
+      }
+    : {
+        title: 'Precipitation',
+        detail: `Peak chance is ${Math.round(peakPrecip)}% during this travel window; your limit is ${Math.round(preferences.maxPrecipChance)}%.`,
+        tag: peakPrecip >= preferences.maxPrecipChance ? 'Watch' : 'Supports',
+        tone: peakPrecip >= preferences.maxPrecipChance ? 'caution' : 'positive',
+        icon: <CloudRain size={16} aria-hidden />,
+      };
+
+  const windTone: BriefSignalTone = peakGust >= maxGustMph * 0.7 ? 'caution' : 'positive';
+  const windSignal: BriefSignal = {
+    title: 'Ridgetop wind',
+    detail: Number.isFinite(firstGust)
+      ? `Gusts build from ${formatWindDisplay(firstGust)} to a peak of ${formatWindDisplay(peakGust)}; your limit is ${formatWindDisplay(maxGustMph)}.`
+      : `Peak gust is ${formatWindDisplay(peakGust)}; your limit is ${formatWindDisplay(maxGustMph)}.`,
+    tag: windTone === 'caution' ? 'Watch' : 'Supports',
+    tone: windTone,
+    icon: <Wind size={16} aria-hidden />,
+  };
+
+  const avalancheProblem = safetyData.avalanche.problems?.[0];
+  const avalancheRelevant = safetyData.avalanche.relevant !== false;
+  const avalancheSignal: BriefSignal = avalancheRelevant
+    ? {
+        title: avalancheProblem?.name ? `Avalanche: ${avalancheProblem.name}` : 'Avalanche problem',
+        detail: compactText(
+          safetyData.avalanche.relevanceReason
+            || avalancheProblem?.problem_description
+            || avalancheProblem?.discussion
+            || safetyData.avalanche.bottomLine,
+          safetyData.avalanche.dangerUnknown
+            ? 'Danger is unknown for this objective; verify the current bulletin before entering avalanche terrain.'
+            : `${safetyData.avalanche.risk || 'Current danger'} for the selected objective and time.`,
+        ),
+        tag: safetyData.avalanche.dangerUnknown ? 'Verify' : safetyData.avalanche.dangerLevel >= 2 || avalancheProblem ? 'Watch' : 'Supports',
+        tone: safetyData.avalanche.dangerUnknown ? 'neutral' : safetyData.avalanche.dangerLevel >= 2 || avalancheProblem ? 'caution' : 'positive',
+        icon: <TriangleAlert size={16} aria-hidden />,
+      }
+    : {
+        title: safetyData.alerts?.activeCount ? 'Active weather alerts' : 'Weather alerts',
+        detail: safetyData.alerts?.activeCount
+          ? `${safetyData.alerts.activeCount} active alert${safetyData.alerts.activeCount === 1 ? '' : 's'}; highest severity is ${safetyData.alerts.highestSeverity || 'not rated'}.`
+          : 'No active weather alert is currently affecting the selected travel window.',
+        tag: safetyData.alerts?.activeCount ? 'Watch' : 'Supports',
+        tone: safetyData.alerts?.activeCount ? 'caution' : 'positive',
+        icon: safetyData.alerts?.activeCount ? <TriangleAlert size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />,
+      };
+  const briefSignals = [surfaceSignal, windSignal, avalancheSignal];
+  const aiBriefSections = formatAiBriefSections(aiBriefNarrative);
 
   return (
     <div className="ssr-dash">
-      <section className={`ssr-dash-risk ${lvClass}`}>
-        <div className="ssr-dash-top">
-          <div className="ssr-dash-score-block">
-            <span className="ssr-dash-score-label"><ShieldCheck size={14} aria-hidden /> Safety score</span>
-            <div
-              className="ssr-dash-gauge"
-              role="meter"
-              aria-label={`Safety score ${score} out of 100, ${tierLabel}. Higher scores indicate lower modeled risk.`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={score}
-            >
-              <svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true">
-                <circle cx="64" cy="64" r={GAUGE_R} fill="none" stroke="var(--d-surface-3)" strokeWidth="11" />
-                <circle
-                  cx="64"
-                  cy="64"
-                  r={GAUGE_R}
-                  fill="none"
-                  stroke={scoreColor}
-                  strokeWidth="11"
-                  strokeLinecap="round"
-                  strokeDasharray={GAUGE_C.toFixed(1)}
-                  strokeDashoffset={dashOffset.toFixed(1)}
-                />
-              </svg>
-              <div className="ssr-dash-gauge-center">
-                <span className="ssr-dash-gauge-num">{score}</span>
-                <span className="ssr-dash-gauge-den">out of 100</span>
-              </div>
-            </div>
-            <span className="ssr-dash-score-direction">Higher is lower risk</span>
+      <section className={`ssr-dash-risk ${lvClass}`} aria-labelledby="conditions-brief-title">
+        <header className="ssr-dash-brief-head">
+          <div>
+            <span className="ssr-dash-eyebrow">Conditions brief</span>
+            <h2 id="conditions-brief-title">{objectiveName || 'Objective'}</h2>
+            <p>Planned travel window · {travelWindowLabel}</p>
           </div>
+          <div
+            className="ssr-dash-score"
+            role="meter"
+            aria-label={`Safety score ${score} out of 100`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={score}
+            style={{ '--brief-score-color': scoreColor } as CSSProperties}
+          >
+            <b>{score}</b><span>/ 100</span>
+          </div>
+        </header>
 
-          <div className="ssr-dash-mid">
-            <div className="ssr-dash-pill-row">
-              <span className="ssr-dash-pill">{tierLabel}</span>
-              <span className="ssr-dash-model-note">Modeled planning signal</span>
-            </div>
-            <h2 className="ssr-dash-head">{decision.headline}</h2>
-            <div className="ssr-dash-where">
-              <b>{objectiveName || 'Objective'}</b>
-              <span className="ssr-dash-dot" />
-              <span className="mono">{displayStartTime}{returnLabel ? ` – ${returnLabel}` : ''}</span>
-              {returnExtendsPastMidnight && (
-                <>
-                  <span className="ssr-dash-dot" />
-                  returns after midnight
-                </>
-              )}
-            </div>
+        <div className="ssr-dash-verdict">
+          <div className="ssr-dash-verdict-meta">
+            <span className="ssr-dash-status"><ShieldCheck size={16} aria-hidden /> {decision.level.replace('-', ' ')}</span>
+            {statusMeta && <span className="ssr-dash-confidence">{statusMeta}</span>}
           </div>
+          <h3>{decision.headline}</h3>
+          <p>{localizeUnitText(verdictSummary)}</p>
         </div>
 
-        {(confidence !== null || pleasantnessScore !== null) && (
-          <div className={`ssr-dash-context-grid ${confidence === null || pleasantnessScore === null ? 'single' : ''}`}>
-            {confidence !== null && (
-              <div className="ssr-dash-context-card confidence">
-                <div className="ssr-dash-context-icon"><Database size={17} aria-hidden /></div>
-                <div className="ssr-dash-context-body">
-                  <div className="ssr-dash-context-heading">
-                    <div>
-                      <span>Evidence confidence</span>
-                      <strong>{confidenceLabel}</strong>
-                    </div>
-                    <b className="ssr-dash-context-score">{confidence}<small>%</small></b>
-                  </div>
-                  <span className="ssr-dash-context-bar" aria-hidden="true"><i style={{ width: `${confidence}%` }} /></span>
-                  {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0 ? (
-                    <ul className="ssr-dash-conf-reasons">
-                      {safetyData.safety.confidenceReasons.map((reason, idx) => (
-                        <li key={idx}>{reason}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>How completely the expected source data supports this score.</p>
-                  )}
-                </div>
+        {travelWindowRows.length > 0 && (
+          <div className="ssr-dash-window">
+            <div className="ssr-dash-window-labels" aria-hidden>
+              <span>Your travel window</span>
+              <div style={{ gridTemplateColumns: `repeat(${timelineLabelIndices.length}, 1fr)` }}>
+                {timelineLabelIndices.map((index) => (
+                  <b key={`${travelWindowRows[index].time}-${index}`}>{formatClockForStyle(travelWindowRows[index].time, preferences.timeStyle)}</b>
+                ))}
               </div>
-            )}
-
-            {pleasantnessScore !== null && (
-              <div className={`ssr-dash-context-card pleasantness ${pleasantnessTone}`}>
-                <div className="ssr-dash-context-icon"><Sun size={17} aria-hidden /></div>
-                <div className="ssr-dash-context-body">
-                  <div className="ssr-dash-context-heading">
-                    <div>
-                      <span>Comfort outlook</span>
-                      <strong>{pleasantness?.label || 'Rated'}</strong>
-                    </div>
-                    <b className="ssr-dash-context-score">{pleasantnessScore}<small>/100</small></b>
-                  </div>
-                  {pleasantness?.summary && <p>{pleasantness.summary}</p>}
-                  {Array.isArray(pleasantness?.factors) && pleasantness.factors.length > 0 && (
-                    <details>
-                      <summary>See comfort factors</summary>
-                      <ul>
-                        {pleasantness.factors.map((factor) => (
-                          <li key={factor.factor}>
-                            <b>{factor.factor}: {Math.round(factor.score)}/100.</b> {factor.message}
-                          </li>
-                        ))}
-                      </ul>
-                      {pleasantness.disclaimer && <small>{pleasantness.disclaimer}</small>}
-                    </details>
-                  )}
-                </div>
-              </div>
-            )}
+            </div>
+            <div
+              className="ssr-dash-window-band"
+              style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(4px, 1fr))` }}
+              role="img"
+              aria-label={`${travelWindowInsights.passHours} of ${travelWindowRows.length} forecast hours stay within your limits.`}
+            >
+              {travelWindowRows.map((row, index) => {
+                const bandTone = row.pass
+                  ? 'good'
+                  : row.lightningRisk || row.failedRules.length > 1 || row.gust >= maxGustMph
+                    ? 'poor'
+                    : 'fair';
+                return <span key={`${row.time}-${index}`} className={bandTone} title={`${formatClockForStyle(row.time, preferences.timeStyle)}: ${row.reasonSummary}`} />;
+              })}
+              {sunrisePosition !== null && <i className="sunrise-marker" style={{ left: `${sunrisePosition}%` }} />}
+              {gustMarkerPosition !== null && <i className="wind-marker" style={{ left: `${gustMarkerPosition}%` }} />}
+            </div>
+            <div className="ssr-dash-window-markers">
+              <span><Sunrise size={14} aria-hidden /> Sunrise {formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}</span>
+              {gustMarkerRow && <span><Wind size={14} aria-hidden /> Gusts build {formatClockForStyle(gustMarkerRow.time, preferences.timeStyle)}</span>}
+            </div>
           </div>
         )}
 
-        <div className="ssr-dash-cond-strip">
-          <div className="ssr-dash-cond">
-            <div className="ssr-dash-cond-k"><Thermometer /> Start temp</div>
-            <div className="ssr-dash-cond-v">{formatTempDisplay(safetyData.weather.temp)}</div>
-            <div className="ssr-dash-cond-sub">feels {formatTempDisplay(safetyData.weather.feelsLike ?? safetyData.weather.temp)}</div>
-          </div>
-          <div className="ssr-dash-cond">
-            <div className="ssr-dash-cond-k"><Wind /> Peak gust</div>
-            <div className={`ssr-dash-cond-v ${peakGust >= maxGustMph ? 'warn' : ''}`}>{formatWindDisplay(peakGust)}</div>
-            <div className={`ssr-dash-cond-sub ${peakGust >= maxGustMph ? 'warn' : ''}`}>limit {formatWindDisplay(maxGustMph)}</div>
-          </div>
-          <div className="ssr-dash-cond">
-            <div className="ssr-dash-cond-k"><CloudRain /> Precip</div>
-            <div className={`ssr-dash-cond-v ${peakPrecip >= preferences.maxPrecipChance ? 'warn' : ''}`}>{Math.round(peakPrecip)}<small>%</small></div>
-            <div className={`ssr-dash-cond-sub ${peakPrecip >= preferences.maxPrecipChance ? 'warn' : ''}`}>
-              {peakPrecip >= preferences.maxPrecipChance ? 'above threshold' : 'below threshold'}
+        <div className="ssr-dash-signals" aria-label="Key planning signals">
+          {briefSignals.map((signal) => (
+            <div className="ssr-dash-signal" key={signal.title}>
+              <span className={signal.tone}>{signal.icon}</span>
+              <p><strong>{signal.title}</strong><small>{localizeUnitText(signal.detail)}</small></p>
+              <b>{signal.tag}</b>
             </div>
-          </div>
-          <div className="ssr-dash-cond">
-            <div className="ssr-dash-cond-k"><CheckCircle2 /> Clean hours</div>
-            <div className={`ssr-dash-cond-v ${cleanHours > 0 ? '' : 'warn'}`}>{cleanHours}<small>h</small></div>
-            <div className={`ssr-dash-cond-sub ${cleanHours > 0 ? '' : 'warn'}`}>{bestWindow}</div>
-          </div>
+          ))}
         </div>
 
         {decisionActionLine && (
           <div className="ssr-dash-recco">
-            <span className="ssr-dash-recco-ic"><Sparkles size={17} /></span>
-            <p><b>Recommendation.</b> {localizeUnitText(decisionActionLine)}</p>
+            <Compass size={19} aria-hidden />
+            <p><b>Plan adjustment</b><span>{localizeUnitText(decisionActionLine)}</span></p>
+          </div>
+        )}
+
+        {(confidence !== null || pleasantnessScore !== null) && (
+          <div className="ssr-dash-context-grid">
+            {confidence !== null && (
+              <details className="ssr-dash-context-card confidence">
+                <summary>
+                  <span><Database size={16} aria-hidden /> Evidence confidence</span>
+                  <strong>{confidenceLabel} · {confidence}%</strong>
+                </summary>
+                {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0
+                  ? <ul>{safetyData.safety.confidenceReasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
+                  : <p>How completely the expected source data supports this score.</p>}
+              </details>
+            )}
+            {pleasantnessScore !== null && (
+              <details className={`ssr-dash-context-card pleasantness ${pleasantnessTone}`}>
+                <summary>
+                  <span><Sun size={16} aria-hidden /> Comfort outlook</span>
+                  <strong>{pleasantness?.label || 'Rated'} · {pleasantnessScore}/100</strong>
+                </summary>
+                {pleasantness?.summary && <p>{pleasantness.summary}</p>}
+                {Array.isArray(pleasantness?.factors) && pleasantness.factors.length > 0 && (
+                  <ul>
+                    {pleasantness.factors.map((factor) => (
+                      <li key={factor.factor}><b>{factor.factor}: {Math.round(factor.score)}/100.</b> {factor.message}</li>
+                    ))}
+                  </ul>
+                )}
+                {pleasantness?.disclaimer && <small>{pleasantness.disclaimer}</small>}
+              </details>
+            )}
           </div>
         )}
 
         {(aiAvailability.aiBrief || aiAvailability.reportChat) && (
           <div className="ssr-dash-ai">
-          {aiAvailability.aiBrief && (aiBriefNarrative ? (
-            <AiInsightBriefing
-              title="Your field briefing"
-              subtitle="The quick read on what matters most for this plan."
-              sections={aiBriefSections}
-              formatText={localizeUnitText}
-            />
-          ) : aiBriefError ? (
-            <div className="ssr-dash-ai-error">
-              <span>{aiBriefError}</span>
-              <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief}>Retry</button>
-            </div>
-          ) : (
-            <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief} disabled={aiBriefLoading}>
-              {aiBriefLoading
-                ? <><LoaderCircle size={14} className="spin" aria-hidden /> Generating…</>
-                : <><Sparkles size={14} aria-hidden /> AI analysis</>}
-            </button>
-          ))}
-          {aiAvailability.reportChat && <ReportChat reportPayload={rawReportPayload} />}
+            {aiAvailability.aiBrief && (aiBriefNarrative ? (
+              <AiInsightBriefing
+                title="Your field briefing"
+                subtitle="The quick read on what matters most for this plan."
+                sections={aiBriefSections}
+                formatText={localizeUnitText}
+              />
+            ) : aiBriefError ? (
+              <div className="ssr-dash-ai-error">
+                <span>{aiBriefError}</span>
+                <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief}>Retry</button>
+              </div>
+            ) : (
+              <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief} disabled={aiBriefLoading}>
+                {aiBriefLoading
+                  ? <><LoaderCircle size={14} className="spin" aria-hidden /> Generating…</>
+                  : <><Sparkles size={14} aria-hidden /> AI analysis</>}
+              </button>
+            ))}
+            {aiAvailability.reportChat && <ReportChat reportPayload={rawReportPayload} />}
           </div>
         )}
       </section>
