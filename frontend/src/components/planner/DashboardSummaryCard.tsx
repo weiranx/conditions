@@ -296,7 +296,7 @@ export function DashboardSummaryCard({
 
   return (
     <div className="ssr-dash">
-      <section className={`ssr-dash-risk ${lvClass}`} aria-labelledby="conditions-brief-title">
+      <section className={`ssr-card ssr-dash-risk ${lvClass}`} aria-labelledby="conditions-brief-title">
         <header className="ssr-dash-brief-head">
           <div>
             <span className="ssr-dash-eyebrow">Conditions brief</span>

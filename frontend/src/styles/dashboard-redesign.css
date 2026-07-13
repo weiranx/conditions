@@ -10,12 +10,10 @@
   padding: 30px 32px;
   overflow: hidden;
   border: 1px solid var(--d-line-2);
-  border-radius: 18px;
+  border-radius: var(--ssr-section-radius, 16px);
   background:
     linear-gradient(155deg, color-mix(in oklch, var(--d-surface) 97%, var(--d-sage-1)), var(--d-surface));
-  box-shadow:
-    0 34px 78px -54px color-mix(in oklch, var(--d-pine-deep) 55%, transparent),
-    10px 12px 0 -8px color-mix(in oklch, var(--d-sage-1) 68%, transparent);
+  box-shadow: var(--ssr-section-shadow, var(--ui-shadow-md));
 }
 
 .ssr-dash-risk::before {
@@ -541,7 +539,7 @@
 .ssr-snow-vision-map-btn:hover { text-decoration: underline; }
 
 @media (max-width: 700px) {
-  .ssr-dash-risk { padding: 25px 21px; border-radius: 15px; box-shadow: var(--ui-shadow-md); }
+  .ssr-dash-risk { padding: 25px 21px; border-radius: var(--ssr-section-radius, 12px); box-shadow: var(--ssr-section-shadow, var(--ui-shadow-md)); }
   .ssr-dash-brief-head { gap: 16px; padding-bottom: 21px; }
   .ssr-dash-brief-head h2 { font-size: 29px; }
   .ssr-dash-score b { font-size: 47px; }

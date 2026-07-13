@@ -900,6 +900,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   // list mirrors the `id` attributes on the sections below.
   const jumpSections = [
     { id: 'planner-section-decision', label: 'Verdict', present: true },
+    { id: 'planner-section-route', label: 'Route', present: Boolean(props.routeAnalysisSlot) },
     { id: 'planner-section-actions', label: 'Plan', present: true },
     { id: 'planner-section-travel', label: 'Travel', present: travelWindowRows.length > 0 },
     { id: 'planner-section-checks', label: 'Checks', present: Boolean(shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0) },

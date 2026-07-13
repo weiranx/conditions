@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, FileCheck2, Upload } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, FileCheck2, Route, Upload } from 'lucide-react';
 import { formatRouteAnalysisSections } from '../../app/text-utils';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
@@ -128,9 +128,31 @@ export function RouteAnalysisSection({
       aria-label="Import a GPX route"
     />
   );
+  const sectionMeta = routeLoading
+    ? 'Analyzing'
+    : routeAnalysis
+      ? `${routeAnalysis.summaries.length} checkpoint${routeAnalysis.summaries.length === 1 ? '' : 's'}`
+      : gpxRoute
+        ? 'GPX ready'
+        : routeSuggestions
+          ? `${routeSuggestions.length} route${routeSuggestions.length === 1 ? '' : 's'}`
+          : 'Optional';
 
   return (
-    <div className="route-analysis-section" style={{ order: order - 1 }}>
+    <section
+      className="ssr-card ssr-route-card route-analysis-section"
+      id="planner-section-route"
+      style={{ order: order - 1 }}
+      aria-labelledby="planner-route-title"
+    >
+      <div className="ssr-card-h">
+        <h2 id="planner-route-title">
+          <span className="ssr-h-icon icon-neutral"><Route size={16} /></span>
+          Route analysis
+        </h2>
+        <span className="ssr-h-meta">{sectionMeta}</span>
+      </div>
+      <div className="ssr-card-b ssr-route-body">
       {!gpxRoute && !routeSuggestions && !routeAnalysis && !routeLoading && (
         <div className="route-analysis-actions">
           {gpxInput}
@@ -252,7 +274,6 @@ export function RouteAnalysisSection({
       {routeAnalysis && (
         <div className="route-analysis-card">
           <div className="route-analysis-header">
-            <span>Route Analysis</span>
             <span className="route-analysis-badges">
               <span className="route-ai-badge">{routeAnalysis.analysisSource === 'deterministic' ? 'Data-derived · verify' : 'AI-assisted · verify'}</span>
               {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
@@ -406,6 +427,7 @@ export function RouteAnalysisSection({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </section>
   );
 }
