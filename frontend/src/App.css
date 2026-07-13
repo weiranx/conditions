@@ -8656,6 +8656,49 @@ button.collapsible-card-header:hover .collapsible-chevron {
   margin: 0 0 14px;
 }
 
+.route-summary-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 118px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+  padding: 10px 2px;
+  border-top: 1px solid rgba(215, 210, 194, 0.42);
+}
+
+.route-summary-row:last-of-type {
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(215, 210, 194, 0.42);
+}
+
+.route-summary-label {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.route-summary-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+  color: var(--text-dark);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-summary-values span + span {
+  position: relative;
+}
+
+.route-summary-values span + span::before {
+  position: absolute;
+  left: -11px;
+  color: var(--text-muted);
+  content: '·';
+}
+
 .route-picker-header,
 .route-analysis-header {
   font-size: 0.82rem;
@@ -8853,28 +8896,44 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 .route-waypoints {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  display: grid;
+  gap: 8px;
   margin-bottom: 18px;
-  padding: 5px 16px;
-  background: rgba(246, 241, 230, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 12px;
+  padding: 0;
 }
 
 .route-waypoint-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  width: 100%;
   font-size: 0.88rem;
-  padding: 11px 0;
-  border-bottom: 1px solid rgba(215, 210, 194, 0.3);
+  font-family: inherit;
+  padding: 13px 14px;
+  border: 1px solid rgba(215, 210, 194, 0.58);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.72);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
-.route-waypoints > div:last-of-type .route-waypoint-row {
-  border-bottom: none;
+.route-waypoint-row:hover {
+  border-color: rgba(45, 112, 82, 0.38);
+  background: rgba(255, 253, 248, 0.96);
+  transform: translateY(-1px);
+}
+
+.route-waypoint-row:focus-visible {
+  outline: 2px solid var(--accent-green);
+  outline-offset: 2px;
+}
+
+.route-waypoint-row[aria-expanded='true'] {
+  border-radius: 10px 10px 0 0;
+  border-color: rgba(45, 112, 82, 0.32);
+  background: rgba(255, 253, 248, 0.98);
 }
 
 .route-wp-name {
@@ -8883,7 +8942,8 @@ button.collapsible-card-header:hover .collapsible-chevron {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-dark);
-  font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 .route-wp-content {
@@ -8903,10 +8963,17 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 .route-wp-metrics {
-  gap: 10px;
+  gap: 5px 13px;
   min-height: 20px;
-  margin-top: 3px;
+  margin-top: 4px;
   flex-wrap: wrap;
+}
+
+.route-wp-metrics > span:not(.route-wp-avy) {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .route-wp-elev {
@@ -8923,8 +8990,11 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
 .route-wp-score {
   font-weight: 700;
-  font-size: 0.88rem;
-  min-width: 36px;
+  font-size: 0.9rem;
+  min-width: 42px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: rgba(246, 241, 230, 0.72);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -8970,23 +9040,64 @@ button.collapsible-card-header:hover .collapsible-chevron {
   border: 1px solid rgba(215, 210, 194, 0.3);
 }
 
-.route-wp-link {
-  display: inline-flex;
+.route-wp-status {
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
   color: var(--text-muted);
-  opacity: 0.6;
-  transition: opacity 0.15s ease;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  margin-right: -8px;
-  border-radius: 8px;
 }
 
-.route-wp-link:hover {
-  opacity: 1;
+.route-wp-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px 18px;
+  margin-top: -1px;
+  padding: 12px 14px 14px;
+  border: 1px solid rgba(45, 112, 82, 0.32);
+  border-top-color: rgba(215, 210, 194, 0.45);
+  border-radius: 0 0 10px 10px;
+  background: rgba(246, 241, 230, 0.36);
 }
+
+.route-wp-details > span {
+  display: grid;
+  gap: 2px;
+  color: var(--text-dark);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+
+.route-wp-details strong {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ssr-route-card .route-summary-row { border-color: var(--ssr-line); }
+.ssr-route-card .route-summary-label { color: var(--ssr-text-3); }
+.ssr-route-card .route-summary-values { color: var(--ssr-text); }
+.ssr-route-card .route-summary-values span + span::before { color: var(--ssr-text-3); }
+.ssr-route-card .route-waypoint-row {
+  border-color: var(--ssr-line);
+  background: var(--ssr-surface-2);
+  color: var(--ssr-text);
+}
+.ssr-route-card .route-waypoint-row:hover,
+.ssr-route-card .route-waypoint-row[aria-expanded='true'] {
+  border-color: var(--ssr-line-strong);
+  background: var(--ssr-surface);
+}
+.ssr-route-card .route-wp-score { background: var(--ssr-surface-3); }
+.ssr-route-card .route-wp-details {
+  border-color: var(--ssr-line-strong);
+  border-top-color: var(--ssr-line);
+  background: var(--ssr-surface-2);
+}
+.ssr-route-card .route-wp-details > span { color: var(--ssr-text); }
+.ssr-route-card .route-wp-details strong { color: var(--ssr-text-3); }
 
 .route-waypoints-toggle {
   display: flex;
@@ -9041,9 +9152,24 @@ button.collapsible-card-header:hover .collapsible-chevron {
     margin-bottom: 12px;
   }
 
+  .route-summary-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
   .route-waypoints {
-    margin-inline: -4px;
-    padding-inline: 14px;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  .route-waypoint-row {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .route-wp-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-inline: 12px;
   }
 }
 
@@ -9193,11 +9319,28 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 :root[data-theme='dark'] .route-waypoints {
-  background: rgba(26, 39, 49, 0.45);
+  background: transparent;
 }
 
 :root[data-theme='dark'] .route-waypoint-row {
-  border-bottom-color: rgba(43, 57, 70, 0.35);
+  border-color: rgba(43, 57, 70, 0.52);
+  background: rgba(26, 39, 49, 0.55);
+}
+
+:root[data-theme='dark'] .route-waypoint-row:hover,
+:root[data-theme='dark'] .route-waypoint-row[aria-expanded='true'] {
+  border-color: rgba(80, 135, 112, 0.55);
+  background: rgba(26, 39, 49, 0.82);
+}
+
+:root[data-theme='dark'] .route-wp-score {
+  background: rgba(22, 32, 41, 0.62);
+}
+
+:root[data-theme='dark'] .route-wp-details {
+  border-color: rgba(80, 135, 112, 0.55);
+  border-top-color: rgba(43, 57, 70, 0.52);
+  background: rgba(22, 32, 41, 0.46);
 }
 
 :root[data-theme='dark'] .route-wp-avy {
