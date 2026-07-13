@@ -11,9 +11,9 @@ struct GearCard: View {
                     let sortedKeys = grouped.keys.sorted { a, b in
                         let severity: (String) -> Int = { tone in
                             switch tone {
-                            case "critical": return 0
-                            case "warning": return 1
-                            case "info": return 2
+                            case "nogo", "critical": return 0
+                            case "caution", "warning": return 1
+                            case "watch", "info": return 2
                             default: return 3
                             }
                         }
@@ -61,18 +61,18 @@ struct GearCard: View {
 
     private func toneIcon(_ tone: String) -> String {
         switch tone {
-        case "critical": return "exclamationmark.triangle.fill"
-        case "warning": return "exclamationmark.circle.fill"
-        case "info": return "info.circle"
+        case "nogo", "critical": return "exclamationmark.triangle.fill"
+        case "caution", "warning": return "exclamationmark.circle.fill"
+        case "watch", "info": return "info.circle"
         default: return "checkmark.circle"
         }
     }
 
     private func toneColor(_ tone: String) -> Color {
         switch tone {
-        case "critical": return .red
-        case "warning": return .orange
-        case "info": return .blue
+        case "nogo", "critical": return .red
+        case "caution", "warning": return .orange
+        case "watch", "info": return .blue
         default: return .green
         }
     }

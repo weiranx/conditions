@@ -568,6 +568,7 @@ const safetyHandler = async (req, res) => {
       snowpackData,
       fireRiskData,
       heatRiskData,
+      selectedTravelWindowHours: requestedTravelWindowHours,
     });
 
     const analysis = calculateSafetyScore({

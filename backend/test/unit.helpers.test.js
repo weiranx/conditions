@@ -428,7 +428,7 @@ test('buildLayeringGearSuggestions adds hazard-specific items when risk signals 
 
   expect(suggestions.some((item) => item.title === 'Static insulation')).toBe(true);
   expect(suggestions.some((item) => item.title === 'Avalanche rescue kit')).toBe(true);
-  expect(suggestions.some((item) => item.title === 'Air quality protection')).toBe(true);
+  expect(suggestions.some((item) => item.title === 'Smoke respirator')).toBe(true);
   expect(suggestions.some((item) => item.title === 'Alerts contingency')).toBe(true);
 });
 

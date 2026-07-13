@@ -1074,12 +1074,13 @@ const baseSuggestionInput = () => ({
 });
 
 describe('buildLayeringGearSuggestions — always-present baseline', () => {
-  test('always includes layering-core suggestion', () => {
+  test('always includes core backcountry and layering essentials', () => {
     const suggestions = buildLayeringGearSuggestions(baseSuggestionInput());
+    expect(suggestions.some((s) => s.id === 'backcountry-essentials')).toBe(true);
     expect(suggestions.some((s) => s.id === 'layering-core')).toBe(true);
   });
 
-  test('output is limited to 10 items maximum', () => {
+  test('output is limited to 12 items maximum without dropping essential gear', () => {
     // Force many suggestions by triggering multiple branches
     const suggestions = buildLayeringGearSuggestions({
       ...baseSuggestionInput(),
@@ -1105,7 +1106,10 @@ describe('buildLayeringGearSuggestions — always-present baseline', () => {
       heatRiskData: { level: 0 },
     });
 
-    expect(suggestions.length).toBeLessThanOrEqual(10);
+    expect(suggestions.length).toBeLessThanOrEqual(12);
+    expect(suggestions.some((s) => s.id === 'backcountry-essentials')).toBe(true);
+    expect(suggestions.some((s) => s.id === 'layering-core')).toBe(true);
+    expect(suggestions.some((s) => s.id === 'avalanche-kit' && s.tone === 'nogo')).toBe(true);
   });
 
   test('each suggestion has required fields: id, title, detail, category, tone', () => {
@@ -1177,6 +1181,25 @@ describe('buildLayeringGearSuggestions — alpine hardware', () => {
 
     // icy && feelsLikeF <= 20 → alpine-hardware
     expect(suggestions.some((s) => s.id === 'alpine-hardware')).toBe(true);
+  });
+
+  test('recommends flotation, not technical hardware, for deep non-icy snow', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      snowpackData: {
+        cdec: { snowDepthIn: 24 },
+      },
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        description: 'Cloudy',
+        temp: 28,
+        feelsLike: 24,
+      },
+      trailStatus: 'snowy',
+    });
+
+    expect(suggestions.some((s) => s.id === 'snow-flotation')).toBe(true);
+    expect(suggestions.some((s) => s.id === 'alpine-hardware')).toBe(false);
   });
 });
 
@@ -1367,7 +1390,7 @@ describe('buildLayeringGearSuggestions — heat hydration and electrolytes', () 
 });
 
 describe('buildLayeringGearSuggestions — avalanche rescue kit', () => {
-  test('adds avalanche kit for relevant avy danger >= 2 with caution tone', () => {
+  test('marks rescue gear essential whenever avalanche terrain is relevant', () => {
     const suggestions = buildLayeringGearSuggestions({
       ...baseSuggestionInput(),
       avalancheData: { relevant: true, dangerLevel: 2, dangerUnknown: false },
@@ -1375,7 +1398,8 @@ describe('buildLayeringGearSuggestions — avalanche rescue kit', () => {
 
     const kit = suggestions.find((s) => s.id === 'avalanche-kit');
     expect(kit).toBeDefined();
-    expect(kit.tone).toBe('caution');
+    expect(kit.tone).toBe('nogo');
+    expect(kit.detail).toMatch(/each traveler/i);
   });
 
   test('uses nogo tone for danger level >= 4', () => {
@@ -1396,6 +1420,7 @@ describe('buildLayeringGearSuggestions — avalanche rescue kit', () => {
     });
 
     expect(suggestions.some((s) => s.id === 'avalanche-unknown')).toBe(true);
+    expect(suggestions.some((s) => s.id === 'avalanche-kit')).toBe(true);
   });
 
   test('does not add avalanche kit when relevant is explicitly false', () => {
@@ -1407,13 +1432,86 @@ describe('buildLayeringGearSuggestions — avalanche rescue kit', () => {
     expect(suggestions.some((s) => s.id === 'avalanche-kit')).toBe(false);
   });
 
-  test('does not add avalanche kit for danger level 1 (below threshold)', () => {
+  test('adds avalanche kit for danger level 1 because low danger is not no danger', () => {
     const suggestions = buildLayeringGearSuggestions({
       ...baseSuggestionInput(),
       avalancheData: { relevant: true, dangerLevel: 1, dangerUnknown: false },
     });
 
-    expect(suggestions.some((s) => s.id === 'avalanche-kit')).toBe(false);
+    expect(suggestions.some((s) => s.id === 'avalanche-kit' && s.tone === 'nogo')).toBe(true);
+  });
+});
+
+describe('buildLayeringGearSuggestions — travel-window hazards', () => {
+  test('uses later forecast hours instead of only the start-hour snapshot', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      selectedTravelWindowHours: 4,
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        description: 'Mostly Sunny',
+        temp: 55,
+        feelsLike: 54,
+        windSpeed: 5,
+        windGust: 8,
+        precipChance: 5,
+        trend: [
+          { temp: 55, feelsLike: 54, wind: 5, gust: 8, precipChance: 5, condition: 'Mostly Sunny' },
+          { temp: 48, feelsLike: 42, wind: 12, gust: 20, precipChance: 20, condition: 'Cloudy' },
+          { temp: 35, wind: 22, gust: 38, precipChance: 75, condition: 'Rain and Snow' },
+          { temp: 30, wind: 25, gust: 42, precipChance: 80, condition: 'Snow' },
+        ],
+      },
+    });
+
+    expect(suggestions.some((s) => s.id === 'shell-wet' && /window peak 80%/.test(s.detail))).toBe(true);
+    expect(suggestions.some((s) => s.id === 'insulation-stop' && /16F/.test(s.detail))).toBe(true);
+    expect(suggestions.some((s) => s.id === 'traction-snow')).toBe(true);
+  });
+
+  test('adds storm contingency gear for lightning later in the window', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      selectedTravelWindowHours: 3,
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        trend: [
+          { temp: 60, condition: 'Mostly Sunny' },
+          { temp: 58, condition: 'Scattered Thunderstorms' },
+          { temp: 55, condition: 'Lightning' },
+        ],
+      },
+    });
+
+    expect(suggestions.some((s) => s.id === 'storm-contingency')).toBe(true);
+  });
+
+  test('does not interpret missing hourly values as zero-degree weather', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        trend: [{ temp: null, feelsLike: null, wind: null, gust: null, precipChance: null, condition: '' }],
+      },
+    });
+
+    expect(suggestions.some((s) => s.id === 'insulation-stop')).toBe(false);
+    expect(suggestions.some((s) => s.id === 'extremities-cold')).toBe(false);
+  });
+});
+
+describe('buildLayeringGearSuggestions — air quality protection', () => {
+  test('recommends a fitted respirator and rejects cloth-covering language', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      airQualityData: { usAqi: 151 },
+    });
+
+    const protection = suggestions.find((s) => s.id === 'aq-health');
+    expect(protection).toBeDefined();
+    expect(protection.title).toBe('Smoke respirator');
+    expect(protection.detail).toMatch(/NIOSH-approved N95 or P100/i);
+    expect(protection.detail).toMatch(/Buff or cloth covering does not filter/i);
   });
 });
 
