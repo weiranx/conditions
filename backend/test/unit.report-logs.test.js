@@ -43,13 +43,38 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const runDiagnostics = jest.fn(async () => diagnosticsPayload);
   const modelCatalogPayload = { fetchedAt: '2026-07-12T12:00:00.000Z', providers: {} };
   const loadModelCatalog = jest.fn(async () => modelCatalogPayload);
+  const adminUser = {
+    id: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+    email: 'weiranxiong@gmail.com',
+    displayName: 'Weiran Xiong',
+  };
+  const managedUser = {
+    id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+    email: 'climber@example.com',
+    displayName: 'Avery Stone',
+    status: 'active',
+  };
+  const listUsers = jest.fn(async () => ({
+    users: [adminUser, managedUser],
+    total: 2,
+    summary: { active: 2, suspended: 0, activeSessions: 3 },
+    limit: 500,
+  }));
+  const updateUserStatus = jest.fn(async ({ status }) => ({
+    user: { ...managedUser, status },
+    revokedSessions: status === 'suspended' ? 2 : 0,
+  }));
+  const revokeUserSessions = jest.fn(async () => ({ user: managedUser, revokedSessions: 1 }));
   const accountService = {
     available: true,
+    listUsers,
+    updateUserStatus,
+    revokeUserSessions,
     getUserForSession: jest.fn(async (token) => (
       token === 'admin-session-token'
-        ? { email: 'weiranxiong@gmail.com' }
+        ? adminUser
         : token === 'other-session-token'
-          ? { email: 'climber@example.com' }
+          ? managedUser
           : null
     )),
   };
@@ -72,6 +97,54 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const auditResponse = createResponse();
   await routes.get.get('/api/admin/audit-log')({ headers }, auditResponse);
   expect(auditResponse.payload).toEqual(auditEntries);
+
+  const usersResponse = createResponse();
+  await routes.get.get('/api/admin/users')({ headers, query: { limit: '250' } }, usersResponse);
+  expect(listUsers).toHaveBeenCalledWith({ limit: '250' });
+  expect(usersResponse.payload).toEqual({
+    users: [
+      { ...adminUser, isOwner: true },
+      { ...managedUser, isOwner: false },
+    ],
+    total: 2,
+    summary: { active: 2, suspended: 0, activeSessions: 3 },
+    limit: 500,
+  });
+
+  const suspendResponse = createResponse();
+  await routes.patch.get('/api/admin/users/:userId')({
+    headers,
+    params: { userId: managedUser.id },
+    body: { status: 'suspended' },
+  }, suspendResponse);
+  expect(updateUserStatus).toHaveBeenCalledWith({
+    userId: managedUser.id,
+    status: 'suspended',
+    actorUserId: adminUser.id,
+  });
+  expect(suspendResponse.payload).toEqual({
+    user: { ...managedUser, status: 'suspended' },
+    revokedSessions: 2,
+  });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'account.user.suspended',
+    category: 'accounts',
+  }));
+
+  const revokeSessionsResponse = createResponse();
+  await routes.post.get('/api/admin/users/:userId/revoke-sessions')({
+    headers,
+    params: { userId: managedUser.id },
+  }, revokeSessionsResponse);
+  expect(revokeUserSessions).toHaveBeenCalledWith({
+    userId: managedUser.id,
+    actorUserId: adminUser.id,
+  });
+  expect(revokeSessionsResponse.payload).toEqual({ user: managedUser, revokedSessions: 1 });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'account.sessions.revoked',
+    category: 'accounts',
+  }));
 
   const getResponse = createResponse();
   await routes.get.get('/api/admin/ai-settings')({ headers }, getResponse);

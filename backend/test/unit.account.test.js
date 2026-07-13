@@ -240,6 +240,120 @@ describe('password accounts', () => {
       code: 'AUTHENTICATION_REQUIRED',
     });
   });
+
+  test('lists account activity and usage for the admin directory', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [{
+        ...USER_ROW,
+        auth_provider: 'password',
+        auth_methods: ['google', 'password'],
+        status: 'active',
+        updated_at: new Date('2026-07-12T11:00:00.000Z'),
+        last_activity_at: new Date('2026-07-12T12:00:00.000Z'),
+        active_sessions: '2',
+        saved_reports: '4',
+        ai_calls: '9',
+        ai_tokens: '12500',
+        total_count: '1',
+        active_count: '1',
+        suspended_count: '0',
+        total_active_sessions: '2',
+      }],
+    });
+    const service = createAccountService({ database: { configured: true, query } });
+
+    await expect(service.listUsers({ limit: 999 })).resolves.toEqual({
+      users: [{
+        id: USER_ROW.id,
+        email: USER_ROW.email,
+        displayName: USER_ROW.display_name,
+        authProvider: 'password',
+        authMethods: ['google', 'password'],
+        status: 'active',
+        createdAt: USER_ROW.created_at.toISOString(),
+        updatedAt: '2026-07-12T11:00:00.000Z',
+        lastActivityAt: '2026-07-12T12:00:00.000Z',
+        activeSessions: 2,
+        savedReports: 4,
+        aiCalls: 9,
+        aiTokens: 12500,
+      }],
+      total: 1,
+      summary: { active: 1, suspended: 0, activeSessions: 2 },
+      limit: 500,
+    });
+    expect(query.mock.calls[0][0]).toContain('COUNT(*) FILTER (WHERE expires_at > NOW())');
+    expect(query.mock.calls[0][1]).toEqual([500]);
+  });
+
+  test('suspends an account and revokes every active session atomically', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          ...USER_ROW,
+          auth_provider: 'password',
+          status: 'suspended',
+          updated_at: new Date('2026-07-12T12:00:00.000Z'),
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'session-1' }, { id: 'session-2' }], rowCount: 2 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    const result = await service.updateUserStatus({
+      userId: USER_ROW.id,
+      status: 'suspended',
+      actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+    });
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain('UPDATE users');
+    expect(query.mock.calls[1][0]).toContain('DELETE FROM user_sessions');
+    expect(result.user.status).toBe('suspended');
+    expect(result.revokedSessions).toBe(2);
+  });
+
+  test('revokes a managed account session without changing its status', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          ...USER_ROW,
+          auth_provider: 'google',
+          status: 'active',
+          updated_at: new Date('2026-07-12T12:00:00.000Z'),
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'session-1' }], rowCount: 1 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    const result = await service.revokeUserSessions({
+      userId: USER_ROW.id,
+      actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+    });
+
+    expect(query.mock.calls[0][0]).toContain('FROM users');
+    expect(query.mock.calls[1][0]).toContain('DELETE FROM user_sessions');
+    expect(result.user.status).toBe('active');
+    expect(result.revokedSessions).toBe(1);
+  });
+
+  test('prevents the administrator from suspending or signing out the owner account', async () => {
+    const query = jest.fn();
+    const transaction = jest.fn();
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    await expect(service.updateUserStatus({
+      userId: USER_ROW.id,
+      status: 'suspended',
+      actorUserId: USER_ROW.id,
+    })).rejects.toMatchObject({ code: 'ADMIN_SELF_MODIFICATION' });
+    await expect(service.revokeUserSessions({
+      userId: USER_ROW.id,
+      actorUserId: USER_ROW.id,
+    })).rejects.toMatchObject({ code: 'ADMIN_SELF_MODIFICATION' });
+    expect(transaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('Google identity verification', () => {

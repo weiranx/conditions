@@ -25,6 +25,8 @@ const TEMPERATURE_UNITS = new Set(['f', 'c']);
 const ELEVATION_UNITS = new Set(['ft', 'm']);
 const WIND_SPEED_UNITS = new Set(['mph', 'kph']);
 const TIME_STYLES = new Set(['ampm', '24h']);
+const ADMIN_USER_STATUSES = new Set(['active', 'suspended']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 class AccountValidationError extends Error {
   constructor(message, field) {
@@ -159,6 +161,47 @@ const serializeUser = (row) => ({
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   preferences: normalizeStoredPreferences(row.preferences),
 });
+
+const asNonNegativeNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+};
+
+const serializeAdminUser = (row) => ({
+  id: row.id,
+  email: row.email || null,
+  displayName: row.display_name || row.email || 'Unnamed account',
+  authProvider: row.auth_provider,
+  authMethods: Array.isArray(row.auth_methods) && row.auth_methods.length
+    ? row.auth_methods
+    : [row.auth_provider].filter(Boolean),
+  status: row.status,
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  lastActivityAt: row.last_activity_at instanceof Date ? row.last_activity_at.toISOString() : row.last_activity_at || null,
+  activeSessions: asNonNegativeNumber(row.active_sessions),
+  savedReports: asNonNegativeNumber(row.saved_reports),
+  aiCalls: asNonNegativeNumber(row.ai_calls),
+  aiTokens: asNonNegativeNumber(row.ai_tokens),
+});
+
+const createAdminAccountError = (message, code) => Object.assign(new Error(message), { code });
+
+const validateAdminUserId = (value) => {
+  const id = String(value || '').trim();
+  if (!UUID_PATTERN.test(id)) {
+    throw createAdminAccountError('Choose a valid account.', 'INVALID_ACCOUNT_ID');
+  }
+  return id;
+};
+
+const validateAdminUserStatus = (value) => {
+  const status = String(value || '').trim().toLowerCase();
+  if (!ADMIN_USER_STATUSES.has(status)) {
+    throw createAdminAccountError('Status must be active or suspended.', 'INVALID_ACCOUNT_STATUS');
+  }
+  return status;
+};
 
 const createDatabaseUnavailableError = () => {
   const error = new Error('Accounts are temporarily unavailable.');
@@ -303,6 +346,152 @@ const createAccountService = ({
     }
   };
 
+  const runInTransaction = (callback) => (
+    typeof database?.transaction === 'function'
+      ? database.transaction(callback)
+      : callback(database.query.bind(database))
+  );
+
+  const listUsers = async ({ limit: rawLimit = 500 } = {}) => {
+    ensureAvailable();
+    const parsedLimit = Number(rawLimit);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(500, Math.max(1, Math.round(parsedLimit)))
+      : 500;
+    const result = await database.query(
+      `WITH user_directory AS (
+         SELECT users.id,
+                users.email,
+                users.display_name,
+                users.auth_provider,
+                ARRAY(
+                  SELECT DISTINCT provider
+                  FROM (
+                    SELECT users.auth_provider AS provider
+                    UNION ALL
+                    SELECT account_identities.provider
+                    FROM account_identities
+                    WHERE account_identities.user_id = users.id
+                  ) linked_auth_methods
+                  WHERE provider IS NOT NULL
+                  ORDER BY provider
+                ) AS auth_methods,
+                users.status,
+                users.created_at,
+                users.updated_at,
+                GREATEST(
+                  users.created_at,
+                  session_activity.last_session_at,
+                  report_activity.last_report_at,
+                  ai_activity.last_ai_at
+                ) AS last_activity_at,
+                COALESCE(session_activity.active_sessions, 0) AS active_sessions,
+                COALESCE(report_activity.saved_reports, 0) AS saved_reports,
+                COALESCE(ai_activity.ai_calls, 0) AS ai_calls,
+                COALESCE(ai_activity.ai_tokens, 0) AS ai_tokens
+         FROM users
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) FILTER (WHERE expires_at > NOW()) AS active_sessions,
+                  MAX(created_at) AS last_session_at
+           FROM user_sessions
+           WHERE user_id = users.id
+         ) session_activity ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) AS saved_reports,
+                  MAX(updated_at) AS last_report_at
+           FROM saved_reports
+           WHERE user_id = users.id
+         ) report_activity ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) AS ai_calls,
+                  COALESCE(SUM(total_tokens), 0) AS ai_tokens,
+                  MAX(created_at) AS last_ai_at
+           FROM ai_usage_events
+           WHERE user_id = users.id
+         ) ai_activity ON TRUE
+       )
+       SELECT user_directory.*,
+              COUNT(*) OVER() AS total_count,
+              COUNT(*) FILTER (WHERE status = 'active') OVER() AS active_count,
+              COUNT(*) FILTER (WHERE status = 'suspended') OVER() AS suspended_count,
+              COALESCE(SUM(active_sessions) OVER(), 0) AS total_active_sessions
+       FROM user_directory
+       ORDER BY created_at DESC, id
+       LIMIT $1`,
+      [limit],
+    );
+    return {
+      users: result.rows.map(serializeAdminUser),
+      total: result.rows.length ? asNonNegativeNumber(result.rows[0].total_count) : 0,
+      summary: {
+        active: result.rows.length ? asNonNegativeNumber(result.rows[0].active_count) : 0,
+        suspended: result.rows.length ? asNonNegativeNumber(result.rows[0].suspended_count) : 0,
+        activeSessions: result.rows.length ? asNonNegativeNumber(result.rows[0].total_active_sessions) : 0,
+      },
+      limit,
+    };
+  };
+
+  const updateUserStatus = async ({ userId: rawUserId, status: rawStatus, actorUserId: rawActorUserId } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    const status = validateAdminUserStatus(rawStatus);
+    if (userId === actorUserId) {
+      throw createAdminAccountError('The owner account cannot be suspended from the admin console.', 'ADMIN_SELF_MODIFICATION');
+    }
+
+    return runInTransaction(async (query) => {
+      const result = await query(
+        `UPDATE users
+         SET status = $2,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, email, display_name, auth_provider, status, created_at, updated_at`,
+        [userId, status],
+      );
+      if (!result.rows[0]) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+      let revokedSessions = 0;
+      if (status === 'suspended') {
+        const revoked = await query('DELETE FROM user_sessions WHERE user_id = $1 RETURNING id', [userId]);
+        revokedSessions = asNonNegativeNumber(revoked.rowCount ?? revoked.rows?.length);
+      }
+      return {
+        user: serializeAdminUser(result.rows[0]),
+        revokedSessions,
+      };
+    });
+  };
+
+  const revokeUserSessions = async ({ userId: rawUserId, actorUserId: rawActorUserId } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    if (userId === actorUserId) {
+      throw createAdminAccountError('The owner account cannot be signed out from the admin console.', 'ADMIN_SELF_MODIFICATION');
+    }
+
+    return runInTransaction(async (query) => {
+      const account = await query(
+        `SELECT id, email, display_name, auth_provider, status, created_at, updated_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId],
+      );
+      if (!account.rows[0]) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+      const revoked = await query('DELETE FROM user_sessions WHERE user_id = $1 RETURNING id', [userId]);
+      return {
+        user: serializeAdminUser(account.rows[0]),
+        revokedSessions: asNonNegativeNumber(revoked.rowCount ?? revoked.rows?.length),
+      };
+    });
+  };
+
   const register = async ({
     email: rawEmail,
     displayName: rawDisplayName,
@@ -428,11 +617,14 @@ const createAccountService = ({
     available,
     sessionTtlMs,
     getUserForSession,
+    listUsers,
     login,
     loginWithGoogle,
     logout,
     register,
+    revokeUserSessions,
     updatePreferences,
+    updateUserStatus,
   };
 };
 

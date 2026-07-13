@@ -77,6 +77,18 @@ const isAdminAccount = (user) => (
   && user.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL
 );
 
+const getUserManagementError = (error, fallback) => {
+  if (error?.code === 'ACCOUNT_NOT_FOUND') return { status: 404, message: error.message };
+  if (error?.code === 'ADMIN_SELF_MODIFICATION') return { status: 409, message: error.message };
+  if (error?.code === 'INVALID_ACCOUNT_ID' || error?.code === 'INVALID_ACCOUNT_STATUS') {
+    return { status: 400, message: error.message };
+  }
+  if (error?.code === 'ACCOUNT_DATABASE_UNAVAILABLE') {
+    return { status: 503, message: 'Account management is temporarily unavailable.' };
+  }
+  return { status: 500, message: fallback };
+};
+
 const registerReportLogsRoute = (
   app,
   {
@@ -108,9 +120,9 @@ const registerReportLogsRoute = (
     }
     if (!isAdminAccount(accountUser)) {
       res.status(404).json({ error: 'Not found' });
-      return false;
+      return null;
     }
-    return true;
+    return accountUser;
   };
 
   app.get('/api/report-logs', async (req, res) => {
@@ -127,6 +139,103 @@ const registerReportLogsRoute = (
   app.get('/api/admin/audit-log', async (req, res) => {
     if (!await authorize(req, res)) return;
     res.json(await getAdminAuditEntries());
+  });
+
+  app.get('/api/admin/users', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (typeof accountService?.listUsers !== 'function') {
+      res.status(503).json({ error: 'Account management is temporarily unavailable.' });
+      return;
+    }
+    try {
+      const directory = await accountService.listUsers({ limit: req.query?.limit });
+      res.json({
+        ...directory,
+        users: directory.users.map((user) => ({ ...user, isOwner: isAdminAccount(user) })),
+      });
+    } catch (error) {
+      req.log?.error({ err: error }, 'Admin user directory could not be loaded');
+      const failure = getUserManagementError(error, 'Account directory could not be loaded.');
+      res.status(failure.status).json({ error: failure.message });
+    }
+  });
+
+  app.patch('/api/admin/users/:userId', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    if (typeof accountService?.updateUserStatus !== 'function') {
+      res.status(503).json({ error: 'Account management is temporarily unavailable.' });
+      return;
+    }
+    try {
+      const result = await accountService.updateUserStatus({
+        userId: req.params?.userId,
+        status: req.body?.status,
+        actorUserId: adminUser.id,
+      });
+      const targetName = result.user.displayName || result.user.email || 'account';
+      await audit(req, {
+        action: result.user.status === 'suspended' ? 'account.user.suspended' : 'account.user.reactivated',
+        category: 'accounts',
+        summary: `${result.user.status === 'suspended' ? 'Suspended' : 'Reactivated'} ${targetName}`,
+        details: {
+          targetUserId: result.user.id,
+          targetEmail: result.user.email,
+          status: result.user.status,
+          revokedSessions: result.revokedSessions,
+        },
+      });
+      res.json(result);
+    } catch (error) {
+      const failure = getUserManagementError(error, 'Account status could not be updated.');
+      if (failure.status === 500) req.log?.error({ err: error }, 'Admin account status update failed');
+      await audit(req, {
+        action: 'account.user.status-update-failed',
+        category: 'accounts',
+        status: 'error',
+        summary: failure.message,
+        details: { targetUserId: req.params?.userId ?? null },
+      });
+      res.status(failure.status).json({ error: failure.message });
+    }
+  });
+
+  app.post('/api/admin/users/:userId/revoke-sessions', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    if (typeof accountService?.revokeUserSessions !== 'function') {
+      res.status(503).json({ error: 'Account management is temporarily unavailable.' });
+      return;
+    }
+    try {
+      const result = await accountService.revokeUserSessions({
+        userId: req.params?.userId,
+        actorUserId: adminUser.id,
+      });
+      const targetName = result.user.displayName || result.user.email || 'account';
+      await audit(req, {
+        action: 'account.sessions.revoked',
+        category: 'accounts',
+        summary: `Signed out ${targetName} from ${result.revokedSessions} ${result.revokedSessions === 1 ? 'session' : 'sessions'}`,
+        details: {
+          targetUserId: result.user.id,
+          targetEmail: result.user.email,
+          revokedSessions: result.revokedSessions,
+        },
+      });
+      res.json(result);
+    } catch (error) {
+      const failure = getUserManagementError(error, 'Account sessions could not be revoked.');
+      if (failure.status === 500) req.log?.error({ err: error }, 'Admin account session revocation failed');
+      await audit(req, {
+        action: 'account.sessions.revoke-failed',
+        category: 'accounts',
+        status: 'error',
+        summary: failure.message,
+        details: { targetUserId: req.params?.userId ?? null },
+      });
+      res.status(failure.status).json({ error: failure.message });
+    }
   });
 
   app.get('/api/admin/ai-settings', async (req, res) => {

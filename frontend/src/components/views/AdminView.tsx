@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Activity,
   AlertTriangle,
+  Ban,
   BarChart3,
   Bot,
   CalendarRange,
   CheckCircle2,
+  CircleUserRound,
   Clock3,
   Cpu,
   Database,
@@ -18,6 +20,7 @@ import {
   KeyRound,
   LoaderCircle,
   Layers,
+  LogOut,
   MessageCircleQuestion,
   Pause,
   Play,
@@ -30,6 +33,7 @@ import {
   Server,
   ShieldCheck,
   Sparkles,
+  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -120,6 +124,34 @@ interface AdminAuditEntry {
   summary: string;
   actorNetwork: string | null;
   details: Record<string, unknown> | null;
+}
+
+interface AdminUserRecord {
+  id: string;
+  email: string | null;
+  displayName: string;
+  authProvider: string;
+  authMethods: string[];
+  status: 'active' | 'suspended' | string;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string | null;
+  activeSessions: number;
+  savedReports: number;
+  aiCalls: number;
+  aiTokens: number;
+  isOwner: boolean;
+}
+
+interface AdminUserDirectory {
+  users: AdminUserRecord[];
+  total: number;
+  summary: {
+    active: number;
+    suspended: number;
+    activeSessions: number;
+  };
+  limit: number;
 }
 
 interface ExternalDiagnosticsResult {
@@ -277,7 +309,8 @@ export function AdminView({ navigateToView, openPlannerView, openTripToolView }:
 type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' | 'durationMs' | 'ip';
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow';
 type AnalyticsRange = '6h' | '24h' | '7d';
-type AuditFilter = 'all' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
+type AuditFilter = 'all' | 'accounts' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
+type UserStatusFilter = 'all' | 'active' | 'suspended';
 
 const ANALYTICS_RANGES: Array<{
   value: AnalyticsRange;
@@ -313,10 +346,17 @@ const LOG_PAGE_SIZE = 10;
 
 const AUDIT_FILTERS: Array<{ value: AuditFilter; label: string }> = [
   { value: 'all', label: 'All activity' },
+  { value: 'accounts', label: 'Accounts' },
   { value: 'configuration', label: 'Configuration' },
   { value: 'maintenance', label: 'Maintenance' },
   { value: 'diagnostics', label: 'Diagnostics' },
   { value: 'errors', label: 'Failed' },
+];
+
+const USER_STATUS_FILTERS: Array<{ value: UserStatusFilter; label: string }> = [
+  { value: 'all', label: 'All accounts' },
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
 ];
 
 function getAnalyticsRange(range: AnalyticsRange) {
@@ -361,6 +401,24 @@ function formatLogTime(timestamp: string): { primary: string; secondary: string 
     primary: date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
     secondary: sameDay ? 'Today' : date.toLocaleDateString([], { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' }),
   };
+}
+
+function formatAccountDate(timestamp: string | null): string {
+  if (!timestamp) return 'No activity yet';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  const elapsedMs = Math.max(0, Date.now() - date.getTime());
+  if (elapsedMs < 60_000) return 'Just now';
+  if (elapsedMs < 60 * 60_000) return `${Math.floor(elapsedMs / 60_000)}m ago`;
+  if (elapsedMs < 24 * 60 * 60_000) return `${Math.floor(elapsedMs / (60 * 60_000))}h ago`;
+  if (elapsedMs < 7 * 24 * 60 * 60_000) return `${Math.floor(elapsedMs / (24 * 60 * 60_000))}d ago`;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+}
+
+function accountInitials(user: AdminUserRecord): string {
+  const words = user.displayName.trim().split(/\s+/u).filter(Boolean);
+  if (words.length > 1) return `${words[0][0]}${words.at(-1)?.[0] ?? ''}`.toUpperCase();
+  return (words[0]?.slice(0, 2) || user.email?.slice(0, 2) || '?').toUpperCase();
 }
 
 function percentile(values: number[], percentileValue: number): number {
@@ -595,6 +653,9 @@ function AdminDashboard() {
   const [healthHttpStatus, setHealthHttpStatus] = useState<number | null>(null);
   const [backendLatencyMs, setBackendLatencyMs] = useState<number | null>(null);
   const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, activeSessions: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -611,6 +672,8 @@ function AdminDashboard() {
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [userActionPending, setUserActionPending] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
@@ -621,6 +684,8 @@ function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [auditFilter, setAuditFilter] = useState<AuditFilter>('all');
   const [auditQuery, setAuditQuery] = useState('');
+  const [userQuery, setUserQuery] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all');
   const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [visibleLogCount, setVisibleLogCount] = useState(LOG_PAGE_SIZE);
@@ -650,6 +715,21 @@ function AdminDashboard() {
     return false;
   }, []);
 
+  const applyUserDirectory = useCallback((payload: unknown) => {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+    const directory = payload as Partial<AdminUserDirectory>;
+    if (!Array.isArray(directory.users) || !directory.summary || typeof directory.summary !== 'object') return false;
+    setUsers(directory.users);
+    setUsersTotal(Number.isFinite(directory.total) ? Number(directory.total) : directory.users.length);
+    setUserSummary({
+      active: Number.isFinite(directory.summary.active) ? Number(directory.summary.active) : 0,
+      suspended: Number.isFinite(directory.summary.suspended) ? Number(directory.summary.suspended) : 0,
+      activeSessions: Number.isFinite(directory.summary.activeSessions) ? Number(directory.summary.activeSessions) : 0,
+    });
+    setUsersError(null);
+    return true;
+  }, []);
+
   const fetchAuditTrail = useCallback(async () => {
     try {
       const result = await fetchApi('/api/admin/audit-log');
@@ -664,10 +744,21 @@ function AdminDashboard() {
     }
   }, []);
 
+  const fetchUserDirectory = useCallback(async () => {
+    try {
+      const result = await fetchApi('/api/admin/users?limit=500');
+      if (result.response.ok && applyUserDirectory(result.payload)) return true;
+      setUsersError('The account directory is temporarily unavailable.');
+    } catch {
+      setUsersError('Could not reach the server to load accounts.');
+    }
+    return false;
+  }, [applyUserDirectory]);
+
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
@@ -675,6 +766,7 @@ function AdminDashboard() {
         fetchApi('/api/admin/feature-flags'),
         fetchApi('/api/admin/ai-models'),
         fetchApi('/api/admin/audit-log'),
+        fetchApi('/api/admin/users?limit=500'),
       ]);
       if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
         setLogs(logsResult.payload as ReportLogEntry[]);
@@ -714,6 +806,9 @@ function AdminDashboard() {
       } else {
         setAuditError('Administrative activity is temporarily unavailable.');
       }
+      if (!usersResult.response.ok || !applyUserDirectory(usersResult.payload)) {
+        setUsersError('The account directory is temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
@@ -722,11 +817,12 @@ function AdminDashboard() {
       setFeatureFlagsError('Product feature flags are temporarily unavailable.');
       setAIModelCatalogError('Provider model lists are temporarily unavailable.');
       setAuditError('Administrative activity is temporarily unavailable.');
+      setUsersError('The account directory is temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [applyHealthSnapshot, fetchHealthSnapshot]);
+  }, [applyHealthSnapshot, applyUserDirectory, fetchHealthSnapshot]);
 
   const refreshModelCatalog = useCallback(async () => {
     setAIModelCatalogPending(true);
@@ -816,6 +912,60 @@ function AdminDashboard() {
     const fast = draft.fast.trim();
     if (!primary || !fast) return;
     await updateAIControl({ models: { [provider]: { primary, fast } } });
+  };
+
+  const updateManagedUserStatus = async (user: AdminUserRecord, status: 'active' | 'suspended') => {
+    if (user.isOwner) return;
+    if (status === 'suspended' && !window.confirm(
+      `Suspend ${user.displayName}? This immediately signs them out and blocks future sign-ins until the account is reactivated.`,
+    )) return;
+    setUserActionPending(`${user.id}:status`);
+    setUsersError(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The account status could not be updated.';
+        setUsersError(message);
+        return;
+      }
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to update this account.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const revokeManagedUserSessions = async (user: AdminUserRecord) => {
+    if (user.isOwner || user.activeSessions === 0) return;
+    if (!window.confirm(`Sign ${user.displayName} out of all active sessions?`)) return;
+    setUserActionPending(`${user.id}:sessions`);
+    setUsersError(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}/revoke-sessions`, {
+        method: 'POST',
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The account could not be signed out.';
+        setUsersError(message);
+        return;
+      }
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to sign this account out.');
+    } finally {
+      setUserActionPending(null);
+    }
   };
 
   const toggleProductFeature = async (feature: ProductFeatureKey) => {
@@ -1086,6 +1236,16 @@ function AdminDashboard() {
     });
   }, [auditEntries, auditFilter, auditQuery]);
 
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = userQuery.trim().toLowerCase();
+    return users.filter((user) => {
+      if (userStatusFilter !== 'all' && user.status !== userStatusFilter) return false;
+      if (!normalizedQuery) return true;
+      return [user.displayName, user.email, user.authProvider, ...user.authMethods, user.status]
+        .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery));
+    });
+  }, [userQuery, users, userStatusFilter]);
+
   const downloadOperationsSnapshot = () => {
     triggerJsonDownload(`admin-snapshot-${new Date().toISOString().replaceAll(':', '-').slice(0, 19)}.json`, {
       generatedAt: new Date().toISOString(),
@@ -1095,6 +1255,7 @@ function AdminDashboard() {
       aiMetrics,
       aiStatus: aiSettings,
       productFeatures: featureFlagStatus,
+      accounts: { total: usersTotal, ...userSummary },
       externalDiagnostics: diagnostics,
       recentAdminActivity: auditEntries.slice(0, 50),
     });
@@ -1247,6 +1408,158 @@ function AdminDashboard() {
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
         </article>
+      </section>
+
+      <section className="logs-panel admin-users-panel" aria-labelledby="admin-users-title">
+        <div className="logs-panel-head">
+          <div className="admin-users-heading">
+            <span className="logs-section-icon"><Users size={17} aria-hidden /></span>
+            <div>
+              <h2 id="admin-users-title">User management</h2>
+              <p>Review accounts, control access, and end active sessions</p>
+            </div>
+          </div>
+          <span className="admin-users-total">{usersTotal.toLocaleString()} {usersTotal === 1 ? 'account' : 'accounts'}</span>
+        </div>
+
+        <div className="admin-user-summary" aria-label="Account summary">
+          <article>
+            <span><CircleUserRound size={15} aria-hidden /> Total accounts</span>
+            <strong>{usersTotal.toLocaleString()}</strong>
+          </article>
+          <article>
+            <span><UserCheck size={15} aria-hidden /> Active</span>
+            <strong>{userSummary.active.toLocaleString()}</strong>
+          </article>
+          <article>
+            <span><Ban size={15} aria-hidden /> Suspended</span>
+            <strong>{userSummary.suspended.toLocaleString()}</strong>
+          </article>
+          <article>
+            <span><KeyRound size={15} aria-hidden /> Active sessions</span>
+            <strong>{userSummary.activeSessions.toLocaleString()}</strong>
+          </article>
+        </div>
+
+        <div className="logs-controls admin-users-controls">
+          <label className="logs-search">
+            <Search size={16} aria-hidden />
+            <span className="sr-only">Search accounts</span>
+            <input
+              value={userQuery}
+              onChange={(event) => setUserQuery(event.target.value)}
+              placeholder="Search name, email, or sign-in method…"
+            />
+            {userQuery && <button type="button" onClick={() => setUserQuery('')} aria-label="Clear account search"><X size={15} aria-hidden /></button>}
+          </label>
+          <div className="logs-filter-tabs" aria-label="Filter accounts">
+            {USER_STATUS_FILTERS.map((filter) => (
+              <button
+                type="button"
+                key={filter.value}
+                className={userStatusFilter === filter.value ? 'is-active' : ''}
+                onClick={() => setUserStatusFilter(filter.value)}
+                aria-pressed={userStatusFilter === filter.value}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {usersError && (
+          <div className="admin-users-error" role="alert">
+            <AlertTriangle size={15} aria-hidden />
+            <span>{usersError}</span>
+            <button type="button" onClick={() => void fetchUserDirectory()}>Try again</button>
+          </div>
+        )}
+        {users.length === 0 && usersError ? null : users.length === 0 ? (
+          <div className="logs-empty"><Users size={26} aria-hidden /><h3>No accounts yet</h3><p>New registered accounts will appear here.</p></div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="logs-empty"><Search size={26} aria-hidden /><h3>No matching accounts</h3><p>Try another status or search.</p><button type="button" onClick={() => { setUserQuery(''); setUserStatusFilter('all'); }}>Clear filters</button></div>
+        ) : (
+          <div className="admin-users-table-scroll">
+            <table className="admin-users-table">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>Access</th>
+                  <th>Usage</th>
+                  <th>Recent activity</th>
+                  <th>Status</th>
+                  <th><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => {
+                  const statusPending = userActionPending === `${user.id}:status`;
+                  const sessionsPending = userActionPending === `${user.id}:sessions`;
+                  const isActive = user.status === 'active';
+                  return (
+                    <tr key={user.id}>
+                      <td data-label="Account">
+                        <div className="admin-user-person">
+                          <span className="admin-user-avatar" aria-hidden>{accountInitials(user)}</span>
+                          <div>
+                            <strong>{user.displayName}</strong>
+                            <small>{user.email || 'No email address'}{user.isOwner && <span className="admin-owner-badge">Owner</span>}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td data-label="Access">
+                        <span className="admin-user-primary">{(user.authMethods?.length ? user.authMethods : [user.authProvider]).map((method) => method === 'password' ? 'Email & password' : method.replaceAll('-', ' ')).join(' + ')}</span>
+                        <small>{user.activeSessions.toLocaleString()} active {user.activeSessions === 1 ? 'session' : 'sessions'}</small>
+                      </td>
+                      <td data-label="Usage">
+                        <span className="admin-user-primary">{user.savedReports.toLocaleString()} saved {user.savedReports === 1 ? 'report' : 'reports'}</span>
+                        <small>{user.aiCalls.toLocaleString()} AI calls · {formatTokenCount(user.aiTokens)} tokens</small>
+                      </td>
+                      <td data-label="Recent activity">
+                        <span className="admin-user-primary" title={user.lastActivityAt ? new Date(user.lastActivityAt).toLocaleString() : undefined}>{formatAccountDate(user.lastActivityAt)}</span>
+                        <small>Joined {new Date(user.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</small>
+                      </td>
+                      <td data-label="Status">
+                        <span className={`admin-user-status is-${isActive ? 'active' : 'suspended'}`}><span aria-hidden />{isActive ? 'Active' : 'Suspended'}</span>
+                      </td>
+                      <td data-label="Actions">
+                        {user.isOwner ? (
+                          <span className="admin-user-protected"><ShieldCheck size={14} aria-hidden /> Protected</span>
+                        ) : (
+                          <div className="admin-user-actions">
+                            <button
+                              type="button"
+                              className={isActive ? 'logs-btn admin-user-suspend' : 'logs-btn admin-user-reactivate'}
+                              onClick={() => void updateManagedUserStatus(user, isActive ? 'suspended' : 'active')}
+                              disabled={Boolean(userActionPending)}
+                            >
+                              {isActive ? <Ban size={14} aria-hidden /> : <UserCheck size={14} aria-hidden />}
+                              {statusPending ? 'Saving…' : isActive ? 'Suspend' : 'Reactivate'}
+                            </button>
+                            <button
+                              type="button"
+                              className="logs-icon-btn"
+                              onClick={() => void revokeManagedUserSessions(user)}
+                              disabled={Boolean(userActionPending) || user.activeSessions === 0}
+                              title={user.activeSessions === 0 ? 'No active sessions' : 'Sign out all active sessions'}
+                              aria-label={`Sign ${user.displayName} out of all sessions`}
+                            >
+                              {sessionsPending ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <LogOut size={14} aria-hidden />}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <footer className="logs-panel-foot">
+          <span>Showing {filteredUsers.length.toLocaleString()} of {users.length.toLocaleString()} loaded accounts</span>
+          <span>Suspending an account revokes its active sessions immediately</span>
+        </footer>
       </section>
 
       <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title">
