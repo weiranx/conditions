@@ -1,27 +1,45 @@
 import SwiftUI
+import UIKit
 
 extension Color {
-    // Website-aligned application palette.
-    static let webBackground = Color(red: 0.966, green: 0.973, blue: 0.966)
-    static let webSurface = Color(red: 0.994, green: 0.996, blue: 0.993)
-    static let webSurfaceSubtle = Color(red: 0.944, green: 0.955, blue: 0.945)
-    static let webLine = Color(red: 0.855, green: 0.875, blue: 0.858)
-    static let webLineStrong = Color(red: 0.72, green: 0.76, blue: 0.73)
-    static let webInk = Color(red: 0.105, green: 0.125, blue: 0.11)
-    static let webInkSecondary = Color(red: 0.34, green: 0.37, blue: 0.35)
-    static let webInkTertiary = Color(red: 0.51, green: 0.54, blue: 0.52)
-    static let webPine = Color(red: 0.23, green: 0.48, blue: 0.34)
-    static let webPineDeep = Color(red: 0.115, green: 0.32, blue: 0.22)
-    static let webPineSoft = Color(red: 0.91, green: 0.95, blue: 0.92)
-    static let webHero = Color(red: 0.025, green: 0.105, blue: 0.08)
+    private static func adaptive(
+        light: (red: CGFloat, green: CGFloat, blue: CGFloat),
+        dark: (red: CGFloat, green: CGFloat, blue: CGFloat)
+    ) -> Color {
+        Color(uiColor: UIColor { traits in
+            let components = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(
+                red: components.red,
+                green: components.green,
+                blue: components.blue,
+                alpha: 1
+            )
+        })
+    }
+
+    // Website-aligned application palette. Each semantic token resolves against
+    // the current appearance so foregrounds, cards, and controls keep their
+    // contrast when iOS changes between light and dark mode.
+    static let webBackground = adaptive(light: (0.966, 0.973, 0.966), dark: (0.055, 0.075, 0.065))
+    static let webSurface = adaptive(light: (0.994, 0.996, 0.993), dark: (0.09, 0.118, 0.102))
+    static let webSurfaceSubtle = adaptive(light: (0.944, 0.955, 0.945), dark: (0.126, 0.161, 0.137))
+    static let webLine = adaptive(light: (0.855, 0.875, 0.858), dark: (0.204, 0.255, 0.224))
+    static let webLineStrong = adaptive(light: (0.72, 0.76, 0.73), dark: (0.298, 0.357, 0.322))
+    static let webInk = adaptive(light: (0.105, 0.125, 0.11), dark: (0.933, 0.957, 0.941))
+    static let webInkSecondary = adaptive(light: (0.34, 0.37, 0.35), dark: (0.761, 0.8, 0.773))
+    static let webInkTertiary = adaptive(light: (0.51, 0.54, 0.52), dark: (0.604, 0.655, 0.624))
+    static let webPine = adaptive(light: (0.23, 0.48, 0.34), dark: (0.396, 0.722, 0.545))
+    static let webPineDeep = adaptive(light: (0.115, 0.32, 0.22), dark: (0.561, 0.827, 0.667))
+    static let webPineSoft = adaptive(light: (0.91, 0.95, 0.92), dark: (0.137, 0.231, 0.18))
+    static let webHero = adaptive(light: (0.025, 0.105, 0.08), dark: (0.027, 0.102, 0.071))
 
     // Accessible danger level colors — avoids raw .yellow/.green which wash out on light backgrounds
     static let dangerLevel0 = Color.gray
-    static let dangerLevel1 = Color(red: 0.2, green: 0.65, blue: 0.32)       // accessible green
-    static let dangerLevel2 = Color(red: 0.78, green: 0.58, blue: 0.05)      // accessible amber/yellow
-    static let dangerLevel3 = Color(red: 0.9, green: 0.45, blue: 0.1)        // accessible orange
-    static let dangerLevel4 = Color(red: 0.85, green: 0.18, blue: 0.18)      // accessible red
-    static let dangerLevel5 = Color(red: 0.6, green: 0, blue: 0)             // dark red / extreme
+    static let dangerLevel1 = adaptive(light: (0.2, 0.65, 0.32), dark: (0.39, 0.79, 0.47))
+    static let dangerLevel2 = adaptive(light: (0.78, 0.58, 0.05), dark: (0.88, 0.72, 0.28))
+    static let dangerLevel3 = adaptive(light: (0.9, 0.45, 0.1), dark: (0.94, 0.58, 0.28))
+    static let dangerLevel4 = adaptive(light: (0.85, 0.18, 0.18), dark: (0.93, 0.4, 0.4))
+    static let dangerLevel5 = adaptive(light: (0.6, 0, 0), dark: (0.85, 0.55, 0.55))
 
     static func dangerLevel(_ level: Int) -> Color {
         switch level {
@@ -36,17 +54,17 @@ extension Color {
     }
 
     static func scoreColor(_ score: Double) -> Color {
-        if score >= 80 { return Color(red: 0.2, green: 0.65, blue: 0.32) }    // green
-        if score >= 60 { return Color(red: 0.78, green: 0.58, blue: 0.05) }   // amber
-        if score >= 40 { return Color(red: 0.9, green: 0.45, blue: 0.1) }     // orange
-        return Color(red: 0.85, green: 0.18, blue: 0.18)                       // red
+        if score >= 80 { return .dangerLevel1 }
+        if score >= 60 { return .dangerLevel2 }
+        if score >= 40 { return .dangerLevel3 }
+        return .dangerLevel4
     }
 
     // Semantic aliases for common use
-    static let safeGreen = Color(red: 0.2, green: 0.65, blue: 0.32)
-    static let cautionAmber = Color(red: 0.78, green: 0.58, blue: 0.05)
-    static let warningOrange = Color(red: 0.9, green: 0.45, blue: 0.1)
-    static let dangerRed = Color(red: 0.85, green: 0.18, blue: 0.18)
+    static let safeGreen = dangerLevel1
+    static let cautionAmber = dangerLevel2
+    static let warningOrange = dangerLevel3
+    static let dangerRed = dangerLevel4
 }
 
 extension Font {
