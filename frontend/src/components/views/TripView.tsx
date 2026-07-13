@@ -7,36 +7,29 @@ import {
   ArrowRight,
   CalendarDays,
   Clock3,
+  Check,
+  Copy,
+  Droplets,
+  Eye,
+  Gauge,
+  Minus,
+  Printer,
+  ShieldAlert,
+  Sunrise,
+  Table2,
+  TrendingDown,
+  TrendingUp,
+  Wind,
 } from 'lucide-react';
 import type { DecisionLevel, TimeStyle } from '../../app/types';
 import { formatClockForStyle } from '../../app/core';
 import { weatherConditionEmoji } from '../../app/weather-display';
+import type { MultiDayTripForecastDay } from '../../hooks/useTripForecast';
 import type { Suggestion } from '../../lib/search';
 import { SearchBox } from '../planner/SearchBox';
 import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
 import type { AppView } from '../../hooks/useUrlState';
-
-export type MultiDayTripForecastDay = {
-  date: string;
-  decisionLevel: DecisionLevel;
-  decisionHeadline: string;
-  score: number | null;
-  weatherDescription: string;
-  tempF: number | null;
-  feelsLikeF: number | null;
-  windGustMph: number | null;
-  precipChance: number | null;
-  isDaytime: boolean | null;
-  travelSummary: string;
-  sourceIssuedTime: string | null;
-  deltas?: {
-    score: number | null;
-    tempF: number | null;
-    windGustMph: number | null;
-    precipChance: number | null;
-  } | null;
-};
 
 export interface TripViewProps {
   appShellClassName: string;
@@ -112,6 +105,15 @@ function monthDayLabel(iso: string): string {
   return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : iso;
 }
 
+function dayLengthLabel(value: string | null): string | null {
+  if (!value) return null;
+  const match = /^(\d{1,2}):(\d{2})/.exec(value.trim());
+  if (!match) return value;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
+}
+
 function levelClass(level: DecisionLevel): string {
   return level.toLowerCase().replace('-', '');
 }
@@ -129,6 +131,46 @@ function compareForecastDays(
   const decisionDifference = DECISION_PRIORITY[left.decisionLevel] - DECISION_PRIORITY[right.decisionLevel];
   if (decisionDifference !== 0) return decisionDifference;
   return (left.score ?? -Infinity) - (right.score ?? -Infinity);
+}
+
+function extremeDayIndex(
+  days: MultiDayTripForecastDay[],
+  getValue: (day: MultiDayTripForecastDay) => number | null,
+  mode: 'min' | 'max',
+): number {
+  let selectedIndex = -1;
+  let selectedValue = mode === 'min' ? Infinity : -Infinity;
+  days.forEach((day, index) => {
+    const value = getValue(day);
+    if (value === null || !Number.isFinite(value)) return;
+    const isBetter = mode === 'min' ? value < selectedValue : value > selectedValue;
+    if (isBetter) {
+      selectedIndex = index;
+      selectedValue = value;
+    }
+  });
+  return selectedIndex;
+}
+
+async function copyTextWithFallback(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to the textarea copy path for restricted browser contexts.
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return copied;
 }
 
 /* Inline day-over-day delta marker for a trip metric. */
@@ -251,9 +293,15 @@ export function TripView({
   onUseDayInPlanner,
 }: TripViewProps) {
   const [sel, setSel] = React.useState(0);
+  const [briefCopied, setBriefCopied] = React.useState(false);
   const dayRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const detailRef = React.useRef<HTMLDivElement | null>(null);
   const anchoredRowsRef = React.useRef<MultiDayTripForecastDay[] | null>(null);
+  const copyResetTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => () => {
+    if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
+  }, []);
 
   // Re-anchor selection to the best day whenever a fresh forecast lands.
   React.useEffect(() => {
@@ -304,6 +352,30 @@ export function TripView({
     : best?.decisionLevel === 'CAUTION'
       ? 'Most favorable — use caution'
       : 'Least unfavorable — still no-go';
+  const calmestDayIndex = extremeDayIndex(tripForecastRows, (day) => day.windGustMph, 'min');
+  const driestDayIndex = extremeDayIndex(tripForecastRows, (day) => day.precipChance, 'min');
+  const bestTravelDayIndex = extremeDayIndex(
+    tripForecastRows,
+    (day) => day.travelTotalHours > 0 ? day.travelPassHours / day.travelTotalHours : null,
+    'max',
+  );
+  const calmestDay = tripForecastRows[calmestDayIndex] ?? null;
+  const driestDay = tripForecastRows[driestDayIndex] ?? null;
+  const bestTravelDay = tripForecastRows[bestTravelDayIndex] ?? null;
+  const firstScoredDay = tripForecastRows.find((day) => day.score !== null) ?? null;
+  const lastScoredDay = [...tripForecastRows].reverse().find((day) => day.score !== null) ?? null;
+  const tripScoreChange = typeof firstScoredDay?.score === 'number' && typeof lastScoredDay?.score === 'number'
+    ? lastScoredDay.score - firstScoredDay.score
+    : null;
+  const tripTrend = tripScoreChange === null || Math.abs(tripScoreChange) < 3
+    ? 'steady'
+    : tripScoreChange > 0
+      ? 'improving'
+      : 'declining';
+  const partialDayCount = tripForecastRows.filter((day) => day.partialData).length;
+  const averageScore = scoredValues.length > 0
+    ? Math.round(scoredValues.reduce((sum, score) => sum + score, 0) / scoredValues.length)
+    : null;
 
   const clearForecastState = () => {
     setTripForecastRows([]);
@@ -328,6 +400,42 @@ export function TripView({
     window.requestAnimationFrame(() => {
       detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  };
+
+  const inspectDay = (index: number) => {
+    if (index < 0) return;
+    selectDay(index);
+    window.requestAnimationFrame(() => {
+      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const buildTripBrief = () => {
+    const dateRange = tripForecastRows.length > 1
+      ? `${monthDayLabel(tripForecastRows[0].date)}–${monthDayLabel(tripForecastRows[tripForecastRows.length - 1].date)}`
+      : tripForecastRows[0] ? monthDayLabel(tripForecastRows[0].date) : tripStartDate;
+    const lines = [
+      `${objectiveSummary} · Multi-day trip brief`,
+      `${dateRange} · ${tripStartDisplay} daily start · ${travelWindowHoursLabel} travel window`,
+      best ? `Best option: ${weekdayLabel(best.date)}, ${monthDayLabel(best.date)} · ${best.decisionLevel} · ${best.score ?? 'N/A'}/100` : '',
+      '',
+      ...tripForecastRows.map((day) => [
+        `${weekdayLabel(day.date)}, ${monthDayLabel(day.date)} — ${day.decisionLevel}${day.score !== null ? ` · ${day.score}/100` : ''}`,
+        `${day.weatherDescription}; ${formatTempDisplay(day.tempF)}; gusts ${formatWindDisplay(day.windGustMph)}; precip ${day.precipChance !== null ? `${day.precipChance}%` : 'N/A'}; travel ${day.travelPassHours}/${day.travelTotalHours}h passing.`,
+        day.decisionHeadline,
+      ].join('\n')),
+      '',
+      'Weather and travel-window comparison only. Check the current official avalanche bulletin within 24h of departure.',
+    ];
+    return lines.filter((line, index) => line !== '' || lines[index - 1] !== '').join('\n');
+  };
+
+  const copyTripBrief = async () => {
+    const copied = await copyTextWithFallback(buildTripBrief());
+    if (!copied) return;
+    setBriefCopied(true);
+    if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
+    copyResetTimerRef.current = window.setTimeout(() => setBriefCopied(false), 2200);
   };
 
   return (
@@ -516,6 +624,55 @@ export function TripView({
               </div>
             </div>
 
+            {/* PLANNING SIGNALS */}
+            <section className="ssr-trip-insights" aria-labelledby="trip-insights-title">
+              <div className="ssr-trip-panel-head">
+                <div>
+                  <span>Planning signals</span>
+                  <h2 id="trip-insights-title">What changes across the window</h2>
+                  <p>
+                    Fast comparisons from the same daily start and travel thresholds.
+                    {partialDayCount > 0 ? ` ${partialDayCount} day${partialDayCount === 1 ? '' : 's'} include partial data.` : ''}
+                  </p>
+                </div>
+                <div className="ssr-trip-panel-actions">
+                  <button type="button" onClick={() => void copyTripBrief()}>
+                    {briefCopied ? <Check aria-hidden /> : <Copy aria-hidden />}
+                    {briefCopied ? 'Copied' : 'Copy trip brief'}
+                  </button>
+                  <button type="button" onClick={() => window.print()}>
+                    <Printer aria-hidden /> Print
+                  </button>
+                </div>
+              </div>
+              <div className="ssr-trip-insight-grid">
+                <button type="button" className="ssr-trip-insight" onClick={() => inspectDay(calmestDayIndex)} disabled={!calmestDay}>
+                  <Wind aria-hidden />
+                  <span>Calmest day</span>
+                  <strong>{calmestDay ? `${weekdayLabel(calmestDay.date)}, ${monthDayLabel(calmestDay.date)}` : 'Unavailable'}</strong>
+                  <small>{calmestDay ? `${formatWindDisplay(calmestDay.windGustMph)} peak gust` : 'No wind forecast'}</small>
+                </button>
+                <button type="button" className="ssr-trip-insight" onClick={() => inspectDay(driestDayIndex)} disabled={!driestDay}>
+                  <Droplets aria-hidden />
+                  <span>Driest day</span>
+                  <strong>{driestDay ? `${weekdayLabel(driestDay.date)}, ${monthDayLabel(driestDay.date)}` : 'Unavailable'}</strong>
+                  <small>{driestDay?.precipChance !== null && driestDay ? `${driestDay.precipChance}% precipitation chance` : 'No precipitation forecast'}</small>
+                </button>
+                <button type="button" className="ssr-trip-insight" onClick={() => inspectDay(bestTravelDayIndex)} disabled={!bestTravelDay}>
+                  <Gauge aria-hidden />
+                  <span>Cleanest travel window</span>
+                  <strong>{bestTravelDay ? `${weekdayLabel(bestTravelDay.date)}, ${monthDayLabel(bestTravelDay.date)}` : 'Unavailable'}</strong>
+                  <small>{bestTravelDay ? `${bestTravelDay.travelPassHours}/${bestTravelDay.travelTotalHours}h meet every threshold` : 'No hourly travel data'}</small>
+                </button>
+                <div className={`ssr-trip-insight trend ${tripTrend}`}>
+                  {tripTrend === 'improving' ? <TrendingUp aria-hidden /> : tripTrend === 'declining' ? <TrendingDown aria-hidden /> : <Minus aria-hidden />}
+                  <span>Trip trend</span>
+                  <strong>{tripTrend === 'improving' ? 'Conditions improve' : tripTrend === 'declining' ? 'Conditions deteriorate' : 'Conditions stay steady'}</strong>
+                  <small>{tripScoreChange === null ? 'Not enough scores to compare' : `${tripScoreChange > 0 ? '+' : ''}${tripScoreChange} points from first to last day`}</small>
+                </div>
+              </div>
+            </section>
+
             {/* TREND ARC */}
             <div className="ssr-trip-trend">
               <div className="ssr-trip-trend-h">
@@ -524,6 +681,60 @@ export function TripView({
               </div>
               <TrendArc days={tripForecastRows} getScoreColor={getScoreColor} />
             </div>
+
+            {/* COMPARISON MATRIX */}
+            <section className="ssr-trip-matrix" aria-labelledby="trip-matrix-title">
+              <div className="ssr-trip-panel-head compact">
+                <div>
+                  <span>All-day matrix</span>
+                  <h2 id="trip-matrix-title"><Table2 aria-hidden /> Compare every signal</h2>
+                  <p>Scan the full window without opening each day.</p>
+                </div>
+              </div>
+              <div className="ssr-trip-matrix-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Day</th>
+                      <th scope="col">Decision</th>
+                      <th scope="col">Score</th>
+                      <th scope="col">Travel</th>
+                      <th scope="col">Temperature</th>
+                      <th scope="col">Peak gust</th>
+                      <th scope="col">Precip</th>
+                      <th scope="col">Daylight</th>
+                      <th scope="col">Visibility</th>
+                      <th scope="col">Alerts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tripForecastRows.map((day, index) => (
+                      <tr key={day.date} className={sel === index ? 'selected' : ''}>
+                        <th scope="row">
+                          <button type="button" onClick={() => inspectDay(index)} aria-label={`Inspect ${weekdayLabel(day.date)}, ${monthDayLabel(day.date)}`}>
+                            <strong>{weekdayLabel(day.date)}</strong>
+                            <span>{monthDayLabel(day.date)}</span>
+                          </button>
+                        </th>
+                        <td><span className={`ssr-trip-day-pill ${levelClass(day.decisionLevel)}`}>{day.decisionLevel}</span></td>
+                        <td className="numeric"><strong>{day.score ?? '—'}</strong>{day.score !== null ? '/100' : ''}</td>
+                        <td className="numeric"><strong>{day.travelPassHours}</strong>/{day.travelTotalHours}h</td>
+                        <td>{formatTempDisplay(day.tempF)}</td>
+                        <td>{formatWindDisplay(day.windGustMph)}</td>
+                        <td>{day.precipChance !== null ? `${day.precipChance}%` : '—'}</td>
+                        <td>
+                          {day.sunrise && day.sunset
+                            ? `${formatClockForStyle(day.sunrise, timeStyle)}–${formatClockForStyle(day.sunset, timeStyle)}`
+                            : '—'}
+                        </td>
+                        <td>{day.visibilityLevel || '—'}</td>
+                        <td className={day.alertCount > 0 ? 'warn' : ''}>{day.alertCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
             {/* DAY STRIP */}
             <div className="ssr-trip-section-head">
@@ -617,11 +828,14 @@ export function TripView({
               <div className="ssr-trip-detail" ref={detailRef} aria-live="polite">
                 <div className="ssr-trip-detail-h">
                   <div className="ssr-trip-detail-title">
-                    <span className={`ssr-trip-day-pill ${levelClass(selected.decisionLevel)}`}>{selected.decisionLevel}</span>
-                    <h2>
-                      {weekdayLabel(selected.date)}, {monthDayLabel(selected.date)}
-                      {selected.score !== null ? ` · ${selected.score}/100` : ''}
-                    </h2>
+                    <div>
+                      <span className={`ssr-trip-day-pill ${levelClass(selected.decisionLevel)}`}>{selected.decisionLevel}</span>
+                      <h2>
+                        {weekdayLabel(selected.date)}, {monthDayLabel(selected.date)}
+                        {selected.score !== null ? ` · ${selected.score}/100` : ''}
+                      </h2>
+                    </div>
+                    <p>{localizeUnitText(selected.decisionHeadline)}</p>
                   </div>
                   <button type="button" className="ssr-btn primary" onClick={() => onUseDayInPlanner(selected.date, tripStartTime)}>
                     Use this day in Planner
@@ -632,17 +846,56 @@ export function TripView({
                     <h3><CloudRain /> Weather</h3>
                     <p>
                       {localizeUnitText(selected.weatherDescription)}. Temp {formatTempDisplay(selected.tempF)} (feels{' '}
-                      {formatTempDisplay(selected.feelsLikeF)}), gusts to {formatWindDisplay(selected.windGustMph)}, precip{' '}
-                      {selected.precipChance !== null ? `${selected.precipChance}%` : 'N/A'}.
+                      {formatTempDisplay(selected.feelsLikeF)}), precip {selected.precipChance !== null ? `${selected.precipChance}%` : 'N/A'}.
                     </p>
+                    <small>{selected.humidityPct !== null ? `${selected.humidityPct}% humidity` : 'Humidity unavailable'} · {selected.cloudCoverPct !== null ? `${selected.cloudCoverPct}% cloud cover` : 'Cloud cover unavailable'}</small>
+                  </div>
+                  <div className="ssr-trip-detail-cell">
+                    <h3><Wind /> Wind & visibility</h3>
+                    <p>Peak gust {formatWindDisplay(selected.windGustMph)}{selected.windDirection ? ` from ${selected.windDirection}` : ''}.</p>
+                    <small>{selected.visibilitySummary ? localizeUnitText(selected.visibilitySummary) : selected.visibilityLevel ? `${selected.visibilityLevel} visibility risk` : 'Visibility risk unavailable'}</small>
                   </div>
                   <div className="ssr-trip-detail-cell">
                     <h3><Route /> Travel window</h3>
-                    <p>{localizeUnitText(selected.travelSummary)}</p>
+                    <p><strong>{selected.travelPassHours}/{selected.travelTotalHours} hours</strong> meet every travel threshold.</p>
+                    <small>
+                      {(selected.expectedRainIn !== null || selected.expectedSnowIn !== null)
+                        && (selected.expectedRainIn ?? 0) === 0
+                        && (selected.expectedSnowIn ?? 0) === 0
+                        ? 'No rain or snow accumulation expected'
+                        : selected.expectedRainIn !== null || selected.expectedSnowIn !== null
+                        ? localizeUnitText(`${selected.expectedRainIn !== null ? `${selected.expectedRainIn.toFixed(2)} in rain` : 'No rain estimate'} · ${selected.expectedSnowIn !== null ? `${selected.expectedSnowIn.toFixed(1)} in snow` : 'No snow estimate'}`)
+                        : 'No accumulation estimate'}
+                    </small>
                   </div>
                   <div className="ssr-trip-detail-cell">
-                    <h3><Info /> Decision</h3>
-                    <p>{localizeUnitText(selected.decisionHeadline)}</p>
+                    <h3><Sunrise /> Daylight</h3>
+                    <p>
+                      {selected.sunrise && selected.sunset
+                        ? `${formatClockForStyle(selected.sunrise, timeStyle)} sunrise · ${formatClockForStyle(selected.sunset, timeStyle)} sunset`
+                        : 'Daylight times unavailable'}
+                    </p>
+                    <small>{dayLengthLabel(selected.dayLength) ? `${dayLengthLabel(selected.dayLength)} total daylight` : `Daily start ${tripStartDisplay}`}</small>
+                  </div>
+                  <div className="ssr-trip-detail-cell">
+                    <h3><ShieldAlert /> Alerts & air</h3>
+                    <p>{selected.alertCount > 0 ? `${selected.alertCount} active weather alert${selected.alertCount === 1 ? '' : 's'}` : 'No active weather alerts'}</p>
+                    <small>
+                      {selected.airQualityAqi !== null
+                        ? `AQI ${selected.airQualityAqi}${selected.airQualityCategory ? ` · ${selected.airQualityCategory}` : ''}`
+                        : selected.airQualityCategory || 'Air quality unavailable'}
+                    </small>
+                  </div>
+                  <div className="ssr-trip-detail-cell">
+                    <h3><Eye /> Decision context</h3>
+                    <p>
+                      {selected.score !== null && averageScore !== null
+                        ? `${selected.score - averageScore >= 0 ? '+' : ''}${selected.score - averageScore} points versus the trip average.`
+                        : 'No trip-average score comparison.'}
+                    </p>
+                    <small className={selected.partialData ? 'warn' : ''}>
+                      {selected.partialData ? selected.apiWarning || 'Some forecast inputs are missing.' : 'All primary trip inputs loaded.'}
+                    </small>
                   </div>
                 </div>
                 <div className="ssr-trip-detail-foot">

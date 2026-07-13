@@ -16,9 +16,26 @@ export type MultiDayTripForecastDay = {
   tempF: number | null;
   feelsLikeF: number | null;
   windGustMph: number | null;
+  windDirection: string | null;
   precipChance: number | null;
+  expectedRainIn: number | null;
+  expectedSnowIn: number | null;
+  humidityPct: number | null;
+  cloudCoverPct: number | null;
   isDaytime: boolean | null;
   travelSummary: string;
+  travelPassHours: number;
+  travelTotalHours: number;
+  sunrise: string | null;
+  sunset: string | null;
+  dayLength: string | null;
+  visibilityLevel: string | null;
+  visibilitySummary: string | null;
+  alertCount: number;
+  airQualityAqi: number | null;
+  airQualityCategory: string | null;
+  partialData: boolean;
+  apiWarning: string | null;
   sourceIssuedTime: string | null;
   deltas?: {
     score: number | null;
@@ -30,6 +47,12 @@ export type MultiDayTripForecastDay = {
 
 const diffOrNull = (current: number | null, previous: number | null): number | null =>
   current != null && previous != null ? Math.round((current - previous) * 10) / 10 : null;
+
+const finiteNumberOrNull = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export interface UseTripForecastParams {
   hasObjective: boolean;
@@ -161,6 +184,15 @@ export function useTripForecast({
             const feelsRaw = Number(dayData?.weather?.feelsLike ?? dayData?.weather?.temp);
             const gustRaw = Number(dayData?.weather?.windGust);
             const precipRaw = Number(dayData?.weather?.precipChance);
+            const humidityRaw = finiteNumberOrNull(dayData?.weather?.humidity);
+            const cloudCoverRaw = finiteNumberOrNull(dayData?.weather?.cloudCover);
+            const expectedRainRaw = finiteNumberOrNull(dayData?.rainfall?.expected?.rainWindowIn);
+            const expectedSnowRaw = finiteNumberOrNull(dayData?.rainfall?.expected?.snowWindowIn);
+            const airQualityAqiRaw = finiteNumberOrNull(dayData?.airQuality?.forecast?.usAqi ?? dayData?.airQuality?.usAqi);
+            const airQualityCategoryRaw = dayData?.airQuality?.forecast?.category || dayData?.airQuality?.category || null;
+            const airQualityCategory = airQualityCategoryRaw?.trim().toLowerCase() === 'unknown'
+              ? null
+              : airQualityCategoryRaw;
 
             return {
               date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : date,
@@ -171,9 +203,26 @@ export function useTripForecast({
               tempF: Number.isFinite(tempRaw) ? tempRaw : null,
               feelsLikeF: Number.isFinite(feelsRaw) ? feelsRaw : null,
               windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
+              windDirection: dayData?.weather?.windDirection || null,
               precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
+              expectedRainIn: expectedRainRaw,
+              expectedSnowIn: expectedSnowRaw,
+              humidityPct: humidityRaw !== null ? Math.round(humidityRaw) : null,
+              cloudCoverPct: cloudCoverRaw !== null ? Math.round(cloudCoverRaw) : null,
               isDaytime: typeof dayData?.weather?.isDaytime === 'boolean' ? dayData.weather.isDaytime : null,
               travelSummary: `${travelInsights.passHours}/${travelRows.length}h passing`,
+              travelPassHours: travelInsights.passHours,
+              travelTotalHours: travelRows.length,
+              sunrise: dayData?.solar?.sunrise || null,
+              sunset: dayData?.solar?.sunset || null,
+              dayLength: dayData?.solar?.dayLength || null,
+              visibilityLevel: dayData?.weather?.visibilityRisk?.level || null,
+              visibilitySummary: dayData?.weather?.visibilityRisk?.summary || null,
+              alertCount: Math.max(0, Math.round(Number(dayData?.alerts?.activeCount) || 0)),
+              airQualityAqi: airQualityAqiRaw !== null ? Math.round(airQualityAqiRaw) : null,
+              airQualityCategory,
+              partialData: Boolean(dayData?.partialData),
+              apiWarning: dayData?.apiWarning || null,
               sourceIssuedTime: dayData?.weather?.issuedTime || null,
             } as MultiDayTripForecastDay;
           } catch {
