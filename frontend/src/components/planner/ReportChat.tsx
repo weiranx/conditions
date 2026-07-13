@@ -127,6 +127,7 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
                       {message.parts.map((part, partIndex) => (
                         part.type === 'text' ? (
                           <MessageResponse
+                            className="report-chat-response"
                             key={`${message.id}-${partIndex}`}
                             isAnimating={isBusy && message.role === 'assistant' && messageIndex === messages.length - 1}
                           >

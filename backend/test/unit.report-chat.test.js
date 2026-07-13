@@ -22,6 +22,10 @@ describe('report chat request handling', () => {
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/specific report evidence and values/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/concrete timing, terrain, verification, gear, or turnaround actions/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Keep a simple factual answer short/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/scope is limited to interpreting the attached report/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/programming, coding exercises/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/do not answer any part of it/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/one brief redirect/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Never invent current conditions/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/never fabricate a name/i);
   });

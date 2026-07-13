@@ -117,6 +117,27 @@
 .report-chat-message-content strong { font-weight: 700; }
 .report-chat-message-content code { font-family: var(--ssr-mono); font-size: .92em; }
 
+/* MessageResponse defaults to `size-full`, which gives streamed markdown a
+   100% height and can stretch code blocks to the conversation viewport. */
+.report-chat-message-content .report-chat-response {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+}
+
+/* Streamdown uses an intrinsic placeholder while offscreen code is highlighted.
+   Inside this already-bounded scroll area that can leave a large blank block. */
+.report-chat-message-content [data-streamdown='code-block'] {
+  max-width: 100%;
+  content-visibility: visible !important;
+  contain-intrinsic-size: none !important;
+}
+
+.report-chat-message-content [data-streamdown='code-block-body'] {
+  max-height: 280px;
+  overflow: auto;
+}
+
 .report-chat-follow-ups {
   display: grid;
   gap: 7px;
