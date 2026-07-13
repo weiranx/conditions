@@ -1,4 +1,5 @@
 const { isAdminAccount, isRouteWaypointEntry } = require('../src/routes/report-logs');
+const { usageSnapshot } = require('../src/utils/system-resources');
 
 test('identifies internal route waypoint log entries', () => {
   expect(isRouteWaypointEntry({ name: 'Route waypoint: Trailhead' })).toBe(true);
@@ -11,6 +12,23 @@ test('recognizes only the configured administrator account', () => {
   expect(isAdminAccount({ email: 'WEIRANXIONG@GMAIL.COM' })).toBe(true);
   expect(isAdminAccount({ email: 'climber@example.com' })).toBe(false);
   expect(isAdminAccount(null)).toBe(false);
+});
+
+test('calculates resource usage without allowing invalid capacity values', () => {
+  expect(usageSnapshot(8_000, 3_000, 2_500)).toEqual({
+    totalBytes: 8_000,
+    usedBytes: 5_000,
+    freeBytes: 3_000,
+    availableBytes: 2_500,
+    usagePercent: 62.5,
+  });
+  expect(usageSnapshot(0, -1)).toEqual({
+    totalBytes: 0,
+    usedBytes: 0,
+    freeBytes: 0,
+    availableBytes: 0,
+    usagePercent: 0,
+  });
 });
 
 test('authorized AI admin routes read and update runtime settings', async () => {
@@ -43,6 +61,12 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const runDiagnostics = jest.fn(async () => diagnosticsPayload);
   const modelCatalogPayload = { fetchedAt: '2026-07-12T12:00:00.000Z', providers: {} };
   const loadModelCatalog = jest.fn(async () => modelCatalogPayload);
+  const systemResourcesPayload = {
+    memory: { totalBytes: 8_000, usedBytes: 5_000, freeBytes: 3_000, availableBytes: 3_000, usagePercent: 62.5 },
+    disk: { totalBytes: 100_000, usedBytes: 40_000, freeBytes: 60_000, availableBytes: 55_000, usagePercent: 40 },
+    timestamp: '2026-07-12T12:00:00.000Z',
+  };
+  const readSystemResources = jest.fn(async () => systemResourcesPayload);
   const adminUser = {
     id: 'f39db25c-3498-41f9-9448-7c8004b8f688',
     email: 'weiranxiong@gmail.com',
@@ -84,6 +108,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     caches: [firstCache, null, secondCache],
     runDiagnostics,
     loadModelCatalog,
+    readSystemResources,
   });
 
   const createResponse = () => ({
@@ -97,6 +122,11 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const auditResponse = createResponse();
   await routes.get.get('/api/admin/audit-log')({ headers }, auditResponse);
   expect(auditResponse.payload).toEqual(auditEntries);
+
+  const systemResourcesResponse = createResponse();
+  await routes.get.get('/api/admin/system-resources')({ headers }, systemResourcesResponse);
+  expect(readSystemResources).toHaveBeenCalledTimes(1);
+  expect(systemResourcesResponse.payload).toEqual(systemResourcesPayload);
 
   const usersResponse = createResponse();
   await routes.get.get('/api/admin/users')({ headers, query: { limit: '250' } }, usersResponse);
@@ -232,6 +262,13 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, hiddenFromOtherAccountResponse);
   expect(hiddenFromOtherAccountResponse.statusCode).toBe(404);
   expect(hiddenFromOtherAccountResponse.payload).toEqual({ error: 'Not found' });
+
+  const hiddenSystemResourcesResponse = createResponse();
+  await routes.get.get('/api/admin/system-resources')({
+    headers: { cookie: 'bc_session=other-session-token' },
+  }, hiddenSystemResourcesResponse);
+  expect(hiddenSystemResourcesResponse.statusCode).toBe(404);
+  expect(readSystemResources).toHaveBeenCalledTimes(1);
 
   expect(routes.post.has('/api/admin/maintenance/report-logs')).toBe(true);
 

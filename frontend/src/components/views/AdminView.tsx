@@ -16,6 +16,7 @@ import {
   ExternalLink,
   FileJson,
   Gauge,
+  HardDrive,
   History,
   KeyRound,
   LayoutDashboard,
@@ -23,6 +24,7 @@ import {
   Layers,
   LogOut,
   MessageCircleQuestion,
+  MemoryStick,
   Pause,
   Play,
   Power,
@@ -115,6 +117,20 @@ interface AdminHealthSnapshot {
     staleHits: number;
   }>;
   timestamp: string;
+}
+
+interface AdminSystemResources {
+  memory: ResourceUsageSnapshot;
+  disk: ResourceUsageSnapshot | null;
+  timestamp: string;
+}
+
+interface ResourceUsageSnapshot {
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  availableBytes: number;
+  usagePercent: number;
 }
 
 interface AdminAuditEntry {
@@ -405,6 +421,17 @@ function formatDuration(durationMs: number | null): string {
   return durationMs >= 1000
     ? `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`
     : `${Math.round(durationMs)}ms`;
+}
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / (1024 ** unitIndex);
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: value >= 100 ? 0 : value >= 10 ? 1 : 2,
+  }).format(value)} ${units[unitIndex]}`;
 }
 
 function formatLogTime(timestamp: string): { primary: string; secondary: string } {
@@ -764,6 +791,7 @@ function AdminDashboard() {
   const [aiModelCatalog, setAIModelCatalog] = useState<AIModelCatalog | null>(null);
   const [featureFlagStatus, setFeatureFlagStatus] = useState<ProductFeatureFlagStatus | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
+  const [systemResources, setSystemResources] = useState<AdminSystemResources | null>(null);
   const [healthHttpStatus, setHealthHttpStatus] = useState<number | null>(null);
   const [backendLatencyMs, setBackendLatencyMs] = useState<number | null>(null);
   const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
@@ -785,6 +813,7 @@ function AdminDashboard() {
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [systemResourcesError, setSystemResourcesError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [userActionPending, setUserActionPending] = useState<string | null>(null);
@@ -874,10 +903,11 @@ function AdminDashboard() {
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
+        fetchApi('/api/admin/system-resources'),
         fetchApi('/api/admin/ai-settings'),
         fetchApi('/api/admin/feature-flags'),
         fetchApi('/api/admin/ai-models'),
@@ -898,6 +928,12 @@ function AdminDashboard() {
         setAIUsageError('AI usage data is temporarily unavailable.');
       }
       applyHealthSnapshot(healthResult);
+      if (systemResourcesResult.response.ok && systemResourcesResult.payload && typeof systemResourcesResult.payload === 'object' && 'memory' in systemResourcesResult.payload) {
+        setSystemResources(systemResourcesResult.payload as AdminSystemResources);
+        setSystemResourcesError(null);
+      } else {
+        setSystemResourcesError('Disk and RAM usage are temporarily unavailable.');
+      }
       if (aiSettingsResult.response.ok && aiSettingsResult.payload && typeof aiSettingsResult.payload === 'object') {
         setAISettings(aiSettingsResult.payload as AIAdminSettings);
         setAISettingsError(null);
@@ -929,6 +965,7 @@ function AdminDashboard() {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
       setHealthError('System details are temporarily unavailable.');
+      setSystemResourcesError('Disk and RAM usage are temporarily unavailable.');
       setAISettingsError('AI controls are temporarily unavailable.');
       setFeatureFlagsError('Product feature flags are temporarily unavailable.');
       setAIModelCatalogError('Provider model lists are temporarily unavailable.');
@@ -1385,6 +1422,7 @@ function AdminDashboard() {
       generatedAt: new Date().toISOString(),
       range: { value: analyticsRange, label: selectedRange.label },
       system: health,
+      systemResources,
       reportMetrics: metrics,
       planningInsights,
       reliabilityHotspots,
@@ -1545,6 +1583,7 @@ function AdminDashboard() {
             <Server size={18} aria-hidden />
           </div>
           {healthError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {healthError}</div>}
+          {systemResourcesError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {systemResourcesError}</div>}
           <div className="admin-system-grid">
             <div>
               <span><Server size={14} aria-hidden /> Service</span>
@@ -1560,6 +1599,18 @@ function AdminDashboard() {
               <span><Cpu size={14} aria-hidden /> Runtime</span>
               <strong>{health?.nodeVersion ?? '—'}</strong>
               <small>{health ? `${health.memory.rssMb} MB RSS · ${health.memory.heapUsedMb} MB heap` : 'Memory unavailable'}</small>
+            </div>
+            <div>
+              <span><MemoryStick size={14} aria-hidden /> RAM</span>
+              <strong>{systemResources ? `${systemResources.memory.usagePercent}% used` : '—'}</strong>
+              <small>{systemResources ? `${formatBytes(systemResources.memory.usedBytes)} of ${formatBytes(systemResources.memory.totalBytes)}` : 'Usage unavailable'}</small>
+            </div>
+            <div>
+              <span><HardDrive size={14} aria-hidden /> Disk</span>
+              <strong className={systemResources && !systemResources.disk ? 'is-unavailable' : undefined}>
+                {systemResources?.disk ? `${systemResources.disk.usagePercent}% used` : '—'}
+              </strong>
+              <small>{systemResources?.disk ? `${formatBytes(systemResources.disk.usedBytes)} of ${formatBytes(systemResources.disk.totalBytes)}` : 'Usage unavailable'}</small>
             </div>
             <div>
               <span><Database size={14} aria-hidden /> Database</span>

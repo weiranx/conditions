@@ -4,6 +4,7 @@ const { clearAIUsageEntries, getAIUsageEntries } = require('../utils/ai-usage');
 const { getAIStatus, updateAISettings } = require('../utils/ai-client');
 const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require('../utils/feature-flags');
 const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit');
+const { getSystemResources } = require('../utils/system-resources');
 const { readSessionToken } = require('./account');
 
 const ADMIN_ACCOUNT_EMAIL = 'weiranxiong@gmail.com';
@@ -96,6 +97,7 @@ const registerReportLogsRoute = (
     caches = [],
     runDiagnostics = null,
     loadModelCatalog = null,
+    readSystemResources = getSystemResources,
   } = {},
 ) => {
   let diagnosticsInFlight = null;
@@ -139,6 +141,15 @@ const registerReportLogsRoute = (
   app.get('/api/admin/audit-log', async (req, res) => {
     if (!await authorize(req, res)) return;
     res.json(await getAdminAuditEntries());
+  });
+
+  app.get('/api/admin/system-resources', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    try {
+      res.json(await readSystemResources());
+    } catch {
+      res.status(500).json({ error: 'System resource usage is unavailable' });
+    }
   });
 
   app.get('/api/admin/users', async (req, res) => {
