@@ -456,6 +456,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     travelWindowHoursLabel,
     travelWindowInsights,
     travelWindowSummary,
+    formatTravelWindowSpan,
     elevationForecastBands,
     objectiveElevationFt,
     avalancheRelevant,
@@ -665,6 +666,62 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   // 44px floor keeps hour columns tappable/readable on phones; the strip scrolls
   // horizontally instead of crushing 12 columns into the viewport.
   const stripCols = `repeat(${Math.max(1, travelWindowRows.length)}, minmax(44px, 1fr))`;
+  const travelWindowTone = travelWindowInsights.passHours === travelWindowRows.length
+    ? 'clear'
+    : travelWindowInsights.passHours === 0
+      ? 'blocked'
+      : 'mixed';
+  const travelWindowHeadline = travelWindowTone === 'clear'
+    ? `All ${travelWindowRows.length} hours stay within your limits`
+    : travelWindowTone === 'blocked'
+      ? 'No hour stays within every limit'
+      : `${travelWindowInsights.passHours} of ${travelWindowRows.length} hours stay within your limits`;
+  const bestTravelWindowLabel = travelWindowInsights.bestWindow
+    ? formatTravelWindowSpan(travelWindowInsights.bestWindow, preferences.timeStyle)
+    : 'No clean stretch';
+  const topTravelWindowLimits = travelWindowInsights.topFailureLabels
+    .slice(0, 2)
+    .map(localizeUnitText)
+    .join(' · ');
+  const travelWindowIssueGroups: Array<{
+    start: string;
+    end: string;
+    count: number;
+    labels: string[];
+    key: string;
+    endIndex: number;
+    exposureClass?: 'brief' | 'short' | 'sustained';
+  }> = [];
+  travelWindowRows.forEach((row, index) => {
+    if (row.pass) return;
+    const labels = row.failedRuleLabels.length > 0
+      ? Array.from(new Set(row.failedRuleLabels.map(localizeUnitText)))
+      : [localizeUnitText(row.reasonSummary || 'Threshold needs attention')];
+    const key = labels.join('|');
+    const previous = travelWindowIssueGroups[travelWindowIssueGroups.length - 1];
+    if (previous && previous.endIndex === index - 1 && previous.key === key) {
+      previous.end = row.time;
+      previous.count += 1;
+      previous.endIndex = index;
+      if (row.exposureClass === 'sustained' || previous.exposureClass !== 'sustained') {
+        previous.exposureClass = row.exposureClass;
+      }
+      return;
+    }
+    travelWindowIssueGroups.push({
+      start: row.time,
+      end: row.time,
+      count: 1,
+      labels,
+      key,
+      endIndex: index,
+      exposureClass: row.exposureClass,
+    });
+  });
+  const formatTravelIssueSpan = (start: string, end: string, count: number) => {
+    const startLabel = formatClockForStyle(start, preferences.timeStyle);
+    return count === 1 ? startLabel : `${startLabel}–${formatClockForStyle(end, preferences.timeStyle)}`;
+  };
 
   // ── ACTION PLAN: the plan levers the user can still change, ranked ──
   const fmtSpan = (s: { start: string; end: string }) =>
@@ -912,101 +969,191 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           </div>
         </section>
 
-        {/* TRAVEL WINDOW STRIP */}
+        {/* TRAVEL WINDOW */}
         {travelWindowRows.length > 0 && (
-          <section className="ssr-card" id="planner-section-travel">
+          <section className={`ssr-card ssr-tw-card ${travelWindowTone}`} id="planner-section-travel">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-blue"><Clock size={16} /></span>
                 Travel Window
               </h2>
               <span className="ssr-h-meta">
-                Start {displayStartTime} · {travelWindowHoursLabel}
+                {displayStartTime}
+                {returnTimeFormatted ? ` → ${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ` · ${travelWindowHoursLabel}`}
+                {returnExtendsPastMidnight ? ' (+1 day)' : ''}
               </span>
             </div>
             <div className="ssr-card-b ssr-tight">
+              <div className={`ssr-tw-overview ${travelWindowTone}`}>
+                <div className="ssr-tw-verdict">
+                  <span className="ssr-tw-verdict-icon" aria-hidden>
+                    {travelWindowTone === 'clear'
+                      ? <CheckCircle2 size={19} />
+                      : travelWindowTone === 'blocked'
+                        ? <XCircle size={19} />
+                        : <AlertTriangle size={19} />}
+                  </span>
+                  <div>
+                    <span className="ssr-tw-eyebrow">Window read</span>
+                    <strong>{travelWindowHeadline}</strong>
+                    <p>
+                      {travelWindowTone === 'clear'
+                        ? `${travelWindowInsights.conditionTrendLabel}. Keep normal field checkpoints in the plan.`
+                        : topTravelWindowLimits
+                          ? `Main limits: ${topTravelWindowLimits}.`
+                          : 'Review the gated hours before committing to the plan.'}
+                    </p>
+                  </div>
+                </div>
+                <dl className="ssr-tw-stats">
+                  <div>
+                    <dt>Best stretch</dt>
+                    <dd>{bestTravelWindowLabel}</dd>
+                    <span>
+                      {travelWindowInsights.bestWindow
+                        ? `${travelWindowInsights.bestWindow.length} continuous hour${travelWindowInsights.bestWindow.length === 1 ? '' : 's'}`
+                        : 'Re-time or change the plan'}
+                    </span>
+                  </div>
+                  <div className={`trend-${travelWindowInsights.trendDirection}`}>
+                    <dt>Window trend</dt>
+                    <dd>{travelWindowInsights.trendLabel}</dd>
+                    <span>{travelWindowInsights.conditionTrendLabel}</span>
+                  </div>
+                  <div>
+                    <dt>Hours gated</dt>
+                    <dd>{travelWindowInsights.failHours}</dd>
+                    <span>of {travelWindowRows.length} forecast hours</span>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="ssr-tw-detail-head">
+                <div>
+                  <strong>Hour-by-hour detail</strong>
+                  <span>Compared with the thresholds in your settings</span>
+                </div>
+                <div className="ssr-keys" aria-label="Travel window legend">
+                  <span className="ssr-key">Clean</span>
+                  <span className="ssr-key gate">Gated</span>
+                </div>
+              </div>
               <div className="ssr-strip-scroll">
-              <div className="ssr-strip-rows">
-                <div className="ssr-srow">
-                  <div className="ssr-srow-lbl"><Clock size={14} /> Hour</div>
-                  <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
-                    {travelWindowRows.map((r, i) => (
-                      <div key={i} className="ssr-scell hour-header">
-                        {formatClockForStyle(r.time, preferences.timeStyle)}
-                      </div>
-                    ))}
+                <div className="ssr-strip-rows" tabIndex={0} aria-label="Scrollable hourly travel window forecast">
+                  <div className="ssr-srow">
+                    <div className="ssr-srow-lbl"><Clock size={14} /> Hour</div>
+                    <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
+                      {travelWindowRows.map((r, i) => (
+                        <div key={i} className="ssr-scell hour-header">
+                          {formatClockForStyle(r.time, preferences.timeStyle)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="ssr-srow">
-                  <div className="ssr-srow-lbl"><Thermometer size={14} /> Temp</div>
-                  <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
-                    {travelWindowRows.map((r, i) => (
-                      <div key={i} className="ssr-scell">
-                        <span className="ssr-cv">{formatTempDisplay(r.temp, { includeUnit: false })}</span>
-                      </div>
-                    ))}
+                  <div className="ssr-srow">
+                    <div className="ssr-srow-lbl"><Thermometer size={14} /> Temp · Feels</div>
+                    <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
+                      {travelWindowRows.map((r, i) => (
+                        <div key={i} className="ssr-scell">
+                          <span className="ssr-cv">{formatTempDisplay(r.temp, { includeUnit: false })}</span>
+                          <span className="ssr-cv-sub">F {formatTempDisplay(r.feelsLike, { includeUnit: false })}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="ssr-srow">
-                  <div className="ssr-srow-lbl"><Wind size={14} /> Wind·Gust</div>
-                  <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
-                    {travelWindowRows.map((r, i) => (
-                      <div key={i} className="ssr-scell">
-                        <span className="ssr-cv">{formatWindDisplay(r.wind, { includeUnit: false })}</span>
-                        <span
-                          className="ssr-cv-sub"
-                          style={{
-                            color: r.gust >= maxGustMph ? 'var(--ssr-nogo-ink)' : 'var(--ssr-text-3)',
-                            fontWeight: r.gust >= maxGustMph ? 600 : 400,
-                          }}
-                        >
-                          G{formatWindDisplay(r.gust, { includeUnit: false })}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="ssr-srow">
+                    <div className="ssr-srow-lbl"><Wind size={14} /> Wind · Gust</div>
+                    <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
+                      {travelWindowRows.map((r, i) => (
+                        <div key={i} className="ssr-scell">
+                          <span className="ssr-cv">{formatWindDisplay(r.wind, { includeUnit: false })}</span>
+                          <span
+                            className="ssr-cv-sub"
+                            style={{
+                              color: r.gust > maxGustMph ? 'var(--ssr-nogo-ink)' : 'var(--ssr-text-3)',
+                              fontWeight: r.gust > maxGustMph ? 700 : 400,
+                            }}
+                          >
+                            G {formatWindDisplay(r.gust, { includeUnit: false })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="ssr-srow">
-                  <div className="ssr-srow-lbl"><CloudRain size={14} /> Precip</div>
-                  <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
-                    {travelWindowRows.map((r, i) => (
-                      <div key={i} className="ssr-scell">
-                        <span className="ssr-cv" style={{ opacity: r.precipChance === 0 ? 0.35 : 1 }}>
-                          {r.precipChance === 0 ? '—' : `${Math.round(r.precipChance)}%`}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="ssr-srow">
+                    <div className="ssr-srow-lbl"><CloudRain size={14} /> Precip</div>
+                    <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
+                      {travelWindowRows.map((r, i) => (
+                        <div key={i} className="ssr-scell">
+                          <span
+                            className="ssr-cv"
+                            style={{
+                              opacity: r.precipChance === 0 ? 0.35 : 1,
+                              color: r.precipChance > preferences.maxPrecipChance ? 'var(--ssr-nogo-ink)' : undefined,
+                            }}
+                          >
+                            {r.precipChance === 0 ? '—' : `${Math.round(r.precipChance)}%`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="ssr-srow">
-                  <div className="ssr-srow-lbl" style={{ fontWeight: 700, color: 'var(--ssr-text)' }}>
-                    <CheckCircle2 size={14} /> Move OK
-                  </div>
-                  <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
-                    {travelWindowRows.map((r, i) => (
-                      <div
-                        key={i}
-                        className={`ssr-scell move ${r.pass ? 'pass' : 'gate'}`}
-                        title={r.reasonSummary ? localizeUnitText(r.reasonSummary) : undefined}
-                      >
-                        <span
-                          className="ssr-cv"
-                          style={{ color: r.pass ? 'var(--ssr-go-ink)' : 'var(--ssr-nogo-ink)', fontSize: 11 }}
-                        >
-                          {r.pass ? '✓' : '✕'}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="ssr-srow">
+                    <div className="ssr-srow-lbl ssr-srow-status">
+                      <ShieldCheck size={14} /> Thresholds
+                    </div>
+                    <div className="ssr-srow-cells" style={{ gridTemplateColumns: stripCols }}>
+                      {travelWindowRows.map((r, i) => {
+                        const timeLabel = formatClockForStyle(r.time, preferences.timeStyle);
+                        const reason = localizeUnitText(r.reasonSummary || (r.pass ? 'Meets thresholds' : 'Needs attention'));
+                        return (
+                          <div
+                            key={i}
+                            className={`ssr-scell move ${r.pass ? 'pass' : 'gate'}`}
+                            title={`${timeLabel}: ${reason}`}
+                            aria-label={`${timeLabel}: ${r.pass ? 'clean' : 'gated'}. ${reason}`}
+                          >
+                            <span className="ssr-cv" aria-hidden>
+                              {r.pass ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
-              </div>
+
+              {travelWindowIssueGroups.length > 0 && (
+                <div className="ssr-tw-issues">
+                  <div className="ssr-tw-issues-head">
+                    <span><AlertTriangle size={14} /> Periods to plan around</span>
+                    <small>{travelWindowIssueGroups.length} distinct period{travelWindowIssueGroups.length === 1 ? '' : 's'}</small>
+                  </div>
+                  <div className="ssr-tw-issue-list">
+                    {travelWindowIssueGroups.map((group, index) => (
+                      <div className={`ssr-tw-issue ${group.exposureClass || 'brief'}`} key={`${group.start}-${group.key}-${index}`}>
+                        <time>{formatTravelIssueSpan(group.start, group.end, group.count)}</time>
+                        <div>
+                          <strong>{group.labels.join(' · ')}</strong>
+                          <span>
+                            {group.count} hour{group.count === 1 ? '' : 's'} of exposure
+                            {group.exposureClass === 'sustained'
+                              ? ' · sustained'
+                              : group.exposureClass === 'short'
+                                ? ' · short run'
+                                : ' · brief'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="ssr-strip-foot">
-                <div className="ssr-keys">
-                  <span className="ssr-key">✓ Clean</span>
-                  <span className="ssr-key gate">✕ Gated</span>
-                </div>
-                <span>{localizeUnitText(travelWindowSummary)}</span>
+                <ShieldCheck size={14} aria-hidden />
+                <span>{localizeUnitText(travelWindowSummary)} Thresholds reflect your settings, not a guarantee of safe travel.</span>
               </div>
             </div>
           </section>
