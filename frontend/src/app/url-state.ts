@@ -65,7 +65,8 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   // Support path-based routing (/admin, /settings, etc.) with legacy ?view= fallback.
   // Keep /logs working as an alias for existing bookmarks.
   const pathSegment = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
-  const sharedReportMatch = /^shared\/([A-Za-z0-9_-]{20,64})$/u.exec(pathSegment);
+  // Keep previously copied /shared links working, but URL sync canonicalizes them to /report.
+  const sharedReportMatch = /^(?:report|shared)\/([A-Za-z0-9_-]{20,64})$/u.exec(pathSegment);
   const sharedReportToken = sharedReportMatch?.[1] || null;
   const viewParam = pathSegment || params.get('view') || '';
   const hasExplicitSettingsView = viewParam === 'settings';

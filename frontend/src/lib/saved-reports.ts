@@ -40,7 +40,7 @@ const requireReportIdentity = (payload: unknown): SavedReportIdentity => {
 };
 
 export function buildSavedReportShareUrl(shareToken: string, origin = window.location.origin): string {
-  return `${origin.replace(/\/+$/u, '')}/shared/${encodeURIComponent(shareToken)}`;
+  return `${origin.replace(/\/+$/u, '')}/report/${encodeURIComponent(shareToken)}`;
 }
 
 export async function createSavedReport(report: PersistedReport): Promise<SavedReportIdentity> {

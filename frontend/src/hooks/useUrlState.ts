@@ -174,7 +174,7 @@ export function useSyncUrlEffect(params: {
 
     const viewPath = view === 'home' ? '' : view;
     const nextUrl = hasSharedReport
-      ? `/shared/${encodeURIComponent(sharedReportToken || '')}`
+      ? `/report/${encodeURIComponent(sharedReportToken || '')}`
       : `/${viewPath}${query ? `?${query}` : ''}`;
     const currentUrl = `${window.location.pathname}${window.location.search}`;
     if (nextUrl !== currentUrl) {
