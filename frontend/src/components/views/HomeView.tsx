@@ -79,8 +79,6 @@ export interface HomeViewProps {
   importedGpxRoute: ParsedGpxRoute | null;
   handleImportGpxObjective: (route: ParsedGpxRoute) => void;
   gpxEstimatedDurationHours: number | null;
-  activeTravelWindowHours: number;
-  handleUseGpxEstimatedDuration: () => void;
 }
 
 export function HomeView({
@@ -120,8 +118,6 @@ export function HomeView({
   importedGpxRoute,
   handleImportGpxObjective,
   gpxEstimatedDurationHours,
-  activeTravelWindowHours,
-  handleUseGpxEstimatedDuration,
 }: HomeViewProps) {
   const featureFlags = useProductFeatureFlags();
   const submitSearch = async () => {
@@ -207,8 +203,6 @@ export function HomeView({
                   selectedRoute={importedGpxRoute}
                   onImport={importGpxObjective}
                   estimatedDurationHours={gpxEstimatedDurationHours}
-                  activeDurationHours={activeTravelWindowHours}
-                  onUseEstimatedDuration={handleUseGpxEstimatedDuration}
                 />
               </div>
 
@@ -226,23 +220,30 @@ export function HomeView({
                     onChange={handlePlannerTimeChange(setAlpineStartTime)}
                   />
                 </label>
-                <label className="ssr-h-param">
-                  <span><Route size={13} aria-hidden /> Travel window</span>
-                  <span className="ssr-h-window-input">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      aria-label="Trip duration in hours"
-                      min={MIN_TRAVEL_WINDOW_HOURS}
-                      max={MAX_TRAVEL_WINDOW_HOURS}
-                      step={1}
-                      value={travelWindowHoursDraft}
-                      onChange={handleTravelWindowHoursDraftChange}
-                      onBlur={handleTravelWindowHoursDraftBlur}
-                    />
-                    hr
-                  </span>
-                </label>
+                {importedGpxRoute ? (
+                  <div className="ssr-h-param ssr-h-route-estimate">
+                    <span><Route size={13} aria-hidden /> Route estimate</span>
+                    <strong>{gpxEstimatedDurationHours ?? travelWindowHoursDraft} hr · Objective profile</strong>
+                  </div>
+                ) : (
+                  <label className="ssr-h-param">
+                    <span><Route size={13} aria-hidden /> Travel window</span>
+                    <span className="ssr-h-window-input">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        aria-label="Trip duration in hours"
+                        min={MIN_TRAVEL_WINDOW_HOURS}
+                        max={MAX_TRAVEL_WINDOW_HOURS}
+                        step={1}
+                        value={travelWindowHoursDraft}
+                        onChange={handleTravelWindowHoursDraftChange}
+                        onBlur={handleTravelWindowHoursDraftBlur}
+                      />
+                      hr
+                    </span>
+                  </label>
+                )}
               </div>
 
               <button

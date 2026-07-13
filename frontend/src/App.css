@@ -8427,21 +8427,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
 .gpx-objective-selected strong { font-size: 11px; }
 .gpx-objective-selected small { color: var(--text-muted); font-size: 9.5px; }
-.gpx-objective-use-duration {
-  min-height: 30px;
-  margin-left: auto;
-  padding: 5px 9px;
-  border: 1px solid var(--ui-line-strong);
-  border-radius: 7px;
-  background: var(--ui-surface);
+.gpx-objective-selected .gpx-objective-duration {
   color: var(--ui-accent-strong);
-  font: inherit;
-  font-size: 9.5px;
   font-weight: 700;
-  cursor: pointer;
 }
-.gpx-objective-use-duration:hover:not(:disabled) { border-color: var(--ui-accent); }
-.gpx-objective-use-duration:disabled { cursor: not-allowed; opacity: .55; }
 
 .gpx-objective-error {
   margin: 0;

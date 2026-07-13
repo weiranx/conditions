@@ -396,22 +396,24 @@ export function PlannerMapSection({
             />
           </label>
 
-          <label className="date-control compact travel-window-control">
-            <span>Trip hours</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              aria-label="Trip duration in hours"
-              title="How many hours to evaluate from the selected start time."
-              min={MIN_TRAVEL_WINDOW_HOURS}
-              max={MAX_TRAVEL_WINDOW_HOURS}
-              step={1}
-              value={travelWindowHoursDraft}
-              onChange={handleTravelWindowHoursDraftChange}
-              onBlur={handleTravelWindowHoursDraftBlur}
-              disabled={locked}
-            />
-          </label>
+          {!importedGpxRoute && (
+            <label className="date-control compact travel-window-control">
+              <span>Trip hours</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                aria-label="Trip duration in hours"
+                title="How many hours to evaluate from the selected start time."
+                min={MIN_TRAVEL_WINDOW_HOURS}
+                max={MAX_TRAVEL_WINDOW_HOURS}
+                step={1}
+                value={travelWindowHoursDraft}
+                onChange={handleTravelWindowHoursDraftChange}
+                onBlur={handleTravelWindowHoursDraftBlur}
+                disabled={locked}
+              />
+            </label>
+          )}
 
           <button
             type="button"

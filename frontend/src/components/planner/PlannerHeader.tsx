@@ -41,8 +41,6 @@ export interface PlannerHeaderProps {
   importedGpxRoute: ParsedGpxRoute | null;
   handleImportGpxObjective: (route: ParsedGpxRoute) => void;
   gpxEstimatedDurationHours: number | null;
-  activeTravelWindowHours: number;
-  handleUseGpxEstimatedDuration: () => void;
   activityLabel: string;
 }
 
@@ -56,7 +54,7 @@ export function PlannerHeader({
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
   copiedLink, handleCopyLink,
   importedGpxRoute, handleImportGpxObjective,
-  gpxEstimatedDurationHours, activeTravelWindowHours, handleUseGpxEstimatedDuration,
+  gpxEstimatedDurationHours,
   activityLabel,
 }: PlannerHeaderProps) {
   const [saveMessage, setSaveMessage] = React.useState('');
@@ -120,8 +118,6 @@ export function PlannerHeader({
           selectedRoute={importedGpxRoute}
           onImport={handleImportGpxObjective}
           estimatedDurationHours={gpxEstimatedDurationHours}
-          activeDurationHours={activeTravelWindowHours}
-          onUseEstimatedDuration={handleUseGpxEstimatedDuration}
           disabled={disabled}
         />
 

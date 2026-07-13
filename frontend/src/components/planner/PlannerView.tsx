@@ -80,7 +80,6 @@ export interface PlannerViewProps {
   importedGpxRoute: ParsedGpxRoute | null;
   handleImportGpxObjective: (route: ParsedGpxRoute) => void;
   gpxEstimatedDurationHours: number | null;
-  handleUseGpxEstimatedDuration: () => void;
 
   // Header controls
   hasObjective: boolean;
@@ -490,7 +489,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     importedGpxRoute,
     handleImportGpxObjective,
     gpxEstimatedDurationHours,
-    handleUseGpxEstimatedDuration,
 
     // Header
     hasObjective,
@@ -677,8 +675,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         importedGpxRoute={importedGpxRoute}
         handleImportGpxObjective={handleImportGpxObjective}
         gpxEstimatedDurationHours={gpxEstimatedDurationHours}
-        activeTravelWindowHours={travelWindowHours}
-        handleUseGpxEstimatedDuration={handleUseGpxEstimatedDuration}
         activityLabel={`${ACTIVITY_PROFILES[preferences.defaultActivity].shortLabel} profile`}
         disabled={reportLocked}
         hasObjective={objectiveReady}

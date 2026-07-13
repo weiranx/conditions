@@ -41,7 +41,7 @@ export type ParsedGpxRoute = {
   routeShape: 'closed route' | 'point-to-point';
 };
 
-export type RunnerTimingProfile = {
+export type RouteTimingProfile = {
   paceMinutesPerMile: number;
   ascentMinutesPer1000Ft: number;
   stopBufferMinutes: number;
@@ -187,7 +187,7 @@ function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: num
   }));
 }
 
-export function estimateRunnerDurationHours(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'>, profile: RunnerTimingProfile): number {
+export function estimateRouteDurationHours(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'>, profile: RouteTimingProfile): number {
   const distanceMinutes = Math.max(0, route.distanceMiles) * Math.max(5, profile.paceMinutesPerMile);
   const ascentMinutes = Math.max(0, route.elevationGainFt || 0) / 1000 * Math.max(0, profile.ascentMinutesPer1000Ft);
   const totalMinutes = distanceMinutes + ascentMinutes + Math.max(0, profile.stopBufferMinutes);

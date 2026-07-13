@@ -114,7 +114,7 @@ import { useTripForecast } from './hooks/useTripForecast';
 import { useSafetyData } from './hooks/useSafetyData';
 import { useSearchSuggestions } from './hooks/useSearchSuggestions';
 import { normalizeSuggestionText } from './lib/search';
-import { estimateRunnerDurationHours, type ParsedGpxRoute } from './lib/gpx';
+import { estimateRouteDurationHours, type ParsedGpxRoute } from './lib/gpx';
 import { useUrlState, useSyncUrlEffect } from './hooks/useUrlState';
 import type { AppView } from './hooks/useUrlState';
 import { useDayComparisons } from './hooks/useDayComparisons';
@@ -1039,7 +1039,7 @@ function App() {
 
   const gpxEstimatedDurationHours = React.useMemo(
     () => importedGpxRoute
-      ? estimateRunnerDurationHours(importedGpxRoute, {
+      ? estimateRouteDurationHours(importedGpxRoute, {
           paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
           ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
           stopBufferMinutes: preferences.runnerStopBufferMinutes,
@@ -1052,10 +1052,10 @@ function App() {
       preferences.runnerStopBufferMinutes,
     ],
   );
-  const handleUseGpxEstimatedDuration = useCallback(() => {
-    if (gpxEstimatedDurationHours === null) return;
+  useEffect(() => {
+    if (gpxEstimatedDurationHours === null || travelWindowHours === gpxEstimatedDurationHours) return;
     updatePreferences({ travelWindowHours: gpxEstimatedDurationHours });
-  }, [gpxEstimatedDurationHours, updatePreferences]);
+  }, [gpxEstimatedDurationHours, travelWindowHours, updatePreferences]);
 
   const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
   const returnExtendsPastMidnight = returnMinutes !== null && returnMinutes > 1439;
@@ -1779,8 +1779,6 @@ function App() {
         importedGpxRoute={importedGpxRoute}
         handleImportGpxObjective={handleImportGpxObjective}
         gpxEstimatedDurationHours={gpxEstimatedDurationHours}
-        activeTravelWindowHours={travelWindowHours}
-        handleUseGpxEstimatedDuration={handleUseGpxEstimatedDuration}
       />
       </React.Activity>
 
@@ -1848,7 +1846,6 @@ function App() {
       importedGpxRoute={importedGpxRoute}
       handleImportGpxObjective={handleImportGpxObjective}
       gpxEstimatedDurationHours={gpxEstimatedDurationHours}
-      handleUseGpxEstimatedDuration={handleUseGpxEstimatedDuration}
       // Header controls
       hasObjective={hasObjective}
       objectiveDraftDirty={objectiveDraftDirty}
