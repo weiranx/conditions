@@ -40,6 +40,12 @@ import {
 } from './app/core';
 import { currentDateTimeInputs, dateTimeInputsFor } from './app/date-time-inputs';
 import {
+  type PastPlannedStart,
+  getPastPlannedStart,
+  getTomorrowDate,
+  resolveObjectiveTimeZone,
+} from './app/planned-start';
+import {
   computeFeelsLikeF,
   getDangerLevelClass,
   normalizeDangerLevel,
@@ -121,6 +127,12 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const PlannerView = React.lazy(() =>
   import('./components/planner/PlannerView').then((module) => ({ default: module.PlannerView })),
+);
+const PastStartPrompt = React.lazy(() =>
+  import('./components/planner/PastStartNotice').then((module) => ({ default: module.PastStartPrompt })),
+);
+const PassedReportNotice = React.lazy(() =>
+  import('./components/planner/PastStartNotice').then((module) => ({ default: module.PassedReportNotice })),
 );
 const AdminView = React.lazy(() =>
   import('./components/views/AdminView').then((module) => ({ default: module.AdminView })),
@@ -250,10 +262,17 @@ function App() {
     handleRequestAiBrief,
   } = safetyHook;
 
+  const coordinateTimezone = useMemo(
+    () => resolveObjectiveTimeZone(position.lat, position.lng),
+    [position.lat, position.lng],
+  );
+  const objectiveTimezone = safetyData?.weather.timezone || coordinateTimezone;
+
   const [forecastDate, setForecastDate] = useState(initialLinkState.forecastDate);
   const [alpineStartTime, setAlpineStartTime] = useState(initialLinkState.alpineStartTime);
   const [targetElevationInput, setTargetElevationInput] = useState(initialLinkState.targetElevationInput);
   const [targetElevationManual, setTargetElevationManual] = useState(Boolean(initialLinkState.targetElevationInput));
+  const [pastStartPrompt, setPastStartPrompt] = useState<PastPlannedStart | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedRawPayload, setCopiedRawPayload] = useState(false);
   const [travelWindowExpanded, setTravelWindowExpanded] = useState(false);
@@ -738,6 +757,11 @@ function App() {
     if (!hasObjective) {
       return;
     }
+    const pastStart = getPastPlannedStart(forecastDate, alpineStartTime, objectiveTimezone);
+    if (pastStart) {
+      setPastStartPrompt(pastStart);
+      return;
+    }
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
@@ -746,6 +770,11 @@ function App() {
   // triggers a fetch, so a report never regenerates out from under someone mid-edit.
   const handleGenerateReport = () => {
     if (!hasObjective) {
+      return;
+    }
+    const pastStart = getPastPlannedStart(forecastDate, alpineStartTime, objectiveTimezone);
+    if (pastStart) {
+      setPastStartPrompt(pastStart);
       return;
     }
     collapseMobilePlanControls();
@@ -766,9 +795,14 @@ function App() {
       return;
     }
     setPendingAutoGenerate(false);
+    const pastStart = getPastPlannedStart(forecastDate, alpineStartTime, objectiveTimezone);
+    if (pastStart) {
+      setPastStartPrompt(pastStart);
+      return;
+    }
     collapseMobilePlanControls();
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
-  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, fetchSafetyData, collapseMobilePlanControls]);
+  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, objectiveTimezone, fetchSafetyData, collapseMobilePlanControls]);
 
   const handleEditPlan = useCallback(() => {
     clearPersistedReport();
@@ -1359,7 +1393,6 @@ function App() {
           ? `${formatDurationMinutes(daylightRemainingFromStartMinutes)} (start before sunrise)`
           : formatDurationMinutes(daylightRemainingFromStartMinutes)
       : 'N/A';
-  const objectiveTimezone = safetyData?.weather.timezone || null;
   const precipitationDisplayTimezone = objectiveTimezone || safetyData?.rainfall?.timezone || null;
   const deviceTimezone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || null : null;
   const timezoneMismatch = Boolean(objectiveTimezone && deviceTimezone && objectiveTimezone !== deviceTimezone);
@@ -1373,6 +1406,24 @@ function App() {
     setForecastDate(nextDate);
     setAlpineStartTime(nextTime);
     setError(null);
+  };
+  const preparePastStartReplacement = () => {
+    if (safetyData) {
+      handleEditPlan();
+    }
+    setPastStartPrompt(null);
+    setError(null);
+  };
+  const handleUseNowAfterPastStart = () => {
+    preparePastStartReplacement();
+    const nowInputs = currentDateTimeInputs(objectiveTimezone);
+    setForecastDate(nowInputs.date);
+    setAlpineStartTime(nowInputs.time);
+  };
+  const handleUseTomorrowAfterPastStart = () => {
+    preparePastStartReplacement();
+    setForecastDate(getTomorrowDate(objectiveTimezone));
+    setAlpineStartTime(preferences.defaultStartTime);
   };
   const freshness = buildSourceFreshnessDisplay(safetyData, rainfallPayload, avalancheRelevant, travelWindowHours);
   const {
@@ -1694,6 +1745,7 @@ function App() {
       {/* Leaflet cannot reconnect its imperative map instance after Activity
           disconnects the planner's effects. Remount the planner instead. */}
       {view === 'planner' ? (
+        <>
     <PlannerView
       // Shell / layout
       appShellClassName={appShellClassName}
@@ -2064,6 +2116,25 @@ function App() {
       // Footer
       formatGeneratedAt={formatGeneratedAt}
     />
+      <PastStartPrompt
+        prompt={pastStartPrompt}
+        onDismiss={() => setPastStartPrompt(null)}
+        onUseNow={handleUseNowAfterPastStart}
+        onUseTomorrow={handleUseTomorrowAfterPastStart}
+        tomorrowTimeLabel={formatClockForStyle(preferences.defaultStartTime, preferences.timeStyle)}
+      />
+      {safetyData?.forecast?.selectedDate && safetyData.forecast.selectedStartTime && (
+        <PassedReportNotice
+          date={safetyData.forecast.selectedDate}
+          time={safetyData.forecast.selectedStartTime.slice(0, 5)}
+          timeZone={objectiveTimezone}
+          hidden={Boolean(pastStartPrompt)}
+          onUseNow={handleUseNowAfterPastStart}
+          onUseTomorrow={handleUseTomorrowAfterPastStart}
+          tomorrowTimeLabel={formatClockForStyle(preferences.defaultStartTime, preferences.timeStyle)}
+        />
+      )}
+        </>
       ) : null}
     </>
   );

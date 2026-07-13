@@ -7,6 +7,7 @@ import {
   normalizeTimeOrFallback,
 } from './core';
 import { normalizeElevationInput } from './planner-helpers';
+import { getInitialForecastDate } from './planned-start';
 
 export function sanitizeExternalUrl(rawUrl?: string): string | null {
   if (!rawUrl) {
@@ -35,6 +36,7 @@ export function sanitizeExternalUrl(rawUrl?: string): string | null {
 }
 
 export function parseLinkState(todayDate: string, maxForecastDate: string, preferences: UserPreferences): LinkState {
+  const initialForecastDate = getInitialForecastDate(todayDate, preferences.defaultStartTime);
   const defaults: LinkState = {
     view: 'home',
     activity: 'backcountry',
@@ -42,7 +44,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
     hasObjective: false,
     objectiveName: '',
     searchQuery: '',
-    forecastDate: todayDate,
+    forecastDate: initialForecastDate,
     alpineStartTime: preferences.defaultStartTime,
     targetElevationInput: '',
   };
@@ -103,7 +105,9 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
     hasObjective: hasCoords,
     objectiveName,
     searchQuery,
-    forecastDate: normalizeForecastDate(params.get('date'), todayDate, maxForecastDate),
+    forecastDate: params.has('date')
+      ? normalizeForecastDate(params.get('date'), todayDate, maxForecastDate)
+      : initialForecastDate,
     alpineStartTime: normalizeTimeOrFallback(params.get('start'), preferences.defaultStartTime),
     targetElevationInput: normalizeElevationInput(params.get('elev')),
     travelWindowHours: params.has('tw') && Number.isFinite(Number(params.get('tw'))) && Number(params.get('tw')) >= 1 && Number(params.get('tw')) <= 24 ? Number(params.get('tw')) : null,
