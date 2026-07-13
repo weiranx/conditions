@@ -11,6 +11,7 @@ const FREE_ACCOUNT_TIER = Object.freeze({
 const PREMIUM_ACCOUNT_TIER_KEY = 'premium';
 const PREMIUM_ACCOUNT_TIER_LABEL = 'Premium';
 const PREMIUM_STATUSES = new Set(['active', 'trialing']);
+const ADMIN_TIER_PROVIDER = 'admin';
 
 const normalizeValue = (value) => String(value || '').trim().toLowerCase();
 
@@ -29,13 +30,38 @@ const resolveAccountTier = (subscriptions = [], now = Date.now()) => {
   const nowMs = new Date(now).getTime();
   if (!Number.isFinite(nowMs)) throw new TypeError('A valid date is required');
 
-  const premiumSubscription = subscriptions.find((subscription) => {
-    if (!isPremiumPlanKey(subscription?.plan_key ?? subscription?.planKey)) return false;
+  const isCurrent = (subscription) => {
     if (!PREMIUM_STATUSES.has(normalizeValue(subscription?.status))) return false;
     const currentPeriodEnd = serializePeriodEnd(
       subscription?.current_period_end ?? subscription?.currentPeriodEnd,
     );
     return !currentPeriodEnd || new Date(currentPeriodEnd).getTime() > nowMs;
+  };
+  const adminOverride = subscriptions.find((subscription) => (
+    normalizeValue(subscription?.provider) === ADMIN_TIER_PROVIDER
+    && ['free', PREMIUM_ACCOUNT_TIER_KEY].includes(normalizeValue(subscription?.plan_key ?? subscription?.planKey))
+    && isCurrent(subscription)
+  ));
+  if (adminOverride) {
+    if (!isPremiumPlanKey(adminOverride.plan_key ?? adminOverride.planKey)) {
+      return { ...FREE_ACCOUNT_TIER };
+    }
+    return {
+      key: PREMIUM_ACCOUNT_TIER_KEY,
+      label: PREMIUM_ACCOUNT_TIER_LABEL,
+      status: normalizeValue(adminOverride.status),
+      currentPeriodEnd: serializePeriodEnd(
+        adminOverride.current_period_end ?? adminOverride.currentPeriodEnd,
+      ),
+      cancelAtPeriodEnd: Boolean(
+        adminOverride.cancel_at_period_end ?? adminOverride.cancelAtPeriodEnd,
+      ),
+    };
+  }
+
+  const premiumSubscription = subscriptions.find((subscription) => {
+    if (!isPremiumPlanKey(subscription?.plan_key ?? subscription?.planKey)) return false;
+    return isCurrent(subscription);
   });
 
   if (!premiumSubscription) return { ...FREE_ACCOUNT_TIER };
@@ -61,10 +87,10 @@ const createAccountTierService = ({ database, now = Date.now } = {}) => {
     if (!available) return { ...FREE_ACCOUNT_TIER };
 
     const result = await database.query(`
-      SELECT plan_key, status, current_period_end, cancel_at_period_end
+      SELECT provider, plan_key, status, current_period_end, cancel_at_period_end
       FROM subscriptions
       WHERE user_id = $1
-      ORDER BY updated_at DESC
+      ORDER BY CASE WHEN provider = 'admin' THEN 0 ELSE 1 END, updated_at DESC
       LIMIT 20
     `, [userId]);
 

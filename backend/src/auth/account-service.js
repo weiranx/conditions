@@ -26,6 +26,7 @@ const ELEVATION_UNITS = new Set(['ft', 'm']);
 const WIND_SPEED_UNITS = new Set(['mph', 'kph']);
 const TIME_STYLES = new Set(['ampm', '24h']);
 const ADMIN_USER_STATUSES = new Set(['active', 'suspended']);
+const ADMIN_ACCOUNT_TIERS = new Set(['free', 'premium']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 class AccountValidationError extends Error {
@@ -175,6 +176,7 @@ const serializeAdminUser = (row) => ({
   authMethods: Array.isArray(row.auth_methods) && row.auth_methods.length
     ? row.auth_methods
     : [row.auth_provider].filter(Boolean),
+  tier: row.account_tier === 'premium' ? 'premium' : 'free',
   status: row.status,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
@@ -201,6 +203,14 @@ const validateAdminUserStatus = (value) => {
     throw createAdminAccountError('Status must be active or suspended.', 'INVALID_ACCOUNT_STATUS');
   }
   return status;
+};
+
+const validateAdminAccountTier = (value) => {
+  const tier = String(value || '').trim().toLowerCase();
+  if (!ADMIN_ACCOUNT_TIERS.has(tier)) {
+    throw createAdminAccountError('Tier must be free or premium.', 'INVALID_ACCOUNT_TIER');
+  }
+  return tier;
 };
 
 const createDatabaseUnavailableError = () => {
@@ -376,6 +386,26 @@ const createAccountService = ({
                   WHERE provider IS NOT NULL
                   ORDER BY provider
                 ) AS auth_methods,
+                COALESCE(
+                  (
+                    SELECT CASE WHEN plan_key = 'premium' THEN 'premium' ELSE 'free' END
+                    FROM subscriptions
+                    WHERE user_id = users.id
+                      AND provider = 'admin'
+                      AND status IN ('active', 'trialing')
+                      AND (current_period_end IS NULL OR current_period_end > NOW())
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                  ),
+                  CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM subscriptions
+                    WHERE user_id = users.id
+                      AND (plan_key = 'premium' OR LEFT(plan_key, 8) = 'premium_')
+                      AND status IN ('active', 'trialing')
+                      AND (current_period_end IS NULL OR current_period_end > NOW())
+                  ) THEN 'premium' ELSE 'free' END
+                ) AS account_tier,
                 users.status,
                 users.created_at,
                 users.updated_at,
@@ -414,6 +444,8 @@ const createAccountService = ({
               COUNT(*) OVER() AS total_count,
               COUNT(*) FILTER (WHERE status = 'active') OVER() AS active_count,
               COUNT(*) FILTER (WHERE status = 'suspended') OVER() AS suspended_count,
+              COUNT(*) FILTER (WHERE account_tier = 'free') OVER() AS free_count,
+              COUNT(*) FILTER (WHERE account_tier = 'premium') OVER() AS premium_count,
               COALESCE(SUM(active_sessions) OVER(), 0) AS total_active_sessions
        FROM user_directory
        ORDER BY created_at DESC, id
@@ -426,6 +458,8 @@ const createAccountService = ({
       summary: {
         active: result.rows.length ? asNonNegativeNumber(result.rows[0].active_count) : 0,
         suspended: result.rows.length ? asNonNegativeNumber(result.rows[0].suspended_count) : 0,
+        free: result.rows.length ? asNonNegativeNumber(result.rows[0].free_count) : 0,
+        premium: result.rows.length ? asNonNegativeNumber(result.rows[0].premium_count) : 0,
         activeSessions: result.rows.length ? asNonNegativeNumber(result.rows[0].total_active_sessions) : 0,
       },
       limit,
@@ -461,6 +495,61 @@ const createAccountService = ({
       return {
         user: serializeAdminUser(result.rows[0]),
         revokedSessions,
+      };
+    });
+  };
+
+  const updateUserTier = async ({ userId: rawUserId, tier: rawTier, actorUserId: rawActorUserId } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    const tier = validateAdminAccountTier(rawTier);
+
+    return runInTransaction(async (query) => {
+      const account = await query(
+        `SELECT id, email, display_name, auth_provider, status, created_at, updated_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId],
+      );
+      if (!account.rows[0]) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+
+      await query(
+        `INSERT INTO subscriptions (
+           user_id,
+           provider,
+           provider_subscription_id,
+           plan_key,
+           status,
+           current_period_start,
+           current_period_end,
+           cancel_at_period_end,
+           metadata
+         )
+         VALUES ($1, 'admin', $2, $3, 'active', NOW(), NULL, FALSE, $4::jsonb)
+         ON CONFLICT (provider, provider_subscription_id) DO UPDATE
+         SET user_id = EXCLUDED.user_id,
+             plan_key = EXCLUDED.plan_key,
+             status = 'active',
+             current_period_start = NOW(),
+             current_period_end = NULL,
+             cancel_at_period_end = FALSE,
+             metadata = EXCLUDED.metadata,
+             updated_at = NOW()`,
+        [
+          userId,
+          `admin-user-tier:${userId}`,
+          tier,
+          JSON.stringify({ source: 'admin', actorUserId }),
+        ],
+      );
+
+      return {
+        user: serializeAdminUser({ ...account.rows[0], account_tier: tier }),
+        tier,
       };
     });
   };
@@ -624,6 +713,7 @@ const createAccountService = ({
     register,
     revokeUserSessions,
     updatePreferences,
+    updateUserTier,
     updateUserStatus,
   };
 };

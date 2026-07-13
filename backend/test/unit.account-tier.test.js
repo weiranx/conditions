@@ -40,6 +40,22 @@ test('resolves active and trialing premium subscriptions through their current p
     .toMatchObject({ key: 'premium', status: 'trialing' });
 });
 
+test('uses an active administrator tier override ahead of billing subscriptions', () => {
+  const paidSubscription = {
+    provider: 'stripe',
+    plan_key: 'premium_monthly',
+    status: 'active',
+    current_period_end: '2026-08-01T00:00:00.000Z',
+  };
+  expect(resolveAccountTier([
+    { provider: 'admin', plan_key: 'free', status: 'active' },
+    paidSubscription,
+  ], NOW)).toEqual(FREE_ACCOUNT_TIER);
+  expect(resolveAccountTier([
+    { provider: 'admin', plan_key: 'premium', status: 'active' },
+  ], NOW)).toMatchObject({ key: 'premium', status: 'active' });
+});
+
 test('loads subscription state for one account from the database', async () => {
   const query = jest.fn().mockResolvedValue({
     rows: [{
@@ -56,6 +72,7 @@ test('loads subscription state for one account from the database', async () => {
 
   await expect(service.getAccountTier(USER_ID)).resolves.toMatchObject({ key: 'premium' });
   expect(query).toHaveBeenCalledWith(expect.stringContaining('FROM subscriptions'), [USER_ID]);
+  expect(query.mock.calls[0][0]).toContain("provider = 'admin'");
 });
 
 test('uses Free when subscription storage is not configured', async () => {

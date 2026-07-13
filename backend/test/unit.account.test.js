@@ -257,6 +257,7 @@ describe('password accounts', () => {
         ...USER_ROW,
         auth_provider: 'password',
         auth_methods: ['google', 'password'],
+        account_tier: 'premium',
         status: 'active',
         updated_at: new Date('2026-07-12T11:00:00.000Z'),
         last_activity_at: new Date('2026-07-12T12:00:00.000Z'),
@@ -267,6 +268,8 @@ describe('password accounts', () => {
         total_count: '1',
         active_count: '1',
         suspended_count: '0',
+        free_count: '0',
+        premium_count: '1',
         total_active_sessions: '2',
       }],
     });
@@ -279,6 +282,7 @@ describe('password accounts', () => {
         displayName: USER_ROW.display_name,
         authProvider: 'password',
         authMethods: ['google', 'password'],
+        tier: 'premium',
         status: 'active',
         createdAt: USER_ROW.created_at.toISOString(),
         updatedAt: '2026-07-12T11:00:00.000Z',
@@ -289,11 +293,62 @@ describe('password accounts', () => {
         aiTokens: 12500,
       }],
       total: 1,
-      summary: { active: 1, suspended: 0, activeSessions: 2 },
+      summary: { active: 1, suspended: 0, free: 0, premium: 1, activeSessions: 2 },
       limit: 500,
     });
     expect(query.mock.calls[0][0]).toContain('COUNT(*) FILTER (WHERE expires_at > NOW())');
+    expect(query.mock.calls[0][0]).toContain("provider = 'admin'");
     expect(query.mock.calls[0][1]).toEqual([500]);
+  });
+
+  test('assigns a managed account tier through an administrator override', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          ...USER_ROW,
+          auth_provider: 'password',
+          status: 'active',
+          updated_at: new Date('2026-07-13T08:00:00.000Z'),
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    await expect(service.updateUserTier({
+      userId: USER_ROW.id,
+      tier: 'premium',
+      actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+    })).resolves.toMatchObject({
+      user: { id: USER_ROW.id, tier: 'premium' },
+      tier: 'premium',
+    });
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[1][0]).toContain('INSERT INTO subscriptions');
+    expect(query.mock.calls[1][0]).toContain('ON CONFLICT (provider, provider_subscription_id) DO UPDATE');
+    expect(query.mock.calls[1][1]).toEqual([
+      USER_ROW.id,
+      `admin-user-tier:${USER_ROW.id}`,
+      'premium',
+      JSON.stringify({
+        source: 'admin',
+        actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+      }),
+    ]);
+  });
+
+  test('rejects unsupported managed account tiers before writing', async () => {
+    const query = jest.fn();
+    const transaction = jest.fn();
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    await expect(service.updateUserTier({
+      userId: USER_ROW.id,
+      tier: 'enterprise',
+      actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
+    })).rejects.toMatchObject({ code: 'INVALID_ACCOUNT_TIER' });
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   test('suspends an account and revokes every active session atomically', async () => {

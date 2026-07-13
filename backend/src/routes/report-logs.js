@@ -81,7 +81,11 @@ const isAdminAccount = (user) => (
 const getUserManagementError = (error, fallback) => {
   if (error?.code === 'ACCOUNT_NOT_FOUND') return { status: 404, message: error.message };
   if (error?.code === 'ADMIN_SELF_MODIFICATION') return { status: 409, message: error.message };
-  if (error?.code === 'INVALID_ACCOUNT_ID' || error?.code === 'INVALID_ACCOUNT_STATUS') {
+  if (
+    error?.code === 'INVALID_ACCOUNT_ID'
+    || error?.code === 'INVALID_ACCOUNT_STATUS'
+    || error?.code === 'INVALID_ACCOUNT_TIER'
+  ) {
     return { status: 400, message: error.message };
   }
   if (error?.code === 'ACCOUNT_DATABASE_UNAVAILABLE') {
@@ -202,6 +206,45 @@ const registerReportLogsRoute = (
       if (failure.status === 500) req.log?.error({ err: error }, 'Admin account status update failed');
       await audit(req, {
         action: 'account.user.status-update-failed',
+        category: 'accounts',
+        status: 'error',
+        summary: failure.message,
+        details: { targetUserId: req.params?.userId ?? null },
+      });
+      res.status(failure.status).json({ error: failure.message });
+    }
+  });
+
+  app.patch('/api/admin/users/:userId/tier', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    if (typeof accountService?.updateUserTier !== 'function') {
+      res.status(503).json({ error: 'Account management is temporarily unavailable.' });
+      return;
+    }
+    try {
+      const result = await accountService.updateUserTier({
+        userId: req.params?.userId,
+        tier: req.body?.tier,
+        actorUserId: adminUser.id,
+      });
+      const targetName = result.user.displayName || result.user.email || 'account';
+      await audit(req, {
+        action: 'account.user.tier-updated',
+        category: 'accounts',
+        summary: `Changed ${targetName} to ${result.tier === 'premium' ? 'Premium' : 'Free'}`,
+        details: {
+          targetUserId: result.user.id,
+          targetEmail: result.user.email,
+          tier: result.tier,
+        },
+      });
+      res.json(result);
+    } catch (error) {
+      const failure = getUserManagementError(error, 'Account tier could not be updated.');
+      if (failure.status === 500) req.log?.error({ err: error }, 'Admin account tier update failed');
+      await audit(req, {
+        action: 'account.user.tier-update-failed',
         category: 'accounts',
         status: 'error',
         summary: failure.message,

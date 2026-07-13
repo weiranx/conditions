@@ -76,17 +76,22 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
     email: 'climber@example.com',
     displayName: 'Avery Stone',
+    tier: 'free',
     status: 'active',
   };
   const listUsers = jest.fn(async () => ({
     users: [adminUser, managedUser],
     total: 2,
-    summary: { active: 2, suspended: 0, activeSessions: 3 },
+    summary: { active: 2, suspended: 0, free: 2, premium: 0, activeSessions: 3 },
     limit: 500,
   }));
   const updateUserStatus = jest.fn(async ({ status }) => ({
     user: { ...managedUser, status },
     revokedSessions: status === 'suspended' ? 2 : 0,
+  }));
+  const updateUserTier = jest.fn(async ({ tier }) => ({
+    user: { ...managedUser, tier },
+    tier,
   }));
   const revokeUserSessions = jest.fn(async () => ({ user: managedUser, revokedSessions: 1 }));
   const accountService = {
@@ -94,6 +99,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     listUsers,
     updateUserStatus,
     revokeUserSessions,
+    updateUserTier,
     getUserForSession: jest.fn(async (token) => (
       token === 'admin-session-token'
         ? adminUser
@@ -137,7 +143,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
       { ...managedUser, isOwner: false },
     ],
     total: 2,
-    summary: { active: 2, suspended: 0, activeSessions: 3 },
+    summary: { active: 2, suspended: 0, free: 2, premium: 0, activeSessions: 3 },
     limit: 500,
   });
 
@@ -159,6 +165,27 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'account.user.suspended',
     category: 'accounts',
+  }));
+
+  const tierResponse = createResponse();
+  await routes.patch.get('/api/admin/users/:userId/tier')({
+    headers,
+    params: { userId: managedUser.id },
+    body: { tier: 'premium' },
+  }, tierResponse);
+  expect(updateUserTier).toHaveBeenCalledWith({
+    userId: managedUser.id,
+    tier: 'premium',
+    actorUserId: adminUser.id,
+  });
+  expect(tierResponse.payload).toEqual({
+    user: { ...managedUser, tier: 'premium' },
+    tier: 'premium',
+  });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'account.user.tier-updated',
+    category: 'accounts',
+    summary: 'Changed Avery Stone to Premium',
   }));
 
   const revokeSessionsResponse = createResponse();

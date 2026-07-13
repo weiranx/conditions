@@ -10,6 +10,7 @@ import {
   CircleUserRound,
   Clock3,
   Cpu,
+  Crown,
   Database,
   DollarSign,
   Download,
@@ -149,6 +150,7 @@ interface AdminUserRecord {
   displayName: string;
   authProvider: string;
   authMethods: string[];
+  tier: 'free' | 'premium' | string;
   status: 'active' | 'suspended' | string;
   createdAt: string;
   updatedAt: string;
@@ -166,6 +168,8 @@ interface AdminUserDirectory {
   summary: {
     active: number;
     suspended: number;
+    free: number;
+    premium: number;
     activeSessions: number;
   };
   limit: number;
@@ -327,7 +331,7 @@ type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' |
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow';
 type AnalyticsRange = '6h' | '24h' | '7d';
 type AuditFilter = 'all' | 'accounts' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
-type UserStatusFilter = 'all' | 'active' | 'suspended';
+type UserStatusFilter = 'all' | 'active' | 'suspended' | 'free' | 'premium';
 type AdminSection = 'overview' | 'users' | 'operations' | 'analytics' | 'activity';
 
 const ADMIN_SECTIONS = [
@@ -388,6 +392,8 @@ const USER_STATUS_FILTERS: Array<{ value: UserStatusFilter; label: string }> = [
   { value: 'all', label: 'All accounts' },
   { value: 'active', label: 'Active' },
   { value: 'suspended', label: 'Suspended' },
+  { value: 'free', label: 'Free' },
+  { value: 'premium', label: 'Premium' },
 ];
 
 function getAnalyticsRange(range: AnalyticsRange) {
@@ -797,7 +803,7 @@ function AdminDashboard() {
   const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
-  const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, activeSessions: 0 });
+  const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, activeSessions: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -869,6 +875,8 @@ function AdminDashboard() {
     setUserSummary({
       active: Number.isFinite(directory.summary.active) ? Number(directory.summary.active) : 0,
       suspended: Number.isFinite(directory.summary.suspended) ? Number(directory.summary.suspended) : 0,
+      free: Number.isFinite(directory.summary.free) ? Number(directory.summary.free) : 0,
+      premium: Number.isFinite(directory.summary.premium) ? Number(directory.summary.premium) : 0,
       activeSessions: Number.isFinite(directory.summary.activeSessions) ? Number(directory.summary.activeSessions) : 0,
     });
     setUsersError(null);
@@ -1091,6 +1099,35 @@ function AdminDashboard() {
       void fetchAuditTrail();
     } catch {
       setUsersError('Could not reach the server to update this account.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const updateManagedUserTier = async (user: AdminUserRecord, tier: 'free' | 'premium') => {
+    if (user.tier === tier) return;
+    if (tier === 'free' && !window.confirm(
+      `Move ${user.displayName} to Free? Premium limits and features will stop applying immediately.`,
+    )) return;
+    setUserActionPending(`${user.id}:tier`);
+    setUsersError(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}/tier`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The account tier could not be updated.';
+        setUsersError(message);
+        return;
+      }
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to update this account tier.');
     } finally {
       setUserActionPending(null);
     }
@@ -1410,9 +1447,13 @@ function AdminDashboard() {
   const filteredUsers = useMemo(() => {
     const normalizedQuery = userQuery.trim().toLowerCase();
     return users.filter((user) => {
-      if (userStatusFilter !== 'all' && user.status !== userStatusFilter) return false;
+      if (
+        userStatusFilter !== 'all'
+        && user.status !== userStatusFilter
+        && user.tier !== userStatusFilter
+      ) return false;
       if (!normalizedQuery) return true;
-      return [user.displayName, user.email, user.authProvider, ...user.authMethods, user.status]
+      return [user.displayName, user.email, user.authProvider, ...user.authMethods, user.status, user.tier]
         .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery));
     });
   }, [userQuery, users, userStatusFilter]);
@@ -1685,7 +1726,7 @@ function AdminDashboard() {
             <span className="logs-section-icon"><Users size={17} aria-hidden /></span>
             <div>
               <h2 id="admin-users-title">User management</h2>
-              <p>Review accounts, control access, and end active sessions</p>
+              <p>Assign Free or Premium, control access, and end active sessions</p>
             </div>
           </div>
           <span className="admin-users-total">{usersTotal.toLocaleString()} {usersTotal === 1 ? 'account' : 'accounts'}</span>
@@ -1705,6 +1746,14 @@ function AdminDashboard() {
             <strong>{userSummary.suspended.toLocaleString()}</strong>
           </article>
           <article>
+            <span><CircleUserRound size={15} aria-hidden /> Free</span>
+            <strong>{userSummary.free.toLocaleString()}</strong>
+          </article>
+          <article>
+            <span><Crown size={15} aria-hidden /> Premium</span>
+            <strong>{userSummary.premium.toLocaleString()}</strong>
+          </article>
+          <article>
             <span><KeyRound size={15} aria-hidden /> Active sessions</span>
             <strong>{userSummary.activeSessions.toLocaleString()}</strong>
           </article>
@@ -1717,7 +1766,7 @@ function AdminDashboard() {
             <input
               value={userQuery}
               onChange={(event) => setUserQuery(event.target.value)}
-              placeholder="Search name, email, or sign-in method…"
+              placeholder="Search name, email, tier, or sign-in method…"
             />
             {userQuery && <button type="button" onClick={() => setUserQuery('')} aria-label="Clear account search"><X size={15} aria-hidden /></button>}
           </label>
@@ -1754,6 +1803,7 @@ function AdminDashboard() {
                 <tr>
                   <th>Account</th>
                   <th>Access</th>
+                  <th>Tier</th>
                   <th>Usage</th>
                   <th>Recent activity</th>
                   <th>Status</th>
@@ -1764,7 +1814,9 @@ function AdminDashboard() {
                 {filteredUsers.map((user) => {
                   const statusPending = userActionPending === `${user.id}:status`;
                   const sessionsPending = userActionPending === `${user.id}:sessions`;
+                  const tierPending = userActionPending === `${user.id}:tier`;
                   const isActive = user.status === 'active';
+                  const tier = user.tier === 'premium' ? 'premium' : 'free';
                   return (
                     <tr key={user.id}>
                       <td data-label="Account">
@@ -1779,6 +1831,22 @@ function AdminDashboard() {
                       <td data-label="Access">
                         <span className="admin-user-primary">{(user.authMethods?.length ? user.authMethods : [user.authProvider]).map((method) => method === 'password' ? 'Email & password' : method.replaceAll('-', ' ')).join(' + ')}</span>
                         <small>{user.activeSessions.toLocaleString()} active {user.activeSessions === 1 ? 'session' : 'sessions'}</small>
+                      </td>
+                      <td data-label="Tier">
+                        <label className={`admin-user-tier is-${tier}`}>
+                          {tier === 'premium' ? <Crown size={13} aria-hidden /> : <CircleUserRound size={13} aria-hidden />}
+                          <span className="sr-only">Change {user.displayName} tier</span>
+                          <select
+                            value={tier}
+                            onChange={(event) => void updateManagedUserTier(user, event.target.value as 'free' | 'premium')}
+                            disabled={Boolean(userActionPending)}
+                            aria-label={`Change ${user.displayName} tier`}
+                          >
+                            <option value="free">Free</option>
+                            <option value="premium">Premium</option>
+                          </select>
+                          {tierPending && <LoaderCircle className="logs-spin" size={13} aria-label="Saving tier" />}
+                        </label>
                       </td>
                       <td data-label="Usage">
                         <span className="admin-user-primary">{user.savedReports.toLocaleString()} saved {user.savedReports === 1 ? 'report' : 'reports'}</span>
@@ -1827,7 +1895,7 @@ function AdminDashboard() {
         )}
         <footer className="logs-panel-foot">
           <span>Showing {filteredUsers.length.toLocaleString()} of {users.length.toLocaleString()} loaded accounts</span>
-          <span>Suspending an account revokes its active sessions immediately</span>
+          <span>Tier changes apply immediately · suspending an account revokes active sessions</span>
         </footer>
       </section>
 
