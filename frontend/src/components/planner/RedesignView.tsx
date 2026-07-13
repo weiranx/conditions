@@ -2021,16 +2021,34 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           const score = Math.round(safetyData.safety.score);
           const scoreColor = getScoreColor(score, safetyData.safety.tier);
           const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : null;
+          const confidence = Number.isFinite(Number(safetyData.safety.confidence))
+            ? Math.round(Number(safetyData.safety.confidence))
+            : null;
+          const confidenceLabel = confidence === null
+            ? 'Not rated'
+            : confidence >= 85
+              ? 'High confidence'
+              : confidence >= 70
+                ? 'Moderate confidence'
+                : 'Lower confidence';
+          const confidenceTone = confidence === null || confidence >= 85 ? 'good' : confidence >= 70 ? 'watch' : 'low';
+          const totalDeduction = Math.max(0, 100 - score);
           const primary = factors.slice(0, 3);
           const others = factors.slice(3);
-          // The backend can emit several distinct sub-factors under one hazard name
-          // (e.g. two "Wind" entries with different messages); without a hint the
-          // repeats read as double counting.
-          const hazardNameCounts = factors.reduce((acc: Record<string, number>, f: any) => {
-            const name = String(f.hazard || 'Factor');
-            acc[name] = (acc[name] || 0) + 1;
-            return acc;
-          }, {});
+          const groupLabels: Record<string, string> = {
+            avalanche: 'Avalanche', weather: 'Weather', alerts: 'Official alerts', airQuality: 'Air quality', fire: 'Fire',
+          };
+          const groups = safetyData.safety.groupImpacts
+            ? Object.entries(safetyData.safety.groupImpacts)
+                .map(([key, value]: [string, any]) => ({
+                  key,
+                  label: groupLabels[key] || key,
+                  effective: Math.round(Number(value?.effective || 0)),
+                  scale: Math.round(Number(value?.scale || 0)),
+                }))
+                .filter((g) => g.effective > 0 && g.scale > 0)
+                .sort((a, b) => b.effective - a.effective)
+            : [];
           return (
             <section className="ssr-card" id="planner-section-score">
               <div className="ssr-card-h">
@@ -2045,62 +2063,67 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 )}
               </div>
               <div className="ssr-card-b">
-                <div className="ssr-sb-summary">
-                  <span className="ssr-sb-score" style={{ color: scoreColor }}>{score}<small>/ 100</small></span>
-                  <div className="ssr-sb-summary-meta">
+                <div className="ssr-sb-hero">
+                  <div className="ssr-sb-score-block">
+                    <span className="ssr-sb-eyebrow">Safety score</span>
+                    <span className="ssr-sb-score" style={{ color: scoreColor }}>{score}<small>/ 100</small></span>
                     {tierLabel && <span className="ssr-sb-tier">{tierLabel}</span>}
-                    <span className="ssr-sb-sub">{factors.length} factor{factors.length !== 1 ? 's' : ''} weighed against a 100 baseline</span>
+                  </div>
+                  <div className="ssr-sb-hero-copy">
+                    <strong>{totalDeduction === 0 ? 'No scored hazard deductions' : `${totalDeduction} points deducted for active hazards`}</strong>
+                    <p>Higher scores mean more planning margin. The score summarizes forecast signals; it does not replace current observations or field judgment.</p>
+                  </div>
+                  <div className={`ssr-sb-confidence ${confidenceTone}`}>
+                    <span>Data confidence</span>
+                    <strong>{confidenceLabel}</strong>
+                    {confidence !== null && <small>{confidence}%</small>}
                   </div>
                 </div>
-                {(() => {
-                  const groupLabels: Record<string, string> = {
-                    avalanche: 'Avalanche', weather: 'Weather', alerts: 'Alerts', airQuality: 'Air Quality', fire: 'Fire',
-                  };
-                  const groups = safetyData.safety.groupImpacts
-                    ? Object.entries(safetyData.safety.groupImpacts)
-                        .map(([key, value]: [string, any]) => ({
-                          key,
-                          label: groupLabels[key] || key,
-                          effective: Math.round(Number(value?.effective || 0)),
-                          scale: Math.round(Number(value?.scale || 0)),
-                        }))
-                        .filter((g) => g.effective > 0 && g.scale > 0)
-                        .sort((a, b) => b.effective - a.effective)
-                    : [];
-                  if (groups.length === 0) return null;
-                  return (
-                    <div className="ssr-cc-group">
-                      <div className="ssr-cc-group-h">Hazard groups <span className="ssr-cc-count">{groups.length}</span></div>
-                      <div className="ssr-factors">
-                        {groups.map((g) => (
-                          <div className="ssr-factor" key={g.key}>
-                            <div className="ssr-factor-top">
-                              <span className="ssr-factor-name">{g.label}</span>
-                              <span className="ssr-factor-impact neg">−{g.effective} <small>/ {g.scale}</small></span>
-                            </div>
-                            <span className="ssr-factor-bar">
-                              <i className="neg" style={{ width: `${(g.effective / g.scale) * 100}%` }} />
-                            </span>
+                <div className="ssr-sb-score-track" aria-label={`Safety score ${score} out of 100`}>
+                  <i style={{ width: `${Math.max(0, Math.min(100, score))}%`, backgroundColor: scoreColor }} />
+                </div>
+                <div className="ssr-sb-equation" aria-label={`100 starting points minus ${totalDeduction} hazard points equals a score of ${score}`}>
+                  <div><span>Starting margin</span><strong>100</strong></div>
+                  <b aria-hidden="true">−</b>
+                  <div><span>Hazard deductions</span><strong>{totalDeduction}</strong></div>
+                  <b aria-hidden="true">=</b>
+                  <div className="result"><span>Final score</span><strong style={{ color: scoreColor }}>{score}</strong></div>
+                </div>
+                {groups.length > 0 && (
+                  <div className="ssr-cc-group ssr-sb-deductions">
+                    <div className="ssr-cc-group-h">Score deductions <span className="ssr-cc-count">{groups.length}</span></div>
+                    <p className="ssr-sb-section-intro">These group totals are the points used in the score calculation.</p>
+                    <div className="ssr-factors">
+                      {groups.map((g) => (
+                        <div className="ssr-factor" key={g.key}>
+                          <div className="ssr-factor-top">
+                            <span className="ssr-factor-name">{g.label}</span>
+                            <span className="ssr-factor-impact neg">−{g.effective} <small>pts</small></span>
                           </div>
-                        ))}
-                      </div>
+                          <span className="ssr-factor-bar" aria-hidden="true">
+                            <i className="neg" style={{ width: `${Math.min(100, (g.effective / g.scale) * 100)}%` }} />
+                          </span>
+                          <small className="ssr-factor-msg">{g.effective} of {g.scale} available points used in this hazard group</small>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
                 <div className="ssr-cc-group">
                   <div className="ssr-cc-group-h">Primary drivers <span className="ssr-cc-count">{primary.length}</span></div>
+                  <p className="ssr-sb-section-intro">The strongest individual signals behind the group deductions above.</p>
                   <div className="ssr-factors">
                     {primary.map((f: any, i: number) => {
                       const impact = Math.round(Number(f.impact || 0));
                       // Stored impact is positive-for-penalty (risk-increasing); negative = bonus.
                       const isPenalty = impact >= 0;
                       return (
-                        <div className="ssr-factor" key={i}>
+                        <div className="ssr-factor ssr-sb-driver" key={`${f.hazard || 'factor'}-${i}`}>
                           <div className="ssr-factor-top">
-                            <span className="ssr-factor-name">{f.hazard || 'Factor'}</span>
-                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                            <span className="ssr-factor-name"><i>{i + 1}</i>{f.hazard || 'Factor'}</span>
+                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)} <small>raw pts</small></span>
                           </div>
-                          <span className="ssr-factor-bar">
+                          <span className="ssr-factor-bar" aria-hidden="true">
                             <i className={isPenalty ? 'neg' : 'pos'} style={{ width: `${(Math.abs(impact) / maxImpact) * 100}%` }} />
                           </span>
                           {f.message && <small className="ssr-factor-msg">{localizeUnitText(f.message)}</small>}
@@ -2110,30 +2133,31 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                   </div>
                 </div>
                 {others.length > 0 && (
-                  <div className="ssr-cc-group">
-                    <div className="ssr-cc-group-h">Other factors <span className="ssr-cc-count">{others.length}</span></div>
+                  <details className="ssr-sb-more">
+                    <summary>
+                      <span>Other scored factors</span>
+                      <small>{others.length} more</small>
+                    </summary>
                     <div className="ssr-sb-other">
                       {others.map((f: any, i: number) => {
                         const impact = Math.round(Number(f.impact || 0));
                         const isPenalty = impact >= 0;
                         const name = String(f.hazard || 'Factor');
                         const message = f.message ? localizeUnitText(String(f.message)) : '';
-                        const hint = hazardNameCounts[name] > 1 && message
-                          ? message.split(/[.(]/)[0].trim().slice(0, 48)
-                          : '';
                         return (
-                          <div className="ssr-sb-other-row" key={i} title={message || undefined}>
+                          <div className="ssr-sb-other-row" key={`${name}-${i}`}>
                             <span className="ssr-sb-other-name">
                               {name}
-                              {hint && <small className="ssr-sb-other-hint">{hint}</small>}
+                              {message && <small className="ssr-sb-other-hint">{message}</small>}
                             </span>
-                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)}</span>
+                            <span className={`ssr-factor-impact ${isPenalty ? 'neg' : 'pos'}`}>{isPenalty ? '−' : '+'}{Math.abs(impact)} <small>raw pts</small></span>
                           </div>
                         );
                       })}
                     </div>
-                  </div>
+                  </details>
                 )}
+                <p className="ssr-sb-footnote">Raw factor points explain each signal. Group deductions are adjusted for overlap and diminishing returns, so raw points do not add directly to the final score.</p>
               </div>
             </section>
           );
