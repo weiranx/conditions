@@ -111,14 +111,23 @@ export interface UseRouteAnalysisReturn {
     options?: RouteAnalysisOptions,
   ) => Promise<void>;
   resetRouteState: () => void;
+  restoreRouteState: (state: {
+    routeSuggestions: RouteOption[] | null;
+    routeAnalysis: RouteAnalysisResult | null;
+    customRouteName: string;
+  }) => void;
 }
 
-export function useRouteAnalysis(): UseRouteAnalysisReturn {
-  const [routeSuggestions, setRouteSuggestions] = useState<RouteOption[] | null>(null);
-  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(null);
+export function useRouteAnalysis(initialState?: {
+  routeSuggestions?: RouteOption[] | null;
+  routeAnalysis?: RouteAnalysisResult | null;
+  customRouteName?: string;
+}): UseRouteAnalysisReturn {
+  const [routeSuggestions, setRouteSuggestions] = useState<RouteOption[] | null>(initialState?.routeSuggestions ?? null);
+  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(initialState?.routeAnalysis ?? null);
   const [routeLoadingState, setRouteLoadingState] = useState<RouteLoadingState | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const [customRouteName, setCustomRouteName] = useState('');
+  const [customRouteName, setCustomRouteName] = useState(initialState?.customRouteName ?? '');
   const activeRequestRef = useRef<{ id: number; controller: AbortController } | null>(null);
   const nextRequestIdRef = useRef(0);
 
@@ -214,6 +223,22 @@ export function useRouteAnalysis(): UseRouteAnalysisReturn {
     setRouteSuggestions(null);
     setRouteAnalysis(null);
     setRouteError(null);
+    setCustomRouteName('');
+  }, []);
+
+  const restoreRouteState = useCallback((state: {
+    routeSuggestions: RouteOption[] | null;
+    routeAnalysis: RouteAnalysisResult | null;
+    customRouteName: string;
+  }) => {
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = null;
+    nextRequestIdRef.current += 1;
+    setRouteLoadingState(null);
+    setRouteError(null);
+    setRouteSuggestions(state.routeSuggestions);
+    setRouteAnalysis(state.routeAnalysis);
+    setCustomRouteName(state.customRouteName);
   }, []);
 
   return {
@@ -229,5 +254,6 @@ export function useRouteAnalysis(): UseRouteAnalysisReturn {
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
+    restoreRouteState,
   };
 }

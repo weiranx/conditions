@@ -16,6 +16,7 @@ import { Suggestion, Suggestions } from '../ai-elements/suggestion';
 import { buildApiUrl } from '../../lib/api-client';
 import { useAiAccess } from '../../hooks/useAiAccess';
 import '../../styles/report-chat.css';
+import type { PersistedReportChatMessage } from '../../app/report-storage';
 
 const STARTER_QUESTIONS = [
   'What is driving the risk score?',
@@ -44,13 +45,16 @@ function getFollowUpQuestions(message: ReportChatMessage | undefined): string[] 
 
 export interface ReportChatProps {
   reportPayload: string;
+  initialMessages: PersistedReportChatMessage[];
+  onMessagesChange: (messages: PersistedReportChatMessage[]) => void;
 }
 
-function ReportChatComponent({ reportPayload }: ReportChatProps) {
+function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange }: ReportChatProps) {
   const { requestAiAccess } = useAiAccess();
   const [isOpen, setIsOpen] = React.useState(false);
   const [input, setInput] = React.useState('');
   const conversationId = React.useId();
+  const lastReportedMessagesRef = React.useRef(JSON.stringify([]));
   const transport = React.useMemo(
     () => new DefaultChatTransport({ api: buildApiUrl('/api/report-chat') }),
     [],
@@ -62,17 +66,32 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
     error,
     setMessages,
     stop,
-  } = useChat<ReportChatMessage>({ transport });
+  } = useChat<ReportChatMessage>({
+    transport,
+    messages: initialMessages as ReportChatMessage[],
+  });
   const isBusy = status === 'submitted' || status === 'streaming';
   const latestMessage = messages[messages.length - 1];
   const followUpQuestions = !isBusy && !error
     ? getFollowUpQuestions(latestMessage)
     : [];
 
-  React.useEffect(() => {
-    setMessages([]);
+  const resetChatForReport = React.useEffectEvent(() => {
+    lastReportedMessagesRef.current = JSON.stringify(initialMessages);
+    setMessages(initialMessages as ReportChatMessage[]);
     setInput('');
-  }, [reportPayload, setMessages]);
+  });
+
+  React.useEffect(() => {
+    resetChatForReport();
+  }, [reportPayload]);
+
+  React.useEffect(() => {
+    const serialized = JSON.stringify(messages);
+    if (serialized === lastReportedMessagesRef.current) return;
+    lastReportedMessagesRef.current = serialized;
+    onMessagesChange(messages as PersistedReportChatMessage[]);
+  }, [messages, onMessagesChange]);
 
   const submitQuestion = React.useCallback((question: string) => {
     const text = question.trim();

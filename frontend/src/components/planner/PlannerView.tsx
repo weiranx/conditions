@@ -41,6 +41,7 @@ import type { VisibilityRiskEstimate } from '../../app/visibility';
 import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecast } from '../../app/types';
 import type { FreshnessRow as SourceFreshnessRow } from '../../app/source-freshness-display';
 import type { StartTimeScenarioComparison } from '../../app/start-time-scenarios';
+import type { PersistedReportChatMessage } from '../../app/report-storage';
 
 const RouteAnalysisSection = React.lazy(() =>
   import('./RouteAnalysisSection').then((module) => ({ default: module.RouteAnalysisSection })),
@@ -55,6 +56,7 @@ export interface PlannerViewProps {
   // Shell / layout
   appShellClassName: string;
   isViewPending: boolean;
+  restoredFromHistory: boolean;
 
   // Navigation
   navigateToView: (view: AppView) => void;
@@ -155,6 +157,9 @@ export interface PlannerViewProps {
   aiBriefError: string | null;
   aiBriefLoading: boolean;
   handleRequestAiBriefAction: () => void;
+  reportChatMessages: PersistedReportChatMessage[];
+  reportChatSessionKey: number;
+  onReportChatMessagesChange: (messages: PersistedReportChatMessage[]) => void;
   snowVisionAnalysis: string | null;
   snowVisionImage: string | null;
   snowVisionError: string | null;
@@ -466,6 +471,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     // Shell
     appShellClassName,
     isViewPending,
+    restoredFromHistory,
 
     // Navigation
     navigateToView,
@@ -657,6 +663,12 @@ function PlannerViewComponent(props: PlannerViewProps) {
         openTripToolView={openTripToolView}
       />
       <main id="planner-main-content" className="planner-page-main" tabIndex={-1}>
+      {restoredFromHistory && (
+        <div className="planner-history-notice" role="status">
+          <strong>Saved report snapshot</strong>
+          <span>No new conditions or AI were generated. Select New report to check current data.</span>
+        </div>
+      )}
       <PlannerHeader
         searchWrapperRef={searchWrapperRef}
         searchInputRef={searchInputRef}

@@ -50,6 +50,7 @@ const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
 const { registerAccountRoutes } = require('./src/routes/account');
+const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
@@ -802,6 +803,7 @@ const accountService = registerAccountRoutes({
   isProduction: IS_PRODUCTION,
   usageService: aiUsageLimitService,
 });
+registerSavedReportRoutes({ app, database, accountService });
 const ensureAccountAccess = createAccountAccessGuard({
   service: accountService,
   usageService: aiUsageLimitService,

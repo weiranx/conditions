@@ -800,3 +800,29 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert::before { background: va
   .ssr-shell .empty-state { margin-inline: -4px; padding: 24px 18px 24px 74px; border-radius: 12px; }
   .ssr-shell .empty-state::before { left: 18px; top: 24px; }
 }
+.planner-history-notice {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent-teal) 10%, var(--surface-raised));
+  border: 1px solid color-mix(in srgb, var(--accent-teal) 35%, var(--border-subtle));
+  border-radius: 12px;
+  color: var(--text-primary);
+  display: flex;
+  gap: 10px;
+  margin: 16px auto 0;
+  max-width: 1180px;
+  padding: 10px 14px;
+}
+
+.planner-history-notice span {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 640px) {
+  .planner-history-notice {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+    margin: 12px 12px 0;
+  }
+}

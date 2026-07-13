@@ -1019,6 +1019,9 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           aiBriefLoading={aiBriefLoading}
           onRequestAiBrief={handleRequestAiBriefAction}
           rawReportPayload={rawReportPayload}
+          reportChatMessages={props.reportChatMessages}
+          reportChatSessionKey={props.reportChatSessionKey}
+          onReportChatMessagesChange={props.onReportChatMessagesChange}
         />
         </div>
 

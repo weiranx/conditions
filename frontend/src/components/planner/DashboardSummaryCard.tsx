@@ -28,6 +28,7 @@ import { buildFieldBrief, downloadFieldBrief } from '../../app/field-brief';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
+import type { PersistedReportChatMessage } from '../../app/report-storage';
 
 type BriefSignalTone = 'positive' | 'caution' | 'neutral';
 
@@ -92,6 +93,9 @@ export interface DashboardSummaryCardProps {
   aiBriefLoading: boolean;
   onRequestAiBrief: () => void;
   rawReportPayload: string;
+  reportChatMessages: PersistedReportChatMessage[];
+  reportChatSessionKey: number;
+  onReportChatMessagesChange: (messages: PersistedReportChatMessage[]) => void;
 }
 
 export function DashboardSummaryCard({
@@ -120,6 +124,9 @@ export function DashboardSummaryCard({
   aiBriefLoading,
   onRequestAiBrief,
   rawReportPayload,
+  reportChatMessages,
+  reportChatSessionKey,
+  onReportChatMessagesChange,
 }: DashboardSummaryCardProps) {
   const [fieldBriefSaved, setFieldBriefSaved] = useState(false);
   const fieldBriefTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -465,7 +472,14 @@ export function DashboardSummaryCard({
                   : <><Sparkles size={14} aria-hidden /> AI analysis</>}
               </button>
             ))}
-            {aiAvailability.reportChat && <ReportChat reportPayload={rawReportPayload} />}
+            {aiAvailability.reportChat && (
+              <ReportChat
+                key={reportChatSessionKey}
+                reportPayload={rawReportPayload}
+                initialMessages={reportChatMessages}
+                onMessagesChange={onReportChatMessagesChange}
+              />
+            )}
           </div>
         )}
       </section>

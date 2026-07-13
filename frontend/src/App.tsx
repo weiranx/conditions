@@ -110,10 +110,13 @@ import { buildWindLoadingDisplay } from './app/wind-loading-display';
 import { buildRainfallDisplay } from './app/rainfall-display';
 import { buildSourceFreshnessDisplay } from './app/source-freshness-display';
 import {
+  buildPersistedReport,
   clearPersistedReport,
   loadPersistedReport,
   persistedReportMatchesPlan,
   persistReport,
+  type PersistedReport,
+  type PersistedReportChatMessage,
 } from './app/report-storage';
 import { HomeView } from './components/views/HomeView';
 import { LegalView } from './components/views/LegalView';
@@ -136,6 +139,7 @@ import { useProductFeatureFlags } from './contexts/feature-flags';
 import { useAccount } from './hooks/useAccount';
 import { AiAccessContext } from './contexts/ai-access';
 import { AiAccessPrompt, type AccountAccessReason } from './components/AiAccessPrompt';
+import { createSavedReport, updateSavedReport } from './lib/saved-reports';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -160,6 +164,9 @@ const SettingsView = React.lazy(() =>
 );
 const TripView = React.lazy(() =>
   import('./components/views/TripView').then((module) => ({ default: module.TripView })),
+);
+const HistoryView = React.lazy(() =>
+  import('./components/views/HistoryView').then((module) => ({ default: module.HistoryView })),
 );
 
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
@@ -236,6 +243,8 @@ function App() {
     };
   });
   const preferencesRef = useRef(preferences);
+  const preHistoryPreferencesRef = useRef<UserPreferences | null>(null);
+  const historyReportPreferencesRef = useRef<UserPreferences | null>(null);
   const accountPreferenceOwnerRef = useRef<string | null>(null);
   useEffect(() => {
     preferencesRef.current = preferences;
@@ -331,8 +340,8 @@ function App() {
   const {
     routeSuggestions, setRouteSuggestions, routeAnalysis, routeLoading, routeLoadingState, routeError, setRouteError,
     customRouteName, setCustomRouteName,
-    fetchRouteSuggestions, fetchRouteAnalysis, resetRouteState,
-  } = useRouteAnalysis();
+    fetchRouteSuggestions, fetchRouteAnalysis, resetRouteState, restoreRouteState,
+  } = useRouteAnalysis(initialRestoredReport?.route);
 
   const safetyHook = useSafetyData({
     todayDate,
@@ -354,9 +363,59 @@ function App() {
     handleRequestAiBrief,
   } = safetyHook;
   const [previousSafetyData, setPreviousSafetyData] = useState<SafetyData | null>(null);
+  const [reportChatMessages, setReportChatMessages] = useState<PersistedReportChatMessage[]>(
+    initialRestoredReport?.ai.reportChatMessages ?? [],
+  );
+  const [reportChatSessionKey, setReportChatSessionKey] = useState(0);
+  const [viewingHistoryReport, setViewingHistoryReport] = useState(false);
+  const [activeSavedReportId, setActiveSavedReportId] = useState<string | null>(null);
+  const [reportGenerationPending, setReportGenerationPending] = useState(false);
+  const reportGenerationRef = useRef(0);
+  const reportSaveIntentRef = useRef<'waiting-for-account' | 'save' | 'saving' | 'browser-only'>('browser-only');
+  const reportSaveSourceDataRef = useRef<SafetyData | null>(null);
+  const reportSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reportUpdateChainRef = useRef<Promise<void>>(Promise.resolve());
+  const lastSavedReportSnapshotRef = useRef('');
   useEffect(() => {
     if (!safetyData) setPreviousSafetyData(null);
   }, [safetyData]);
+
+  useEffect(() => {
+    if (viewingHistoryReport || !preHistoryPreferencesRef.current) return;
+    setPreferences(preHistoryPreferencesRef.current);
+    preHistoryPreferencesRef.current = null;
+    historyReportPreferencesRef.current = null;
+  }, [viewingHistoryReport]);
+
+  const resetSavedReportTracking = useCallback(() => {
+    reportGenerationRef.current += 1;
+    reportSaveIntentRef.current = 'browser-only';
+    reportSaveSourceDataRef.current = null;
+    lastSavedReportSnapshotRef.current = '';
+    setReportGenerationPending(false);
+    setActiveSavedReportId(null);
+    if (reportSyncTimeoutRef.current) {
+      clearTimeout(reportSyncTimeoutRef.current);
+      reportSyncTimeoutRef.current = null;
+    }
+  }, []);
+
+  const beginReportGeneration = useCallback(() => {
+    const priorSafetyData = safetyData;
+    resetSavedReportTracking();
+    reportSaveSourceDataRef.current = priorSafetyData;
+    setReportGenerationPending(true);
+    reportSaveIntentRef.current = accountLoading
+      ? 'waiting-for-account'
+      : accountUserId
+        ? 'save'
+        : 'browser-only';
+    setViewingHistoryReport(false);
+  }, [accountLoading, accountUserId, resetSavedReportTracking, safetyData]);
+
+  useEffect(() => () => {
+    if (reportSyncTimeoutRef.current) clearTimeout(reportSyncTimeoutRef.current);
+  }, []);
 
   const coordinateTimezone = useMemo(
     () => resolveObjectiveTimeZone(position.lat, position.lng),
@@ -428,6 +487,10 @@ function App() {
 
   const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
     clearWakeRetry();
+    resetSavedReportTracking();
+    setViewingHistoryReport(false);
+    setReportChatMessages([]);
+    setReportChatSessionKey((value) => value + 1);
     setPosition(nextPosition);
     setMapFocusNonce((prev) => prev + 1);
     setHasObjective(true);
@@ -452,7 +515,7 @@ function App() {
     // selection or "use current location"), always relabel as "Dropped pin" rather than
     // silently keeping a stale name (e.g. "Mount Rainier") attached to brand-new coordinates.
     setObjectiveName(label || 'Dropped pin');
-  }, [clearWakeRetry, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
+  }, [clearWakeRetry, resetSavedReportTracking, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, setTripForecastRowsDirect, setTripForecastErrorDirect, setTripForecastNoteDirect]);
 
   const searchHook = useSearchSuggestions({
     initialSearchQuery: initialLinkState.searchQuery,
@@ -543,6 +606,10 @@ function App() {
         return;
       }
       clearWakeRetry();
+      resetSavedReportTracking();
+      setViewingHistoryReport(false);
+      setReportChatMessages([]);
+      setReportChatSessionKey((value) => value + 1);
       setSafetyData(null);
       setAiBriefNarrative(null);
       setAiBriefLoading(false);
@@ -568,9 +635,17 @@ function App() {
         ...(linkState.travelWindowHours ? { travelWindowHours: linkState.travelWindowHours } : {}),
       }));
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
+    }, [clearWakeRetry, resetSavedReportTracking, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
+
+  useEffect(() => {
+    if (!viewingHistoryReport) return;
+    const displayPreferences = view === 'planner'
+      ? historyReportPreferencesRef.current
+      : preHistoryPreferencesRef.current;
+    if (displayPreferences) setPreferences(displayPreferences);
+  }, [view, viewingHistoryReport]);
 
   useEffect(() => {
     if (!accountUserId || (view !== 'settings' && view !== 'account')) return;
@@ -627,6 +702,11 @@ function App() {
 
     if (view === 'settings' || view === 'account') {
       document.title = 'Settings & Account - Backcountry Conditions';
+      return;
+    }
+
+    if (view === 'history') {
+      document.title = 'Report History - Backcountry Conditions';
       return;
     }
 
@@ -715,40 +795,138 @@ function App() {
     setTravelWindowExpanded(false);
   }, [safetyData?.forecast?.selectedDate, safetyData?.forecast?.selectedStartTime]);
 
-  useEffect(() => {
-    if (!hasObjective || !safetyData) {
-      return;
-    }
-    persistReport({
-      lat: position.lat,
-      lon: position.lng,
-      objectiveName,
-      searchQuery: committedSearchQuery,
-      forecastDate,
-      alpineStartTime,
-      targetElevationInput,
-      travelWindowHours: Math.max(
-        MIN_TRAVEL_WINDOW_HOURS,
-        Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
-      ),
-    }, safetyData, {
-      aiBriefNarrative,
-      snowVisionAnalysis,
-      snowVisionImage,
-    });
-  }, [
-    hasObjective,
-    safetyData,
-    position,
+  const reportPlan = useMemo(() => ({
+    lat: position.lat,
+    lon: position.lng,
+    objectiveName,
+    searchQuery: committedSearchQuery,
+    forecastDate,
+    alpineStartTime,
+    targetElevationInput,
+    travelWindowHours: Math.max(
+      MIN_TRAVEL_WINDOW_HOURS,
+      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
+    ),
+  }), [
+    position.lat,
+    position.lng,
     objectiveName,
     committedSearchQuery,
     forecastDate,
     alpineStartTime,
     targetElevationInput,
     preferences.travelWindowHours,
+  ]);
+
+  const reportSnapshot = useMemo(() => safetyData
+    ? buildPersistedReport(reportPlan, safetyData, {
+      aiBriefNarrative,
+      snowVisionAnalysis,
+      snowVisionImage,
+      reportChatMessages,
+    }, {
+      preferences,
+      route: {
+        routeSuggestions,
+        routeAnalysis,
+        customRouteName,
+      },
+    })
+    : null, [
+    reportPlan,
+    safetyData,
     aiBriefNarrative,
     snowVisionAnalysis,
     snowVisionImage,
+    reportChatMessages,
+    preferences,
+    routeSuggestions,
+    routeAnalysis,
+    customRouteName,
+  ]);
+
+  useEffect(() => {
+    if (
+      !reportGenerationPending
+      || !safetyData
+      || safetyData === reportSaveSourceDataRef.current
+    ) return;
+    setReportChatMessages([]);
+    resetRouteState();
+    setReportGenerationPending(false);
+    setReportChatSessionKey((value) => value + 1);
+  }, [reportGenerationPending, resetRouteState, safetyData]);
+
+  useEffect(() => {
+    if (!hasObjective || !reportSnapshot || reportGenerationPending) return;
+    persistReport(reportSnapshot.plan, reportSnapshot.safetyData, reportSnapshot.ai, {
+      preferences: reportSnapshot.preferences,
+      route: reportSnapshot.route,
+    });
+  }, [hasObjective, reportGenerationPending, reportSnapshot]);
+
+  useEffect(() => {
+    if (
+      !reportSnapshot
+      || reportGenerationPending
+      || reportSnapshot.safetyData === reportSaveSourceDataRef.current
+      || viewingHistoryReport
+      || reportSaveIntentRef.current === 'browser-only'
+    ) return;
+    if (reportSaveIntentRef.current === 'waiting-for-account') {
+      if (accountLoading) return;
+      reportSaveIntentRef.current = accountUserId ? 'save' : 'browser-only';
+    }
+    if (reportSaveIntentRef.current !== 'save' || !accountUserId) return;
+
+    reportSaveIntentRef.current = 'saving';
+    const generation = reportGenerationRef.current;
+    const serialized = JSON.stringify(reportSnapshot);
+    void createSavedReport(reportSnapshot)
+      .then((reportId) => {
+        if (generation !== reportGenerationRef.current) return;
+        lastSavedReportSnapshotRef.current = serialized;
+        reportSaveSourceDataRef.current = null;
+        reportSaveIntentRef.current = 'browser-only';
+        setActiveSavedReportId(reportId);
+      })
+      .catch(() => {
+        if (generation !== reportGenerationRef.current) return;
+        reportSaveIntentRef.current = 'browser-only';
+      });
+  }, [accountLoading, accountUserId, reportGenerationPending, reportSnapshot, viewingHistoryReport]);
+
+  useEffect(() => {
+    if (!activeSavedReportId || !accountUserId || !reportSnapshot || viewingHistoryReport) return;
+    const serialized = JSON.stringify(reportSnapshot);
+    if (serialized === lastSavedReportSnapshotRef.current) return;
+    if (reportSyncTimeoutRef.current) clearTimeout(reportSyncTimeoutRef.current);
+    const generation = reportGenerationRef.current;
+    reportSyncTimeoutRef.current = setTimeout(() => {
+      reportSyncTimeoutRef.current = null;
+      const update = reportUpdateChainRef.current.then(async () => {
+        if (generation !== reportGenerationRef.current) return;
+        await updateSavedReport(activeSavedReportId, reportSnapshot);
+        if (generation === reportGenerationRef.current) {
+          lastSavedReportSnapshotRef.current = serialized;
+        }
+      });
+      reportUpdateChainRef.current = update
+        .catch(() => {
+          // The in-memory and browser snapshots remain available if account sync is offline.
+        });
+    }, 400);
+    return () => {
+      if (reportSyncTimeoutRef.current) {
+        clearTimeout(reportSyncTimeoutRef.current);
+        reportSyncTimeoutRef.current = null;
+      }
+    };
+  }, [
+    accountUserId,
+    activeSavedReportId,
+    reportSnapshot,
+    viewingHistoryReport,
   ]);
 
   const handleRecenterMap = () => {
@@ -938,6 +1116,7 @@ function App() {
     if (retryCreatesNewReport && !requestNewReportAccess()) {
       return;
     }
+    beginReportGeneration();
     setPreviousSafetyData(safetyData);
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
       force: true,
@@ -960,6 +1139,7 @@ function App() {
     if (!requestNewReportAccess()) {
       return;
     }
+    beginReportGeneration();
     collapseMobilePlanControls();
     setPreviousSafetyData(null);
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
@@ -974,7 +1154,7 @@ function App() {
   // and confirm it with Generate Report before any report request is made.
   const [pendingAutoGenerate, setPendingAutoGenerate] = useState(initialLinkState.hasObjective && !initialRestoredReport);
   useEffect(() => {
-    if (!pendingAutoGenerate || !hasObjective || view !== 'planner') {
+    if (!pendingAutoGenerate || !hasObjective || view !== 'planner' || accountLoading) {
       return;
     }
     setPendingAutoGenerate(false);
@@ -986,18 +1166,23 @@ function App() {
     if (!requestNewReportAccess()) {
       return;
     }
+    beginReportGeneration();
     collapseMobilePlanControls();
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
       force: true,
       countAsNewReport: true,
     });
-  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, objectiveTimezone, fetchSafetyData, collapseMobilePlanControls, requestNewReportAccess]);
+  }, [pendingAutoGenerate, hasObjective, view, accountLoading, position, forecastDate, alpineStartTime, objectiveTimezone, beginReportGeneration, fetchSafetyData, collapseMobilePlanControls, requestNewReportAccess]);
 
   const handleEditPlan = useCallback(() => {
     if (!requestNewReportAccess()) {
       return false;
     }
     clearPersistedReport();
+    resetSavedReportTracking();
+    setViewingHistoryReport(false);
+    setReportChatMessages([]);
+    setReportChatSessionKey((value) => value + 1);
     setSafetyData(null);
     setPreviousSafetyData(null);
     setError(null);
@@ -1010,7 +1195,67 @@ function App() {
     setSnowVisionError(null);
     resetRouteState();
     return true;
-  }, [setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, requestNewReportAccess]);
+  }, [resetSavedReportTracking, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, requestNewReportAccess]);
+
+  const handleOpenSavedReport = useCallback((report: PersistedReport) => {
+    clearWakeRetry();
+    clearLastLoadedKey();
+    resetSavedReportTracking();
+    setPendingAutoGenerate(false);
+    setViewingHistoryReport(true);
+    if (!preHistoryPreferencesRef.current) {
+      preHistoryPreferencesRef.current = preferencesRef.current;
+    }
+    historyReportPreferencesRef.current = report.preferences;
+    if (report.preferences) setPreferences(report.preferences);
+
+    setPosition(new L.LatLng(report.plan.lat, report.plan.lon));
+    setMapFocusNonce((value) => value + 1);
+    setHasObjective(true);
+    setObjectiveName(report.plan.objectiveName);
+    setSearchInputValue(report.plan.searchQuery || report.plan.objectiveName);
+    setCommittedSearchQuery(report.plan.searchQuery || report.plan.objectiveName);
+    setForecastDate(report.plan.forecastDate);
+    setAlpineStartTime(report.plan.alpineStartTime);
+    setTargetElevationInput(report.plan.targetElevationInput);
+    setTargetElevationManual(Boolean(report.plan.targetElevationInput));
+    setImportedGpxRoute(null);
+    setPastStartPrompt(null);
+    setPreviousSafetyData(null);
+    setError(null);
+    setSafetyData(report.safetyData);
+
+    setAiBriefNarrative(report.ai.aiBriefNarrative);
+    setAiBriefLoading(false);
+    setAiBriefError(null);
+    setSnowVisionAnalysis(report.ai.snowVisionAnalysis);
+    setSnowVisionImage(report.ai.snowVisionImage);
+    setSnowVisionLoading(false);
+    setSnowVisionError(null);
+    setReportChatMessages(report.ai.reportChatMessages);
+    setReportChatSessionKey((value) => value + 1);
+    restoreRouteState(report.route);
+
+    startViewChange(() => setView('planner'));
+  }, [
+    clearLastLoadedKey,
+    clearWakeRetry,
+    resetSavedReportTracking,
+    restoreRouteState,
+    setAiBriefError,
+    setAiBriefLoading,
+    setAiBriefNarrative,
+    setCommittedSearchQuery,
+    setError,
+    setSafetyData,
+    setSearchInputValue,
+    setSnowVisionAnalysis,
+    setSnowVisionError,
+    setSnowVisionImage,
+    setSnowVisionLoading,
+    setView,
+    startViewChange,
+  ]);
 
   const openPlannerView = () => {
     if (!hasObjective && !searchQuery.trim()) {
@@ -1216,7 +1461,7 @@ function App() {
 
   const dayComparisonsHook = useDayComparisons({
     hasObjective,
-    view,
+    view: viewingHistoryReport ? 'history' : view,
     safetyData,
     forecastDate,
     position: { lat: position.lat, lng: position.lng },
@@ -1224,7 +1469,7 @@ function App() {
   });
   const { dayOverDay } = dayComparisonsHook;
   const startTimeScenarios = useStartTimeScenarios({
-    enabled: featureFlags.startTimeComparisons && hasObjective && view === 'planner' && Boolean(safetyData),
+    enabled: featureFlags.startTimeComparisons && hasObjective && view === 'planner' && Boolean(safetyData) && !viewingHistoryReport,
     forecastDate,
     currentStartTime: alpineStartTime,
     position: { lat: position.lat, lng: position.lng },
@@ -1835,6 +2080,17 @@ function App() {
       />
       </React.Activity>
 
+      <React.Activity name="history-page" mode={view === 'history' ? 'visible' : 'hidden'}>
+      <HistoryView
+        appShellClassName={appShellClassName}
+        isViewPending={isViewPending}
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+        openTripToolView={openTripToolView}
+        onOpenReport={handleOpenSavedReport}
+      />
+      </React.Activity>
+
       <React.Activity name="trip-page" mode={featureFlags.tripPlanning && view === 'trip' ? 'visible' : 'hidden'}>
       <TripView
         appShellClassName={appShellClassName}
@@ -1975,6 +2231,7 @@ function App() {
       // Shell / layout
       appShellClassName={appShellClassName}
       isViewPending={isViewPending}
+      restoredFromHistory={viewingHistoryReport}
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}
@@ -2067,6 +2324,9 @@ function App() {
       aiBriefError={aiBriefError}
       aiBriefLoading={aiBriefLoading}
       handleRequestAiBriefAction={handleRequestAiBriefAction}
+      reportChatMessages={reportChatMessages}
+      reportChatSessionKey={reportChatSessionKey}
+      onReportChatMessagesChange={setReportChatMessages}
       snowVisionAnalysis={snowVisionAnalysis}
       snowVisionImage={snowVisionImage}
       snowVisionError={snowVisionError}

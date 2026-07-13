@@ -34,7 +34,9 @@ const createApp = ({
   app.use(cors(corsOptions));
   app.use(compression());
   app.use(helmet());
-  app.use(express.json({ limit: '1mb' }));
+  // Full account-owned report snapshots can include the analyzed satellite tile.
+  // Saved-report validation applies a tighter 4 MB limit after parsing.
+  app.use(express.json({ limit: '5mb' }));
 
   app.use((req, res, next) => {
     const requestId = crypto.randomUUID();

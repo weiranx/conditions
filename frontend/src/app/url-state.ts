@@ -67,6 +67,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const viewParam = pathSegment || params.get('view') || '';
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitAccountView = viewParam === 'account';
+  const hasExplicitHistoryView = viewParam === 'history';
   const hasExplicitStatusView = viewParam === 'status';
   const hasExplicitTripView = viewParam === 'trip';
   const hasExplicitAdminView = viewParam === 'admin' || viewParam === 'logs';
@@ -75,6 +76,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const hasUnknownView = Boolean(viewParam) && ![
     'home',
     'planner',
+    'history',
     'settings',
     'account',
     'status',
@@ -92,19 +94,21 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
       ? 'settings'
       : hasExplicitAccountView
         ? 'account'
-        : hasExplicitStatusView
-          ? 'status'
-          : hasExplicitTripView
-            ? 'trip'
-            : hasExplicitAdminView
-              ? 'admin'
-              : hasExplicitPrivacyView
-                ? 'privacy'
-                : hasExplicitTermsView
-                  ? 'terms'
-                  : viewParam === 'planner' || hasCoords
-                    ? 'planner'
-                    : 'home',
+        : hasExplicitHistoryView
+          ? 'history'
+          : hasExplicitStatusView
+            ? 'status'
+            : hasExplicitTripView
+              ? 'trip'
+              : hasExplicitAdminView
+                ? 'admin'
+                : hasExplicitPrivacyView
+                  ? 'privacy'
+                  : hasExplicitTermsView
+                    ? 'terms'
+                    : viewParam === 'planner' || hasCoords
+                      ? 'planner'
+                      : 'home',
     activity: normalizeActivity(params.get('activity') || preferences.defaultActivity),
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
     hasObjective: hasCoords,
@@ -120,7 +124,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 }
 
 export function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
+  view: 'home' | 'planner' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;

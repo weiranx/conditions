@@ -5,10 +5,12 @@ import {
   PERSISTED_REPORT_KEY,
 } from './constants';
 import { isValidLatLon, parseTimeInputMinutes } from './core';
-import type { SafetyData } from './types';
+import { hasStoredUserPreferences, normalizeUserPreferences } from './preferences';
+import type { SafetyData, UserPreferences } from './types';
 import { buildSafetyRequestKey } from './url-state';
+import type { RouteAnalysisResult, RouteOption } from '../hooks/useRouteAnalysis';
 
-const PERSISTED_REPORT_VERSION = 1;
+const PERSISTED_REPORT_VERSION = 2;
 
 export interface PersistedReportPlan {
   lat: number;
@@ -25,14 +27,34 @@ export interface PersistedReportAiFields {
   aiBriefNarrative: string | null;
   snowVisionAnalysis: string | null;
   snowVisionImage: string | null;
+  reportChatMessages: PersistedReportChatMessage[];
+}
+
+export interface PersistedReportChatPart {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface PersistedReportChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  parts: PersistedReportChatPart[];
+}
+
+export interface PersistedReportRouteFields {
+  routeSuggestions: RouteOption[] | null;
+  routeAnalysis: RouteAnalysisResult | null;
+  customRouteName: string;
 }
 
 export interface PersistedReport {
   version: typeof PERSISTED_REPORT_VERSION;
   savedAt: string;
   plan: PersistedReportPlan;
+  preferences: UserPreferences | null;
   safetyData: SafetyData;
   ai: PersistedReportAiFields;
+  route: PersistedReportRouteFields;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,8 +75,26 @@ function isSafetyData(value: unknown): value is SafetyData {
   );
 }
 
-function parsePersistedReport(value: unknown): PersistedReport | null {
-  if (!isRecord(value) || value.version !== PERSISTED_REPORT_VERSION || !isRecord(value.plan)) {
+function parseChatMessages(value: unknown): PersistedReportChatMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((message) => {
+    if (
+      !isRecord(message)
+      || typeof message.id !== 'string'
+      || (message.role !== 'user' && message.role !== 'assistant')
+      || !Array.isArray(message.parts)
+    ) {
+      return [];
+    }
+    const parts = message.parts.filter((part): part is PersistedReportChatPart => (
+      isRecord(part) && typeof part.type === 'string'
+    ));
+    return parts.length > 0 ? [{ id: message.id, role: message.role, parts }] : [];
+  });
+}
+
+export function parsePersistedReport(value: unknown): PersistedReport | null {
+  if (!isRecord(value) || (value.version !== 1 && value.version !== PERSISTED_REPORT_VERSION) || !isRecord(value.plan)) {
     return null;
   }
 
@@ -89,6 +129,9 @@ function parsePersistedReport(value: unknown): PersistedReport | null {
       targetElevationInput: typeof plan.targetElevationInput === 'string' ? plan.targetElevationInput : '',
       travelWindowHours,
     },
+    preferences: hasStoredUserPreferences(value.preferences)
+      ? normalizeUserPreferences(value.preferences)
+      : null,
     safetyData: value.safetyData,
     ai: {
       aiBriefNarrative: isRecord(value.ai) && typeof value.ai.aiBriefNarrative === 'string'
@@ -100,6 +143,20 @@ function parsePersistedReport(value: unknown): PersistedReport | null {
       snowVisionImage: isRecord(value.ai) && typeof value.ai.snowVisionImage === 'string'
         ? value.ai.snowVisionImage
         : null,
+      reportChatMessages: isRecord(value.ai)
+        ? parseChatMessages(value.ai.reportChatMessages)
+        : [],
+    },
+    route: {
+      routeSuggestions: isRecord(value.route) && Array.isArray(value.route.routeSuggestions)
+        ? value.route.routeSuggestions as RouteOption[]
+        : null,
+      routeAnalysis: isRecord(value.route) && isRecord(value.route.routeAnalysis)
+        ? value.route.routeAnalysis as unknown as RouteAnalysisResult
+        : null,
+      customRouteName: isRecord(value.route) && typeof value.route.customRouteName === 'string'
+        ? value.route.customRouteName
+        : '',
     },
   };
 }
@@ -133,23 +190,45 @@ export function persistReport(
   plan: PersistedReportPlan,
   safetyData: SafetyData,
   ai: PersistedReportAiFields,
+  extras?: {
+    preferences?: UserPreferences | null;
+    route?: PersistedReportRouteFields;
+  },
 ): void {
   if (typeof window === 'undefined') {
     return;
   }
 
-  const report: PersistedReport = {
-    version: PERSISTED_REPORT_VERSION,
-    savedAt: new Date().toISOString(),
-    plan,
-    safetyData,
-    ai,
-  };
+  const report = buildPersistedReport(plan, safetyData, ai, extras);
   try {
     window.localStorage.setItem(PERSISTED_REPORT_KEY, JSON.stringify(report));
   } catch {
     // QuotaExceededError or SecurityError — keep the in-memory report working.
   }
+}
+
+export function buildPersistedReport(
+  plan: PersistedReportPlan,
+  safetyData: SafetyData,
+  ai: PersistedReportAiFields,
+  extras?: {
+    preferences?: UserPreferences | null;
+    route?: PersistedReportRouteFields;
+  },
+): PersistedReport {
+  return {
+    version: PERSISTED_REPORT_VERSION,
+    savedAt: new Date().toISOString(),
+    plan,
+    preferences: extras?.preferences ?? null,
+    safetyData,
+    ai,
+    route: extras?.route ?? {
+      routeSuggestions: null,
+      routeAnalysis: null,
+      customRouteName: '',
+    },
+  };
 }
 
 export function clearPersistedReport(): void {

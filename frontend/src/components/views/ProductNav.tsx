@@ -1,6 +1,7 @@
-import { CalendarRange, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { CalendarRange, FileClock, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import { useAccount } from '../../hooks/useAccount';
 import '../../styles/page-chrome.css';
 
 interface ProductNavProps {
@@ -17,11 +18,15 @@ export function ProductNav({
   openTripToolView,
 }: ProductNavProps) {
   const featureFlags = useProductFeatureFlags();
+  const { user } = useAccount();
   const items: Array<{ id: AppView; label: string; icon: typeof House; action: () => void }> = [
     { id: 'home', label: 'Home', icon: House, action: () => navigateToView('home') },
     { id: 'planner', label: 'Planner', icon: Map, action: openPlannerView || (() => navigateToView('planner')) },
     ...(featureFlags.tripPlanning
       ? [{ id: 'trip' as const, label: 'Compare', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) }]
+      : []),
+    ...(user
+      ? [{ id: 'history' as const, label: 'History', icon: FileClock, action: () => navigateToView('history') }]
       : []),
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
   ];

@@ -37,7 +37,7 @@ function withViewTransition(apply: () => void, fallback: () => void = apply) {
   transition?.updateCallbackDone?.catch(() => {});
 }
 
-export type AppView = 'home' | 'planner' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
+export type AppView = 'home' | 'planner' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
 
 export interface UseUrlStateParams {
   todayDate: string;
