@@ -67,6 +67,9 @@ export interface PlannerMapSectionProps {
   travelWindowHoursDraft: string | number;
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTravelWindowHoursDraftBlur: () => void;
+  targetElevationInput: string;
+  handleTargetElevationChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  elevationUnitLabel: string;
   objectiveTimezone: string | null;
   handleUseNowConditions: () => void;
   loading: boolean;
@@ -89,6 +92,7 @@ export function PlannerMapSection({
   forecastDate, dateLabel, displayStartTime, todayDate, maxForecastDate, handleDateChange,
   startLabel, alpineStartTime, handlePlannerTimeChange, setAlpineStartTime,
   travelWindowHoursDraft, handleTravelWindowHoursDraftChange, handleTravelWindowHoursDraftBlur,
+  targetElevationInput, handleTargetElevationChange, elevationUnitLabel,
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
@@ -383,6 +387,21 @@ export function PlannerMapSection({
               value={travelWindowHoursDraft}
               onChange={handleTravelWindowHoursDraftChange}
               onBlur={handleTravelWindowHoursDraftBlur}
+              disabled={locked}
+            />
+          </label>
+
+          <label className="date-control compact target-elevation-control">
+            <span>Elevation ({elevationUnitLabel})</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              aria-label={`Objective elevation in ${elevationUnitLabel}`}
+              title={`Optional: override the mapped elevation when you know the objective altitude (${elevationUnitLabel}).`}
+              placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
+              value={targetElevationInput}
+              onChange={handleTargetElevationChange}
               disabled={locked}
             />
           </label>

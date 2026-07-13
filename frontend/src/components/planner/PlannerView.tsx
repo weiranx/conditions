@@ -521,6 +521,9 @@ function PlannerViewComponent(props: PlannerViewProps) {
     travelWindowHoursDraft,
     handleTravelWindowHoursDraftChange,
     handleTravelWindowHoursDraftBlur,
+    targetElevationInput,
+    handleTargetElevationChange,
+    elevationUnitLabel,
     objectiveTimezone,
     handleUseNowConditions,
     loading,
@@ -676,6 +679,9 @@ function PlannerViewComponent(props: PlannerViewProps) {
         travelWindowHoursDraft={travelWindowHoursDraft}
         handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
         handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
+        targetElevationInput={targetElevationInput}
+        handleTargetElevationChange={handleTargetElevationChange}
+        elevationUnitLabel={elevationUnitLabel}
         objectiveTimezone={objectiveTimezone}
         handleUseNowConditions={handleUseNowConditions}
         loading={loading}

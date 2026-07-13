@@ -191,30 +191,62 @@ function ElevationProfileSection({
   bands,
   maxGustMph,
   note,
+  targetElevationForecast,
+  targetElevationFt,
   formatTempDisplay,
   formatWindDisplay,
   formatElevationDisplay,
+  formatElevationDeltaDisplay,
 }: {
   bands: ElevationForecastBand[];
   maxGustMph: number;
   note?: string | null;
+  targetElevationForecast: PlannerViewProps['targetElevationForecast'];
+  targetElevationFt: number;
   formatTempDisplay: PlannerViewProps['formatTempDisplay'];
   formatWindDisplay: PlannerViewProps['formatWindDisplay'];
   formatElevationDisplay: PlannerViewProps['formatElevationDisplay'];
+  formatElevationDeltaDisplay: PlannerViewProps['formatElevationDeltaDisplay'];
 }) {
-  const profileKey = bands.map((band) => band.elevationFt).join('|');
-  const [selectedIndex, setSelectedIndex] = React.useState(Math.max(0, bands.length - 1));
+  const manualTarget = targetElevationForecast
+    && Number.isFinite(targetElevationFt)
+    && Math.abs(targetElevationForecast.deltaFt) >= 10
+    ? {
+        label: 'Your target',
+        elevationFt: Math.round(targetElevationFt),
+        deltaFromObjectiveFt: targetElevationForecast.deltaFt,
+        temp: targetElevationForecast.temp,
+        feelsLike: targetElevationForecast.feelsLike,
+        windSpeed: targetElevationForecast.windSpeed,
+        windGust: targetElevationForecast.windGust,
+      }
+    : null;
+
+  let profileBands = bands;
+  if (manualTarget) {
+    const matchingBandIndex = bands.findIndex((band) => Math.abs(band.elevationFt - manualTarget.elevationFt) < 10);
+    profileBands = matchingBandIndex >= 0
+      ? bands.map((band, index) => (index === matchingBandIndex ? manualTarget : band))
+      : [...bands, manualTarget].sort((a, b) => a.elevationFt - b.elevationFt);
+  }
+
+  const targetBandIndex = manualTarget
+    ? profileBands.findIndex((band) => band.label === manualTarget.label && band.elevationFt === manualTarget.elevationFt)
+    : -1;
+  const defaultBandIndex = targetBandIndex >= 0 ? targetBandIndex : Math.max(0, profileBands.length - 1);
+  const profileKey = profileBands.map((band) => `${band.label}:${band.elevationFt}`).join('|');
+  const [selectedIndex, setSelectedIndex] = React.useState(defaultBandIndex);
 
   React.useEffect(() => {
-    setSelectedIndex(Math.max(0, bands.length - 1));
-  }, [profileKey, bands.length]);
+    setSelectedIndex(defaultBandIndex);
+  }, [profileKey, defaultBandIndex]);
 
-  const activeIndex = Math.min(selectedIndex, bands.length - 1);
-  const activeBand = bands[activeIndex];
-  const lowerBand = bands[0];
-  const objectiveBand = bands[bands.length - 1];
-  const peakGustBand = bands.reduce((peak, band) => (band.windGust > peak.windGust ? band : peak), bands[0]);
-  const spanFt = Math.max(0, objectiveBand.elevationFt - lowerBand.elevationFt);
+  const activeIndex = Math.min(selectedIndex, profileBands.length - 1);
+  const activeBand = profileBands[activeIndex];
+  const lowerBand = profileBands[0];
+  const highestBand = profileBands[profileBands.length - 1];
+  const peakGustBand = profileBands.reduce((peak, band) => (band.windGust > peak.windGust ? band : peak), profileBands[0]);
+  const spanFt = Math.max(0, highestBand.elevationFt - lowerBand.elevationFt);
   const activeRisk = bandRisk(activeBand.windGust, maxGustMph);
   const activeRiskLabel = activeRisk === 'high'
     ? 'Over gust limit'
@@ -229,17 +261,19 @@ function ElevationProfileSection({
           <span className="ssr-h-icon icon-amber"><Layers size={16} /></span>
           Elevation profile
         </h2>
-        <span className="ssr-h-meta">{formatElevationDisplay(spanFt)} vertical span</span>
+        <span className="ssr-h-meta">
+          {manualTarget ? `Target ${formatElevationDisplay(manualTarget.elevationFt)}` : `${formatElevationDisplay(spanFt)} vertical span`}
+        </span>
       </div>
 
       <div className="ssr-elev-summary" aria-label="Elevation profile summary">
         <div>
           <span>Terrain range</span>
-          <strong>{formatElevationDisplay(lowerBand.elevationFt)} → {formatElevationDisplay(objectiveBand.elevationFt)}</strong>
+          <strong>{formatElevationDisplay(lowerBand.elevationFt)} → {formatElevationDisplay(highestBand.elevationFt)}</strong>
         </div>
         <div>
           <span>Temperature change</span>
-          <strong>{formatTempDisplay(lowerBand.temp)} → {formatTempDisplay(objectiveBand.temp)}</strong>
+          <strong>{formatTempDisplay(lowerBand.temp)} → {formatTempDisplay(highestBand.temp)}</strong>
         </div>
         <div className={bandRisk(peakGustBand.windGust, maxGustMph)}>
           <span>Peak gust · {peakGustBand.label}</span>
@@ -247,9 +281,20 @@ function ElevationProfileSection({
         </div>
       </div>
 
+      {manualTarget && (
+        <div className="ssr-elev-target" role="status">
+          <Mountain size={17} aria-hidden />
+          <div>
+            <span>Manual objective elevation</span>
+            <strong>{formatElevationDisplay(manualTarget.elevationFt)} · {formatElevationDeltaDisplay(manualTarget.deltaFromObjectiveFt)} vs mapped elevation</strong>
+          </div>
+          <p>{formatTempDisplay(manualTarget.temp)} · feels {formatTempDisplay(manualTarget.feelsLike)} · gusts {formatWindDisplay(manualTarget.windGust)}</p>
+        </div>
+      )}
+
       <figure className="ssr-cross-wrap">
         <ElevationCrossPlot
-          bands={bands}
+          bands={profileBands}
           maxGustMph={maxGustMph}
           activeIndex={activeIndex}
           onActiveIndexChange={setSelectedIndex}
@@ -257,15 +302,15 @@ function ElevationProfileSection({
           formatWindDisplay={formatWindDisplay}
           formatElevationDisplay={formatElevationDisplay}
         />
-        <figcaption className="sr-only">Estimated temperature and wind conditions across {bands.length} elevation bands.</figcaption>
+        <figcaption className="sr-only">Estimated temperature and wind conditions across {profileBands.length} elevation bands.</figcaption>
       </figure>
 
       <div className="ssr-elev-band-tabs" aria-label="Choose an elevation band">
-        {bands.map((band, index) => (
+        {profileBands.map((band, index) => (
           <button
             key={`${band.label}-${band.elevationFt}`}
             type="button"
-            className={index === activeIndex ? 'is-active' : ''}
+            className={`${index === activeIndex ? 'is-active' : ''} ${band.label === 'Your target' ? 'is-manual' : ''}`}
             aria-pressed={index === activeIndex}
             onClick={() => setSelectedIndex(index)}
           >
@@ -304,10 +349,10 @@ function ElevationProfileSection({
             </tr>
           </thead>
           <tbody>
-            {bands.map((band, index) => {
+            {profileBands.map((band, index) => {
               const risk = bandRisk(band.windGust, maxGustMph);
               return (
-                <tr key={`${band.label}-${band.elevationFt}`} className={index === activeIndex ? 'is-active' : ''}>
+                <tr key={`${band.label}-${band.elevationFt}`} className={`${index === activeIndex ? 'is-active' : ''} ${band.label === 'Your target' ? 'is-manual' : ''}`}>
                   <td>
                     <span className="ssr-band-name-cell">
                       <span className={`ssr-risk-pip ${risk}`} />
@@ -445,6 +490,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     formatTempDisplay,
     formatWindDisplay,
     formatElevationDisplay,
+    formatElevationDeltaDisplay,
     alpineStartTime,
     setAlpineStartTime,
     setMobileMapControlsExpanded,
@@ -461,6 +507,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     travelWindowSummary,
     formatTravelWindowSpan,
     elevationForecastBands,
+    targetElevationForecast,
+    targetElevationFt,
     objectiveElevationFt,
     avalancheRelevant,
     avalancheUnknown,
@@ -1404,9 +1452,12 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             bands={bands}
             maxGustMph={maxGustMph}
             note={safetyData.weather.elevationForecastNote}
+            targetElevationForecast={targetElevationForecast}
+            targetElevationFt={targetElevationFt}
             formatTempDisplay={formatTempDisplay}
             formatWindDisplay={formatWindDisplay}
             formatElevationDisplay={formatElevationDisplay}
+            formatElevationDeltaDisplay={formatElevationDeltaDisplay}
           />
         )}
 
