@@ -14,6 +14,7 @@ test('public feature flag endpoint returns current safe values without caching',
   expect(response.headers['cache-control']).toBe('no-store');
   expect(response.body).toEqual({
     tripPlanning: true,
+    routeAnalysis: true,
     satelliteImagery: true,
     startTimeComparisons: true,
   });

@@ -76,6 +76,7 @@ export interface RouteAnalysisSectionProps {
   formatElevationDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatDistanceDisplay: (miles: number | null | undefined) => string;
   initialGpxRoute?: ParsedGpxRoute | null;
+  aiAvailable: boolean;
 }
 
 export function RouteAnalysisSection({
@@ -86,6 +87,7 @@ export function RouteAnalysisSection({
   customRouteName, setCustomRouteName, setRouteSuggestions, setRouteError,
   getScoreColor, formatTempDisplay, formatWindDisplay, formatElevationDisplay, formatDistanceDisplay,
   initialGpxRoute = null,
+  aiAvailable,
 }: RouteAnalysisSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(initialGpxRoute);
@@ -158,6 +160,31 @@ export function RouteAnalysisSection({
     travelWindowHours,
   ]);
 
+  const analyzeCustomRoute = useCallback(() => {
+    const routeName = customRouteName.trim();
+    if (!routeName) return;
+    fetchRouteAnalysis(
+      objectiveName,
+      routeName,
+      positionLat,
+      positionLng,
+      forecastDate,
+      alpineStartTime,
+      travelWindowHours,
+    );
+    setCustomRouteName('');
+  }, [
+    customRouteName,
+    fetchRouteAnalysis,
+    objectiveName,
+    positionLat,
+    positionLng,
+    forecastDate,
+    alpineStartTime,
+    travelWindowHours,
+    setCustomRouteName,
+  ]);
+
   const gpxInput = (
     <input
       ref={fileInputRef}
@@ -196,13 +223,28 @@ export function RouteAnalysisSection({
       {!gpxRoute && !routeSuggestions && !routeAnalysis && !routeLoading && (
         <div className="route-analysis-actions">
           {gpxInput}
-          <button
-            type="button"
-            className="route-analyze-btn"
-            onClick={() => fetchRouteSuggestions(objectiveName, positionLat, positionLng)}
-          >
-            Analyze a Known Route
-          </button>
+          {aiAvailable ? (
+            <button
+              type="button"
+              className="route-analyze-btn"
+              onClick={() => fetchRouteSuggestions(objectiveName, positionLat, positionLng)}
+            >
+              Analyze a Known Route
+            </button>
+          ) : (
+            <div className="route-picker-custom">
+              <input
+                type="text"
+                placeholder="Enter a mapped route name…"
+                value={customRouteName}
+                onChange={(event) => setCustomRouteName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') analyzeCustomRoute();
+                }}
+              />
+              <button type="button" disabled={!customRouteName.trim()} onClick={analyzeCustomRoute}>Analyze</button>
+            </div>
+          )}
           <button
             type="button"
             className="route-analyze-btn route-gpx-upload-btn"
@@ -211,6 +253,9 @@ export function RouteAnalysisSection({
           >
             <Upload size={16} /> {gpxParsing ? 'Reading GPX…' : 'Import GPX Route'}
           </button>
+          {!aiAvailable && (
+            <p className="route-analysis-disclaimer">AI route assistance is off. Enter a mapped trail name or import a GPX track for data-derived analysis.</p>
+          )}
         </div>
       )}
 

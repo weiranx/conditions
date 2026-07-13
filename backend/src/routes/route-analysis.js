@@ -1,5 +1,6 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
+const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
@@ -213,7 +214,8 @@ const registerRouteAnalysisRoutes = ({
   invokeSafetyHandler,
   fetchWithTimeout,
   fetchHeaders,
-  ensureFeatureEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
+  ensureRouteAnalysisEnabled = () => assertFeatureEnabled('routeAnalysis'),
+  ensureAIEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
 }) => {
   const routeDataService = createRouteDataService({
     fetchWithTimeout,
@@ -233,7 +235,12 @@ const registerRouteAnalysisRoutes = ({
       return res.status(400).json({ error: 'lat and lon must be valid numbers' });
     }
     try {
-      ensureFeatureEnabled();
+      ensureRouteAnalysisEnabled();
+    } catch (error) {
+      return res.status(error.statusCode || 503).json({ error: error.message || 'Route analysis is unavailable' });
+    }
+    try {
+      ensureAIEnabled();
     } catch (error) {
       return res.status(503).json({ error: error.message || 'AI features are unavailable' });
     }
@@ -283,14 +290,16 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       return res.status(400).json({ error: error.message });
     }
     const routeMetadata = suppliedWaypoints ? sanitizeRouteMetadata(route_metadata) : null;
+    try {
+      ensureRouteAnalysisEnabled();
+    } catch (error) {
+      return res.status(error.statusCode || 503).json({ error: error.message || 'Route analysis is unavailable' });
+    }
     let aiFeatureEnabled = true;
     try {
-      ensureFeatureEnabled();
+      ensureAIEnabled();
     } catch (error) {
       aiFeatureEnabled = false;
-      if (!suppliedWaypoints) {
-        return res.status(503).json({ error: error.message || 'AI features are unavailable' });
-      }
     }
 
     try {
@@ -319,6 +328,11 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           };
           waypointsCopy = mappedRoute.waypoints.map((waypoint) => ({ ...waypoint }));
         } else {
+          if (!aiFeatureEnabled) {
+            return res.status(503).json({
+              error: 'AI waypoint generation is unavailable. Import a GPX route or enter a mapped trail name.',
+            });
+          }
           const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
           const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
             const waypointText = await withTimeout(askAI(
