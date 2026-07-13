@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { ChevronDown, ChevronUp, FileCheck2, Route, Upload } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronUp, FileCheck2, Route, Search, Upload } from 'lucide-react';
 import { formatRouteAnalysisSections } from '../../app/text-utils';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult, RouteLoadingState } from '../../hooks/useRouteAnalysis';
@@ -295,57 +295,83 @@ export function RouteAnalysisSection({
 
       {routeSuggestions && !routeAnalysis && !routeLoading && (
         <div className="route-picker-card">
-          <div className="route-picker-header">Choose a route to analyze</div>
+          <div className="route-picker-intro">
+            <div className="route-picker-header">Choose the route you plan to take</div>
+            <p>We’ll check forecast conditions at key points along the route.</p>
+          </div>
           <ul className="route-picker-list">
-            {routeSuggestions.map((r) => (
+            {routeSuggestions.map((r, index) => (
               <li key={r.name} className="route-picker-item">
                 <button
                   type="button"
                   className="route-picker-option"
+                  aria-label={`Analyze ${r.name}`}
                   onClick={() => fetchRouteAnalysis(objectiveName, r.name, positionLat, positionLng, forecastDate, alpineStartTime, travelWindowHours)}
                 >
-                  <span className="route-option-name">{r.name}</span>
-                  <span className="route-option-meta">{formatDistanceDisplay(r.distance_rt_miles)} RT &middot; {formatElevationDisplay(r.elev_gain_ft)} gain &middot; {r.class}</span>
-                  <span className="route-option-desc">{r.description}</span>
+                  <span className="route-option-marker" aria-hidden="true">
+                    <Route size={18} />
+                    <span>{index + 1}</span>
+                  </span>
+                  <span className="route-option-copy">
+                    <span className="route-option-name">{r.name}</span>
+                    <span className="route-option-meta">
+                      <span>{formatDistanceDisplay(r.distance_rt_miles)} round trip</span>
+                      <span>{formatElevationDisplay(r.elev_gain_ft)} gain</span>
+                      <span>{r.class}</span>
+                    </span>
+                    <span className="route-option-desc">{r.description}</span>
+                  </span>
+                  <span className="route-option-action" aria-hidden="true">
+                    Analyze <ArrowRight size={16} />
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
-          <div className="route-picker-custom">
-            <input
-              type="text"
-              placeholder="Or type a route name…"
-              value={customRouteName}
-              onChange={(e) => setCustomRouteName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && customRouteName.trim()) {
+          <div className="route-picker-alternatives">
+            <div className="route-picker-alternatives-copy">
+              <label htmlFor="route-picker-custom-name">Taking a different route?</label>
+              <span>Enter its mapped name or import a GPX track.</span>
+            </div>
+            <div className="route-picker-custom">
+              <input
+                id="route-picker-custom-name"
+                type="text"
+                placeholder="Trail or route name"
+                value={customRouteName}
+                onChange={(e) => setCustomRouteName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customRouteName.trim()) {
+                    fetchRouteAnalysis(objectiveName, customRouteName.trim(), positionLat, positionLng, forecastDate, alpineStartTime, travelWindowHours);
+                    setCustomRouteName('');
+                  }
+                }}
+              />
+              <button
+                type="button"
+                disabled={!customRouteName.trim()}
+                onClick={() => {
                   fetchRouteAnalysis(objectiveName, customRouteName.trim(), positionLat, positionLng, forecastDate, alpineStartTime, travelWindowHours);
                   setCustomRouteName('');
-                }
-              }}
-            />
-            <button
-              type="button"
-              disabled={!customRouteName.trim()}
-              onClick={() => {
-                fetchRouteAnalysis(objectiveName, customRouteName.trim(), positionLat, positionLng, forecastDate, alpineStartTime, travelWindowHours);
-                setCustomRouteName('');
-              }}
-            >
-              Go
-            </button>
+                }}
+              >
+                <Search size={15} /> Analyze route
+              </button>
+            </div>
+            <div className="route-picker-footer">
+              <button type="button" className="route-picker-gpx" onClick={() => fileInputRef.current?.click()}>
+                <Upload size={15} /> Import GPX file
+              </button>
+              <button
+                type="button"
+                className="route-picker-cancel"
+                onClick={() => { setRouteSuggestions(null); setRouteError(null); setCustomRouteName(''); }}
+              >
+                Back
+              </button>
+            </div>
           </div>
-          <button type="button" className="route-picker-gpx" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={14} /> Import GPX instead
-          </button>
           {gpxInput}
-          <button
-            type="button"
-            className="route-picker-cancel"
-            onClick={() => { setRouteSuggestions(null); setRouteError(null); setCustomRouteName(''); }}
-          >
-            Cancel
-          </button>
         </div>
       )}
 
