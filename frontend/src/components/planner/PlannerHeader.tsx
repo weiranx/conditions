@@ -6,6 +6,7 @@ import {
   Check,
   Compass,
   CloudSun,
+  Clock3,
   LockKeyhole,
   MapPin,
   MountainSnow,
@@ -35,6 +36,8 @@ export interface PlannerHeaderProps {
   setActiveSuggestionIndex: (index: number) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  reportGeneratedAt: string | null;
+  reportGeneratedAtLabel: string;
   hasObjective: boolean;
   objectiveIsSaved: boolean;
   handleToggleSaveObjective: () => void;
@@ -54,6 +57,8 @@ export function PlannerHeader({
   handleSearchClear, handleUseTypedCoordinates, selectSuggestion, setActiveSuggestionIndex,
   disabled = false,
   readOnly = false,
+  reportGeneratedAt,
+  reportGeneratedAtLabel,
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
   copiedLink, handleCopyLink,
   importedGpxRoute, handleImportGpxObjective,
@@ -120,6 +125,10 @@ export function PlannerHeader({
               <span>
                 <strong>{searchQuery.trim() || 'Selected objective'}</strong>
                 <small>{importedGpxRoute ? 'GPX route locked to this report' : activityLabel}</small>
+                <small className="planner-report-generated-at">
+                  <Clock3 size={11} aria-hidden />
+                  <time dateTime={reportGeneratedAt || undefined}>Generated {reportGeneratedAtLabel}</time>
+                </small>
               </span>
             </div>
             <p>{readOnly ? 'This saved snapshot cannot be changed.' : 'Inputs are locked so this report stays consistent.'} Choose <strong>New report</strong> below to edit the objective or timing.</p>

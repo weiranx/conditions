@@ -1431,8 +1431,12 @@ function App() {
     return date.toLocaleString([], baseOptions);
   };
 
-  const formatGeneratedAt = (value: Date = new Date()) =>
-    value.toLocaleString([], {
+  const formatGeneratedAt = (isoString: string | null) => {
+    const parsedMs = isoString ? parseIsoToMs(isoString) : null;
+    if (parsedMs === null) {
+      return 'time unavailable';
+    }
+    return new Date(parsedMs).toLocaleString([], {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -1440,6 +1444,7 @@ function App() {
       minute: '2-digit',
       hour12: useHour12Clock,
     });
+  };
 
   const formatTempDisplay = (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) =>
     formatTemperatureForUnit(value, preferences.temperatureUnit, options);

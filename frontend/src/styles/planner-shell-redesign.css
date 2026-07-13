@@ -275,6 +275,14 @@ body:has(.page-shell-planner) {
 .ssr-shell .planner-locked-objective small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ssr-shell .planner-locked-objective strong { color: var(--d-ink); font-size: 15px; font-weight: 680; }
 .ssr-shell .planner-locked-objective small { margin-top: 2px; color: var(--d-ink-3); font-size: 11.5px; }
+.ssr-shell .planner-locked-objective .planner-report-generated-at {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  color: var(--d-ink-2);
+}
+.ssr-shell .planner-report-generated-at svg { flex: none; }
 .ssr-shell .planner-locked-summary > p {
   grid-column: 1 / -1;
   margin: 0;
