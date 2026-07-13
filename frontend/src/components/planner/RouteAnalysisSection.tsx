@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { ExternalLink, FileCheck2, Upload } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, FileCheck2, Upload } from 'lucide-react';
 import { formatRouteAnalysisSections } from '../../app/text-utils';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
@@ -47,11 +47,16 @@ export function RouteAnalysisSection({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(initialGpxRoute);
   const [gpxParsing, setGpxParsing] = useState(false);
+  const [showAllWaypoints, setShowAllWaypoints] = useState(false);
 
   useEffect(() => {
     setGpxRoute(initialGpxRoute);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [initialGpxRoute, objectiveName, positionLat, positionLng]);
+
+  useEffect(() => {
+    setShowAllWaypoints(false);
+  }, [routeAnalysis]);
 
   const handleGpxFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -228,11 +233,19 @@ export function RouteAnalysisSection({
       {routeAnalysis && (
         <div className="route-analysis-card">
           <div className="route-analysis-header">
-            Route Analysis <span className="route-ai-badge">AI-assisted · verify</span>
-            {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
-            {routeAnalysis.routeSource === 'nps' && <span className="route-gpx-badge">NPS Trail</span>}
-            {routeAnalysis.routeSource === 'openstreetmap' && <span className="route-gpx-badge">Mapped Trail</span>}
+            <span>Route Analysis</span>
+            <span className="route-analysis-badges">
+              <span className="route-ai-badge">AI-assisted · verify</span>
+              {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
+              {routeAnalysis.routeSource === 'nps' && <span className="route-gpx-badge">NPS Trail</span>}
+              {routeAnalysis.routeSource === 'openstreetmap' && <span className="route-gpx-badge">Mapped Trail</span>}
+            </span>
           </div>
+          {(routeAnalysis.routeSourceDetails?.matchedName || routeAnalysis.routeMetadata?.fileName) && (
+            <h3 className="route-analysis-route-title">
+              {routeAnalysis.routeSourceDetails?.matchedName || routeAnalysis.routeMetadata?.fileName}
+            </h3>
+          )}
           <p className="route-analysis-disclaimer">
             {routeAnalysis.routeSource === 'gpx'
               ? 'Checkpoints come from your GPX track, but conditions and recommendations are model-derived. Verify the route, closures, and current official sources, and navigate with your original track.'
@@ -264,6 +277,17 @@ export function RouteAnalysisSection({
           )}
           <div className="route-waypoints">
             {routeAnalysis.summaries.map((wp, i) => {
+              const waypointCount = routeAnalysis.summaries.length;
+              const collapsible = waypointCount > 6;
+              const hiddenWaypointCount = waypointCount - 5;
+              const shouldHide = collapsible && !showAllWaypoints && i > 2 && i < waypointCount - 2;
+              const routeTitle = routeAnalysis.routeSourceDetails?.matchedName || routeAnalysis.routeMetadata?.fileName;
+              const displayName = routeTitle && wp.name.toLocaleLowerCase().startsWith(routeTitle.toLocaleLowerCase())
+                ? wp.name.slice(routeTitle.length).trim().replace(/^./, (character) => character.toUpperCase()) || wp.name
+                : wp.name;
+
+              if (shouldHide) return null;
+
               const wpCoords = routeAnalysis.waypoints[i];
               const wpReportParams = new URLSearchParams({
                 lat: String(wpCoords?.lat ?? ''),
@@ -274,37 +298,68 @@ export function RouteAnalysisSection({
                 travel_window_hours: String(travelWindowHours),
               });
               return (
-                <div key={wp.name} className={`route-waypoint-row${wp.dataAvailable ? '' : ' route-wp-no-data'}`}>
-                  <span className="route-wp-name">{wp.name}</span>
-                  {wp.distance_miles != null && <span className="route-wp-distance">mi {wp.distance_miles.toFixed(1)}</span>}
-                  <span className="route-wp-elev">{formatElevationDisplay(wp.elev_ft)}</span>
-                  {!wp.dataAvailable && <span className="route-wp-no-data-label">No data</span>}
-                  {wp.weather.temp != null && (
-                    <span className="route-wp-temp">{formatTempDisplay(wp.weather.temp)}</span>
-                  )}
-                  {wp.weather.windGust != null && (
-                    <span className="route-wp-gust">g {formatWindDisplay(wp.weather.windGust)}</span>
-                  )}
-                  {wp.score !== null && (
-                    <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
-                  )}
-                  {wp.avalanche?.risk && (
-                    <span className="route-wp-avy">{wp.avalanche.risk}</span>
-                  )}
-                  {wpCoords && (
-                    <a
-                      href={`/?${wpReportParams.toString()}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="route-wp-link"
-                      title={`Open full report for ${wp.name}`}
+                <div key={`${i}-${wp.name}`}>
+                  {collapsible && !showAllWaypoints && i === waypointCount - 2 && (
+                    <button
+                      type="button"
+                      className="route-waypoints-toggle route-waypoints-toggle-inline"
+                      aria-expanded="false"
+                      onClick={() => setShowAllWaypoints(true)}
                     >
-                      <ExternalLink size={13} />
-                    </a>
+                      <span>{hiddenWaypointCount} more checkpoints</span>
+                      <ChevronDown size={15} aria-hidden="true" />
+                    </button>
                   )}
+                  <div className={`route-waypoint-row${wp.dataAvailable ? '' : ' route-wp-no-data'}`}>
+                    <div className="route-wp-content">
+                      <div className="route-wp-heading">
+                        <span className="route-wp-name" title={wp.name}>{displayName}</span>
+                        {wp.score !== null && (
+                          <span className="route-wp-score" style={{ color: getScoreColor(wp.score) }}>{wp.score}%</span>
+                        )}
+                      </div>
+                      <div className="route-wp-metrics">
+                        {wp.distance_miles != null && <span className="route-wp-distance">mi {wp.distance_miles.toFixed(1)}</span>}
+                        <span className="route-wp-elev">{formatElevationDisplay(wp.elev_ft)}</span>
+                        {!wp.dataAvailable && <span className="route-wp-no-data-label">No data</span>}
+                        {wp.weather.temp != null && (
+                          <span className="route-wp-temp">{formatTempDisplay(wp.weather.temp)}</span>
+                        )}
+                        {wp.weather.windGust != null && (
+                          <span className="route-wp-gust">g {formatWindDisplay(wp.weather.windGust)}</span>
+                        )}
+                        {wp.avalanche?.risk && (
+                          <span className="route-wp-avy">{wp.avalanche.risk}</span>
+                        )}
+                      </div>
+                    </div>
+                    {wpCoords && (
+                      <a
+                        href={`/?${wpReportParams.toString()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="route-wp-link"
+                        title={`Open full report for ${wp.name}`}
+                        aria-label={`Open full report for ${wp.name}`}
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
+            {routeAnalysis.summaries.length > 6 && showAllWaypoints && (
+              <button
+                type="button"
+                className="route-waypoints-toggle"
+                aria-expanded="true"
+                onClick={() => setShowAllWaypoints(false)}
+              >
+                <span>Show fewer checkpoints</span>
+                <ChevronUp size={15} aria-hidden="true" />
+              </button>
+            )}
           </div>
           <Suspense
             fallback={(

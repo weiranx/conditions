@@ -94,10 +94,23 @@ export function RouteConditionsProfile({
   const minElev = Math.floor(Math.min(...elevs) / 500) * 500;
   const maxElev = Math.ceil(Math.max(...elevs) / 500) * 500;
 
+  const formatWaypointTick = (_name: string, index: number) => {
+    if (index === 0) return 'Start';
+    if (index === waypoints.length - 1) return /summit|peak/i.test(waypoints[index]?.name || '') ? 'Summit' : 'Finish';
+    return `CP ${index + 1}`;
+  };
+
   return (
     <div className="route-conditions-profile">
-      <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={waypoints} margin={{ top: 8, right: 12, bottom: 4, left: -8 }}>
+      <div className="route-profile-heading">
+        <div>
+          <strong>Elevation profile</strong>
+          <span>Tap a point for conditions</span>
+        </div>
+        <span>{formatElevationDisplay(Math.min(...elevs))}–{formatElevationDisplay(Math.max(...elevs))}</span>
+      </div>
+      <ResponsiveContainer width="100%" height={176}>
+        <AreaChart data={waypoints} margin={{ top: 10, right: 18, bottom: 0, left: -8 }}>
           <defs>
             <linearGradient id="elev-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#64748b" stopOpacity={0.3} />
@@ -106,13 +119,13 @@ export function RouteConditionsProfile({
           </defs>
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 10, fill: '#888' }}
+            tick={{ fontSize: 9, fill: '#888' }}
             axisLine={false}
             tickLine={false}
             interval={0}
-            angle={-30}
-            textAnchor="end"
-            height={40}
+            tickFormatter={formatWaypointTick}
+            minTickGap={12}
+            height={26}
           />
           <YAxis
             domain={[minElev, maxElev]}
