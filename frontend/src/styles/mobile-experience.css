@@ -68,9 +68,9 @@
     padding-block: 12px;
   }
 
-  /* Fixed bottom navigation remains legible above the home indicator. */
+  /* The compact top navigation stays dense and scrolls with the page. */
   .ssr-product-nav {
-    padding-bottom: max(env(safe-area-inset-bottom), 4px);
+    padding-bottom: 0;
   }
 
   .ssr-product-links button {
