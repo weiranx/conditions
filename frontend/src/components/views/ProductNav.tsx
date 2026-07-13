@@ -21,7 +21,7 @@ export function ProductNav({
     { id: 'home', label: 'Home', icon: House, action: () => navigateToView('home') },
     { id: 'planner', label: 'Planner', icon: Map, action: openPlannerView || (() => navigateToView('planner')) },
     ...(featureFlags.tripPlanning
-      ? [{ id: 'trip' as const, label: 'Trip', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) }]
+      ? [{ id: 'trip' as const, label: 'Compare', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) }]
       : []),
     { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
   ];

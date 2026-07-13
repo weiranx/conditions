@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { ChevronDown, ChevronUp, ExternalLink, FileCheck2, Upload } from 'lucide-react';
 import { formatRouteAnalysisSections } from '../../app/text-utils';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
@@ -48,6 +48,7 @@ export function RouteAnalysisSection({
   const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(initialGpxRoute);
   const [gpxParsing, setGpxParsing] = useState(false);
   const [showAllWaypoints, setShowAllWaypoints] = useState(false);
+  const autoAnalyzedRouteRef = useRef<string | null>(null);
 
   useEffect(() => {
     setGpxRoute(initialGpxRoute);
@@ -75,7 +76,7 @@ export function RouteAnalysisSection({
     }
   };
 
-  const analyzeGpxRoute = () => {
+  const analyzeGpxRoute = useCallback(() => {
     if (!gpxRoute) return;
     fetchRouteAnalysis(
       objectiveName,
@@ -94,10 +95,28 @@ export function RouteAnalysisSection({
           elevationGainFt: gpxRoute.elevationGainFt,
           minElevationFt: gpxRoute.minElevationFt,
           maxElevationFt: gpxRoute.maxElevationFt,
+          routeShape: gpxRoute.routeShape,
         },
       },
     );
-  };
+  }, [
+    gpxRoute,
+    fetchRouteAnalysis,
+    objectiveName,
+    positionLat,
+    positionLng,
+    forecastDate,
+    alpineStartTime,
+    travelWindowHours,
+  ]);
+
+  useEffect(() => {
+    if (!initialGpxRoute || !gpxRoute || routeAnalysis || routeLoading) return;
+    const routeKey = `${gpxRoute.fileName}|${forecastDate}|${alpineStartTime}|${travelWindowHours}`;
+    if (autoAnalyzedRouteRef.current === routeKey) return;
+    autoAnalyzedRouteRef.current = routeKey;
+    analyzeGpxRoute();
+  }, [initialGpxRoute, gpxRoute, routeAnalysis, routeLoading, forecastDate, alpineStartTime, travelWindowHours, analyzeGpxRoute]);
 
   const gpxInput = (
     <input
@@ -142,7 +161,7 @@ export function RouteAnalysisSection({
             <span>{gpxRoute.pointCount.toLocaleString()} track points</span>
             <span>{gpxRoute.checkpoints.length} safety checkpoints</span>
           </div>
-          <p>Checkpoints follow the uploaded track at even distance intervals. GPX coordinates bypass AI waypoint estimation.</p>
+          <p>Checkpoints follow the uploaded track and are forecast at estimated arrival times across your {travelWindowHours}h plan. GPX coordinates bypass waypoint estimation.</p>
           <div className="route-gpx-card-actions">
             <button type="button" className="route-gpx-analyze" onClick={analyzeGpxRoute}>Analyze This Track</button>
             <button
@@ -235,7 +254,7 @@ export function RouteAnalysisSection({
           <div className="route-analysis-header">
             <span>Route Analysis</span>
             <span className="route-analysis-badges">
-              <span className="route-ai-badge">AI-assisted · verify</span>
+              <span className="route-ai-badge">{routeAnalysis.analysisSource === 'deterministic' ? 'Data-derived · verify' : 'AI-assisted · verify'}</span>
               {routeAnalysis.routeSource === 'gpx' && <span className="route-gpx-badge">GPX Track</span>}
               {routeAnalysis.routeSource === 'nps' && <span className="route-gpx-badge">NPS Trail</span>}
               {routeAnalysis.routeSource === 'openstreetmap' && <span className="route-gpx-badge">Mapped Trail</span>}
@@ -269,6 +288,7 @@ export function RouteAnalysisSection({
               <strong>{routeAnalysis.routeMetadata.fileName}</strong>
               {routeAnalysis.routeMetadata.distanceMiles !== null && <span>{formatDistanceDisplay(routeAnalysis.routeMetadata.distanceMiles)}</span>}
               {routeAnalysis.routeMetadata.elevationGainFt !== null && <span>{formatElevationDisplay(routeAnalysis.routeMetadata.elevationGainFt)} gain</span>}
+              {routeAnalysis.routeMetadata.routeShape && <span>{routeAnalysis.routeMetadata.routeShape}</span>}
               {routeAnalysis.routeMetadata.pointCount != null && <span>{routeAnalysis.routeMetadata.pointCount.toLocaleString()} points</span>}
             </div>
           )}
@@ -320,6 +340,7 @@ export function RouteAnalysisSection({
                       </div>
                       <div className="route-wp-metrics">
                         {wp.distance_miles != null && <span className="route-wp-distance">mi {wp.distance_miles.toFixed(1)}</span>}
+                        {wp.etaTime && <span className="route-wp-eta">ETA {wp.etaTime}{wp.etaDate && wp.etaDate !== forecastDate ? ' +1 day' : ''}</span>}
                         <span className="route-wp-elev">{formatElevationDisplay(wp.elev_ft)}</span>
                         {!wp.dataAvailable && <span className="route-wp-no-data-label">No data</span>}
                         {wp.weather.temp != null && (

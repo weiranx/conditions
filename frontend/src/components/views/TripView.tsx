@@ -118,6 +118,12 @@ function levelClass(level: DecisionLevel): string {
   return level.toLowerCase().replace('-', '');
 }
 
+function weatherWindowLabel(level: DecisionLevel): string {
+  if (level === 'GO') return 'WEATHER CLEAR';
+  if (level === 'NO-GO') return 'WEATHER BLOCKED';
+  return 'WEATHER CAUTION';
+}
+
 const DECISION_PRIORITY: Record<DecisionLevel, number> = {
   GO: 2,
   CAUTION: 1,
@@ -211,7 +217,7 @@ function TrendArc({
   if (currentSegment.length > 1) scoreSegments.push(currentSegment);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Conditions score trend by trip day">
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Weather-window score trend by trip day">
       {[0, 25, 50, 75, 100].map((g) => (
         <g key={g}>
           <line x1={pad.l} x2={W - pad.r} y1={y(g)} y2={y(g)} stroke="var(--ssr-line)" strokeDasharray="2 4" />
@@ -348,10 +354,10 @@ export function TripView({
       ? `${scoredValues[0]} / 100`
       : 'Scores unavailable';
   const recommendationEyebrow = best?.decisionLevel === 'GO'
-    ? 'Most favorable go day'
+    ? 'Most favorable weather window'
     : best?.decisionLevel === 'CAUTION'
-      ? 'Most favorable — use caution'
-      : 'Least unfavorable — still no-go';
+      ? 'Most favorable weather window — use caution'
+      : 'Least unfavorable weather window — still blocked';
   const calmestDayIndex = extremeDayIndex(tripForecastRows, (day) => day.windGustMph, 'min');
   const driestDayIndex = extremeDayIndex(tripForecastRows, (day) => day.precipChance, 'min');
   const bestTravelDayIndex = extremeDayIndex(
@@ -417,10 +423,10 @@ export function TripView({
     const lines = [
       `${objectiveSummary} · Multi-day trip brief`,
       `${dateRange} · ${tripStartDisplay} daily start · ${travelWindowHoursLabel} travel window`,
-      best ? `Best option: ${weekdayLabel(best.date)}, ${monthDayLabel(best.date)} · ${best.decisionLevel} · ${best.score ?? 'N/A'}/100` : '',
+      best ? `Best weather window: ${weekdayLabel(best.date)}, ${monthDayLabel(best.date)} · ${weatherWindowLabel(best.decisionLevel)} · ${best.score ?? 'N/A'}/100` : '',
       '',
       ...tripForecastRows.map((day) => [
-        `${weekdayLabel(day.date)}, ${monthDayLabel(day.date)} — ${day.decisionLevel}${day.score !== null ? ` · ${day.score}/100` : ''}`,
+        `${weekdayLabel(day.date)}, ${monthDayLabel(day.date)} — ${weatherWindowLabel(day.decisionLevel)}${day.score !== null ? ` · ${day.score}/100 weather-window score` : ''}`,
         `${day.weatherDescription}; ${formatTempDisplay(day.tempF)}; gusts ${formatWindDisplay(day.windGustMph)}; precip ${day.precipChance !== null ? `${day.precipChance}%` : 'N/A'}; travel ${day.travelPassHours}/${day.travelTotalHours}h passing.`,
         day.decisionHeadline,
       ].join('\n')),
@@ -445,8 +451,8 @@ export function TripView({
         {/* HEADER + SETUP */}
         <div className="ssr-trip-head">
           <div className="ssr-trip-intro">
-            <div className="ssr-trip-kicker">Expedition tool</div>
-            <h1>Plan the right day, not just the route.</h1>
+            <div className="ssr-trip-kicker">Weather window comparison</div>
+            <h1>Compare days before choosing the trip.</h1>
             <p>Compare daily decision gates for one objective and find the most favorable weather and travel window.</p>
           </div>
           <div className="ssr-trip-setup" aria-label="Multi-day forecast setup">
@@ -528,6 +534,14 @@ export function TripView({
           </div>
         </div>
 
+        <div className="ssr-trip-disclaimer" role="note">
+          <Info />
+          <span>
+            <strong>Weather-window comparison only.</strong> Avalanche danger is not projected here, so “weather clear” is not a trip GO.
+            Review the selected day in Planner and check the current official avalanche bulletin within 24h of departure.
+          </span>
+        </div>
+
         {!hasObjective && (
           <div className="ssr-trip-banner">
             <div>
@@ -580,7 +594,7 @@ export function TripView({
                   <p>{localizeUnitText(best.decisionHeadline)}</p>
                 </div>
                 <div className="ssr-trip-recommendation-facts" aria-label="Recommended day summary">
-                  <span><strong>{best.score ?? '—'}</strong> conditions score</span>
+                  <span><strong>{best.score ?? '—'}</strong> weather-window score</span>
                   <span><strong>{formatWindDisplay(best.windGustMph, { includeUnit: false })}</strong> peak gust</span>
                   <span><strong>{best.precipChance !== null ? `${best.precipChance}%` : '—'}</strong> precip</span>
                 </div>
@@ -601,22 +615,22 @@ export function TripView({
               </div>
               <div className="ssr-trip-ov">
                 <div className="ssr-trip-ov-count go">{goCount}</div>
-                <div className="ssr-trip-ov-count-k">Go days</div>
+                <div className="ssr-trip-ov-count-k">Weather clear</div>
               </div>
               <div className="ssr-trip-ov">
                 <div className="ssr-trip-ov-count caution">{cautionCount}</div>
-                <div className="ssr-trip-ov-count-k">Caution</div>
+                <div className="ssr-trip-ov-count-k">Weather caution</div>
               </div>
               <div className="ssr-trip-ov">
                 <div className="ssr-trip-ov-count nogo">{noGoCount}</div>
-                <div className="ssr-trip-ov-count-k">No-go</div>
+                <div className="ssr-trip-ov-count-k">Weather blocked</div>
               </div>
               <div className="ssr-trip-ov">
                 <div className="ssr-trip-ov-k">Watch day</div>
                 {watchDay && (
                   <div className="ssr-trip-ov-best">
                     <span className={`ssr-trip-ov-watch-day ${levelClass(watchDay.decisionLevel)}`}>
-                      {weekdayLabel(watchDay.date)} {monthDayLabel(watchDay.date)} · {watchDay.decisionLevel}
+                      {weekdayLabel(watchDay.date)} {monthDayLabel(watchDay.date)} · {weatherWindowLabel(watchDay.decisionLevel)}
                     </span>
                     <span className="ssr-trip-ov-best-note">{localizeUnitText(watchDay.decisionHeadline)}</span>
                   </div>
@@ -676,7 +690,7 @@ export function TripView({
             {/* TREND ARC */}
             <div className="ssr-trip-trend">
               <div className="ssr-trip-trend-h">
-                <h2>Conditions score across the trip</h2>
+                <h2>Weather-window score across the trip</h2>
                 <span>{scoreRange}{tripForecastNote ? ` · ${tripForecastNote}` : ''}</span>
               </div>
               <TrendArc days={tripForecastRows} getScoreColor={getScoreColor} />
@@ -696,8 +710,8 @@ export function TripView({
                   <thead>
                     <tr>
                       <th scope="col">Day</th>
-                      <th scope="col">Decision</th>
-                      <th scope="col">Score</th>
+                      <th scope="col">Weather gate</th>
+                      <th scope="col">Weather score</th>
                       <th scope="col">Travel</th>
                       <th scope="col">Temperature</th>
                       <th scope="col">Peak gust</th>
@@ -716,7 +730,7 @@ export function TripView({
                             <span>{monthDayLabel(day.date)}</span>
                           </button>
                         </th>
-                        <td><span className={`ssr-trip-day-pill ${levelClass(day.decisionLevel)}`}>{day.decisionLevel}</span></td>
+                        <td><span className={`ssr-trip-day-pill ${levelClass(day.decisionLevel)}`}>{weatherWindowLabel(day.decisionLevel)}</span></td>
                         <td className="numeric"><strong>{day.score ?? '—'}</strong>{day.score !== null ? '/100' : ''}</td>
                         <td className="numeric"><strong>{day.travelPassHours}</strong>/{day.travelTotalHours}h</td>
                         <td>{formatTempDisplay(day.tempF)}</td>
@@ -777,8 +791,8 @@ export function TripView({
                   >
                     <div className={`ssr-trip-day-band ${dlv}`} />
                     {(isBestDay || isWatchDay) && (
-                      <div className="ssr-trip-day-flags" aria-label={isBestDay ? 'Best option in this forecast' : 'Day needing the most scrutiny'}>
-                        <span className={isBestDay ? 'best' : 'watch'}>{isBestDay ? 'Best option' : 'Watch closely'}</span>
+                      <div className="ssr-trip-day-flags" aria-label={isBestDay ? 'Best weather option in this forecast' : 'Day needing the most scrutiny'}>
+                        <span className={isBestDay ? 'best' : 'watch'}>{isBestDay ? 'Best weather' : 'Watch closely'}</span>
                       </div>
                     )}
                     <div className="ssr-trip-day-top">
@@ -787,14 +801,14 @@ export function TripView({
                         <span className="ssr-trip-day-sky">{weatherConditionEmoji(day.weatherDescription, day.isDaytime)}</span>
                       </div>
                       <div className="ssr-trip-day-verdict">
-                        <span className={`ssr-trip-day-pill ${dlv}`}>{day.decisionLevel}</span>
+                        <span className={`ssr-trip-day-pill ${dlv}`}>{weatherWindowLabel(day.decisionLevel)}</span>
                         {day.score !== null && (
                           <span className="ssr-trip-day-score">{day.score}<small>/100</small></span>
                         )}
                         {typeof day.deltas?.score === 'number' && day.deltas.score !== 0 && (
                           <span
                             className={`ssr-trip-day-delta ${day.deltas.score > 0 ? 'up' : 'down'}`}
-                            title={`Conditions score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
+                            title={`Weather-window score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
                           >
                             {day.deltas.score > 0 ? '▲' : '▼'}{Math.abs(day.deltas.score)}
                           </span>
@@ -829,7 +843,7 @@ export function TripView({
                 <div className="ssr-trip-detail-h">
                   <div className="ssr-trip-detail-title">
                     <div>
-                      <span className={`ssr-trip-day-pill ${levelClass(selected.decisionLevel)}`}>{selected.decisionLevel}</span>
+                      <span className={`ssr-trip-day-pill ${levelClass(selected.decisionLevel)}`}>{weatherWindowLabel(selected.decisionLevel)}</span>
                       <h2>
                         {weekdayLabel(selected.date)}, {monthDayLabel(selected.date)}
                         {selected.score !== null ? ` · ${selected.score}/100` : ''}
@@ -838,7 +852,7 @@ export function TripView({
                     <p>{localizeUnitText(selected.decisionHeadline)}</p>
                   </div>
                   <button type="button" className="ssr-btn primary" onClick={() => onUseDayInPlanner(selected.date, tripStartTime)}>
-                    Use this day in Planner
+                    Review full Planner assessment
                   </button>
                 </div>
                 <div className="ssr-trip-detail-body">
@@ -907,13 +921,6 @@ export function TripView({
           </>
         )}
 
-        <div className="ssr-trip-disclaimer">
-          <Info />
-          <span>
-            This view compares forecast weather and travel windows only; it does not project avalanche danger.
-            Check the current official bulletin within 24h of departure and use Planner for the final day-specific assessment.
-          </span>
-        </div>
       </div>
     </div>
   );

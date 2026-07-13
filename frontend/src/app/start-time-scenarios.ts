@@ -53,7 +53,7 @@ export function includeUserStartTimeScenario(
   return result.sort((a, b) => (scenarioTimeMinutes(a) ?? 0) - (scenarioTimeMinutes(b) ?? 0));
 }
 
-export type StartTimeScenarioRisk = 'Wind' | 'Heat' | 'Precipitation' | 'Avalanche';
+export type StartTimeScenarioRisk = 'Storm / lightning' | 'Wind' | 'Heat' | 'Precipitation' | 'Avalanche' | 'Visibility' | 'Daylight';
 
 export interface StartTimeScenario {
   startTime: string;
@@ -68,6 +68,9 @@ export interface StartTimeScenario {
   peakPrecipChance: number;
   avalancheLevel: number | null;
   avalancheLabel: string;
+  stormHours: number;
+  cleanHours: number;
+  visibilityHours: number;
   data: SafetyData;
 }
 
@@ -76,6 +79,7 @@ export interface StartTimeScenarioComparison {
   bestStartTime: string;
   drivingRisk: StartTimeScenarioRisk;
   recommendationReason: string;
+  effectivelyTied: boolean;
 }
 
 function clockFromMinutes(totalMinutes: number): string {
@@ -119,6 +123,9 @@ export function buildStartTimeScenario(
     : avalancheLevel !== null
       ? `D${avalancheLevel}`
       : 'Unknown';
+  const stormHours = trend.filter((point) => /thunder|lightning|hail|tornado|convective/i.test(point.condition || '')).length;
+  const visibilityHours = Math.max(0, Number(data.weather?.visibilityRisk?.activeHours) || 0);
+  const cleanHours = Math.max(0, trend.length - stormHours);
 
   return {
     startTime,
@@ -133,6 +140,9 @@ export function buildStartTimeScenario(
     peakPrecipChance,
     avalancheLevel,
     avalancheLabel,
+    stormHours,
+    cleanHours,
+    visibilityHours,
     data,
   };
 }
@@ -152,6 +162,12 @@ function riskPressure(scenario: StartTimeScenario, risk: StartTimeScenarioRisk, 
       return scenario.peakPrecipChance / Math.max(1, preferences.maxPrecipChance);
     case 'Avalanche':
       return scenario.avalancheLevel === null ? 0 : scenario.avalancheLevel / 3;
+    case 'Storm / lightning':
+      return scenario.stormHours / Math.max(1, preferences.travelWindowHours);
+    case 'Visibility':
+      return scenario.visibilityHours / Math.max(1, preferences.travelWindowHours);
+    case 'Daylight':
+      return scenario.daylightRemainingMinutes === null ? 0 : Math.max(0, 180 - scenario.daylightRemainingMinutes) / 180;
   }
 }
 
@@ -165,34 +181,47 @@ export function compareStartTimeScenarios(
     const levelDelta = decisionLevelRank(b.decision.level) - decisionLevelRank(a.decision.level);
     if (levelDelta !== 0) return levelDelta;
     if (b.score !== a.score) return b.score - a.score;
+    if (b.cleanHours !== a.cleanHours) return b.cleanHours - a.cleanHours;
     const daylightA = a.daylightRemainingMinutes ?? -Infinity;
     const daylightB = b.daylightRemainingMinutes ?? -Infinity;
     if (daylightB !== daylightA) return daylightB - daylightA;
     return a.startTime.localeCompare(b.startTime);
   });
   const best = sorted[0];
-  const risks: StartTimeScenarioRisk[] = ['Wind', 'Heat', 'Precipitation', 'Avalanche'];
-  const normalizedSpread: Record<StartTimeScenarioRisk, number> = {
+  const risks: Exclude<StartTimeScenarioRisk, 'Daylight'>[] = ['Storm / lightning', 'Wind', 'Heat', 'Precipitation', 'Avalanche', 'Visibility'];
+  const normalizedSpread: Record<Exclude<StartTimeScenarioRisk, 'Daylight'>, number> = {
+    'Storm / lightning': range(scenarios.map((scenario) => scenario.stormHours)) / Math.max(1, preferences.travelWindowHours),
     Wind: range(scenarios.map((scenario) => scenario.peakGustMph)) / Math.max(1, preferences.maxWindGustMph),
     Heat: range(scenarios.map((scenario) => scenario.peakFeelsLikeF)) / 15,
     Precipitation: range(scenarios.map((scenario) => scenario.peakPrecipChance)) / Math.max(1, preferences.maxPrecipChance),
     Avalanche: range(scenarios.map((scenario) => scenario.avalancheLevel)) / 2,
+    Visibility: range(scenarios.map((scenario) => scenario.visibilityHours)) / Math.max(1, preferences.travelWindowHours),
   };
   const hasMeaningfulSpread = risks.some((risk) => normalizedSpread[risk] > 0.01);
-  const drivingRisk = [...risks].sort((a, b) => {
+  const changingRisk = [...risks].sort((a, b) => {
     const spreadDelta = normalizedSpread[b] - normalizedSpread[a];
     if (Math.abs(spreadDelta) > 0.001) return spreadDelta;
     return riskPressure(best, b, preferences) - riskPressure(best, a, preferences);
   })[0];
+  const drivingRisk: StartTimeScenarioRisk = hasMeaningfulSpread ? changingRisk : 'Daylight';
+  const scoreRange = range(scenarios.map((scenario) => scenario.score));
+  const sameDecisionLevel = scenarios.every((scenario) => scenario.decision.level === best.decision.level);
+  const effectivelyTied = sameDecisionLevel && scoreRange <= 1;
+  const cleanHourRange = range(scenarios.map((scenario) => scenario.cleanHours));
   const levelLabel: Record<DecisionLevel, string> = { GO: 'go', CAUTION: 'caution', 'NO-GO': 'no-go' };
-  const recommendationReason = hasMeaningfulSpread
-    ? `${drivingRisk} changes most across these departure windows; ${best.startTime} has the strongest overall ${levelLabel[best.decision.level]} assessment.`
-    : `${drivingRisk} is the leading shared constraint; ${best.startTime} preserves the best score and daylight margin.`;
+  const recommendationReason = effectivelyTied
+    ? cleanHourRange > 0
+      ? `Overall scores are effectively tied; ${best.startTime} keeps ${best.cleanHours} of ${preferences.travelWindowHours} hours free of a thunderstorm signal and preserves the most daylight margin.`
+      : `Overall scores are effectively tied; ${best.startTime} is shown first because it preserves the most daylight margin.`
+    : hasMeaningfulSpread
+      ? `${drivingRisk} changes most across these departure windows; ${best.startTime} has the strongest overall ${levelLabel[best.decision.level]} assessment.`
+      : `${best.startTime} has the strongest score and daylight margin; the compared hazard values otherwise change little.`;
 
   return {
     scenarios: sorted,
     bestStartTime: best.startTime,
     drivingRisk,
     recommendationReason,
+    effectivelyTied,
   };
 }

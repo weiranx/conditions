@@ -5,12 +5,18 @@ import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
 export interface GpxObjectiveInputProps {
   selectedRoute: ParsedGpxRoute | null;
   onImport: (route: ParsedGpxRoute) => void;
+  estimatedDurationHours?: number | null;
+  activeDurationHours?: number | null;
+  onUseEstimatedDuration?: () => void;
   disabled?: boolean;
 }
 
 export function GpxObjectiveInput({
   selectedRoute,
   onImport,
+  estimatedDurationHours = null,
+  activeDurationHours = null,
+  onUseEstimatedDuration,
   disabled = false,
 }: GpxObjectiveInputProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -60,8 +66,15 @@ export function GpxObjectiveInput({
           <FileCheck2 size={15} aria-hidden />
           <span>
             <strong>{selectedRoute.name}</strong>
-            <small>{selectedRoute.pointCount.toLocaleString()} track points · {selectedRoute.checkpoints.length} route checkpoints</small>
+            <small>
+              {selectedRoute.distanceMiles.toFixed(1)} mi · {selectedRoute.elevationGainFt === null ? 'elevation gain unavailable' : `${Math.round(selectedRoute.elevationGainFt).toLocaleString()} ft gain`} · {selectedRoute.routeShape} · {selectedRoute.checkpoints.length} timed checkpoints
+            </small>
           </span>
+          {estimatedDurationHours !== null && onUseEstimatedDuration && activeDurationHours !== estimatedDurationHours && (
+            <button type="button" className="gpx-objective-use-duration" onClick={onUseEstimatedDuration} disabled={disabled}>
+              Use {estimatedDurationHours}h estimate
+            </button>
+          )}
         </div>
       )}
       {error && <p className="gpx-objective-error" role="alert">{error}</p>}

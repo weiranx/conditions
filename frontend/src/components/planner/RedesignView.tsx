@@ -499,7 +499,7 @@ function ReportJumpNav({
   );
 }
 
-function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability }) {
+function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability; routeAnalysisSlot?: React.ReactNode }) {
   const featureFlags = useProductFeatureFlags();
   const {
     safetyData,
@@ -981,9 +981,14 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         <DashboardSummaryCard
           aiAvailability={aiAvailability}
           safetyData={safetyData}
+          previousSafetyData={props.previousSafetyData}
           decision={decision}
           preferences={preferences}
           objectiveName={objectiveName}
+          forecastDate={props.forecastDate}
+          travelWindowHours={props.travelWindowHours}
+          importedGpxRoute={props.importedGpxRoute}
+          planStartTime={alpineStartTime}
           displayStartTime={displayStartTime}
           returnTimeFormatted={returnTimeFormatted}
           returnExtendsPastMidnight={returnExtendsPastMidnight}
@@ -1002,6 +1007,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           rawReportPayload={rawReportPayload}
         />
         </div>
+
+        {props.routeAnalysisSlot}
 
         {featureFlags.startTimeComparisons && <StartTimeScenarioCard
           comparison={startTimeScenarioComparison}

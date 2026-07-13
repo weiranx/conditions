@@ -28,8 +28,8 @@ const TRAVEL_THRESHOLD_PRESETS: Record<
 > = {
   conservative: { label: 'Conservative', maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: 15, maxFeelsLikeF: 90 },
   standard: { label: 'Standard', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5, maxFeelsLikeF: 95 },
-  aggressive: { label: 'Aggressive', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5, maxFeelsLikeF: 105 },
-  runner: { label: 'Runner / Summer', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25, maxFeelsLikeF: 85 },
+  aggressive: { label: 'Sheltered terrain', maxWindGustMph: 35, maxPrecipChance: 75, minFeelsLikeF: -5, maxFeelsLikeF: 105 },
+  runner: { label: 'Fast summer travel', maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25, maxFeelsLikeF: 85 },
 };
 
 export { TRAVEL_THRESHOLD_PRESETS };

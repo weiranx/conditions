@@ -3,6 +3,7 @@ import type { LinkState, UserPreferences } from './types';
 import { DEFAULT_CENTER } from './constants';
 import {
   isValidLatLon,
+  normalizeActivity,
   normalizeForecastDate,
   normalizeTimeOrFallback,
 } from './core';
@@ -39,7 +40,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const initialForecastDate = getInitialForecastDate(todayDate, preferences.defaultStartTime);
   const defaults: LinkState = {
     view: 'home',
-    activity: 'backcountry',
+    activity: preferences.defaultActivity,
     position: DEFAULT_CENTER,
     hasObjective: false,
     objectiveName: '',
@@ -100,7 +101,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
                 : viewParam === 'planner' || hasCoords
                   ? 'planner'
                   : 'home',
-    activity: 'backcountry',
+    activity: normalizeActivity(params.get('activity') || preferences.defaultActivity),
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
     hasObjective: hasCoords,
     objectiveName,
@@ -124,6 +125,7 @@ export function buildShareQuery(state: {
   alpineStartTime: string;
   targetElevationInput: string;
   travelWindowHours?: number;
+  activity?: UserPreferences['defaultActivity'];
 }): string {
   const params = new URLSearchParams();
 
@@ -142,6 +144,9 @@ export function buildShareQuery(state: {
 
   params.set('date', state.forecastDate);
   params.set('start', state.alpineStartTime);
+  if (state.activity) {
+    params.set('activity', state.activity);
+  }
   if (state.targetElevationInput.trim()) {
     params.set('elev', state.targetElevationInput.trim());
   }

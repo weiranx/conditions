@@ -104,13 +104,13 @@ export function StartTimeScenarioCard({
           <div className="start-scenarios__recommendation">
             <span className="start-scenarios__recommendation-icon"><Sparkles size={17} aria-hidden /></span>
             <div className="start-scenarios__recommendation-copy">
-              <span className="start-scenarios__eyebrow">Recommended departure</span>
+              <span className="start-scenarios__eyebrow">{comparison.effectivelyTied ? 'Best margin among tied scores' : 'Recommended departure'}</span>
               <div className="start-scenarios__recommendation-title">
                 <strong>{formatClockForStyle(best.startTime, preferences.timeStyle)}</strong>
                 {currentIsBest && <span><Check size={12} aria-hidden /> Your input</span>}
               </div>
               <p>{recommendationReason}</p>
-              <span className="start-scenarios__driver">Biggest timing difference: <b>{comparison.drivingRisk}</b></span>
+              <span className="start-scenarios__driver">{comparison.effectivelyTied ? 'Tie-breaker' : 'Biggest timing difference'}: <b>{comparison.drivingRisk}</b></span>
             </div>
             {!currentIsBest && (
               <button type="button" onClick={() => onUseForNewReport(best.startTime)}>
@@ -163,6 +163,7 @@ export function StartTimeScenarioCard({
                     <div className={comparison.drivingRisk === 'Heat' ? 'is-driver' : ''}><dt>Feels like</dt><dd><b>{formatTempDisplay(scenario.peakFeelsLikeF)}</b><small>{scenario.peakFeelsLikeF === null || best.peakFeelsLikeF === null ? '—' : formatTemperatureDelta(scenario.peakFeelsLikeF, best.peakFeelsLikeF, preferences.temperatureUnit)}</small></dd></div>
                     <div className={comparison.drivingRisk === 'Precipitation' ? 'is-driver' : ''}><dt>Precipitation</dt><dd><b>{Math.round(scenario.peakPrecipChance)}%</b><small>{formatDelta(scenario.peakPrecipChance, best.peakPrecipChance, ' pp')}</small></dd></div>
                     <div className={comparison.drivingRisk === 'Avalanche' ? 'is-driver' : ''}><dt>Avalanche danger</dt><dd><b>{scenario.avalancheLabel}</b><small>{scenario.avalancheLevel === null || best.avalancheLevel === null ? '—' : formatDelta(scenario.avalancheLevel, best.avalancheLevel, '')}</small></dd></div>
+                    <div className={comparison.drivingRisk === 'Storm / lightning' ? 'is-driver' : ''}><dt>Storm-free hours</dt><dd><b>{scenario.cleanHours}h</b><small>{scenario.stormHours > 0 ? `${scenario.stormHours}h storm signal` : 'no storm signal'}</small></dd></div>
                   </dl>
                   {!isCurrent && (
                     <button type="button" className="start-scenario__use" onClick={() => onUseForNewReport(scenario.startTime)}>

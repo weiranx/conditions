@@ -78,6 +78,9 @@ export interface HomeViewProps {
   openTripToolView: () => void;
   importedGpxRoute: ParsedGpxRoute | null;
   handleImportGpxObjective: (route: ParsedGpxRoute) => void;
+  gpxEstimatedDurationHours: number | null;
+  activeTravelWindowHours: number;
+  handleUseGpxEstimatedDuration: () => void;
 }
 
 export function HomeView({
@@ -116,6 +119,9 @@ export function HomeView({
   openTripToolView,
   importedGpxRoute,
   handleImportGpxObjective,
+  gpxEstimatedDurationHours,
+  activeTravelWindowHours,
+  handleUseGpxEstimatedDuration,
 }: HomeViewProps) {
   const featureFlags = useProductFeatureFlags();
   const submitSearch = async () => {
@@ -200,6 +206,9 @@ export function HomeView({
                 <GpxObjectiveInput
                   selectedRoute={importedGpxRoute}
                   onImport={importGpxObjective}
+                  estimatedDurationHours={gpxEstimatedDurationHours}
+                  activeDurationHours={activeTravelWindowHours}
+                  onUseEstimatedDuration={handleUseGpxEstimatedDuration}
                 />
               </div>
 

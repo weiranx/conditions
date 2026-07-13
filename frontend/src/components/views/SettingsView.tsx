@@ -4,6 +4,7 @@ import {
   Eye,
   Ruler,
   Gauge,
+  Footprints,
   Check,
   X,
   FlaskConical,
@@ -20,6 +21,7 @@ import {
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
+import { ACTIVITY_PROFILES, ACTIVITY_PROFILE_ORDER } from '../../app/activity-profiles';
 import '../../styles/settings-redesign.css';
 import { ProductNav } from './ProductNav';
 import type { AppView } from '../../hooks/useUrlState';
@@ -62,6 +64,7 @@ export interface SettingsViewProps {
   handleElevationUnitChange: (elevationUnit: ElevationUnit) => void;
   handleWindSpeedUnitChange: (windSpeedUnit: WindSpeedUnit) => void;
   handleTimeStyleChange: (timeStyle: TimeStyle) => void;
+  updatePreferences: (patch: Partial<UserPreferences>) => void;
 
   // Threshold draft handlers
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -176,6 +179,7 @@ export function SettingsView({
   handleElevationUnitChange,
   handleWindSpeedUnitChange,
   handleTimeStyleChange,
+  updatePreferences,
   handleTravelWindowHoursDraftChange,
   handleTravelWindowHoursDraftBlur,
   handleWindThresholdDisplayChange,
@@ -247,6 +251,7 @@ export function SettingsView({
             {railItem('timing', <Clock />, 'Timing')}
             {railItem('appearance', <Eye />, 'Appearance')}
             {railItem('units', <Ruler />, 'Units & time')}
+            {railItem('activity', <Footprints />, 'Objective')}
             {railItem('thresholds', <Gauge />, 'Thresholds')}
             <div className="ssr-set-rail-foot">Saved locally in your browser.</div>
           </nav>
@@ -281,6 +286,67 @@ export function SettingsView({
                 unit="h"
                 onChange={handleTravelWindowHoursDraftChange}
                 onCommit={handleTravelWindowHoursDraftBlur}
+              />
+            </section>
+
+            {/* OBJECTIVE + ROUTE TIMING PROFILE */}
+            <section className="ssr-set-card" id="ssr-set-activity">
+              <div className="ssr-set-card-h">
+                <h2><Footprints /> Objective profile</h2>
+                <p>Sets a starting point for weather gates and GPX timing. Lightning and unknown avalanche danger remain verification gates in every profile.</p>
+              </div>
+              <div className="ssr-set-activity-grid" role="radiogroup" aria-label="Objective profile">
+                {ACTIVITY_PROFILE_ORDER.map((profileKey) => {
+                  const profile = ACTIVITY_PROFILES[profileKey];
+                  const selected = preferences.defaultActivity === profileKey;
+                  return (
+                    <button
+                      key={profileKey}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={selected ? 'is-selected' : ''}
+                      onClick={() => updatePreferences(profile.preferencePatch)}
+                    >
+                      <strong>{profile.label}</strong>
+                      <span>{profile.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="ssr-set-subhead">
+                <strong>Route timing assumptions</strong>
+                <span>Used to estimate GPX checkpoint arrivals; edit these for your party and conditions.</span>
+              </div>
+              <Thresh
+                label="Flat / rolling travel pace"
+                value={preferences.runnerPaceMinutesPerMile}
+                min={5}
+                max={90}
+                step={1}
+                unit="min/mi"
+                onChange={(e) => updatePreferences({ runnerPaceMinutesPerMile: Math.max(5, Math.min(90, Number(e.target.value) || 5)) })}
+                onCommit={() => undefined}
+              />
+              <Thresh
+                label="Ascent allowance"
+                value={preferences.runnerAscentMinutesPer1000Ft}
+                min={0}
+                max={120}
+                step={5}
+                unit="min/1k ft"
+                onChange={(e) => updatePreferences({ runnerAscentMinutesPer1000Ft: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })}
+                onCommit={() => undefined}
+              />
+              <Thresh
+                label="Stops and contingency"
+                value={preferences.runnerStopBufferMinutes}
+                min={0}
+                max={240}
+                step={5}
+                unit="min"
+                onChange={(e) => updatePreferences({ runnerStopBufferMinutes: Math.max(0, Math.min(240, Number(e.target.value) || 0)) })}
+                onCommit={() => undefined}
               />
             </section>
 
@@ -397,7 +463,7 @@ export function SettingsView({
                 </span>
               </div>
               <div className="ssr-set-note">
-                <b>Current defaults</b> · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
+                <b>Current defaults</b> · {ACTIVITY_PROFILES[preferences.defaultActivity].label} · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Route {preferences.runnerPaceMinutesPerMile} min/mi + {preferences.runnerAscentMinutesPer1000Ft} min/1k ft · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
               </div>
             </section>
           </div>

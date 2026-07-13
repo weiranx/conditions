@@ -21,6 +21,9 @@ export interface RouteWaypointSummary {
   elev_ft: number;
   distance_miles?: number;
   progress_percent?: number;
+  etaDate?: string;
+  etaTime?: string;
+  offsetMinutes?: number;
   dataAvailable: boolean;
   score: number | null;
   weather: { temp?: number; feelsLike?: number; windSpeed?: number; windGust?: number; description?: string; precipChance?: number };
@@ -37,9 +40,13 @@ export interface RouteAnalysisResult {
     elev_ft: number;
     distance_miles?: number;
     progress_percent?: number;
+    eta_date?: string;
+    eta_time?: string;
+    offset_minutes?: number;
   }>;
   summaries: RouteWaypointSummary[];
   analysis: string;
+  analysisSource?: 'ai' | 'deterministic';
   partialData: boolean;
   routeSource?: 'generated' | 'gpx' | 'nps' | 'openstreetmap';
   routeSourceDetails?: {
@@ -66,6 +73,7 @@ export interface GpxRouteMetadata {
   elevationGainFt: number | null;
   minElevationFt: number | null;
   maxElevationFt: number | null;
+  routeShape?: 'closed route' | 'point-to-point' | null;
 }
 
 export interface RouteAnalysisOptions {

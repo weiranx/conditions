@@ -1,7 +1,7 @@
 import L from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
-export type ActivityType = 'backcountry' | 'trail-running';
+export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'snow-climbing' | 'ski-touring' | 'trail-running';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type MapStyle = 'topo' | 'street' | 'satellite';
 export type TemperatureUnit = 'f' | 'c';
@@ -718,6 +718,9 @@ export interface UserPreferences {
   minFeelsLikeF: number;
   maxFeelsLikeF: number;
   travelWindowHours: number;
+  runnerPaceMinutesPerMile: number;
+  runnerAscentMinutesPer1000Ft: number;
+  runnerStopBufferMinutes: number;
 }
 
 export type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';

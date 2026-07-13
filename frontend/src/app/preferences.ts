@@ -34,7 +34,7 @@ function normalizeDecimalPreference(rawValue: unknown, fallback: number, min: nu
 
 export function getDefaultUserPreferences(): UserPreferences {
   return {
-    defaultActivity: 'backcountry',
+    defaultActivity: 'hiking',
     defaultStartTime: '07:00',
     themeMode: 'system',
     temperatureUnit: 'f',
@@ -46,6 +46,9 @@ export function getDefaultUserPreferences(): UserPreferences {
     minFeelsLikeF: 5,
     maxFeelsLikeF: 95,
     travelWindowHours: 12,
+    runnerPaceMinutesPerMile: 30,
+    runnerAscentMinutesPer1000Ft: 45,
+    runnerStopBufferMinutes: 45,
   };
 }
 
@@ -86,6 +89,9 @@ export function loadUserPreferences(): UserPreferences {
         MIN_TRAVEL_WINDOW_HOURS,
         MAX_TRAVEL_WINDOW_HOURS,
       ),
+      runnerPaceMinutesPerMile: normalizeNumberPreference(parsed.runnerPaceMinutesPerMile, defaults.runnerPaceMinutesPerMile, 5, 90),
+      runnerAscentMinutesPer1000Ft: normalizeNumberPreference(parsed.runnerAscentMinutesPer1000Ft, defaults.runnerAscentMinutesPer1000Ft, 0, 120),
+      runnerStopBufferMinutes: normalizeNumberPreference(parsed.runnerStopBufferMinutes, defaults.runnerStopBufferMinutes, 0, 240),
     };
   } catch {
     return defaults;

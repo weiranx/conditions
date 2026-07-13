@@ -3,7 +3,9 @@ import {
   CloudRain,
   Compass,
   Database,
+  Download,
   LoaderCircle,
+  Printer,
   ShieldCheck,
   Snowflake,
   Sparkles,
@@ -12,8 +14,9 @@ import {
   TriangleAlert,
   Wind,
 } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
+import type { ParsedGpxRoute } from '../../lib/gpx';
 import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
 import {
   formatAgeFromNow,
@@ -21,6 +24,7 @@ import {
   parseTimeInputMinutes,
 } from '../../app/core';
 import { formatAiBriefSections } from '../../app/text-utils';
+import { buildFieldBrief, downloadFieldBrief } from '../../app/field-brief';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
@@ -64,9 +68,14 @@ function timelinePosition(value: string | null | undefined, rows: TravelWindowRo
 export interface DashboardSummaryCardProps {
   aiAvailability: AiFeatureAvailability;
   safetyData: SafetyData;
+  previousSafetyData: SafetyData | null;
   decision: SummitDecision;
   preferences: UserPreferences;
   objectiveName: string;
+  forecastDate: string;
+  travelWindowHours: number;
+  importedGpxRoute: ParsedGpxRoute | null;
+  planStartTime: string;
   displayStartTime: string;
   returnTimeFormatted: string | null;
   returnExtendsPastMidnight: boolean;
@@ -88,9 +97,14 @@ export interface DashboardSummaryCardProps {
 export function DashboardSummaryCard({
   aiAvailability,
   safetyData,
+  previousSafetyData,
   decision,
   preferences,
   objectiveName,
+  forecastDate,
+  travelWindowHours,
+  importedGpxRoute,
+  planStartTime,
   displayStartTime,
   returnTimeFormatted,
   returnExtendsPastMidnight,
@@ -107,6 +121,11 @@ export function DashboardSummaryCard({
   onRequestAiBrief,
   rawReportPayload,
 }: DashboardSummaryCardProps) {
+  const [fieldBriefSaved, setFieldBriefSaved] = useState(false);
+  const fieldBriefTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (fieldBriefTimer.current !== null) window.clearTimeout(fieldBriefTimer.current);
+  }, []);
   const lvClass = decision.level.toLowerCase().replace('-', '');
   const score = Math.round(safetyData.safety.score);
   const scoreColor = getScoreColor(score, safetyData.safety.tier);
@@ -231,7 +250,49 @@ export function DashboardSummaryCard({
         icon: safetyData.alerts?.activeCount ? <TriangleAlert size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />,
       };
   const briefSignals = [surfaceSignal, windSignal, avalancheSignal];
+  const firstGatedHour = travelWindowRows.find((row) => !row.pass) || null;
+  const bestWindow = travelWindowInsights.bestWindow;
   const aiBriefSections = formatAiBriefSections(aiBriefNarrative);
+  const previousScore = previousSafetyData ? Math.round(previousSafetyData.safety.score) : null;
+  const currentAlertCount = Number(safetyData.alerts?.activeCount) || 0;
+  const previousAlertCount = Number(previousSafetyData?.alerts?.activeCount) || 0;
+  const firstStormTime = (data: SafetyData | null): string | null => data?.weather.trend?.find((point) =>
+    /thunder|lightning|hail|tornado|convective/i.test(point.condition || ''),
+  )?.time || null;
+  const currentStormTime = firstStormTime(safetyData);
+  const previousStormTime = firstStormTime(previousSafetyData);
+  const recheckChanges: string[] = [];
+  if (previousScore !== null && previousScore !== score) {
+    recheckChanges.push(`Safety score ${score > previousScore ? 'improved' : 'fell'} ${Math.abs(score - previousScore)} points.`);
+  }
+  if (previousSafetyData && currentAlertCount !== previousAlertCount) {
+    recheckChanges.push(`${currentAlertCount > previousAlertCount ? 'New' : 'Fewer'} official alerts: ${currentAlertCount} active now.`);
+  }
+  if (previousSafetyData && currentStormTime !== previousStormTime) {
+    recheckChanges.push(currentStormTime
+      ? `First thunderstorm signal is now ${formatClockForStyle(currentStormTime, preferences.timeStyle)}${previousStormTime ? ` (was ${formatClockForStyle(previousStormTime, preferences.timeStyle)})` : ''}.`
+      : 'The prior thunderstorm signal is no longer present in the selected window.');
+  }
+  if (previousSafetyData && Math.round(previousSafetyData.weather.windGust) !== Math.round(safetyData.weather.windGust)) {
+    recheckChanges.push(`Start-time gust changed from ${formatWindDisplay(previousSafetyData.weather.windGust)} to ${formatWindDisplay(safetyData.weather.windGust)}.`);
+  }
+  const saveFieldBrief = () => {
+    downloadFieldBrief(buildFieldBrief({
+      objectiveName,
+      forecastDate,
+      startTime: planStartTime,
+      returnTime: returnLabel,
+      travelWindowHours,
+      activity: preferences.defaultActivity,
+      safetyData,
+      decision,
+      actionLine: decisionActionLine,
+      gpxRoute: importedGpxRoute,
+    }));
+    setFieldBriefSaved(true);
+    if (fieldBriefTimer.current !== null) window.clearTimeout(fieldBriefTimer.current);
+    fieldBriefTimer.current = window.setTimeout(() => setFieldBriefSaved(false), 2200);
+  };
 
   return (
     <div className="ssr-dash">
@@ -262,6 +323,39 @@ export function DashboardSummaryCard({
           </div>
           <h3>{decision.headline}</h3>
           <p>{localizeUnitText(verdictSummary)}</p>
+        </div>
+
+        <dl className="ssr-dash-decision-strip" aria-label="Field timing decisions">
+          <div>
+            <dt>Best clean stretch</dt>
+            <dd>{bestWindow ? `${formatClockForStyle(bestWindow.start, preferences.timeStyle)}–${formatClockForStyle(bestWindow.end, preferences.timeStyle)}` : 'No clean stretch identified'}</dd>
+          </div>
+          <div className={firstGatedHour ? 'is-warning' : ''}>
+            <dt>First gated hour</dt>
+            <dd>{firstGatedHour ? `${formatClockForStyle(firstGatedHour.time, preferences.timeStyle)} · ${firstGatedHour.failedRuleLabels[0] || firstGatedHour.condition}` : 'None in selected window'}</dd>
+          </div>
+          <div>
+            <dt>Expected return</dt>
+            <dd>{returnLabel || 'Set a back-by time'}{returnExtendsPastMidnight ? ' +1 day' : ''}</dd>
+          </div>
+        </dl>
+
+        <div className={`ssr-dash-recheck ${previousSafetyData && recheckChanges.length > 0 ? 'changed' : ''}`} role="status">
+          <div>
+            <strong>{previousSafetyData ? (recheckChanges.length > 0 ? 'Changed since your saved report' : 'No material change since your saved report') : 'Offline report saved on this device'}</strong>
+            <span>{previousSafetyData ? 'Use these deltas for the trailhead re-check.' : `Generated ${generatedAge || 'just now'}; refresh from the plan controls before starting.`}</span>
+          </div>
+          {recheckChanges.length > 0 && <ul>{recheckChanges.slice(0, 3).map((change) => <li key={change}>{change}</li>)}</ul>}
+        </div>
+
+        <div className="ssr-dash-field-actions" aria-label="Field brief actions">
+          <button type="button" onClick={saveFieldBrief}>
+            <Download size={15} aria-hidden /> {fieldBriefSaved ? 'Field brief saved' : 'Save offline field brief'}
+          </button>
+          <button type="button" onClick={() => window.print()}>
+            <Printer size={15} aria-hidden /> Print report
+          </button>
+          <span role="status" aria-live="polite">{fieldBriefSaved ? 'Standalone field brief downloaded for offline use.' : ''}</span>
         </div>
 
         {travelWindowRows.length > 0 && (

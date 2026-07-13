@@ -1,0 +1,17 @@
+{
+  "name": "Backcountry Conditions",
+  "short_name": "Conditions",
+  "description": "Time-aware mountain weather and backcountry planning.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f3",
+  "theme_color": "#173f2b",
+  "icons": [
+    {
+      "src": "/summitsafe-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Marker, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, Marker, Polyline, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { AlertTriangle } from 'lucide-react';
 import { APP_DISCLAIMER_TEXT } from './constants';
 import { LegalLinks } from './legal-links';
 import type { AppView } from '../hooks/useUrlState';
-import type L from 'leaflet';
+import L from 'leaflet';
+import type { ParsedGpxRoute } from '../lib/gpx';
+import type { RouteAnalysisResult } from '../hooks/useRouteAnalysis';
 
 export function LocationMarker({ position, setPosition, locked = false }: { position: L.LatLng; setPosition: (p: L.LatLng) => void; locked?: boolean }) {
   const markerRef = useRef<L.Marker | null>(null);
@@ -42,6 +44,54 @@ export function MapUpdater({ position, zoom, focusKey }: { position: L.LatLng; z
     };
   }, [position, zoom, focusKey, map]);
   return null;
+}
+
+function routeScoreColor(score: number | null | undefined): string {
+  if (!Number.isFinite(Number(score))) return '#64748b';
+  if (Number(score) < 40) return '#b91c1c';
+  if (Number(score) < 65) return '#c2410c';
+  if (Number(score) < 80) return '#ca8a04';
+  return '#15803d';
+}
+
+export function RouteMapOverlay({ route, analysis }: { route: ParsedGpxRoute; analysis?: RouteAnalysisResult | null }) {
+  const map = useMap();
+  const positions = useMemo(
+    () => route.displayTrack.map((point) => [point.lat, point.lon] as [number, number]),
+    [route.displayTrack],
+  );
+
+  useEffect(() => {
+    if (positions.length < 2) return;
+    map.fitBounds(L.latLngBounds(positions), { padding: [28, 28], maxZoom: 14, animate: true });
+    const timeoutId = window.setTimeout(() => map.invalidateSize(), 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [map, positions]);
+
+  return (
+    <>
+      <Polyline positions={positions} pathOptions={{ color: '#1d4ed8', weight: 5, opacity: 0.86 }} />
+      {analysis?.waypoints.map((waypoint, index) => {
+        if (!Number.isFinite(waypoint.lat) || !Number.isFinite(waypoint.lon)) return null;
+        const summary = analysis.summaries[index];
+        const key = `${waypoint.name}-${waypoint.lat}-${waypoint.lon}`;
+        return (
+          <CircleMarker
+            key={key}
+            center={[waypoint.lat, waypoint.lon]}
+            radius={6}
+            pathOptions={{ color: '#fff', weight: 2, fillColor: routeScoreColor(summary?.score), fillOpacity: 1 }}
+          >
+            <Popup>
+              <strong>{waypoint.name}</strong><br />
+              {summary?.etaTime ? `ETA ${summary.etaTime}` : 'ETA unavailable'}
+              {summary?.score !== null && summary?.score !== undefined ? ` · score ${Math.round(summary.score)}` : ''}
+            </Popup>
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
 }
 
 // The map sits at the top of a long, scrollable report. With Leaflet's default

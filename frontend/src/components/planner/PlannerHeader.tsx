@@ -5,6 +5,9 @@ import {
   Link2,
   Check,
   Compass,
+  CloudSun,
+  MapPin,
+  MountainSnow,
 } from 'lucide-react';
 import { SearchBox } from './SearchBox';
 import { GpxObjectiveInput } from './GpxObjectiveInput';
@@ -37,6 +40,10 @@ export interface PlannerHeaderProps {
   handleCopyLink: () => void;
   importedGpxRoute: ParsedGpxRoute | null;
   handleImportGpxObjective: (route: ParsedGpxRoute) => void;
+  gpxEstimatedDurationHours: number | null;
+  activeTravelWindowHours: number;
+  handleUseGpxEstimatedDuration: () => void;
+  activityLabel: string;
 }
 
 export function PlannerHeader({
@@ -49,6 +56,8 @@ export function PlannerHeader({
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
   copiedLink, handleCopyLink,
   importedGpxRoute, handleImportGpxObjective,
+  gpxEstimatedDurationHours, activeTravelWindowHours, handleUseGpxEstimatedDuration,
+  activityLabel,
 }: PlannerHeaderProps) {
   const [saveMessage, setSaveMessage] = React.useState('');
   const saveMessageTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,11 +79,24 @@ export function PlannerHeader({
   return (
     <header className={`header-section ${hasObjective ? 'has-objective' : 'is-awaiting-objective'} ${disabled ? 'is-locked' : ''}`}>
       <div className="planner-header-intro">
-        <p className="planner-header-kicker"><Compass size={12} aria-hidden /> Decision workspace</p>
-        <h1>Plan with the whole picture.</h1>
+        <div className="planner-header-eyebrow">
+          <p className="planner-header-kicker"><Compass size={12} aria-hidden /> Decision workspace</p>
+          <span className="planner-source-status"><i aria-hidden /> Live source synthesis</span>
+        </div>
+        <h1>Plan with the <em>whole picture.</em></h1>
         <p className="planner-header-lede">Set an objective and timing. We’ll organize the signals that shape the call.</p>
+        <div className="planner-header-signals" aria-label="Conditions included in the report">
+          <span><Compass size={13} aria-hidden /> {activityLabel}</span>
+          <span><CloudSun size={13} aria-hidden /> Weather</span>
+          <span><MountainSnow size={13} aria-hidden /> Snow &amp; avalanche</span>
+          <span><Compass size={13} aria-hidden /> Terrain &amp; daylight</span>
+        </div>
       </div>
       <div className="header-controls">
+        <div className="planner-search-heading">
+          <span><MapPin size={14} aria-hidden /> Choose a location or route</span>
+          <small>Search a route by name or upload its GPX track</small>
+        </div>
         <SearchBox
           searchWrapperRef={searchWrapperRef}
           searchInputRef={searchInputRef}
@@ -97,26 +119,36 @@ export function PlannerHeader({
         <GpxObjectiveInput
           selectedRoute={importedGpxRoute}
           onImport={handleImportGpxObjective}
+          estimatedDurationHours={gpxEstimatedDurationHours}
+          activeDurationHours={activeTravelWindowHours}
+          onUseEstimatedDuration={handleUseGpxEstimatedDuration}
           disabled={disabled}
         />
 
-        {hasObjective && (
-          <nav className="header-nav" aria-label="Planner controls">
-            <button
-              type="button"
-              className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
-              onClick={toggleSavedObjective}
-              aria-pressed={objectiveIsSaved}
-              title={objectiveIsSaved ? 'Remove this objective from saved locations' : 'Save this objective for faster access from search'}
-            >
-              {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
-              <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
-            </button>
-            <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
-              {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
-            </button>
-          </nav>
-        )}
+        <div className="planner-search-footer">
+          <p>
+            {importedGpxRoute
+              ? 'Base conditions use the route midpoint; the generated brief keeps the full track ready for checkpoint analysis.'
+              : 'Search a place or named route, or upload a GPX track. You’ll review timing before generating the brief.'}
+          </p>
+          {hasObjective && (
+            <nav className="header-nav" aria-label="Planner controls">
+              <button
+                type="button"
+                className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
+                onClick={toggleSavedObjective}
+                aria-pressed={objectiveIsSaved}
+                title={objectiveIsSaved ? 'Remove this objective from saved locations' : 'Save this objective for faster access from search'}
+              >
+                {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
+                <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
+              </button>
+              <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
+                {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
+              </button>
+            </nav>
+          )}
+        </div>
         <span className={`planner-save-status ${saveMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
           {saveMessage}
         </span>

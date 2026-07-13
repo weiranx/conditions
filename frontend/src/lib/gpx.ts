@@ -21,6 +21,13 @@ export type GpxCheckpoint = {
   progress_percent: number;
 };
 
+export type GpxTrackPoint = {
+  lat: number;
+  lon: number;
+  elev_ft?: number;
+  progress_percent: number;
+};
+
 export type ParsedGpxRoute = {
   name: string;
   fileName: string;
@@ -30,6 +37,14 @@ export type ParsedGpxRoute = {
   minElevationFt: number | null;
   maxElevationFt: number | null;
   checkpoints: GpxCheckpoint[];
+  displayTrack: GpxTrackPoint[];
+  routeShape: 'closed route' | 'point-to-point';
+};
+
+export type RunnerTimingProfile = {
+  paceMinutesPerMile: number;
+  ascentMinutesPer1000Ft: number;
+  stopBufferMinutes: number;
 };
 
 function haversineMeters(a: ParsedTrackPoint, b: ParsedTrackPoint): number {
@@ -158,6 +173,27 @@ function chooseCheckpoints(points: ParsedTrackPoint[], totalDistanceMeters: numb
     });
 }
 
+function chooseDisplayTrack(points: ParsedTrackPoint[], totalDistanceMeters: number): GpxTrackPoint[] {
+  const maxDisplayPoints = 500;
+  const stride = Math.max(1, Math.ceil(points.length / maxDisplayPoints));
+  const selected = points.filter((_, index) => index === 0 || index === points.length - 1 || index % stride === 0);
+  return selected.map((point, index) => ({
+    lat: Number(point.lat.toFixed(6)),
+    lon: Number(point.lon.toFixed(6)),
+    ...(point.elevationMeters !== null ? { elev_ft: Math.round(point.elevationMeters * METERS_TO_FEET) } : {}),
+    progress_percent: totalDistanceMeters > 0
+      ? Math.round((point.distanceMeters / totalDistanceMeters) * 1000) / 10
+      : Math.round((index / Math.max(1, selected.length - 1)) * 1000) / 10,
+  }));
+}
+
+export function estimateRunnerDurationHours(route: Pick<ParsedGpxRoute, 'distanceMiles' | 'elevationGainFt'>, profile: RunnerTimingProfile): number {
+  const distanceMinutes = Math.max(0, route.distanceMiles) * Math.max(5, profile.paceMinutesPerMile);
+  const ascentMinutes = Math.max(0, route.elevationGainFt || 0) / 1000 * Math.max(0, profile.ascentMinutesPer1000Ft);
+  const totalMinutes = distanceMinutes + ascentMinutes + Math.max(0, profile.stopBufferMinutes);
+  return Math.max(1, Math.min(24, Math.round(totalMinutes / 60)));
+}
+
 export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): ParsedGpxRoute {
   const document = new DOMParser().parseFromString(xmlText, 'application/xml');
   if (document.querySelector('parsererror')) {
@@ -199,6 +235,8 @@ export function parseGpxText(xmlText: string, fileName = 'Imported route.gpx'): 
     minElevationFt: elevations.length > 0 ? Math.round(Math.min(...elevations) * METERS_TO_FEET) : null,
     maxElevationFt: elevations.length > 0 ? Math.round(Math.max(...elevations) * METERS_TO_FEET) : null,
     checkpoints: chooseCheckpoints(points, totalDistanceMeters),
+    displayTrack: chooseDisplayTrack(points, totalDistanceMeters),
+    routeShape: haversineMeters(points[0], points[points.length - 1]) <= 250 ? 'closed route' : 'point-to-point',
   };
 }
 

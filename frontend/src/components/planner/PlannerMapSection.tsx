@@ -20,7 +20,7 @@ import {
   FileCheck2,
   ArrowDown,
 } from 'lucide-react';
-import { LocationMarker, MapUpdater, CtrlScrollZoom } from '../../app/map-components';
+import { LocationMarker, MapUpdater, CtrlScrollZoom, RouteMapOverlay } from '../../app/map-components';
 import {
   MAP_STYLE_OPTIONS,
   MAX_TRAVEL_WINDOW_HOURS,
@@ -30,6 +30,8 @@ import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const MAP_STYLE_CYCLE: MapStyle[] = ['topo', 'street', 'satellite'];
 import type { MapStyle, SafetyData, UserPreferences } from '../../app/types';
+import type { ParsedGpxRoute } from '../../lib/gpx';
+import type { RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 
 export interface PlannerMapSectionProps {
   position: L.LatLng;
@@ -77,6 +79,8 @@ export interface PlannerMapSectionProps {
   locked: boolean;
   onEditPlan: () => void;
   onGenerateReport: () => void;
+  importedGpxRoute: ParsedGpxRoute | null;
+  routeAnalysis: RouteAnalysisResult | null;
 }
 
 export function PlannerMapSection({
@@ -93,6 +97,7 @@ export function PlannerMapSection({
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
   locked, onEditPlan, onGenerateReport,
+  importedGpxRoute, routeAnalysis,
 }: PlannerMapSectionProps) {
   const featureFlags = useProductFeatureFlags();
   React.useEffect(() => {
@@ -274,6 +279,7 @@ export function PlannerMapSection({
           />
           <LocationMarker position={position} setPosition={updateObjectivePosition} />
           <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
+          {importedGpxRoute && <RouteMapOverlay route={importedGpxRoute} analysis={routeAnalysis} />}
           <CtrlScrollZoom />
         </MapContainer>
 

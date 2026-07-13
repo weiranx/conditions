@@ -32,6 +32,7 @@ import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 import type { AppView } from '../../hooks/useUrlState';
+import { ACTIVITY_PROFILES } from '../../app/activity-profiles';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
 import type { Suggestion } from '../../lib/search';
 import type { ParsedGpxRoute } from '../../lib/gpx';
@@ -78,6 +79,8 @@ export interface PlannerViewProps {
   setActiveSuggestionIndex: (index: number) => void;
   importedGpxRoute: ParsedGpxRoute | null;
   handleImportGpxObjective: (route: ParsedGpxRoute) => void;
+  gpxEstimatedDurationHours: number | null;
+  handleUseGpxEstimatedDuration: () => void;
 
   // Header controls
   hasObjective: boolean;
@@ -99,6 +102,7 @@ export interface PlannerViewProps {
   handleUseCurrentLocation: () => void;
   handleRecenterMap: () => void;
   safetyData: SafetyData | null;
+  previousSafetyData: SafetyData | null;
   mapElevationChipTitle: string;
   mapElevationLabel: string;
   mapWeatherEmoji: string;
@@ -484,6 +488,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
     setActiveSuggestionIndex,
     importedGpxRoute,
     handleImportGpxObjective,
+    gpxEstimatedDurationHours,
+    handleUseGpxEstimatedDuration,
 
     // Header
     hasObjective,
@@ -610,6 +616,34 @@ function PlannerViewComponent(props: PlannerViewProps) {
   // and returns the planner to its explicit pre-generation state.
   const reportLocked = Boolean(safetyData);
   const objectiveReady = hasObjective && !objectiveDraftDirty;
+  const reportResumeHandledRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!safetyData) {
+      reportResumeHandledRef.current = false;
+      return;
+    }
+    if (loading || reportResumeHandledRef.current) return;
+    const scrollToReport = () => {
+      const report = document.getElementById('planner-section-decision');
+      if (!report) return false;
+      reportResumeHandledRef.current = true;
+      report.scrollIntoView({ behavior: 'auto', block: 'start' });
+      return true;
+    };
+    if (scrollToReport()) return;
+    const root = document.getElementById('planner-main-content');
+    if (!root) return;
+    const observer = new MutationObserver(() => {
+      if (scrollToReport()) observer.disconnect();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    const timeout = window.setTimeout(() => observer.disconnect(), 2500);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timeout);
+    };
+  }, [loading, safetyData]);
 
   return (
     <div key="view-planner" className={`${appShellClassName} ssr-shell`} aria-busy={isViewPending}>
@@ -640,6 +674,10 @@ function PlannerViewComponent(props: PlannerViewProps) {
         setActiveSuggestionIndex={setActiveSuggestionIndex}
         importedGpxRoute={importedGpxRoute}
         handleImportGpxObjective={handleImportGpxObjective}
+        gpxEstimatedDurationHours={gpxEstimatedDurationHours}
+        activeTravelWindowHours={travelWindowHours}
+        handleUseGpxEstimatedDuration={handleUseGpxEstimatedDuration}
+        activityLabel={`${ACTIVITY_PROFILES[preferences.defaultActivity].shortLabel} profile`}
         disabled={reportLocked}
         hasObjective={objectiveReady}
         objectiveIsSaved={objectiveIsSaved}
@@ -694,6 +732,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
         locked={reportLocked}
         onEditPlan={onEditPlan}
         onGenerateReport={onGenerateReport}
+        importedGpxRoute={importedGpxRoute}
+        routeAnalysis={routeAnalysis}
       />
 
       {loading && !safetyData && <ForecastLoading />}
@@ -748,48 +788,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         <section className="data-grid" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
 
-          {aiAvailability.routeAnalysis && objectiveName && (
-            <React.Suspense
-              fallback={(
-                <div
-                  className="route-analysis-section loading-state inline-loading-state"
-                  style={{ order: reportCardOrder.reportColumns - 1 }}
-                  role="status"
-                  aria-live="polite"
-                  aria-busy="true"
-                >
-                  Loading route analysis tools…
-                </div>
-              )}
-            >
-              <RouteAnalysisSection
-                objectiveName={objectiveName}
-                positionLat={position.lat}
-                positionLng={position.lng}
-                forecastDate={forecastDate}
-                alpineStartTime={alpineStartTime}
-                travelWindowHours={travelWindowHours}
-                order={reportCardOrder.reportColumns}
-                routeSuggestions={routeSuggestions}
-                routeAnalysis={routeAnalysis}
-                routeLoading={routeLoading}
-                routeError={routeError}
-                fetchRouteSuggestions={fetchRouteSuggestions}
-                fetchRouteAnalysis={fetchRouteAnalysis}
-                customRouteName={customRouteName}
-                setCustomRouteName={setCustomRouteName}
-                setRouteSuggestions={setRouteSuggestions}
-                setRouteError={setRouteError}
-                getScoreColor={getScoreColor}
-                formatTempDisplay={formatTempDisplay}
-                formatWindDisplay={formatWindDisplay}
-                formatElevationDisplay={formatElevationDisplay}
-                formatDistanceDisplay={formatDistanceDisplay}
-                initialGpxRoute={importedGpxRoute}
-              />
-            </React.Suspense>
-          )}
-
           {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
             <div className={`visibility-banner visibility-banner-${weatherVisibilityPill}`} style={{ order: reportCardOrder.reportColumns }}>
               <Eye size={14} /> Visibility risk: <strong>{weatherVisibilityRisk.level}</strong>{weatherVisibilityDetail ? ` — ${weatherVisibilityDetail}` : ''}
@@ -804,7 +802,41 @@ function PlannerViewComponent(props: PlannerViewProps) {
                 </div>
               )}
             >
-              <RedesignView {...props} aiAvailability={aiAvailability} />
+              <RedesignView
+                {...props}
+                aiAvailability={aiAvailability}
+                routeAnalysisSlot={(aiAvailability.routeAnalysis || importedGpxRoute) && objectiveName ? (
+                  <React.Suspense
+                    fallback={<div className="route-analysis-section loading-state inline-loading-state" role="status" aria-live="polite" aria-busy="true">Loading route analysis tools…</div>}
+                  >
+                    <RouteAnalysisSection
+                      objectiveName={objectiveName}
+                      positionLat={position.lat}
+                      positionLng={position.lng}
+                      forecastDate={forecastDate}
+                      alpineStartTime={alpineStartTime}
+                      travelWindowHours={travelWindowHours}
+                      order={1}
+                      routeSuggestions={routeSuggestions}
+                      routeAnalysis={routeAnalysis}
+                      routeLoading={routeLoading}
+                      routeError={routeError}
+                      fetchRouteSuggestions={fetchRouteSuggestions}
+                      fetchRouteAnalysis={fetchRouteAnalysis}
+                      customRouteName={customRouteName}
+                      setCustomRouteName={setCustomRouteName}
+                      setRouteSuggestions={setRouteSuggestions}
+                      setRouteError={setRouteError}
+                      getScoreColor={getScoreColor}
+                      formatTempDisplay={formatTempDisplay}
+                      formatWindDisplay={formatWindDisplay}
+                      formatElevationDisplay={formatElevationDisplay}
+                      formatDistanceDisplay={formatDistanceDisplay}
+                      initialGpxRoute={importedGpxRoute}
+                    />
+                  </React.Suspense>
+                ) : null}
+              />
             </React.Suspense>
           </div>
 

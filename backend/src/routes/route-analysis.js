@@ -37,6 +37,49 @@ const pick = (obj, keys) => {
   }, {});
 };
 
+const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowHours = 12) => {
+  const [year, month, day] = String(date).split('-').map(Number);
+  const [hour, minute] = String(start || '06:00').split(':').map(Number);
+  const baseMs = Date.UTC(year, month - 1, day, hour, minute);
+  const safeHours = Math.max(1, Math.min(24, Math.round(Number(travelWindowHours) || 12)));
+  return waypoints.map((waypoint, index) => {
+    const fallbackProgress = waypoints.length > 1 ? (index / (waypoints.length - 1)) * 100 : 0;
+    const progress = Number.isFinite(Number(waypoint.progress_percent))
+      ? Math.max(0, Math.min(100, Number(waypoint.progress_percent)))
+      : fallbackProgress;
+    const offsetMinutes = Math.round(safeHours * 60 * progress / 100);
+    const eta = new Date(baseMs + offsetMinutes * 60 * 1000);
+    return {
+      date: eta.toISOString().slice(0, 10),
+      time: eta.toISOString().slice(11, 16),
+      offsetMinutes,
+      progressPercent: Math.round(progress),
+    };
+  });
+};
+
+const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = []) => {
+  const available = summaries.filter((summary) => summary.dataAvailable);
+  const scored = available.filter((summary) => Number.isFinite(Number(summary.score)));
+  const worst = scored.reduce((current, summary) => (!current || Number(summary.score) < Number(current.score) ? summary : current), null);
+  const peakGust = available.reduce((peak, summary) => Math.max(peak, Number(summary.weather?.windGust) || 0), 0);
+  const peakPrecip = available.reduce((peak, summary) => Math.max(peak, Number(summary.weather?.precipChance) || 0), 0);
+  const first = available[0];
+  const last = available[available.length - 1];
+  const timing = first && last ? `${first.name} at ${first.etaTime} to ${last.name} at ${last.etaTime}` : 'the planned route window';
+  const missing = failedWaypointNames.length
+    ? ` Data is missing at ${failedWaypointNames.join(', ')} and must be treated as unknown.`
+    : '';
+  return [
+    `HAZARD ZONES: ${worst ? `${worst.name} has the least modeled margin at ${worst.etaTime} with a score of ${Math.round(worst.score)}.` : 'No checkpoint score is available.'}${missing}`,
+    `WEATHER WINDOW: Checkpoint forecasts follow estimated arrival times from ${timing}. Peak modeled gust is ${Math.round(peakGust)} mph and peak precipitation chance is ${Math.round(peakPrecip)}%.`,
+    'OTHER CONCERNS: This briefing uses forecast and modeled checkpoint data. Verify official alerts, route access, surface conditions, and any unavailable checkpoint before departure.',
+    `DECISION POINTS: Reassess at each timed checkpoint${worst ? `, especially before ${worst.name}` : ''}. Turn around when observed conditions arrive earlier or are worse than the checkpoint forecast.`,
+    'GEAR CHECK: Offline route and navigation backup; emergency communication; weather protection matched to the report; lighting and reserve power; normal backcountry emergency kit.',
+    `BOTTOM LINE: ${worst && Number(worst.score) < 40 ? 'The route contains a low-margin checkpoint and should not be treated as a go.' : 'Use the timed checkpoints as verification gates rather than a guarantee.'} Rebuild the route brief when timing or pace changes.`,
+  ].join('\n');
+};
+
 const parseJsonArrayFromAI = (text) => {
   // Strip markdown code fences and XML-like tags that models sometimes wrap around JSON
   let cleaned = text
@@ -133,6 +176,7 @@ const sanitizeRouteMetadata = (raw) => {
     elevationGainFt: finiteOrNull(raw.elevationGainFt, 0, 100000),
     minElevationFt: finiteOrNull(raw.minElevationFt, -2000, 30000),
     maxElevationFt: finiteOrNull(raw.maxElevationFt, -2000, 30000),
+    routeShape: raw.routeShape === 'closed route' || raw.routeShape === 'point-to-point' ? raw.routeShape : null,
   };
 };
 
@@ -232,12 +276,6 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     if (start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) {
       return res.status(400).json({ error: 'start must be HH:MM format (00:00–23:59)' });
     }
-    try {
-      ensureFeatureEnabled();
-    } catch (error) {
-      return res.status(503).json({ error: error.message || 'AI features are unavailable' });
-    }
-
     let suppliedWaypoints;
     try {
       suppliedWaypoints = sanitizeSuppliedWaypoints(waypoints, safeLat, safeLon);
@@ -245,6 +283,15 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       return res.status(400).json({ error: error.message });
     }
     const routeMetadata = suppliedWaypoints ? sanitizeRouteMetadata(route_metadata) : null;
+    let aiFeatureEnabled = true;
+    try {
+      ensureFeatureEnabled();
+    } catch (error) {
+      aiFeatureEnabled = false;
+      if (!suppliedWaypoints) {
+        return res.status(503).json({ error: error.message || 'AI features are unavailable' });
+      }
+    }
 
     try {
       // Step 1: Use authoritative GPX checkpoints when provided. Otherwise retain
@@ -306,12 +353,20 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         }
       }
 
-      // Step 2: Run safety checks for each waypoint in parallel
+      // Step 2: Estimate arrival time from route progress, then evaluate each
+      // checkpoint at that ETA instead of applying the trailhead start time to
+      // every point on the route.
+      const checkpointSchedule = buildCheckpointSchedule(waypointsCopy, date, start || '06:00', travel_window_hours || 12);
+      waypointsCopy.forEach((waypoint, index) => {
+        waypoint.eta_date = checkpointSchedule[index].date;
+        waypoint.eta_time = checkpointSchedule[index].time;
+        waypoint.offset_minutes = checkpointSchedule[index].offsetMinutes;
+      });
       const safetySettled = await withTimeout(
         Promise.allSettled(
-          waypointsCopy.map((wp) =>
+          waypointsCopy.map((wp, index) =>
             invokeSafetyHandler(
-              { lat: String(wp.lat), lon: String(wp.lon), date, start: start || '06:00', travel_window_hours: String(travel_window_hours || 12), name: `Route waypoint: ${wp.name || 'unnamed'}` },
+              { lat: String(wp.lat), lon: String(wp.lon), date: checkpointSchedule[index].date, start: checkpointSchedule[index].time, travel_window_hours: '1', name: `Route waypoint: ${wp.name || 'unnamed'}` },
               { suppressReportLog: true },
             )
           )
@@ -340,6 +395,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           elev_ft: resolvedElevationFt,
           ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
           ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
+          etaDate: wp.eta_date,
+          etaTime: wp.eta_time,
+          offsetMinutes: wp.offset_minutes,
           dataAvailable,
           score: p.safety?.score ?? null,
           weather: pick(p.weather, ['temp', 'feelsLike', 'windSpeed', 'windGust', 'description', 'precipChance']),
@@ -361,6 +419,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           elev_ft: wp.elev_ft,
           ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
           ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
+          etaDate: wp.eta_date,
+          etaTime: wp.eta_time,
+          offsetMinutes: wp.offset_minutes,
           dataAvailable,
           report: dataAvailable ? settled.value.payload : null,
         };
@@ -369,7 +430,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const partialData = failedWaypointNames.length > 0;
       const reportsJson = JSON.stringify(rawWaypointReports).slice(0, MAX_WAYPOINT_REPORTS_LENGTH);
 
-      const analysis = await withTimeout(askAI(
+      const analysis = aiFeatureEnabled ? await withTimeout(askAI(
         `${describeUnitsInstruction(units)}
 
 You are analyzing backcountry conditions for a trip on ${safePeak}.
@@ -403,12 +464,13 @@ Aim for a substantive 300-550 word briefing when the route evidence supports it.
 
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
         { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis' }
-      ), 60000, 'Route synthesis');
+      ), 60000, 'Route synthesis') : buildDeterministicRouteBriefing(summaries, failedWaypointNames);
 
       return res.json({
         waypoints: waypointsCopy,
         summaries,
         analysis,
+        analysisSource: aiFeatureEnabled ? 'ai' : 'deterministic',
         partialData,
         routeSource,
         ...(routeSourceDetails ? { routeSourceDetails } : {}),
@@ -422,4 +484,10 @@ Use plain, calm language that feels like advice from an experienced trip partner
   });
 };
 
-module.exports = { ROUTE_ANALYSIS_MAX_TOKENS, registerRouteAnalysisRoutes, withTimeout };
+module.exports = {
+  ROUTE_ANALYSIS_MAX_TOKENS,
+  buildCheckpointSchedule,
+  buildDeterministicRouteBriefing,
+  registerRouteAnalysisRoutes,
+  withTimeout,
+};

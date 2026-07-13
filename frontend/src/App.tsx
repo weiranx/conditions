@@ -114,7 +114,7 @@ import { useTripForecast } from './hooks/useTripForecast';
 import { useSafetyData } from './hooks/useSafetyData';
 import { useSearchSuggestions } from './hooks/useSearchSuggestions';
 import { normalizeSuggestionText } from './lib/search';
-import type { ParsedGpxRoute } from './lib/gpx';
+import { estimateRunnerDurationHours, type ParsedGpxRoute } from './lib/gpx';
 import { useUrlState, useSyncUrlEffect } from './hooks/useUrlState';
 import type { AppView } from './hooks/useUrlState';
 import { useDayComparisons } from './hooks/useDayComparisons';
@@ -205,12 +205,13 @@ function App() {
   }, [initialPersistedReport, parsedInitialLinkState]);
 
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
-    if (initialLinkState.travelWindowHours) {
-      return { ...initialPreferences, travelWindowHours: initialLinkState.travelWindowHours };
-    }
-    return initialPreferences;
+    return {
+      ...initialPreferences,
+      defaultActivity: initialLinkState.activity,
+      ...(initialLinkState.travelWindowHours ? { travelWindowHours: initialLinkState.travelWindowHours } : {}),
+    };
   });
-  const activity: ActivityType = 'backcountry';
+  const activity: ActivityType = preferences.defaultActivity;
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
   const [objectiveName, setObjectiveName] = useState(initialLinkState.objectiveName);
@@ -263,6 +264,10 @@ function App() {
     fetchSafetyData, clearLastLoadedKey, clearWakeRetry,
     handleRequestAiBrief,
   } = safetyHook;
+  const [previousSafetyData, setPreviousSafetyData] = useState<SafetyData | null>(null);
+  useEffect(() => {
+    if (!safetyData) setPreviousSafetyData(null);
+  }, [safetyData]);
 
   const coordinateTimezone = useMemo(
     () => resolveObjectiveTimeZone(position.lat, position.lng),
@@ -440,6 +445,7 @@ function App() {
         linkState.forecastDate === forecastDate &&
         linkState.alpineStartTime === alpineStartTime &&
         linkState.targetElevationInput === targetElevationInput &&
+        linkState.activity === preferences.defaultActivity &&
         (!linkState.travelWindowHours || linkState.travelWindowHours === preferences.travelWindowHours);
       if (sameReport) {
         setSearchInputValue(linkState.searchQuery);
@@ -467,11 +473,13 @@ function App() {
       setAlpineStartTime(linkState.alpineStartTime);
       setTargetElevationInput(linkState.targetElevationInput);
       setTargetElevationManual(Boolean(linkState.targetElevationInput));
-      if (linkState.travelWindowHours) {
-        setPreferences(prev => ({ ...prev, travelWindowHours: linkState.travelWindowHours! }));
-      }
+      setPreferences(prev => ({
+        ...prev,
+        defaultActivity: linkState.activity,
+        ...(linkState.travelWindowHours ? { travelWindowHours: linkState.travelWindowHours } : {}),
+      }));
       setError(null);
-    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.travelWindowHours]),
+    }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
 
@@ -546,6 +554,7 @@ function App() {
 
   useSyncUrlEffect({
     view,
+    activity,
     hasObjective,
     position,
     objectiveName,
@@ -802,6 +811,7 @@ function App() {
       setPastStartPrompt(pastStart);
       return;
     }
+    setPreviousSafetyData(safetyData);
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
@@ -818,6 +828,7 @@ function App() {
       return;
     }
     collapseMobilePlanControls();
+    setPreviousSafetyData(null);
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
   };
 
@@ -843,6 +854,7 @@ function App() {
   const handleEditPlan = useCallback(() => {
     clearPersistedReport();
     setSafetyData(null);
+    setPreviousSafetyData(null);
     setError(null);
     setAiBriefNarrative(null);
     setAiBriefLoading(false);
@@ -988,6 +1000,7 @@ function App() {
     }, [preferences.defaultStartTime, startViewChange, setView]),
   });
   const {
+    updatePreferences,
     travelWindowHoursDraft,
     maxPrecipChanceDraft,
     maxWindGustDraft,
@@ -1023,6 +1036,26 @@ function App() {
     travelThresholdEditorOpen,
     setTravelThresholdEditorOpen,
   } = prefHandlers;
+
+  const gpxEstimatedDurationHours = React.useMemo(
+    () => importedGpxRoute
+      ? estimateRunnerDurationHours(importedGpxRoute, {
+          paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
+          ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+          stopBufferMinutes: preferences.runnerStopBufferMinutes,
+        })
+      : null,
+    [
+      importedGpxRoute,
+      preferences.runnerPaceMinutesPerMile,
+      preferences.runnerAscentMinutesPer1000Ft,
+      preferences.runnerStopBufferMinutes,
+    ],
+  );
+  const handleUseGpxEstimatedDuration = useCallback(() => {
+    if (gpxEstimatedDurationHours === null) return;
+    updatePreferences({ travelWindowHours: gpxEstimatedDurationHours });
+  }, [gpxEstimatedDurationHours, updatePreferences]);
 
   const returnMinutes = cutoffMinutes !== null ? cutoffMinutes + travelWindowHours * 60 : null;
   const returnExtendsPastMidnight = returnMinutes !== null && returnMinutes > 1439;
@@ -1630,6 +1663,7 @@ function App() {
         handleElevationUnitChange={handleElevationUnitChange}
         handleWindSpeedUnitChange={handleWindSpeedUnitChange}
         handleTimeStyleChange={handleTimeStyleChange}
+        updatePreferences={updatePreferences}
         handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
         handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
         handleWindThresholdDisplayChange={handleWindThresholdDisplayChange}
@@ -1744,6 +1778,9 @@ function App() {
         openTripToolView={openTripToolView}
         importedGpxRoute={importedGpxRoute}
         handleImportGpxObjective={handleImportGpxObjective}
+        gpxEstimatedDurationHours={gpxEstimatedDurationHours}
+        activeTravelWindowHours={travelWindowHours}
+        handleUseGpxEstimatedDuration={handleUseGpxEstimatedDuration}
       />
       </React.Activity>
 
@@ -1810,6 +1847,8 @@ function App() {
       setActiveSuggestionIndex={setActiveSuggestionIndex}
       importedGpxRoute={importedGpxRoute}
       handleImportGpxObjective={handleImportGpxObjective}
+      gpxEstimatedDurationHours={gpxEstimatedDurationHours}
+      handleUseGpxEstimatedDuration={handleUseGpxEstimatedDuration}
       // Header controls
       hasObjective={hasObjective}
       objectiveDraftDirty={objectiveDraftDirty}
@@ -1829,6 +1868,7 @@ function App() {
       handleUseCurrentLocation={handleUseCurrentLocation}
       handleRecenterMap={handleRecenterMap}
       safetyData={safetyData}
+      previousSafetyData={previousSafetyData}
       mapElevationChipTitle={mapElevationChipTitle}
       mapElevationLabel={mapElevationLabel}
       mapWeatherEmoji={mapWeatherEmoji}
