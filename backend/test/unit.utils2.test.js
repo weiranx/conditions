@@ -45,6 +45,24 @@ const {
   buildLayeringGearSuggestions,
 } = require('../src/utils/gear-suggestions');
 
+const {
+  parsePointElevationMeters,
+} = require('../src/utils/weather-pipeline');
+
+describe('parsePointElevationMeters', () => {
+  test('preserves missing NOAA elevation so the fallback service runs', () => {
+    expect(parsePointElevationMeters(null)).toBeNull();
+    expect(parsePointElevationMeters(undefined)).toBeNull();
+    expect(parsePointElevationMeters('')).toBeNull();
+  });
+
+  test('accepts finite numeric elevation values, including sea level', () => {
+    expect(parsePointElevationMeters(0)).toBe(0);
+    expect(parsePointElevationMeters('4387.2')).toBe(4387.2);
+    expect(parsePointElevationMeters('not available')).toBeNull();
+  });
+});
+
 // ============================================================================
 // 1. wind.js — parseWindMph
 // ============================================================================

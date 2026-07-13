@@ -57,18 +57,24 @@ function bandRisk(gustMph: number, maxGustMph: number): 'low' | 'watch' | 'high'
 function ElevationCrossPlot({
   bands,
   maxGustMph,
+  activeIndex,
+  onActiveIndexChange,
   formatTempDisplay,
   formatWindDisplay,
+  formatElevationDisplay,
 }: {
   bands: ElevationForecastBand[];
   maxGustMph: number;
+  activeIndex: number;
+  onActiveIndexChange: (index: number) => void;
   formatTempDisplay: PlannerViewProps['formatTempDisplay'];
   formatWindDisplay: PlannerViewProps['formatWindDisplay'];
+  formatElevationDisplay: PlannerViewProps['formatElevationDisplay'];
 }) {
   const W = 900;
-  const H = 230;
-  const pad = { l: 50, r: 16, t: 26, b: 40 };
-  const [hover, setHover] = React.useState<number | null>(null);
+  const H = 260;
+  const pad = { l: 76, r: 82, t: 38, b: 58 };
+  const gradientId = React.useId().replace(/:/g, '');
 
   const fts = bands.map((b) => b.elevationFt);
   const minFt = Math.min(...fts);
@@ -82,18 +88,18 @@ function ElevationCrossPlot({
     i,
   }));
 
-  let d = `M ${pad.l} ${H - pad.b}`;
+  let profilePath = '';
   pts.forEach((p, i) => {
     if (i === 0) {
-      d += ` L ${p.x} ${p.y}`;
+      profilePath = `M ${p.x} ${p.y}`;
     } else {
       const prev = pts[i - 1];
       const cx1 = prev.x + (p.x - prev.x) * 0.45;
       const cx2 = prev.x + (p.x - prev.x) * 0.55;
-      d += ` C ${cx1} ${prev.y}, ${cx2} ${p.y}, ${p.x} ${p.y}`;
+      profilePath += ` C ${cx1} ${prev.y}, ${cx2} ${p.y}, ${p.x} ${p.y}`;
     }
   });
-  d += ` L ${W - pad.r} ${H - pad.b} Z`;
+  const areaPath = `${profilePath} L ${pts[pts.length - 1].x} ${H - pad.b} L ${pts[0].x} ${H - pad.b} Z`;
 
   const ticks: Array<{ ft: number; y: number }> = [];
   const step = rg > 6000 ? 2000 : rg > 2500 ? 1000 : 500;
@@ -109,49 +115,215 @@ function ElevationCrossPlot({
   };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-labelledby={`${gradientId}-title ${gradientId}-desc`}
+    >
+      <title id={`${gradientId}-title`}>Estimated conditions by elevation band</title>
+      <desc id={`${gradientId}-desc`}>Select a point to compare temperature, wind, and gusts from lower terrain to the objective.</desc>
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--ssr-brand)" stopOpacity="0.24" />
+          <stop offset="100%" stopColor="var(--ssr-brand)" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
       {ticks.map((t) => (
         <g key={t.ft}>
           <line x1={pad.l} x2={W - pad.r} y1={t.y} y2={t.y} stroke="var(--ssr-line)" strokeDasharray="2 3" />
-          <text x={pad.l - 8} y={t.y + 3} textAnchor="end" fontSize="10" fill="var(--ssr-text-3)" fontFamily="var(--ssr-mono)">
-            {(t.ft / 1000).toFixed(t.ft % 1000 === 0 ? 0 : 1)}k
+          <text x={pad.l - 10} y={t.y + 4} textAnchor="end" fontSize="10" fill="var(--ssr-text-3)" fontFamily="var(--ssr-mono)">
+            {formatElevationDisplay(t.ft, { precision: 0 })}
           </text>
         </g>
       ))}
-      <path d={d} fill="var(--ssr-surface-3)" stroke="var(--ssr-line-strong)" strokeWidth="1" />
+      <path d={areaPath} fill={`url(#${gradientId})`} />
+      <path d={profilePath} fill="none" stroke="var(--ssr-brand-dark)" strokeWidth="2.5" strokeLinecap="round" />
       {pts.map((p) => {
         const risk = bandRisk(p.b.windGust, maxGustMph);
+        const isActive = p.i === activeIndex;
+        const windLabel = formatWindDisplay(p.b.windGust, { includeUnit: false });
         return (
-          <g key={p.i} onMouseEnter={() => setHover(p.i)} onMouseLeave={() => setHover(null)} style={{ cursor: 'pointer' }}>
-            <circle cx={p.x} cy={p.y} r="5" fill={riskCol[risk]} stroke="var(--ssr-surface)" strokeWidth="2" />
-            <text x={p.x} y={H - pad.b + 14} textAnchor="middle" fontSize="9.5" fill="var(--ssr-text-3)" fontFamily="var(--ssr-mono)">
-              {Math.round(p.b.elevationFt).toLocaleString()}
+          <g
+            key={p.i}
+            role="button"
+            tabIndex={0}
+            aria-label={`${p.b.label}, ${formatElevationDisplay(p.b.elevationFt)}, ${formatTempDisplay(p.b.temp)}, gusts ${formatWindDisplay(p.b.windGust)}`}
+            aria-pressed={isActive}
+            onMouseEnter={() => onActiveIndexChange(p.i)}
+            onFocus={() => onActiveIndexChange(p.i)}
+            onClick={() => onActiveIndexChange(p.i)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onActiveIndexChange(p.i);
+              }
+            }}
+            className={`ssr-elev-node ${isActive ? 'is-active' : ''}`}
+          >
+            {isActive && (
+              <line x1={p.x} x2={p.x} y1={p.y + 8} y2={H - pad.b} stroke="var(--ssr-brand)" strokeDasharray="3 4" opacity="0.65" />
+            )}
+            <rect x={p.x - 23} y={p.y - 32} width="46" height="20" rx="10" fill={riskCol[risk]} />
+            <text x={p.x} y={p.y - 18} textAnchor="middle" fontSize="9.5" fill="white" fontWeight="700" fontFamily="var(--ssr-mono)">
+              G {windLabel}
             </text>
-            <text x={p.x} y={H - pad.b + 28} textAnchor="middle" fontSize="10" fill="var(--ssr-text-2)" fontWeight="500">
+            <circle cx={p.x} cy={p.y} r={isActive ? 8 : 6} fill={riskCol[risk]} stroke="var(--ssr-surface)" strokeWidth="3" />
+            <text x={p.x} y={H - pad.b + 20} textAnchor="middle" fontSize="10" fill="var(--ssr-text-2)" fontWeight="650">
               {p.b.label}
+            </text>
+            <text x={p.x} y={H - pad.b + 36} textAnchor="middle" fontSize="9.5" fill="var(--ssr-text-3)" fontFamily="var(--ssr-mono)">
+              {formatElevationDisplay(p.b.elevationFt, { precision: 0 })}
             </text>
           </g>
         );
       })}
-      {hover !== null &&
-        (() => {
-          const p = pts[hover];
-          const tx = Math.min(W - 160, Math.max(pad.l, p.x - 75));
-          const ty = Math.max(4, p.y - 52);
-          return (
-            <g>
-              <rect x={tx} y={ty} width="150" height="40" rx="4" fill="var(--ssr-surface)" stroke="var(--ssr-line-strong)" />
-              <text x={tx + 10} y={ty + 15} fontSize="11" fontWeight="600" fill="var(--ssr-text)">
-                {p.b.label} · {Math.round(p.b.elevationFt).toLocaleString()} ft
-              </text>
-              <text x={tx + 10} y={ty + 30} fontSize="10" fill="var(--ssr-text-3)" fontFamily="var(--ssr-mono)">
-                {formatTempDisplay(p.b.temp)} · {formatWindDisplay(p.b.windSpeed, { includeUnit: false })}G
-                {formatWindDisplay(p.b.windGust, { includeUnit: false })}
-              </text>
-            </g>
-          );
-        })()}
     </svg>
+  );
+}
+
+function ElevationProfileSection({
+  bands,
+  maxGustMph,
+  note,
+  formatTempDisplay,
+  formatWindDisplay,
+  formatElevationDisplay,
+}: {
+  bands: ElevationForecastBand[];
+  maxGustMph: number;
+  note?: string | null;
+  formatTempDisplay: PlannerViewProps['formatTempDisplay'];
+  formatWindDisplay: PlannerViewProps['formatWindDisplay'];
+  formatElevationDisplay: PlannerViewProps['formatElevationDisplay'];
+}) {
+  const profileKey = bands.map((band) => band.elevationFt).join('|');
+  const [selectedIndex, setSelectedIndex] = React.useState(Math.max(0, bands.length - 1));
+
+  React.useEffect(() => {
+    setSelectedIndex(Math.max(0, bands.length - 1));
+  }, [profileKey, bands.length]);
+
+  const activeIndex = Math.min(selectedIndex, bands.length - 1);
+  const activeBand = bands[activeIndex];
+  const lowerBand = bands[0];
+  const objectiveBand = bands[bands.length - 1];
+  const peakGustBand = bands.reduce((peak, band) => (band.windGust > peak.windGust ? band : peak), bands[0]);
+  const spanFt = Math.max(0, objectiveBand.elevationFt - lowerBand.elevationFt);
+  const activeRisk = bandRisk(activeBand.windGust, maxGustMph);
+  const activeRiskLabel = activeRisk === 'high'
+    ? 'Over gust limit'
+    : activeRisk === 'watch'
+      ? 'Near gust limit'
+      : 'Below gust limit';
+
+  return (
+    <section className="ssr-card ssr-elev-card" id="planner-section-elevation">
+      <div className="ssr-card-h">
+        <h2>
+          <span className="ssr-h-icon icon-amber"><Layers size={16} /></span>
+          Elevation profile
+        </h2>
+        <span className="ssr-h-meta">{formatElevationDisplay(spanFt)} vertical span</span>
+      </div>
+
+      <div className="ssr-elev-summary" aria-label="Elevation profile summary">
+        <div>
+          <span>Terrain range</span>
+          <strong>{formatElevationDisplay(lowerBand.elevationFt)} → {formatElevationDisplay(objectiveBand.elevationFt)}</strong>
+        </div>
+        <div>
+          <span>Temperature change</span>
+          <strong>{formatTempDisplay(lowerBand.temp)} → {formatTempDisplay(objectiveBand.temp)}</strong>
+        </div>
+        <div className={bandRisk(peakGustBand.windGust, maxGustMph)}>
+          <span>Peak gust · {peakGustBand.label}</span>
+          <strong>{formatWindDisplay(peakGustBand.windGust)}</strong>
+        </div>
+      </div>
+
+      <figure className="ssr-cross-wrap">
+        <ElevationCrossPlot
+          bands={bands}
+          maxGustMph={maxGustMph}
+          activeIndex={activeIndex}
+          onActiveIndexChange={setSelectedIndex}
+          formatTempDisplay={formatTempDisplay}
+          formatWindDisplay={formatWindDisplay}
+          formatElevationDisplay={formatElevationDisplay}
+        />
+        <figcaption className="sr-only">Estimated temperature and wind conditions across {bands.length} elevation bands.</figcaption>
+      </figure>
+
+      <div className="ssr-elev-band-tabs" aria-label="Choose an elevation band">
+        {bands.map((band, index) => (
+          <button
+            key={`${band.label}-${band.elevationFt}`}
+            type="button"
+            className={index === activeIndex ? 'is-active' : ''}
+            aria-pressed={index === activeIndex}
+            onClick={() => setSelectedIndex(index)}
+          >
+            <span className={`ssr-risk-pip ${bandRisk(band.windGust, maxGustMph)}`} />
+            {band.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`ssr-elev-active ${activeRisk}`} aria-live="polite">
+        <div className="ssr-elev-active-h">
+          <div>
+            <span>Selected band</span>
+            <strong>{activeBand.label}</strong>
+          </div>
+          <span className={`ssr-pill ${activeRisk === 'high' ? 'nogo' : activeRisk === 'watch' ? 'caution' : 'go'}`}>{activeRiskLabel}</span>
+        </div>
+        <div className="ssr-elev-active-grid">
+          <span><small>Elevation</small><b>{formatElevationDisplay(activeBand.elevationFt)}</b></span>
+          <span><small>Temperature</small><b>{formatTempDisplay(activeBand.temp)}</b></span>
+          <span><small>Feels like</small><b>{formatTempDisplay(activeBand.feelsLike)}</b></span>
+          <span><small>Wind · gust</small><b>{formatWindDisplay(activeBand.windSpeed)} · {formatWindDisplay(activeBand.windGust)}</b></span>
+        </div>
+      </div>
+
+      <div className="ssr-elev-table-wrap">
+        <table className="ssr-bands-table">
+          <caption className="sr-only">Comparison of estimated conditions by elevation band</caption>
+          <thead>
+            <tr>
+              <th>Band</th>
+              <th className="num">Elevation</th>
+              <th className="num">Temp</th>
+              <th className="num">Feels</th>
+              <th className="num">Wind · gust</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bands.map((band, index) => {
+              const risk = bandRisk(band.windGust, maxGustMph);
+              return (
+                <tr key={`${band.label}-${band.elevationFt}`} className={index === activeIndex ? 'is-active' : ''}>
+                  <td>
+                    <span className="ssr-band-name-cell">
+                      <span className={`ssr-risk-pip ${risk}`} />
+                      {band.label}
+                    </span>
+                  </td>
+                  <td className="num">{formatElevationDisplay(band.elevationFt)}</td>
+                  <td className="num">{formatTempDisplay(band.temp)}</td>
+                  <td className="num">{formatTempDisplay(band.feelsLike)}</td>
+                  <td className="num">{formatWindDisplay(band.windSpeed, { includeUnit: false })} · G{formatWindDisplay(band.windGust)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="ssr-cross-note">
+        <strong>Planning estimate.</strong> {note || 'Conditions are adjusted from the objective forecast by elevation.'} Local terrain can change wind and temperature; use the colored gust markers to spot where exposure increases.
+      </p>
+    </section>
   );
 }
 
@@ -1021,61 +1193,14 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* ELEVATION */}
         {bands.length >= 2 && (
-          <section className="ssr-card">
-            <div className="ssr-card-h">
-              <h2>
-                <span className="ssr-h-icon icon-amber"><Layers size={16} /></span>
-                Elevation profile
-              </h2>
-              <span className="ssr-h-meta">{bands.length} bands</span>
-            </div>
-            <div className="ssr-cross-wrap">
-              <ElevationCrossPlot
-                bands={bands}
-                maxGustMph={maxGustMph}
-                formatTempDisplay={formatTempDisplay}
-                formatWindDisplay={formatWindDisplay}
-              />
-            </div>
-            <div className="ssr-card-b ssr-tight">
-              <table className="ssr-bands-table">
-                <thead>
-                  <tr>
-                    <th>Band</th>
-                    <th className="num">Elev</th>
-                    <th className="num">Temp</th>
-                    <th className="num">Feels</th>
-                    <th className="num">Wind·Gust</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bands.map((b, i) => {
-                    const risk = bandRisk(b.windGust, maxGustMph);
-                    return (
-                      <tr key={i}>
-                        <td>
-                          <span className="ssr-band-name-cell">
-                            <span className={`ssr-risk-pip ${risk}`} />
-                            {b.label}
-                          </span>
-                        </td>
-                        <td className="num">{formatElevationDisplay(b.elevationFt)}</td>
-                        <td className="num">{formatTempDisplay(b.temp)}</td>
-                        <td className="num">{formatTempDisplay(b.feelsLike)}</td>
-                        <td className="num">
-                          {formatWindDisplay(b.windSpeed, { includeUnit: false })}G
-                          {formatWindDisplay(b.windGust, { includeUnit: false })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="ssr-cross-note" style={{ padding: '0 24px 20px' }}>
-              Colored pips mark relative wind hazard along the ascent. Hover any node for temp and wind.
-            </p>
-          </section>
+          <ElevationProfileSection
+            bands={bands}
+            maxGustMph={maxGustMph}
+            note={safetyData.weather.elevationForecastNote}
+            formatTempDisplay={formatTempDisplay}
+            formatWindDisplay={formatWindDisplay}
+            formatElevationDisplay={formatElevationDisplay}
+          />
         )}
 
         {/* WIND LOADING */}

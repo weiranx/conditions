@@ -27,6 +27,14 @@ class ForecastDateOutOfRangeError extends Error {
   }
 }
 
+const parsePointElevationMeters = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 /**
  * Fetches weather data from NOAA (primary) with Open-Meteo fallback, plus solar data.
  * Returns the complete weather context needed by the safety pipeline.
@@ -104,7 +112,7 @@ async function fetchWeatherPipeline({
       if (!pointsRes.ok) throw new Error('Failed to fetch NOAA points (Location might be outside US)');
       return pointsRes.json();
     }));
-    const pointElevationMeters = Number(pointsData?.properties?.elevation?.value);
+    const pointElevationMeters = parsePointElevationMeters(pointsData?.properties?.elevation?.value);
     let objectiveElevationFt = Number.isFinite(pointElevationMeters)
       ? Math.round(pointElevationMeters * FT_PER_METER)
       : null;
@@ -453,5 +461,6 @@ async function fetchWeatherPipeline({
 
 module.exports = {
   ForecastDateOutOfRangeError,
+  parsePointElevationMeters,
   fetchWeatherPipeline,
 };
