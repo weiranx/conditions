@@ -53,7 +53,35 @@ test('route suggestions use the fast model tier', async () => {
   expect(calls[0].options).toMatchObject({ tier: 'fast', maxTokens: 2048 });
 });
 
-test('disabled route analysis blocks suggestions before an AI request', async () => {
+test('disabled product route analysis blocks suggestions before checking AI', async () => {
+  const app = express();
+  const askAI = jest.fn();
+  const ensureAIEnabled = jest.fn();
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler: jest.fn(),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureRouteAnalysisEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.statusCode = 503;
+      throw error;
+    },
+    ensureAIEnabled,
+  });
+
+  const response = await request(app)
+    .get('/api/route-suggestions')
+    .query({ peak: 'Test Peak', lat: 39.1234, lon: -106.5678 });
+
+  expect(response.status).toBe(503);
+  expect(response.body.error).toBe('This feature is unavailable');
+  expect(askAI).not.toHaveBeenCalled();
+  expect(ensureAIEnabled).not.toHaveBeenCalled();
+});
+
+test('disabled AI route assistance blocks suggestions without disabling route analysis', async () => {
   const app = express();
   const askAI = jest.fn();
   registerRouteAnalysisRoutes({
@@ -62,7 +90,8 @@ test('disabled route analysis blocks suggestions before an AI request', async ()
     invokeSafetyHandler: jest.fn(),
     fetchWithTimeout: jest.fn(),
     fetchHeaders: {},
-    ensureFeatureEnabled: () => {
+    ensureRouteAnalysisEnabled: jest.fn(),
+    ensureAIEnabled: () => {
       throw new Error('AI features are unavailable');
     },
   });
@@ -180,7 +209,7 @@ test('GPX route analysis remains available without AI and returns a deterministi
     }),
     fetchWithTimeout: jest.fn(),
     fetchHeaders: {},
-    ensureFeatureEnabled: () => { throw new Error('AI features are unavailable'); },
+    ensureAIEnabled: () => { throw new Error('AI features are unavailable'); },
   });
 
   const response = await request(app)
@@ -202,5 +231,75 @@ test('GPX route analysis remains available without AI and returns a deterministi
   expect(response.status).toBe(200);
   expect(response.body.analysis).toMatch(/HAZARD ZONES:/);
   expect(response.body.analysis).toMatch(/timed checkpoints/i);
+  expect(response.body.analysisSource).toBe('deterministic');
   expect(askAI).not.toHaveBeenCalled();
+});
+
+test('disabled product route analysis blocks GPX analysis even when AI is available', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn();
+  const invokeSafetyHandler = jest.fn();
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler,
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureRouteAnalysisEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.statusCode = 503;
+      throw error;
+    },
+    ensureAIEnabled: jest.fn(),
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Runner Route',
+      route: 'runner.gpx',
+      lat: 46.8,
+      lon: -121.7,
+      date: '2026-07-10',
+      waypoints: [
+        { name: 'Start', lat: 46.8, lon: -121.7 },
+        { name: 'Finish', lat: 46.81, lon: -121.71 },
+      ],
+    });
+
+  expect(response.status).toBe(503);
+  expect(response.body.error).toBe('This feature is unavailable');
+  expect(askAI).not.toHaveBeenCalled();
+  expect(invokeSafetyHandler).not.toHaveBeenCalled();
+});
+
+test('AI-disabled named routes fail before waypoint generation when no mapped trail is found', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn();
+  const invokeSafetyHandler = jest.fn();
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler,
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    ensureAIEnabled: () => { throw new Error('AI features are unavailable'); },
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Unmapped Peak',
+      route: 'Unmapped Route',
+      lat: 46.8,
+      lon: -121.7,
+      date: '2026-07-10',
+    });
+
+  expect(response.status).toBe(503);
+  expect(response.body.error).toMatch(/AI waypoint generation is unavailable/i);
+  expect(askAI).not.toHaveBeenCalled();
+  expect(invokeSafetyHandler).not.toHaveBeenCalled();
 });

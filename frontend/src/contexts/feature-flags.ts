@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react';
 
-export const PRODUCT_FEATURE_KEYS = ['tripPlanning', 'satelliteImagery', 'startTimeComparisons'] as const;
+export const PRODUCT_FEATURE_KEYS = ['tripPlanning', 'routeAnalysis', 'satelliteImagery', 'startTimeComparisons'] as const;
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
 
 export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   tripPlanning: true,
+  routeAnalysis: true,
   satelliteImagery: true,
   startTimeComparisons: true,
 };

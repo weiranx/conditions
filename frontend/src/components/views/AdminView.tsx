@@ -188,8 +188,8 @@ const AI_FEATURE_CONTROLS = [
   },
   {
     key: 'routeAnalysis',
-    label: 'Route analysis',
-    description: 'Enables AI route suggestions, waypoint generation, and route briefing.',
+    label: 'AI route assistance',
+    description: 'Adds AI route suggestions, waypoint generation, and narrative synthesis to the base route-analysis feature.',
     icon: Route,
   },
   {
@@ -206,6 +206,12 @@ interface ProductFeatureFlagStatus {
 }
 
 const PRODUCT_FEATURE_CONTROLS = [
+  {
+    key: 'routeAnalysis',
+    label: 'Route analysis',
+    description: 'Shows route checkpoint analysis, mapped-route matching, and GPX route tools.',
+    icon: Route,
+  },
   {
     key: 'tripPlanning',
     label: 'Multi-day trip planning',
@@ -1389,7 +1395,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <span className="admin-ai-setting-icon"><Power size={18} aria-hidden /></span>
             <div>
               <strong>AI feature kill switch</strong>
-              <p>{aiSettings?.enabled ? 'AI briefs, chat, route analysis, and vision features can make model calls.' : 'All model calls and individual AI feature flags are switched off.'}</p>
+              <p>{aiSettings?.enabled ? 'AI briefs, chat, AI-assisted route analysis, and vision features can make model calls.' : 'All model calls and individual AI feature flags are switched off.'}</p>
             </div>
             <button
               type="button"

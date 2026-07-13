@@ -34,6 +34,7 @@ import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult, RouteLoadi
 import type { AppView } from '../../hooks/useUrlState';
 import { ACTIVITY_PROFILES } from '../../app/activity-profiles';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 import type { Suggestion } from '../../lib/search';
 import type { ParsedGpxRoute } from '../../lib/gpx';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
@@ -460,6 +461,7 @@ export interface PlannerViewProps {
 
 function PlannerViewComponent(props: PlannerViewProps) {
   const aiAvailability = useAiAvailability(props.safetyData?.capabilities);
+  const featureFlags = useProductFeatureFlags();
   const {
     // Shell
     appShellClassName,
@@ -805,7 +807,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
               <RedesignView
                 {...props}
                 aiAvailability={aiAvailability}
-                routeAnalysisSlot={(aiAvailability.routeAnalysis || importedGpxRoute) && objectiveName ? (
+                routeAnalysisSlot={featureFlags.routeAnalysis && objectiveName ? (
                   <React.Suspense
                     fallback={<div className="route-analysis-section loading-state inline-loading-state" role="status" aria-live="polite" aria-busy="true">Loading route analysis tools…</div>}
                   >
@@ -834,6 +836,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
                       formatElevationDisplay={formatElevationDisplay}
                       formatDistanceDisplay={formatDistanceDisplay}
                       initialGpxRoute={importedGpxRoute}
+                      aiAvailable={aiAvailability.routeAnalysis}
                     />
                   </React.Suspense>
                 ) : null}

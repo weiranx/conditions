@@ -24,6 +24,7 @@ test('product feature flags default to enabled and update independently', () => 
     persistent: false,
     flags: {
       tripPlanning: true,
+      routeAnalysis: true,
       satelliteImagery: true,
       startTimeComparisons: true,
     },
@@ -44,11 +45,12 @@ test('product feature flags reject unknown or non-boolean values', () => {
 test('product feature flags can be restored to enabled defaults', () => {
   const { getFeatureFlags, resetFeatureFlags, updateFeatureFlags } = loadFeatureFlags();
 
-  updateFeatureFlags({ tripPlanning: false, satelliteImagery: false, startTimeComparisons: false });
+  updateFeatureFlags({ tripPlanning: false, routeAnalysis: false, satelliteImagery: false, startTimeComparisons: false });
   const status = resetFeatureFlags();
 
   expect(status.flags).toEqual({
     tripPlanning: true,
+    routeAnalysis: true,
     satelliteImagery: true,
     startTimeComparisons: true,
   });
@@ -63,6 +65,7 @@ test('product feature flags persist across module reloads', () => {
 
     expect(JSON.parse(fs.readFileSync(settingsFile, 'utf8'))).toEqual({
       tripPlanning: false,
+      routeAnalysis: true,
       satelliteImagery: true,
       startTimeComparisons: false,
     });
@@ -71,6 +74,7 @@ test('product feature flags persist across module reloads', () => {
     const reloaded = loadFeatureFlags(settingsFile);
     expect(reloaded.getFeatureFlags()).toEqual({
       tripPlanning: false,
+      routeAnalysis: true,
       satelliteImagery: true,
       startTimeComparisons: false,
     });
@@ -84,5 +88,6 @@ test('disabled product features fail closed', () => {
   updateFeatureFlags({ tripPlanning: false });
 
   expect(() => assertFeatureEnabled('tripPlanning')).toThrow('This feature is unavailable');
+  expect(() => assertFeatureEnabled('routeAnalysis')).not.toThrow();
   expect(() => assertFeatureEnabled('satelliteImagery')).not.toThrow();
 });
