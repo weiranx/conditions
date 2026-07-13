@@ -139,32 +139,37 @@ export function HomeView({
 
       <main className="ssr-home">
         <section className="ssr-h-hero" aria-labelledby="home-hero-title">
+          <div className="ssr-h-hero-contours" aria-hidden="true"><i /><i /><i /></div>
           <div className="ssr-h-hero-coordinates" aria-hidden="true">46.8523° N&nbsp;&nbsp; 121.7603° W</div>
           <div className="ssr-h-hero-inner">
             <div className="ssr-h-hero-copy">
               <div className="ssr-h-kicker"><Sparkles size={13} aria-hidden /> Backcountry planning intelligence</div>
               <h1 id="home-hero-title">Move with the mountain,<br /><em>not against it.</em></h1>
               <p>
-                Stop stitching together six different forecasts. Get one time-aware brief that shows
-                when conditions shift, what matters most, and what to verify before you go.
+                Turn weather, avalanche, snowpack, terrain, and daylight into one time-aware brief—so
+                you can see the best window, the reasons behind it, and what still needs verification.
               </p>
-              <div className="ssr-h-proof" aria-label="Data sources included">
-                <span><Check size={13} aria-hidden /> Official sources</span>
-                <span><Check size={13} aria-hidden /> Matched to your timing</span>
-                <span><Check size={13} aria-hidden /> Uncertainty made visible</span>
+              <div className="ssr-h-proof" aria-label="Brief capabilities">
+                <span><b>6+</b><small>Conditions signals</small></span>
+                <span><b>Hourly</b><small>Window-level timing</small></span>
+                <span><b>Visible</b><small>Age &amp; confidence</small></span>
               </div>
               <div className="ssr-h-hero-actions">
                 <button type="button" onClick={() => searchInputRef.current?.focus()}>
-                  Start my brief <ArrowRight size={16} aria-hidden />
+                  Plan my objective <ArrowRight size={16} aria-hidden />
                 </button>
                 <a href="#home-report-title">Preview a sample brief</a>
               </div>
             </div>
 
             <div className="ssr-h-builder" id="build-brief">
+              <div className="ssr-h-builder-status">
+                <span><i aria-hidden="true" /> Live source synthesis</span>
+                <small>Official + modeled data</small>
+              </div>
               <div className="ssr-h-builder-head">
                 <div>
-                  <span className="ssr-h-builder-step">Start here</span>
+                  <span className="ssr-h-builder-step">Planning workspace</span>
                   <h2>Build your conditions brief</h2>
                 </div>
                 <span className="ssr-h-builder-time"><Timer size={13} aria-hidden /> 30 seconds</span>
@@ -241,7 +246,7 @@ export function HomeView({
                 {searchLoading ? (
                   <><LoaderCircle size={17} className="spin" aria-hidden /> Finding your objective…</>
                 ) : (
-                  <>Build my conditions brief <ArrowRight size={17} aria-hidden /></>
+                  <>See my conditions window <ArrowRight size={17} aria-hidden /></>
                 )}
               </button>
 
