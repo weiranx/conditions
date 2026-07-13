@@ -191,6 +191,9 @@ function ElevationProfileSection({
   bands,
   maxGustMph,
   note,
+  targetElevationInput,
+  handleTargetElevationChange,
+  elevationUnitLabel,
   targetElevationForecast,
   targetElevationFt,
   formatTempDisplay,
@@ -201,6 +204,9 @@ function ElevationProfileSection({
   bands: ElevationForecastBand[];
   maxGustMph: number;
   note?: string | null;
+  targetElevationInput: string;
+  handleTargetElevationChange: PlannerViewProps['handleTargetElevationChange'];
+  elevationUnitLabel: string;
   targetElevationForecast: PlannerViewProps['targetElevationForecast'];
   targetElevationFt: number;
   formatTempDisplay: PlannerViewProps['formatTempDisplay'];
@@ -264,6 +270,26 @@ function ElevationProfileSection({
         <span className="ssr-h-meta">
           {manualTarget ? `Target ${formatElevationDisplay(manualTarget.elevationFt)}` : `${formatElevationDisplay(spanFt)} vertical span`}
         </span>
+      </div>
+
+      <div className="ssr-elev-input-row">
+        <label htmlFor="elevation-profile-target">
+          <span>Objective elevation</span>
+          <small>Adjust this when the mapped elevation does not match your route.</small>
+        </label>
+        <div className="ssr-elev-input-wrap">
+          <input
+            id="elevation-profile-target"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            aria-label={`Objective elevation in ${elevationUnitLabel}`}
+            placeholder={elevationUnitLabel === 'm' ? 'e.g. 2600' : 'e.g. 8500'}
+            value={targetElevationInput}
+            onChange={handleTargetElevationChange}
+          />
+          <span>{elevationUnitLabel}</span>
+        </div>
       </div>
 
       <div className="ssr-elev-summary" aria-label="Elevation profile summary">
@@ -507,6 +533,9 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     travelWindowSummary,
     formatTravelWindowSpan,
     elevationForecastBands,
+    targetElevationInput,
+    handleTargetElevationChange,
+    elevationUnitLabel,
     targetElevationForecast,
     targetElevationFt,
     objectiveElevationFt,
@@ -1452,6 +1481,9 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             bands={bands}
             maxGustMph={maxGustMph}
             note={safetyData.weather.elevationForecastNote}
+            targetElevationInput={targetElevationInput}
+            handleTargetElevationChange={handleTargetElevationChange}
+            elevationUnitLabel={elevationUnitLabel}
             targetElevationForecast={targetElevationForecast}
             targetElevationFt={targetElevationFt}
             formatTempDisplay={formatTempDisplay}
