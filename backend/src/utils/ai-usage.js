@@ -30,12 +30,13 @@ const trimMemory = () => {
   memoryEntries.splice(0, memoryEntries.length, ...recent);
 };
 
-const recordAIUsage = async ({ provider, model, feature, status = 'success', usage, durationMs }) => {
+const recordAIUsage = async ({ userId, provider, model, feature, status = 'success', usage, durationMs }) => {
   const tokens = normalizeTokenUsage(usage);
   const timestamp = new Date().toISOString();
   const normalizedProvider = String(provider || 'unknown').slice(0, 40);
   const normalizedModel = String(model || 'unknown').slice(0, 120);
   const record = {
+    userId: userId || null,
     timestamp,
     provider: normalizedProvider,
     model: normalizedModel,

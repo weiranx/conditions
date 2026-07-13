@@ -22,6 +22,8 @@ Express API for the SummitSafe backcountry planning app.
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Health check (also `/health`, `/api/healthz`, `/api/health`) |
 
+AI features require an account and are limited per user by provider-reported token usage. The monthly allowance defaults to 250,000 tokens and can be changed with `AI_USER_MONTHLY_TOKEN_LIMIT`; the current meter and reset date are included in authenticated account responses.
+
 ## Run Locally
 
 ```bash

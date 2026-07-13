@@ -9,11 +9,23 @@ export interface AccountUser {
   preferences: Partial<UserPreferences>;
 }
 
+export interface AccountAIUsage {
+  usedTokens: number;
+  limitTokens: number;
+  remainingTokens: number;
+  percentUsed: number;
+  periodStart: string;
+  periodEnd: string;
+  resetAt: string;
+  exhausted: boolean;
+}
+
 export type PreferenceSyncState = 'idle' | 'saving' | 'saved' | 'error';
 
 export interface AccountContextValue {
   available: boolean | null;
   user: AccountUser | null;
+  aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
   error: string | null;
@@ -27,6 +39,7 @@ export interface AccountContextValue {
   }) => Promise<AccountUser | null>;
   signIn: (input: { email: string; password: string }) => Promise<AccountUser | null>;
   signOut: () => Promise<AccountUser | null>;
+  refreshAccount: () => Promise<AccountUser | null>;
   savePreferences: (preferences: UserPreferences) => Promise<AccountUser>;
 }
 

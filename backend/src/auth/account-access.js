@@ -27,7 +27,7 @@ const denyUnconfiguredAccountAccess = async (_req, res) => {
   return false;
 };
 
-const createAccountAccessGuard = ({ service } = {}) => async (req, res) => {
+const createAccountAccessGuard = ({ service, usageService } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!service?.available || typeof service.getUserForSession !== 'function') {
     res.status(503).json({
@@ -46,9 +46,33 @@ const createAccountAccessGuard = ({ service } = {}) => async (req, res) => {
       });
       return false;
     }
+    if (!usageService?.available || typeof usageService.assertUserCanGenerate !== 'function') {
+      res.status(503).json({
+        error: 'AI usage is temporarily unavailable. Please try again later.',
+        code: 'AI_USAGE_UNAVAILABLE',
+      });
+      return false;
+    }
+    req.aiUsage = await usageService.assertUserCanGenerate(user.id);
     req.accountUser = user;
     return true;
   } catch (error) {
+    if (error?.code === 'AI_USAGE_LIMIT_REACHED') {
+      res.status(429).json({
+        error: error.message,
+        code: error.code,
+        aiUsage: error.usage,
+      });
+      return false;
+    }
+    if (error?.code === 'AI_USAGE_UNAVAILABLE') {
+      req.log?.error({ err: error }, 'AI usage verification failed');
+      res.status(503).json({
+        error: error.message,
+        code: error.code,
+      });
+      return false;
+    }
     req.log?.error({ err: error }, 'AI account verification failed');
     res.status(503).json({
       error: 'Account verification is temporarily unavailable. Please try again.',

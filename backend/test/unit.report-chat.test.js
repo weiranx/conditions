@@ -13,7 +13,10 @@ const {
   sanitizeMessages,
 } = require('../src/routes/report-chat');
 
-const allowAccountAccess = async () => true;
+const allowAccountAccess = async (req) => {
+  req.accountUser = { id: '8c696be4-e175-4b6a-965b-82bdf3758e0c' };
+  return true;
+};
 const registerReportChatRoute = (options) => registerReportChatRouteWithoutAccount({
   ...options,
   ensureAccountAccess: options.ensureAccountAccess || allowAccountAccess,

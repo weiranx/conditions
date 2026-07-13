@@ -6,6 +6,7 @@ import {
   LoaderCircle,
   LogOut,
   Mail,
+  Sparkles,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
@@ -34,6 +35,15 @@ const formatMemberSince = (value: string) => {
   return Number.isNaN(parsed.getTime())
     ? 'Member'
     : `Member since ${parsed.toLocaleDateString([], { month: 'long', year: 'numeric' })}`;
+};
+
+const formatTokens = (value: number) => Math.max(0, Math.round(value)).toLocaleString();
+
+const formatUsageReset = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? 'next month'
+    : parsed.toLocaleDateString([], { month: 'long', day: 'numeric', timeZone: 'UTC' });
 };
 
 export function AccountView({
@@ -157,6 +167,39 @@ export function AccountView({
                   <strong>Your session is protected.</strong>
                   <span>Planning preferences sync to your account. Saved objectives and recent reports remain on this device.</span>
                 </div>
+              </div>
+              <div className="account-usage-card">
+                <div className="account-usage-heading">
+                  <span><Sparkles aria-hidden /> AI usage</span>
+                  <small>Monthly</small>
+                </div>
+                {account.aiUsage ? (
+                  <>
+                    <p className="account-usage-total">
+                      <strong>{formatTokens(account.aiUsage.usedTokens)}</strong>
+                      <span> / {formatTokens(account.aiUsage.limitTokens)} tokens</span>
+                    </p>
+                    <div
+                      className="account-usage-progress"
+                      role="progressbar"
+                      aria-label="Monthly AI token usage"
+                      aria-valuemin={0}
+                      aria-valuemax={account.aiUsage.limitTokens}
+                      aria-valuenow={Math.min(account.aiUsage.usedTokens, account.aiUsage.limitTokens)}
+                    >
+                      <span style={{ width: `${account.aiUsage.percentUsed}%` }} />
+                    </div>
+                    <div className="account-usage-meta">
+                      <span>{formatTokens(account.aiUsage.remainingTokens)} tokens remaining</span>
+                      <span>Resets {formatUsageReset(account.aiUsage.resetAt)}</span>
+                    </div>
+                    <p className="account-usage-note">
+                      Different AI tools use different amounts. This meter follows provider-reported tokens.
+                    </p>
+                  </>
+                ) : (
+                  <p className="account-usage-unavailable">Usage meter temporarily unavailable.</p>
+                )}
               </div>
               {errorMessage && <p className="account-error" role="alert">{errorMessage}</p>}
               <div className="account-profile-actions">

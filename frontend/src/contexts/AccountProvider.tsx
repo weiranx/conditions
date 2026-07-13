@@ -10,6 +10,7 @@ import type { UserPreferences } from '../app/types';
 import { fetchApi, readApiErrorMessage } from '../lib/api-client';
 import {
   AccountContext,
+  type AccountAIUsage,
   type AccountContextValue,
   type AccountUser,
 } from './account';
@@ -18,16 +19,42 @@ interface AccountResponse {
   available: boolean;
   authenticated: boolean;
   user: AccountUser | null;
+  aiUsage: AccountAIUsage | null;
 }
 
 interface AccountState {
   available: boolean | null;
   user: AccountUser | null;
+  aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
   error: string | null;
   preferenceSyncState: AccountContextValue['preferenceSyncState'];
   preferenceError: string | null;
+}
+
+function parseAIUsage(value: unknown): AccountAIUsage | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const numberFields = ['usedTokens', 'limitTokens', 'remainingTokens', 'percentUsed'] as const;
+  const dateFields = ['periodStart', 'periodEnd', 'resetAt'] as const;
+  if (
+    numberFields.some((field) => typeof record[field] !== 'number' || !Number.isFinite(record[field]))
+    || dateFields.some((field) => typeof record[field] !== 'string')
+    || typeof record.exhausted !== 'boolean'
+  ) {
+    return null;
+  }
+  return {
+    usedTokens: record.usedTokens as number,
+    limitTokens: record.limitTokens as number,
+    remainingTokens: record.remainingTokens as number,
+    percentUsed: record.percentUsed as number,
+    periodStart: record.periodStart as string,
+    periodEnd: record.periodEnd as string,
+    resetAt: record.resetAt as string,
+    exhausted: record.exhausted,
+  };
 }
 
 function parseAccountUser(value: unknown): AccountUser | null {
@@ -59,13 +86,19 @@ function parseAccountResponse(payload: unknown): AccountResponse | null {
   if (typeof record.available !== 'boolean' || typeof record.authenticated !== 'boolean') return null;
   const user = parseAccountUser(record.user);
   if (record.authenticated && !user) return null;
-  return { available: record.available, authenticated: record.authenticated, user };
+  return {
+    available: record.available,
+    authenticated: record.authenticated,
+    user,
+    aiUsage: parseAIUsage(record.aiUsage),
+  };
 }
 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AccountState>({
     available: null,
     user: null,
+    aiUsage: null,
     loading: true,
     busy: false,
     error: null,
@@ -81,6 +114,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       ...current,
       available: account.available,
       user: account.authenticated ? account.user : null,
+      aiUsage: account.authenticated ? account.aiUsage : null,
       loading: false,
       busy: false,
       error: null,
@@ -90,26 +124,29 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return account.user;
   }, []);
 
+  const fetchAccount = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const { response, payload } = await fetchApi('/api/auth/session', { signal });
+      if (!response.ok) {
+        throw new Error(readApiErrorMessage(payload, 'Account status is unavailable.'));
+      }
+      if (signal?.aborted) return null;
+      return applyResponse(payload);
+    } catch (error) {
+      if (signal?.aborted) return null;
+      const message = error instanceof Error ? error.message : 'Account status is unavailable.';
+      setState((current) => ({ ...current, loading: false, error: message }));
+      throw new Error(message);
+    }
+  }, [applyResponse]);
+
+  const refreshAccount = useCallback(() => fetchAccount(), [fetchAccount]);
+
   useEffect(() => {
     const controller = new AbortController();
-    void (async () => {
-      try {
-        const { response, payload } = await fetchApi('/api/auth/session', { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error(readApiErrorMessage(payload, 'Account status is unavailable.'));
-        }
-        if (!controller.signal.aborted) applyResponse(payload);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setState((current) => ({
-          ...current,
-          loading: false,
-          error: error instanceof Error ? error.message : 'Account status is unavailable.',
-        }));
-      }
-    })();
+    void fetchAccount(controller.signal).catch(() => undefined);
     return () => controller.abort();
-  }, [applyResponse]);
+  }, [fetchAccount]);
 
   const runAction = useCallback(async (
     path: '/api/auth/register' | '/api/auth/login' | '/api/auth/logout',
@@ -163,7 +200,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           });
           if (!response.ok) {
             if (response.status === 401) {
-              setState((current) => ({ ...current, user: null }));
+              setState((current) => ({ ...current, user: null, aiUsage: null }));
             }
             throw new Error(readApiErrorMessage(payload, 'Could not save account preferences.'));
           }
@@ -173,6 +210,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             ...current,
             available: account.available,
             user: account.user,
+            aiUsage: account.aiUsage,
             preferenceSyncState: 'saved',
             preferenceError: null,
           }));
@@ -199,8 +237,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     createAccount,
     signIn,
     signOut,
+    refreshAccount,
     savePreferences,
-  }), [createAccount, savePreferences, signIn, signOut, state]);
+  }), [createAccount, refreshAccount, savePreferences, signIn, signOut, state]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

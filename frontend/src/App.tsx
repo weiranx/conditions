@@ -183,9 +183,11 @@ function App() {
   const featureFlags = useProductFeatureFlags();
   const {
     loading: accountLoading,
+    refreshAccount,
     savePreferences: saveAccountPreferences,
     user: accountUser,
   } = useAccount();
+  const accountUserId = accountUser?.id;
   const [aiAccessPromptOpen, setAiAccessPromptOpen] = useState(false);
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
@@ -546,6 +548,14 @@ function App() {
     }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
+
+  useEffect(() => {
+    if (!accountUserId || (view !== 'settings' && view !== 'account')) return;
+    void refreshAccount().catch(() => {
+      // The existing account details remain visible if the usage refresh is offline.
+    });
+  }, [accountUserId, refreshAccount, view]);
+
   const isAdminAccount = accountUser?.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL;
   const showAdminNotFound = view === 'admin' && !accountLoading && !isAdminAccount;
 

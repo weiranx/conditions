@@ -18,6 +18,7 @@ test('parses valid NDJSON records and skips malformed lines', () => {
 test('maps AI usage between application and PostgreSQL fields', () => {
   const params = aiUsageParams({
     timestamp: '2026-07-12T12:00:00.000Z',
+    userId: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
     provider: 'openai',
     model: 'gpt-test',
     feature: 'brief',
@@ -32,7 +33,9 @@ test('maps AI usage between application and PostgreSQL fields', () => {
   }, { idempotencyKey: 'usage-1', legacyId: 'legacy-secret' });
 
   expect(params).toEqual(expect.arrayContaining(['usage-1', 12, 3, 15, 1234, 25]));
+  expect(params[1]).toBe('8c696be4-e175-4b6a-965b-82bdf3758e0c');
   expect(mapAIUsageRow({
+    user_id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
     created_at: '2026-07-12T12:00:00.000Z',
     provider: 'openai',
     model: 'gpt-test',
@@ -45,6 +48,7 @@ test('maps AI usage between application and PostgreSQL fields', () => {
     cost_usd_micros: '1234',
     metadata: { pricingMatched: true, pricingVersion: 'test', legacyId: 'legacy-secret' },
   })).toEqual({
+    userId: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
     timestamp: '2026-07-12T12:00:00.000Z',
     provider: 'openai',
     model: 'gpt-test',

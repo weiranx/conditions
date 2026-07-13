@@ -191,13 +191,14 @@ const readAnthropicText = (message, { maxTokens, model, operation }) => {
 };
 
 const callTextProvider = async (provider, prompt, options, allowExplicitModel) => {
-  const { maxTokens, model, system, tier, feature } = options;
+  const { maxTokens, model, system, tier, feature, userId } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
   const startedAt = Date.now();
   let response;
   const finish = async (status) => {
     try {
       await recordAIUsage({
+        userId,
         provider,
         model: resolvedModel,
         feature,
@@ -240,13 +241,14 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
 };
 
 const callVisionProvider = async (provider, imageBase64, prompt, options, allowExplicitModel) => {
-  const { maxTokens, model, system, mediaType, tier, feature } = options;
+  const { maxTokens, model, system, mediaType, tier, feature, userId } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
   const startedAt = Date.now();
   let response;
   const finish = async (status) => {
     try {
       await recordAIUsage({
+        userId,
         provider,
         model: resolvedModel,
         feature,
@@ -351,15 +353,15 @@ const runWithFailover = async (operation, tier, invoke) => {
   }
 };
 
-const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', feature = 'text-generation' } = {}) => {
-  const options = { maxTokens, model, system, tier, feature };
+const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', feature = 'text-generation', userId } = {}) => {
+  const options = { maxTokens, model, system, tier, feature, userId };
   return runWithFailover('askAI', tier, (provider, allowExplicitModel) => (
     callTextProvider(provider, prompt, options, allowExplicitModel)
   ));
 };
 
-const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary', feature = 'vision-analysis' } = {}) => {
-  const options = { maxTokens, model, system, mediaType, tier, feature };
+const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, system, mediaType = 'image/png', tier = 'primary', feature = 'vision-analysis', userId } = {}) => {
+  const options = { maxTokens, model, system, mediaType, tier, feature, userId };
   return runWithFailover('askAIVision', tier, (provider, allowExplicitModel) => (
     callVisionProvider(provider, imageBase64, prompt, options, allowExplicitModel)
   ));

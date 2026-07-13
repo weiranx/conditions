@@ -10,7 +10,8 @@ const { logger } = require('../utils/logger');
 const REPORT_LIMIT = 500;
 const REPORT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const AI_USAGE_LIMIT = 2000;
-const AI_USAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const AI_USAGE_LIST_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const AI_USAGE_RETENTION_MS = 35 * 24 * 60 * 60 * 1000;
 const ADMIN_AUDIT_LIMIT = 500;
 const ADMIN_AUDIT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -70,6 +71,7 @@ const aiUsageParams = (record, { idempotencyKey = crypto.randomUUID(), legacyId 
   const estimatedCost = Number(record.estimatedCostUsd);
   const metadata = Object.fromEntries(Object.entries(record).filter(([key]) => ![
     'timestamp',
+    'userId',
     'provider',
     'model',
     'feature',
@@ -83,6 +85,7 @@ const aiUsageParams = (record, { idempotencyKey = crypto.randomUUID(), legacyId 
   if (legacyId) metadata.legacyId = legacyId;
   return [
     idempotencyKey,
+    record.userId || null,
     record.requestId || null,
     String(record.feature || 'generation').slice(0, 80),
     String(record.provider || 'unknown').slice(0, 40),
@@ -104,6 +107,7 @@ const mapAIUsageRow = (row) => {
   const costMicros = Number(row.cost_usd_micros || 0);
   return {
     ...metadata,
+    userId: row.user_id || null,
     timestamp: normalizeTimestamp(row.created_at),
     provider: row.provider,
     model: row.model,
@@ -183,10 +187,10 @@ const createAppDataStore = ({
   const insertAIUsageWith = async (query, record, options = {}) => {
     const result = await query(`
       INSERT INTO ai_usage_events (
-        idempotency_key, request_id, feature, provider, model, status,
+        idempotency_key, user_id, request_id, feature, provider, model, status,
         input_tokens, output_tokens, total_tokens, cost_usd_micros,
         duration_ms, metadata, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14)
       ON CONFLICT (idempotency_key) DO NOTHING
     `, aiUsageParams(record, options));
     return result.rowCount > 0;
@@ -199,13 +203,13 @@ const createAppDataStore = ({
   const listAIUsage = async () => {
     if (!isConfigured()) return [];
     const result = await db.query(`
-      SELECT provider, model, feature, status, input_tokens, output_tokens,
+      SELECT user_id, provider, model, feature, status, input_tokens, output_tokens,
              total_tokens, cost_usd_micros, duration_ms, metadata, created_at
       FROM ai_usage_events
       WHERE created_at >= NOW() - ($1 * INTERVAL '1 millisecond')
       ORDER BY created_at DESC, id DESC
       LIMIT $2
-    `, [AI_USAGE_RETENTION_MS, AI_USAGE_LIMIT]);
+    `, [AI_USAGE_LIST_WINDOW_MS, AI_USAGE_LIMIT]);
     return result.rows.map(mapAIUsageRow);
   };
 
@@ -266,11 +270,12 @@ const createAppDataStore = ({
     if (!isConfigured()) return;
     const policies = [
       ['report_activity_events', 'occurred_at', REPORT_RETENTION_MS, REPORT_LIMIT],
-      ['ai_usage_events', 'created_at', AI_USAGE_RETENTION_MS, AI_USAGE_LIMIT],
+      ['ai_usage_events', 'created_at', AI_USAGE_RETENTION_MS, null],
       ['admin_audit_events', 'occurred_at', ADMIN_AUDIT_RETENTION_MS, ADMIN_AUDIT_LIMIT],
     ];
     for (const [table, timestampColumn, retentionMs, limit] of policies) {
       await db.query(`DELETE FROM ${table} WHERE ${timestampColumn} < NOW() - ($1 * INTERVAL '1 millisecond')`, [retentionMs]);
+      if (!limit) continue;
       await db.query(`
         DELETE FROM ${table}
         WHERE id IN (

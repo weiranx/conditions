@@ -17,6 +17,7 @@ const registerAccountRoutes = ({
   database,
   isProduction = process.env.NODE_ENV === 'production',
   service = createAccountService({ database }),
+  usageService,
 } = {}) => {
   const cookieOptions = {
     httpOnly: true,
@@ -42,6 +43,21 @@ const registerAccountRoutes = ({
 
   const clearSessionCookie = (res) => res.clearCookie(ACCOUNT_COOKIE_NAME, cookieOptions);
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
+  const getAIUsage = async (req, user) => {
+    if (!user || !usageService?.available || typeof usageService.getUserUsage !== 'function') return null;
+    try {
+      return await usageService.getUserUsage(user.id);
+    } catch (error) {
+      req.log?.warn({ err: error, userId: user.id }, 'Account AI usage could not be loaded');
+      return null;
+    }
+  };
+  const accountResponse = async (req, user, available = true) => ({
+    available,
+    authenticated: Boolean(user),
+    user,
+    aiUsage: await getAIUsage(req, user),
+  });
 
   const handleError = (req, res, error) => {
     if (error instanceof AccountValidationError) {
@@ -66,13 +82,13 @@ const registerAccountRoutes = ({
   app.get('/api/auth/session', async (req, res) => {
     setNoStore(res);
     if (!service.available) {
-      return res.json({ available: false, authenticated: false, user: null });
+      return res.json({ available: false, authenticated: false, user: null, aiUsage: null });
     }
     try {
       const token = readSessionToken(req);
       const user = await service.getUserForSession(token);
       if (!user && token) clearSessionCookie(res);
-      return res.json({ available: true, authenticated: Boolean(user), user });
+      return res.json(await accountResponse(req, user));
     } catch (error) {
       return handleError(req, res, error);
     }
@@ -83,7 +99,7 @@ const registerAccountRoutes = ({
     try {
       const session = await service.register(req.body);
       setSessionCookie(res, session);
-      return res.status(201).json({ available: true, authenticated: true, user: session.user });
+      return res.status(201).json(await accountResponse(req, session.user));
     } catch (error) {
       return handleError(req, res, error);
     }
@@ -94,7 +110,7 @@ const registerAccountRoutes = ({
     try {
       const session = await service.login(req.body);
       setSessionCookie(res, session);
-      return res.json({ available: true, authenticated: true, user: session.user });
+      return res.json(await accountResponse(req, session.user));
     } catch (error) {
       return handleError(req, res, error);
     }
@@ -104,7 +120,7 @@ const registerAccountRoutes = ({
     setNoStore(res);
     try {
       const user = await service.updatePreferences(readSessionToken(req), req.body?.preferences);
-      return res.json({ available: true, authenticated: true, user });
+      return res.json(await accountResponse(req, user));
     } catch (error) {
       return handleError(req, res, error);
     }
@@ -116,7 +132,7 @@ const registerAccountRoutes = ({
     try {
       if (service.available) await service.logout(token);
       clearSessionCookie(res);
-      return res.json({ available: service.available, authenticated: false, user: null });
+      return res.json({ available: service.available, authenticated: false, user: null, aiUsage: null });
     } catch (error) {
       clearSessionCookie(res);
       return handleError(req, res, error);

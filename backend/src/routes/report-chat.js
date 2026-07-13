@@ -142,6 +142,7 @@ const createContextualFollowUps = async ({
   Output,
   provider,
   modelId,
+  userId,
 }) => {
   const followUpSchema = jsonSchema({
     type: 'object',
@@ -186,6 +187,7 @@ const createContextualFollowUps = async ({
       const result = await generateText(generationRequest);
       if (provider && modelId) {
         await persistAIUsage({
+          userId,
           provider,
           model: modelId,
           feature: 'report-chat-suggestions',
@@ -198,6 +200,7 @@ const createContextualFollowUps = async ({
     } catch (error) {
       if (provider && modelId) {
         await persistAIUsage({
+          userId,
           provider,
           model: modelId,
           feature: 'report-chat-suggestions',
@@ -237,6 +240,7 @@ const createReportChatStream = async ({
   abortSignal,
   onError,
   onFollowUpError,
+  userId,
 }) => {
   const {
     convertToModelMessages,
@@ -261,6 +265,7 @@ const createReportChatStream = async ({
         abortSignal,
         async onFinish({ text, finishReason, totalUsage }) {
           await persistAIUsage({
+            userId,
             provider,
             model: modelId,
             feature: 'report-chat',
@@ -281,6 +286,7 @@ const createReportChatStream = async ({
               Output,
               provider,
               modelId,
+              userId,
             });
             if (suggestions.length > 0) {
               writer.write({
@@ -357,6 +363,7 @@ const registerReportChatRoute = ({
           if (abortController.signal.aborted) return;
           logger.warn({ err: error, requestId: req.requestId }, 'report-chat suggestions unavailable');
         },
+        userId: req.accountUser.id,
       });
       return pipeStream({
         response: res,

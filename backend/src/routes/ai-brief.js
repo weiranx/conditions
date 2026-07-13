@@ -42,6 +42,7 @@ const registerAiBriefRoute = ({
           maxTokens: AI_BRIEF_MAX_TOKENS,
           system: SYSTEM_PROMPT,
           feature: 'report-brief',
+          userId: req.accountUser.id,
         });
       });
 

@@ -96,7 +96,12 @@ const registerSnowVisionRoute = ({
         const analysis = await askAIVision(
           base64,
           promptText,
-          { maxTokens: SNOW_VISION_MAX_TOKENS, system: SYSTEM_PROMPT, feature: 'snow-vision' },
+          {
+            maxTokens: SNOW_VISION_MAX_TOKENS,
+            system: SYSTEM_PROMPT,
+            feature: 'snow-vision',
+            userId: req.accountUser.id,
+          },
         );
         // Return the same tile shown to the AI so the UI can display exactly what was
         // analyzed, alongside a note pointing users at the app's live satellite basemap.

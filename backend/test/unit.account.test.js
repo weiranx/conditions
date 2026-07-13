@@ -41,6 +41,17 @@ const USER_ROW = {
   preferences: PREFERENCES,
 };
 
+const AI_USAGE = {
+  usedTokens: 12500,
+  limitTokens: 250000,
+  remainingTokens: 237500,
+  percentUsed: 5,
+  periodStart: '2026-07-01T00:00:00.000Z',
+  periodEnd: '2026-08-01T00:00:00.000Z',
+  resetAt: '2026-08-01T00:00:00.000Z',
+  exhausted: false,
+};
+
 describe('password accounts', () => {
   test('normalizes account input and enforces password length', () => {
     expect(normalizeEmail('  CLIMBER@Example.COM ')).toBe('climber@example.com');
@@ -154,10 +165,14 @@ describe('password accounts', () => {
 });
 
 describe('account routes', () => {
+  const usageService = {
+    available: true,
+    getUserUsage: jest.fn().mockResolvedValue(AI_USAGE),
+  };
   const makeApp = (service) => {
     const app = express();
     app.use(express.json());
-    registerAccountRoutes({ app, service, isProduction: false });
+    registerAccountRoutes({ app, service, usageService, isProduction: false });
     return app;
   };
 
@@ -196,7 +211,12 @@ describe('account routes', () => {
     expect(service.register).toHaveBeenCalledWith(expect.objectContaining({ preferences: PREFERENCES }));
 
     const sessionResponse = await agent.get('/api/auth/session');
-    expect(sessionResponse.body).toEqual({ available: true, authenticated: true, user });
+    expect(sessionResponse.body).toEqual({
+      available: true,
+      authenticated: true,
+      user,
+      aiUsage: AI_USAGE,
+    });
     expect(service.getUserForSession).toHaveBeenCalledWith('test-session-token');
 
     const preferencesResponse = await agent.patch('/api/account/preferences').send({ preferences: PREFERENCES });
@@ -214,7 +234,7 @@ describe('account routes', () => {
     const response = await request(makeApp({ available: false })).get('/api/auth/session');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ available: false, authenticated: false, user: null });
+    expect(response.body).toEqual({ available: false, authenticated: false, user: null, aiUsage: null });
   });
 
   test('returns field-safe registration conflicts', async () => {
@@ -245,9 +265,13 @@ describe('account routes', () => {
 });
 
 describe('AI account access', () => {
-  const makeApp = (service) => {
+  const allowUsageService = {
+    available: true,
+    assertUserCanGenerate: jest.fn().mockResolvedValue(AI_USAGE),
+  };
+  const makeApp = (service, usageService = allowUsageService) => {
     const app = express();
-    const ensureAccountAccess = createAccountAccessGuard({ service });
+    const ensureAccountAccess = createAccountAccessGuard({ service, usageService });
     app.get('/api/protected-ai', async (req, res) => {
       if (!(await ensureAccountAccess(req, res))) return;
       return res.json({ user: req.accountUser });
@@ -286,5 +310,27 @@ describe('AI account access', () => {
 
     expect(response.status).toBe(503);
     expect(response.body.code).toBe('ACCOUNT_SERVICE_UNAVAILABLE');
+  });
+
+  test('blocks AI work when the account has exhausted its monthly allowance', async () => {
+    const usage = { ...AI_USAGE, usedTokens: 250000, remainingTokens: 0, percentUsed: 100, exhausted: true };
+    const limitError = Object.assign(new Error('Monthly AI usage limit reached.'), {
+      code: 'AI_USAGE_LIMIT_REACHED',
+      statusCode: 429,
+      usage,
+    });
+    const response = await request(makeApp(
+      { available: true, getUserForSession: jest.fn().mockResolvedValue({ id: USER_ROW.id }) },
+      { available: true, assertUserCanGenerate: jest.fn().mockRejectedValue(limitError) },
+    ))
+      .get('/api/protected-ai')
+      .set('Cookie', 'bc_session=valid-session-token');
+
+    expect(response.status).toBe(429);
+    expect(response.body).toEqual({
+      error: 'Monthly AI usage limit reached.',
+      code: 'AI_USAGE_LIMIT_REACHED',
+      aiUsage: usage,
+    });
   });
 });

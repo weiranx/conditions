@@ -51,6 +51,7 @@ const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
 const { registerAccountRoutes } = require('./src/routes/account');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
+const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -794,8 +795,17 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
 });
 registerFeatureFlagRoutes(app);
-const accountService = registerAccountRoutes({ app, database, isProduction: IS_PRODUCTION });
-const ensureAccountAccess = createAccountAccessGuard({ service: accountService });
+const aiUsageLimitService = createAIUsageLimitService({ database });
+const accountService = registerAccountRoutes({
+  app,
+  database,
+  isProduction: IS_PRODUCTION,
+  usageService: aiUsageLimitService,
+});
+const ensureAccountAccess = createAccountAccessGuard({
+  service: accountService,
+  usageService: aiUsageLimitService,
+});
 const observableCaches = [
   noaaPointsCache,
   elevationCache,

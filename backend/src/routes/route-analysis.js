@@ -284,7 +284,7 @@ const registerRouteAnalysisRoutes = ({
           `List all well-known hiking, climbing, and scrambling routes for ${safePeak} near coordinates (${safeLat}, ${safeLon}) in the United States. Include 3 routes covering a range of difficulty levels.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Route Name","distance_rt_miles":22,"elev_gain_ft":6100,"class":"Class 1","description":"One sentence description."}]`,
-          { maxTokens: 2048, tier: 'fast', feature: 'route-suggestions' }
+          { maxTokens: 2048, tier: 'fast', feature: 'route-suggestions', userId: req.accountUser.id }
         );
         return parseJsonArrayFromAI(text);
       });
@@ -358,7 +358,7 @@ Use the specific proper name of each trailhead, junction, camp, lake, pass, ridg
 List them in order from trailhead to summit.
 Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
 [{"name":"Specific Place Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-              { maxTokens: 1024, tier: 'fast', feature: 'route-waypoints' }
+              { maxTokens: 1024, tier: 'fast', feature: 'route-waypoints', userId: req.accountUser.id }
             ), 20000, 'Waypoint lookup');
             try {
               return sanitizeGeneratedWaypoints(parseJsonArrayFromAI(waypointText));
@@ -519,7 +519,7 @@ BOTTOM LINE: 2-3 sentences stating go, go-with-caution, or no-go, identifying th
 Aim for a substantive 300-550 word briefing when the route evidence supports it. Do not pad sparse data, repeat the same point in multiple sections, or give generic backcountry advice that is unrelated to the reports.
 
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
-        { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis' }
+        { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis', userId: req.accountUser.id }
       ), 60000, 'Route synthesis') : buildDeterministicRouteBriefing(summaries, failedWaypointNames);
 
       return res.json({
