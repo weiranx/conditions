@@ -48,7 +48,6 @@ export function RouteAnalysisSection({
   const [gpxRoute, setGpxRoute] = useState<ParsedGpxRoute | null>(initialGpxRoute);
   const [gpxParsing, setGpxParsing] = useState(false);
   const [showAllWaypoints, setShowAllWaypoints] = useState(false);
-  const autoAnalyzedRouteRef = useRef<string | null>(null);
 
   useEffect(() => {
     setGpxRoute(initialGpxRoute);
@@ -109,14 +108,6 @@ export function RouteAnalysisSection({
     alpineStartTime,
     travelWindowHours,
   ]);
-
-  useEffect(() => {
-    if (!initialGpxRoute || !gpxRoute || routeAnalysis || routeLoading) return;
-    const routeKey = `${gpxRoute.fileName}|${forecastDate}|${alpineStartTime}|${travelWindowHours}`;
-    if (autoAnalyzedRouteRef.current === routeKey) return;
-    autoAnalyzedRouteRef.current = routeKey;
-    analyzeGpxRoute();
-  }, [initialGpxRoute, gpxRoute, routeAnalysis, routeLoading, forecastDate, alpineStartTime, travelWindowHours, analyzeGpxRoute]);
 
   const gpxInput = (
     <input
@@ -183,7 +174,7 @@ export function RouteAnalysisSection({
             <span>{gpxRoute.pointCount.toLocaleString()} track points</span>
             <span>{gpxRoute.checkpoints.length} safety checkpoints</span>
           </div>
-          <p>Checkpoints follow the uploaded track and are forecast at estimated arrival times across your {travelWindowHours}h plan. GPX coordinates bypass waypoint estimation.</p>
+          <p>Checkpoints follow the uploaded track and are forecast at estimated arrival times across your {travelWindowHours}h plan. GPX coordinates bypass waypoint estimation. Route analysis starts only when you click below.</p>
           <div className="route-gpx-card-actions">
             <button type="button" className="route-gpx-analyze" onClick={analyzeGpxRoute}>Analyze This Track</button>
             <button
