@@ -1,6 +1,8 @@
 'use strict';
 
-const DIAGNOSTIC_TIMEOUT_MS = 6000;
+const DIAGNOSTIC_TIMEOUT_MS = 9000;
+const DIAGNOSTIC_MAX_ATTEMPTS = 2;
+const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const USER_AGENT = 'BackcountryConditions/1.0 (+https://backcountryconditions.app; support@backcountryconditions.app)';
 
 const oneDayAgo = () => {
@@ -222,6 +224,8 @@ const releaseResponseBody = async (response) => {
   }
 };
 
+const isRetryableResponse = (response) => RETRYABLE_HTTP_STATUSES.has(response?.status);
+
 const runCheck = async (check, fetchWithTimeout) => {
   if (check.optional && !check.configured) {
     return {
@@ -236,39 +240,48 @@ const runCheck = async (check, fetchWithTimeout) => {
   }
 
   const startedAt = Date.now();
-  try {
-    const headers = {
-      'User-Agent': USER_AGENT,
-      ...(check.options?.headers || {}),
-    };
-    const response = await fetchWithTimeout(
-      check.url,
-      { ...(check.options || {}), headers },
-      DIAGNOSTIC_TIMEOUT_MS,
-    );
-    const latencyMs = Date.now() - startedAt;
-    await releaseResponseBody(response);
-    return {
-      id: check.id,
-      name: check.name,
-      category: check.category,
-      status: response.ok ? 'operational' : 'failed',
-      httpStatus: Number.isInteger(response.status) ? response.status : null,
-      latencyMs,
-      message: response.ok ? 'Reachable' : `Upstream returned HTTP ${response.status || 'error'}`,
-    };
-  } catch (error) {
-    const timedOut = error?.name === 'AbortError';
-    return {
-      id: check.id,
-      name: check.name,
-      category: check.category,
-      status: 'failed',
-      httpStatus: null,
-      latencyMs: Date.now() - startedAt,
-      message: timedOut ? 'Timed out' : 'Request failed',
-    };
+  const headers = {
+    'User-Agent': USER_AGENT,
+    ...(check.options?.headers || {}),
+  };
+
+  for (let attempt = 1; attempt <= DIAGNOSTIC_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        check.url,
+        { ...(check.options || {}), headers },
+        DIAGNOSTIC_TIMEOUT_MS,
+      );
+      const latencyMs = Date.now() - startedAt;
+      await releaseResponseBody(response);
+      if (!response.ok && isRetryableResponse(response) && attempt < DIAGNOSTIC_MAX_ATTEMPTS) {
+        continue;
+      }
+      return {
+        id: check.id,
+        name: check.name,
+        category: check.category,
+        status: response.ok ? 'operational' : 'failed',
+        httpStatus: Number.isInteger(response.status) ? response.status : null,
+        latencyMs,
+        message: response.ok ? 'Reachable' : `Upstream returned HTTP ${response.status || 'error'}`,
+      };
+    } catch (error) {
+      if (attempt < DIAGNOSTIC_MAX_ATTEMPTS) continue;
+      const timedOut = error?.name === 'AbortError';
+      return {
+        id: check.id,
+        name: check.name,
+        category: check.category,
+        status: 'failed',
+        httpStatus: null,
+        latencyMs: Date.now() - startedAt,
+        message: timedOut ? 'Timed out' : 'Request failed',
+      };
+    }
   }
+
+  throw new Error('External diagnostic exhausted attempts without a result');
 };
 
 const runExternalDiagnostics = async ({ fetchWithTimeout, env = process.env } = {}) => {
