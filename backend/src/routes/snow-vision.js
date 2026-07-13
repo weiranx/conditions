@@ -14,20 +14,25 @@ const SYSTEM_PROMPT = [
   'centered on the requested coordinates and covering about 5x5 km).',
   'You may also be given raw ground-station snowpack data (SNOTEL/CDEC/NOHRSC snow depth and SWE readings,',
   'and a comparison to the historical average for this date) as JSON.',
-  'Turn the evidence into a quick, friendly briefing for a backcountry traveler. In 4-6 sentences, describe snow coverage: rough percent coverage,',
-  'how patchy/continuous it is, and any obvious bare or rocky terrain — then cross-reference that with',
-  'the ground-station data if provided, noting whether the visual coverage and the measured depth/SWE agree,',
-  'and what the historical comparison implies about how the snowpack got here. If ground-station data is absent',
-  'or from a station far from the imaged area, say so and rely on the image alone.',
-  'Be direct and concrete. This resolution cannot resolve small features like cornices, crevasses, or thin ice —',
-  'do not speculate about them. Return exactly these three labeled sections, each on its own line, with no other introduction or closing:',
-  'SNOW COVERAGE: 1-2 sentences describing what is visibly snow-covered, patchy, bare, or rocky.',
-  'GROUND CHECK: 1-2 sentences cross-referencing station measurements and imagery freshness, including uncertainty or missing data.',
-  'TRAVEL TAKEAWAY: 1 concise sentence explaining the practical planning implication without inventing small-scale hazards.',
+  'Turn the evidence into a decision-useful briefing for a backcountry traveler, not a short visual caption.',
+  'Describe the broad snow distribution, where continuity changes, how the image and station evidence agree or conflict,',
+  'and what those patterns imply for route planning. Reference measured depth, SWE, percent of normal, station distance,',
+  'and acquisition time when they are provided. If ground-station data is absent or poorly representative of the imaged terrain,',
+  'say so clearly and explain the resulting uncertainty. Be direct and concrete.',
+  'This resolution cannot resolve small features like cornices, crevasses, thin ice, snow bridges, or surface firmness —',
+  'do not speculate about them or infer travel technique from color alone.',
+  'Return exactly these five labeled sections, each on its own line, with no other introduction or closing:',
+  'SNOW COVERAGE: 2-3 sentences estimating a defensible coverage range and describing where snow looks continuous, patchy, or absent.',
+  'TERRAIN PATTERN: 2-3 sentences describing only broad, visible differences by elevation band, aspect, basin, ridge, forest, or exposed rock; say when the image does not support a directional claim.',
+  'GROUND CHECK: 2-3 sentences cross-referencing station measurements with the visible pattern and explaining agreement, conflict, or representativeness.',
+  'UNCERTAINTY: 1-2 sentences explaining imagery age, cloud/shadow ambiguity, resolution limits, station distance, or missing evidence and what needs field verification.',
+  'TRAVEL TAKEAWAY: 2-3 sentences translating the evidence into specific planning implications, likely transitions to expect, and a concrete verification step without inventing small-scale hazards.',
+  'Aim for 9-13 substantive sentences when the evidence supports them; do not pad sparse evidence or repeat the same point.',
   'Plain text only: no markdown, bullets, numbered lists, "#" characters, or bold/italic asterisks.',
 ].join(' ');
 
-const SNOW_VISION_PROMPT_VERSION = '2';
+const SNOW_VISION_PROMPT_VERSION = '3';
+const SNOW_VISION_MAX_TOKENS = 8192;
 
 const lonLatToTile = (lon, lat, zoom) => {
   const latRad = (lat * Math.PI) / 180;
@@ -88,7 +93,7 @@ const registerSnowVisionRoute = ({
         const analysis = await askAIVision(
           base64,
           promptText,
-          { maxTokens: 4096, system: SYSTEM_PROMPT, feature: 'snow-vision' },
+          { maxTokens: SNOW_VISION_MAX_TOKENS, system: SYSTEM_PROMPT, feature: 'snow-vision' },
         );
         // Return the same tile shown to the AI so the UI can display exactly what was
         // analyzed, alongside a note pointing users at the app's live satellite basemap.
@@ -105,5 +110,7 @@ const registerSnowVisionRoute = ({
 };
 
 module.exports = {
+  SNOW_VISION_MAX_TOKENS,
+  SYSTEM_PROMPT,
   registerSnowVisionRoute,
 };

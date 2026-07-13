@@ -1,7 +1,11 @@
 const express = require('express');
 const request = require('supertest');
 
-const { registerRouteAnalysisRoutes, withTimeout } = require('../src/routes/route-analysis');
+const {
+  ROUTE_ANALYSIS_MAX_TOKENS,
+  registerRouteAnalysisRoutes,
+  withTimeout,
+} = require('../src/routes/route-analysis');
 
 test('withTimeout clears its timer when work finishes before the deadline', async () => {
   jest.useFakeTimers();
@@ -62,13 +66,13 @@ test('disabled route analysis blocks suggestions before an AI request', async ()
 test('GPX route analysis uses supplied coordinates without generating or geocoding waypoints', async () => {
   const app = express();
   app.use(express.json());
-  const aiPrompts = [];
+  const aiCalls = [];
   const safetyQueries = [];
 
   registerRouteAnalysisRoutes({
     app,
-    askAI: async (prompt) => {
-      aiPrompts.push(prompt);
+    askAI: async (prompt, options) => {
+      aiCalls.push({ prompt, options });
       return 'GPX route briefing';
     },
     invokeSafetyHandler: async (query) => {
@@ -127,6 +131,12 @@ test('GPX route analysis uses supplied coordinates without generating or geocodi
     { lat: '46.8', lon: '-121.7' },
     { lat: '46.85', lon: '-121.76' },
   ]);
-  expect(aiPrompts).toHaveLength(1);
-  expect(aiPrompts[0]).toMatch(/user-supplied GPX track with authoritative checkpoint coordinates/i);
+  expect(aiCalls).toHaveLength(1);
+  expect(aiCalls[0].prompt).toMatch(/user-supplied GPX track with authoritative checkpoint coordinates/i);
+  expect(aiCalls[0].prompt).toMatch(/DECISION POINTS:/);
+  expect(aiCalls[0].prompt).toMatch(/300-550 word briefing/i);
+  expect(aiCalls[0].options).toMatchObject({
+    feature: 'route-analysis',
+    maxTokens: ROUTE_ANALYSIS_MAX_TOKENS,
+  });
 });

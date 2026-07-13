@@ -4,6 +4,7 @@ const {
   MAX_MESSAGE_LENGTH,
   MAX_MESSAGES,
   MAX_REPORT_LENGTH,
+  REPORT_CHAT_MAX_OUTPUT_TOKENS,
   REPORT_CHAT_SYSTEM_PROMPT,
   createContextualFollowUps,
   normalizeReport,
@@ -14,9 +15,13 @@ const {
 
 describe('report chat request handling', () => {
   test('allows useful outside-report route guidance without weakening live-condition guardrails', () => {
+    expect(REPORT_CHAT_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(4096);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/supplement the report with well-established general backcountry knowledge/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Do not refuse or stop merely because the report lacks a route line/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Lead with the answer, not a disclaimer/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/specific report evidence and values/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/concrete timing, terrain, verification, gear, or turnaround actions/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Keep a simple factual answer short/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Never invent current conditions/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/never fabricate a name/i);
   });

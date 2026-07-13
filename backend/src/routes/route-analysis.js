@@ -23,6 +23,7 @@ const withTimeout = (promise, ms, label) => {
 const MAX_WAYPOINT_REPORTS_LENGTH = 30000;
 const MAX_SUPPLIED_WAYPOINTS = 8;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
+const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
 
 const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 100 });
 const waypointCache = createCache({ name: 'waypoints', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 200 });
@@ -388,17 +389,20 @@ ${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNam
 Raw safety report per waypoint, trailhead to summit (JSON):
 ${reportsJson}
 
-Turn the route data into a concise, friendly field briefing rather than a long essay. Reference specific waypoint names and actual values. Do not assume pace or method of travel. Only discuss hazards present in the reports, and clearly note unavailable waypoint data.
+Turn the route data into a decision-ready field briefing rather than a compressed recap or raw-data inventory. Reference specific waypoint names, elevations, distances or progress, times, and actual values. Explain how and why conditions change along the route, how hazards may combine, and what the traveler should do with that information. Distinguish observed, forecast, modeled, and missing evidence when the reports provide that context. Do not assume pace or method of travel. Only discuss hazards present in the reports, and clearly note unavailable waypoint data. Never invent a terrain feature, route detail, timing threshold, or condition that is not supported by the supplied route metadata, terrain profile, or waypoint reports.
 
-Return exactly these five labeled sections, each on its own line, with no other introduction or closing:
-HAZARD ZONES: 1-2 sentences explaining where conditions change significantly by waypoint or elevation.
-WEATHER WINDOW: 1-2 sentences explaining when storms, winds, or other weather conditions deteriorate.
-OTHER CONCERNS: 1-2 sentences covering only relevant secondary hazards such as avalanche conditions, terrain surface, freezing level, heat, fire, air quality, or thunderstorms.
-GEAR CHECK: 2-4 short condition-specific items separated by semicolons, with no bullets.
-BOTTOM LINE: 1 concise sentence stating go, go-with-caution, or no-go and why.
+Return exactly these six labeled sections, each on its own line, with no other introduction or closing:
+HAZARD ZONES: 3-5 sentences identifying where conditions materially change by named waypoint, elevation, distance, or progress and explaining the practical consequence of each change.
+WEATHER WINDOW: 2-4 sentences explaining how conditions evolve across the selected travel window, the best-supported timing advantage, and the time-based signs that should trigger reassessment.
+OTHER CONCERNS: 2-4 sentences covering only relevant secondary hazards such as avalanche conditions, terrain surface, freezing level, heat, fire, air quality, thunderstorms, or missing data, including interactions with the main hazard.
+DECISION POINTS: 2-4 sentences naming specific checkpoints or condition thresholds where the traveler should pause, verify conditions, turn around, or choose lower-exposure terrain. If exact thresholds are unavailable, state what observable change matters instead of inventing a number.
+GEAR CHECK: 4-7 short condition-specific items separated by semicolons, with no bullets; tie each item to a reported condition or a clearly identified verification need.
+BOTTOM LINE: 2-3 sentences stating go, go-with-caution, or no-go, identifying the decisive evidence, and explaining what new observation or forecast change would alter that conclusion. Never soften a NO-GO reported at any relevant waypoint.
+
+Aim for a substantive 300-550 word briefing when the route evidence supports it. Do not pad sparse data, repeat the same point in multiple sections, or give generic backcountry advice that is unrelated to the reports.
 
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
-        { maxTokens: 4096, feature: 'route-analysis' }
+        { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis' }
       ), 60000, 'Route synthesis');
 
       return res.json({
@@ -418,4 +422,4 @@ Use plain, calm language that feels like advice from an experienced trip partner
   });
 };
 
-module.exports = { registerRouteAnalysisRoutes, withTimeout };
+module.exports = { ROUTE_ANALYSIS_MAX_TOKENS, registerRouteAnalysisRoutes, withTimeout };

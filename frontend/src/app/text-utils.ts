@@ -149,14 +149,18 @@ interface AiBriefSectionDefinition {
 
 const SUMMARY_SECTION_DEFINITIONS: AiBriefSectionDefinition[] = [
   { prefix: 'big picture', kind: 'overview', label: 'Big picture' },
+  { prefix: 'why it matters', kind: 'evidence', label: 'Why it matters' },
   { prefix: 'watch closely', kind: 'watch', label: 'Watch closely' },
+  { prefix: 'data confidence', kind: 'evidence', label: 'Data confidence' },
   { prefix: 'comfort check', kind: 'comfort', label: 'Comfort check' },
   { prefix: 'best move', kind: 'action', label: 'Best move' },
 ];
 
 const SNOW_SECTION_DEFINITIONS: AiBriefSectionDefinition[] = [
   { prefix: 'snow coverage', kind: 'overview', label: 'Snow coverage' },
+  { prefix: 'terrain pattern', kind: 'watch', label: 'Terrain pattern' },
   { prefix: 'ground check', kind: 'evidence', label: 'Ground check' },
+  { prefix: 'uncertainty', kind: 'evidence', label: 'Uncertainty' },
   { prefix: 'travel takeaway', kind: 'action', label: 'Travel takeaway' },
 ];
 
@@ -164,6 +168,7 @@ const ROUTE_SECTION_DEFINITIONS: AiBriefSectionDefinition[] = [
   { prefix: 'hazard zones', kind: 'overview', label: 'Hazard zones' },
   { prefix: 'weather window', kind: 'watch', label: 'Weather window' },
   { prefix: 'other concerns', kind: 'evidence', label: 'Other concerns' },
+  { prefix: 'decision points', kind: 'action', label: 'Decision points' },
   { prefix: 'gear check', kind: 'gear', label: 'Gear check' },
   { prefix: 'bottom line', kind: 'action', label: 'Bottom line' },
 ];
@@ -224,7 +229,7 @@ export function formatAiBriefSections(input: string | null | undefined): AiBrief
   return formatAiSections(input, SUMMARY_SECTION_DEFINITIONS, [
     SUMMARY_SECTION_DEFINITIONS[0],
     { prefix: '', kind: 'note', label: 'Field note' },
-    SUMMARY_SECTION_DEFINITIONS[3],
+    SUMMARY_SECTION_DEFINITIONS[SUMMARY_SECTION_DEFINITIONS.length - 1],
   ]);
 }
 
