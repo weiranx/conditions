@@ -22,7 +22,8 @@ Express API for the SummitSafe backcountry planning app.
 | GET | `/api/account/reports` | List report history for the signed-in account |
 | GET | `/api/account/reports/:reportId` | Retrieve one account-owned report snapshot |
 | POST | `/api/account/reports` | Save a newly generated report snapshot |
-| PUT | `/api/account/reports/:reportId` | Update a report snapshot with later AI sections |
+| PUT | `/api/account/reports/:reportId` | Add later AI and route sections without changing the saved plan |
+| GET | `/api/reports/shared/:shareToken` | Retrieve a read-only saved snapshot by its random public token |
 | POST | `/api/auth/logout` | End the current session |
 | GET | `/api/report-logs` | Retrieve logged reports (administrator account only) |
 | POST | `/api/report-logs` | Log a report entry |

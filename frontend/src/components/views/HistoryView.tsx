@@ -1,17 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
+  Check,
   Clock3,
   FileClock,
   LoaderCircle,
   MapPinned,
+  Share2,
   Sparkles,
 } from 'lucide-react';
+import { copyTextToClipboard } from '../../app/clipboard';
 import { parsePersistedReport, type PersistedReport } from '../../app/report-storage';
 import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
-import { getSavedReport, listSavedReports, type SavedReportSummary } from '../../lib/saved-reports';
+import {
+  buildSavedReportShareUrl,
+  getSavedReport,
+  listSavedReports,
+  type SavedReportSummary,
+} from '../../lib/saved-reports';
 import { ProductNav } from './ProductNav';
 import '../../styles/history.css';
 
@@ -21,7 +29,7 @@ interface HistoryViewProps {
   navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
-  onOpenReport: (report: PersistedReport) => void;
+  onOpenReport: (report: PersistedReport, shareToken: string) => void;
 }
 
 const formatSavedAt = (value: string) => {
@@ -52,7 +60,13 @@ export function HistoryView({
   const [reports, setReports] = useState<SavedReportSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!accountUserId) {
@@ -78,19 +92,34 @@ export function HistoryView({
     return () => controller.abort();
   }, [accountUserId]);
 
-  const openReport = async (reportId: string) => {
+  const openReport = async (report: SavedReportSummary) => {
     if (openingId) return;
-    setOpeningId(reportId);
+    setOpeningId(report.id);
     setError(null);
     try {
-      const snapshot = parsePersistedReport(await getSavedReport(reportId));
+      const snapshot = parsePersistedReport(await getSavedReport(report.id));
       if (!snapshot) throw new Error('This saved report is incomplete or no longer compatible.');
-      onOpenReport(snapshot);
+      onOpenReport(snapshot, report.shareToken);
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : 'Could not retrieve this saved report.');
     } finally {
       setOpeningId(null);
     }
+  };
+
+  const shareReport = async (report: SavedReportSummary) => {
+    setError(null);
+    const copied = await copyTextToClipboard(buildSavedReportShareUrl(report.shareToken));
+    if (!copied) {
+      setError('Could not copy this report link. Please try again.');
+      return;
+    }
+    setCopiedId(report.id);
+    if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(() => {
+      setCopiedId(null);
+      copiedTimerRef.current = null;
+    }, 1600);
   };
 
   return (
@@ -131,29 +160,42 @@ export function HistoryView({
         ) : (
           <section className="history-list" aria-label="Saved reports">
             {reports.map((report) => (
-              <button
+              <article
                 key={report.id}
-                type="button"
                 className="history-card"
-                onClick={() => void openReport(report.id)}
-                disabled={Boolean(openingId)}
               >
-                <span className="history-card-main">
-                  <span className="history-card-kicker">Saved {formatSavedAt(report.createdAt)}</span>
-                  <strong>{report.objectiveName || report.title}</strong>
-                  <span className="history-card-meta">
-                    <span><CalendarDays aria-hidden /> {formatPlanDate(report.forecastDate)}</span>
-                    {report.alpineStartTime && <span><Clock3 aria-hidden /> Start {report.alpineStartTime}</span>}
+                <button
+                  type="button"
+                  className="history-card-open"
+                  onClick={() => void openReport(report)}
+                  disabled={Boolean(openingId)}
+                >
+                  <span className="history-card-main">
+                    <span className="history-card-kicker">Saved {formatSavedAt(report.createdAt)}</span>
+                    <strong>{report.objectiveName || report.title}</strong>
+                    <span className="history-card-meta">
+                      <span><CalendarDays aria-hidden /> {formatPlanDate(report.forecastDate)}</span>
+                      {report.alpineStartTime && <span><Clock3 aria-hidden /> Start {report.alpineStartTime}</span>}
+                    </span>
                   </span>
-                </span>
-                <span className="history-card-side">
-                  {report.hasAi && <span className="history-ai-tag"><Sparkles aria-hidden /> AI saved</span>}
-                  {report.score !== null && <span className="history-score"><small>Score</small>{Math.round(report.score)}</span>}
-                  {openingId === report.id
-                    ? <LoaderCircle className="history-spinner" aria-hidden />
-                    : <ArrowRight className="history-arrow" aria-hidden />}
-                </span>
-              </button>
+                  <span className="history-card-side">
+                    {report.hasAi && <span className="history-ai-tag"><Sparkles aria-hidden /> AI saved</span>}
+                    {report.score !== null && <span className="history-score"><small>Score</small>{Math.round(report.score)}</span>}
+                    {openingId === report.id
+                      ? <LoaderCircle className="history-spinner" aria-hidden />
+                      : <ArrowRight className="history-arrow" aria-hidden />}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="history-share"
+                  onClick={() => void shareReport(report)}
+                  aria-label={`Copy share link for ${report.objectiveName || report.title}`}
+                >
+                  {copiedId === report.id ? <Check aria-hidden /> : <Share2 aria-hidden />}
+                  <span>{copiedId === report.id ? 'Copied' : 'Share'}</span>
+                </button>
+              </article>
             ))}
           </section>
         )}

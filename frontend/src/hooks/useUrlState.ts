@@ -132,12 +132,13 @@ export function useSyncUrlEffect(params: {
   targetElevationInput: string;
   travelWindowHours?: number;
   activity: UserPreferences['defaultActivity'];
+  sharedReportToken?: string | null;
   isApplyingPopStateRef: React.MutableRefObject<boolean>;
   hasInitializedHistoryRef: React.MutableRefObject<boolean>;
 }) {
   const {
     view, hasObjective, position, objectiveName, committedSearchQuery,
-    forecastDate, alpineStartTime, targetElevationInput, travelWindowHours, activity,
+    forecastDate, alpineStartTime, targetElevationInput, travelWindowHours, activity, sharedReportToken,
     isApplyingPopStateRef, hasInitializedHistoryRef,
   } = params;
 
@@ -154,7 +155,8 @@ export function useSyncUrlEffect(params: {
       return;
     }
 
-    const hasSharableState = view === 'planner' || view === 'trip';
+    const hasSharedReport = view === 'planner' && Boolean(sharedReportToken);
+    const hasSharableState = !hasSharedReport && (view === 'planner' || view === 'trip');
     const query = hasSharableState
       ? buildShareQuery({
           view,
@@ -171,7 +173,9 @@ export function useSyncUrlEffect(params: {
       : '';
 
     const viewPath = view === 'home' ? '' : view;
-    const nextUrl = `/${viewPath}${query ? `?${query}` : ''}`;
+    const nextUrl = hasSharedReport
+      ? `/shared/${encodeURIComponent(sharedReportToken || '')}`
+      : `/${viewPath}${query ? `?${query}` : ''}`;
     const currentUrl = `${window.location.pathname}${window.location.search}`;
     if (nextUrl !== currentUrl) {
       if (isApplyingPopStateRef.current || !hasInitializedHistoryRef.current) {
@@ -194,6 +198,7 @@ export function useSyncUrlEffect(params: {
     targetElevationInput,
     travelWindowHours,
     activity,
+    sharedReportToken,
     isApplyingPopStateRef,
     hasInitializedHistoryRef,
   ]);

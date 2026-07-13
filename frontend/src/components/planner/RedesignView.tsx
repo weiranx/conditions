@@ -993,6 +993,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         {/* VERDICT */}
         <div id="planner-section-decision" className="ssr-jump-anchor">
         <DashboardSummaryCard
+          readOnly={props.restoredFromHistory}
           aiAvailability={aiAvailability}
           safetyData={safetyData}
           previousSafetyData={props.previousSafetyData}
@@ -1789,7 +1790,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               {safetyData.snowpack.viirs?.observedTime && (
                 <p className="ssr-muted">Latest NASA VIIRS 375 m snow-cover granule: {formatPubTime(safetyData.snowpack.viirs.observedTime)}. Used as freshness/corroboration metadata; pixel-level NDSI is not treated as a depth measurement.</p>
               )}
-              {featureFlags.satelliteImagery && aiAvailability.snowVision && (
+              {(snowVisionAnalysis || (!props.restoredFromHistory && featureFlags.satelliteImagery && aiAvailability.snowVision)) && (
                 <div style={{ marginTop: '14px' }}>
                   {snowVisionAnalysis ? (
                     <AiInsightBriefing
@@ -1816,20 +1817,20 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                         </button>
                       )}
                     />
-                  ) : snowVisionError ? (
+                  ) : !props.restoredFromHistory && snowVisionError ? (
                     <div className="ssr-dash-ai-error">
                     <span>{snowVisionError}</span>
                     <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction}>
                       <Sparkles size={14} aria-hidden /> Retry AI analysis
                     </button>
                     </div>
-                  ) : (
+                  ) : !props.restoredFromHistory ? (
                     <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction} disabled={snowVisionLoading}>
                     {snowVisionLoading
                       ? <><LoaderCircle size={14} className="spin" aria-hidden /> Analyzing satellite view…</>
                       : <><Sparkles size={14} aria-hidden /> Analyze snow from satellite</>}
                     </button>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>

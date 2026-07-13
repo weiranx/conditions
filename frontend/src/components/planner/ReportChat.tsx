@@ -44,14 +44,15 @@ function getFollowUpQuestions(message: ReportChatMessage | undefined): string[] 
 }
 
 export interface ReportChatProps {
+  readOnly: boolean;
   reportPayload: string;
   initialMessages: PersistedReportChatMessage[];
   onMessagesChange: (messages: PersistedReportChatMessage[]) => void;
 }
 
-function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange }: ReportChatProps) {
+function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessagesChange }: ReportChatProps) {
   const { requestAiAccess } = useAiAccess();
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(readOnly && initialMessages.length > 0);
   const [input, setInput] = React.useState('');
   const conversationId = React.useId();
   const lastReportedMessagesRef = React.useRef(JSON.stringify([]));
@@ -87,15 +88,16 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
   }, [reportPayload]);
 
   React.useEffect(() => {
+    if (readOnly) return;
     const serialized = JSON.stringify(messages);
     if (serialized === lastReportedMessagesRef.current) return;
     lastReportedMessagesRef.current = serialized;
     onMessagesChange(messages as PersistedReportChatMessage[]);
-  }, [messages, onMessagesChange]);
+  }, [messages, onMessagesChange, readOnly]);
 
   const submitQuestion = React.useCallback((question: string) => {
     const text = question.trim();
-    if (!text || isBusy || !reportPayload) return;
+    if (readOnly || !text || isBusy || !reportPayload) return;
     if (!requestAiAccess()) return;
     setIsOpen(true);
     setInput('');
@@ -103,7 +105,7 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
       { text },
       { body: { report: reportPayload } },
     );
-  }, [isBusy, reportPayload, requestAiAccess, sendMessage]);
+  }, [isBusy, readOnly, reportPayload, requestAiAccess, sendMessage]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -118,7 +120,7 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
         onClick={() => {
           if (isOpen) {
             setIsOpen(false);
-          } else if (requestAiAccess()) {
+          } else if (readOnly || requestAiAccess()) {
             setIsOpen(true);
           }
         }}
@@ -127,8 +129,8 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
       >
         <span className="report-chat-toggle-icon"><Sparkles size={17} aria-hidden /></span>
         <span>
-          <strong>Ask about this report</strong>
-          <small>Chat with the report data already attached</small>
+          <strong>{readOnly ? 'Saved AI conversation' : 'Ask about this report'}</strong>
+          <small>{readOnly ? 'Read-only text stored with this report' : 'Chat with the report data already attached'}</small>
         </span>
         <ChevronDown className="report-chat-chevron" size={17} aria-hidden />
       </button>
@@ -140,13 +142,13 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
               {messages.length === 0 ? (
                 <div className="report-chat-empty">
                   <p>Ask what is driving the decision, how conditions interact, or what needs a current field check.</p>
-                  <div className="report-chat-suggestions" aria-label="Suggested questions">
+                  {!readOnly && <div className="report-chat-suggestions" aria-label="Suggested questions">
                     {STARTER_QUESTIONS.map((question) => (
                       <button key={question} type="button" onClick={() => submitQuestion(question)}>
                         <Sparkles size={12} aria-hidden /> {question}
                       </button>
                     ))}
-                  </div>
+                  </div>}
                 </div>
               ) : (
                 messages.map((message, messageIndex) => (
@@ -172,7 +174,7 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
                   <span /><span /><span /> Reading the report…
                 </div>
               )}
-              {followUpQuestions.length > 0 && (
+              {!readOnly && followUpQuestions.length > 0 && (
                 <div className="report-chat-follow-ups" role="group" aria-label="Suggested replies">
                   <p>Suggested replies</p>
                   <Suggestions className="report-chat-follow-up-list">
@@ -198,7 +200,7 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
             <ConversationScrollButton className="report-chat-scroll" aria-label="Scroll to latest message" />
           </Conversation>
 
-          <form className="report-chat-form" onSubmit={handleSubmit}>
+          {!readOnly && <form className="report-chat-form" onSubmit={handleSubmit}>
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value.slice(0, 1000))}
@@ -222,7 +224,7 @@ function ReportChatComponent({ reportPayload, initialMessages, onMessagesChange 
                 <Send size={16} aria-hidden />
               </button>
             )}
-          </form>
+          </form>}
           <p className="report-chat-disclaimer">Planning support only. Confirm official forecasts and current field conditions.</p>
         </div>
       )}

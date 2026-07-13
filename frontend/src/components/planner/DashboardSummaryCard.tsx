@@ -67,6 +67,7 @@ function timelinePosition(value: string | null | undefined, rows: TravelWindowRo
 }
 
 export interface DashboardSummaryCardProps {
+  readOnly: boolean;
   aiAvailability: AiFeatureAvailability;
   safetyData: SafetyData;
   previousSafetyData: SafetyData | null;
@@ -99,6 +100,7 @@ export interface DashboardSummaryCardProps {
 }
 
 export function DashboardSummaryCard({
+  readOnly,
   aiAvailability,
   safetyData,
   previousSafetyData,
@@ -260,6 +262,12 @@ export function DashboardSummaryCard({
   const firstGatedHour = travelWindowRows.find((row) => !row.pass) || null;
   const bestWindow = travelWindowInsights.bestWindow;
   const aiBriefSections = formatAiBriefSections(aiBriefNarrative);
+  const hasSavedChat = reportChatMessages.length > 0;
+  const showAiSection = Boolean(
+    aiBriefNarrative
+    || hasSavedChat
+    || (!readOnly && (aiAvailability.aiBrief || aiAvailability.reportChat)),
+  );
   const previousScore = previousSafetyData ? Math.round(previousSafetyData.safety.score) : null;
   const currentAlertCount = Number(safetyData.alerts?.activeCount) || 0;
   const previousAlertCount = Number(previousSafetyData?.alerts?.activeCount) || 0;
@@ -449,9 +457,9 @@ export function DashboardSummaryCard({
           </div>
         )}
 
-        {(aiAvailability.aiBrief || aiAvailability.reportChat) && (
+        {showAiSection && (
           <div className="ssr-dash-ai">
-            {aiAvailability.aiBrief && (aiBriefNarrative ? (
+            {(aiBriefNarrative || (!readOnly && aiAvailability.aiBrief)) && (aiBriefNarrative ? (
               <AiInsightBriefing
                 title="Your field briefing"
                 subtitle="The quick read on what matters most for this plan."
@@ -472,9 +480,10 @@ export function DashboardSummaryCard({
                   : <><Sparkles size={14} aria-hidden /> AI analysis</>}
               </button>
             ))}
-            {aiAvailability.reportChat && (
+            {(hasSavedChat || (!readOnly && aiAvailability.reportChat)) && (
               <ReportChat
                 key={reportChatSessionKey}
+                readOnly={readOnly}
                 reportPayload={rawReportPayload}
                 initialMessages={reportChatMessages}
                 onMessagesChange={onReportChatMessagesChange}

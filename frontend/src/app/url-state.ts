@@ -40,6 +40,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const initialForecastDate = getInitialForecastDate(todayDate);
   const defaults: LinkState = {
     view: 'home',
+    sharedReportToken: null,
     activity: preferences.defaultActivity,
     position: DEFAULT_CENTER,
     hasObjective: false,
@@ -64,6 +65,8 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   // Support path-based routing (/admin, /settings, etc.) with legacy ?view= fallback.
   // Keep /logs working as an alias for existing bookmarks.
   const pathSegment = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  const sharedReportMatch = /^shared\/([A-Za-z0-9_-]{20,64})$/u.exec(pathSegment);
+  const sharedReportToken = sharedReportMatch?.[1] || null;
   const viewParam = pathSegment || params.get('view') || '';
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitAccountView = viewParam === 'account';
@@ -73,7 +76,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const hasExplicitAdminView = viewParam === 'admin' || viewParam === 'logs';
   const hasExplicitPrivacyView = viewParam === 'privacy';
   const hasExplicitTermsView = viewParam === 'terms';
-  const hasUnknownView = Boolean(viewParam) && ![
+  const hasUnknownView = Boolean(viewParam) && !sharedReportToken && ![
     'home',
     'planner',
     'history',
@@ -88,7 +91,9 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   ].includes(viewParam);
 
   return {
-    view: hasUnknownView
+    view: sharedReportToken
+      ? 'planner'
+      : hasUnknownView
       ? 'not-found'
       : hasExplicitSettingsView
       ? 'settings'
@@ -109,6 +114,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
                     : viewParam === 'planner' || hasCoords
                       ? 'planner'
                       : 'home',
+    sharedReportToken,
     activity: normalizeActivity(params.get('activity') || preferences.defaultActivity),
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
     hasObjective: hasCoords,

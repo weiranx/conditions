@@ -34,6 +34,7 @@ export interface PlannerHeaderProps {
   selectSuggestion: (suggestion: Suggestion) => void;
   setActiveSuggestionIndex: (index: number) => void;
   disabled?: boolean;
+  readOnly?: boolean;
   hasObjective: boolean;
   objectiveIsSaved: boolean;
   handleToggleSaveObjective: () => void;
@@ -52,6 +53,7 @@ export function PlannerHeader({
   handleInputChange, handleFocus, handleSearchKeyDown,
   handleSearchClear, handleUseTypedCoordinates, selectSuggestion, setActiveSuggestionIndex,
   disabled = false,
+  readOnly = false,
   hasObjective, objectiveIsSaved, handleToggleSaveObjective,
   copiedLink, handleCopyLink,
   importedGpxRoute, handleImportGpxObjective,
@@ -77,7 +79,7 @@ export function PlannerHeader({
 
   const plannerControls = hasObjective ? (
     <nav className="header-nav" aria-label="Planner controls">
-      <button
+      {!readOnly && <button
         type="button"
         className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
         onClick={toggleSavedObjective}
@@ -86,7 +88,7 @@ export function PlannerHeader({
       >
         {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
         <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
-      </button>
+      </button>}
       <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
         {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
       </button>
@@ -98,7 +100,7 @@ export function PlannerHeader({
       <div className="planner-header-intro">
         <div className="planner-header-eyebrow">
           <p className="planner-header-kicker"><Compass size={12} aria-hidden /> Decision workspace</p>
-          <span className="planner-source-status"><i aria-hidden /> Live source synthesis</span>
+          <span className="planner-source-status"><i aria-hidden /> {readOnly ? 'Saved snapshot' : 'Live source synthesis'}</span>
         </div>
         <h1>Plan with the <em>whole picture.</em></h1>
         <p className="planner-header-lede">Set an objective and timing. We’ll organize the signals that shape the call.</p>
@@ -112,7 +114,7 @@ export function PlannerHeader({
       <div className="header-controls">
         {disabled ? (
           <div className="planner-locked-summary">
-            <span className="planner-locked-label"><LockKeyhole size={13} aria-hidden /> Report generated</span>
+            <span className="planner-locked-label"><LockKeyhole size={13} aria-hidden /> {readOnly ? 'Read-only report' : 'Report generated'}</span>
             <div className="planner-locked-objective">
               <span className="planner-locked-icon"><MapPin size={18} aria-hidden /></span>
               <span>
@@ -120,7 +122,7 @@ export function PlannerHeader({
                 <small>{importedGpxRoute ? 'GPX route locked to this report' : activityLabel}</small>
               </span>
             </div>
-            <p>Inputs are locked so this report stays consistent. Choose <strong>New report</strong> below to edit the objective or timing.</p>
+            <p>{readOnly ? 'This saved snapshot cannot be changed.' : 'Inputs are locked so this report stays consistent.'} Choose <strong>New report</strong> below to edit the objective or timing.</p>
             {plannerControls}
           </div>
         ) : (

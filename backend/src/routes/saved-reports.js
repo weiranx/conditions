@@ -1,10 +1,14 @@
 'use strict';
 
+const { randomBytes } = require('crypto');
 const { readSessionToken } = require('../auth/account-access');
 
 const MAX_SAVED_REPORT_BYTES = 4 * 1024 * 1024;
 const SAVED_REPORT_LIST_LIMIT = 100;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,64}$/u;
+
+const createShareToken = () => randomBytes(18).toString('base64url');
 
 class SavedReportValidationError extends Error {
   constructor(message, statusCode = 400) {
@@ -42,6 +46,7 @@ const normalizeSavedReport = (value) => {
 
 const mapSavedReportSummary = (row) => ({
   id: row.id,
+  shareToken: row.share_token,
   title: row.title,
   objectiveName: row.objective_name || row.title,
   forecastDate: row.forecast_date || null,
@@ -91,12 +96,41 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
     return res.status(500).json({ error: 'Report history request failed. Please try again.' });
   };
 
+  app.get('/api/reports/shared/:shareToken', async (req, res) => {
+    setNoStore(res);
+    if (!ensureDatabase(res)) return;
+    const shareToken = String(req.params.shareToken || '');
+    if (!SHARE_TOKEN_PATTERN.test(shareToken)) {
+      return res.status(404).json({ error: 'Shared report not found.' });
+    }
+    try {
+      const result = await database.query(`
+        SELECT title, report, created_at, updated_at
+        FROM saved_reports
+        WHERE share_token = $1
+        LIMIT 1
+      `, [shareToken]);
+      const row = result.rows[0];
+      if (!row) return res.status(404).json({ error: 'Shared report not found.' });
+      return res.json({
+        report: {
+          title: row.title,
+          snapshot: row.report,
+          createdAt: normalizeTimestamp(row.created_at),
+          updatedAt: normalizeTimestamp(row.updated_at),
+        },
+      });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
   app.get('/api/account/reports', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
     try {
       const result = await database.query(`
-        SELECT id, title, created_at, updated_at,
+        SELECT id, share_token, title, created_at, updated_at,
                report #>> '{plan,objectiveName}' AS objective_name,
                report #>> '{plan,forecastDate}' AS forecast_date,
                report #>> '{plan,alpineStartTime}' AS alpine_start_time,
@@ -130,7 +164,7 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
     }
     try {
       const result = await database.query(`
-        SELECT id, title, report, created_at, updated_at
+        SELECT id, share_token, title, report, created_at, updated_at
         FROM saved_reports
         WHERE id = $1 AND user_id = $2
         LIMIT 1
@@ -140,6 +174,7 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
       return res.json({
         report: {
           id: row.id,
+          shareToken: row.share_token,
           title: row.title,
           snapshot: row.report,
           createdAt: normalizeTimestamp(row.created_at),
@@ -156,15 +191,17 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
     if (!user || !ensureDatabase(res)) return;
     try {
       const normalized = normalizeSavedReport(req.body?.report);
+      const shareToken = createShareToken();
       const result = await database.query(`
-        INSERT INTO saved_reports (user_id, title, report)
-        VALUES ($1, $2, $3::jsonb)
-        RETURNING id, title, created_at, updated_at
-      `, [user.id, normalized.title, normalized.serialized]);
+        INSERT INTO saved_reports (user_id, share_token, title, report)
+        VALUES ($1, $2, $3, $4::jsonb)
+        RETURNING id, share_token, title, created_at, updated_at
+      `, [user.id, shareToken, normalized.title, normalized.serialized]);
       const row = result.rows[0];
       return res.status(201).json({
         report: {
           id: row.id,
+          shareToken: row.share_token,
           title: row.title,
           createdAt: normalizeTimestamp(row.created_at),
           updatedAt: normalizeTimestamp(row.updated_at),
@@ -185,15 +222,20 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
       const normalized = normalizeSavedReport(req.body?.report);
       const result = await database.query(`
         UPDATE saved_reports
-        SET title = $3, report = $4::jsonb, updated_at = NOW()
+        SET report = jsonb_set(
+              jsonb_set(report, '{ai}', COALESCE($3::jsonb -> 'ai', '{}'::jsonb), true),
+              '{route}', COALESCE($3::jsonb -> 'route', '{}'::jsonb), true
+            ),
+            updated_at = NOW()
         WHERE id = $1 AND user_id = $2
-        RETURNING id, title, created_at, updated_at
-      `, [req.params.reportId, user.id, normalized.title, normalized.serialized]);
+        RETURNING id, share_token, title, created_at, updated_at
+      `, [req.params.reportId, user.id, normalized.serialized]);
       const row = result.rows[0];
       if (!row) return res.status(404).json({ error: 'Saved report not found.' });
       return res.json({
         report: {
           id: row.id,
+          shareToken: row.share_token,
           title: row.title,
           createdAt: normalizeTimestamp(row.created_at),
           updatedAt: normalizeTimestamp(row.updated_at),
@@ -208,7 +250,9 @@ const registerSavedReportRoutes = ({ app, database, accountService } = {}) => {
 module.exports = {
   MAX_SAVED_REPORT_BYTES,
   SAVED_REPORT_LIST_LIMIT,
+  SHARE_TOKEN_PATTERN,
   SavedReportValidationError,
+  createShareToken,
   mapSavedReportSummary,
   normalizeSavedReport,
   registerSavedReportRoutes,

@@ -79,6 +79,7 @@ export interface PlannerMapSectionProps {
   timezoneMismatch: boolean;
   deviceTimezone: string | null;
   locked: boolean;
+  readOnly: boolean;
   onEditPlan: () => void;
   onGenerateReport: () => void;
   importedGpxRoute: ParsedGpxRoute | null;
@@ -99,7 +100,7 @@ export function PlannerMapSection({
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
-  locked, onEditPlan, onGenerateReport,
+  locked, readOnly, onEditPlan, onGenerateReport,
   importedGpxRoute, routeAnalysis,
 }: PlannerMapSectionProps) {
   const featureFlags = useProductFeatureFlags();
@@ -124,8 +125,10 @@ export function PlannerMapSection({
     workflowDetail = 'Fetching the latest conditions for this plan.';
     WorkflowStateIcon = RefreshCw;
   } else if (locked) {
-    workflowTitle = 'Report ready';
-    workflowDetail = 'These inputs match the current results.';
+    workflowTitle = readOnly ? 'Saved report' : 'Report ready';
+    workflowDetail = readOnly
+      ? 'This shared snapshot is read-only.'
+      : 'These inputs match the current results.';
     WorkflowStateIcon = FileCheck2;
   } else if (objectiveReady) {
     workflowTitle = 'Ready to generate';
@@ -236,9 +239,11 @@ export function PlannerMapSection({
                   >
                     <PencilLine size={14} /> New report
                   </button>
-                  <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
-                    <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating…' : 'Update report'}
-                  </button>
+                  {!readOnly && (
+                    <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
+                      <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating…' : 'Update report'}
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
@@ -280,7 +285,7 @@ export function PlannerMapSection({
             imperial={preferences.elevationUnit === 'ft'}
             metric={preferences.elevationUnit === 'm'}
           />
-          <LocationMarker position={position} setPosition={updateObjectivePosition} />
+          <LocationMarker position={position} setPosition={updateObjectivePosition} locked={locked} />
           <MapUpdater position={position} zoom={hasObjective ? 11 : 4} focusKey={mapFocusNonce} />
           {importedGpxRoute && <RouteMapOverlay route={importedGpxRoute} analysis={routeAnalysis} />}
           <CtrlScrollZoom />
@@ -305,7 +310,7 @@ export function PlannerMapSection({
             type="button"
             className="map-overlay-btn"
             onClick={handleUseCurrentLocation}
-            disabled={locatingUser}
+            disabled={locatingUser || locked}
             title={locatingUser ? 'Locating...' : 'Use my location'}
             aria-label="Use my location"
           >

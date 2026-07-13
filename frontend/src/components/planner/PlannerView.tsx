@@ -665,8 +665,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
       <main id="planner-main-content" className="planner-page-main" tabIndex={-1}>
       {restoredFromHistory && (
         <div className="planner-history-notice" role="status">
-          <strong>Saved report snapshot</strong>
-          <span>No new conditions or AI were generated. Select New report to check current data.</span>
+          <strong>Read-only saved report</strong>
+          <span>This exact snapshot includes the AI text saved with it. Select New report to check current data.</span>
         </div>
       )}
       <PlannerHeader
@@ -692,6 +692,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         gpxEstimatedDurationHours={gpxEstimatedDurationHours}
         activityLabel={`${ACTIVITY_PROFILES[preferences.defaultActivity].shortLabel} profile`}
         disabled={reportLocked}
+        readOnly={restoredFromHistory}
         hasObjective={objectiveReady}
         objectiveIsSaved={objectiveIsSaved}
         handleToggleSaveObjective={handleToggleSaveObjective}
@@ -744,6 +745,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         timezoneMismatch={timezoneMismatch}
         deviceTimezone={deviceTimezone}
         locked={reportLocked}
+        readOnly={restoredFromHistory}
         onEditPlan={onEditPlan}
         onGenerateReport={onGenerateReport}
         importedGpxRoute={importedGpxRoute}
@@ -819,7 +821,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
               <RedesignView
                 {...props}
                 aiAvailability={aiAvailability}
-                routeAnalysisSlot={featureFlags.routeAnalysis && objectiveName ? (
+                routeAnalysisSlot={objectiveName && (routeAnalysis || (!restoredFromHistory && featureFlags.routeAnalysis)) ? (
                   <React.Suspense
                     fallback={<div className="route-analysis-section loading-state inline-loading-state" role="status" aria-live="polite" aria-busy="true">Loading route analysis tools…</div>}
                   >

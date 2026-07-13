@@ -142,6 +142,8 @@ When neither AI provider key is configured, AI-powered controls are hidden in th
 | POST | `/api/auth/register` | Create an email/password account and session |
 | POST | `/api/auth/login` | Sign in and create a session |
 | PATCH | `/api/account/preferences` | Save planning preferences for the signed-in account |
+| GET | `/api/account/reports` | List saved report history for the signed-in account |
+| GET | `/api/reports/shared/:shareToken` | Open a read-only saved report from its random share link |
 | POST | `/api/auth/logout` | End the current session |
 | GET | `/api/report-logs` | Retrieve logged reports (administrator account only) |
 | POST | `/api/report-logs` | Log a report entry |

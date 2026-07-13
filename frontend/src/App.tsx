@@ -113,11 +113,13 @@ import {
   buildPersistedReport,
   clearPersistedReport,
   loadPersistedReport,
+  parsePersistedReport,
   persistedReportMatchesPlan,
   persistReport,
   type PersistedReport,
   type PersistedReportChatMessage,
 } from './app/report-storage';
+import { copyTextToClipboard } from './app/clipboard';
 import { HomeView } from './components/views/HomeView';
 import { LegalView } from './components/views/LegalView';
 import { NotFoundView } from './components/views/NotFoundView';
@@ -139,7 +141,12 @@ import { useProductFeatureFlags } from './contexts/feature-flags';
 import { useAccount } from './hooks/useAccount';
 import { AiAccessContext } from './contexts/ai-access';
 import { AiAccessPrompt, type AccountAccessReason } from './components/AiAccessPrompt';
-import { createSavedReport, updateSavedReport } from './lib/saved-reports';
+import {
+  buildSavedReportShareUrl,
+  createSavedReport,
+  getSharedReport,
+  updateSavedReport,
+} from './lib/saved-reports';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -167,6 +174,9 @@ const TripView = React.lazy(() =>
 );
 const HistoryView = React.lazy(() =>
   import('./components/views/HistoryView').then((module) => ({ default: module.HistoryView })),
+);
+const SharedReportStatusView = React.lazy(() =>
+  import('./components/views/SharedReportStatusView').then((module) => ({ default: module.SharedReportStatusView })),
 );
 
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
@@ -216,6 +226,7 @@ function App() {
     if (
       !initialPersistedReport ||
       parsedInitialLinkState.hasObjective ||
+      parsedInitialLinkState.sharedReportToken ||
       (parsedInitialLinkState.view !== 'home' && parsedInitialLinkState.view !== 'planner')
     ) {
       return parsedInitialLinkState;
@@ -234,6 +245,11 @@ function App() {
       travelWindowHours: plan.travelWindowHours,
     };
   }, [initialPersistedReport, parsedInitialLinkState]);
+  const [sharedReportToken, setSharedReportToken] = useState(initialLinkState.sharedReportToken);
+  const [sharedReportLoading, setSharedReportLoading] = useState(Boolean(initialLinkState.sharedReportToken));
+  const [sharedReportError, setSharedReportError] = useState<string | null>(null);
+  const [sharedReportLoadAttempt, setSharedReportLoadAttempt] = useState(0);
+  const sharedReportResolvedTokenRef = useRef<string | null>(null);
 
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
     return {
@@ -317,7 +333,7 @@ function App() {
   }, []);
 
   const initialRestoredReport = React.useMemo(() => {
-    if (!initialPersistedReport || !initialLinkState.hasObjective) {
+    if (!initialPersistedReport || !initialLinkState.hasObjective || initialLinkState.sharedReportToken) {
       return null;
     }
     const travelWindowHours = initialLinkState.travelWindowHours || initialPreferences.travelWindowHours;
@@ -369,6 +385,7 @@ function App() {
   const [reportChatSessionKey, setReportChatSessionKey] = useState(0);
   const [viewingHistoryReport, setViewingHistoryReport] = useState(false);
   const [activeSavedReportId, setActiveSavedReportId] = useState<string | null>(null);
+  const [activeSavedReportShareToken, setActiveSavedReportShareToken] = useState<string | null>(null);
   const [reportGenerationPending, setReportGenerationPending] = useState(false);
   const reportGenerationRef = useRef(0);
   const reportSaveIntentRef = useRef<'waiting-for-account' | 'save' | 'saving' | 'browser-only'>('browser-only');
@@ -394,6 +411,7 @@ function App() {
     lastSavedReportSnapshotRef.current = '';
     setReportGenerationPending(false);
     setActiveSavedReportId(null);
+    setActiveSavedReportShareToken(null);
     if (reportSyncTimeoutRef.current) {
       clearTimeout(reportSyncTimeoutRef.current);
       reportSyncTimeoutRef.current = null;
@@ -584,6 +602,11 @@ function App() {
     initialView: initialLinkState.view as AppView,
     isApplyingPopStateRef,
     onPopState: useCallback((linkState: ReturnType<typeof parseLinkState>) => {
+      sharedReportResolvedTokenRef.current = null;
+      setSharedReportToken(linkState.sharedReportToken);
+      setSharedReportLoading(Boolean(linkState.sharedReportToken));
+      setSharedReportError(null);
+      if (linkState.sharedReportToken) setSharedReportLoadAttempt((attempt) => attempt + 1);
       if (linkState.view === 'trip') {
         initializeTripView(linkState.forecastDate, linkState.alpineStartTime);
       }
@@ -638,6 +661,14 @@ function App() {
     }, [clearWakeRetry, resetSavedReportTracking, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
+
+  useEffect(() => {
+    if (view === 'planner') return;
+    sharedReportResolvedTokenRef.current = null;
+    setSharedReportToken(null);
+    setSharedReportLoading(false);
+    setSharedReportError(null);
+  }, [view]);
 
   useEffect(() => {
     if (!viewingHistoryReport) return;
@@ -747,6 +778,7 @@ function App() {
   useSyncUrlEffect({
     view,
     activity,
+    sharedReportToken,
     hasObjective,
     position,
     objectiveName,
@@ -883,12 +915,13 @@ function App() {
     const generation = reportGenerationRef.current;
     const serialized = JSON.stringify(reportSnapshot);
     void createSavedReport(reportSnapshot)
-      .then((reportId) => {
+      .then(({ id: reportId, shareToken }) => {
         if (generation !== reportGenerationRef.current) return;
         lastSavedReportSnapshotRef.current = serialized;
         reportSaveSourceDataRef.current = null;
         reportSaveIntentRef.current = 'browser-only';
         setActiveSavedReportId(reportId);
+        setActiveSavedReportShareToken(shareToken);
       })
       .catch(() => {
         if (generation !== reportGenerationRef.current) return;
@@ -1036,12 +1069,15 @@ function App() {
   };
 
   const handleCopyLink = async () => {
-    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+    if (typeof window === 'undefined') {
       return;
     }
 
+    const shareToken = sharedReportToken || activeSavedReportShareToken;
+    const link = shareToken ? buildSavedReportShareUrl(shareToken) : window.location.href;
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const copied = await copyTextToClipboard(link);
+      if (!copied) throw new Error('Clipboard unavailable');
       setCopiedLink(true);
       if (copyResetTimeout.current) {
         clearTimeout(copyResetTimeout.current);
@@ -1179,6 +1215,10 @@ function App() {
       return false;
     }
     clearPersistedReport();
+    sharedReportResolvedTokenRef.current = null;
+    setSharedReportToken(null);
+    setSharedReportLoading(false);
+    setSharedReportError(null);
     resetSavedReportTracking();
     setViewingHistoryReport(false);
     setReportChatMessages([]);
@@ -1197,12 +1237,16 @@ function App() {
     return true;
   }, [resetSavedReportTracking, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, requestNewReportAccess]);
 
-  const handleOpenSavedReport = useCallback((report: PersistedReport) => {
+  const handleOpenSavedReport = useCallback((report: PersistedReport, shareToken: string) => {
     clearWakeRetry();
     clearLastLoadedKey();
     resetSavedReportTracking();
     setPendingAutoGenerate(false);
     setViewingHistoryReport(true);
+    sharedReportResolvedTokenRef.current = shareToken;
+    setSharedReportToken(shareToken);
+    setSharedReportLoading(false);
+    setSharedReportError(null);
     if (!preHistoryPreferencesRef.current) {
       preHistoryPreferencesRef.current = preferencesRef.current;
     }
@@ -1257,11 +1301,47 @@ function App() {
     startViewChange,
   ]);
 
+  useEffect(() => {
+    if (!sharedReportToken || sharedReportResolvedTokenRef.current === sharedReportToken) return;
+    const controller = new AbortController();
+    setSharedReportLoading(true);
+    setSharedReportError(null);
+    void getSharedReport(sharedReportToken, controller.signal)
+      .then((rawReport) => {
+        if (controller.signal.aborted) return;
+        const report = parsePersistedReport(rawReport);
+        if (!report) throw new Error('This shared report is incomplete or no longer compatible.');
+        handleOpenSavedReport(report, sharedReportToken);
+      })
+      .catch((loadError) => {
+        if (controller.signal.aborted) return;
+        setSharedReportLoading(false);
+        setSharedReportError(loadError instanceof Error ? loadError.message : 'Could not retrieve this shared report.');
+      });
+    return () => controller.abort();
+  }, [handleOpenSavedReport, sharedReportLoadAttempt, sharedReportToken]);
+
+  const retrySharedReport = useCallback(() => {
+    sharedReportResolvedTokenRef.current = null;
+    setSharedReportError(null);
+    setSharedReportLoading(true);
+    setSharedReportLoadAttempt((attempt) => attempt + 1);
+  }, []);
+
   const openPlannerView = () => {
     if (!hasObjective && !searchQuery.trim()) {
       setAlpineStartTime(preferences.defaultStartTime);
     }
     startViewChange(() => setView('planner'));
+  };
+
+  const openBlankPlannerFromSharedReport = () => {
+    sharedReportResolvedTokenRef.current = null;
+    setSharedReportToken(null);
+    setSharedReportLoading(false);
+    setSharedReportError(null);
+    setViewingHistoryReport(false);
+    openPlannerView();
   };
 
   const openTripToolView = () => {
@@ -2227,6 +2307,16 @@ function App() {
       {/* Leaflet cannot reconnect its imperative map instance after Activity
           disconnects the planner's effects. Remount the planner instead. */}
       {view === 'planner' ? (
+        sharedReportToken && !safetyData && (sharedReportLoading || sharedReportError) ? (
+          <SharedReportStatusView
+            appShellClassName={appShellClassName}
+            error={sharedReportError}
+            navigateToView={navigateToView}
+            onOpenPlanner={openBlankPlannerFromSharedReport}
+            onRetry={retrySharedReport}
+            openTripToolView={openTripToolView}
+          />
+        ) : (
         <>
     <PlannerView
       // Shell / layout
@@ -2627,6 +2717,7 @@ function App() {
         />
       )}
         </>
+      )
       ) : null}
       <AiAccessPrompt
         reason={accountAccessReason}
