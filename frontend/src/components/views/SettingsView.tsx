@@ -196,19 +196,7 @@ export function SettingsView({
   openPlannerView,
   openTripToolView,
 }: SettingsViewProps) {
-  const [saved, setSaved] = React.useState(false);
   const [activeSection, setActiveSection] = React.useState('timing');
-  const savedTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  React.useEffect(() => () => {
-    if (savedTimer.current) clearTimeout(savedTimer.current);
-  }, []);
-
-  const showSaved = () => {
-    setSaved(true);
-    if (savedTimer.current) clearTimeout(savedTimer.current);
-    savedTimer.current = setTimeout(() => setSaved(false), 1800);
-  };
 
   const goToSection = (id: string) => {
     setActiveSection(id);
@@ -249,11 +237,11 @@ export function SettingsView({
           {/* RAIL */}
           <nav className="ssr-set-rail" aria-label="Settings sections">
             {railItem('timing', <Clock />, 'Timing')}
+            {railItem('activity', <Footprints />, 'Objective')}
             {railItem('appearance', <Eye />, 'Appearance')}
             {railItem('units', <Ruler />, 'Units & time')}
-            {railItem('activity', <Footprints />, 'Objective')}
             {railItem('thresholds', <Gauge />, 'Thresholds')}
-            <div className="ssr-set-rail-foot">Saved locally in your browser.</div>
+            <div className="ssr-set-rail-foot"><Check /> Changes save automatically on this device.</div>
           </nav>
 
           {/* PANELS */}
@@ -457,9 +445,8 @@ export function SettingsView({
                 </button>
                 <button type="button" className="ssr-btn" onClick={resetPreferences}>Reset to defaults</button>
                 <span className="ssr-spacer" />
-                <button type="button" className="ssr-btn" onClick={showSaved}>Save</button>
-                <span className={`ssr-set-saved ${saved ? 'show' : ''}`} role="status" aria-live="polite">
-                  {saved && <><Check /> Saved to this device</>}
+                <span className="ssr-set-autosave">
+                  <Check /> Saved automatically
                 </span>
               </div>
               <div className="ssr-set-note">

@@ -1,7 +1,7 @@
 /* Conditions report layout. */
 
 .ssr-report {
-  --ssr-section-radius: 16px;
+  --ssr-section-radius: var(--ui-radius-card);
   --ssr-section-shadow: 0 1px 2px rgba(20, 42, 27, .04), 0 18px 42px -34px rgba(18, 48, 29, .36);
   color: var(--ssr-text);
   font-family: var(--ssr-sans);
@@ -90,7 +90,7 @@
 .ssr-hdr-stat:last-child { border-right: none; padding-right: 0; }
 .ssr-hdr-stat .ssr-k {
   font-family: var(--ssr-mono);
-  font-size: 9px;
+  font-size: 10.5px;
   letter-spacing: .055em;
   text-transform: uppercase;
   color: var(--ssr-text-3);
@@ -124,7 +124,6 @@
 .ssr-card:hover {
   box-shadow: 0 2px 3px rgba(20, 42, 27, .04), 0 24px 52px -34px rgba(18, 48, 29, .42);
   border-color: var(--ssr-line-strong);
-  transform: translateY(-1px);
 }
 html[data-theme="dark"] .ssr-card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 24px -16px rgba(0, 0, 0, 0.45); }
 html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.65); }
@@ -133,7 +132,7 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 
    `backwards` keeps delayed cards invisible until their turn. */
 @media (prefers-reduced-motion: no-preference) {
   .ssr-report .ssr-card {
-    animation: ssr-card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation: ssr-card-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   .ssr-main > .ssr-card:nth-child(2),
   .ssr-side > .ssr-card:nth-child(1) { animation-delay: 0.05s; }
@@ -202,7 +201,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
   color: var(--ssr-brand-dark);
 }
 .ssr-h-meta {
-  font-size: 10px;
+  font-size: var(--ui-meta-size);
   color: var(--ssr-text-3);
   font-family: var(--ssr-mono);
   letter-spacing: 0;
@@ -318,7 +317,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
   border-top: 1px solid var(--ssr-line);
 }
 .ssr-vd-h {
-  font-size: 10px;
+  font-size: var(--ui-meta-size);
   letter-spacing: 0;
   text-transform: uppercase;
   color: var(--ssr-text-3);
@@ -362,7 +361,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
 .ssr-q:last-child { border-right: none; }
 .ssr-q-k {
   font-family: var(--ssr-mono);
-  font-size: 9px;
+  font-size: 10.5px;
   letter-spacing: .045em;
   text-transform: uppercase;
   color: var(--ssr-text-3);

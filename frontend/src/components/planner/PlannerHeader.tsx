@@ -6,6 +6,7 @@ import {
   Check,
   Compass,
   CloudSun,
+  LockKeyhole,
   MapPin,
   MountainSnow,
 } from 'lucide-react';
@@ -74,6 +75,24 @@ export function PlannerHeader({
     saveMessageTimer.current = setTimeout(() => setSaveMessage(''), 2800);
   };
 
+  const plannerControls = hasObjective ? (
+    <nav className="header-nav" aria-label="Planner controls">
+      <button
+        type="button"
+        className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
+        onClick={toggleSavedObjective}
+        aria-pressed={objectiveIsSaved}
+        title={objectiveIsSaved ? 'Remove this objective from saved locations' : 'Save this objective for faster access from search'}
+      >
+        {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
+        <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
+      </button>
+      <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
+        {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
+      </button>
+    </nav>
+  ) : null;
+
   return (
     <header className={`header-section ${hasObjective ? 'has-objective' : 'is-awaiting-objective'} ${disabled ? 'is-locked' : ''}`}>
       <div className="planner-header-intro">
@@ -91,60 +110,59 @@ export function PlannerHeader({
         </div>
       </div>
       <div className="header-controls">
-        <div className="planner-search-heading">
-          <span><MapPin size={14} aria-hidden /> Choose a location or route</span>
-          <small>Search a route by name or upload its GPX track</small>
-        </div>
-        <SearchBox
-          searchWrapperRef={searchWrapperRef}
-          searchInputRef={searchInputRef}
-          searchQuery={searchQuery}
-          trimmedSearchQuery={trimmedSearchQuery}
-          showSuggestions={showSuggestions}
-          searchLoading={searchLoading}
-          suggestions={suggestions}
-          activeSuggestionIndex={activeSuggestionIndex}
-          canUseCoordinates={Boolean(parsedTypedCoordinates)}
-          disabled={disabled}
-          onInputChange={handleInputChange}
-          onFocus={handleFocus}
-          onKeyDown={handleSearchKeyDown}
-          onClear={handleSearchClear}
-          onUseCoordinates={handleUseTypedCoordinates}
-          onSelectSuggestion={selectSuggestion}
-          onHoverSuggestion={setActiveSuggestionIndex}
-        />
-        <GpxObjectiveInput
-          selectedRoute={importedGpxRoute}
-          onImport={handleImportGpxObjective}
-          estimatedDurationHours={gpxEstimatedDurationHours}
-          disabled={disabled}
-        />
+        {disabled ? (
+          <div className="planner-locked-summary">
+            <span className="planner-locked-label"><LockKeyhole size={13} aria-hidden /> Report generated</span>
+            <div className="planner-locked-objective">
+              <span className="planner-locked-icon"><MapPin size={18} aria-hidden /></span>
+              <span>
+                <strong>{searchQuery.trim() || 'Selected objective'}</strong>
+                <small>{importedGpxRoute ? 'GPX route locked to this report' : activityLabel}</small>
+              </span>
+            </div>
+            <p>Inputs are locked so this report stays consistent. Choose <strong>New report</strong> below to edit the objective or timing.</p>
+            {plannerControls}
+          </div>
+        ) : (
+          <>
+            <div className="planner-search-heading">
+              <span><MapPin size={14} aria-hidden /> Choose a location or route</span>
+              <small>Search a route by name or upload its GPX track</small>
+            </div>
+            <SearchBox
+              searchWrapperRef={searchWrapperRef}
+              searchInputRef={searchInputRef}
+              searchQuery={searchQuery}
+              trimmedSearchQuery={trimmedSearchQuery}
+              showSuggestions={showSuggestions}
+              searchLoading={searchLoading}
+              suggestions={suggestions}
+              activeSuggestionIndex={activeSuggestionIndex}
+              canUseCoordinates={Boolean(parsedTypedCoordinates)}
+              onInputChange={handleInputChange}
+              onFocus={handleFocus}
+              onKeyDown={handleSearchKeyDown}
+              onClear={handleSearchClear}
+              onUseCoordinates={handleUseTypedCoordinates}
+              onSelectSuggestion={selectSuggestion}
+              onHoverSuggestion={setActiveSuggestionIndex}
+            />
+            <GpxObjectiveInput
+              selectedRoute={importedGpxRoute}
+              onImport={handleImportGpxObjective}
+              estimatedDurationHours={gpxEstimatedDurationHours}
+            />
 
-        <div className="planner-search-footer">
-          <p>
-            {importedGpxRoute
-              ? 'Base conditions use the route midpoint; the generated brief keeps the full track ready for checkpoint analysis.'
-              : 'Search a place or named route, or upload a GPX track. You’ll review timing before generating the brief.'}
-          </p>
-          {hasObjective && (
-            <nav className="header-nav" aria-label="Planner controls">
-              <button
-                type="button"
-                className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
-                onClick={toggleSavedObjective}
-                aria-pressed={objectiveIsSaved}
-                title={objectiveIsSaved ? 'Remove this objective from saved locations' : 'Save this objective for faster access from search'}
-              >
-                {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
-                <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
-              </button>
-              <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
-                {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
-              </button>
-            </nav>
-          )}
-        </div>
+            <div className="planner-search-footer">
+              <p>
+                {importedGpxRoute
+                  ? 'Base conditions use the route midpoint; the generated brief keeps the full track ready for checkpoint analysis.'
+                  : 'Search a place or named route, or upload a GPX track. You’ll review timing before generating the brief.'}
+              </p>
+              {plannerControls}
+            </div>
+          </>
+        )}
         <span className={`planner-save-status ${saveMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
           {saveMessage}
         </span>

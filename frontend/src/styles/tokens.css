@@ -17,6 +17,13 @@
   --ui-brand:          oklch(47% 0.085 155);
   --ui-brand-strong:   oklch(34% 0.075 155);
   --ui-brand-soft:     oklch(94% 0.022 155);
+  --ui-content-width:  1180px;
+  --ui-gutter:         clamp(16px, 4vw, 48px);
+  --ui-radius-control: 10px;
+  --ui-radius-card:    16px;
+  --ui-radius-shell:   22px;
+  --ui-meta-size:      11px;
+  --ui-motion-fast:    160ms ease;
   --ui-shadow-xs:      0 1px 2px oklch(24% 0.02 155 / 0.06);
   --ui-shadow-sm:      0 1px 2px oklch(24% 0.02 155 / 0.05), 0 8px 24px -18px oklch(24% 0.02 155 / 0.28);
   --ui-shadow-md:      0 2px 4px oklch(24% 0.02 155 / 0.06), 0 16px 36px -22px oklch(24% 0.02 155 / 0.32);
@@ -88,7 +95,7 @@
   --d-nogo-bg:   color-mix(in oklch, var(--ui-risk-4) 10%, var(--ui-surface));
   --d-chip-bg:   color-mix(in oklch, var(--ui-surface) 92%, transparent);
   --d-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --d-r-lg: 8px;
+  --d-r-lg: var(--ui-radius-control);
   --d-r-pill: 999px;
   --d-shadow: var(--ui-shadow-sm);
   --d-shadow-sm: var(--ui-shadow-xs);

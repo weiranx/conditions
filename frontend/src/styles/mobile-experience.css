@@ -9,7 +9,7 @@
 
 @media (max-width: 640px) {
   html {
-    scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
 
   body {
@@ -318,6 +318,10 @@
   .ssr-settings .ssr-set-actions,
   .ssr-settings .ssr-set-note {
     padding-inline: 16px;
+  }
+
+  .ssr-settings .ssr-set-card {
+    scroll-margin-top: 76px;
   }
 
   .ssr-settings .ssr-set-row .ssr-seg,
