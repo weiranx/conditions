@@ -303,6 +303,11 @@ struct RouteAnalysisCard: View {
                         .font(.caption2.weight(.bold).monospacedDigit())
                         .foregroundStyle(Color.scoreColor(score))
                 }
+                if let eta = summary?.etaTime ?? wp.eta_time {
+                    Text("ETA \(eta)")
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Color.webPineDeep)
+                }
                 if let elev = wp.elevation {
                     Text(formatElevation(elev, unit: appState.preferences.elevationUnit))
                         .font(.caption.monospaced())

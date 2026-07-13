@@ -41,6 +41,7 @@ struct GPXRouteMetadata: Codable, Sendable {
     var elevationGainFt: Double?
     var minElevationFt: Double?
     var maxElevationFt: Double?
+    var routeShape: String? = nil
 }
 
 struct RouteWaypoint: Codable, Sendable, Identifiable {
@@ -50,6 +51,9 @@ struct RouteWaypoint: Codable, Sendable, Identifiable {
     var elev_ft: Double?
     var distance_miles: Double?
     var progress_percent: Double?
+    var eta_date: String?
+    var eta_time: String?
+    var offset_minutes: Int?
 
     var id: String { (name ?? "") + "\(lat ?? 0)" }
 
@@ -67,6 +71,9 @@ struct RouteSummary: Codable, Sendable {
     var dataAvailable: Bool?
     var distance_miles: Double?
     var progress_percent: Double?
+    var etaDate: String?
+    var etaTime: String?
+    var offsetMinutes: Int?
 }
 
 struct RouteSummaryWeather: Codable, Sendable {

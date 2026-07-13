@@ -16,7 +16,7 @@ struct ContentView: View {
                 .tag(AppState.AppTab.planner)
 
             TripPlannerView()
-                .tabItem { Label("Trip", systemImage: "calendar.badge.clock") }
+                .tabItem { Label("Compare", systemImage: "calendar.badge.clock") }
                 .tag(AppState.AppTab.trip)
 
             NavigationStack {
