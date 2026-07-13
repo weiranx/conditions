@@ -468,12 +468,16 @@ body:has(.page-shell-planner) {
   text-transform: uppercase;
   color: var(--d-ink-3);
 }
-.ssr-shell .map-actions-flat .date-control input {
+.ssr-shell .map-actions-flat .date-control input,
+.ssr-shell .map-actions-flat .date-control select {
   background: none;
   border: none;
   font-family: var(--d-mono);
   font-weight: 600;
   color: var(--d-ink);
+}
+.ssr-shell .map-actions-flat .objective-profile-control select {
+  max-width: 180px;
 }
 .ssr-shell .now-control-btn {
   min-height: 48px;

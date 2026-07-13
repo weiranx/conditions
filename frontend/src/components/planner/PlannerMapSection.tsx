@@ -26,10 +26,11 @@ import {
   MAX_TRAVEL_WINDOW_HOURS,
   MIN_TRAVEL_WINDOW_HOURS,
 } from '../../app/constants';
+import { ACTIVITY_PROFILES, ACTIVITY_PROFILE_ORDER } from '../../app/activity-profiles';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const MAP_STYLE_CYCLE: MapStyle[] = ['topo', 'street', 'satellite'];
-import type { MapStyle, SafetyData, UserPreferences } from '../../app/types';
+import type { ActivityType, MapStyle, SafetyData, UserPreferences } from '../../app/types';
 import type { ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 
@@ -69,6 +70,7 @@ export interface PlannerMapSectionProps {
   travelWindowHoursDraft: string | number;
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTravelWindowHoursDraftBlur: () => void;
+  onObjectiveProfileChange: (profile: ActivityType) => void;
   objectiveTimezone: string | null;
   handleUseNowConditions: () => void;
   loading: boolean;
@@ -93,6 +95,7 @@ export function PlannerMapSection({
   forecastDate, dateLabel, displayStartTime, todayDate, maxForecastDate, handleDateChange,
   startLabel, alpineStartTime, handlePlannerTimeChange, setAlpineStartTime,
   travelWindowHoursDraft, handleTravelWindowHoursDraftChange, handleTravelWindowHoursDraftBlur,
+  onObjectiveProfileChange,
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
@@ -208,7 +211,7 @@ export function PlannerMapSection({
           {objectiveReady && (
             <div className="planner-flow-summary" role="group" aria-label="Selected plan">
               <strong>{objectiveName || 'Dropped pin'}</strong>
-              <span><time dateTime={forecastDate}>{dateLabel}</time> · {displayStartTime} · {travelWindowHoursDraft}h</span>
+              <span>{ACTIVITY_PROFILES[preferences.defaultActivity].shortLabel} · <time dateTime={forecastDate}>{dateLabel}</time> · {displayStartTime} · {travelWindowHoursDraft}h</span>
             </div>
           )}
 
@@ -359,6 +362,23 @@ export function PlannerMapSection({
         </button>
 
         <div id="map-actions-flat" className="map-actions-flat">
+          <label className="date-control objective-profile-control">
+            <span>Objective profile</span>
+            <select
+              value={preferences.defaultActivity}
+              onChange={(event) => onObjectiveProfileChange(event.target.value as ActivityType)}
+              disabled={locked}
+              title={ACTIVITY_PROFILES[preferences.defaultActivity].description}
+              aria-label="Objective profile"
+            >
+              {ACTIVITY_PROFILE_ORDER.map((profileKey) => (
+                <option key={profileKey} value={profileKey}>
+                  {ACTIVITY_PROFILES[profileKey].label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="date-control">
             <span>Date</span>
             <input type="date" value={forecastDate} min={todayDate} max={maxForecastDate} onChange={handleDateChange} disabled={locked} />

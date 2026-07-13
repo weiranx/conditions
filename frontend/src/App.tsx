@@ -1860,6 +1860,7 @@ function App() {
       position={position}
       activeBasemap={activeBasemap}
       preferences={preferences}
+      updatePreferences={updatePreferences}
       updateObjectivePosition={handleMapPositionChange}
       mapFocusNonce={mapFocusNonce}
       mapStyle={mapStyle}

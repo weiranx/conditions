@@ -94,6 +94,7 @@ export interface PlannerViewProps {
   position: L.LatLng;
   activeBasemap: { url: string; attribution: string };
   preferences: UserPreferences;
+  updatePreferences: (patch: Partial<UserPreferences>) => void;
   updateObjectivePosition: (pos: L.LatLng, label?: string) => void;
   mapFocusNonce: number;
   mapStyle: string;
@@ -503,6 +504,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     position,
     activeBasemap,
     preferences,
+    updatePreferences,
     updateObjectivePosition,
     mapFocusNonce,
     mapStyle,
@@ -722,6 +724,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         travelWindowHoursDraft={travelWindowHoursDraft}
         handleTravelWindowHoursDraftChange={handleTravelWindowHoursDraftChange}
         handleTravelWindowHoursDraftBlur={handleTravelWindowHoursDraftBlur}
+        onObjectiveProfileChange={(profileKey) => updatePreferences(ACTIVITY_PROFILES[profileKey].preferencePatch)}
         objectiveTimezone={objectiveTimezone}
         handleUseNowConditions={handleUseNowConditions}
         loading={loading}
