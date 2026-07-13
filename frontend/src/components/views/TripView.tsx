@@ -582,7 +582,7 @@ export function TripView({
           <>
             {/* DECISION SPOTLIGHT */}
             {best && (
-              <section className={`ssr-trip-recommendation ${levelClass(best.decisionLevel)}`} aria-labelledby="trip-recommendation-title">
+              <section className={`ssr-trip-panel ssr-trip-recommendation ${levelClass(best.decisionLevel)}`} aria-labelledby="trip-recommendation-title">
                 <div className="ssr-trip-recommendation-icon" aria-hidden>
                   <CalendarDays />
                 </div>
@@ -605,7 +605,7 @@ export function TripView({
             )}
 
             {/* OVERVIEW */}
-            <div className="ssr-trip-overview">
+            <div className="ssr-trip-panel ssr-trip-overview">
               <div className="ssr-trip-ov">
                 <div className="ssr-trip-ov-k">Objective</div>
                 <div className="ssr-trip-ov-obj">{objectiveSummary}</div>
@@ -639,11 +639,11 @@ export function TripView({
             </div>
 
             {/* PLANNING SIGNALS */}
-            <section className="ssr-trip-insights" aria-labelledby="trip-insights-title">
+            <section className="ssr-trip-panel ssr-trip-insights" aria-labelledby="trip-insights-title">
               <div className="ssr-trip-panel-head">
                 <div>
                   <span>Planning signals</span>
-                  <h2 id="trip-insights-title">What changes across the window</h2>
+                  <h2 id="trip-insights-title"><Gauge aria-hidden /> What changes across the window</h2>
                   <p>
                     Fast comparisons from the same daily start and travel thresholds.
                     {partialDayCount > 0 ? ` ${partialDayCount} day${partialDayCount === 1 ? '' : 's'} include partial data.` : ''}
@@ -688,16 +688,21 @@ export function TripView({
             </section>
 
             {/* TREND ARC */}
-            <div className="ssr-trip-trend">
-              <div className="ssr-trip-trend-h">
-                <h2>Weather-window score across the trip</h2>
-                <span>{scoreRange}{tripForecastNote ? ` · ${tripForecastNote}` : ''}</span>
+            <section className="ssr-trip-panel ssr-trip-trend" aria-labelledby="trip-trend-title">
+              <div className="ssr-trip-panel-head compact">
+                <div>
+                  <span>Score trend</span>
+                  <h2 id="trip-trend-title"><TrendingUp aria-hidden /> Weather-window score across the trip</h2>
+                  <p>{scoreRange}{tripForecastNote ? ` · ${tripForecastNote}` : ''}</p>
+                </div>
               </div>
-              <TrendArc days={tripForecastRows} getScoreColor={getScoreColor} />
-            </div>
+              <div className="ssr-trip-trend-chart">
+                <TrendArc days={tripForecastRows} getScoreColor={getScoreColor} />
+              </div>
+            </section>
 
             {/* COMPARISON MATRIX */}
-            <section className="ssr-trip-matrix" aria-labelledby="trip-matrix-title">
+            <section className="ssr-trip-panel ssr-trip-matrix" aria-labelledby="trip-matrix-title">
               <div className="ssr-trip-panel-head compact">
                 <div>
                   <span>All-day matrix</span>
@@ -751,95 +756,97 @@ export function TripView({
             </section>
 
             {/* DAY STRIP */}
-            <div className="ssr-trip-section-head">
-              <div>
-                <span>Day-by-day comparison</span>
-                <h2>Choose a day to inspect</h2>
+            <section className="ssr-trip-panel ssr-trip-days-panel" aria-labelledby="trip-days-title">
+              <div className="ssr-trip-section-head">
+                <div>
+                  <span>Day-by-day comparison</span>
+                  <h2 id="trip-days-title"><CalendarDays aria-hidden /> Choose a day to inspect</h2>
+                </div>
+                <p><Clock3 aria-hidden /> All days use a {tripStartDisplay} start and {travelWindowHoursLabel} window.</p>
               </div>
-              <p><Clock3 aria-hidden /> All days use a {tripStartDisplay} start and {travelWindowHoursLabel} window.</p>
-            </div>
-            <div className="ssr-trip-days" role="group" aria-label="Trip forecast days">
-              {tripForecastRows.map((day, i) => {
-                const dlv = levelClass(day.decisionLevel);
-                const gustWarn = typeof day.windGustMph === 'number' && day.windGustMph >= 35;
-                const precipWarn = typeof day.precipChance === 'number' && day.precipChance >= 30;
-                const isBestDay = i === bestIndex;
-                const isWatchDay = i === watchDayIndex && watchDayIndex !== bestIndex;
-                return (
-                  <button
-                    type="button"
-                    key={day.date}
-                    ref={(node) => { dayRefs.current[i] = node; }}
-                    className={`ssr-trip-day ${sel === i ? 'sel' : ''}`}
-                    onClick={() => selectDay(i)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-                        event.preventDefault();
-                        selectDay((i + 1) % tripForecastRows.length, true);
-                      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-                        event.preventDefault();
-                        selectDay((i - 1 + tripForecastRows.length) % tripForecastRows.length, true);
-                      } else if (event.key === 'Home') {
-                        event.preventDefault();
-                        selectDay(0, true);
-                      } else if (event.key === 'End') {
-                        event.preventDefault();
-                        selectDay(tripForecastRows.length - 1, true);
-                      }
-                    }}
-                    aria-pressed={sel === i}
-                  >
-                    <div className={`ssr-trip-day-band ${dlv}`} />
-                    {(isBestDay || isWatchDay) && (
-                      <div className="ssr-trip-day-flags" aria-label={isBestDay ? 'Best weather option in this forecast' : 'Day needing the most scrutiny'}>
-                        <span className={isBestDay ? 'best' : 'watch'}>{isBestDay ? 'Best weather' : 'Watch closely'}</span>
-                      </div>
-                    )}
-                    <div className="ssr-trip-day-top">
-                      <div className="ssr-trip-day-date">
-                        <span className="ssr-trip-day-wd">{weekdayLabel(day.date)}<b>{monthDayLabel(day.date)}</b></span>
-                        <span className="ssr-trip-day-sky">{weatherConditionEmoji(day.weatherDescription, day.isDaytime)}</span>
-                      </div>
-                      <div className="ssr-trip-day-verdict">
-                        <span className={`ssr-trip-day-pill ${dlv}`}>{weatherWindowLabel(day.decisionLevel)}</span>
-                        {day.score !== null && (
-                          <span className="ssr-trip-day-score">{day.score}<small>/100</small></span>
-                        )}
-                        {typeof day.deltas?.score === 'number' && day.deltas.score !== 0 && (
-                          <span
-                            className={`ssr-trip-day-delta ${day.deltas.score > 0 ? 'up' : 'down'}`}
-                            title={`Weather-window score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
-                          >
-                            {day.deltas.score > 0 ? '▲' : '▼'}{Math.abs(day.deltas.score)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="ssr-trip-day-body">
-                      <div className="ssr-trip-day-metrics">
-                        <div className="ssr-trip-day-metric">
-                          <span className="mk">Temp</span>
-                          <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}{renderMetricDelta(day.deltas?.tempF, '°')}</span>
+              <div className="ssr-trip-days" role="group" aria-label="Trip forecast days">
+                {tripForecastRows.map((day, i) => {
+                  const dlv = levelClass(day.decisionLevel);
+                  const gustWarn = typeof day.windGustMph === 'number' && day.windGustMph >= 35;
+                  const precipWarn = typeof day.precipChance === 'number' && day.precipChance >= 30;
+                  const isBestDay = i === bestIndex;
+                  const isWatchDay = i === watchDayIndex && watchDayIndex !== bestIndex;
+                  return (
+                    <button
+                      type="button"
+                      key={day.date}
+                      ref={(node) => { dayRefs.current[i] = node; }}
+                      className={`ssr-trip-day ${sel === i ? 'sel' : ''}`}
+                      onClick={() => selectDay(i)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                          event.preventDefault();
+                          selectDay((i + 1) % tripForecastRows.length, true);
+                        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                          event.preventDefault();
+                          selectDay((i - 1 + tripForecastRows.length) % tripForecastRows.length, true);
+                        } else if (event.key === 'Home') {
+                          event.preventDefault();
+                          selectDay(0, true);
+                        } else if (event.key === 'End') {
+                          event.preventDefault();
+                          selectDay(tripForecastRows.length - 1, true);
+                        }
+                      }}
+                      aria-pressed={sel === i}
+                    >
+                      <div className={`ssr-trip-day-band ${dlv}`} />
+                      {(isBestDay || isWatchDay) && (
+                        <div className="ssr-trip-day-flags" aria-label={isBestDay ? 'Best weather option in this forecast' : 'Day needing the most scrutiny'}>
+                          <span className={isBestDay ? 'best' : 'watch'}>{isBestDay ? 'Best weather' : 'Watch closely'}</span>
                         </div>
-                        <div className="ssr-trip-day-metric">
-                          <span className="mk">Gust</span>
-                          <span className={`mv ${gustWarn ? 'warn' : ''}`}>{formatWindDisplay(day.windGustMph, { includeUnit: false })}{renderMetricDelta(day.deltas?.windGustMph)}</span>
+                      )}
+                      <div className="ssr-trip-day-top">
+                        <div className="ssr-trip-day-date">
+                          <span className="ssr-trip-day-wd">{weekdayLabel(day.date)}<b>{monthDayLabel(day.date)}</b></span>
+                          <span className="ssr-trip-day-sky">{weatherConditionEmoji(day.weatherDescription, day.isDaytime)}</span>
                         </div>
-                        <div className="ssr-trip-day-metric">
-                          <span className="mk">Precip</span>
-                          <span className={`mv ${precipWarn ? 'warn' : ''}`}>{day.precipChance !== null ? `${day.precipChance}%` : '—'}{renderMetricDelta(day.deltas?.precipChance, '%')}</span>
+                        <div className="ssr-trip-day-verdict">
+                          <span className={`ssr-trip-day-pill ${dlv}`}>{weatherWindowLabel(day.decisionLevel)}</span>
+                          {day.score !== null && (
+                            <span className="ssr-trip-day-score">{day.score}<small>/100</small></span>
+                          )}
+                          {typeof day.deltas?.score === 'number' && day.deltas.score !== 0 && (
+                            <span
+                              className={`ssr-trip-day-delta ${day.deltas.score > 0 ? 'up' : 'down'}`}
+                              title={`Weather-window score ${day.deltas.score > 0 ? 'up' : 'down'} ${Math.abs(day.deltas.score)} vs. previous day`}
+                            >
+                              {day.deltas.score > 0 ? '▲' : '▼'}{Math.abs(day.deltas.score)}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div className="ssr-trip-day-headline">{localizeUnitText(day.decisionHeadline)}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                      <div className="ssr-trip-day-body">
+                        <div className="ssr-trip-day-metrics">
+                          <div className="ssr-trip-day-metric">
+                            <span className="mk">Temp</span>
+                            <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}{renderMetricDelta(day.deltas?.tempF, '°')}</span>
+                          </div>
+                          <div className="ssr-trip-day-metric">
+                            <span className="mk">Gust</span>
+                            <span className={`mv ${gustWarn ? 'warn' : ''}`}>{formatWindDisplay(day.windGustMph, { includeUnit: false })}{renderMetricDelta(day.deltas?.windGustMph)}</span>
+                          </div>
+                          <div className="ssr-trip-day-metric">
+                            <span className="mk">Precip</span>
+                            <span className={`mv ${precipWarn ? 'warn' : ''}`}>{day.precipChance !== null ? `${day.precipChance}%` : '—'}{renderMetricDelta(day.deltas?.precipChance, '%')}</span>
+                          </div>
+                        </div>
+                        <div className="ssr-trip-day-headline">{localizeUnitText(day.decisionHeadline)}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
 
             {/* SELECTED DAY DETAIL */}
             {selected && (
-              <div className="ssr-trip-detail" ref={detailRef} aria-live="polite">
+              <div className="ssr-trip-panel ssr-trip-detail" ref={detailRef} aria-live="polite">
                 <div className="ssr-trip-detail-h">
                   <div className="ssr-trip-detail-title">
                     <div>
