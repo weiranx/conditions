@@ -44,6 +44,7 @@ export interface AccountContextValue {
   available: boolean | null;
   user: AccountUser | null;
   tier: AccountTier | null;
+  reportCount: number | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;

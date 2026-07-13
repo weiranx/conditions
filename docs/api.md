@@ -336,6 +336,7 @@ Returns account availability and the current user, if signed in:
     "currentPeriodEnd": null,
     "cancelAtPeriodEnd": false
   },
+  "reportCount": 7,
   "aiUsage": {
     "tierKey": "free",
     "usedTokens": 12500,

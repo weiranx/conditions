@@ -71,13 +71,32 @@ const registerAccountRoutes = ({
       return null;
     }
   };
+  const getReportCount = async (req, user) => {
+    if (!user || !database?.configured || typeof database.query !== 'function') return null;
+    try {
+      const result = await database.query(`
+        SELECT COUNT(*)::bigint AS report_count
+        FROM saved_reports
+        WHERE user_id = $1
+      `, [user.id]);
+      const reportCount = Number(result?.rows?.[0]?.report_count);
+      return Number.isSafeInteger(reportCount) && reportCount >= 0 ? reportCount : null;
+    } catch (error) {
+      req.log?.warn({ err: error, userId: user.id }, 'Account report count could not be loaded');
+      return null;
+    }
+  };
   const accountResponse = async (req, user, available = true) => {
-    const accountTier = await getAccountTier(req, user);
+    const [accountTier, reportCount] = await Promise.all([
+      getAccountTier(req, user),
+      getReportCount(req, user),
+    ]);
     return {
       available,
       authenticated: Boolean(user),
       user,
       accountTier,
+      reportCount,
       aiUsage: await getAIUsage(req, user, accountTier),
     };
   };
@@ -122,6 +141,7 @@ const registerAccountRoutes = ({
         authenticated: false,
         user: null,
         accountTier: null,
+        reportCount: null,
         aiUsage: null,
       });
     }
@@ -211,6 +231,7 @@ const registerAccountRoutes = ({
         authenticated: false,
         user: null,
         accountTier: null,
+        reportCount: null,
         aiUsage: null,
       });
     } catch (error) {

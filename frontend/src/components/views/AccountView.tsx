@@ -3,6 +3,7 @@ import {
   Check,
   CircleUserRound,
   Crown,
+  FileText,
   KeyRound,
   LoaderCircle,
   LogOut,
@@ -188,6 +189,14 @@ export function AccountView({
               <h2>{account.user.displayName}</h2>
               <p className="account-profile-email"><Mail aria-hidden /> {account.user.email}</p>
               <p className="account-member-since">{formatMemberSince(account.user.createdAt)}</p>
+              <section className="account-report-counter" aria-label="Generated report count">
+                <FileText aria-hidden />
+                <div>
+                  <strong>{account.reportCount?.toLocaleString() ?? '—'}</strong>
+                  <span>{account.reportCount === 1 ? 'Report generated' : 'Reports generated'}</span>
+                </div>
+                <small>Saved in history</small>
+              </section>
               <div className="account-profile-note">
                 <ShieldCheck aria-hidden />
                 <div>

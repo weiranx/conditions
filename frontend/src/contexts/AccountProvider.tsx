@@ -22,6 +22,7 @@ interface AccountResponse {
   authenticated: boolean;
   user: AccountUser | null;
   accountTier: AccountTier | null;
+  reportCount: number | null;
   aiUsage: AccountAIUsage | null;
 }
 
@@ -29,6 +30,7 @@ interface AccountState {
   available: boolean | null;
   user: AccountUser | null;
   tier: AccountTier | null;
+  reportCount: number | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
@@ -133,11 +135,18 @@ function parseAccountResponse(payload: unknown): AccountResponse | null {
   if (record.authenticated && !user) return null;
   const accountTier = parseAccountTier(record.accountTier);
   if (record.authenticated && !accountTier && record.accountTier !== undefined) return null;
+  const reportCount = typeof record.reportCount === 'number'
+    && Number.isSafeInteger(record.reportCount)
+    && record.reportCount >= 0
+    ? record.reportCount
+    : null;
+  if (record.reportCount !== undefined && record.reportCount !== null && reportCount === null) return null;
   return {
     available: record.available,
     authenticated: record.authenticated,
     user,
     accountTier: record.authenticated ? accountTier || LEGACY_FREE_TIER : null,
+    reportCount: record.authenticated ? reportCount : null,
     aiUsage: parseAIUsage(record.aiUsage),
   };
 }
@@ -147,6 +156,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     available: null,
     user: null,
     tier: null,
+    reportCount: null,
     aiUsage: null,
     loading: true,
     busy: false,
@@ -193,6 +203,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       available: account.available,
       user: account.authenticated ? account.user : null,
       tier: account.authenticated ? account.accountTier : null,
+      reportCount: account.authenticated ? account.reportCount : null,
       aiUsage: account.authenticated ? account.aiUsage : null,
       loading: false,
       busy: false,
@@ -297,7 +308,13 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           });
           if (!response.ok) {
             if (response.status === 401) {
-              setState((current) => ({ ...current, user: null, tier: null, aiUsage: null }));
+              setState((current) => ({
+                ...current,
+                user: null,
+                tier: null,
+                reportCount: null,
+                aiUsage: null,
+              }));
             }
             throw new Error(readApiErrorMessage(payload, 'Could not save account preferences.'));
           }
@@ -308,6 +325,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             available: account.available,
             user: account.user,
             tier: account.accountTier,
+            reportCount: account.reportCount,
             aiUsage: account.aiUsage,
             preferenceSyncState: 'saved',
             preferenceError: null,

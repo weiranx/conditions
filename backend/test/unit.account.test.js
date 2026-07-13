@@ -425,11 +425,16 @@ describe('account routes', () => {
     available: true,
     getAccountTier: jest.fn().mockResolvedValue(FREE_TIER),
   };
-  const makeApp = (service, googleVerifier) => {
+  const reportDatabase = {
+    configured: true,
+    query: jest.fn().mockResolvedValue({ rows: [{ report_count: '7' }] }),
+  };
+  const makeApp = (service, googleVerifier, database = reportDatabase) => {
     const app = express();
     app.use(express.json());
     registerAccountRoutes({
       app,
+      database,
       service,
       tierService,
       usageService,
@@ -479,9 +484,14 @@ describe('account routes', () => {
       authenticated: true,
       user,
       accountTier: FREE_TIER,
+      reportCount: 7,
       aiUsage: AI_USAGE,
     });
     expect(service.getUserForSession).toHaveBeenCalledWith('test-session-token');
+    expect(reportDatabase.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM saved_reports'),
+      [USER_ROW.id],
+    );
 
     const preferencesResponse = await agent.patch('/api/account/preferences').send({ preferences: PREFERENCES });
     expect(preferencesResponse.status).toBe(200);
@@ -503,6 +513,7 @@ describe('account routes', () => {
       authenticated: false,
       user: null,
       accountTier: null,
+      reportCount: null,
       aiUsage: null,
     });
   });
@@ -555,6 +566,7 @@ describe('account routes', () => {
       authenticated: true,
       user,
       accountTier: FREE_TIER,
+      reportCount: 7,
       aiUsage: AI_USAGE,
     });
     expect(googleVerifier.verify).toHaveBeenCalledWith('header.payload.signature-value', {
@@ -566,6 +578,24 @@ describe('account routes', () => {
     }));
     expect(loginResponse.headers['set-cookie'].join(';')).toMatch(/bc_session=google-session-token/);
     expect(loginResponse.headers['set-cookie'].join(';')).toMatch(/bc_google_nonce=;/);
+  });
+
+  test('keeps account details available when the report counter cannot be loaded', async () => {
+    const user = {
+      id: USER_ROW.id,
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      createdAt: USER_ROW.created_at.toISOString(),
+      preferences: PREFERENCES,
+    };
+    const response = await request(makeApp(
+      { available: true, getUserForSession: jest.fn().mockResolvedValue(user) },
+      undefined,
+      { configured: true, query: jest.fn().mockRejectedValue(new Error('offline')) },
+    )).get('/api/auth/session');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ authenticated: true, user, reportCount: null });
   });
 
   test('returns field-safe registration conflicts', async () => {
