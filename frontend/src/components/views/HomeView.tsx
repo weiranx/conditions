@@ -262,7 +262,7 @@ export function HomeView({
               </button>
 
               <div className="ssr-h-builder-assurance" aria-label="Brief benefits">
-                <span><Check size={12} aria-hidden /> No account required</span>
+                <span><Check size={12} aria-hidden /> 10 reports without an account</span>
                 <span><Check size={12} aria-hidden /> Source age and confidence included</span>
               </div>
 

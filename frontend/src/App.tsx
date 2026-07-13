@@ -58,6 +58,12 @@ import {
   persistUserPreferences,
 } from './app/preferences';
 import {
+  GUEST_REPORT_COUNT_KEY,
+  GUEST_REPORT_LIMIT,
+  incrementGuestReportCount,
+  loadGuestReportCount,
+} from './app/guest-report-limit';
+import {
   stringifyRawPayload,
   summarizeText,
   toPlainText,
@@ -129,7 +135,7 @@ import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 import { useProductFeatureFlags } from './contexts/feature-flags';
 import { useAccount } from './hooks/useAccount';
 import { AiAccessContext } from './contexts/ai-access';
-import { AiAccessPrompt } from './components/AiAccessPrompt';
+import { AiAccessPrompt, type AccountAccessReason } from './components/AiAccessPrompt';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -188,7 +194,8 @@ function App() {
     user: accountUser,
   } = useAccount();
   const accountUserId = accountUser?.id;
-  const [aiAccessPromptOpen, setAiAccessPromptOpen] = useState(false);
+  const [accountAccessReason, setAccountAccessReason] = useState<AccountAccessReason | null>(null);
+  const [guestReportCount, setGuestReportCount] = useState(loadGuestReportCount);
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
   const maxForecastDate = formatDateInput(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7));
@@ -285,6 +292,21 @@ function App() {
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
+  const handleNewReportGenerated = useCallback(() => {
+    if (accountUser) return;
+    setGuestReportCount((currentCount) => incrementGuestReportCount(currentCount));
+  }, [accountUser]);
+
+  useEffect(() => {
+    const syncGuestReportCount = (event: StorageEvent) => {
+      if (event.key === GUEST_REPORT_COUNT_KEY) {
+        setGuestReportCount(loadGuestReportCount());
+      }
+    };
+    window.addEventListener('storage', syncGuestReportCount);
+    return () => window.removeEventListener('storage', syncGuestReportCount);
+  }, []);
+
   const initialRestoredReport = React.useMemo(() => {
     if (!initialPersistedReport || !initialLinkState.hasObjective) {
       return null;
@@ -317,6 +339,7 @@ function App() {
     preferences,
     isProductionBuild,
     objectiveNameRef,
+    onNewReportGenerated: handleNewReportGenerated,
     initialSafetyData: initialRestoredReport?.safetyData,
     initialAiBriefNarrative: initialRestoredReport?.ai.aiBriefNarrative,
     initialSnowVisionAnalysis: initialRestoredReport?.ai.snowVisionAnalysis,
@@ -561,11 +584,16 @@ function App() {
 
   const requestAiAccess = useCallback(() => {
     if (accountUser) return true;
-    setAiAccessPromptOpen(true);
+    setAccountAccessReason('ai');
     return false;
   }, [accountUser]);
+  const requestNewReportAccess = useCallback(() => {
+    if (accountUser || guestReportCount < GUEST_REPORT_LIMIT) return true;
+    setAccountAccessReason('report-limit');
+    return false;
+  }, [accountUser, guestReportCount]);
   const aiAccessContextValue = useMemo(() => ({ requestAiAccess }), [requestAiAccess]);
-  const closeAiAccessPrompt = useCallback(() => setAiAccessPromptOpen(false), []);
+  const closeAccountAccessPrompt = useCallback(() => setAccountAccessReason(null), []);
 
   useEffect(() => {
     if (!featureFlags.tripPlanning && view === 'trip') {
@@ -906,8 +934,15 @@ function App() {
       setPastStartPrompt(pastStart);
       return;
     }
+    const retryCreatesNewReport = !safetyData;
+    if (retryCreatesNewReport && !requestNewReportAccess()) {
+      return;
+    }
     setPreviousSafetyData(safetyData);
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
+    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
+      force: true,
+      countAsNewReport: retryCreatesNewReport,
+    });
   };
 
   // Fetching a report is an explicit, user-confirmed action rather than an automatic
@@ -922,9 +957,15 @@ function App() {
       setPastStartPrompt(pastStart);
       return;
     }
+    if (!requestNewReportAccess()) {
+      return;
+    }
     collapseMobilePlanControls();
     setPreviousSafetyData(null);
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
+    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
+      force: true,
+      countAsNewReport: true,
+    });
   };
 
   // Arms a one-shot report fetch when the page loads from a shared link (URL already carries
@@ -942,11 +983,20 @@ function App() {
       setPastStartPrompt(pastStart);
       return;
     }
+    if (!requestNewReportAccess()) {
+      return;
+    }
     collapseMobilePlanControls();
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, { force: true });
-  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, objectiveTimezone, fetchSafetyData, collapseMobilePlanControls]);
+    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
+      force: true,
+      countAsNewReport: true,
+    });
+  }, [pendingAutoGenerate, hasObjective, view, position, forecastDate, alpineStartTime, objectiveTimezone, fetchSafetyData, collapseMobilePlanControls, requestNewReportAccess]);
 
   const handleEditPlan = useCallback(() => {
+    if (!requestNewReportAccess()) {
+      return false;
+    }
     clearPersistedReport();
     setSafetyData(null);
     setPreviousSafetyData(null);
@@ -959,7 +1009,8 @@ function App() {
     setSnowVisionLoading(false);
     setSnowVisionError(null);
     resetRouteState();
-  }, [setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState]);
+    return true;
+  }, [setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, requestNewReportAccess]);
 
   const openPlannerView = () => {
     if (!hasObjective && !searchQuery.trim()) {
@@ -1575,19 +1626,22 @@ function App() {
   };
   const preparePastStartReplacement = () => {
     if (safetyData) {
-      handleEditPlan();
+      if (!handleEditPlan()) return false;
+    } else if (!requestNewReportAccess()) {
+      return false;
     }
     setPastStartPrompt(null);
     setError(null);
+    return true;
   };
   const handleUseNowAfterPastStart = () => {
-    preparePastStartReplacement();
+    if (!preparePastStartReplacement()) return;
     const nowInputs = currentDateTimeInputs(objectiveTimezone);
     setForecastDate(nowInputs.date);
     setAlpineStartTime(nowInputs.time);
   };
   const handleUseTomorrowAfterPastStart = () => {
-    preparePastStartReplacement();
+    if (!preparePastStartReplacement()) return;
     setForecastDate(getTomorrowDate(objectiveTimezone));
     setAlpineStartTime(preferences.defaultStartTime);
   };
@@ -2314,8 +2368,8 @@ function App() {
         </>
       ) : null}
       <AiAccessPrompt
-        open={aiAccessPromptOpen}
-        onClose={closeAiAccessPrompt}
+        reason={accountAccessReason}
+        onClose={closeAccountAccessPrompt}
         preferences={preferences}
       />
     </AiAccessContext.Provider>

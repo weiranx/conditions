@@ -15,7 +15,7 @@ interface LegalViewProps {
   openTripToolView: () => void;
 }
 
-const EFFECTIVE_DATE = 'July 12, 2026';
+const EFFECTIVE_DATE = 'July 13, 2026';
 
 function PrivacyPolicy() {
   return (
@@ -24,8 +24,8 @@ function PrivacyPolicy() {
         <h2>What this policy covers</h2>
         <p>
           This policy explains how Backcountry Conditions collects, uses, stores, and shares information
-          when you use the website, optional account features, and planning tools. You can continue to use the
-          planning tools without creating an account.
+          when you use the website, optional account features, and planning tools. You can generate up to ten
+          reports without creating an account, then sign in or create one to continue.
         </p>
       </section>
 
@@ -53,9 +53,9 @@ function PrivacyPolicy() {
         <h3>Information stored on your device</h3>
         <p>
           When you are not signed in, the app uses browser storage for preferences and interface settings. Recent
-          or saved objectives and a recent generated report also remain in browser storage whether or not you use
-          an account. You can clear this information through the app or your browser. An administrator access key,
-          if used, is kept only for the browser session.
+          or saved objectives, a recent generated report, and the number of reports generated without an account
+          also remain in browser storage. You can clear this information through the app or your browser. An
+          administrator access key, if used, is kept only for the browser session.
         </p>
       </section>
 

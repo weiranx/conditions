@@ -16,10 +16,16 @@ export interface UseSafetyDataParams {
   preferences: UserPreferences;
   isProductionBuild: boolean;
   objectiveNameRef: React.RefObject<string>;
+  onNewReportGenerated?: () => void;
   initialSafetyData?: SafetyData | null;
   initialAiBriefNarrative?: string | null;
   initialSnowVisionAnalysis?: string | null;
   initialSnowVisionImage?: string | null;
+}
+
+export interface SafetyFetchOptions {
+  force?: boolean;
+  countAsNewReport?: boolean;
 }
 
 export interface UseSafetyDataReturn {
@@ -48,7 +54,7 @@ export interface UseSafetyDataReturn {
     lon: number,
     date: string,
     startTime: string,
-    options?: { force?: boolean },
+    options?: SafetyFetchOptions,
   ) => Promise<void>;
   clearLastLoadedKey: () => void;
   clearWakeRetry: () => void;
@@ -63,6 +69,7 @@ export function useSafetyData({
   preferences,
   isProductionBuild,
   objectiveNameRef,
+  onNewReportGenerated,
   initialSafetyData = null,
   initialAiBriefNarrative = null,
   initialSnowVisionAnalysis = null,
@@ -88,9 +95,10 @@ export function useSafetyData({
     startTime: string;
     travelWindowHours: number;
     force: boolean;
+    countAsNewReport: boolean;
   } | null>(null);
   const fetchSafetyDataRef = useRef<
-    ((lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => Promise<void>) | null
+    ((lat: number, lon: number, date: string, startTime: string, options?: SafetyFetchOptions) => Promise<void>) | null
   >(null);
   const wakeRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeRetryStateRef = useRef<{
@@ -100,6 +108,7 @@ export function useSafetyData({
     date: string;
     startTime: string;
     attempts: number;
+    countAsNewReport: boolean;
   } | null>(null);
   // Tracks the controller for whichever /api/safety request is currently
   // in flight, so a newer request (or unmount) can cancel it instead of
@@ -129,7 +138,14 @@ export function useSafetyData({
     );
   }, []);
 
-  const scheduleWakeRetry = useCallback((payload: { key: string; lat: number; lon: number; date: string; startTime: string }) => {
+  const scheduleWakeRetry = useCallback((payload: {
+    key: string;
+    lat: number;
+    lon: number;
+    date: string;
+    startTime: string;
+    countAsNewReport: boolean;
+  }) => {
     if (!isProductionBuild) {
       return;
     }
@@ -165,7 +181,10 @@ export function useSafetyData({
         clearWakeRetry();
         const fetchFn = fetchSafetyDataRef.current;
         if (fetchFn) {
-          void fetchFn(state.lat, state.lon, state.date, state.startTime, { force: true });
+          void fetchFn(state.lat, state.lon, state.date, state.startTime, {
+            force: true,
+            countAsNewReport: state.countAsNewReport,
+          });
         }
         return;
       }
@@ -175,7 +194,7 @@ export function useSafetyData({
   }, [clearWakeRetry, isProductionBuild]);
 
   const fetchSafetyData = useCallback(
-    async (lat: number, lon: number, date: string, startTime: string, options?: { force?: boolean }) => {
+    async (lat: number, lon: number, date: string, startTime: string, options?: SafetyFetchOptions) => {
       const safeDate = DATE_FMT.test(date) ? date : todayDate;
       const safeStartTime = parseTimeInputMinutes(startTime) === null ? preferences.defaultStartTime : startTime;
       const safeTravelWindowHours = Math.max(
@@ -184,6 +203,7 @@ export function useSafetyData({
       );
       const requestKey = buildSafetyRequestKey(lat, lon, safeDate, safeStartTime, safeTravelWindowHours);
       const forceReload = options?.force === true;
+      const countAsNewReport = options?.countAsNewReport === true;
 
       if (wakeRetryStateRef.current?.key && wakeRetryStateRef.current.key !== requestKey) {
         clearWakeRetry();
@@ -200,6 +220,7 @@ export function useSafetyData({
           startTime: safeStartTime,
           travelWindowHours: safeTravelWindowHours,
           force: forceReload,
+          countAsNewReport,
         };
         // A newer request has superseded the one currently in flight — abort
         // it immediately rather than letting it run to completion only to
@@ -251,6 +272,9 @@ export function useSafetyData({
           setSnowVisionLoading(false);
           setSnowVisionError(null);
           lastLoadedSafetyKeyRef.current = requestKey;
+          if (countAsNewReport) {
+            onNewReportGenerated?.();
+          }
           if (wakeRetryStateRef.current?.key === requestKey) {
             clearWakeRetry();
           }
@@ -265,7 +289,14 @@ export function useSafetyData({
         const message = err instanceof Error ? err.message : 'System error';
         setError(message);
         if (isRetriableWakeupError(message)) {
-          scheduleWakeRetry({ key: requestKey, lat, lon, date: safeDate, startTime: safeStartTime });
+          scheduleWakeRetry({
+            key: requestKey,
+            lat,
+            lon,
+            date: safeDate,
+            startTime: safeStartTime,
+            countAsNewReport,
+          });
         }
       } finally {
         if (safetyAbortControllerRef.current === controller) {
@@ -278,12 +309,15 @@ export function useSafetyData({
         if (pending) {
           const nextFetch = fetchSafetyDataRef.current;
           if (nextFetch) {
-            void nextFetch(pending.lat, pending.lon, pending.date, pending.startTime, { force: pending.force });
+            void nextFetch(pending.lat, pending.lon, pending.date, pending.startTime, {
+              force: pending.force,
+              countAsNewReport: pending.countAsNewReport,
+            });
           }
         }
       }
     },
-    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef],
+    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, onNewReportGenerated],
   );
 
   useEffect(() => {

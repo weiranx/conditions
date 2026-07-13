@@ -1,11 +1,13 @@
 import React from 'react';
-import { KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
+import { FileText, KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
 import type { UserPreferences } from '../app/types';
 import { useAccount } from '../hooks/useAccount';
 import '../styles/ai-access-prompt.css';
 
+export type AccountAccessReason = 'ai' | 'report-limit';
+
 interface AiAccessPromptProps {
-  open: boolean;
+  reason: AccountAccessReason | null;
   onClose: () => void;
   preferences: UserPreferences;
 }
@@ -13,7 +15,7 @@ interface AiAccessPromptProps {
 type AuthMode = 'signin' | 'create';
 
 export function AiAccessPrompt({
-  open,
+  reason,
   onClose,
   preferences,
 }: AiAccessPromptProps) {
@@ -25,6 +27,13 @@ export function AiAccessPrompt({
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
+  const open = reason !== null;
+  const reportLimitReached = reason === 'report-limit';
+  const eyebrow = reportLimitReached ? 'Free report limit reached' : 'Free with an account';
+  const title = reportLimitReached ? 'Sign in to create more reports' : 'AI is free to use';
+  const description = reportLimitReached
+    ? 'You have used the 10 reports available without an account in this browser. Sign in or create an account below to continue planning.'
+    : 'AI features are free to use, but you need an account. Sign in or create one below to use AI analysis, report chat, snow imagery insights, and route assistance.';
 
   React.useEffect(() => {
     if (!open) {
@@ -98,14 +107,11 @@ export function AiAccessPrompt({
           <X size={18} aria-hidden />
         </button>
         <div className="ai-access-icon" aria-hidden>
-          <Sparkles size={22} />
+          {reportLimitReached ? <FileText size={22} /> : <Sparkles size={22} />}
         </div>
-        <span className="ai-access-eyebrow"><LockKeyhole size={13} aria-hidden /> Free with an account</span>
-        <h2 id="ai-access-title">AI is free to use</h2>
-        <p id="ai-access-description">
-          AI features are free to use, but you need an account. Sign in or create one below to use AI analysis,
-          report chat, snow imagery insights, and route assistance.
-        </p>
+        <span className="ai-access-eyebrow"><LockKeyhole size={13} aria-hidden /> {eyebrow}</span>
+        <h2 id="ai-access-title">{title}</h2>
+        <p id="ai-access-description">{description}</p>
 
         <div className="ai-access-account" aria-live="polite">
           {account.loading ? (
@@ -116,7 +122,9 @@ export function AiAccessPrompt({
           ) : account.available === false ? (
             <div className="ai-access-unavailable" role="status">
               <strong>Accounts are temporarily unavailable.</strong>
-              <span>Try again later to use AI features on this deployment.</span>
+              <span>
+                Try again later to {reportLimitReached ? 'create more reports' : 'use AI features'} on this deployment.
+              </span>
               <button type="button" className="ai-access-secondary" onClick={onClose}>Not now</button>
             </div>
           ) : (
