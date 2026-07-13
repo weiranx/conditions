@@ -13,8 +13,8 @@ export type MultiDayTripForecastDay = {
   decisionHeadline: string;
   score: number | null;
   weatherDescription: string;
-  tempF: number | null;
-  feelsLikeF: number | null;
+  tempHighF: number | null;
+  tempLowF: number | null;
   windGustMph: number | null;
   windDirection: string | null;
   precipChance: number | null;
@@ -39,7 +39,8 @@ export type MultiDayTripForecastDay = {
   sourceIssuedTime: string | null;
   deltas?: {
     score: number | null;
-    tempF: number | null;
+    tempHighF: number | null;
+    tempLowF: number | null;
     windGustMph: number | null;
     precipChance: number | null;
   } | null;
@@ -180,8 +181,12 @@ export function useTripForecast({
             const scoreRaw = Number.isFinite(rawSafetyScore)
               ? normalizedDecisionScore(dayData, decisionOptions)
               : Number.NaN;
-            const tempRaw = Number(dayData?.weather?.temp);
-            const feelsRaw = Number(dayData?.weather?.feelsLike ?? dayData?.weather?.temp);
+            const tempHighRaw = finiteNumberOrNull(
+              dayData?.weather?.dailyTempHighF ?? dayData?.weather?.temperatureContext24h?.maxTempF,
+            );
+            const tempLowRaw = finiteNumberOrNull(
+              dayData?.weather?.dailyTempLowF ?? dayData?.weather?.temperatureContext24h?.minTempF,
+            );
             const gustRaw = Number(dayData?.weather?.windGust);
             const precipRaw = Number(dayData?.weather?.precipChance);
             const humidityRaw = finiteNumberOrNull(dayData?.weather?.humidity);
@@ -200,8 +205,8 @@ export function useTripForecast({
               decisionHeadline,
               score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
               weatherDescription: String(dayData?.weather?.description || 'Unknown'),
-              tempF: Number.isFinite(tempRaw) ? tempRaw : null,
-              feelsLikeF: Number.isFinite(feelsRaw) ? feelsRaw : null,
+              tempHighF: tempHighRaw,
+              tempLowF: tempLowRaw,
               windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
               windDirection: dayData?.weather?.windDirection || null,
               precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
@@ -241,7 +246,8 @@ export function useTripForecast({
         const prev = rows[idx - 1];
         row.deltas = {
           score: diffOrNull(row.score, prev.score),
-          tempF: diffOrNull(row.tempF, prev.tempF),
+          tempHighF: diffOrNull(row.tempHighF, prev.tempHighF),
+          tempLowF: diffOrNull(row.tempLowF, prev.tempLowF),
           windGustMph: diffOrNull(row.windGustMph, prev.windGustMph),
           precipChance: diffOrNull(row.precipChance, prev.precipChance),
         };

@@ -457,6 +457,8 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
 .ssr-trip-day-metric { display: flex; flex-direction: column; gap: 1px; }
 .ssr-trip-day-metric .mk { font-size: 9px; letter-spacing: 0; text-transform: uppercase; color: var(--ssr-text-3); }
 .ssr-trip-day-metric .mv { font-size: 14px; font-weight: 600; color: var(--ssr-text); font-variant-numeric: tabular-nums; }
+.ssr-trip-day-metric .ssr-trip-temp-range { display: flex; flex-wrap: wrap; gap: 1px 8px; }
+.ssr-trip-day-metric .ssr-trip-temp-range > span { white-space: nowrap; }
 .ssr-trip-day-metric .mv.warn { color: var(--ssr-nogo-ink); }
 .ssr-trip-day-headline {
   font-size: 12.5px;

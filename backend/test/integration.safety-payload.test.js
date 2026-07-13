@@ -169,7 +169,11 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(typeof res.body.capabilities.ai).toBe('boolean');
     expect(res.body.location).toEqual({ lat: 46.88, lon: -121.7269 });
     expect(res.body.forecast).toMatchObject({ selectedDate: FORECAST_DATE });
-    expect(res.body.weather).toMatchObject({ dataSource: 'noaa' });
+    expect(res.body.weather).toMatchObject({
+      dataSource: 'noaa',
+      dailyTempHighF: 59,
+      dailyTempLowF: 50,
+    });
     expect(typeof res.body.weather.generatedTime).toBe('string');
     expect(res.body.avalanche).toBeTruthy();
     expect(res.body.alerts).toBeTruthy();

@@ -93,6 +93,10 @@ describe('provider raw-payload caches', () => {
     expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
     expect(first.weatherData.temp).toBe(40);
     expect(second.weatherData.temp).toBe(50);
+    expect(first.weatherData.dailyTempHighF).toBe(50);
+    expect(first.weatherData.dailyTempLowF).toBe(40);
+    expect(second.weatherData.dailyTempHighF).toBe(50);
+    expect(second.weatherData.dailyTempLowF).toBe(40);
   });
 
   test('Open-Meteo weather stops host retries when the request signal is aborted', async () => {

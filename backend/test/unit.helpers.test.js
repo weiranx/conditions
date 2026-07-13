@@ -2979,6 +2979,7 @@ const {
   hourLabelFromIso,
   localHourFromIso,
   buildTemperatureContext24h,
+  buildDailyTemperatureRange,
   isWeatherFieldMissing,
   blendNoaaWeatherWithFallback,
 } = require('../src/utils/weather-data');
@@ -3094,6 +3095,16 @@ test('buildTemperatureContext24h sets overnightLow and daytimeHigh to null when 
   // isDaytime is undefined for these points, so neither bucket gets populated
   expect(ctx.overnightLowF).toBeNull();
   expect(ctx.daytimeHighF).toBeNull();
+});
+
+test('buildDailyTemperatureRange computes the selected date high and low', () => {
+  expect(buildDailyTemperatureRange([
+    { tempF: 31 },
+    { tempF: 47 },
+    { tempF: 39 },
+    { tempF: null },
+  ])).toEqual({ lowF: 31, highF: 47 });
+  expect(buildDailyTemperatureRange([])).toBeNull();
 });
 
 // --- blendNoaaWeatherWithFallback ---

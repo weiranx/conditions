@@ -12,6 +12,7 @@ const {
 const { buildVisibilityRisk, buildElevationForecastBands } = require('./visibility-risk');
 const {
   blendNoaaWeatherWithFallback,
+  buildDailyTemperatureRange,
   buildTemperatureContext24h,
   hourLabelFromIso,
 } = require('./weather-data');
@@ -197,6 +198,10 @@ async function fetchWeatherPipeline({
 
     selectedForecastPeriod = periods[forecastStartIndex];
 
+    const dailyTemperatureRange = buildDailyTemperatureRange(dayPeriods.map(({ period }) => ({
+      tempF: period?.temperature,
+    })));
+
     // Build 24-hour temperature context from selected period for freeze/thaw and day/night analysis.
     const temperatureContextPoints = periods
       .slice(forecastStartIndex, forecastStartIndex + 24)
@@ -301,6 +306,8 @@ async function fetchWeatherPipeline({
       forecastEndTime: selectedForecastPeriod?.endTime || null,
       forecastDate: selectedForecastDate,
       trend: hourlyTrend,
+      dailyTempHighF: dailyTemperatureRange?.highF ?? null,
+      dailyTempLowF: dailyTemperatureRange?.lowF ?? null,
       temperatureContext24h,
       visibilityRisk: null,
       sourceDetails: {
@@ -324,6 +331,8 @@ async function fetchWeatherPipeline({
           forecastStartTime: 'NOAA',
           forecastEndTime: 'NOAA',
           trend: 'NOAA',
+          dailyTempHighF: 'NOAA',
+          dailyTempLowF: 'NOAA',
           temperatureContext24h: 'NOAA',
           visibilityRisk: 'Derived from NOAA weather fields',
         },

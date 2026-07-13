@@ -190,6 +190,17 @@ function renderMetricDelta(delta: number | null | undefined, unit = '') {
   );
 }
 
+function formatTemperatureRange(
+  highF: number | null,
+  lowF: number | null,
+  formatTempDisplay: TripViewProps['formatTempDisplay'],
+  options?: { includeUnit?: boolean },
+): string {
+  const high = formatTempDisplay(highF, options);
+  const low = formatTempDisplay(lowF, options);
+  return `H ${high} / L ${low}`;
+}
+
 /* ── Safety-score trend arc across the trip ── */
 function TrendArc({
   days,
@@ -427,7 +438,7 @@ export function TripView({
       '',
       ...tripForecastRows.map((day) => [
         `${weekdayLabel(day.date)}, ${monthDayLabel(day.date)} — ${weatherWindowLabel(day.decisionLevel)}${day.score !== null ? ` · ${day.score}/100 weather-window score` : ''}`,
-        `${day.weatherDescription}; ${formatTempDisplay(day.tempF)}; gusts ${formatWindDisplay(day.windGustMph)}; precip ${day.precipChance !== null ? `${day.precipChance}%` : 'N/A'}; travel ${day.travelPassHours}/${day.travelTotalHours}h passing.`,
+        `${day.weatherDescription}; ${formatTemperatureRange(day.tempHighF, day.tempLowF, formatTempDisplay)}; gusts ${formatWindDisplay(day.windGustMph)}; precip ${day.precipChance !== null ? `${day.precipChance}%` : 'N/A'}; travel ${day.travelPassHours}/${day.travelTotalHours}h passing.`,
         day.decisionHeadline,
       ].join('\n')),
       '',
@@ -718,7 +729,7 @@ export function TripView({
                       <th scope="col">Weather gate</th>
                       <th scope="col">Weather score</th>
                       <th scope="col">Travel</th>
-                      <th scope="col">Temperature</th>
+                      <th scope="col">High / low</th>
                       <th scope="col">Peak gust</th>
                       <th scope="col">Precip</th>
                       <th scope="col">Daylight</th>
@@ -738,7 +749,7 @@ export function TripView({
                         <td><span className={`ssr-trip-day-pill ${levelClass(day.decisionLevel)}`}>{weatherWindowLabel(day.decisionLevel)}</span></td>
                         <td className="numeric"><strong>{day.score ?? '—'}</strong>{day.score !== null ? '/100' : ''}</td>
                         <td className="numeric"><strong>{day.travelPassHours}</strong>/{day.travelTotalHours}h</td>
-                        <td>{formatTempDisplay(day.tempF)}</td>
+                        <td>{formatTemperatureRange(day.tempHighF, day.tempLowF, formatTempDisplay)}</td>
                         <td>{formatWindDisplay(day.windGustMph)}</td>
                         <td>{day.precipChance !== null ? `${day.precipChance}%` : '—'}</td>
                         <td>
@@ -824,8 +835,11 @@ export function TripView({
                       <div className="ssr-trip-day-body">
                         <div className="ssr-trip-day-metrics">
                           <div className="ssr-trip-day-metric">
-                            <span className="mk">Temp</span>
-                            <span className="mv">{formatTempDisplay(day.tempF, { includeUnit: false })}{renderMetricDelta(day.deltas?.tempF, '°')}</span>
+                            <span className="mk">High / low</span>
+                            <span className="mv ssr-trip-temp-range">
+                              <span>H {formatTempDisplay(day.tempHighF, { includeUnit: false })}{renderMetricDelta(day.deltas?.tempHighF, '°')}</span>
+                              <span>L {formatTempDisplay(day.tempLowF, { includeUnit: false })}{renderMetricDelta(day.deltas?.tempLowF, '°')}</span>
+                            </span>
                           </div>
                           <div className="ssr-trip-day-metric">
                             <span className="mk">Gust</span>
@@ -866,8 +880,8 @@ export function TripView({
                   <div className="ssr-trip-detail-cell">
                     <h3><CloudRain /> Weather</h3>
                     <p>
-                      {localizeUnitText(selected.weatherDescription)}. Temp {formatTempDisplay(selected.tempF)} (feels{' '}
-                      {formatTempDisplay(selected.feelsLikeF)}), precip {selected.precipChance !== null ? `${selected.precipChance}%` : 'N/A'}.
+                      {localizeUnitText(selected.weatherDescription)}. High {formatTempDisplay(selected.tempHighF)}, low{' '}
+                      {formatTempDisplay(selected.tempLowF)}; precip {selected.precipChance !== null ? `${selected.precipChance}%` : 'N/A'}.
                     </p>
                     <small>{selected.humidityPct !== null ? `${selected.humidityPct}% humidity` : 'Humidity unavailable'} · {selected.cloudCoverPct !== null ? `${selected.cloudCoverPct}% cloud cover` : 'Cloud cover unavailable'}</small>
                   </div>

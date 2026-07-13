@@ -126,6 +126,8 @@ export interface SafetyData {
     forecastStartTime?: string;
     forecastEndTime?: string;
     forecastDate?: string;
+    dailyTempHighF?: number | null;
+    dailyTempLowF?: number | null;
     temperatureContext24h?: {
       windowHours?: number | null;
       timezone?: string | null;

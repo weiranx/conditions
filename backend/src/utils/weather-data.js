@@ -151,6 +151,21 @@ const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 
   };
 };
 
+const buildDailyTemperatureRange = (points) => {
+  const temperatures = (Array.isArray(points) ? points : [])
+    .map((point) => point?.tempF)
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .map(Number)
+    .filter(Number.isFinite);
+  if (!temperatures.length) {
+    return null;
+  }
+  return {
+    lowF: Math.min(...temperatures),
+    highF: Math.max(...temperatures),
+  };
+};
+
 const isWeatherFieldMissing = (value) => {
   if (value === null || value === undefined) {
     return true;
@@ -185,7 +200,7 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
     }
   };
 
-  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'temperatureContext24h', 'cloudCover', 'pressure'].forEach(tryFillField);
+  ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'dailyTempHighF', 'dailyTempLowF', 'temperatureContext24h', 'cloudCover', 'pressure'].forEach(tryFillField);
 
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
@@ -301,6 +316,8 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     forecastEndTime: null,
     forecastDate: forecastDate || null,
     trend: [],
+    dailyTempHighF: null,
+    dailyTempLowF: null,
     temperatureContext24h: null,
     visibilityRisk: buildVisibilityRisk({
       description: 'Weather data unavailable',
@@ -445,6 +462,9 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     const currentWeatherCode = Math.round(readHourlyValue('weather_code', selectedHourIndex, -1));
     const currentIsDay = readHourlyValue('is_day', selectedHourIndex, 1) >= 1;
     const feelsLike = computeFeelsLikeF(currentTemp, currentWind);
+    const dailyTemperatureRange = buildDailyTemperatureRange(dayHourIndexes.map((rowIndex) => ({
+      tempF: readHourlyValue('temperature_2m', rowIndex, Number.NaN),
+    })));
 
     const trend = [];
     const temperatureContextPoints = [];
@@ -527,6 +547,8 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         ?? new Date(new Date(selectedHourIso).getTime() + 3_600_000).toISOString(),
       forecastDate: resolvedDate,
       trend,
+      dailyTempHighF: dailyTemperatureRange?.highF ?? null,
+      dailyTempLowF: dailyTemperatureRange?.lowF ?? null,
       temperatureContext24h,
       visibilityRisk: null,
       sourceDetails: {
@@ -548,8 +570,10 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
               issuedTime: 'Open-Meteo response timestamp',
           timezone: 'Open-Meteo',
           forecastStartTime: 'Open-Meteo',
-              forecastEndTime: 'Open-Meteo',
+          forecastEndTime: 'Open-Meteo',
           trend: 'Open-Meteo',
+          dailyTempHighF: 'Open-Meteo',
+          dailyTempLowF: 'Open-Meteo',
           temperatureContext24h: 'Open-Meteo',
           visibilityRisk: 'Derived from Open-Meteo weather fields',
         },
@@ -585,6 +609,7 @@ module.exports = {
   localHourFromIso,
   dateKeyInTimeZone,
   buildTemperatureContext24h,
+  buildDailyTemperatureRange,
   isWeatherFieldMissing,
   blendNoaaWeatherWithFallback,
   OPEN_METEO_WEATHER_HOURLY_FIELDS,
