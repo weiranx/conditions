@@ -842,58 +842,96 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           const failing = orderedCriticalChecks.filter((c) => !c.ok);
           const passing = orderedCriticalChecks.filter((c) => c.ok);
           const total = orderedCriticalChecks.length;
+          const hasFailures = failing.length > 0;
+          const statusTone = hasFailures ? (decision.level === 'NO-GO' ? 'nogo' : 'caution') : 'go';
+          const statusLabel = hasFailures
+            ? `${failing.length} need${failing.length === 1 ? 's' : ''} action`
+            : 'All clear';
+          const statusGuidance = hasFailures
+            ? decision.level === 'NO-GO'
+              ? 'Do not commit to this plan until the failed thresholds change.'
+              : 'Adjust timing, terrain, or limits before you commit.'
+            : 'No configured threshold is currently tripped. Recheck official sources and conditions before departure.';
+          const passingChecks = (
+            <div className="ssr-cc-pass-grid">
+              {passing.map((check, idx) => (
+                <div className="ssr-cc-pass" key={`p-${idx}`} title={check.detail ? localizeUnitText(check.detail) : undefined}>
+                  <CheckCircle2 size={13} />
+                  <span>{localizeUnitText(check.label)}</span>
+                </div>
+              ))}
+            </div>
+          );
           return (
-            <section className="ssr-card" id="planner-section-checks">
+            <section className={`ssr-card ssr-cc-card ${statusTone}`} id="planner-section-checks">
               <div className="ssr-card-h">
                 <h2>
-                  <span className="ssr-h-icon icon-neutral"><CheckCircle2 size={16} /></span>
+                  <span className={`ssr-h-icon ssr-cc-h-icon ${statusTone}`}>
+                    {hasFailures ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
+                  </span>
                   Critical Checks
                 </h2>
-                <div className="ssr-cc-meter" title={`${passing.length} of ${total} checks passing`}>
-                  <span className="ssr-cc-meter-bar">
-                    {orderedCriticalChecks.map((c, i) => <i key={i} className={c.ok ? 'ok' : 'fail'} />)}
-                  </span>
-                  <span className="ssr-cc-meter-num">{passing.length}/{total}</span>
-                </div>
+                <span className={`ssr-cc-head-status ${statusTone}`}>{statusLabel}</span>
               </div>
               <div className="ssr-card-b">
-                {failing.length > 0 ? (
+                <div className={`ssr-cc-overview ${statusTone}`}>
+                  <span className="ssr-cc-overview-icon" aria-hidden>
+                    {hasFailures ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+                  </span>
+                  <div className="ssr-cc-overview-copy">
+                    <strong>{hasFailures ? `${failing.length} of ${total} checks need attention` : `${total} of ${total} checks pass`}</strong>
+                    <span>{statusGuidance}</span>
+                  </div>
+                  <div className="ssr-cc-meter" title={`${passing.length} of ${total} checks passing`} aria-label={`${passing.length} of ${total} checks passing`}>
+                    <span className="ssr-cc-meter-bar" aria-hidden>
+                      {orderedCriticalChecks.map((c, i) => <i key={i} className={c.ok ? 'ok' : 'fail'} />)}
+                    </span>
+                    <span className="ssr-cc-meter-num">{passing.length}/{total} pass</span>
+                  </div>
+                </div>
+
+                {hasFailures && (
                   <div className="ssr-cc-group">
-                    <div className="ssr-cc-group-h warn">
-                      <AlertTriangle size={13} /> Needs attention <span className="ssr-cc-count">{failing.length}</span>
+                    <div className={`ssr-cc-group-h ${statusTone}`}>
+                      <AlertTriangle size={13} /> {decision.level === 'NO-GO' ? 'Resolve before committing' : 'Plan adjustments needed'} <span className="ssr-cc-count">{failing.length}</span>
                     </div>
                     <div className="ssr-cc-fails">
                       {failing.map((check, idx) => (
-                        <div className="ssr-cc-fail" key={`f-${idx}`}>
+                        <div className={`ssr-cc-fail ${statusTone}`} key={`f-${idx}`}>
                           <span className="ssr-cc-fail-ic"><XCircle size={15} /></span>
                           <div className="ssr-cc-fail-body">
+                            <span className="ssr-cc-fail-meta">{localizeUnitText(check.label)}</span>
                             <span className="ssr-cc-fail-lbl">{localizeUnitText(describeFailedCriticalCheck(check))}</span>
                             {check.detail && <span className="ssr-cc-fail-detail">{localizeUnitText(check.detail)}</span>}
                             {check.action && (
-                              <span className="ssr-cc-fail-action"><ArrowRight size={12} /> {localizeUnitText(check.action)}</span>
+                              <span className="ssr-cc-fail-action">
+                                <ArrowRight size={12} />
+                                <span><strong>Next step:</strong> {localizeUnitText(check.action)}</span>
+                              </span>
                             )}
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                ) : (
-                  <div className="ssr-cc-allclear"><CheckCircle2 size={16} /> All critical checks pass.</div>
                 )}
                 {passing.length > 0 && (
-                  <div className="ssr-cc-group">
-                    <div className="ssr-cc-group-h">
-                      <CheckCircle2 size={13} /> Passing <span className="ssr-cc-count">{passing.length}</span>
+                  hasFailures ? (
+                    <details className="ssr-cc-passing-details">
+                      <summary>
+                        <span><CheckCircle2 size={13} /> Passing checks</span>
+                        <span className="ssr-cc-count">{passing.length}</span>
+                      </summary>
+                      {passingChecks}
+                    </details>
+                  ) : (
+                    <div className="ssr-cc-group ssr-cc-passing-group">
+                      <div className="ssr-cc-group-h">
+                        <CheckCircle2 size={13} /> Checks reviewed <span className="ssr-cc-count">{passing.length}</span>
+                      </div>
+                      {passingChecks}
                     </div>
-                    <div className="ssr-cc-pass-grid">
-                      {passing.map((check, idx) => (
-                        <div className="ssr-cc-pass" key={`p-${idx}`} title={check.detail ? localizeUnitText(check.detail) : undefined}>
-                          <CheckCircle2 size={13} />
-                          <span>{check.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  )
                 )}
               </div>
             </section>
