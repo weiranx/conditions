@@ -358,6 +358,8 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'slow', label: 'Slow (10s+)' },
 ];
 
+const LOG_PAGE_SIZE = 10;
+
 const AUDIT_FILTERS: Array<{ value: AuditFilter; label: string }> = [
   { value: 'all', label: 'All activity' },
   { value: 'configuration', label: 'Configuration' },
@@ -668,6 +670,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [auditQuery, setAuditQuery] = useState('');
   const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [visibleLogCount, setVisibleLogCount] = useState(LOG_PAGE_SIZE);
   const hasLoadedRef = useRef(false);
   const requestActivityRef = useRef<HTMLElement>(null);
   const aiUsageRef = useRef<HTMLElement>(null);
@@ -1053,6 +1056,15 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       return sortAsc ? comparison : -comparison;
     });
   }, [query, rangeLogs, statusFilter, sortKey, sortAsc]);
+
+  const visibleLogs = useMemo(
+    () => filteredAndSorted.slice(0, visibleLogCount),
+    [filteredAndSorted, visibleLogCount],
+  );
+
+  useEffect(() => {
+    setVisibleLogCount(LOG_PAGE_SIZE);
+  }, [analyticsRange, query, sortAsc, sortKey, statusFilter]);
 
   const filteredAuditEntries = useMemo(() => {
     const normalizedQuery = auditQuery.trim().toLowerCase();
@@ -1868,7 +1880,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                 </tr>
               </thead>
               <tbody>
-                {filteredAndSorted.map((entry, index) => {
+                {visibleLogs.map((entry, index) => {
                   const time = formatLogTime(entry.timestamp);
                   const plannerHref = entry.lat != null && entry.lon != null
                     ? `/planner?lat=${entry.lat.toFixed(5)}&lon=${entry.lon.toFixed(5)}${entry.date ? `&date=${encodeURIComponent(entry.date)}` : ''}${entry.startTime ? `&start=${encodeURIComponent(entry.startTime)}` : ''}${entry.name ? `&name=${encodeURIComponent(entry.name)}` : ''}`
@@ -1876,17 +1888,17 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                   const scoreClass = entry.safetyScore == null ? '' : entry.safetyScore >= 70 ? 'is-good' : entry.safetyScore >= 55 ? 'is-watch' : 'is-risk';
                   return (
                     <tr key={`${entry.timestamp}-${entry.lat}-${entry.lon}-${index}`}>
-                      <td><span className="logs-cell-primary logs-cell-tabular">{time.primary}</span><span className="logs-cell-secondary">{time.secondary}</span></td>
-                      <td><span className="logs-cell-primary">{entry.name ?? 'Unnamed report'}</span><span className="logs-cell-secondary logs-cell-mono">{entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : 'No coordinates'}</span></td>
-                      <td><span className="logs-cell-primary">{entry.date ?? 'No date'}</span><span className="logs-cell-secondary">{entry.startTime ? `Starts ${entry.startTime}` : 'No start time'}</span></td>
-                      <td>
+                      <td data-label="Received"><span className="logs-cell-primary logs-cell-tabular">{time.primary}</span><span className="logs-cell-secondary">{time.secondary}</span></td>
+                      <td data-label="Report"><span className="logs-cell-primary">{entry.name ?? 'Unnamed report'}</span><span className="logs-cell-secondary logs-cell-mono">{entry.lat != null && entry.lon != null ? `${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}` : 'No coordinates'}</span></td>
+                      <td data-label="Plan"><span className="logs-cell-primary">{entry.date ?? 'No date'}</span><span className="logs-cell-secondary">{entry.startTime ? `Starts ${entry.startTime}` : 'No start time'}</span></td>
+                      <td data-label="Response">
                         <span className={entry.statusCode === 200 ? 'logs-status-pill is-ok' : 'logs-status-pill is-error'}>{entry.statusCode}</span>
                         {entry.partialData === true && <span className="logs-status-pill is-partial">Partial</span>}
                       </td>
-                      <td><span className={`logs-score ${scoreClass}`}>{entry.safetyScore != null ? entry.safetyScore : '—'}</span></td>
-                      <td className="logs-cell-tabular">{formatDuration(entry.durationMs)}</td>
-                      <td title={entry.userAgent ?? undefined}><span className="logs-cell-primary logs-cell-mono">{entry.ip ?? '—'}</span><span className="logs-cell-secondary">Masked</span></td>
-                      <td>{plannerHref ? <a className="logs-open-link" href={plannerHref} target="_blank" rel="noopener noreferrer" aria-label={`Open ${entry.name ?? 'report'} in planner`}><ExternalLink size={15} aria-hidden /></a> : '—'}</td>
+                      <td data-label="Score"><span className={`logs-score ${scoreClass}`}>{entry.safetyScore != null ? entry.safetyScore : '—'}</span></td>
+                      <td data-label="Duration" className="logs-cell-tabular">{formatDuration(entry.durationMs)}</td>
+                      <td data-label="Network" title={entry.userAgent ?? undefined}><span className="logs-cell-primary logs-cell-mono">{entry.ip ?? '—'}</span><span className="logs-cell-secondary">Masked</span></td>
+                      <td data-label="Open">{plannerHref ? <a className="logs-open-link" href={plannerHref} target="_blank" rel="noopener noreferrer" aria-label={`Open ${entry.name ?? 'report'} in planner`}><ExternalLink size={15} aria-hidden /></a> : '—'}</td>
                     </tr>
                   );
                 })}
@@ -1895,7 +1907,16 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
           </div>
         )}
         <footer className="logs-panel-foot">
-          <span>Showing {filteredAndSorted.length} of {rangeLogs.length} in this period</span>
+          <span>Showing {visibleLogs.length} of {filteredAndSorted.length} matching requests</span>
+          {visibleLogs.length < filteredAndSorted.length && (
+            <button
+              type="button"
+              className="logs-load-more"
+              onClick={() => setVisibleLogCount((current) => current + LOG_PAGE_SIZE)}
+            >
+              Show {Math.min(LOG_PAGE_SIZE, filteredAndSorted.length - visibleLogs.length)} more
+            </button>
+          )}
           <span>{autoRefresh ? 'Auto-refreshes every 30 seconds' : 'Auto-refresh paused'}</span>
         </footer>
       </section>
