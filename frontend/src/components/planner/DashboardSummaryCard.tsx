@@ -454,7 +454,9 @@ export function DashboardSummaryCard({
             ) : aiBriefError ? (
               <div className="ssr-dash-ai-error">
                 <span>{aiBriefError}</span>
-                <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief}>Retry</button>
+                <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief}>
+                  <Sparkles size={14} aria-hidden /> Retry AI analysis
+                </button>
               </div>
             ) : (
               <button type="button" className="ssr-dash-ai-btn" onClick={onRequestAiBrief} disabled={aiBriefLoading}>

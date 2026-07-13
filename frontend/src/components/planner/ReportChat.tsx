@@ -1,6 +1,6 @@
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
-import { ChevronDown, MessageCircleQuestion, Send, Square } from 'lucide-react';
+import { ChevronDown, Send, Sparkles, Square } from 'lucide-react';
 import React from 'react';
 import {
   Conversation,
@@ -97,7 +97,7 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
         aria-expanded={isOpen}
         aria-controls={conversationId}
       >
-        <span className="report-chat-toggle-icon"><MessageCircleQuestion size={17} aria-hidden /></span>
+        <span className="report-chat-toggle-icon"><Sparkles size={17} aria-hidden /></span>
         <span>
           <strong>Ask about this report</strong>
           <small>Chat with the report data already attached</small>
@@ -115,7 +115,7 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
                   <div className="report-chat-suggestions" aria-label="Suggested questions">
                     {STARTER_QUESTIONS.map((question) => (
                       <button key={question} type="button" onClick={() => submitQuestion(question)}>
-                        {question}
+                        <Sparkles size={12} aria-hidden /> {question}
                       </button>
                     ))}
                   </div>
@@ -154,7 +154,9 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
                         className="report-chat-follow-up"
                         suggestion={question}
                         onClick={submitQuestion}
-                      />
+                      >
+                        <Sparkles size={12} aria-hidden /> {question}
+                      </Suggestion>
                     ))}
                   </Suggestions>
                 </div>

@@ -23,7 +23,7 @@ import {
   Package,
   ArrowRight,
   Compass,
-  Satellite,
+  Sparkles,
   LoaderCircle,
   ExternalLink,
 } from 'lucide-react';
@@ -1816,13 +1816,15 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                   ) : snowVisionError ? (
                     <div className="ssr-dash-ai-error">
                     <span>{snowVisionError}</span>
-                    <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction}>Retry</button>
+                    <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction}>
+                      <Sparkles size={14} aria-hidden /> Retry AI analysis
+                    </button>
                     </div>
                   ) : (
                     <button type="button" className="ssr-dash-ai-btn" onClick={handleRequestSnowVisionAction} disabled={snowVisionLoading}>
                     {snowVisionLoading
                       ? <><LoaderCircle size={14} className="spin" aria-hidden /> Analyzing satellite view…</>
-                      : <><Satellite size={14} aria-hidden /> Analyze snow from satellite</>}
+                      : <><Sparkles size={14} aria-hidden /> Analyze snow from satellite</>}
                     </button>
                   )}
                 </div>

@@ -8456,6 +8456,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
 
 .route-analyze-btn {
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   padding: 14px 20px;
   background: rgba(255, 253, 248, 0.55);
   backdrop-filter: blur(12px);
@@ -8769,6 +8773,9 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 .route-option-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-dark);
@@ -8821,6 +8828,9 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 .route-picker-custom button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.8rem;
   font-weight: 600;
   padding: 6px 14px;
@@ -8840,6 +8850,15 @@ button.collapsible-card-header:hover .collapsible-chevron {
 .route-picker-custom button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.route-analyze-btn:not(.route-gpx-upload-btn)::before,
+.route-picker-card .route-option-name::before,
+.route-picker-card .route-picker-custom button::before {
+  content: '✦';
+  color: currentColor;
+  font-size: 0.9em;
+  line-height: 1;
 }
 
 .route-waypoints {

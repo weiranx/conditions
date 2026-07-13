@@ -73,6 +73,9 @@
 
 .report-chat-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
 .report-chat-suggestions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 7px 10px;
   border: 1px solid var(--d-line-2);
   border-radius: 999px;
@@ -156,6 +159,7 @@
 .report-chat-follow-up {
   height: auto;
   min-height: 31px;
+  gap: 5px;
   padding: 6px 10px;
   border-color: var(--d-line-2);
   background: var(--d-surface);
