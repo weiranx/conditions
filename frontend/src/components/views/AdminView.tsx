@@ -1849,7 +1849,7 @@ function AdminDashboard() {
                         </label>
                       </td>
                       <td data-label="Usage">
-                        <span className="admin-user-primary">{user.savedReports.toLocaleString()} saved {user.savedReports === 1 ? 'report' : 'reports'}</span>
+                        <span className="admin-user-primary">{user.savedReports.toLocaleString()} generated {user.savedReports === 1 ? 'report' : 'reports'}</span>
                         <small>{user.aiCalls.toLocaleString()} AI calls · {formatTokenCount(user.aiTokens)} tokens</small>
                       </td>
                       <td data-label="Recent activity">

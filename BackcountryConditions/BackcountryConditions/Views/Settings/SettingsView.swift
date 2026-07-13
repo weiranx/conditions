@@ -98,8 +98,8 @@ struct SettingsView: View {
             }
         }
 
-        settingsCard("Saved data & operations", icon: "externaldrive", copy: "Review offline reports or inspect restricted request activity.") {
-            NavigationLink { ReportHistoryView() } label: { settingsLink("Saved reports", icon: "clock.arrow.circlepath") }
+        settingsCard("Reports & operations", icon: "externaldrive", copy: "Review generated reports or inspect restricted request activity.") {
+            NavigationLink { ReportHistoryView() } label: { settingsLink("Generated reports", icon: "clock.arrow.circlepath") }
             NavigationLink { ReportLogsView() } label: { settingsLink("Report logs", icon: "doc.text.magnifyingglass") }
             Button(role: .destructive) { settings.preferences.reset() } label: { settingsLink("Reset to defaults", icon: "arrow.counterclockwise") }
         }

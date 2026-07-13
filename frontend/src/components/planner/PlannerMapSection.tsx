@@ -125,7 +125,7 @@ export function PlannerMapSection({
     workflowDetail = 'Fetching the latest conditions for this plan.';
     WorkflowStateIcon = RefreshCw;
   } else if (locked) {
-    workflowTitle = readOnly ? 'Saved report' : 'Report ready';
+    workflowTitle = readOnly ? 'Generated report' : 'Report ready';
     workflowDetail = readOnly
       ? 'This shared snapshot is read-only.'
       : 'These inputs match the current results.';

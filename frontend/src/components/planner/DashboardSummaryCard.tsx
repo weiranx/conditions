@@ -357,7 +357,7 @@ export function DashboardSummaryCard({
 
         <div className={`ssr-dash-recheck ${previousSafetyData && recheckChanges.length > 0 ? 'changed' : ''}`} role="status">
           <div>
-            <strong>{previousSafetyData ? (recheckChanges.length > 0 ? 'Changed since your saved report' : 'No material change since your saved report') : 'Offline report saved on this device'}</strong>
+            <strong>{previousSafetyData ? (recheckChanges.length > 0 ? 'Changed since your generated report' : 'No material change since your generated report') : 'Offline generated report available on this device'}</strong>
             <span>{previousSafetyData ? 'Use these deltas for the trailhead re-check.' : `Generated ${generatedAge || 'just now'}; refresh from the plan controls before starting.`}</span>
           </div>
           {recheckChanges.length > 0 && <ul>{recheckChanges.slice(0, 3).map((change) => <li key={change}>{change}</li>)}</ul>}

@@ -39,7 +39,7 @@ const normalizeSavedReport = (value) => {
 
   const serialized = JSON.stringify(value);
   if (Buffer.byteLength(serialized, 'utf8') > MAX_SAVED_REPORT_BYTES) {
-    throw new SavedReportValidationError('This report is too large to save.', 413);
+    throw new SavedReportValidationError('This generated report is too large to add to history.', 413);
   }
   const title = String(value.plan.objectiveName || '').trim().replace(/\s+/gu, ' ').slice(0, 160)
     || 'Backcountry report';
@@ -79,12 +79,12 @@ const registerSavedReportRoutes = ({
     try {
       const user = await accountService.getUserForSession(readSessionToken(req));
       if (!user) {
-        res.status(401).json({ error: 'Sign in to view and save report history.', code: 'ACCOUNT_REQUIRED' });
+        res.status(401).json({ error: 'Sign in to view generated report history.', code: 'ACCOUNT_REQUIRED' });
         return null;
       }
       return user;
     } catch (error) {
-      req.log?.error({ err: error }, 'Saved report account verification failed');
+      req.log?.error({ err: error }, 'Generated report account verification failed');
       res.status(503).json({ error: 'Account verification is temporarily unavailable. Please try again.' });
       return null;
     }
@@ -101,7 +101,7 @@ const registerSavedReportRoutes = ({
     try {
       return await tierService.getAccountTier(user.id);
     } catch (error) {
-      req.log?.warn({ err: error, userId: user.id }, 'Saved report account tier could not be loaded');
+      req.log?.warn({ err: error, userId: user.id }, 'Generated report account tier could not be loaded');
       return { ...FREE_ACCOUNT_TIER };
     }
   };
@@ -120,7 +120,7 @@ const registerSavedReportRoutes = ({
     if (error?.code === 'REPORT_USAGE_UNAVAILABLE') {
       return res.status(503).json({ error: error.message, code: error.code });
     }
-    req.log?.error({ err: error }, 'Saved report request failed');
+    req.log?.error({ err: error }, 'Generated report request failed');
     return res.status(500).json({ error: 'Report history request failed. Please try again.' });
   };
 
@@ -198,7 +198,7 @@ const registerSavedReportRoutes = ({
         LIMIT 1
       `, [req.params.reportId, user.id]);
       const row = result.rows[0];
-      if (!row) return res.status(404).json({ error: 'Saved report not found.' });
+      if (!row) return res.status(404).json({ error: 'Generated report not found.' });
       return res.json({
         report: {
           id: row.id,
@@ -271,7 +271,7 @@ const registerSavedReportRoutes = ({
         RETURNING id, share_token, title, created_at, updated_at
       `, [req.params.reportId, user.id, normalized.serialized]);
       const row = result.rows[0];
-      if (!row) return res.status(404).json({ error: 'Saved report not found.' });
+      if (!row) return res.status(404).json({ error: 'Generated report not found.' });
       return res.json({
         report: {
           id: row.id,

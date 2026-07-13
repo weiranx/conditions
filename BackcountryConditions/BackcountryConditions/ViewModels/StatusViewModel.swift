@@ -23,7 +23,7 @@ final class StatusViewModel {
             var checks = [
                 HealthCheckItem(label: "Backend API", status: response.ok == true ? "ok" : "down", detail: response.ok == true ? "The planning API is responding." : "The planning API reported a failure.", meta: response.version.map { "v\($0)" }),
                 HealthCheckItem(label: "API Latency", status: milliseconds < 750 ? "ok" : (milliseconds < 2_000 ? "warn" : "down"), detail: milliseconds < 750 ? "Response time is normal." : "Response time is elevated.", meta: "\(Int(milliseconds)) ms"),
-                HealthCheckItem(label: "Device Storage", status: "ok", detail: "Saved reports and preferences are available on this device.", meta: nil)
+                HealthCheckItem(label: "Device Storage", status: "ok", detail: "Generated reports and preferences are available on this device.", meta: nil)
             ]
             if let ai = response.ai {
                 let provider = ai.provider == "anthropic" ? "Anthropic" : "OpenAI"

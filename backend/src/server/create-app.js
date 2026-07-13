@@ -35,7 +35,7 @@ const createApp = ({
   app.use(compression());
   app.use(helmet());
   // Full account-owned report snapshots can include the analyzed satellite tile.
-  // Saved-report validation applies a tighter 4 MB limit after parsing.
+  // Generated-report validation applies a tighter 4 MB limit after parsing.
   app.use(express.json({ limit: '5mb' }));
 
   app.use((req, res, next) => {

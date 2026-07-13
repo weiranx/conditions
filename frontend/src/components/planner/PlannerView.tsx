@@ -665,8 +665,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
       <main id="planner-main-content" className="planner-page-main" tabIndex={-1}>
       {restoredFromHistory && (
         <div className="planner-history-notice" role="status">
-          <strong>Read-only saved report</strong>
-          <span>This exact snapshot includes the AI text saved with it. Select New report to check current data.</span>
+          <strong>Read-only generated report</strong>
+          <span>This exact generated report includes its AI text. Select New report to check current data.</span>
         </div>
       )}
       <PlannerHeader

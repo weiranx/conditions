@@ -38,7 +38,7 @@ final class PlannerViewModel {
     var aiBrief: String?
     var isLoadingBrief = false
 
-    // Current saved report ID (for updating with AI brief / route analysis)
+    // Current generated report ID (for updating with AI brief / route analysis)
     var currentReportId: String?
 
     private let safetyService = SafetyService()
@@ -129,7 +129,7 @@ final class PlannerViewModel {
             let response = try await briefService.fetchAiBrief(request: request)
             aiBrief = response.narrative
 
-            // Persist to saved report
+            // Persist to generated report history
             if let narrative = aiBrief, let reportId = currentReportId {
                 Task.detached {
                     try? await ReportStore.shared.updateAiBrief(id: reportId, narrative: narrative)

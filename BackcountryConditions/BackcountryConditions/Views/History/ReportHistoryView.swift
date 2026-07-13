@@ -10,7 +10,7 @@ struct ReportHistoryView: View {
             VStack(alignment: .leading, spacing: 16) {
                 WebPageHeader(
                     kicker: "Offline library",
-                    title: "Saved reports",
+                    title: "Generated reports",
                     subtitle: "Reopen decision briefs you have already generated, even when reception disappears.",
                     systemImage: "clock.arrow.circlepath"
                 )
@@ -26,7 +26,7 @@ struct ReportHistoryView: View {
             .padding(16)
         }
         .background(Color.webBackground)
-        .navigationTitle("Saved reports")
+        .navigationTitle("Generated reports")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !historyVM.reports.isEmpty {
@@ -38,7 +38,7 @@ struct ReportHistoryView: View {
                 }
             }
         }
-        .confirmationDialog("Delete all saved reports?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
+        .confirmationDialog("Delete all generated reports?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
             Button("Delete All", role: .destructive) {
                 Task { await historyVM.deleteAll() }
             }
@@ -131,9 +131,9 @@ struct ReportHistoryView: View {
 
     private var emptyState: some View {
         WebSectionHeader(
-            "No saved reports yet",
+            "No generated reports yet",
             number: "01",
-            subtitle: "Conditions briefs are saved automatically after a successful Planner request."
+            subtitle: "Generated conditions reports are added automatically after a successful Planner request."
         )
         .webCard(padding: 18)
     }
@@ -169,7 +169,7 @@ struct ReportHistoryView: View {
     private func relativeDateString(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return "Saved " + formatter.localizedString(for: date, relativeTo: Date())
+        return "Generated " + formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

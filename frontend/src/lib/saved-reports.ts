@@ -49,7 +49,7 @@ export async function createSavedReport(report: PersistedReport): Promise<SavedR
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ report }),
   });
-  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not save this report.'));
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not add this generated report to history.'));
   return requireReportIdentity(payload);
 }
 
@@ -59,7 +59,7 @@ export async function updateSavedReport(reportId: string, report: PersistedRepor
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ report }),
   });
-  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not update this saved report.'));
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not update this generated report.'));
   requireReportIdentity(payload);
 }
 
@@ -83,10 +83,10 @@ export async function listSavedReports(signal?: AbortSignal): Promise<SavedRepor
 
 export async function getSavedReport(reportId: string, signal?: AbortSignal): Promise<PersistedReport> {
   const { response, payload } = await fetchApi(`/api/account/reports/${encodeURIComponent(reportId)}`, { signal });
-  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not retrieve this saved report.'));
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not retrieve this generated report.'));
   const snapshot = (payload as { report?: { snapshot?: unknown } } | null)?.report?.snapshot;
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
-    throw new Error('The saved report is incomplete.');
+    throw new Error('The generated report is incomplete.');
   }
   return snapshot as PersistedReport;
 }

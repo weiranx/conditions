@@ -8,6 +8,7 @@ actor ReportStore {
 
     private init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        // Keep the legacy directory name so existing generated report history remains available after the terminology change.
         directory = docs.appendingPathComponent("saved-reports", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }

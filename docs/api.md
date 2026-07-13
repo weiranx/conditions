@@ -412,15 +412,15 @@ method to avoid unsafe email-based account linking.
 Accepts the complete preferences object under `preferences` and returns the updated signed-in account. The
 session cookie is required. Invalid values return `400`; a missing or expired session returns `401`.
 
-### Saved reports
+### Generated reports
 
-`GET /api/account/reports` lists the signed-in user's saved report summaries. `GET /api/account/reports/:reportId`
+`GET /api/account/reports` lists the signed-in user's generated report summaries. `GET /api/account/reports/:reportId`
 returns one owned snapshot, and `POST /api/account/reports` creates a snapshot with a database-unique,
 cryptographically random `shareToken`. The client may send `PUT /api/account/reports/:reportId` after AI or route
 analysis finishes; that endpoint updates only the snapshot's `ai` and `route` sections and preserves the original
 plan, conditions, preferences, title, and share token.
 
-`GET /api/reports/shared/:shareToken` does not require a session. It returns the exact saved snapshot, including any
+`GET /api/reports/shared/:shareToken` does not require a session. It returns the exact generated report, including any
 AI briefing, AI conversation, snow analysis, or AI route text present when the owner last enriched the report. The
 token is the authorization secret for this public, read-only view and must be 20 to 64 URL-safe characters.
 

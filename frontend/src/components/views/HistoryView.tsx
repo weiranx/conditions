@@ -32,10 +32,10 @@ interface HistoryViewProps {
   onOpenReport: (report: PersistedReport, shareToken: string) => void;
 }
 
-const formatSavedAt = (value: string) => {
+const formatGeneratedAt = (value: string) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
-    ? 'Saved report'
+    ? 'date unavailable'
     : parsed.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
@@ -98,10 +98,10 @@ export function HistoryView({
     setError(null);
     try {
       const snapshot = parsePersistedReport(await getSavedReport(report.id));
-      if (!snapshot) throw new Error('This saved report is incomplete or no longer compatible.');
+      if (!snapshot) throw new Error('This generated report is incomplete or no longer compatible.');
       onOpenReport(snapshot, report.shareToken);
     } catch (openError) {
-      setError(openError instanceof Error ? openError.message : 'Could not retrieve this saved report.');
+      setError(openError instanceof Error ? openError.message : 'Could not retrieve this generated report.');
     } finally {
       setOpeningId(null);
     }
@@ -133,32 +133,32 @@ export function HistoryView({
       <main className="history-page">
         <header className="history-head">
           <div className="history-head-icon" aria-hidden><FileClock /></div>
-          <p>Report archive</p>
-          <h1>Your report history</h1>
-          <span>Open an exact saved snapshot without fetching new conditions or using AI again.</span>
+          <p>Generated reports</p>
+          <h1>Your generated reports</h1>
+          <span>Open an exact generated report without fetching new conditions or using AI again.</span>
         </header>
 
         {!account.user ? (
           <section className="history-empty" aria-labelledby="history-signin-title">
             <FileClock aria-hidden />
             <h2 id="history-signin-title">Sign in to view report history</h2>
-            <p>Reports generated while you are signed in are saved securely to your account.</p>
+            <p>Reports generated while you are signed in are added securely to your account history.</p>
             <button type="button" onClick={() => navigateToView('settings')}>Open account settings</button>
           </section>
         ) : loading ? (
           <div className="history-loading" role="status">
             <LoaderCircle className="history-spinner" aria-hidden />
-            Loading saved reports…
+            Loading generated reports…
           </div>
         ) : reports.length === 0 ? (
           <section className="history-empty" aria-labelledby="history-empty-title">
             <MapPinned aria-hidden />
-            <h2 id="history-empty-title">No saved reports yet</h2>
+            <h2 id="history-empty-title">No generated reports yet</h2>
             <p>Generate a report while signed in and it will appear here automatically.</p>
             <button type="button" onClick={openPlannerView}>Create a report</button>
           </section>
         ) : (
-          <section className="history-list" aria-label="Saved reports">
+          <section className="history-list" aria-label="Generated reports">
             {reports.map((report) => (
               <article
                 key={report.id}
@@ -171,7 +171,7 @@ export function HistoryView({
                   disabled={Boolean(openingId)}
                 >
                   <span className="history-card-main">
-                    <span className="history-card-kicker">Saved {formatSavedAt(report.createdAt)}</span>
+                    <span className="history-card-kicker">Generated {formatGeneratedAt(report.createdAt)}</span>
                     <strong>{report.objectiveName || report.title}</strong>
                     <span className="history-card-meta">
                       <span><CalendarDays aria-hidden /> {formatPlanDate(report.forecastDate)}</span>
@@ -179,7 +179,7 @@ export function HistoryView({
                     </span>
                   </span>
                   <span className="history-card-side">
-                    {report.hasAi && <span className="history-ai-tag"><Sparkles aria-hidden /> AI saved</span>}
+                    {report.hasAi && <span className="history-ai-tag"><Sparkles aria-hidden /> AI included</span>}
                     {report.score !== null && <span className="history-score"><small>Score</small>{Math.round(report.score)}</span>}
                     {openingId === report.id
                       ? <LoaderCircle className="history-spinner" aria-hidden />

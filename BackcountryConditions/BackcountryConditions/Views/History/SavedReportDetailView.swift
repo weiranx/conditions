@@ -22,7 +22,7 @@ struct SavedReportDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                ShareLink(item: savedShareSummary) {
+                ShareLink(item: generatedReportShareSummary) {
                     Image(systemName: "square.and.arrow.up")
                 }
                 offlineBadge
@@ -30,7 +30,7 @@ struct SavedReportDetailView: View {
         }
     }
 
-    private var savedShareSummary: String {
+    private var generatedReportShareSummary: String {
         [
             "Backcountry Conditions — \(report.objectiveName)",
             "\(report.forecastDate) at \(report.startTime)",
@@ -78,7 +78,7 @@ struct SavedReportDetailView: View {
 
                 Spacer()
 
-                Text(savedDateString)
+                Text(generatedDateString)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -139,7 +139,7 @@ struct SavedReportDetailView: View {
                 .id(cardType)
             }
 
-            // Saved route analysis (offline)
+            // Generated route analysis (offline)
             if let routeResult = report.routeAnalysis {
                 savedRouteAnalysisCard(routeResult)
             }
@@ -162,7 +162,7 @@ struct SavedReportDetailView: View {
         .background(.quaternary.opacity(0.2), in: Capsule())
     }
 
-    // MARK: - Saved Route Analysis
+    // MARK: - Generated Route Analysis
 
     private func savedRouteAnalysisCard(_ result: RouteAnalysisResult) -> some View {
         CollapsibleSection(title: "Route Analysis", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill", headerColor: .purple, initiallyExpanded: false) {
@@ -248,10 +248,10 @@ struct SavedReportDetailView: View {
         }
     }
 
-    private var savedDateString: String {
+    private var generatedDateString: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        return "Saved " + formatter.string(from: report.savedAt)
+        return "Generated " + formatter.string(from: report.savedAt)
     }
 }
