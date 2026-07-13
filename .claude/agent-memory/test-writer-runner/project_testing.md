@@ -76,7 +76,7 @@ Routes covered in `integration.api.test.js`:
 - `/api/ai-brief` POST: empty body, each required field missing, score=0 (valid), score=null (invalid), empty-string primaryHazard/decisionLevel, optional factors/context omitted, JSON content-type on error
 - `/api/route-suggestions` GET: missing peak/lat/lon, empty-string peak, non-numeric lat/lon, lat=0 lon=0 valid (query string "0" is truthy)
 - `/api/route-analysis` POST: empty body, missing peak, missing route, missing date, invalid date format, invalid start format, non-numeric lat/lon, start=00:00 valid, start=23:59 valid, start omitted (optional), lat=0 body (documents falsy-zero bug)
-- `/api/report-logs` GET: 403 when LOGS_SECRET not set
+- `/api/report-logs` GET: 404 without the administrator account session
 - Response headers: Content-Type: application/json on error responses, X-Request-Id present on every response, X-Request-Id unique per request
 - HTTP method mismatches: POST /api/safety → 404, GET /api/ai-brief → 404, GET /api/route-analysis → 404
 

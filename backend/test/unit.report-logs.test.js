@@ -14,8 +14,6 @@ test('recognizes only the configured administrator account', () => {
 });
 
 test('authorized AI admin routes read and update runtime settings', async () => {
-  const originalSecret = process.env.LOGS_SECRET;
-  process.env.LOGS_SECRET = 'admin-test-secret';
   jest.resetModules();
 
   const getAIStatus = jest.fn(() => ({ enabled: true, provider: 'openai' }));
@@ -69,10 +67,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     status(code) { this.statusCode = code; return this; },
     json(payload) { this.payload = payload; return this; },
   });
-  const headers = {
-    authorization: 'Bearer admin-test-secret',
-    cookie: 'bc_session=admin-session-token',
-  };
+  const headers = { cookie: 'bc_session=admin-session-token' };
 
   const auditResponse = createResponse();
   await routes.get.get('/api/admin/audit-log')({ headers }, auditResponse);
@@ -158,26 +153,9 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(resetFeatureFlags).toHaveBeenCalledTimes(1);
   expect(resetFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
 
-  const unauthorizedResponse = createResponse();
-  await routes.post.get('/api/admin/maintenance/ai-usage')({
-    headers: { cookie: 'bc_session=admin-session-token' },
-  }, unauthorizedResponse);
-  expect(unauthorizedResponse.statusCode).toBe(401);
-  expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
-
-  const unauthorizedModelsResponse = createResponse();
-  await routes.get.get('/api/admin/ai-models')({
-    headers: { cookie: 'bc_session=admin-session-token' },
-  }, unauthorizedModelsResponse);
-  expect(unauthorizedModelsResponse.statusCode).toBe(401);
-  expect(loadModelCatalog).toHaveBeenCalledTimes(2);
-
   const hiddenFromOtherAccountResponse = createResponse();
   await routes.get.get('/api/admin/ai-settings')({
-    headers: {
-      authorization: 'Bearer admin-test-secret',
-      cookie: 'bc_session=other-session-token',
-    },
+    headers: { cookie: 'bc_session=other-session-token' },
   }, hiddenFromOtherAccountResponse);
   expect(hiddenFromOtherAccountResponse.statusCode).toBe(404);
   expect(hiddenFromOtherAccountResponse.payload).toEqual({ error: 'Not found' });
@@ -193,18 +171,9 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     status: 'success',
   }));
 
-  const unauthorizedDiagnosticsResponse = createResponse();
-  await routes.post.get('/api/admin/diagnostics')({
-    headers: { cookie: 'bc_session=admin-session-token' },
-  }, unauthorizedDiagnosticsResponse);
-  expect(unauthorizedDiagnosticsResponse.statusCode).toBe(401);
-  expect(runDiagnostics).toHaveBeenCalledTimes(1);
-
   jest.dontMock('../src/utils/ai-client');
   jest.dontMock('../src/utils/ai-usage');
   jest.dontMock('../src/utils/feature-flags');
   jest.dontMock('../src/utils/admin-audit');
-  if (originalSecret === undefined) delete process.env.LOGS_SECRET;
-  else process.env.LOGS_SECRET = originalSecret;
   jest.resetModules();
 });

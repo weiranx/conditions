@@ -39,7 +39,7 @@ Built-in controls:
 | Upstream timeout handling | Prevents hung requests from blocking the event loop |
 | Tiered in-memory caching | TTL + stale-while-revalidate caching across all upstream API calls (weather, avalanche, snowpack, AI brief, etc.) |
 | Graceful shutdown | Handles `SIGINT`, `SIGTERM`, and uncaught exceptions cleanly |
-| Report-logs access control | `LOGS_SECRET` env var gates `GET /api/report-logs`; requests without a matching `Authorization: Bearer` header receive `401`. Leave blank to allow open access (not recommended in production). |
+| Admin access control | The signed-in administrator account gates report logs and all `/api/admin/*` endpoints; every other session receives `404`. |
 
 ---
 
@@ -127,7 +127,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 3. **Inspect the response** for `partialData`, `apiWarning`, and per-section `status` fields to identify which upstream feed failed.
 4. **Correlate backend logs** using the `X-Request-Id` from the response header.
 5. **Enable avalanche debug logging** with `DEBUG_AVY=true` if the issue is in avalanche zone matching or bulletin parsing.
-6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `LOGS_SECRET`, `DATABASE_URL`, `AI_PROVIDER`, `AI_ENABLED`, and both provider API keys.
+6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `DATABASE_URL`, `AI_PROVIDER`, `AI_ENABLED`, and both provider API keys.
 7. **Check network egress** — confirm the backend can reach all upstream providers (NOAA, Avalanche.org, NRCS, Open-Meteo).
 8. **Check the frontend proxy** — verify the frontend is pointing to the expected backend origin or proxy target.
 

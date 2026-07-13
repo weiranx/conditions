@@ -380,11 +380,11 @@ Revokes the current server-side session and clears its cookie.
 
 ## `GET /api/report-logs`
 
-Retrieves logged report entries from the last 7 days, newest first. Access-controlled via `LOGS_SECRET`.
+Retrieves logged report entries from the last 7 days, newest first. Access is limited to the signed-in administrator account.
 
 ### Authentication
 
-Requires `Authorization: Bearer <LOGS_SECRET>` header. Returns `403` if `LOGS_SECRET` is not configured on the server, `401` if the token is missing or invalid.
+Requires the administrator's current account-session cookie. Requests from signed-out sessions or any other account return `404`.
 
 ### Response Shape
 

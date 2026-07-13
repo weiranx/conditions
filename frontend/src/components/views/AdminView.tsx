@@ -17,7 +17,6 @@ import {
   History,
   KeyRound,
   LoaderCircle,
-  Lock,
   Layers,
   MessageCircleQuestion,
   Pause,
@@ -246,9 +245,6 @@ const PRODUCT_FEATURE_CONTROLS = [
   icon: typeof Clock3;
 }>;
 
-const ADMIN_SESSION_KEY = 'summitsafe:admin-key';
-const LEGACY_LOGS_SESSION_KEY = 'summitsafe:logs-key';
-
 interface AdminViewProps {
   navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
@@ -256,30 +252,6 @@ interface AdminViewProps {
 }
 
 export function AdminView({ navigateToView, openPlannerView, openTripToolView }: AdminViewProps) {
-  const [secretKey, setSecretKey] = useState<string>(() => (
-    sessionStorage.getItem(ADMIN_SESSION_KEY) ?? sessionStorage.getItem(LEGACY_LOGS_SESSION_KEY) ?? ''
-  ));
-  const [draft, setDraft] = useState('');
-  const [rejected, setRejected] = useState(false);
-
-  const lockAdmin = useCallback((wasRejected = false) => {
-    sessionStorage.removeItem(ADMIN_SESSION_KEY);
-    sessionStorage.removeItem(LEGACY_LOGS_SESSION_KEY);
-    setSecretKey('');
-    setRejected(wasRejected);
-  }, []);
-
-  const handleSubmit = useCallback((event: React.FormEvent) => {
-    event.preventDefault();
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-    sessionStorage.setItem(ADMIN_SESSION_KEY, trimmed);
-    sessionStorage.removeItem(LEGACY_LOGS_SESSION_KEY);
-    setSecretKey(trimmed);
-    setRejected(false);
-    setDraft('');
-  }, [draft]);
-
   return (
     <>
       <ProductNav
@@ -295,44 +267,8 @@ export function AdminView({ navigateToView, openPlannerView, openTripToolView }:
             <h1>Admin console</h1>
             <p>Monitor system health, investigate report issues, and understand AI and request usage from one protected workspace.</p>
           </div>
-          {secretKey && (
-            <button type="button" className="logs-btn logs-btn-quiet" onClick={() => lockAdmin()}>
-              <Lock size={15} aria-hidden /> Lock
-            </button>
-          )}
         </header>
-
-        {secretKey ? (
-          <AdminDashboard secretKey={secretKey} onUnauthorized={() => lockAdmin(true)} />
-        ) : (
-          <section className="logs-unlock-card" aria-labelledby="admin-unlock-title">
-            <div className="logs-unlock-icon"><KeyRound size={22} aria-hidden /></div>
-            <div className="logs-unlock-copy">
-              <h2 id="admin-unlock-title">Admin access</h2>
-              <p>Enter the server’s admin key. It is stored only for this browser session.</p>
-            </div>
-            <form onSubmit={handleSubmit} className="logs-unlock-form">
-              <label htmlFor="logs-key-input">Access key</label>
-              <div className="logs-unlock-controls">
-                <input
-                  id="logs-key-input"
-                  type="password"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Enter access key"
-                  autoComplete="current-password"
-                  aria-invalid={rejected}
-                  aria-describedby={rejected ? 'logs-unlock-error' : undefined}
-                  autoFocus
-                />
-                <button type="submit" className="logs-btn logs-btn-primary" disabled={!draft.trim()}>
-                  Unlock
-                </button>
-              </div>
-              {rejected && <p id="logs-unlock-error" className="logs-unlock-error">That key was not accepted. Try again.</p>}
-            </form>
-          </section>
-        )}
+        <AdminDashboard />
       </main>
     </>
   );
@@ -649,7 +585,7 @@ function SortButton({ sortKey, activeKey, ascending, onSort, children }: {
   );
 }
 
-function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUnauthorized: () => void }) {
+function AdminDashboard() {
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [aiUsage, setAIUsage] = useState<AIUsageEntry[]>([]);
   const [aiSettings, setAISettings] = useState<AIAdminSettings | null>(null);
@@ -716,13 +652,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
 
   const fetchAuditTrail = useCallback(async () => {
     try {
-      const result = await fetchApi('/api/admin/audit-log', {
-        headers: { Authorization: `Bearer ${secretKey}` },
-      });
-      if (result.response.status === 401 || result.response.status === 403) {
-        onUnauthorized();
-        return;
-      }
+      const result = await fetchApi('/api/admin/audit-log');
       if (result.response.ok && Array.isArray(result.payload)) {
         setAuditEntries(result.payload as AdminAuditEntry[]);
         setAuditError(null);
@@ -732,25 +662,20 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     } catch {
       setAuditError('Could not reach the server to load administrative activity.');
     }
-  }, [onUnauthorized, secretKey]);
+  }, []);
 
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const headers = { Authorization: `Bearer ${secretKey}` };
       const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult] = await Promise.all([
-        fetchApi('/api/report-logs', { headers }),
-        fetchApi('/api/ai-usage', { headers }),
+        fetchApi('/api/report-logs'),
+        fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
-        fetchApi('/api/admin/ai-settings', { headers }),
-        fetchApi('/api/admin/feature-flags', { headers }),
-        fetchApi('/api/admin/ai-models', { headers }),
-        fetchApi('/api/admin/audit-log', { headers }),
+        fetchApi('/api/admin/ai-settings'),
+        fetchApi('/api/admin/feature-flags'),
+        fetchApi('/api/admin/ai-models'),
+        fetchApi('/api/admin/audit-log'),
       ]);
-      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status, featureFlagsResult.response.status, aiModelsResult.response.status, auditResult.response.status].some((status) => status === 401 || status === 403)) {
-        onUnauthorized();
-        return;
-      }
       if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
         setLogs(logsResult.payload as ReportLogEntry[]);
         setError(null);
@@ -801,7 +726,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       setLoading(false);
       setRefreshing(false);
     }
-  }, [applyHealthSnapshot, fetchHealthSnapshot, secretKey, onUnauthorized]);
+  }, [applyHealthSnapshot, fetchHealthSnapshot]);
 
   const refreshModelCatalog = useCallback(async () => {
     setAIModelCatalogPending(true);
@@ -809,12 +734,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     try {
       const result = await fetchApi('/api/admin/ai-models/refresh', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${secretKey}` },
       });
-      if (result.response.status === 401 || result.response.status === 403) {
-        onUnauthorized();
-        return;
-      }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         setAIModelCatalog(result.payload as AIModelCatalog);
         void fetchAuditTrail();
@@ -826,7 +746,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     } finally {
       setAIModelCatalogPending(false);
     }
-  }, [fetchAuditTrail, onUnauthorized, secretKey]);
+  }, [fetchAuditTrail]);
 
   const updateAIControl = useCallback(async (settings: {
     enabled?: boolean;
@@ -840,15 +760,10 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       const result = await fetchApi('/api/admin/ai-settings', {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(settings),
       });
-      if (result.response.status === 401 || result.response.status === 403) {
-        onUnauthorized();
-        return null;
-      }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         const nextSettings = result.payload as AIAdminSettings;
         setAISettings(nextSettings);
@@ -867,7 +782,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     } finally {
       setAISettingsPending(false);
     }
-  }, [fetchAuditTrail, onUnauthorized, secretKey]);
+  }, [fetchAuditTrail]);
 
   useEffect(() => {
     if (!aiSettings) return;
@@ -912,15 +827,10 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       const result = await fetchApi('/api/admin/feature-flags', {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ flags: { [feature]: !current } }),
       });
-      if (result.response.status === 401 || result.response.status === 403) {
-        onUnauthorized();
-        return;
-      }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         const nextStatus = result.payload as ProductFeatureFlagStatus;
         setFeatureFlagStatus(nextStatus);
@@ -946,7 +856,6 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       fetchHealthSnapshot(),
       fetchApi('/api/admin/diagnostics', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${secretKey}` },
       }),
     ]);
 
@@ -959,10 +868,6 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     try {
       if (externalResult.status === 'rejected') throw externalResult.reason;
       const result = externalResult.value;
-      if (result.response.status === 401 || result.response.status === 403) {
-        onUnauthorized();
-        return;
-      }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         setDiagnostics(result.payload as ExternalDiagnosticsResult);
         void fetchAuditTrail();

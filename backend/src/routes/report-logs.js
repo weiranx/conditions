@@ -1,4 +1,3 @@
-const crypto = require('node:crypto');
 const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('../utils/logger');
 const { clearAIUsageEntries, getAIUsageEntries } = require('../utils/ai-usage');
@@ -14,7 +13,7 @@ const isRouteWaypointEntry = (entry) =>
 
 // Privacy/retention policy: report-log entries (including the requester IP below) are kept
 // for at most 7 days (enforced by the PostgreSQL application data store) and are only
-// readable via the bearer-secret-gated /api/report-logs endpoint. Even within that 7-day
+// readable by the signed-in administrator account. Even within that 7-day
 // window we don't need precise per-host IPs — coarse network-level buckets are enough for
 // abuse detection — so we mask the host portion before it's ever written to memory or disk.
 const maskIp = (ip) => {
@@ -73,20 +72,6 @@ const clearReportLogs = async () => {
   return cleared;
 };
 
-const LOGS_SECRET = process.env.LOGS_SECRET || '';
-
-// Constant-time secret comparison — avoids leaking timing information that could help an
-// attacker brute-force LOGS_SECRET one byte at a time. Buffers must be equal length for
-// timingSafeEqual, so unequal lengths fail closed without ever calling it.
-const secretsMatch = (provided, expected) => {
-  const providedBuf = Buffer.from(String(provided || ''), 'utf8');
-  const expectedBuf = Buffer.from(String(expected || ''), 'utf8');
-  if (providedBuf.length !== expectedBuf.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(providedBuf, expectedBuf);
-};
-
 const isAdminAccount = (user) => (
   typeof user?.email === 'string'
   && user.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL
@@ -123,16 +108,6 @@ const registerReportLogsRoute = (
     }
     if (!isAdminAccount(accountUser)) {
       res.status(404).json({ error: 'Not found' });
-      return false;
-    }
-    if (!LOGS_SECRET) {
-      res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
-      return false;
-    }
-    const auth = req.headers['authorization'] ?? '';
-    const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    if (!secretsMatch(provided, LOGS_SECRET)) {
-      res.status(401).json({ error: 'Unauthorized' });
       return false;
     }
     return true;

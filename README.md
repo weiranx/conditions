@@ -143,7 +143,7 @@ When neither AI provider key is configured, AI-powered controls are hidden in th
 | POST | `/api/auth/login` | Sign in and create a session |
 | PATCH | `/api/account/preferences` | Save planning preferences for the signed-in account |
 | POST | `/api/auth/logout` | End the current session |
-| GET | `/api/report-logs` | Retrieve logged reports (requires `LOGS_SECRET`) |
+| GET | `/api/report-logs` | Retrieve logged reports (administrator account only) |
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Backend health check (also `/health`, `/api/healthz`, `/api/health`) |
 
