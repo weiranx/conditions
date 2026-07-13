@@ -95,7 +95,7 @@ Browser
 | `frontend/src/components/ErrorBoundary.tsx` | React error boundary wrapper |
 | `frontend/src/utils/avalanche.ts` | Avalanche-specific utility functions |
 
-**User preferences** are persisted under `summitsafe:user-preferences:v1` in browser `localStorage`. Unit conversions (temperature, elevation, wind, time) are display-side only — the backend always returns SI-adjacent values.
+**User preferences** are stored in `users.preferences` for signed-in accounts. Guests use browser `localStorage` under `summitsafe:user-preferences:v1`; creating an account seeds it with those browser preferences, and signing out restores the current values to browser storage. Unit conversions (temperature, elevation, wind, time) are display-side only — the backend always returns SI-adjacent values.
 
 ---
 
@@ -124,6 +124,7 @@ Browser
 | `backend/src/routes/search.js` | `GET /api/search` |
 | `backend/src/routes/route-analysis.js` | `GET /api/route-suggestions`, `POST /api/route-analysis` |
 | `backend/src/routes/ai-brief.js` | `POST /api/ai-brief` |
+| `backend/src/routes/account.js` | `GET /api/auth/session`, `POST /api/auth/register`, `/api/auth/login`, `PATCH /api/account/preferences`, `POST /api/auth/logout` |
 | `backend/src/routes/report-logs.js` | `GET /api/report-logs`, `POST /api/report-logs` |
 | `backend/src/routes/health.js` | `GET /healthz`, `/health`, `/api/healthz`, `/api/health` |
 

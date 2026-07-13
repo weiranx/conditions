@@ -49,6 +49,7 @@ const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions')
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
+const { registerAccountRoutes } = require('./src/routes/account');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -792,6 +793,7 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
 });
 registerFeatureFlagRoutes(app);
+registerAccountRoutes({ app, database, isProduction: IS_PRODUCTION });
 const observableCaches = [
   noaaPointsCache,
   elevationCache,

@@ -15,6 +15,7 @@ const createApp = ({
   const app = express();
 
   const corsOptions = {
+    credentials: true,
     origin(origin, callback) {
       if (!origin) {
         callback(null, true);

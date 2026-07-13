@@ -42,6 +42,8 @@ export interface UsePreferenceHandlersParams {
   targetElevationInput: string;
   setTargetElevationInput: React.Dispatch<React.SetStateAction<string>>;
   onApplyToPlanner: () => void;
+  persistLocally: boolean;
+  onPreferencesChange?: (preferences: UserPreferences) => void;
 }
 
 export interface UsePreferenceHandlersReturn {
@@ -97,6 +99,8 @@ export function usePreferenceHandlers({
   targetElevationInput,
   setTargetElevationInput,
   onApplyToPlanner,
+  persistLocally,
+  onPreferencesChange,
 }: UsePreferenceHandlersParams): UsePreferenceHandlersReturn {
   const [travelWindowHoursDraft, setTravelWindowHoursDraft] = useState(() => String(preferences.travelWindowHours));
   const [maxPrecipChanceDraft, setMaxPrecipChanceDraft] = useState(() => String(preferences.maxPrecipChance));
@@ -162,10 +166,11 @@ export function usePreferenceHandlers({
   const updatePreferences = useCallback((patch: Partial<UserPreferences>) => {
     setPreferences((prev) => {
       const next = { ...prev, ...patch };
-      persistUserPreferences(next);
+      if (persistLocally) persistUserPreferences(next);
+      onPreferencesChange?.(next);
       return next;
     });
-  }, [setPreferences]);
+  }, [onPreferencesChange, persistLocally, setPreferences]);
 
   const handlePreferenceTimeChange = useCallback((field: 'defaultStartTime', value: string) => {
     if (parseTimeInputMinutes(value) === null) {
@@ -389,8 +394,9 @@ export function usePreferenceHandlers({
   const resetPreferences = useCallback(() => {
     const defaults = getDefaultUserPreferences();
     setPreferences(defaults);
-    persistUserPreferences(defaults);
-  }, [setPreferences]);
+    if (persistLocally) persistUserPreferences(defaults);
+    onPreferencesChange?.(defaults);
+  }, [onPreferencesChange, persistLocally, setPreferences]);
 
   return {
     travelWindowHoursDraft,

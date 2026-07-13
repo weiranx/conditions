@@ -52,6 +52,65 @@ export function getDefaultUserPreferences(): UserPreferences {
   };
 }
 
+export function hasStoredUserPreferences(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const preferences = value as Record<string, unknown>;
+  return Object.prototype.hasOwnProperty.call(preferences, 'defaultActivity')
+    || Object.prototype.hasOwnProperty.call(preferences, 'defaultStartTime')
+    || Object.prototype.hasOwnProperty.call(preferences, 'themeMode');
+}
+
+export function normalizeUserPreferences(value: unknown): UserPreferences {
+  const defaults = getDefaultUserPreferences();
+  const parsed = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<UserPreferences>
+    : {};
+  const storedStartTime = normalizeTimeOrFallback(parsed.defaultStartTime || null, defaults.defaultStartTime);
+  const normalizedStartTime = storedStartTime === LEGACY_DEFAULT_START_TIME
+    ? defaults.defaultStartTime
+    : storedStartTime;
+
+  return {
+    defaultActivity: parsed.defaultActivity ? normalizeActivity(parsed.defaultActivity) : defaults.defaultActivity,
+    defaultStartTime: normalizedStartTime,
+    themeMode: normalizeThemeMode(parsed.themeMode),
+    temperatureUnit: normalizeTemperatureUnit(parsed.temperatureUnit),
+    elevationUnit: normalizeElevationUnit(parsed.elevationUnit),
+    windSpeedUnit: normalizeWindSpeedUnit(parsed.windSpeedUnit),
+    timeStyle: normalizeTimeStyle(parsed.timeStyle),
+    maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
+    maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
+    minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
+    maxFeelsLikeF: normalizeDecimalPreference(parsed.maxFeelsLikeF, defaults.maxFeelsLikeF, 70, 120, 2),
+    travelWindowHours: normalizeNumberPreference(
+      parsed.travelWindowHours,
+      defaults.travelWindowHours,
+      MIN_TRAVEL_WINDOW_HOURS,
+      MAX_TRAVEL_WINDOW_HOURS,
+    ),
+    runnerPaceMinutesPerMile: normalizeNumberPreference(
+      parsed.runnerPaceMinutesPerMile,
+      defaults.runnerPaceMinutesPerMile,
+      5,
+      90,
+    ),
+    runnerAscentMinutesPer1000Ft: normalizeNumberPreference(
+      parsed.runnerAscentMinutesPer1000Ft,
+      defaults.runnerAscentMinutesPer1000Ft,
+      0,
+      120,
+    ),
+    runnerStopBufferMinutes: normalizeNumberPreference(
+      parsed.runnerStopBufferMinutes,
+      defaults.runnerStopBufferMinutes,
+      0,
+      240,
+    ),
+  };
+}
+
 export function loadUserPreferences(): UserPreferences {
   const defaults = getDefaultUserPreferences();
 
@@ -65,34 +124,7 @@ export function loadUserPreferences(): UserPreferences {
       return defaults;
     }
 
-    const parsed = JSON.parse(raw) as Partial<UserPreferences>;
-    const storedStartTime = normalizeTimeOrFallback(parsed.defaultStartTime || null, defaults.defaultStartTime);
-    const normalizedStartTime =
-      storedStartTime === LEGACY_DEFAULT_START_TIME
-        ? defaults.defaultStartTime
-        : storedStartTime;
-    return {
-      defaultActivity: parsed.defaultActivity ? normalizeActivity(parsed.defaultActivity) : defaults.defaultActivity,
-      defaultStartTime: normalizedStartTime,
-      themeMode: normalizeThemeMode(parsed.themeMode),
-      temperatureUnit: normalizeTemperatureUnit(parsed.temperatureUnit),
-      elevationUnit: normalizeElevationUnit(parsed.elevationUnit),
-      windSpeedUnit: normalizeWindSpeedUnit(parsed.windSpeedUnit),
-      timeStyle: normalizeTimeStyle(parsed.timeStyle),
-      maxWindGustMph: normalizeDecimalPreference(parsed.maxWindGustMph, defaults.maxWindGustMph, 10, 80, 2),
-      maxPrecipChance: normalizeNumberPreference(parsed.maxPrecipChance, defaults.maxPrecipChance, 0, 100),
-      minFeelsLikeF: normalizeDecimalPreference(parsed.minFeelsLikeF, defaults.minFeelsLikeF, -40, 60, 2),
-      maxFeelsLikeF: normalizeDecimalPreference(parsed.maxFeelsLikeF, defaults.maxFeelsLikeF, 70, 120, 2),
-      travelWindowHours: normalizeNumberPreference(
-        parsed.travelWindowHours,
-        defaults.travelWindowHours,
-        MIN_TRAVEL_WINDOW_HOURS,
-        MAX_TRAVEL_WINDOW_HOURS,
-      ),
-      runnerPaceMinutesPerMile: normalizeNumberPreference(parsed.runnerPaceMinutesPerMile, defaults.runnerPaceMinutesPerMile, 5, 90),
-      runnerAscentMinutesPer1000Ft: normalizeNumberPreference(parsed.runnerAscentMinutesPer1000Ft, defaults.runnerAscentMinutesPer1000Ft, 0, 120),
-      runnerStopBufferMinutes: normalizeNumberPreference(parsed.runnerStopBufferMinutes, defaults.runnerStopBufferMinutes, 0, 240),
-    };
+    return normalizeUserPreferences(JSON.parse(raw));
   } catch {
     return defaults;
   }

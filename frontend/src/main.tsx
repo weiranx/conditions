@@ -6,6 +6,7 @@ import App from './App.tsx'
 import './styles/mobile-experience.css'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
+import { AccountProvider } from './contexts/AccountProvider.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -18,7 +19,9 @@ createRoot(document.getElementById('root')!).render(
         )}
       >
         <FeatureFlagsProvider>
-          <App />
+          <AccountProvider>
+            <App />
+          </AccountProvider>
         </FeatureFlagsProvider>
       </Suspense>
     </ErrorBoundary>

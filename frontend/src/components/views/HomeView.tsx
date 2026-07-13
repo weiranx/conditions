@@ -34,6 +34,7 @@ import '../../styles/home-redesign.css';
 import { ProductNav } from './ProductNav';
 import { LegalLinks } from '../../app/legal-links';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import type { AppView } from '../../hooks/useUrlState';
 
 const FEATURED_PEAKS: Suggestion[] = [
   { name: 'Mount Rainier, Washington', lat: 46.8523, lon: -121.7603, class: 'popular', type: 'peak' },
@@ -73,7 +74,7 @@ export interface HomeViewProps {
   handleTravelWindowHoursDraftChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTravelWindowHoursDraftBlur: () => void;
   navigateToPlanner: () => void;
-  navigateToView: (view: 'home' | 'planner' | 'settings' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found') => void;
+  navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
   importedGpxRoute: ParsedGpxRoute | null;

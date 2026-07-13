@@ -304,6 +304,80 @@ Generates an on-demand AI narrative field brief summarizing current conditions. 
 
 ---
 
+## Account endpoints
+
+Accounts are optional and require `DATABASE_URL`. Successful registration and login responses set an opaque,
+HTTP-only session cookie. The browser should send requests with credentials enabled; the web client does this
+automatically. Passwords must contain 12 to 128 characters.
+
+### `GET /api/auth/session`
+
+Returns account availability and the current user, if signed in:
+
+```json
+{
+  "available": true,
+  "authenticated": true,
+  "user": {
+    "id": "8c696be4-e175-4b6a-965b-82bdf3758e0c",
+    "email": "climber@example.com",
+    "displayName": "Avery Stone",
+    "createdAt": "2026-07-12T10:00:00.000Z",
+    "preferences": {
+      "defaultActivity": "ski-touring",
+      "defaultStartTime": "06:30",
+      "themeMode": "dark"
+    }
+  }
+}
+```
+
+When the database is not configured, this endpoint remains available and returns `available: false`.
+
+### `POST /api/auth/register`
+
+```json
+{
+  "displayName": "Avery Stone",
+  "email": "climber@example.com",
+  "password": "a long unique password",
+  "preferences": {
+    "defaultActivity": "hiking",
+    "defaultStartTime": "07:00",
+    "themeMode": "system",
+    "temperatureUnit": "f",
+    "elevationUnit": "ft",
+    "windSpeedUnit": "mph",
+    "timeStyle": "ampm",
+    "maxWindGustMph": 25,
+    "maxPrecipChance": 60,
+    "minFeelsLikeF": 5,
+    "maxFeelsLikeF": 95,
+    "travelWindowHours": 12,
+    "runnerPaceMinutesPerMile": 30,
+    "runnerAscentMinutesPer1000Ft": 45,
+    "runnerStopBufferMinutes": 45
+  }
+}
+```
+
+Returns `201` and the signed-in account. Duplicate emails return `409`.
+
+### `POST /api/auth/login`
+
+Accepts `email` and `password`, then returns the signed-in account. Invalid credentials return `401`.
+
+### `PATCH /api/account/preferences`
+
+Accepts the complete preferences object under `preferences` and returns the updated signed-in account. The
+session cookie is required. Invalid values return `400`; a missing or expired session returns `401`.
+
+### `POST /api/auth/logout`
+
+Revokes the current server-side session and clears its cookie.
+
+---
+
 ## `GET /api/report-logs`
 
 Retrieves logged report entries from the last 7 days, newest first. Access-controlled via `LOGS_SECRET`.

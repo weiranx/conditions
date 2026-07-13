@@ -25,6 +25,7 @@ import { ACTIVITY_PROFILES, ACTIVITY_PROFILE_ORDER } from '../../app/activity-pr
 import '../../styles/settings-redesign.css';
 import { ProductNav } from './ProductNav';
 import type { AppView } from '../../hooks/useUrlState';
+import { useAccount } from '../../hooks/useAccount';
 
 export interface SettingsViewProps {
   appShellClassName: string;
@@ -196,6 +197,7 @@ export function SettingsView({
   openPlannerView,
   openTripToolView,
 }: SettingsViewProps) {
+  const account = useAccount();
   const [activeSection, setActiveSection] = React.useState('timing');
 
   const goToSection = (id: string) => {
@@ -230,7 +232,10 @@ export function SettingsView({
         <div className="ssr-set-head">
           <div className="ssr-set-kicker">Planning preferences</div>
           <h1>Settings</h1>
-          <p>Defaults for this device. Shared planner links can still override any value for a single report.</p>
+          <p>
+            {account.user ? 'Defaults saved to your account.' : 'Defaults for this browser.'}
+            {' '}Shared planner links can still override any value for a single report.
+          </p>
         </div>
 
         <div className="ssr-set-layout">
@@ -241,7 +246,16 @@ export function SettingsView({
             {railItem('appearance', <Eye />, 'Appearance')}
             {railItem('units', <Ruler />, 'Units & time')}
             {railItem('thresholds', <Gauge />, 'Thresholds')}
-            <div className="ssr-set-rail-foot"><Check /> Changes save automatically on this device.</div>
+            <div className="ssr-set-rail-foot" role="status" aria-live="polite">
+              {account.preferenceSyncState === 'error' ? <X /> : <Check />}
+              {account.user
+                ? account.preferenceSyncState === 'saving'
+                  ? 'Saving to your account…'
+                  : account.preferenceSyncState === 'error'
+                    ? account.preferenceError || 'Account sync needs a retry.'
+                    : 'Saved to your account.'
+                : 'Changes save automatically in this browser.'}
+            </div>
           </nav>
 
           {/* PANELS */}
@@ -445,9 +459,19 @@ export function SettingsView({
                 </button>
                 <button type="button" className="ssr-btn" onClick={resetPreferences}>Reset to defaults</button>
                 <span className="ssr-spacer" />
-                <span className="ssr-set-autosave">
-                  <Check /> Saved automatically
-                </span>
+                {account.user && account.preferenceSyncState === 'error' ? (
+                  <button
+                    type="button"
+                    className="ssr-btn"
+                    onClick={() => void account.savePreferences(preferences).catch(() => undefined)}
+                  >
+                    Retry account sync
+                  </button>
+                ) : (
+                  <span className="ssr-set-autosave">
+                    <Check /> {account.user ? 'Saved automatically to account' : 'Saved automatically'}
+                  </span>
+                )}
               </div>
               <div className="ssr-set-note">
                 <b>Current defaults</b> · {ACTIVITY_PROFILES[preferences.defaultActivity].label} · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Route {preferences.runnerPaceMinutesPerMile} min/mi + {preferences.runnerAscentMinutesPer1000Ft} min/1k ft · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}

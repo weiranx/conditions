@@ -111,7 +111,10 @@ export async function fetchApi(path: string, init?: RequestInit): Promise<ApiFet
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
       try {
-        const response = await fetch(requestUrl, init);
+        const response = await fetch(requestUrl, {
+          credentials: 'include',
+          ...init,
+        });
         const payload = await parseJsonFromResponse(response);
         const shouldRetryEmpty500 = index < attemptUrls.length - 1;
         if (shouldRetryEmpty500 && response.status === 500 && payload === null) {

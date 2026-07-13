@@ -24,7 +24,8 @@ function PrivacyPolicy() {
         <h2>What this policy covers</h2>
         <p>
           This policy explains how Backcountry Conditions collects, uses, stores, and shares information
-          when you use the website and planning tools. The service does not currently require an account.
+          when you use the website, optional account features, and planning tools. You can continue to use the
+          planning tools without creating an account.
         </p>
       </section>
 
@@ -43,11 +44,18 @@ function PrivacyPolicy() {
           masked to a coarse network before storage. Those report logs are limited to 500 entries and retained
           for no more than seven days for reliability, usage measurement, and abuse prevention.
         </p>
+        <h3>Account information</h3>
+        <p>
+          If you create an account, we store the name and email address you provide, a salted cryptographic hash
+          of your password, your planning preferences, and records needed to keep you signed in. We do not store
+          your plain-text password. Session cookies are HTTP-only and expire automatically.
+        </p>
         <h3>Information stored on your device</h3>
         <p>
-          The app uses browser storage for preferences, recent or saved objectives, interface settings, and a
-          recent generated report. This information remains on your device unless you clear it through the app
-          or your browser. An administrator access key, if used, is kept only for the browser session.
+          When you are not signed in, the app uses browser storage for preferences and interface settings. Recent
+          or saved objectives and a recent generated report also remain in browser storage whether or not you use
+          an account. You can clear this information through the app or your browser. An administrator access key,
+          if used, is kept only for the browser session.
         </p>
       </section>
 
@@ -55,7 +63,8 @@ function PrivacyPolicy() {
         <h2>How we use information</h2>
         <ul>
           <li>Generate conditions reports, route analysis, and optional AI-assisted explanations.</li>
-          <li>Remember preferences and restore recent planning work on your device.</li>
+          <li>Remember preferences in your account or browser and restore recent planning work on your device.</li>
+          <li>Create and secure an optional account and maintain your signed-in session.</li>
           <li>Operate, secure, troubleshoot, and improve the service.</li>
           <li>Measure coarse usage patterns and prevent misuse.</li>
         </ul>
@@ -86,6 +95,7 @@ function PrivacyPolicy() {
         <p>
           You can decline device-location permission and enter an objective manually. You can clear saved browser
           data in the app or through your browser controls, and you can choose not to use optional AI features.
+          You can sign out from the account page or contact us to request deletion of your account.
           The service does not currently use operator-controlled cross-site advertising trackers, so it does not
           respond differently to browser “Do Not Track” signals.
         </p>

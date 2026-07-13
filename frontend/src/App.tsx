@@ -51,7 +51,12 @@ import {
   normalizeDangerLevel,
   parseOptionalElevationInput,
 } from './app/planner-helpers';
-import { loadUserPreferences } from './app/preferences';
+import {
+  hasStoredUserPreferences,
+  loadUserPreferences,
+  normalizeUserPreferences,
+  persistUserPreferences,
+} from './app/preferences';
 import {
   stringifyRawPayload,
   summarizeText,
@@ -122,6 +127,7 @@ import { useStartTimeScenarios } from './hooks/useStartTimeScenarios';
 import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePreferenceHandlers';
 import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 import { useProductFeatureFlags } from './contexts/feature-flags';
+import { useAccount } from './hooks/useAccount';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -143,6 +149,9 @@ const StatusView = React.lazy(() =>
 );
 const SettingsView = React.lazy(() =>
   import('./components/views/SettingsView').then((module) => ({ default: module.SettingsView })),
+);
+const AccountView = React.lazy(() =>
+  import('./components/views/AccountView').then((module) => ({ default: module.AccountView })),
 );
 const TripView = React.lazy(() =>
   import('./components/views/TripView').then((module) => ({ default: module.TripView })),
@@ -172,6 +181,11 @@ function formatIsoDateLabel(isoDate: string): string {
 
 function App() {
   const featureFlags = useProductFeatureFlags();
+  const {
+    loading: accountLoading,
+    savePreferences: saveAccountPreferences,
+    user: accountUser,
+  } = useAccount();
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
   const maxForecastDate = formatDateInput(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7));
@@ -211,6 +225,55 @@ function App() {
       ...(initialLinkState.travelWindowHours ? { travelWindowHours: initialLinkState.travelWindowHours } : {}),
     };
   });
+  const preferencesRef = useRef(preferences);
+  const accountPreferenceOwnerRef = useRef<string | null>(null);
+  useEffect(() => {
+    preferencesRef.current = preferences;
+  }, [preferences]);
+
+  useEffect(() => {
+    if (accountLoading) return;
+    if (!accountUser) {
+      if (accountPreferenceOwnerRef.current) {
+        persistUserPreferences(preferencesRef.current);
+      }
+      accountPreferenceOwnerRef.current = null;
+      return;
+    }
+    if (accountPreferenceOwnerRef.current === accountUser.id) return;
+
+    accountPreferenceOwnerRef.current = accountUser.id;
+    if (hasStoredUserPreferences(accountUser.preferences)) {
+      const accountPreferences = normalizeUserPreferences(accountUser.preferences);
+      setPreferences(initialLinkState.hasObjective
+        ? {
+            ...accountPreferences,
+            defaultActivity: preferencesRef.current.defaultActivity,
+            travelWindowHours: preferencesRef.current.travelWindowHours,
+          }
+        : accountPreferences);
+      return;
+    }
+    void saveAccountPreferences(preferencesRef.current).catch(() => {
+      // The settings screen exposes the sync error and allows an explicit retry.
+    });
+  }, [accountLoading, accountUser, initialLinkState.hasObjective, saveAccountPreferences]);
+
+  const preferenceSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleAccountPreferenceSave = useCallback((nextPreferences: UserPreferences) => {
+    if (!accountUser) return;
+    if (preferenceSyncTimerRef.current) clearTimeout(preferenceSyncTimerRef.current);
+    preferenceSyncTimerRef.current = setTimeout(() => {
+      preferenceSyncTimerRef.current = null;
+      void saveAccountPreferences(nextPreferences).catch(() => {
+        // The latest values remain in memory and can be retried from Settings.
+      });
+    }, 500);
+  }, [accountUser, saveAccountPreferences]);
+
+  useEffect(() => () => {
+    if (preferenceSyncTimerRef.current) clearTimeout(preferenceSyncTimerRef.current);
+  }, [accountUser?.id]);
   const activity: ActivityType = preferences.defaultActivity;
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
@@ -515,6 +578,11 @@ function App() {
 
     if (view === 'settings') {
       document.title = 'Settings - Backcountry Conditions';
+      return;
+    }
+
+    if (view === 'account') {
+      document.title = 'Account - Backcountry Conditions';
       return;
     }
 
@@ -998,6 +1066,8 @@ function App() {
       setAlpineStartTime(preferences.defaultStartTime);
       startViewChange(() => setView('planner'));
     }, [preferences.defaultStartTime, startViewChange, setView]),
+    persistLocally: !accountUser,
+    onPreferencesChange: accountUser ? scheduleAccountPreferenceSave : undefined,
   });
   const {
     updatePreferences,
@@ -1680,6 +1750,17 @@ function App() {
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
       />
+      </React.Activity>
+
+      <React.Activity name="account-page" mode={view === 'account' ? 'visible' : 'hidden'}>
+        <AccountView
+          appShellClassName={appShellClassName}
+          isViewPending={isViewPending}
+          navigateToView={navigateToView}
+          openPlannerView={openPlannerView}
+          openTripToolView={openTripToolView}
+          preferences={preferences}
+        />
       </React.Activity>
 
       <React.Activity name="trip-page" mode={featureFlags.tripPlanning && view === 'trip' ? 'visible' : 'hidden'}>

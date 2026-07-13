@@ -138,6 +138,11 @@ When neither AI provider key is configured, AI-powered controls are hidden in th
 | GET | `/api/route-suggestions` | AI-generated routes for a named peak |
 | POST | `/api/route-analysis` | Multi-waypoint route analysis with go/no-go briefing |
 | POST | `/api/ai-brief` | On-demand AI narrative field brief |
+| GET | `/api/auth/session` | Current optional-account session |
+| POST | `/api/auth/register` | Create an email/password account and session |
+| POST | `/api/auth/login` | Sign in and create a session |
+| PATCH | `/api/account/preferences` | Save planning preferences for the signed-in account |
+| POST | `/api/auth/logout` | End the current session |
 | GET | `/api/report-logs` | Retrieve logged reports (requires `LOGS_SECRET`) |
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Backend health check (also `/health`, `/api/healthz`, `/api/health`) |

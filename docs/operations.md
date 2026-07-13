@@ -34,6 +34,7 @@ Built-in controls:
 | Helmet security headers | XSS, content-type sniffing, and clickjacking protection |
 | Gzip compression | Reduces response payload size |
 | API rate limiting | Protects `/api/*` from high-volume polling (configurable via env) |
+| Account protection | Salted scrypt password hashes, hashed opaque session tokens, HTTP-only cookies, and tighter account-attempt rate limits |
 | Request tracing (`X-Request-Id`) | Unique ID per request for log correlation |
 | Upstream timeout handling | Prevents hung requests from blocking the event loop |
 | Tiered in-memory caching | TTL + stale-while-revalidate caching across all upstream API calls (weather, avalanche, snowpack, AI brief, etc.) |
