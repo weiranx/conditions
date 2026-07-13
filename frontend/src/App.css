@@ -936,39 +936,6 @@ input {
 .admin-diagnostic-row.is-failed .admin-diagnostic-result > strong { color: var(--ui-nogo-ink); }
 .admin-diagnostics-empty { display: flex; align-items: center; gap: 7px; margin: 2px 0 0; color: var(--ui-text-3); font-size: 11px; }
 
-.admin-maintenance-card { display: grid; gap: 10px; }
-
-.admin-maintenance-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.admin-maintenance-grid button {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 9px;
-  align-items: center;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--ui-line);
-  border-radius: 7px;
-  background: var(--ui-surface-subtle);
-  color: var(--ui-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.admin-maintenance-grid button:hover:not(:disabled) { border-color: var(--ui-brand); background: var(--ui-brand-soft); }
-.admin-maintenance-grid button:disabled { cursor: default; opacity: 0.55; }
-.admin-maintenance-grid button > span:first-child { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; background: var(--ui-surface); color: var(--ui-text-3); }
-.admin-maintenance-grid button > span:nth-child(2) { display: grid; min-width: 0; }
-.admin-maintenance-grid strong { font-size: 11.5px; }
-.admin-maintenance-grid small { margin-top: 2px; color: var(--ui-text-4); font-size: 9.5px; line-height: 1.35; }
-.admin-maintenance-grid b { grid-column: 1 / -1; color: var(--ui-text-3); font-family: var(--font-data); font-size: 9.5px; font-weight: 650; }
-.logs-inline-note.is-success { color: var(--ui-go-ink); }
-
 .admin-audit-heading {
   display: flex;
   align-items: center;
@@ -11350,7 +11317,6 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-toolbar-actions > .logs-btn { margin-left: auto; }
   .admin-operations-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ai-control-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-ai-setting { grid-template-columns: 36px minmax(0, 1fr); }
@@ -11642,9 +11608,6 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-model-card-head > span:last-child { grid-column: 1 / -1; }
   .admin-model-fields { grid-template-columns: minmax(0, 1fr); }
   .admin-model-fields .logs-btn { grid-column: auto; }
-  .admin-maintenance-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .admin-audit-panel .logs-panel-head { align-items: stretch; flex-direction: column; }
   .admin-audit-panel .logs-panel-actions { justify-content: flex-start; }
   .admin-audit-panel .logs-panel-actions .logs-btn { width: 100%; justify-content: center; }
