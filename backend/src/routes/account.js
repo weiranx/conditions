@@ -6,22 +6,11 @@ const {
   DuplicateEmailError,
   createAccountService,
 } = require('../auth/account-service');
-
-const ACCOUNT_COOKIE_NAME = 'bc_session';
-
-const parseCookies = (header) => {
-  const cookies = {};
-  String(header || '').split(';').forEach((part) => {
-    const separator = part.indexOf('=');
-    if (separator < 1) return;
-    const name = part.slice(0, separator).trim();
-    const value = part.slice(separator + 1).trim();
-    if (name) cookies[name] = value;
-  });
-  return cookies;
-};
-
-const readSessionToken = (req) => parseCookies(req?.headers?.cookie)[ACCOUNT_COOKIE_NAME] || null;
+const {
+  ACCOUNT_COOKIE_NAME,
+  parseCookies,
+  readSessionToken,
+} = require('../auth/account-access');
 
 const registerAccountRoutes = ({
   app,

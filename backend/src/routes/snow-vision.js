@@ -3,6 +3,7 @@ const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { fetchSentinelTile } = require('../utils/sentinel-tiles');
 const { logger } = require('../utils/logger');
+const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 
 // z13 tiles cover ~5km per side at Sentinel-2's ~10m/px native resolution — wide
 // enough to see a route's approach/summit block without losing too much detail.
@@ -55,6 +56,7 @@ const registerSnowVisionRoute = ({
   app,
   fetchWithTimeout,
   askAIVision,
+  ensureAccountAccess = denyUnconfiguredAccountAccess,
   ensureFeatureEnabled = () => {
     assertFeatureEnabled('satelliteImagery');
     assertAIFeatureEnabled('snowVision');
@@ -67,6 +69,7 @@ const registerSnowVisionRoute = ({
     if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
       return res.status(400).json({ error: 'Latitude/longitude must be valid decimal coordinates.' });
     }
+    if (!(await ensureAccountAccess(req, res))) return;
     try {
       ensureFeatureEnabled();
     } catch (error) {

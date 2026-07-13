@@ -1,6 +1,7 @@
 const { assertAIEnabled, assertAIFeatureEnabled, getAIStatus } = require('../utils/ai-client');
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
+const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 
 const persistAIUsage = async (entry) => {
   try {
@@ -307,6 +308,7 @@ const registerReportChatRoute = ({
   app,
   createStream = createReportChatStream,
   pipeStream = pipeReportChatStreamToResponse,
+  ensureAccountAccess = denyUnconfiguredAccountAccess,
   ensureAIEnabled = () => assertAIFeatureEnabled('reportChat'),
 }) => {
   app.post('/api/report-chat', async (req, res) => {
@@ -321,6 +323,7 @@ const registerReportChatRoute = ({
     } catch (error) {
       return res.status(400).json({ error: error.message || 'Invalid report chat request' });
     }
+    if (!(await ensureAccountAccess(req, res))) return;
 
     try {
       ensureAIEnabled();

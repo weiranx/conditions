@@ -4,9 +4,15 @@ const request = require('supertest');
 const {
   ROUTE_ANALYSIS_MAX_TOKENS,
   buildCheckpointSchedule,
-  registerRouteAnalysisRoutes,
+  registerRouteAnalysisRoutes: registerRouteAnalysisRoutesWithoutAccount,
   withTimeout,
 } = require('../src/routes/route-analysis');
+
+const allowAccountAccess = async () => true;
+const registerRouteAnalysisRoutes = (options) => registerRouteAnalysisRoutesWithoutAccount({
+  ...options,
+  ensureAccountAccess: options.ensureAccountAccess || allowAccountAccess,
+});
 
 test('checkpoint schedule uses route progress and rolls into the next date', () => {
   expect(buildCheckpointSchedule([

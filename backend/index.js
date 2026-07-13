@@ -50,6 +50,7 @@ const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
 const { registerAccountRoutes } = require('./src/routes/account');
+const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -794,6 +795,7 @@ registerSearchRoutes({
 });
 registerFeatureFlagRoutes(app);
 const accountService = registerAccountRoutes({ app, database, isProduction: IS_PRODUCTION });
+const ensureAccountAccess = createAccountAccessGuard({ service: accountService });
 const observableCaches = [
   noaaPointsCache,
   elevationCache,
@@ -813,11 +815,18 @@ registerReportLogsRoute(app, {
   runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
   loadModelCatalog: (options) => aiModelCatalog.load(options),
 });
-registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
-registerAiBriefRoute({ app, askAI });
-registerReportChatRoute({ app });
+registerRouteAnalysisRoutes({
+  app,
+  askAI,
+  invokeSafetyHandler,
+  fetchWithTimeout,
+  fetchHeaders: DEFAULT_FETCH_HEADERS,
+  ensureAccountAccess,
+});
+registerAiBriefRoute({ app, askAI, ensureAccountAccess });
+registerReportChatRoute({ app, ensureAccountAccess });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
-registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision });
+registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision, ensureAccountAccess });
 
 const startServer = async () => {
   await database.connect();

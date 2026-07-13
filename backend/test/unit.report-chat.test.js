@@ -8,10 +8,16 @@ const {
   REPORT_CHAT_SYSTEM_PROMPT,
   createContextualFollowUps,
   normalizeReport,
-  registerReportChatRoute,
+  registerReportChatRoute: registerReportChatRouteWithoutAccount,
   sanitizeFollowUpSuggestions,
   sanitizeMessages,
 } = require('../src/routes/report-chat');
+
+const allowAccountAccess = async () => true;
+const registerReportChatRoute = (options) => registerReportChatRouteWithoutAccount({
+  ...options,
+  ensureAccountAccess: options.ensureAccountAccess || allowAccountAccess,
+});
 
 describe('report chat request handling', () => {
   test('allows useful outside-report route guidance without weakening live-condition guardrails', () => {

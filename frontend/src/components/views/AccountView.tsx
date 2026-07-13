@@ -120,7 +120,7 @@ export function AccountView({
           <p className="account-eyebrow">Your account</p>
           <h1 id="account-title">A secure home for your profile.</h1>
           <p className="account-lede">
-            Create an optional account or sign back in. The planning tools remain available without one.
+            Create an account or sign back in. Core planning tools remain available without one; AI features require sign-in.
           </p>
           <div className="account-benefits" aria-label="Account details">
             <span><ShieldCheck aria-hidden /> Passwords are salted and hashed</span>

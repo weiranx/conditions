@@ -12,6 +12,7 @@ const {
   validatePassword,
 } = require('../src/auth/account-service');
 const { hashPassword, hashSessionToken, verifyPassword } = require('../src/auth/password');
+const { createAccountAccessGuard } = require('../src/auth/account-access');
 const { registerAccountRoutes } = require('../src/routes/account');
 
 const PREFERENCES = {
@@ -240,5 +241,50 @@ describe('account routes', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Sign in to save account preferences.' });
+  });
+});
+
+describe('AI account access', () => {
+  const makeApp = (service) => {
+    const app = express();
+    const ensureAccountAccess = createAccountAccessGuard({ service });
+    app.get('/api/protected-ai', async (req, res) => {
+      if (!(await ensureAccountAccess(req, res))) return;
+      return res.json({ user: req.accountUser });
+    });
+    return app;
+  };
+
+  test('requires a current account session before AI work can run', async () => {
+    const getUserForSession = jest.fn().mockResolvedValue(null);
+    const response = await request(makeApp({ available: true, getUserForSession }))
+      .get('/api/protected-ai');
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: 'Sign in or create an account to use AI features.',
+      code: 'ACCOUNT_REQUIRED',
+    });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(getUserForSession).toHaveBeenCalledWith(null);
+  });
+
+  test('allows AI work for a valid session and exposes the account to the route', async () => {
+    const user = { id: USER_ROW.id, email: USER_ROW.email };
+    const getUserForSession = jest.fn().mockResolvedValue(user);
+    const response = await request(makeApp({ available: true, getUserForSession }))
+      .get('/api/protected-ai')
+      .set('Cookie', 'bc_session=valid-session-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ user });
+    expect(getUserForSession).toHaveBeenCalledWith('valid-session-token');
+  });
+
+  test('fails closed when account storage cannot verify sessions', async () => {
+    const response = await request(makeApp({ available: false })).get('/api/protected-ai');
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('ACCOUNT_SERVICE_UNAVAILABLE');
   });
 });

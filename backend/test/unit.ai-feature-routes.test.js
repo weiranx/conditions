@@ -4,13 +4,23 @@ const request = require('supertest');
 const {
   AI_BRIEF_MAX_TOKENS,
   SYSTEM_PROMPT: AI_BRIEF_SYSTEM_PROMPT,
-  registerAiBriefRoute,
+  registerAiBriefRoute: registerAiBriefRouteWithoutAccount,
 } = require('../src/routes/ai-brief');
 const {
   SNOW_VISION_MAX_TOKENS,
   SYSTEM_PROMPT: SNOW_VISION_SYSTEM_PROMPT,
-  registerSnowVisionRoute,
+  registerSnowVisionRoute: registerSnowVisionRouteWithoutAccount,
 } = require('../src/routes/snow-vision');
+
+const allowAccountAccess = async () => true;
+const registerAiBriefRoute = (options) => registerAiBriefRouteWithoutAccount({
+  ...options,
+  ensureAccountAccess: options.ensureAccountAccess || allowAccountAccess,
+});
+const registerSnowVisionRoute = (options) => registerSnowVisionRouteWithoutAccount({
+  ...options,
+  ensureAccountAccess: options.ensureAccountAccess || allowAccountAccess,
+});
 
 const rejectDisabledFeature = () => {
   const error = new Error('AI features are unavailable');

@@ -14,6 +14,7 @@ import {
 } from '../ai-elements/message';
 import { Suggestion, Suggestions } from '../ai-elements/suggestion';
 import { buildApiUrl } from '../../lib/api-client';
+import { useAiAccess } from '../../hooks/useAiAccess';
 import '../../styles/report-chat.css';
 
 const STARTER_QUESTIONS = [
@@ -46,6 +47,7 @@ export interface ReportChatProps {
 }
 
 function ReportChatComponent({ reportPayload }: ReportChatProps) {
+  const { requestAiAccess } = useAiAccess();
   const [isOpen, setIsOpen] = React.useState(false);
   const [input, setInput] = React.useState('');
   const conversationId = React.useId();
@@ -75,13 +77,14 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
   const submitQuestion = React.useCallback((question: string) => {
     const text = question.trim();
     if (!text || isBusy || !reportPayload) return;
+    if (!requestAiAccess()) return;
     setIsOpen(true);
     setInput('');
     void sendMessage(
       { text },
       { body: { report: reportPayload } },
     );
-  }, [isBusy, reportPayload, sendMessage]);
+  }, [isBusy, reportPayload, requestAiAccess, sendMessage]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -93,7 +96,13 @@ function ReportChatComponent({ reportPayload }: ReportChatProps) {
       <button
         type="button"
         className="report-chat-toggle"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          if (isOpen) {
+            setIsOpen(false);
+          } else if (requestAiAccess()) {
+            setIsOpen(true);
+          }
+        }}
         aria-expanded={isOpen}
         aria-controls={conversationId}
       >

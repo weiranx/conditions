@@ -1,0 +1,115 @@
+.ai-access-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(13 24 22 / 62%);
+  backdrop-filter: blur(5px);
+}
+
+.ai-access-dialog {
+  position: relative;
+  width: min(100%, 470px);
+  padding: 30px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 14px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: 0 26px 76px rgb(0 0 0 / 30%);
+}
+
+.ai-access-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui-text-2);
+  cursor: pointer;
+}
+
+.ai-access-close:hover {
+  border-color: var(--ui-line);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+}
+
+.ai-access-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 18px;
+  place-items: center;
+  border: 1px solid color-mix(in oklch, var(--ui-brand) 35%, var(--ui-line));
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--ui-brand) 12%, var(--ui-surface));
+  color: var(--ui-brand);
+}
+
+.ai-access-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--ui-brand);
+  font: 700 0.7rem/1.2 var(--ssr-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ai-access-dialog h2 {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+.ai-access-dialog p {
+  margin: 12px 0 0;
+  color: var(--ui-text-2);
+  line-height: 1.6;
+}
+
+.ai-access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.ai-access-actions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font: 700 0.83rem/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.ai-access-primary {
+  border: 1px solid var(--ui-brand);
+  background: var(--ui-brand);
+  color: white;
+}
+
+.ai-access-secondary {
+  border: 1px solid var(--ui-line-strong);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+
+@media (max-width: 520px) {
+  .ai-access-dialog {
+    padding: 25px 22px 22px;
+  }
+
+  .ai-access-actions,
+  .ai-access-actions button {
+    width: 100%;
+  }
+}

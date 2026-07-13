@@ -128,6 +128,8 @@ import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePref
 import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 import { useProductFeatureFlags } from './contexts/feature-flags';
 import { useAccount } from './hooks/useAccount';
+import { AiAccessContext } from './contexts/ai-access';
+import { AiAccessPrompt } from './components/AiAccessPrompt';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -180,10 +182,12 @@ function formatIsoDateLabel(isoDate: string): string {
 function App() {
   const featureFlags = useProductFeatureFlags();
   const {
+    available: accountAvailable,
     loading: accountLoading,
     savePreferences: saveAccountPreferences,
     user: accountUser,
   } = useAccount();
+  const [aiAccessPromptOpen, setAiAccessPromptOpen] = useState(false);
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
   const maxForecastDate = formatDateInput(new Date(Date.now() + 1000 * 60 * 60 * 24 * 7));
@@ -546,6 +550,18 @@ function App() {
   const isAdminAccount = accountUser?.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL;
   const showAdminNotFound = view === 'admin' && !accountLoading && !isAdminAccount;
 
+  const requestAiAccess = useCallback(() => {
+    if (accountUser) return true;
+    setAiAccessPromptOpen(true);
+    return false;
+  }, [accountUser]);
+  const aiAccessContextValue = useMemo(() => ({ requestAiAccess }), [requestAiAccess]);
+  const closeAiAccessPrompt = useCallback(() => setAiAccessPromptOpen(false), []);
+  const openAccountForAi = useCallback(() => {
+    closeAiAccessPrompt();
+    navigateToView('account');
+  }, [closeAiAccessPrompt, navigateToView]);
+
   useEffect(() => {
     if (!featureFlags.tripPlanning && view === 'trip') {
       startViewChange(() => setView('planner'));
@@ -827,6 +843,7 @@ function App() {
 
   const handleRequestAiBriefAction = async () => {
     if (!safetyData || !decision || aiBriefLoading) return;
+    if (!requestAiAccess()) return;
     void handleRequestAiBrief({
       safetyData,
       decisionLevel: decision.level,
@@ -835,18 +852,28 @@ function App() {
 
   const handleRequestSnowVisionAction = () => {
     if (snowVisionLoading) return;
+    if (!requestAiAccess()) return;
     void handleRequestSnowVision(position.lat, position.lng, safetyData?.snowpack);
   };
 
+  const handleFetchRouteSuggestions = useCallback(
+    (peak: string, lat: number, lon: number) => {
+      if (!requestAiAccess()) return;
+      void fetchRouteSuggestions(peak, lat, lon);
+    },
+    [fetchRouteSuggestions, requestAiAccess],
+  );
+
   const handleFetchRouteAnalysis = useCallback(
     (peak: string, route: string, lat: number, lon: number, date: string, start: string, hours: number, options?: RouteAnalysisOptions) => {
+      if (!requestAiAccess()) return;
       void fetchRouteAnalysis(peak, route, lat, lon, date, start, hours, {
         temperature: preferences.temperatureUnit,
         wind: preferences.windSpeedUnit,
         elevation: preferences.elevationUnit,
       }, options);
     },
-    [fetchRouteAnalysis, preferences.temperatureUnit, preferences.windSpeedUnit, preferences.elevationUnit],
+    [fetchRouteAnalysis, preferences.temperatureUnit, preferences.windSpeedUnit, preferences.elevationUnit, requestAiAccess],
   );
 
   const handleCopyRawPayload = async () => {
@@ -1667,7 +1694,7 @@ function App() {
   };
 
   return (
-    <>
+    <AiAccessContext.Provider value={aiAccessContextValue}>
       <React.Activity name="status-page" mode={view === 'status' ? 'visible' : 'hidden'}>
       <StatusView
         appShellClassName={appShellClassName}
@@ -1992,7 +2019,7 @@ function App() {
       routeLoading={routeLoading}
       routeLoadingState={routeLoadingState}
       routeError={routeError}
-      fetchRouteSuggestions={fetchRouteSuggestions}
+      fetchRouteSuggestions={handleFetchRouteSuggestions}
       fetchRouteAnalysis={handleFetchRouteAnalysis}
       customRouteName={customRouteName}
       setCustomRouteName={setCustomRouteName}
@@ -2281,7 +2308,13 @@ function App() {
       )}
         </>
       ) : null}
-    </>
+      <AiAccessPrompt
+        open={aiAccessPromptOpen}
+        accountAvailable={accountAvailable}
+        onClose={closeAiAccessPrompt}
+        onOpenAccount={openAccountForAi}
+      />
+    </AiAccessContext.Provider>
   );
 
 }

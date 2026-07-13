@@ -4,6 +4,7 @@ const { assertFeatureEnabled } = require('../utils/feature-flags');
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
+const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 
 const withTimeout = (promise, ms, label) => {
   let timeout = null;
@@ -243,6 +244,7 @@ const registerRouteAnalysisRoutes = ({
   invokeSafetyHandler,
   fetchWithTimeout,
   fetchHeaders,
+  ensureAccountAccess = denyUnconfiguredAccountAccess,
   ensureRouteAnalysisEnabled = () => assertFeatureEnabled('routeAnalysis'),
   ensureAIEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
 }) => {
@@ -268,6 +270,7 @@ const registerRouteAnalysisRoutes = ({
     } catch (error) {
       return res.status(error.statusCode || 503).json({ error: error.message || 'Route analysis is unavailable' });
     }
+    if (!(await ensureAccountAccess(req, res))) return;
     try {
       ensureAIEnabled();
     } catch (error) {
@@ -324,6 +327,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     } catch (error) {
       return res.status(error.statusCode || 503).json({ error: error.message || 'Route analysis is unavailable' });
     }
+    if (!(await ensureAccountAccess(req, res))) return;
     let aiFeatureEnabled = true;
     try {
       ensureAIEnabled();
