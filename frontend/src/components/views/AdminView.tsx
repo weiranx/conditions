@@ -9,6 +9,7 @@ import {
   Clock3,
   Cpu,
   Database,
+  DollarSign,
   Download,
   ExternalLink,
   Gauge,
@@ -80,6 +81,9 @@ interface AIUsageEntry {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  estimatedCostUsd: number | null;
+  pricingMatched: boolean;
+  pricingVersion: string;
 }
 
 interface AdminHealthSnapshot {
@@ -483,25 +487,27 @@ function buildAITrendData(entries: AIUsageEntry[], range: AnalyticsRange, now: n
 }
 
 function buildAIModels(entries: AIUsageEntry[]) {
-  const models = new Map<string, { provider: string; model: string; calls: number; tokens: number }>();
+  const models = new Map<string, { provider: string; model: string; calls: number; tokens: number; estimatedCostUsd: number }>();
   entries.forEach((entry) => {
     const key = `${entry.provider}:${entry.model}`;
-    const current = models.get(key) ?? { provider: entry.provider, model: entry.model, calls: 0, tokens: 0 };
+    const current = models.get(key) ?? { provider: entry.provider, model: entry.model, calls: 0, tokens: 0, estimatedCostUsd: 0 };
     current.calls += 1;
     current.tokens += Number.isFinite(entry.totalTokens) ? entry.totalTokens : 0;
+    current.estimatedCostUsd += Number.isFinite(entry.estimatedCostUsd) ? Number(entry.estimatedCostUsd) : 0;
     models.set(key, current);
   });
   return [...models.values()].sort((left, right) => right.tokens - left.tokens || right.calls - left.calls);
 }
 
 function buildAIFeatures(entries: AIUsageEntry[]) {
-  const features = new Map<string, { feature: string; calls: number; errors: number; tokens: number; totalDurationMs: number }>();
+  const features = new Map<string, { feature: string; calls: number; errors: number; tokens: number; estimatedCostUsd: number; totalDurationMs: number }>();
   entries.forEach((entry) => {
     const feature = entry.feature?.trim() || 'unknown';
-    const current = features.get(feature) ?? { feature, calls: 0, errors: 0, tokens: 0, totalDurationMs: 0 };
+    const current = features.get(feature) ?? { feature, calls: 0, errors: 0, tokens: 0, estimatedCostUsd: 0, totalDurationMs: 0 };
     current.calls += 1;
     current.errors += entry.status === 'error' ? 1 : 0;
     current.tokens += Number.isFinite(entry.totalTokens) ? entry.totalTokens : 0;
+    current.estimatedCostUsd += Number.isFinite(entry.estimatedCostUsd) ? Number(entry.estimatedCostUsd) : 0;
     current.totalDurationMs += Number.isFinite(entry.durationMs) ? entry.durationMs : 0;
     features.set(feature, current);
   });
@@ -525,6 +531,14 @@ function formatTokenCount(value: number): string {
   if (!Number.isFinite(value)) return '—';
   if (value < 1000) return value.toLocaleString();
   return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function formatEstimatedCost(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  if (value === 0) return '$0.00';
+  if (value < 0.001) return `$${value.toFixed(6)}`;
+  if (value < 0.01) return `$${value.toFixed(4)}`;
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
 }
 
 function escapeCsv(value: string | number | boolean | null): string {
@@ -552,7 +566,7 @@ function downloadReportCsv(entries: ReportLogEntry[]) {
 }
 
 function downloadAIUsageCsv(entries: AIUsageEntry[]) {
-  const keys: Array<keyof AIUsageEntry> = ['timestamp', 'provider', 'model', 'feature', 'status', 'durationMs', 'inputTokens', 'outputTokens', 'totalTokens'];
+  const keys: Array<keyof AIUsageEntry> = ['timestamp', 'provider', 'model', 'feature', 'status', 'durationMs', 'inputTokens', 'outputTokens', 'totalTokens', 'estimatedCostUsd', 'pricingMatched', 'pricingVersion'];
   triggerCsvDownload(
     `ai-usage-${new Date().toISOString().slice(0, 10)}.csv`,
     keys,
@@ -984,6 +998,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       outputTokens: rangeAIUsage.reduce((sum, entry) => sum + (Number.isFinite(entry.outputTokens) ? entry.outputTokens : 0), 0),
       successRate: rangeAIUsage.length ? Math.round((successful / rangeAIUsage.length) * 1000) / 10 : null,
       failures: rangeAIUsage.length - successful,
+      estimatedCostUsd: rangeAIUsage.reduce((sum, entry) => sum + (Number.isFinite(entry.estimatedCostUsd) ? Number(entry.estimatedCostUsd) : 0), 0),
+      pricedCalls: rangeAIUsage.filter((entry) => Number.isFinite(entry.estimatedCostUsd)).length,
     };
   }, [rangeAIUsage]);
   const slowReports = useMemo(() => rangeLogs.filter((entry) => entry.durationMs >= 10_000).length, [rangeLogs]);
@@ -1608,7 +1624,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <span className="logs-section-icon"><Sparkles size={17} aria-hidden /></span>
             <div>
               <h2 id="logs-ai-title">AI usage</h2>
-              <p>Model calls and billed token volume for {selectedRange.label.toLowerCase()}</p>
+              <p>Model calls, billed token volume, and estimated cost for {selectedRange.label.toLowerCase()}</p>
             </div>
           </div>
           <div className="logs-section-actions">
@@ -1635,9 +1651,14 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <div><strong title={aiMetrics.outputTokens.toLocaleString()}>{formatTokenCount(aiMetrics.outputTokens)}</strong><span>Output tokens</span></div>
           </article>
           <article className="logs-metric-card">
-            <span className="logs-metric-icon is-green"><CheckCircle2 size={18} aria-hidden /></span>
-            <div><strong>{aiMetrics.successRate == null ? '—' : `${aiMetrics.successRate}%`}</strong><span>Successful calls</span></div>
+            <span className="logs-metric-icon is-amber"><DollarSign size={18} aria-hidden /></span>
+            <div><strong title={`Estimated USD ${aiMetrics.estimatedCostUsd.toFixed(8)}`}>{formatEstimatedCost(aiMetrics.estimatedCostUsd)}</strong><span>Estimated cost</span></div>
           </article>
+        </div>
+
+        <div className="logs-inline-note">
+          <DollarSign size={14} aria-hidden />
+          Based on standard direct-provider token rates for {aiMetrics.pricedCalls.toLocaleString()} of {aiMetrics.calls.toLocaleString()} calls. Actual billing may vary with service tiers, discounts, regional processing, and separately billed tools.
         </div>
 
         <div className="logs-ai-grid">
@@ -1685,7 +1706,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                       <strong title={model.model}>{model.model}</strong>
                       <span>{model.provider} · {model.calls.toLocaleString()} {model.calls === 1 ? 'call' : 'calls'}</span>
                     </div>
-                    <span title={`${model.tokens.toLocaleString()} tokens`}>{formatTokenCount(model.tokens)}</span>
+                    <span title={`${model.tokens.toLocaleString()} tokens · estimated ${model.estimatedCostUsd.toFixed(8)} USD`}>
+                      {formatEstimatedCost(model.estimatedCostUsd)} · {formatTokenCount(model.tokens)}
+                    </span>
                   </li>
                 ))}
               </ol>
@@ -1711,7 +1734,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                       <span>{feature.calls.toLocaleString()} {feature.calls === 1 ? 'call' : 'calls'} · avg {formatDuration(feature.averageDurationMs)}</span>
                     </div>
                     <div>
-                      <strong>{formatTokenCount(feature.tokens)} tokens</strong>
+                      <strong>{formatEstimatedCost(feature.estimatedCostUsd)} · {formatTokenCount(feature.tokens)} tokens</strong>
                       <span className={feature.errors ? 'has-errors' : ''}>{feature.errors ? `${feature.errors} failed` : '100% successful'}</span>
                     </div>
                   </li>

@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { logger } = require('./logger');
+const { estimateAIUsageCost } = require('./ai-pricing');
 
 const MAX_AI_USAGE_ENTRIES = 2000;
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,14 +74,23 @@ setInterval(trimOldEntries, 24 * 60 * 60 * 1000).unref();
 
 const recordAIUsage = ({ provider, model, feature, status = 'success', usage, durationMs }) => {
   const tokens = normalizeTokenUsage(usage);
+  const timestamp = new Date().toISOString();
+  const normalizedProvider = String(provider || 'unknown').slice(0, 40);
+  const normalizedModel = String(model || 'unknown').slice(0, 120);
   const record = {
-    timestamp: new Date().toISOString(),
-    provider: String(provider || 'unknown').slice(0, 40),
-    model: String(model || 'unknown').slice(0, 120),
+    timestamp,
+    provider: normalizedProvider,
+    model: normalizedModel,
     feature: String(feature || 'generation').slice(0, 80),
     status: status === 'success' ? 'success' : 'error',
     durationMs: asNonNegativeInteger(durationMs),
     ...tokens,
+    ...estimateAIUsageCost({
+      provider: normalizedProvider,
+      model: normalizedModel,
+      usage,
+      timestamp,
+    }),
   };
   if (aiUsageEntries.length >= MAX_AI_USAGE_ENTRIES) aiUsageEntries.shift();
   aiUsageEntries.push(record);
@@ -93,7 +103,18 @@ const recordAIUsage = ({ provider, model, feature, status = 'success', usage, du
 
 const getAIUsageEntries = () => {
   trimOldEntries();
-  return [...aiUsageEntries].reverse();
+  return [...aiUsageEntries].reverse().map((entry) => {
+    if (Object.hasOwn(entry, 'estimatedCostUsd')) return entry;
+    return {
+      ...entry,
+      ...estimateAIUsageCost({
+        provider: entry.provider,
+        model: entry.model,
+        usage: entry,
+        timestamp: entry.timestamp,
+      }),
+    };
+  });
 };
 
 const clearAIUsageEntries = () => {
