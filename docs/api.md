@@ -431,7 +431,9 @@ session cookie is required. Invalid values return `400`; a missing or expired se
 
 `GET /api/account/reports` lists the signed-in user's generated report summaries. `GET /api/account/reports/:reportId`
 returns one owned snapshot, and `POST /api/account/reports` creates a snapshot with a database-unique,
-cryptographically random `shareToken`. The client may send `PUT /api/account/reports/:reportId` after AI or route
+cryptographically random `shareToken`. A successful create also returns the authoritative lifetime `reportCount`
+and current `reportUsage`; clients should update their counters from this response rather than incrementing locally.
+The client may send `PUT /api/account/reports/:reportId` after AI or route
 analysis finishes; that endpoint updates only the snapshot's `ai` and `route` sections and preserves the original
 plan, conditions, preferences, title, and share token.
 

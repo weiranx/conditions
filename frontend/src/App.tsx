@@ -206,10 +206,10 @@ function App() {
   const featureFlags = useProductFeatureFlags();
   const {
     loading: accountLoading,
-    recordReportGenerated,
     refreshAccount,
     reportUsage: accountReportUsage,
     savePreferences: saveAccountPreferences,
+    syncGeneratedReportUsage,
     user: accountUser,
   } = useAccount();
   const accountUserId = accountUser?.id;
@@ -320,12 +320,10 @@ function App() {
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
   const handleNewReportGenerated = useCallback(() => {
-    if (accountUser) {
-      recordReportGenerated();
-      return;
+    if (!accountUser) {
+      setGuestReportCount((currentCount) => incrementGuestReportCount(currentCount));
     }
-    setGuestReportCount((currentCount) => incrementGuestReportCount(currentCount));
-  }, [accountUser, recordReportGenerated]);
+  }, [accountUser]);
 
   useEffect(() => {
     const syncGuestReportCount = (event: StorageEvent) => {
@@ -925,7 +923,8 @@ function App() {
     const generation = reportGenerationRef.current;
     const serialized = JSON.stringify(reportSnapshot);
     void createSavedReport(reportSnapshot)
-      .then(({ id: reportId, shareToken }) => {
+      .then(({ id: reportId, shareToken, reportCount, reportUsage }) => {
+        syncGeneratedReportUsage(accountUserId, reportCount, reportUsage);
         if (generation !== reportGenerationRef.current) return;
         lastSavedReportSnapshotRef.current = serialized;
         reportSaveSourceDataRef.current = null;
@@ -937,7 +936,7 @@ function App() {
         if (generation !== reportGenerationRef.current) return;
         reportSaveIntentRef.current = 'browser-only';
       });
-  }, [accountLoading, accountUserId, reportGenerationPending, reportSnapshot, viewingHistoryReport]);
+  }, [accountLoading, accountUserId, reportGenerationPending, reportSnapshot, syncGeneratedReportUsage, viewingHistoryReport]);
 
   useEffect(() => {
     if (!activeSavedReportId || !accountUserId || !reportSnapshot || viewingHistoryReport) return;
@@ -1158,15 +1157,14 @@ function App() {
       setPastStartPrompt(pastStart);
       return;
     }
-    const retryCreatesNewReport = !safetyData;
-    if (retryCreatesNewReport && !requestNewReportAccess()) {
+    if (!requestNewReportAccess()) {
       return;
     }
     beginReportGeneration();
     setPreviousSafetyData(safetyData);
     fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
       force: true,
-      countAsNewReport: retryCreatesNewReport,
+      countAsNewReport: true,
     });
   };
 

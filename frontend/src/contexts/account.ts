@@ -105,7 +105,11 @@ export interface AccountContextValue {
   }) => Promise<AccountUser | null>;
   signOut: () => Promise<AccountUser | null>;
   refreshAccount: () => Promise<AccountUser | null>;
-  recordReportGenerated: () => void;
+  syncGeneratedReportUsage: (
+    userId: string,
+    reportCount: number,
+    reportUsage: AccountReportUsage,
+  ) => void;
   savePreferences: (preferences: UserPreferences) => Promise<AccountUser>;
 }
 

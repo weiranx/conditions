@@ -17,6 +17,7 @@ import {
   type AccountUser,
   type GoogleAuthConfig,
 } from './account';
+import { parseAccountReportUsage } from './report-usage';
 
 interface AccountResponse {
   available: boolean;
@@ -115,59 +116,6 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
   };
 }
 
-function parseReportUsage(value: unknown): AccountReportUsage | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const dateFields = ['periodStart', 'periodEnd', 'resetAt'] as const;
-  const unlimited = record.unlimited === true;
-  if (
-    typeof record.usedReports !== 'number'
-    || !Number.isFinite(record.usedReports)
-    || dateFields.some((field) => typeof record[field] !== 'string')
-    || typeof record.exhausted !== 'boolean'
-    || (record.tierKey !== 'free' && record.tierKey !== 'premium')
-    || typeof record.unlimited !== 'boolean'
-    || (unlimited && record.tierKey !== 'premium')
-    || (unlimited && (
-      record.limitReports !== null
-      || record.remainingReports !== null
-      || record.percentUsed !== null
-      || record.exhausted
-    ))
-    || (!unlimited && [record.limitReports, record.remainingReports, record.percentUsed]
-      .some((field) => typeof field !== 'number' || !Number.isFinite(field)))
-  ) {
-    return null;
-  }
-  const tierKey: AccountReportUsage['tierKey'] = record.tierKey === 'premium' ? 'premium' : 'free';
-  const baseUsage = {
-    tierKey,
-    usedReports: record.usedReports as number,
-    periodStart: record.periodStart as string,
-    periodEnd: record.periodEnd as string,
-    resetAt: record.resetAt as string,
-  };
-  if (unlimited) {
-    return {
-      ...baseUsage,
-      tierKey: 'premium',
-      unlimited: true,
-      limitReports: null,
-      remainingReports: null,
-      percentUsed: null,
-      exhausted: false,
-    };
-  }
-  return {
-    ...baseUsage,
-    unlimited: false,
-    limitReports: record.limitReports as number,
-    remainingReports: record.remainingReports as number,
-    percentUsed: record.percentUsed as number,
-    exhausted: record.exhausted,
-  };
-}
-
 function parseAccountTier(value: unknown): AccountTier | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -232,7 +180,7 @@ function parseAccountResponse(payload: unknown): AccountResponse | null {
     user,
     accountTier: record.authenticated ? accountTier || LEGACY_FREE_TIER : null,
     reportCount: record.authenticated ? reportCount : null,
-    reportUsage: record.authenticated ? parseReportUsage(record.reportUsage) : null,
+    reportUsage: record.authenticated ? parseAccountReportUsage(record.reportUsage) : null,
     aiUsage: parseAIUsage(record.aiUsage),
   };
 }
@@ -320,31 +268,26 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const refreshAccount = useCallback(() => fetchAccount(), [fetchAccount]);
 
-  const recordReportGenerated = useCallback(() => {
+  const syncGeneratedReportUsage = useCallback((
+    userId: string,
+    reportCount: number,
+    reportUsage: AccountReportUsage,
+  ) => {
     setState((current) => {
-      if (!current.user) return current;
-      const reportCount = current.reportCount === null ? null : current.reportCount + 1;
-      const usage = current.reportUsage;
-      if (!usage) return { ...current, reportCount };
-      const usedReports = usage.usedReports + 1;
-      if (usage.unlimited) {
-        return {
-          ...current,
-          reportCount,
-          reportUsage: { ...usage, usedReports },
-        };
-      }
-      const remainingReports = Math.max(0, usage.limitReports - usedReports);
+      if (current.user?.id !== userId) return current;
+      const currentPeriodStart = current.reportUsage?.periodStart || '';
+      const shouldApplyUsage = !current.reportUsage
+        || reportUsage.periodStart > currentPeriodStart
+        || (
+          reportUsage.periodStart === currentPeriodStart
+          && reportUsage.usedReports >= current.reportUsage.usedReports
+        );
       return {
         ...current,
-        reportCount,
-        reportUsage: {
-          ...usage,
-          usedReports,
-          remainingReports,
-          percentUsed: Math.min(100, Math.round((usedReports / usage.limitReports) * 1000) / 10),
-          exhausted: usedReports >= usage.limitReports,
-        },
+        reportCount: current.reportCount === null
+          ? reportCount
+          : Math.max(current.reportCount, reportCount),
+        reportUsage: shouldApplyUsage ? reportUsage : current.reportUsage,
       };
     });
   }, []);
@@ -474,9 +417,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     signInWithGoogle,
     signOut,
     refreshAccount,
-    recordReportGenerated,
+    syncGeneratedReportUsage,
     savePreferences,
-  }), [createAccount, recordReportGenerated, refreshAccount, savePreferences, signIn, signInWithGoogle, signOut, state]);
+  }), [createAccount, refreshAccount, savePreferences, signIn, signInWithGoogle, signOut, state, syncGeneratedReportUsage]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

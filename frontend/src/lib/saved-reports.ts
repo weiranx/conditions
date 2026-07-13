@@ -1,4 +1,6 @@
 import type { PersistedReport } from '../app/report-storage';
+import type { AccountReportUsage } from '../contexts/account';
+import { parseAccountReportUsage } from '../contexts/report-usage';
 import { fetchApi, readApiErrorMessage } from './api-client';
 
 export interface SavedReportSummary {
@@ -22,11 +24,18 @@ interface SavedReportMutationResponse {
     createdAt?: string;
     updatedAt?: string;
   };
+  reportCount?: unknown;
+  reportUsage?: unknown;
 }
 
 export interface SavedReportIdentity {
   id: string;
   shareToken: string;
+}
+
+export interface CreatedSavedReport extends SavedReportIdentity {
+  reportCount: number;
+  reportUsage: AccountReportUsage;
 }
 
 const requireReportIdentity = (payload: unknown): SavedReportIdentity => {
@@ -39,18 +48,29 @@ const requireReportIdentity = (payload: unknown): SavedReportIdentity => {
   return { id, shareToken };
 };
 
+const requireCreatedSavedReport = (payload: unknown): CreatedSavedReport => {
+  const identity = requireReportIdentity(payload);
+  const response = payload as SavedReportMutationResponse;
+  const reportCount = response.reportCount;
+  const reportUsage = parseAccountReportUsage(response.reportUsage);
+  if (typeof reportCount !== 'number' || !Number.isSafeInteger(reportCount) || reportCount < 0 || !reportUsage) {
+    throw new Error('Report history returned an unexpected response.');
+  }
+  return { ...identity, reportCount, reportUsage };
+};
+
 export function buildSavedReportShareUrl(shareToken: string, origin = window.location.origin): string {
   return `${origin.replace(/\/+$/u, '')}/report/${encodeURIComponent(shareToken)}`;
 }
 
-export async function createSavedReport(report: PersistedReport): Promise<SavedReportIdentity> {
+export async function createSavedReport(report: PersistedReport): Promise<CreatedSavedReport> {
   const { response, payload } = await fetchApi('/api/account/reports', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ report }),
   });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not add this generated report to history.'));
-  return requireReportIdentity(payload);
+  return requireCreatedSavedReport(payload);
 }
 
 export async function updateSavedReport(reportId: string, report: PersistedReport): Promise<void> {

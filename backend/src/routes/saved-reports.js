@@ -26,6 +26,14 @@ const normalizeTimestamp = (value) => {
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 };
 
+const normalizeReportCount = (value) => {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new Error('Generated report count is unavailable.');
+  }
+  return count;
+};
+
 const normalizeSavedReport = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new SavedReportValidationError('Provide a valid report snapshot.');
@@ -230,13 +238,24 @@ const registerSavedReportRoutes = ({
       const { result, reportUsage } = await reportUsageService.consumeReportSlot(
         user.id,
         accountTier.key,
-        (query) => query(`
-          INSERT INTO saved_reports (user_id, share_token, title, report)
-          VALUES ($1, $2, $3, $4::jsonb)
-          RETURNING id, share_token, title, created_at, updated_at
-        `, [user.id, shareToken, normalized.title, normalized.serialized]),
+        async (query) => {
+          const createdReport = await query(`
+            INSERT INTO saved_reports (user_id, share_token, title, report)
+            VALUES ($1, $2, $3, $4::jsonb)
+            RETURNING id, share_token, title, created_at, updated_at
+          `, [user.id, shareToken, normalized.title, normalized.serialized]);
+          const countResult = await query(`
+            SELECT COUNT(*)::bigint AS report_count
+            FROM saved_reports
+            WHERE user_id = $1
+          `, [user.id]);
+          return {
+            createdReport,
+            reportCount: normalizeReportCount(countResult?.rows?.[0]?.report_count),
+          };
+        },
       );
-      const row = result.rows[0];
+      const row = result.createdReport.rows[0];
       return res.status(201).json({
         report: {
           id: row.id,
@@ -245,6 +264,7 @@ const registerSavedReportRoutes = ({
           createdAt: normalizeTimestamp(row.created_at),
           updatedAt: normalizeTimestamp(row.updated_at),
         },
+        reportCount: result.reportCount,
         reportUsage,
       });
     } catch (error) {

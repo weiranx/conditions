@@ -101,9 +101,11 @@ test('creates cryptographically random URL-safe share tokens', () => {
 });
 
 test('saves a new report with every AI section under the signed-in user', async () => {
-  const query = jest.fn().mockResolvedValue({
-    rows: [{ id: REPORT_ID, share_token: SHARE_TOKEN, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
-  });
+  const query = jest.fn()
+    .mockResolvedValueOnce({
+      rows: [{ id: REPORT_ID, share_token: SHARE_TOKEN, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
+    })
+    .mockResolvedValueOnce({ rows: [{ report_count: '12' }] });
   const response = await request(makeApp({ query }))
     .post('/api/account/reports')
     .set('Cookie', 'bc_session=test-session')
@@ -117,6 +119,7 @@ test('saves a new report with every AI section under the signed-in user', async 
     createdAt: CREATED_AT.toISOString(),
     updatedAt: CREATED_AT.toISOString(),
   });
+  expect(response.body.reportCount).toBe(12);
   expect(response.body.reportUsage).toEqual(REPORT_USAGE);
   const [sql, params] = query.mock.calls[0];
   expect(sql).toContain('INSERT INTO saved_reports');
@@ -126,6 +129,8 @@ test('saves a new report with every AI section under the signed-in user', async 
   const stored = JSON.parse(params[3]);
   expect(stored.ai).toEqual(SNAPSHOT.ai);
   expect(stored.route.routeAnalysis.analysis).toBe('AI route analysis');
+  expect(query.mock.calls[1][0]).toContain('COUNT(*)::bigint AS report_count');
+  expect(query.mock.calls[1][1]).toEqual([USER_ID]);
 });
 
 test('enforces the Free monthly report limit before inserting history', async () => {
@@ -153,9 +158,11 @@ test('enforces the Free monthly report limit before inserting history', async ()
 });
 
 test('keeps Premium report creation unlimited', async () => {
-  const query = jest.fn().mockResolvedValue({
-    rows: [{ id: REPORT_ID, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
-  });
+  const query = jest.fn()
+    .mockResolvedValueOnce({
+      rows: [{ id: REPORT_ID, share_token: SHARE_TOKEN, title: 'Mount Rainier', created_at: CREATED_AT, updated_at: CREATED_AT }],
+    })
+    .mockResolvedValueOnce({ rows: [{ report_count: '21' }] });
   const consumeReportSlot = jest.fn(async (_userId, _tierKey, createReport) => ({
     result: await createReport(query),
     reportUsage: { ...REPORT_USAGE, tierKey: 'premium', unlimited: true, limitReports: null, remainingReports: null },
