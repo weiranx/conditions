@@ -182,7 +182,6 @@ function formatIsoDateLabel(isoDate: string): string {
 function App() {
   const featureFlags = useProductFeatureFlags();
   const {
-    available: accountAvailable,
     loading: accountLoading,
     savePreferences: saveAccountPreferences,
     user: accountUser,
@@ -557,10 +556,6 @@ function App() {
   }, [accountUser]);
   const aiAccessContextValue = useMemo(() => ({ requestAiAccess }), [requestAiAccess]);
   const closeAiAccessPrompt = useCallback(() => setAiAccessPromptOpen(false), []);
-  const openAccountForAi = useCallback(() => {
-    closeAiAccessPrompt();
-    navigateToView('account');
-  }, [closeAiAccessPrompt, navigateToView]);
 
   useEffect(() => {
     if (!featureFlags.tripPlanning && view === 'trip') {
@@ -2310,9 +2305,8 @@ function App() {
       ) : null}
       <AiAccessPrompt
         open={aiAccessPromptOpen}
-        accountAvailable={accountAvailable}
         onClose={closeAiAccessPrompt}
-        onOpenAccount={openAccountForAi}
+        preferences={preferences}
       />
     </AiAccessContext.Provider>
   );
