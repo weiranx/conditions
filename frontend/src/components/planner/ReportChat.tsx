@@ -57,7 +57,10 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
   const conversationId = React.useId();
   const lastReportedMessagesRef = React.useRef(JSON.stringify([]));
   const transport = React.useMemo(
-    () => new DefaultChatTransport({ api: buildApiUrl('/api/report-chat') }),
+    () => new DefaultChatTransport({
+      api: buildApiUrl('/api/report-chat'),
+      credentials: 'include',
+    }),
     [],
   );
   const {
