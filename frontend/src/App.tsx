@@ -1746,7 +1746,6 @@ function App() {
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
-        initialSection={view === 'account' ? 'account' : 'timing'}
       />
       </React.Activity>
 

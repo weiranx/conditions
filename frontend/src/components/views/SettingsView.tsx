@@ -87,7 +87,6 @@ export interface SettingsViewProps {
   navigateToView: (view: AppView) => void;
   openPlannerView: () => void;
   openTripToolView: () => void;
-  initialSection?: 'timing' | 'account';
 }
 
 type SettingsSection = 'timing' | 'activity' | 'appearance' | 'units' | 'thresholds' | 'account';
@@ -201,21 +200,9 @@ export function SettingsView({
   navigateToView,
   openPlannerView,
   openTripToolView,
-  initialSection = 'timing',
 }: SettingsViewProps) {
   const account = useAccount();
-  const [activeSection, setActiveSection] = React.useState<SettingsSection>(initialSection);
-
-  React.useEffect(() => {
-    setActiveSection(initialSection);
-    if (initialSection !== 'account') {
-      return undefined;
-    }
-    const animationFrame = window.requestAnimationFrame(() => {
-      document.getElementById('ssr-set-account')?.scrollIntoView({ behavior: 'auto', block: 'start' });
-    });
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [initialSection]);
+  const [activeSection, setActiveSection] = React.useState<SettingsSection>('account');
 
   const goToSection = (id: SettingsSection) => {
     setActiveSection(id);
@@ -258,13 +245,13 @@ export function SettingsView({
         <div className="ssr-set-layout">
           {/* RAIL */}
           <nav className="ssr-set-rail" aria-label="Settings sections">
+            {railItem('account', <CircleUserRound />, 'Account')}
+            <div className="ssr-set-rail-sep" aria-hidden="true" />
             {railItem('timing', <Clock />, 'Timing')}
             {railItem('activity', <Footprints />, 'Objective')}
             {railItem('appearance', <Eye />, 'Appearance')}
             {railItem('units', <Ruler />, 'Units & time')}
             {railItem('thresholds', <Gauge />, 'Thresholds')}
-            <div className="ssr-set-rail-sep" aria-hidden="true" />
-            {railItem('account', <CircleUserRound />, 'Account')}
             <div className="ssr-set-rail-foot" role="status" aria-live="polite">
               {account.preferenceSyncState === 'error' ? <X /> : <Check />}
               {account.user
@@ -279,6 +266,16 @@ export function SettingsView({
 
           {/* PANELS */}
           <div className="ssr-set-panels">
+            <AccountView
+              appShellClassName={appShellClassName}
+              isViewPending={isViewPending}
+              navigateToView={navigateToView}
+              openPlannerView={openPlannerView}
+              openTripToolView={openTripToolView}
+              preferences={preferences}
+              embedded
+            />
+
             {/* TIMING */}
             <section className="ssr-set-card" id="ssr-set-timing">
               <div className="ssr-set-card-h">
@@ -496,16 +493,6 @@ export function SettingsView({
                 <b>Current defaults</b> · {ACTIVITY_PROFILES[preferences.defaultActivity].label} · Start {displayDefaultStartTime} · Theme {preferences.themeMode} · Units {preferences.temperatureUnit.toUpperCase()}/{preferences.elevationUnit}/{preferences.windSpeedUnit} · Time {preferences.timeStyle === 'ampm' ? '12h' : '24h'} · Window {travelWindowHoursLabel} · Route {preferences.runnerPaceMinutesPerMile} min/mi + {preferences.runnerAscentMinutesPer1000Ft} min/1k ft · Gust {windThresholdDisplay} · Precip {preferences.maxPrecipChance}% · Feels-like {feelsLikeThresholdDisplay} · Heat {heatCeilingDisplay}
               </div>
             </section>
-
-            <AccountView
-              appShellClassName={appShellClassName}
-              isViewPending={isViewPending}
-              navigateToView={navigateToView}
-              openPlannerView={openPlannerView}
-              openTripToolView={openTripToolView}
-              preferences={preferences}
-              embedded
-            />
           </div>
         </div>
       </div>
