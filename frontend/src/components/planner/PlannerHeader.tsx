@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  BookmarkPlus,
-  BookmarkCheck,
   Link2,
   Check,
   Compass,
@@ -39,8 +37,6 @@ export interface PlannerHeaderProps {
   reportGeneratedAt: string | null;
   reportGeneratedAtLabel: string;
   hasObjective: boolean;
-  objectiveIsSaved: boolean;
-  handleToggleSaveObjective: () => void;
   copiedLink: boolean;
   handleCopyLink: () => void;
   importedGpxRoute: ParsedGpxRoute | null;
@@ -59,41 +55,14 @@ export function PlannerHeader({
   readOnly = false,
   reportGeneratedAt,
   reportGeneratedAtLabel,
-  hasObjective, objectiveIsSaved, handleToggleSaveObjective,
+  hasObjective,
   copiedLink, handleCopyLink,
   importedGpxRoute, handleImportGpxObjective,
   gpxEstimatedDurationHours,
   activityLabel,
 }: PlannerHeaderProps) {
-  const [saveMessage, setSaveMessage] = React.useState('');
-  const saveMessageTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  React.useEffect(() => () => {
-    if (saveMessageTimer.current) clearTimeout(saveMessageTimer.current);
-  }, []);
-
-  const toggleSavedObjective = () => {
-    const willSave = !objectiveIsSaved;
-    handleToggleSaveObjective();
-    setSaveMessage(willSave
-      ? 'Objective saved. Find it from any location search.'
-      : 'Objective removed from saved locations.');
-    if (saveMessageTimer.current) clearTimeout(saveMessageTimer.current);
-    saveMessageTimer.current = setTimeout(() => setSaveMessage(''), 2800);
-  };
-
   const plannerControls = hasObjective ? (
     <nav className="header-nav" aria-label="Planner controls">
-      {!readOnly && <button
-        type="button"
-        className={`secondary-btn header-nav-btn ${objectiveIsSaved ? 'is-saved' : ''}`}
-        onClick={toggleSavedObjective}
-        aria-pressed={objectiveIsSaved}
-        title={objectiveIsSaved ? 'Remove this objective from saved locations' : 'Save this objective for faster access from search'}
-      >
-        {objectiveIsSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}{' '}
-        <span className="nav-btn-label">{objectiveIsSaved ? 'Objective saved' : 'Save objective'}</span>
-      </button>}
       <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
         {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
       </button>
@@ -174,9 +143,6 @@ export function PlannerHeader({
             </div>
           </>
         )}
-        <span className={`planner-save-status ${saveMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
-          {saveMessage}
-        </span>
       </div>
     </header>
   );

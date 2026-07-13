@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, History, Mountain, Search, Star, X } from 'lucide-react';
+import { History, Mountain, Search, Star, X } from 'lucide-react';
 import { isMountainSuggestion, type Suggestion } from '../../lib/search';
 
 interface SearchBoxProps {
@@ -143,16 +143,13 @@ export function SearchBox({
                 role="option"
                 aria-selected={activeSuggestionIndex === index}
                 className={`suggestion-item ${suggestion.class === 'popular' ? 'popular-suggestion' : ''} ${
-                  suggestion.class === 'saved' ? 'saved-suggestion' : ''
-                } ${suggestion.class === 'recent' ? 'recent-suggestion' : ''} ${
-                  activeSuggestionIndex === index ? 'active' : ''
-                }`}
+                  suggestion.class === 'recent' ? 'recent-suggestion' : ''
+                } ${activeSuggestionIndex === index ? 'active' : ''}`}
                 onClick={() => onSelectSuggestion(suggestion)}
                 onMouseEnter={() => onHoverSuggestion(index)}
               >
                 <strong className="suggestion-title">
                   {suggestion.class === 'popular' && <Star size={13} className="suggestion-title-icon" aria-hidden="true" />}
-                  {suggestion.class === 'saved' && <Bookmark size={13} className="suggestion-title-icon" aria-hidden="true" />}
                   {suggestion.class === 'recent' && <History size={13} className="suggestion-title-icon" aria-hidden="true" />}
                   {isMountainSuggestion(suggestion) && <Mountain size={14} className="suggestion-title-icon" aria-hidden="true" />}
                   <span>{suggestion.name.split(',')[0]}</span>

@@ -4,10 +4,6 @@ export function suggestionIdentityKey(item: Pick<Suggestion, 'lat' | 'lon' | 'na
   return `${Number(item.lat).toFixed(4)},${Number(item.lon).toFixed(4)}:${normalizeSuggestionText(item.name || '')}`;
 }
 
-export function suggestionCoordinateKey(lat: number | string, lon: number | string): string {
-  return `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`;
-}
-
 export function normalizeStoredSuggestion(item: unknown, fallbackClass?: string): Suggestion | null {
   if (!item || typeof item !== 'object') {
     return null;

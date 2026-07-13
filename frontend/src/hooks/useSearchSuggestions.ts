@@ -14,14 +14,11 @@ import {
   writeStoredSuggestions,
   mergeSuggestionBuckets,
   filterSuggestionBucket,
-  suggestionCoordinateKey,
 } from '../app/suggestion-storage';
 import L from 'leaflet';
 
 const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
-const SAVED_OBJECTIVES_STORAGE_KEY = 'summitsafe-saved-objectives';
 const MAX_RECENT_SEARCHES = 8;
-const MAX_SAVED_OBJECTIVES = 12;
 
 export interface UseSearchSuggestionsParams {
   initialSearchQuery: string;
@@ -42,7 +39,6 @@ export interface UseSearchSuggestionsReturn {
   setActiveSuggestionIndex: (value: number) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
-  savedObjectives: Suggestion[];
   recentSearches: Suggestion[];
   fetchSuggestions: (q: string) => Promise<void>;
   selectSuggestion: (s: Suggestion) => void;
@@ -53,10 +49,7 @@ export interface UseSearchSuggestionsReturn {
   handleFocus: () => void;
   handleSearchClear: () => void;
   handleUseTypedCoordinates: (value: string) => void;
-  handleToggleSaveObjective: (params: { hasObjective: boolean; objectiveName: string; position: L.LatLng }) => void;
   recordRecentSuggestion: (item: Suggestion) => void;
-  persistSavedObjectiveList: (next: Suggestion[]) => void;
-  objectiveIsSaved: (lat: number, lng: number) => boolean;
   parsedTypedCoordinates: { lat: number; lon: number } | null;
   clearSuggestionCache: () => void;
 }
@@ -72,9 +65,6 @@ export function useSearchSuggestions({
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
 
-  const [savedObjectives, setSavedObjectives] = useState<Suggestion[]>(() =>
-    readStoredSuggestions(SAVED_OBJECTIVES_STORAGE_KEY, 'saved'),
-  );
   const [recentSearches, setRecentSearches] = useState<Suggestion[]>(() =>
     readStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, 'recent'),
   );
@@ -91,11 +81,6 @@ export function useSearchSuggestions({
     setSearchQueryState(value);
   }, []);
 
-  const persistSavedObjectiveList = useCallback((next: Suggestion[]) => {
-    setSavedObjectives(next);
-    writeStoredSuggestions(SAVED_OBJECTIVES_STORAGE_KEY, next, MAX_SAVED_OBJECTIVES);
-  }, []);
-
   const persistRecentSearchList = useCallback((next: Suggestion[]) => {
     setRecentSearches(next);
     writeStoredSuggestions(RECENT_SEARCHES_STORAGE_KEY, next, MAX_RECENT_SEARCHES);
@@ -103,12 +88,11 @@ export function useSearchSuggestions({
 
   const getStoredSuggestionsForQuery = useCallback(
     (query: string, options?: { includePopular?: boolean }) => {
-      const savedMatches = filterSuggestionBucket(savedObjectives, query).map((item) => ({ ...item, class: 'saved' }));
       const recentMatches = filterSuggestionBucket(recentSearches, query).map((item) => ({ ...item, class: 'recent' }));
       const popularMatches = options?.includePopular ? getLocalPopularSuggestions(query) : [];
-      return mergeSuggestionBuckets([savedMatches, recentMatches, popularMatches], 10);
+      return mergeSuggestionBuckets([recentMatches, popularMatches], 10);
     },
-    [recentSearches, savedObjectives],
+    [recentSearches],
   );
 
   const recordRecentSuggestion = useCallback(
@@ -469,36 +453,6 @@ export function useSearchSuggestions({
     void fetchSuggestions('');
   }, [fetchSuggestions, setSearchQuery]);
 
-  const handleToggleSaveObjective = useCallback((params: { hasObjective: boolean; objectiveName: string; position: L.LatLng }) => {
-    if (!params.hasObjective) {
-      return;
-    }
-    const fallbackName = (params.objectiveName || `${params.position.lat.toFixed(4)}, ${params.position.lng.toFixed(4)}`).trim();
-    const normalized = normalizeStoredSuggestion(
-      { name: fallbackName, lat: params.position.lat, lon: params.position.lng, class: 'saved', type: 'objective' },
-      'saved',
-    );
-    if (!normalized) {
-      return;
-    }
-    const nextCoordinateKey = suggestionCoordinateKey(normalized.lat, normalized.lon);
-    const exists = savedObjectives.some(
-      (saved) => suggestionCoordinateKey(saved.lat, saved.lon) === nextCoordinateKey,
-    );
-    const nextSaved = exists
-      ? savedObjectives.filter((saved) => suggestionCoordinateKey(saved.lat, saved.lon) !== nextCoordinateKey)
-      : mergeSuggestionBuckets(
-          [[{ ...normalized, class: 'saved' }], savedObjectives.map((item) => ({ ...item, class: 'saved' }))],
-          MAX_SAVED_OBJECTIVES,
-        );
-    persistSavedObjectiveList(nextSaved);
-  }, [persistSavedObjectiveList, savedObjectives]);
-
-  const objectiveIsSaved = useCallback((lat: number, lng: number) => {
-    const coordinateKey = suggestionCoordinateKey(lat, lng);
-    return savedObjectives.some((item) => suggestionCoordinateKey(item.lat, item.lon) === coordinateKey);
-  }, [savedObjectives]);
-
   const trimmedSearchQuery = searchQuery.trim();
   const parsedTypedCoordinates = parseCoordinates(trimmedSearchQuery);
 
@@ -506,10 +460,10 @@ export function useSearchSuggestions({
     suggestionCacheRef.current.clear();
   }, []);
 
-  // Clear suggestion cache when stored suggestions change
+  // Clear suggestion cache when recent searches change
   useEffect(() => {
     suggestionCacheRef.current.clear();
-  }, [savedObjectives, recentSearches]);
+  }, [recentSearches]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -590,7 +544,6 @@ export function useSearchSuggestions({
     setActiveSuggestionIndex,
     searchInputRef,
     searchWrapperRef,
-    savedObjectives,
     recentSearches,
     fetchSuggestions,
     selectSuggestion,
@@ -601,10 +554,7 @@ export function useSearchSuggestions({
     handleFocus,
     handleSearchClear,
     handleUseTypedCoordinates,
-    handleToggleSaveObjective,
     recordRecentSuggestion,
-    persistSavedObjectiveList,
-    objectiveIsSaved,
     parsedTypedCoordinates,
     clearSuggestionCache,
   };

@@ -153,17 +153,6 @@
   background: var(--ui-brand-soft);
 }
 
-.saved-suggestion {
-  background: var(--ui-surface-subtle);
-  border-color: var(--ui-line);
-}
-
-.saved-suggestion:hover,
-.saved-suggestion.active {
-  background: var(--ui-surface-muted);
-  border-color: var(--ui-line-strong);
-}
-
 .recent-suggestion {
   background: color-mix(in oklch, var(--ui-surface-subtle) 82%, var(--ui-surface));
   border-color: var(--ui-line);

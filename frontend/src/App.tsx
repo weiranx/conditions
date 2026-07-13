@@ -550,7 +550,6 @@ function App() {
     selectSuggestion,
     handleInputChange, handleSearchKeyDown, handleSearchSubmit, handleFocus, handleSearchClear,
     handleUseTypedCoordinates,
-    handleToggleSaveObjective: handleToggleSaveObjectiveRaw,
     recordRecentSuggestion,
     parsedTypedCoordinates,
   } = searchHook;
@@ -592,10 +591,6 @@ function App() {
     setShowSuggestions,
     updateObjectivePosition,
   ]);
-
-  const handleToggleSaveObjective = useCallback(() => {
-    handleToggleSaveObjectiveRaw({ hasObjective, objectiveName, position });
-  }, [handleToggleSaveObjectiveRaw, hasObjective, objectiveName, position]);
 
   // URL state: view, isViewPending, navigateToView
   const urlState = useUrlState({
@@ -1363,7 +1358,6 @@ function App() {
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
   const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
-  const objectiveIsSaved = hasObjective && searchHook.objectiveIsSaved(position.lat, position.lng);
 
   const getScoreColor = (score: number, tier?: string) => {
     const effectiveTier = tier || (score >= 85 ? 'Low' : score >= 70 ? 'Caution' : score >= 55 ? 'Elevated' : score >= 40 ? 'High' : 'Extreme');
@@ -2363,8 +2357,6 @@ function App() {
       // Header controls
       hasObjective={hasObjective}
       objectiveDraftDirty={objectiveDraftDirty}
-      objectiveIsSaved={objectiveIsSaved}
-      handleToggleSaveObjective={handleToggleSaveObjective}
       copiedLink={copiedLink}
       handleCopyLink={handleCopyLink}
       // Map

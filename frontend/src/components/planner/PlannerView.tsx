@@ -87,8 +87,6 @@ export interface PlannerViewProps {
   // Header controls
   hasObjective: boolean;
   objectiveDraftDirty: boolean;
-  objectiveIsSaved: boolean;
-  handleToggleSaveObjective: () => void;
   copiedLink: boolean;
   handleCopyLink: () => void;
 
@@ -502,8 +500,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     // Header
     hasObjective,
     objectiveDraftDirty,
-    objectiveIsSaved,
-    handleToggleSaveObjective,
     copiedLink,
     handleCopyLink,
 
@@ -698,8 +694,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         reportGeneratedAt={reportGeneratedAt}
         reportGeneratedAtLabel={reportGeneratedAtLabel}
         hasObjective={objectiveReady}
-        objectiveIsSaved={objectiveIsSaved}
-        handleToggleSaveObjective={handleToggleSaveObjective}
         copiedLink={copiedLink}
         handleCopyLink={handleCopyLink}
       />

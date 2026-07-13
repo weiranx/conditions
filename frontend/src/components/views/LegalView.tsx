@@ -53,7 +53,7 @@ function PrivacyPolicy() {
         <h3>Information stored on your device</h3>
         <p>
           When you are not signed in, the app uses browser storage for preferences and interface settings. Recent
-          or saved objectives, a recent generated report, and the number of reports generated without an account
+          objectives, a recent generated report, and the number of reports generated without an account
           also remain in browser storage. You can clear this information through the app or your browser. An
           administrator access key, if used, is kept only for the browser session.
         </p>
