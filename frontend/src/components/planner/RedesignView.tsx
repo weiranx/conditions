@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   Radio,
   Sun,
+  Sunrise,
+  Sunset,
   Flame,
   Route,
   Eye,
@@ -1896,33 +1898,103 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         {/* DAYLIGHT */}
         {shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
           const dayLen = sunsetMinutesForPlan - sunriseMinutesForPlan;
-          const clampPct = (m: number | null) => m === null ? null : Math.max(0, Math.min(100, ((m - sunriseMinutesForPlan) / Math.max(1, dayLen)) * 100));
+          const timelinePaddingMinutes = Math.max(45, Math.min(90, Math.round(dayLen * 0.08)));
+          const timelineStart = sunriseMinutesForPlan - timelinePaddingMinutes;
+          const timelineEnd = sunsetMinutesForPlan + timelinePaddingMinutes;
+          const timelineLength = Math.max(1, timelineEnd - timelineStart);
+          const clampPct = (minutes: number | null) => minutes === null
+            ? null
+            : Math.max(0, Math.min(100, ((minutes - timelineStart) / timelineLength) * 100));
+          const sunrisePct = clampPct(sunriseMinutesForPlan) ?? 0;
+          const sunsetPct = clampPct(sunsetMinutesForPlan) ?? 100;
           const startPct = clampPct(startMinutesForPlan);
           const returnPct = clampPct(returnMinutes);
+          const routeWindowStartPct = startPct !== null && returnPct !== null ? Math.min(startPct, returnPct) : null;
+          const routeWindowWidthPct = startPct !== null && returnPct !== null ? Math.max(1.25, Math.abs(returnPct - startPct)) : null;
+          const daylightMarginMinutes = returnMinutes !== null ? sunsetMinutesForPlan - returnMinutes : null;
+          const startsInDark = startMinutesForPlan !== null
+            && (startMinutesForPlan < sunriseMinutesForPlan || startMinutesForPlan >= sunsetMinutesForPlan);
+          const returnsInDark = daylightMarginMinutes !== null && daylightMarginMinutes < 0;
+          const daylightStatus = (() => {
+            if (returnMinutes === null) {
+              return { tone: 'neutral', label: 'Return not set', title: daylightRemainingFromStartLabel, guidance: 'Set a travel window to check your return against sunset.' };
+            }
+            if (returnsInDark) {
+              return { tone: 'nogo', label: 'Dark return', title: `${Math.abs(daylightMarginMinutes ?? 0)} min after sunset`, guidance: 'Move the start earlier, shorten the route, and carry a headlamp.' };
+            }
+            if ((daylightMarginMinutes ?? 0) < 30) {
+              return { tone: 'caution', label: 'Thin margin', title: `${daylightMarginMinutes} min before sunset`, guidance: 'The plan misses the recommended 30-minute daylight buffer.' };
+            }
+            if ((daylightMarginMinutes ?? 0) < 60) {
+              return { tone: 'watch', label: 'Limited buffer', title: `${daylightMarginMinutes} min before sunset`, guidance: 'Allow extra time for navigation, transitions, and delays.' };
+            }
+            const hours = Math.floor((daylightMarginMinutes ?? 0) / 60);
+            const minutes = (daylightMarginMinutes ?? 0) % 60;
+            return {
+              tone: 'go',
+              label: 'Daylight buffer',
+              title: `${hours > 0 ? `${hours}h ` : ''}${minutes > 0 ? `${minutes}m ` : ''}before sunset`.trim(),
+              guidance: startsInDark ? 'Your start is outside daylight; carry a headlamp and confirm the route is easy to follow.' : 'The estimated return preserves at least one hour of daylight.',
+            };
+          })();
+          const startTimeLabel = displayStartTime;
+          const returnTimeLabel = returnTimeFormatted
+            ? `${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}${returnExtendsPastMidnight ? ' +1' : ''}`
+            : 'Not set';
+          const timelineLabel = `Sunrise ${formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}, start ${startTimeLabel}, estimated return ${returnTimeLabel}, sunset ${formatClockForStyle(safetyData.solar.sunset, preferences.timeStyle)}.`;
           return (
-            <section className="ssr-card">
+            <section className={`ssr-card ssr-daylight-card ${daylightStatus.tone}`}>
               <div className="ssr-card-h">
                 <h2>
                   <span className="ssr-h-icon icon-yellow"><Sun size={16} /></span>
                   Daylight
                 </h2>
-                <span className="ssr-h-meta">{Math.floor(dayLen / 60)}h {dayLen % 60}m</span>
+                <span className={`ssr-pill ${daylightStatus.tone}`}>{daylightStatus.label}</span>
               </div>
               <div className="ssr-card-b">
-                <div className="ssr-day-bar">
-                  {startPct !== null && returnPct !== null && (
-                    <span className="ssr-day-window" style={{ left: `${Math.min(startPct, returnPct)}%`, width: `${Math.abs(returnPct - startPct)}%` }} />
-                  )}
-                  {startPct !== null && <span className="ssr-day-mark start" style={{ left: `${startPct}%` }} title="Start" />}
-                  {returnPct !== null && <span className="ssr-day-mark end" style={{ left: `${returnPct}%` }} title="Return" />}
+                <div className={`ssr-day-summary ${daylightStatus.tone}`}>
+                  <div className="ssr-day-summary-copy">
+                    <span>Estimated return margin</span>
+                    <strong>{daylightStatus.title}</strong>
+                    <p>{daylightStatus.guidance}</p>
+                  </div>
+                  <div className="ssr-day-length">
+                    <span>Available daylight</span>
+                    <strong>{Math.floor(dayLen / 60)}h {dayLen % 60}m</strong>
+                  </div>
                 </div>
-                <div className="ssr-day-ends">
-                  <span>↑ {safetyData.solar.sunrise ? formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle) : '—'}</span>
-                  <span>↓ {safetyData.solar.sunset ? formatClockForStyle(safetyData.solar.sunset, preferences.timeStyle) : '—'}</span>
+
+                <div className="ssr-day-timeline" role="img" aria-label={timelineLabel}>
+                  <div className="ssr-day-track" aria-hidden="true">
+                    <span className="ssr-day-night morning" style={{ width: `${sunrisePct}%` }} />
+                    <span className="ssr-day-sun" style={{ left: `${sunrisePct}%`, width: `${sunsetPct - sunrisePct}%` }} />
+                    <span className="ssr-day-night evening" style={{ left: `${sunsetPct}%`, width: `${100 - sunsetPct}%` }} />
+                    <span
+                      className="ssr-day-buffer"
+                      style={{ left: `${clampPct(sunsetMinutesForPlan - 30) ?? sunsetPct}%`, width: `${sunsetPct - (clampPct(sunsetMinutesForPlan - 30) ?? sunsetPct)}%` }}
+                    />
+                    {routeWindowStartPct !== null && routeWindowWidthPct !== null && (
+                      <span className={`ssr-day-window ${daylightStatus.tone}`} style={{ left: `${routeWindowStartPct}%`, width: `${routeWindowWidthPct}%` }} />
+                    )}
+                    {startPct !== null && <span className="ssr-day-mark start" style={{ left: `${startPct}%` }} />}
+                    {returnPct !== null && <span className={`ssr-day-mark end ${returnsInDark ? 'after-dark' : ''}`} style={{ left: `${returnPct}%` }} />}
+                  </div>
+                  <div className="ssr-day-ends">
+                    <span><Sunrise size={14} /> Sunrise <strong>{formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}</strong></span>
+                    <span>Sunset <strong>{formatClockForStyle(safetyData.solar.sunset, preferences.timeStyle)}</strong> <Sunset size={14} /></span>
+                  </div>
                 </div>
-                <div className="ssr-snow-kv"><span className="ssr-k">Start</span><span className="ssr-v">{displayStartTime}</span></div>
-                <div className="ssr-snow-kv"><span className="ssr-k">Est. return</span><span className="ssr-v">{returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : '—'}{returnExtendsPastMidnight ? ' +1' : ''}</span></div>
-                <div className="ssr-snow-kv"><span className="ssr-k">Daylight from start</span><span className="ssr-v">{daylightRemainingFromStartLabel}</span></div>
+
+                <dl className="ssr-day-plan-times">
+                  <div>
+                    <dt><span className="ssr-day-dot start" /> Start</dt>
+                    <dd>{startTimeLabel}{startsInDark ? <small>Headlamp start</small> : null}</dd>
+                  </div>
+                  <div>
+                    <dt><span className={`ssr-day-dot return ${returnsInDark ? 'after-dark' : ''}`} /> Est. return</dt>
+                    <dd>{returnTimeLabel}{returnsInDark ? <small>After sunset</small> : null}</dd>
+                  </div>
+                </dl>
               </div>
             </section>
           );
