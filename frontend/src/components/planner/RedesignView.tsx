@@ -544,6 +544,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     overallAvalancheLevel,
     avalancheElevationRows,
     avalancheNotApplicableReason,
+    safeAvalancheLink,
     getDangerText,
     snotelDepthDisplay,
     snotelSweDisplay,
@@ -717,7 +718,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       case 'no_center_coverage':
         return 'No avalanche center covers this location. Treat avalanche terrain as unrated: use low-angle, low-consequence routes, avoid terrain traps, and increase spacing.';
       case 'temporarily_unavailable':
-        return 'The avalanche bulletin could not be retrieved. Open the center linked above before departure; until a current product is available, treat the terrain as unrated and conditions as potentially worse.';
+        return 'The avalanche bulletin could not be retrieved. Open the center report below before departure; until a current product is available, treat the terrain as unrated and conditions as potentially worse.';
       default:
         return 'Avalanche danger is unknown for this objective. Use low-angle, low-consequence routes, avoid terrain traps, and increase spacing until current information is available.';
     }
@@ -1676,6 +1677,11 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               </div>
             ) : (
               <div className="ssr-empty">{avalancheNotApplicableReason || 'No avalanche forecast applies to this objective.'}</div>
+            )}
+            {safeAvalancheLink && (
+              <a className="ssr-obs-source-link" href={safeAvalancheLink} target="_blank" rel="noreferrer">
+                Open avalanche center report <ExternalLink size={12} aria-hidden />
+              </a>
             )}
           </div>
         </section>
