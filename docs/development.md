@@ -44,8 +44,8 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `REQUEST_TIMEOUT_MS` | — | Upstream fetch timeout baseline (ms) |
 | `AVALANCHE_MAP_LAYER_TTL_MS` | — | Avalanche map-layer cache TTL |
 | `SNOTEL_STATION_CACHE_TTL_MS` | — | SNOTEL station metadata cache TTL |
-| `RATE_LIMIT_WINDOW_MS` | — | API rate-limit window (ms) |
-| `RATE_LIMIT_MAX_REQUESTS` | — | Max requests per rate-limit window |
+| `RATE_LIMIT_WINDOW_MS` | `900000` | API rate-limit window (ms) |
+| `RATE_LIMIT_MAX_REQUESTS` | `1000` | Max requests per rate-limit window |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
 | `AI_PROVIDER` | `openai` | Preferred AI provider: `openai` or `anthropic`; a failed request retries through the other configured provider. |
 | `AI_PRIMARY_TIMEOUT_MS` | `28000` | Per-provider timeout for synthesis, briefs, and vision before failover. |

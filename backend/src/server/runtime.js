@@ -15,7 +15,7 @@ const REQUEST_TIMEOUT_MS = parsePositiveInt(process.env.REQUEST_TIMEOUT_MS, 9000
 const AVALANCHE_MAP_LAYER_TTL_MS = parsePositiveInt(process.env.AVALANCHE_MAP_LAYER_TTL_MS, 10 * 60 * 1000);
 const SNOTEL_STATION_CACHE_TTL_MS = parsePositiveInt(process.env.SNOTEL_STATION_CACHE_TTL_MS, 12 * 60 * 60 * 1000);
 const RATE_LIMIT_WINDOW_MS = parsePositiveInt(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
-const RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(process.env.RATE_LIMIT_MAX_REQUESTS, 300);
+const RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(process.env.RATE_LIMIT_MAX_REQUESTS, 1000);
 
 const CORS_ALLOWLIST = (process.env.CORS_ORIGIN || '')
   .split(',')
