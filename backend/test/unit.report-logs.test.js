@@ -6,7 +6,7 @@ test('identifies internal route waypoint log entries', () => {
   expect(isRouteWaypointEntry({ name: null })).toBe(false);
 });
 
-test('authorized AI admin routes read and update runtime settings', () => {
+test('authorized AI admin routes read and update runtime settings', async () => {
   const originalSecret = process.env.LOGS_SECRET;
   process.env.LOGS_SECRET = 'admin-test-secret';
   jest.resetModules();
@@ -30,8 +30,10 @@ test('authorized AI admin routes read and update runtime settings', () => {
   };
   const firstCache = { clear: jest.fn(), stats: jest.fn(() => ({ name: 'weather', size: 3 })) };
   const secondCache = { clear: jest.fn(), stats: jest.fn(() => ({ name: 'imagery', size: 2 })) };
+  const diagnosticsPayload = { summary: { total: 2, operational: 2, failed: 0, notConfigured: 0 }, services: [] };
+  const runDiagnostics = jest.fn(async () => diagnosticsPayload);
   const { registerReportLogsRoute } = require('../src/routes/report-logs');
-  registerReportLogsRoute(app, { caches: [firstCache, null, secondCache] });
+  registerReportLogsRoute(app, { caches: [firstCache, null, secondCache], runDiagnostics });
 
   const createResponse = () => ({
     statusCode: 200,
@@ -91,6 +93,16 @@ test('authorized AI admin routes read and update runtime settings', () => {
   expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
 
   expect(routes.post.has('/api/admin/maintenance/report-logs')).toBe(true);
+
+  const diagnosticsResponse = createResponse();
+  await routes.post.get('/api/admin/diagnostics')({ headers }, diagnosticsResponse);
+  expect(runDiagnostics).toHaveBeenCalledTimes(1);
+  expect(diagnosticsResponse.payload).toEqual(diagnosticsPayload);
+
+  const unauthorizedDiagnosticsResponse = createResponse();
+  await routes.post.get('/api/admin/diagnostics')({ headers: {} }, unauthorizedDiagnosticsResponse);
+  expect(unauthorizedDiagnosticsResponse.statusCode).toBe(401);
+  expect(runDiagnostics).toHaveBeenCalledTimes(1);
 
   jest.dontMock('../src/utils/ai-client');
   jest.dontMock('../src/utils/ai-usage');

@@ -318,6 +318,7 @@ test.each([
   '/api/admin/maintenance/ai-usage',
   '/api/admin/maintenance/caches',
   '/api/admin/maintenance/feature-flags',
+  '/api/admin/diagnostics',
 ])('POST %s rejects access without the admin key', async (path) => {
   const response = await request(app).post(path);
   expect([401, 403]).toContain(response.status);

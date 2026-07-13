@@ -149,7 +149,8 @@ const secretsMatch = (provided, expected) => {
   return crypto.timingSafeEqual(providedBuf, expectedBuf);
 };
 
-const registerReportLogsRoute = (app, { caches = [] } = {}) => {
+const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null } = {}) => {
+  let diagnosticsInFlight = null;
   const authorize = (req, res) => {
     if (!LOGS_SECRET) {
       res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
@@ -250,6 +251,24 @@ const registerReportLogsRoute = (app, { caches = [] } = {}) => {
     } catch (error) {
       const status = error?.code === 'FEATURE_FLAGS_PERSIST_FAILED' ? 500 : 400;
       res.status(status).json({ error: error instanceof Error ? error.message : 'Feature flags could not be reset' });
+    }
+  });
+
+  app.post('/api/admin/diagnostics', async (req, res) => {
+    if (!authorize(req, res)) return;
+    if (typeof runDiagnostics !== 'function') {
+      res.status(503).json({ error: 'External diagnostics are unavailable' });
+      return;
+    }
+    try {
+      if (!diagnosticsInFlight) {
+        diagnosticsInFlight = Promise.resolve()
+          .then(() => runDiagnostics())
+          .finally(() => { diagnosticsInFlight = null; });
+      }
+      res.json(await diagnosticsInFlight);
+    } catch {
+      res.status(502).json({ error: 'External diagnostics could not be completed' });
     }
   });
 };

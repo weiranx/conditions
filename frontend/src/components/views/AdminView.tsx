@@ -102,6 +102,27 @@ interface AdminHealthSnapshot {
   timestamp: string;
 }
 
+interface ExternalDiagnosticsResult {
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  summary: {
+    total: number;
+    operational: number;
+    failed: number;
+    notConfigured: number;
+  };
+  services: Array<{
+    id: string;
+    name: string;
+    category: string;
+    status: 'operational' | 'failed' | 'not_configured';
+    httpStatus: number | null;
+    latencyMs: number | null;
+    message: string;
+  }>;
+}
+
 type AIProvider = 'openai' | 'anthropic';
 
 interface AIAdminSettings {
@@ -559,6 +580,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
+  const [diagnosticsPending, setDiagnosticsPending] = useState(false);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [maintenancePending, setMaintenancePending] = useState<MaintenanceAction | null>(null);
   const [maintenanceNotice, setMaintenanceNotice] = useState<{ message: string; error: boolean } | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -781,6 +805,33 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       setMaintenanceNotice({ message: 'Could not reach the server to complete this maintenance action.', error: true });
     } finally {
       setMaintenancePending(null);
+    }
+  };
+
+  const runExternalDiagnostics = async () => {
+    setDiagnosticsPending(true);
+    setDiagnosticsError(null);
+    try {
+      const result = await fetchApi('/api/admin/diagnostics', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      if (result.response.status === 401 || result.response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (result.response.ok && result.payload && typeof result.payload === 'object') {
+        setDiagnostics(result.payload as ExternalDiagnosticsResult);
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : 'The server could not run external service diagnostics.';
+      setDiagnosticsError(message);
+    } catch {
+      setDiagnosticsError('Could not reach the server to run external service diagnostics.');
+    } finally {
+      setDiagnosticsPending(false);
     }
   };
 
@@ -1030,6 +1081,56 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
         </article>
+      </section>
+
+      <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title">
+        <div className="logs-chart-head">
+          <div>
+            <h2 id="admin-diagnostics-title">External API diagnostics</h2>
+            <p>Check weather, avalanche, snowpack, access, water, satellite, wildfire, search, and AI providers</p>
+          </div>
+          <button
+            type="button"
+            className="logs-btn logs-btn-primary"
+            onClick={() => void runExternalDiagnostics()}
+            disabled={diagnosticsPending}
+          >
+            <RefreshCw className={diagnosticsPending ? 'logs-spin' : ''} size={15} aria-hidden />
+            {diagnosticsPending ? 'Running…' : diagnostics ? 'Run again' : 'Run diagnostics'}
+          </button>
+        </div>
+
+        {diagnosticsError && (
+          <div className="logs-inline-note" role="alert"><AlertTriangle size={15} aria-hidden /> {diagnosticsError}</div>
+        )}
+
+        {diagnostics ? (
+          <>
+            <div className="admin-diagnostics-summary" aria-label="Diagnostic summary">
+              <span className="is-operational"><CheckCircle2 size={14} aria-hidden /><strong>{diagnostics.summary.operational}</strong> operational</span>
+              <span className={diagnostics.summary.failed ? 'is-failed' : ''}><AlertTriangle size={14} aria-hidden /><strong>{diagnostics.summary.failed}</strong> failed</span>
+              <span><KeyRound size={14} aria-hidden /><strong>{diagnostics.summary.notConfigured}</strong> not configured</span>
+              <small>Completed in {formatDuration(diagnostics.durationMs)} at {new Date(diagnostics.completedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small>
+            </div>
+            <div className="admin-diagnostics-grid">
+              {diagnostics.services.map((service) => (
+                <article key={service.id} className={`admin-diagnostic-row is-${service.status.replace('_', '-')}`}>
+                  <span className="admin-diagnostic-indicator" aria-hidden />
+                  <div>
+                    <strong>{service.name}</strong>
+                    <small>{service.category}</small>
+                  </div>
+                  <div className="admin-diagnostic-result">
+                    <strong>{service.status === 'operational' ? 'Operational' : service.status === 'failed' ? 'Failed' : 'Not configured'}</strong>
+                    <small>{service.latencyMs == null ? service.message : `${formatDuration(service.latencyMs)} · ${service.httpStatus == null ? service.message : `HTTP ${service.httpStatus}`}`}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : !diagnosticsPending && !diagnosticsError ? (
+          <p className="admin-diagnostics-empty"><Activity size={16} aria-hidden /> Run a live check when you need to verify upstream service availability.</p>
+        ) : null}
       </section>
 
       <section className="logs-chart-card admin-maintenance-card" aria-labelledby="admin-maintenance-title">

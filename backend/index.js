@@ -58,6 +58,7 @@ const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
+const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
@@ -793,7 +794,10 @@ registerHealthRoutes(app, {
   caches: observableCaches,
   ai: getAIStatus,
 });
-registerReportLogsRoute(app, { caches: observableCaches });
+registerReportLogsRoute(app, {
+  caches: observableCaches,
+  runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
+});
 registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askAI });
 registerReportChatRoute({ app });

@@ -881,6 +881,61 @@ input {
 
 .admin-all-clear { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--ui-go-ink); font-size: 10.5px; }
 
+.admin-diagnostics-card { display: grid; gap: 11px; }
+.admin-diagnostics-card .logs-chart-head { align-items: center; }
+
+.admin-diagnostics-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-diagnostics-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-3);
+  font-size: 10px;
+}
+
+.admin-diagnostics-summary > span.is-operational { background: var(--ui-brand-soft); color: var(--ui-go-ink); }
+.admin-diagnostics-summary > span.is-failed { background: color-mix(in oklch, var(--ui-risk-4) 11%, var(--ui-surface)); color: var(--ui-nogo-ink); }
+.admin-diagnostics-summary > small { margin-left: auto; color: var(--ui-text-4); font-size: 9.5px; }
+
+.admin-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.admin-diagnostic-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
+  background: var(--ui-surface-subtle);
+}
+
+.admin-diagnostic-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--ui-text-4); }
+.admin-diagnostic-row.is-operational .admin-diagnostic-indicator { background: var(--ui-go-ink); }
+.admin-diagnostic-row.is-failed .admin-diagnostic-indicator { background: var(--ui-nogo-ink); }
+.admin-diagnostic-row > div { display: grid; min-width: 0; }
+.admin-diagnostic-row > div > strong { overflow: hidden; color: var(--ui-text); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-diagnostic-row > div > small { margin-top: 2px; color: var(--ui-text-4); font-size: 9px; }
+.admin-diagnostic-result { justify-items: end; text-align: right; }
+.admin-diagnostic-row.is-operational .admin-diagnostic-result > strong { color: var(--ui-go-ink); }
+.admin-diagnostic-row.is-failed .admin-diagnostic-result > strong { color: var(--ui-nogo-ink); }
+.admin-diagnostics-empty { display: flex; align-items: center; gap: 7px; margin: 2px 0 0; color: var(--ui-text-3); font-size: 11px; }
+
 .admin-maintenance-card { display: grid; gap: 10px; }
 
 .admin-maintenance-grid {
@@ -11066,6 +11121,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .logs-range-control { flex: 1; }
   .logs-range-control button { flex: 1; }
   .admin-operations-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ai-control-grid { grid-template-columns: minmax(0, 1fr); }
@@ -11348,6 +11404,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
 }
 
 @media (max-width: 560px) {
+  .admin-diagnostics-card .logs-chart-head { align-items: flex-start; }
+  .admin-diagnostics-card .logs-chart-head .logs-btn { width: 100%; justify-content: center; }
+  .admin-diagnostics-summary > small { width: 100%; margin-left: 0; }
+  .admin-diagnostics-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-maintenance-grid {
     grid-template-columns: minmax(0, 1fr);
   }
