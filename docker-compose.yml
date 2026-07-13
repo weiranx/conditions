@@ -31,5 +31,28 @@ services:
       start_period: 15s
       retries: 3
 
+  postgres:
+    image: postgres:17-alpine
+    container_name: summitsafe-postgres
+    restart: unless-stopped
+    # PostgreSQL is intentionally not published on a host port. The backend
+    # reaches it as `postgres:5432` over Docker's private project network.
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-summitsafe}
+      POSTGRES_USER: ${POSTGRES_USER:-summitsafe_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --data-checksums"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    shm_size: 128mb
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
 volumes:
   report-logs-data:
+  postgres-data:

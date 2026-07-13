@@ -149,6 +149,43 @@ ANTHROPIC_MODEL=claude-sonnet-5
 ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
 ```
 
+### Deploy PostgreSQL
+
+Run the database deployment as the `deploy` user after creating `.env`:
+
+```bash
+cd /opt/summitsafe
+./scripts/deploy-postgres.sh
+```
+
+On its first run, the script generates a dedicated database name, application
+user, 256-bit password, and `DATABASE_URL` in `/opt/summitsafe/.env`. It then
+starts PostgreSQL, verifies password authentication, builds the backend, applies
+versioned database migrations, recreates the backend with the new environment,
+and verifies `/healthz` reports an active database connection. Rerunning the
+script reuses the credentials and persistent Docker volume; it does not
+reinitialize or delete data.
+
+Normal backend deployments also apply pending migrations before recreating the
+backend whenever `DATABASE_URL` is configured. A migration failure stops the
+deployment before the running backend is replaced.
+
+PostgreSQL has no published host port. Other Compose services connect privately
+at `postgres:5432`; do not add a public `5432` firewall rule. To inspect the
+service without exposing it:
+
+```bash
+docker compose ps postgres
+docker compose logs --tail 100 postgres
+docker compose exec postgres psql \
+  --username "$(sed -n 's/^POSTGRES_USER=//p' .env)" \
+  --dbname "$(sed -n 's/^POSTGRES_DB=//p' .env)"
+```
+
+The Docker volume protects data across container recreation, but it is not a
+backup. Before storing user or billing data, schedule encrypted `pg_dump`
+backups to storage outside this Droplet and test a restore.
+
 ---
 
 ## 6. Obtain a TLS Certificate (First Deploy Only)

@@ -9,6 +9,7 @@
 # Options:
 #   --no-pull     Skip git pull (deploy current working tree as-is)
 #   --no-build    Skip docker compose build (restart existing image)
+#   --no-nginx    Skip host nginx validation/reload (used by CI deploy user)
 
 set -euo pipefail
 
@@ -17,11 +18,13 @@ cd "$APP_DIR"
 
 NO_PULL=false
 NO_BUILD=false
+NO_NGINX=false
 
 for arg in "$@"; do
   case $arg in
     --no-pull)  NO_PULL=true ;;
     --no-build) NO_BUILD=true ;;
+    --no-nginx) NO_NGINX=true ;;
     *) echo "Unknown option: $arg" && exit 1 ;;
   esac
 done
@@ -38,14 +41,54 @@ if [ "$NO_BUILD" = false ]; then
   docker compose build --pull backend
 fi
 
-echo "==> Restarting backend container..."
-docker compose up -d --no-deps backend
+if [ -f .env ] && grep -Eq '^DATABASE_URL=.+$' .env; then
+  if grep -Eq '^POSTGRES_PASSWORD=.+$' .env; then
+    echo "==> Ensuring local PostgreSQL is running..."
+    docker compose up -d postgres
 
-echo "==> Reloading host nginx..."
-nginx -t && systemctl reload nginx
+    echo "==> Waiting for PostgreSQL readiness..."
+    postgres_ready=false
+    for _ in {1..60}; do
+      if docker compose exec -T postgres pg_isready >/dev/null 2>&1; then
+        postgres_ready=true
+        break
+      fi
+      sleep 1
+    done
+    if [ "$postgres_ready" != true ]; then
+      docker compose ps postgres >&2
+      docker compose logs --tail 50 postgres >&2
+      echo "PostgreSQL did not become ready within 60 seconds." >&2
+      exit 1
+    fi
+  fi
+
+  echo "==> Applying database migrations..."
+  docker compose run --rm --no-deps backend npm run db:migrate
+fi
+
+echo "==> Restarting backend container..."
+docker compose up -d --force-recreate --no-deps backend
+
+if [ "$NO_NGINX" = false ]; then
+  echo "==> Reloading host nginx..."
+  nginx -t && systemctl reload nginx
+fi
 
 echo "==> Waiting for health check..."
-sleep 5
-curl --fail --silent http://localhost:3001/healthz | grep '"ok":true'
+backend_ready=false
+for _ in {1..30}; do
+  if curl --fail --silent http://localhost:3001/healthz | grep --quiet '"ok":true'; then
+    backend_ready=true
+    break
+  fi
+  sleep 1
+done
+if [ "$backend_ready" != true ]; then
+  docker compose ps backend >&2
+  docker compose logs --tail 50 backend >&2
+  echo "Backend did not become healthy within 30 seconds." >&2
+  exit 1
+fi
 
 echo "==> Deploy complete."

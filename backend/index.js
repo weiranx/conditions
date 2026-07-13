@@ -60,6 +60,7 @@ const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, isAIAvailable
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
+const { database } = require('./src/db/database');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
@@ -796,6 +797,7 @@ const observableCaches = [
 registerHealthRoutes(app, {
   caches: observableCaches,
   ai: getAIStatus,
+  database,
 });
 registerReportLogsRoute(app, {
   caches: observableCaches,
@@ -808,10 +810,17 @@ registerReportChatRoute({ app });
 registerSatelliteTileRoute({ app, fetchWithTimeout, tileCache: satelliteTileCache });
 registerSnowVisionRoute({ app, fetchWithTimeout, askAIVision });
 
-const startServer = () => startBackendServer({ app, port: PORT });
+const startServer = async () => {
+  await database.connect();
+  return startBackendServer({ app, port: PORT, onShutdown: () => database.close() });
+};
 
 if (require.main === module) {
-  startServer();
+  startServer().catch(async (error) => {
+    logger.fatal({ err: error }, 'Backend startup failed');
+    await database.close().catch(() => {});
+    process.exit(1);
+  });
 }
 
 module.exports = {

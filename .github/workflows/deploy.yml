@@ -50,14 +50,7 @@ jobs:
             # Pull latest changes.
             git pull origin main
 
-            # Rebuild backend image. --pull ensures the base image is up to date.
-            docker compose build --pull backend
-
-            # Restart only the backend container.
-            docker compose up -d --no-deps backend
-
-            # Verify the backend is healthy after deploy.
-            echo "Waiting for health check..."
-            sleep 5
-            curl --fail --silent http://localhost:3001/healthz | grep '"ok":true'
-            echo "Deploy complete."
+            # Build, migrate, recreate, and verify through the same deployment
+            # path used for manual VPS releases. The CI user does not manage
+            # host nginx, so that privileged step is skipped.
+            ./scripts/deploy.sh --no-pull --no-nginx
