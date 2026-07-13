@@ -37,6 +37,7 @@ import { WeatherTrendMiniChart } from './WeatherTrendMiniChart';
 import { WindDirectionArrow } from './WindDirectionArrow';
 import { StartTimeScenarioCard } from './StartTimeScenarioCard';
 import { HeatRiskSection } from './HeatRiskSection';
+import { CautionsAlertsSection } from './CautionsAlertsSection';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 const DANGER_COLORS = [
@@ -638,22 +639,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     }
   })();
 
-  // ── Alerts/cautions ──
-  const cautionItems = decision.cautions || [];
-  const blockerItems = decision.blockers || [];
-  const alertItems = nwsTopAlerts || [];
-  const openCount = cautionItems.length + blockerItems.length + alertItems.length;
-  const alertSeverityClass = (severity?: string | null): 'nogo' | 'warn' | 'neutral' => {
-    const s = (severity || '').toLowerCase();
-    if (s === 'extreme' || s === 'severe') return 'nogo';
-    if (s === 'moderate') return 'warn';
-    return 'neutral';
-  };
-  const alertExpiryLabel = (alert: { ends?: string | null; expires?: string | null }) => {
-    const iso = alert.ends || alert.expires;
-    return iso ? `Until ${formatPubTime(iso)}` : '';
-  };
-
   // ── Sources ──
   const sourceState = (row: (typeof sourceFreshnessRows)[number]): string => {
     if (row.stateOverride) return row.stateOverride;
@@ -689,7 +674,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   const planActions: Array<{ tone: PlanTone; icon: React.ReactNode; title: string; detail?: string }> = [];
 
   // Hard stops — surface no-go blockers at the very top of the to-do list.
-  blockerItems.forEach((b) =>
+  (decision.blockers || []).forEach((b) =>
     planActions.push({
       tone: 'stop',
       icon: <ShieldAlert size={15} />,
@@ -1964,77 +1949,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           </section>
         )}
 
-        {/* CAUTIONS & ALERTS */}
-        <section className="ssr-card" id="planner-section-alerts">
-          <div className="ssr-card-h">
-            <h2>
-              <span className="ssr-h-icon icon-orange"><ShieldAlert size={16} /></span>
-              Cautions &amp; Alerts
-            </h2>
-            <span className="ssr-h-meta">{openCount} open</span>
-          </div>
-          <div className="ssr-card-b">
-            {openCount === 0 && <div className="ssr-cc-allclear"><CheckCircle2 size={16} /> No open modeled cautions or active alerts. Keep monitoring current official sources and field conditions.</div>}
-            {blockerItems.length > 0 && (
-              <div className="ssr-cc-group">
-                <div className="ssr-cc-group-h nogo"><ShieldAlert size={13} /> Blockers <span className="ssr-cc-count">{blockerItems.length}</span></div>
-                <div className="ssr-cc-fails">
-                  {blockerItems.map((c, i) => (
-                    <div className="ssr-cc-fail nogo" key={`b${i}`}>
-                      <span className="ssr-cc-fail-ic"><AlertTriangle size={15} /></span>
-                      <div className="ssr-cc-fail-body">
-                        <span className="ssr-cc-fail-lbl">{localizeUnitText(c)}</span>
-                        <span className="ssr-cc-fail-meta">No-go condition</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {cautionItems.length > 0 && (
-              <div className="ssr-cc-group">
-                <div className="ssr-cc-group-h warn"><AlertTriangle size={13} /> Cautions <span className="ssr-cc-count">{cautionItems.length}</span></div>
-                <div className="ssr-cc-fails">
-                  {cautionItems.map((c, i) => (
-                    <div className="ssr-cc-fail" key={`c${i}`}>
-                      <span className="ssr-cc-fail-ic"><AlertTriangle size={15} /></span>
-                      <div className="ssr-cc-fail-body">
-                        <span className="ssr-cc-fail-lbl">{localizeUnitText(c)}</span>
-                        <span className="ssr-cc-fail-meta">Caution</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {alertItems.length > 0 && (
-              <div className="ssr-cc-group">
-                <div className="ssr-cc-group-h"><Radio size={13} /> Weather alerts <span className="ssr-cc-count">{alertItems.length}</span></div>
-                <div className="ssr-ac-list">
-                  {alertItems.map((a: any, i: number) => {
-                    const sevClass = alertSeverityClass(a.severity);
-                    const expiry = alertExpiryLabel(a);
-                    return (
-                      <div className={`ssr-ac-item ${sevClass === 'nogo' ? 'nogo' : ''}`} key={`a${i}`}>
-                        <span className="ssr-ac-icon"><AlertTriangle size={12} /></span>
-                        <div>
-                          <div className="ssr-ac-headrow">
-                            <span className="ssr-ac-text">{a.headline || a.event || 'Weather alert'}</span>
-                            <span className={`ssr-ac-severity ${sevClass}`}>{a.severity || 'Unknown'}</span>
-                          </div>
-                          {[a.event, a.senderName || a.source].filter(Boolean).length > 0 && (
-                            <div className="ssr-ac-meta">{[a.event, a.senderName || a.source].filter(Boolean).join(' · ')}</div>
-                          )}
-                          {expiry && <div className="ssr-ac-expiry">{expiry}</div>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+        <CautionsAlertsSection
+          blockers={decision.blockers || []}
+          cautions={decision.cautions || []}
+          alerts={nwsTopAlerts || []}
+          formatPubTime={formatPubTime}
+          localizeUnitText={localizeUnitText}
+        />
 
         {/* SOURCES */}
         {sourceFreshnessRows.length > 0 && (
