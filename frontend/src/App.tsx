@@ -975,6 +975,7 @@ function App() {
   const startTimeScenarios = useStartTimeScenarios({
     enabled: featureFlags.startTimeComparisons && hasObjective && view === 'planner' && Boolean(safetyData),
     forecastDate,
+    currentStartTime: alpineStartTime,
     position: { lat: position.lat, lng: position.lng },
     preferences,
   });

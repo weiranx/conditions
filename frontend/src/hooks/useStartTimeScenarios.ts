@@ -6,6 +6,7 @@ import {
   START_TIME_SCENARIO_TIMES,
   buildStartTimeScenario,
   compareStartTimeScenarios,
+  includeUserStartTimeScenario,
   type StartTimeScenario,
 } from '../app/start-time-scenarios';
 import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../app/constants';
@@ -14,6 +15,7 @@ import { fetchApi } from '../lib/api-client';
 interface UseStartTimeScenariosParams {
   enabled: boolean;
   forecastDate: string;
+  currentStartTime: string;
   position: { lat: number; lng: number };
   preferences: UserPreferences;
 }
@@ -21,6 +23,7 @@ interface UseStartTimeScenariosParams {
 export function useStartTimeScenarios({
   enabled,
   forecastDate,
+  currentStartTime,
   position,
   preferences,
 }: UseStartTimeScenariosParams) {
@@ -28,9 +31,13 @@ export function useStartTimeScenarios({
   const [includeMoreScenarios, setIncludeMoreScenarios] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scenarioTimes = includeMoreScenarios
-    ? EXTENDED_START_TIME_SCENARIO_TIMES
-    : START_TIME_SCENARIO_TIMES;
+  const scenarioTimes = useMemo(
+    () => includeUserStartTimeScenario(
+      includeMoreScenarios ? EXTENDED_START_TIME_SCENARIO_TIMES : START_TIME_SCENARIO_TIMES,
+      currentStartTime,
+    ),
+    [currentStartTime, includeMoreScenarios],
+  );
 
   useEffect(() => {
     if (!enabled) {

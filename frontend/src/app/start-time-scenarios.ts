@@ -15,6 +15,44 @@ export const EXTENDED_START_TIME_SCENARIO_TIMES = [
   '10:00',
 ] as const;
 
+function scenarioTimeMinutes(time: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  return (hours * 60) + minutes;
+}
+
+export function includeUserStartTimeScenario(
+  presetTimes: readonly string[],
+  userStartTime: string,
+): string[] {
+  const userMinutes = scenarioTimeMinutes(userStartTime);
+  if (userMinutes === null || presetTimes.length === 0) return [...presetTimes];
+
+  const normalizedUserTime = `${String(Math.floor(userMinutes / 60)).padStart(2, '0')}:${String(userMinutes % 60).padStart(2, '0')}`;
+  if (presetTimes.includes(normalizedUserTime)) return [...presetTimes];
+
+  let closestIndex = 0;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  presetTimes.forEach((time, index) => {
+    const minutes = scenarioTimeMinutes(time);
+    if (minutes === null) return;
+    const distance = Math.abs(minutes - userMinutes);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+
+  const result = [...presetTimes];
+  result[closestIndex] = normalizedUserTime;
+  return result.sort((a, b) => (scenarioTimeMinutes(a) ?? 0) - (scenarioTimeMinutes(b) ?? 0));
+}
+
 export type StartTimeScenarioRisk = 'Wind' | 'Heat' | 'Precipitation' | 'Avalanche';
 
 export interface StartTimeScenario {

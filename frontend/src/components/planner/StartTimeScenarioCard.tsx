@@ -107,7 +107,7 @@ export function StartTimeScenarioCard({
               <span className="start-scenarios__eyebrow">Recommended departure</span>
               <div className="start-scenarios__recommendation-title">
                 <strong>{formatClockForStyle(best.startTime, preferences.timeStyle)}</strong>
-                {currentIsBest && <span><Check size={12} aria-hidden /> Your current plan</span>}
+                {currentIsBest && <span><Check size={12} aria-hidden /> Your input</span>}
               </div>
               <p>{recommendationReason}</p>
               <span className="start-scenarios__driver">Biggest timing difference: <b>{comparison.drivingRisk}</b></span>
@@ -137,7 +137,7 @@ export function StartTimeScenarioCard({
                       <span className="start-scenario__score">Overall score {Math.round(scenario.score)}</span>
                     </div>
                     <div className="start-scenario__badges">
-                      {isCurrent && <span className="start-scenario__current"><Check size={11} aria-hidden /> Current</span>}
+                      {isCurrent && <span className="start-scenario__current"><Check size={11} aria-hidden /> Your input</span>}
                       <span className={`status-pill ${scenario.decision.level === 'GO' ? 'good' : scenario.decision.level === 'CAUTION' ? 'warn' : 'bad'}`}>
                         {scenario.decision.level}
                       </span>
@@ -170,7 +170,7 @@ export function StartTimeScenarioCard({
                       <ArrowRight size={14} aria-hidden />
                     </button>
                   )}
-                  {isCurrent && <span className="start-scenario__selected"><Check size={13} aria-hidden /> This report uses {displayedStart}</span>}
+                  {isCurrent && <span className="start-scenario__selected"><Check size={13} aria-hidden /> Your report uses {displayedStart}</span>}
                 </article>
               );
             })}
@@ -183,7 +183,7 @@ export function StartTimeScenarioCard({
                   {loading ? <LoaderCircle size={14} className="spin" aria-hidden /> : <Plus size={14} aria-hidden />}
                   {loading ? 'Comparing more times…' : 'Compare hourly starts'}
                 </button>
-                <span>Expand to eight departures from 3 AM through 10 AM.</span>
+                <span>Expand to eight departures, including your selected start.</span>
               </div>
             )}
             {loading && comparison && (
