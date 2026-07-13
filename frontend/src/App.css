@@ -1077,7 +1077,7 @@ input {
 
 .admin-model-fields label { display: grid; gap: 5px; min-width: 0; }
 .admin-model-fields label > span { color: var(--ui-text-3); font-size: 9.5px; font-weight: 650; }
-.admin-model-fields input {
+.admin-model-fields select {
   width: 100%;
   min-width: 0;
   height: 34px;
@@ -1088,7 +1088,7 @@ input {
   color: var(--ui-text);
   font: 10.5px var(--font-data);
 }
-.admin-model-fields input:focus { border-color: var(--ui-brand); outline: 2px solid var(--ui-brand-soft); }
+.admin-model-fields select:focus { border-color: var(--ui-brand); outline: 2px solid var(--ui-brand-soft); }
 .admin-model-fields .logs-btn { min-height: 34px; white-space: nowrap; }
 
 .logs-metric-card {

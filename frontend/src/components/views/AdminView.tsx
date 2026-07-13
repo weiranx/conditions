@@ -1289,7 +1289,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             const changed = Boolean(providerConfig)
               && (draft.primary.trim() !== providerConfig?.primary || draft.fast.trim() !== providerConfig?.fast);
             const providerLabel = provider === 'openai' ? 'OpenAI models' : 'Claude models';
-            const optionsId = `admin-${provider}-model-options`;
+            const modelOptions = providerConfig?.options ?? [];
             return (
               <div className="admin-model-card" key={`${provider}-models`}>
                 <div className="admin-model-card-head">
@@ -1305,37 +1305,32 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                 <div className="admin-model-fields">
                   <label>
                     <span>Primary model</span>
-                    <input
-                      type="text"
-                      list={optionsId}
+                    <select
                       value={draft.primary}
                       onChange={(event) => setModelDrafts((current) => ({
                         ...current,
                         [provider]: { ...current[provider], primary: event.target.value },
                       }))}
                       disabled={!providerConfig || aiSettingsPending}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
+                      aria-label={`${providerLabel} primary model`}
+                    >
+                      {modelOptions.map((model) => <option value={model} key={model}>{model}</option>)}
+                    </select>
                   </label>
                   <label>
                     <span>Fast model</span>
-                    <input
-                      type="text"
-                      list={optionsId}
+                    <select
                       value={draft.fast}
                       onChange={(event) => setModelDrafts((current) => ({
                         ...current,
                         [provider]: { ...current[provider], fast: event.target.value },
                       }))}
                       disabled={!providerConfig || aiSettingsPending}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
+                      aria-label={`${providerLabel} fast model`}
+                    >
+                      {modelOptions.map((model) => <option value={model} key={model}>{model}</option>)}
+                    </select>
                   </label>
-                  <datalist id={optionsId}>
-                    {(providerConfig?.options ?? []).map((model) => <option value={model} key={model} />)}
-                  </datalist>
                   <button
                     type="button"
                     className="logs-btn logs-btn-primary"
