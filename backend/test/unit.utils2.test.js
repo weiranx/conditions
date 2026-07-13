@@ -1486,6 +1486,44 @@ describe('buildLayeringGearSuggestions — travel-window hazards', () => {
     expect(suggestions.some((s) => s.id === 'storm-contingency')).toBe(true);
   });
 
+  test('honors travel windows longer than 12 hours', () => {
+    const trend = Array.from({ length: 24 }, (_, index) => ({
+      temp: 55,
+      condition: index === 20 ? 'Thunderstorms' : 'Mostly Sunny',
+    }));
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      selectedTravelWindowHours: 24,
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        trend,
+      },
+    });
+
+    expect(suggestions.some((s) => s.id === 'storm-contingency')).toBe(true);
+  });
+
+  test('does not combine warm dry and cold snowy hours into a rain signal', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      selectedTravelWindowHours: 2,
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        description: 'Mostly Sunny',
+        temp: 55,
+        precipChance: 0,
+        trend: [
+          { temp: 55, precipChance: 0, condition: 'Mostly Sunny' },
+          { temp: 20, precipChance: 90, condition: 'Snow' },
+        ],
+      },
+    });
+
+    expect(suggestions.some((s) => s.id === 'shell-wind-snow')).toBe(true);
+    expect(suggestions.some((s) => s.id === 'shell-wet')).toBe(false);
+    expect(suggestions.some((s) => s.id === 'gaiters-wet')).toBe(false);
+  });
+
   test('does not interpret missing hourly values as zero-degree weather', () => {
     const suggestions = buildLayeringGearSuggestions({
       ...baseSuggestionInput(),
@@ -1552,6 +1590,21 @@ describe('buildLayeringGearSuggestions — snow/ice traction', () => {
     });
 
     expect(suggestions.some((s) => s.id === 'traction-snow')).toBe(true);
+  });
+
+  test('does not report a measured zero depth when snow observations are missing', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      weatherData: {
+        ...baseSuggestionInput().weatherData,
+        description: 'Snow',
+      },
+      snowpackData: {},
+    });
+
+    const traction = suggestions.find((s) => s.id === 'traction-snow');
+    expect(traction).toBeDefined();
+    expect(traction.detail).not.toMatch(/observed snow depth/i);
   });
 });
 

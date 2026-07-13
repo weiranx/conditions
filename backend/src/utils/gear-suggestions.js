@@ -27,10 +27,12 @@ const buildLayeringGearSuggestions = ({
     }
   };
   const formatWhole = (value, suffix) => {
+    if (value === null || value === undefined || value === '') return null;
     const numeric = Number(value);
     return Number.isFinite(numeric) ? `${Math.round(numeric)}${suffix}` : null;
   };
   const formatOneDecimal = (value, suffix) => {
+    if (value === null || value === undefined || value === '') return null;
     const numeric = Number(value);
     return Number.isFinite(numeric) ? `${numeric.toFixed(1)}${suffix}` : null;
   };
@@ -42,7 +44,7 @@ const buildLayeringGearSuggestions = ({
 
   const windowHours = selectedTravelWindowHours === null || selectedTravelWindowHours === undefined || selectedTravelWindowHours === ''
     ? 12
-    : Math.min(12, clampTravelWindowHours(selectedTravelWindowHours, 12));
+    : clampTravelWindowHours(selectedTravelWindowHours, 12);
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend.slice(0, windowHours) : [];
   const description = String(weatherData?.description || '').toLowerCase();
   const windowDescription = [description, ...trend.map((row) => String(row?.condition || '').toLowerCase())].join(' ');
@@ -52,7 +54,6 @@ const buildLayeringGearSuggestions = ({
   const gustMph = parseFloat(weatherData?.windGust);
   const precipChance = parseFloat(weatherData?.precipChance);
   const humidity = parseFloat(weatherData?.humidity);
-  const trendTemps = trend.map((row) => toFiniteNumber(row?.temp)).filter((value) => value !== null);
   const trendFeelsLike = trend
     .map((row) => {
       const explicitFeelsLike = toFiniteNumber(row?.feelsLike);
@@ -78,15 +79,27 @@ const buildLayeringGearSuggestions = ({
     snowpackData?.nohrsc?.snowDepthIn,
     snowpackData?.cdec?.snowDepthIn,
   ].map(toFiniteNumber).filter((value) => value !== null && value >= 0);
-  const maxObservedSnowDepthIn = snowDepthSamples.reduce((max, current) => Math.max(max, current), 0);
+  const maxObservedSnowDepthIn = snowDepthSamples.length
+    ? snowDepthSamples.reduce((max, current) => Math.max(max, current), 0)
+    : null;
 
-  const hasWetSignal =
-    /rain|shower|drizzle|wet|thunder|storm/.test(windowDescription) ||
-    (Number.isFinite(windowPeakPrecipChance) && windowPeakPrecipChance >= 45 && [tempF, ...trendTemps].some((value) => Number.isFinite(value) && value > 30));
-  const hasSnowSignal =
-    /snow|sleet|freezing|ice|blizzard|wintry|graupel|flurr/.test(windowDescription) ||
-    ([tempF, ...trendTemps].some((value) => Number.isFinite(value) && value <= 34) && Number.isFinite(windowPeakPrecipChance) && windowPeakPrecipChance >= 40) ||
-    maxObservedSnowDepthIn >= 2;
+  const windowWeatherRows = [
+    { condition: description, temp: tempF, precipChance },
+    ...trend.map((row) => ({
+      condition: String(row?.condition || '').toLowerCase(),
+      temp: toFiniteNumber(row?.temp),
+      precipChance: toFiniteNumber(row?.precipChance),
+    })),
+  ];
+
+  const hasWetSignal = windowWeatherRows.some((row) => (
+    /rain|shower|drizzle|wet|thunder|storm/.test(row.condition)
+    || (Number.isFinite(row.precipChance) && row.precipChance >= 45 && Number.isFinite(row.temp) && row.temp > 30)
+  ));
+  const hasSnowSignal = windowWeatherRows.some((row) => (
+    /snow|sleet|freezing|ice|blizzard|wintry|graupel|flurr/.test(row.condition)
+    || (Number.isFinite(row.temp) && row.temp <= 34 && Number.isFinite(row.precipChance) && row.precipChance >= 40)
+  )) || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 2);
   const windy = (Number.isFinite(windowPeakGustMph) && windowPeakGustMph >= 25) || (Number.isFinite(windowPeakWindMph) && windowPeakWindMph >= 18);
   const cold = Number.isFinite(windowMinFeelsLikeF) && windowMinFeelsLikeF <= 20;
   const veryCold = Number.isFinite(windowMinFeelsLikeF) && windowMinFeelsLikeF <= 5;
@@ -160,7 +173,7 @@ const buildLayeringGearSuggestions = ({
   if (muddy || hasRainAccumulation) {
     addSuggestion('traction-mud', 'Mud traction', 'Aggressive-lug footwear and poles for slick or soft approaches.', 'Conditions', 'watch', 34);
   }
-  if (icy || snowy || hasSnowSignal || hasFreshSnow || maxObservedSnowDepthIn >= 4) {
+  if (icy || snowy || hasSnowSignal || hasFreshSnow || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4)) {
     addSuggestion(
       'traction-snow',
       'Snow/ice traction',
@@ -170,10 +183,10 @@ const buildLayeringGearSuggestions = ({
       26,
     );
   }
-  if (maxObservedSnowDepthIn >= 12 || (Number.isFinite(snow24hIn) && snow24hIn >= 6)) {
+  if ((Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 12) || (Number.isFinite(snow24hIn) && snow24hIn >= 6)) {
     addSuggestion('snow-flotation', 'Snow flotation', 'Snowshoes or skis may be needed for deep or unconsolidated snow; verify supportability near the trailhead.', 'Conditions', 'watch', 27);
   }
-  if (icy && (cold || maxObservedSnowDepthIn >= 4)) {
+  if (icy && (cold || (Number.isFinite(maxObservedSnowDepthIn) && maxObservedSnowDepthIn >= 4))) {
     addSuggestion('alpine-hardware', 'Technical snow travel', 'For steep, firm snow only: ice axe, crampons, and helmet — and the training to use them. Otherwise change the route.', 'Safety', 'caution', 15);
   }
 
