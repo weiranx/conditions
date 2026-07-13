@@ -34,7 +34,15 @@ const registerAccountRoutes = ({
     secure: isProduction,
     path: '/',
   };
-  const authLimiter = rateLimit({
+  const accountLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
+    message: { error: 'Too many account requests. Please wait and try again.' },
+  });
+  const authAttemptLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
     standardHeaders: true,
@@ -145,7 +153,7 @@ const registerAccountRoutes = ({
     return res.status(500).json({ error: 'Account request failed. Please try again.' });
   };
 
-  app.get('/api/auth/session', async (req, res) => {
+  app.get('/api/auth/session', accountLimiter, async (req, res) => {
     setNoStore(res);
     if (!service.available) {
       return res.json({
@@ -168,7 +176,7 @@ const registerAccountRoutes = ({
     }
   });
 
-  app.post('/api/auth/register', authLimiter, async (req, res) => {
+  app.post('/api/auth/register', accountLimiter, authAttemptLimiter, async (req, res) => {
     setNoStore(res);
     try {
       const session = await service.register(req.body);
@@ -179,7 +187,7 @@ const registerAccountRoutes = ({
     }
   });
 
-  app.post('/api/auth/login', authLimiter, async (req, res) => {
+  app.post('/api/auth/login', accountLimiter, authAttemptLimiter, async (req, res) => {
     setNoStore(res);
     try {
       const session = await service.login(req.body);
@@ -190,7 +198,7 @@ const registerAccountRoutes = ({
     }
   });
 
-  app.get('/api/auth/google/config', (req, res) => {
+  app.get('/api/auth/google/config', accountLimiter, (req, res) => {
     setNoStore(res);
     if (!service.available || !googleVerifier.available) {
       clearGoogleNonceCookie(res);
@@ -204,7 +212,7 @@ const registerAccountRoutes = ({
     return res.json({ available: true, clientId: googleVerifier.clientId, nonce });
   });
 
-  app.post('/api/auth/google', authLimiter, async (req, res) => {
+  app.post('/api/auth/google', accountLimiter, authAttemptLimiter, async (req, res) => {
     setNoStore(res);
     try {
       const identity = await googleVerifier.verify(req.body?.credential, {
@@ -233,7 +241,7 @@ const registerAccountRoutes = ({
     }
   });
 
-  app.post('/api/auth/logout', async (req, res) => {
+  app.post('/api/auth/logout', accountLimiter, async (req, res) => {
     setNoStore(res);
     const token = readSessionToken(req);
     try {

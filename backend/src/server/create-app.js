@@ -6,6 +6,12 @@ const rateLimit = require('express-rate-limit');
 const crypto = require('node:crypto');
 const { logger, withRequestId } = require('../utils/logger');
 
+const shouldSkipGeneralRateLimit = (req) => (
+  req.method === 'OPTIONS'
+  || req.path === '/auth'
+  || req.path.startsWith('/auth/')
+);
+
 const createApp = ({
   isProduction,
   corsAllowlist,
@@ -60,7 +66,10 @@ const createApp = ({
       max: rateLimitMaxRequests,
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) => req.method === 'OPTIONS',
+      // Account access has independent limits in routes/account.js. Keeping it
+      // out of the general API bucket prevents forecast and map activity from
+      // locking a user out of creating an account or signing back in.
+      skip: shouldSkipGeneralRateLimit,
       message: { error: 'Too many requests. Please retry later.' },
     }),
   );
