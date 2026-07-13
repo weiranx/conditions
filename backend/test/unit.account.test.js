@@ -45,6 +45,7 @@ const USER_ROW = {
 
 const AI_USAGE = {
   tierKey: 'free',
+  unlimited: false,
   usedTokens: 12500,
   limitTokens: 250000,
   remainingTokens: 237500,
@@ -671,10 +672,18 @@ describe('AI account access', () => {
     expect(allowUsageService.assertUserCanGenerate).toHaveBeenCalledWith(USER_ROW.id, 'free');
   });
 
-  test('uses the Premium allowance when an account has a current subscription', async () => {
+  test('uses unlimited Premium AI access when an account has a current subscription', async () => {
     const user = { id: USER_ROW.id, email: USER_ROW.email };
     const premiumTier = { ...FREE_TIER, key: 'premium', label: 'Premium' };
-    const assertUserCanGenerate = jest.fn().mockResolvedValue({ ...AI_USAGE, tierKey: 'premium' });
+    const assertUserCanGenerate = jest.fn().mockResolvedValue({
+      ...AI_USAGE,
+      tierKey: 'premium',
+      unlimited: true,
+      limitTokens: null,
+      remainingTokens: null,
+      percentUsed: null,
+      exhausted: false,
+    });
     const response = await request(makeApp(
       { available: true, getUserForSession: jest.fn().mockResolvedValue(user) },
       { available: true, assertUserCanGenerate },

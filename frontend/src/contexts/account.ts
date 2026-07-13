@@ -19,17 +19,30 @@ export interface AccountTier {
   cancelAtPeriodEnd: boolean;
 }
 
-export interface AccountAIUsage {
+interface AccountAIUsageBase {
   tierKey: AccountTierKey;
   usedTokens: number;
-  limitTokens: number;
-  remainingTokens: number;
-  percentUsed: number;
   periodStart: string;
   periodEnd: string;
   resetAt: string;
   exhausted: boolean;
 }
+
+export type AccountAIUsage = AccountAIUsageBase & (
+  | {
+    unlimited: true;
+    limitTokens: null;
+    remainingTokens: null;
+    percentUsed: null;
+    exhausted: false;
+  }
+  | {
+    unlimited: false;
+    limitTokens: number;
+    remainingTokens: number;
+    percentUsed: number;
+  }
+);
 
 export type PreferenceSyncState = 'idle' | 'saving' | 'saved' | 'error';
 

@@ -339,6 +339,7 @@ Returns account availability and the current user, if signed in:
   "reportCount": 7,
   "aiUsage": {
     "tierKey": "free",
+    "unlimited": false,
     "usedTokens": 12500,
     "limitTokens": 250000,
     "remainingTokens": 237500,
@@ -354,6 +355,10 @@ Returns account availability and the current user, if signed in:
 Every account resolves to Free unless it has a current `premium`, `premium_monthly`, or `premium_annual`
 subscription with `active` or `trialing` status. When the database is not configured, this endpoint remains
 available and returns `available: false`.
+
+For Premium accounts, `aiUsage.unlimited` is `true`; `limitTokens`, `remainingTokens`, and `percentUsed`
+are `null`, while `usedTokens` continues to report the current month's provider-reported usage. Premium
+report generation and history have no usage quota, and `reportCount` remains the lifetime generated total.
 
 ### `POST /api/auth/register`
 

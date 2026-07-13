@@ -60,25 +60,51 @@ function parseGoogleAuthConfig(payload: unknown): Omit<GoogleAuthConfig, 'loadin
 function parseAIUsage(value: unknown): AccountAIUsage | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  const numberFields = ['usedTokens', 'limitTokens', 'remainingTokens', 'percentUsed'] as const;
   const dateFields = ['periodStart', 'periodEnd', 'resetAt'] as const;
+  const unlimited = record.unlimited === true;
   if (
-    numberFields.some((field) => typeof record[field] !== 'number' || !Number.isFinite(record[field]))
+    typeof record.usedTokens !== 'number'
+    || !Number.isFinite(record.usedTokens)
     || dateFields.some((field) => typeof record[field] !== 'string')
     || typeof record.exhausted !== 'boolean'
     || (record.tierKey !== undefined && record.tierKey !== 'free' && record.tierKey !== 'premium')
+    || (record.unlimited !== undefined && typeof record.unlimited !== 'boolean')
+    || (unlimited && record.tierKey !== 'premium')
+    || (unlimited && (
+      record.limitTokens !== null
+      || record.remainingTokens !== null
+      || record.percentUsed !== null
+      || record.exhausted
+    ))
+    || (!unlimited && [record.limitTokens, record.remainingTokens, record.percentUsed]
+      .some((field) => typeof field !== 'number' || !Number.isFinite(field)))
   ) {
     return null;
   }
-  return {
-    tierKey: record.tierKey === 'premium' ? 'premium' : 'free',
+  const tierKey: AccountAIUsage['tierKey'] = record.tierKey === 'premium' ? 'premium' : 'free';
+  const baseUsage = {
+    tierKey,
     usedTokens: record.usedTokens as number,
-    limitTokens: record.limitTokens as number,
-    remainingTokens: record.remainingTokens as number,
-    percentUsed: record.percentUsed as number,
     periodStart: record.periodStart as string,
     periodEnd: record.periodEnd as string,
     resetAt: record.resetAt as string,
+  };
+  if (unlimited) {
+    return {
+      ...baseUsage,
+      unlimited: true,
+      limitTokens: null,
+      remainingTokens: null,
+      percentUsed: null,
+      exhausted: false,
+    };
+  }
+  return {
+    ...baseUsage,
+    unlimited: false,
+    limitTokens: record.limitTokens as number,
+    remainingTokens: record.remainingTokens as number,
+    percentUsed: record.percentUsed as number,
     exhausted: record.exhausted,
   };
 }

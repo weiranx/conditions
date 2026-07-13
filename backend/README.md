@@ -28,7 +28,7 @@ Express API for the SummitSafe backcountry planning app.
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Health check (also `/health`, `/api/healthz`, `/api/health`) |
 
-AI features require an account and are limited per user by provider-reported token usage. Free accounts default to 250,000 tokens per month and Premium accounts default to 2,000,000. Configure the allowances with `AI_FREE_MONTHLY_TOKEN_LIMIT` and `AI_PREMIUM_MONTHLY_TOKEN_LIMIT`; authenticated account responses include the resolved tier, current meter, and reset date. The legacy `AI_USER_MONTHLY_TOKEN_LIMIT` remains a fallback for the Free allowance.
+AI features require an account and are measured with provider-reported token usage. Free accounts default to 250,000 tokens per month, configurable with `AI_FREE_MONTHLY_TOKEN_LIMIT`; Premium accounts have unlimited AI and report usage while their token totals remain visible. Authenticated account responses include the resolved tier, current meter, and tracking-period reset date. The legacy `AI_USER_MONTHLY_TOKEN_LIMIT` remains a fallback for the Free allowance.
 
 ## Run Locally
 

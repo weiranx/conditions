@@ -200,7 +200,7 @@ export function AccountView({
                   <strong>{account.reportCount?.toLocaleString() ?? '—'}</strong>
                   <span>{account.reportCount === 1 ? 'Report generated' : 'Reports generated'}</span>
                 </div>
-                <small>Saved in history</small>
+                <small>{isPremium ? 'Unlimited reports' : 'Saved in history'}</small>
               </section>
               <div className="account-profile-note">
                 <ShieldCheck aria-hidden />
@@ -219,16 +219,23 @@ export function AccountView({
                 </div>
                 <p>
                   {isPremium
-                    ? 'All Free features, with a larger monthly allowance for AI-powered planning.'
+                    ? 'All Free features, with unlimited AI tools and report generation.'
                     : 'Account sync, report history, and a monthly allowance for AI-powered planning.'}
                 </p>
                 <ul aria-label={`${account.tier?.label || 'Free'} plan features`}>
-                  <li><Check aria-hidden /> Preferences and reports saved to your account</li>
                   <li>
                     <Check aria-hidden />
-                    {account.aiUsage
-                      ? `${formatTokens(account.aiUsage.limitTokens)} AI tokens each month`
-                      : `${isPremium ? 'Expanded' : 'Standard'} monthly AI allowance`}
+                    {isPremium
+                      ? 'Unlimited report generation and history'
+                      : 'Preferences and reports saved to your account'}
+                  </li>
+                  <li>
+                    <Check aria-hidden />
+                    {isPremium
+                      ? 'Unlimited AI usage'
+                      : account.aiUsage?.limitTokens != null
+                        ? `${formatTokens(account.aiUsage.limitTokens)} AI tokens each month`
+                        : 'Standard monthly AI allowance'}
                   </li>
                 </ul>
                 {isPremium && planPeriodEnd && (
@@ -246,22 +253,41 @@ export function AccountView({
                   <>
                     <p className="account-usage-total">
                       <strong>{formatTokens(account.aiUsage.usedTokens)}</strong>
-                      <span> / {formatTokens(account.aiUsage.limitTokens)} tokens</span>
+                      <span>
+                        {account.aiUsage.unlimited
+                          ? ' tokens used this month'
+                          : ` / ${formatTokens(account.aiUsage.limitTokens)} tokens`}
+                      </span>
                     </p>
-                    <div
-                      className="account-usage-progress"
-                      role="progressbar"
-                      aria-label="Monthly AI token usage"
-                      aria-valuemin={0}
-                      aria-valuemax={account.aiUsage.limitTokens}
-                      aria-valuenow={Math.min(account.aiUsage.usedTokens, account.aiUsage.limitTokens)}
-                    >
-                      <span style={{ width: `${account.aiUsage.percentUsed}%` }} />
-                    </div>
-                    <div className="account-usage-meta">
-                      <span>{formatTokens(account.aiUsage.remainingTokens)} tokens remaining</span>
-                      <span>Resets {formatUsageReset(account.aiUsage.resetAt)}</span>
-                    </div>
+                    {account.aiUsage.unlimited ? (
+                      <>
+                        <div className="account-usage-unlimited">
+                          <Crown aria-hidden />
+                          <span>Unlimited AI usage</span>
+                        </div>
+                        <div className="account-usage-meta">
+                          <span>No monthly token cap</span>
+                          <span>Tracking resets {formatUsageReset(account.aiUsage.resetAt)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          className="account-usage-progress"
+                          role="progressbar"
+                          aria-label="Monthly AI token usage"
+                          aria-valuemin={0}
+                          aria-valuemax={account.aiUsage.limitTokens}
+                          aria-valuenow={Math.min(account.aiUsage.usedTokens, account.aiUsage.limitTokens)}
+                        >
+                          <span style={{ width: `${account.aiUsage.percentUsed}%` }} />
+                        </div>
+                        <div className="account-usage-meta">
+                          <span>{formatTokens(account.aiUsage.remainingTokens)} tokens remaining</span>
+                          <span>Resets {formatUsageReset(account.aiUsage.resetAt)}</span>
+                        </div>
+                      </>
+                    )}
                     <p className="account-usage-note">
                       Different AI tools use different amounts. This meter follows provider-reported tokens.
                     </p>

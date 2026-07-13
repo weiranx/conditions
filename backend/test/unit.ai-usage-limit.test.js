@@ -3,7 +3,6 @@ const {
   AIUsageUnavailableError,
   DEFAULT_FREE_MONTHLY_TOKEN_LIMIT,
   DEFAULT_MONTHLY_TOKEN_LIMIT,
-  DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT,
   createAIUsageLimitService,
   getMonthlyWindow,
   parseMonthlyTokenLimit,
@@ -14,7 +13,6 @@ const USER_ID = '8c696be4-e175-4b6a-965b-82bdf3758e0c';
 test('parses a bounded monthly token allowance and builds UTC month windows', () => {
   expect(parseMonthlyTokenLimit('500000')).toBe(500_000);
   expect(DEFAULT_MONTHLY_TOKEN_LIMIT).toBe(DEFAULT_FREE_MONTHLY_TOKEN_LIMIT);
-  expect(DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT).toBe(2_000_000);
   expect(parseMonthlyTokenLimit('0')).toBe(DEFAULT_MONTHLY_TOKEN_LIMIT);
   expect(parseMonthlyTokenLimit('not-a-number')).toBe(DEFAULT_MONTHLY_TOKEN_LIMIT);
   expect(getMonthlyWindow('2026-07-31T23:30:00-07:00')).toEqual({
@@ -34,6 +32,7 @@ test('summarizes provider-reported tokens for one user in the current month', as
 
   await expect(service.getUserUsage(USER_ID)).resolves.toEqual({
     tierKey: 'free',
+    unlimited: false,
     usedTokens: 125_050,
     limitTokens: 250_000,
     remainingTokens: 124_950,
@@ -50,27 +49,35 @@ test('summarizes provider-reported tokens for one user in the current month', as
   ]);
 });
 
-test('applies the larger Premium allowance to the same usage ledger', async () => {
+test('tracks Premium usage without applying a token ceiling', async () => {
   const service = createAIUsageLimitService({
     database: {
       configured: true,
       query: jest.fn().mockResolvedValue({ rows: [{ used_tokens: '300000' }] }),
     },
     freeMonthlyTokenLimit: 250_000,
-    premiumMonthlyTokenLimit: 2_000_000,
     now: () => Date.parse('2026-07-13T08:00:00.000Z'),
   });
 
-  await expect(service.getUserUsage(USER_ID, 'premium')).resolves.toMatchObject({
+  await expect(service.getUserUsage(USER_ID, 'premium')).resolves.toEqual({
     tierKey: 'premium',
+    unlimited: true,
     usedTokens: 300_000,
-    limitTokens: 2_000_000,
-    remainingTokens: 1_700_000,
-    percentUsed: 15,
+    limitTokens: null,
+    remainingTokens: null,
+    percentUsed: null,
+    periodStart: '2026-07-01T00:00:00.000Z',
+    periodEnd: '2026-08-01T00:00:00.000Z',
+    resetAt: '2026-08-01T00:00:00.000Z',
+    exhausted: false,
+  });
+  await expect(service.assertUserCanGenerate(USER_ID, 'premium')).resolves.toMatchObject({
+    unlimited: true,
     exhausted: false,
   });
   await expect(service.getUserUsage(USER_ID, 'unknown')).resolves.toMatchObject({
     tierKey: 'free',
+    unlimited: false,
     limitTokens: 250_000,
     exhausted: true,
   });

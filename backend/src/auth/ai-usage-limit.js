@@ -1,7 +1,6 @@
 'use strict';
 
 const DEFAULT_FREE_MONTHLY_TOKEN_LIMIT = 250_000;
-const DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT = 2_000_000;
 const DEFAULT_MONTHLY_TOKEN_LIMIT = DEFAULT_FREE_MONTHLY_TOKEN_LIMIT;
 const MAX_MONTHLY_TOKEN_LIMIT = 100_000_000;
 
@@ -49,18 +48,13 @@ const createAIUsageLimitService = ({
   freeMonthlyTokenLimit = process.env.AI_FREE_MONTHLY_TOKEN_LIMIT
     || process.env.AI_USER_MONTHLY_TOKEN_LIMIT
     || monthlyTokenLimit,
-  premiumMonthlyTokenLimit = process.env.AI_PREMIUM_MONTHLY_TOKEN_LIMIT,
   now = Date.now,
 } = {}) => {
   const freeLimitTokens = parseMonthlyTokenLimit(freeMonthlyTokenLimit);
-  const premiumLimitTokens = parseMonthlyTokenLimit(
-    premiumMonthlyTokenLimit,
-    DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT,
-  );
   const available = Boolean(database?.configured && typeof database.query === 'function');
 
   const getLimitTokens = (tierKey = 'free') => (
-    tierKey === 'premium' ? premiumLimitTokens : freeLimitTokens
+    tierKey === 'premium' ? null : freeLimitTokens
   );
 
   const getUserUsage = async (userId, tierKey = 'free') => {
@@ -68,6 +62,7 @@ const createAIUsageLimitService = ({
     if (!userId) throw new TypeError('userId is required');
 
     const resolvedTierKey = tierKey === 'premium' ? 'premium' : 'free';
+    const unlimited = resolvedTierKey === 'premium';
     const limitTokens = getLimitTokens(resolvedTierKey);
     const window = getMonthlyWindow(now());
     let result;
@@ -84,15 +79,18 @@ const createAIUsageLimitService = ({
     }
 
     const usedTokens = Math.max(0, Math.round(Number(result?.rows?.[0]?.used_tokens) || 0));
-    const remainingTokens = Math.max(0, limitTokens - usedTokens);
+    const remainingTokens = unlimited ? null : Math.max(0, limitTokens - usedTokens);
     return {
       tierKey: resolvedTierKey,
+      unlimited,
       usedTokens,
       limitTokens,
       remainingTokens,
-      percentUsed: Math.min(100, Math.round((usedTokens / limitTokens) * 1000) / 10),
+      percentUsed: unlimited
+        ? null
+        : Math.min(100, Math.round((usedTokens / limitTokens) * 1000) / 10),
       ...window,
-      exhausted: usedTokens >= limitTokens,
+      exhausted: unlimited ? false : usedTokens >= limitTokens,
     };
   };
 
@@ -107,7 +105,6 @@ const createAIUsageLimitService = ({
     freeLimitTokens,
     getLimitTokens,
     limitTokens: freeLimitTokens,
-    premiumLimitTokens,
     assertUserCanGenerate,
     getUserUsage,
   };
@@ -118,7 +115,6 @@ module.exports = {
   AIUsageUnavailableError,
   DEFAULT_FREE_MONTHLY_TOKEN_LIMIT,
   DEFAULT_MONTHLY_TOKEN_LIMIT,
-  DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT,
   createAIUsageLimitService,
   getMonthlyWindow,
   parseMonthlyTokenLimit,
