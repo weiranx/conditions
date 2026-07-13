@@ -1073,7 +1073,7 @@ input {
 .admin-usage-limit-field input { width: 92px; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ui-text); font: 700 11px var(--font-data); }
 .admin-usage-limit-field input:disabled { opacity: 0.6; }
 
-.admin-usage-policy-actions { display: flex; align-items: center; gap: 6px; }
+.admin-usage-policy-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
 .admin-usage-policy-actions .logs-btn { min-height: 32px; padding-inline: 9px; font-size: 10px; white-space: nowrap; }
 .admin-usage-reset-all { color: var(--ui-nogo-ink); }
 .admin-usage-policy-error { display: flex; grid-column: 1 / -1; align-items: center; gap: 6px; margin: 0; color: var(--ui-nogo-ink); font-size: 10.5px; }
@@ -12123,7 +12123,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-usage-policy { grid-template-columns: minmax(0, 1fr); align-items: stretch; padding: 12px; }
   .admin-usage-limit-field { justify-content: space-between; }
   .admin-usage-limit-field input { width: min(160px, 55%); }
-  .admin-usage-policy-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-usage-policy-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-usage-policy-actions .logs-btn { justify-content: center; min-width: 0; white-space: normal; }
   .admin-users-table-scroll { overflow: visible; }
   .admin-users-table,

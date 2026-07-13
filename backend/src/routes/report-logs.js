@@ -199,21 +199,32 @@ const registerReportLogsRoute = (
 
   const updateUsageSettings = async (req, res) => {
     if (!await authorize(req, res)) return;
-    if (req.body?.freeMonthlyUsageLimit === undefined) {
-      res.status(400).json({ error: 'Provide a monthly usage limit.' });
+    const updateAI = req.body?.freeMonthlyAIUsageLimit !== undefined;
+    const updateReports = req.body?.freeMonthlyReportUsageLimit !== undefined;
+    if (!updateAI && !updateReports) {
+      res.status(400).json({ error: 'Provide an AI usage limit or generated report limit.' });
       return;
     }
     if (
-      typeof usageService?.updateSettings !== 'function'
-      || typeof reportUsageService?.updateSettings !== 'function'
+      (updateAI && typeof usageService?.updateSettings !== 'function')
+      || (updateReports && typeof reportUsageService?.updateSettings !== 'function')
     ) {
       res.status(503).json({ error: 'Usage limits are temporarily unavailable.' });
       return;
     }
     try {
-      const validatedLimit = validateFreeMonthlyUsageLimit(req.body.freeMonthlyUsageLimit);
-      await usageService.updateSettings({ freeMonthlyUsageLimit: validatedLimit });
-      await reportUsageService.updateSettings({ freeMonthlyUsageLimit: validatedLimit });
+      const validatedAILimit = updateAI
+        ? validateFreeMonthlyUsageLimit(req.body.freeMonthlyAIUsageLimit)
+        : null;
+      const validatedReportLimit = updateReports
+        ? validateFreeMonthlyUsageLimit(req.body.freeMonthlyReportUsageLimit)
+        : null;
+      if (updateAI) {
+        await usageService.updateSettings({ freeMonthlyAIUsageLimit: validatedAILimit });
+      }
+      if (updateReports) {
+        await reportUsageService.updateSettings({ freeMonthlyReportUsageLimit: validatedReportLimit });
+      }
       const aiSettings = usageService.getSettings();
       const reportSettings = reportUsageService.getSettings();
       const updated = {
@@ -224,9 +235,10 @@ const registerReportLogsRoute = (
       await audit(req, {
         action: 'usage.limits.updated',
         category: 'configuration',
-        summary: `Changed the default Free monthly usage limit to ${validatedLimit.toLocaleString()}`,
+        summary: `Changed the default Free monthly ${[updateAI ? 'AI usage' : null, updateReports ? 'generated report' : null].filter(Boolean).join(' and ')} limit${updateAI && updateReports ? 's' : ''}`,
         details: {
-          freeMonthlyUsageLimit: updated.freeMonthlyUsageLimit,
+          freeMonthlyAIUsageLimit: updated.freeMonthlyAIUsageLimit,
+          freeMonthlyReportUsageLimit: updated.freeMonthlyReportUsageLimit,
         },
       });
       res.json(updated);
@@ -345,8 +357,8 @@ const registerReportLogsRoute = (
         action: 'account.usage-limit.updated',
         category: 'accounts',
         summary: result.limit === null
-          ? `Restored the default usage limit for ${targetName}`
-          : `Changed ${targetName}'s monthly usage limit to ${result.limit.toLocaleString()}`,
+          ? `Restored the default AI usage limit for ${targetName}`
+          : `Changed ${targetName}'s monthly AI usage limit to ${result.limit.toLocaleString()}`,
         details: {
           targetUserId: result.user.id,
           targetEmail: result.user.email,
@@ -359,6 +371,47 @@ const registerReportLogsRoute = (
       if (failure.status === 500) req.log?.error({ err: error }, 'Admin account usage limit update failed');
       await audit(req, {
         action: 'account.usage-limit.update-failed',
+        category: 'accounts',
+        status: 'error',
+        summary: failure.message,
+        details: { targetUserId: req.params?.userId ?? null },
+      });
+      res.status(failure.status).json({ error: failure.message });
+    }
+  });
+
+  app.patch('/api/admin/users/:userId/report-usage-limit', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    if (typeof accountService?.updateUserReportUsageLimit !== 'function') {
+      res.status(503).json({ error: 'Account generated report limits are temporarily unavailable.' });
+      return;
+    }
+    try {
+      const result = await accountService.updateUserReportUsageLimit({
+        userId: req.params?.userId,
+        limit: req.body?.limit,
+        actorUserId: adminUser.id,
+      });
+      const targetName = result.user.displayName || result.user.email || 'account';
+      await audit(req, {
+        action: 'account.report-usage-limit.updated',
+        category: 'accounts',
+        summary: result.limit === null
+          ? `Restored the default generated report limit for ${targetName}`
+          : `Changed ${targetName}'s monthly generated report limit to ${result.limit.toLocaleString()}`,
+        details: {
+          targetUserId: result.user.id,
+          targetEmail: result.user.email,
+          limit: result.limit,
+        },
+      });
+      res.json(result);
+    } catch (error) {
+      const failure = getUserManagementError(error, 'Account generated report limit could not be updated.');
+      if (failure.status === 500) req.log?.error({ err: error }, 'Admin account generated report limit update failed');
+      await audit(req, {
+        action: 'account.report-usage-limit.update-failed',
         category: 'accounts',
         status: 'error',
         summary: failure.message,
@@ -435,6 +488,35 @@ const registerReportLogsRoute = (
       if (failure.status === 500) req.log?.error({ err: error }, 'Admin all-account usage reset failed');
       await audit(req, {
         action: 'account.usage.reset-all-failed',
+        category: 'accounts',
+        status: 'error',
+        summary: failure.message,
+      });
+      res.status(failure.status).json({ error: failure.message });
+    }
+  });
+
+  app.post('/api/admin/users/reset-usage-limits', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    if (typeof accountService?.resetAllUserUsageLimits !== 'function') {
+      res.status(503).json({ error: 'Account usage limits are temporarily unavailable.' });
+      return;
+    }
+    try {
+      const result = await accountService.resetAllUserUsageLimits({ actorUserId: adminUser.id });
+      await audit(req, {
+        action: 'account.usage-limits.reset-all',
+        category: 'accounts',
+        summary: 'Restored default AI and generated report limits for every account',
+        details: result,
+      });
+      res.json(result);
+    } catch (error) {
+      const failure = getUserManagementError(error, 'Account usage limits could not be reset.');
+      if (failure.status === 500) req.log?.error({ err: error }, 'Admin all-account usage limit reset failed');
+      await audit(req, {
+        action: 'account.usage-limits.reset-all-failed',
         category: 'accounts',
         status: 'error',
         summary: failure.message,

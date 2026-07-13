@@ -194,7 +194,8 @@ const serializeAdminUser = (row) => ({
   savedReports: asNonNegativeNumber(row.saved_reports),
   aiCalls: asNonNegativeNumber(row.ai_calls),
   aiTokens: asNonNegativeNumber(row.ai_tokens),
-  usageLimitOverride: asOptionalPositiveNumber(row.usage_limit_override),
+  aiUsageLimitOverride: asOptionalPositiveNumber(row.ai_usage_limit_override),
+  reportUsageLimitOverride: asOptionalPositiveNumber(row.report_usage_limit_override),
 });
 
 const createAdminAccountError = (message, code) => Object.assign(new Error(message), { code });
@@ -441,10 +442,8 @@ const createAccountService = ({
                 COALESCE(report_activity.saved_reports, 0) AS saved_reports,
                 COALESCE(ai_activity.ai_calls, 0) AS ai_calls,
                 COALESCE(ai_activity.ai_tokens, 0) AS ai_tokens,
-                COALESCE(
-                  usage_limit.usage_limit_override,
-                  report_usage_limit.usage_limit_override
-                ) AS usage_limit_override
+                usage_limit.ai_usage_limit_override,
+                report_usage_limit.report_usage_limit_override
          FROM users
          LEFT JOIN LATERAL (
            SELECT COUNT(*) FILTER (WHERE expires_at > NOW()) AS active_sessions,
@@ -453,7 +452,7 @@ const createAccountService = ({
            WHERE user_id = users.id
          ) session_activity ON TRUE
          LEFT JOIN LATERAL (
-           SELECT limits ->> 'monthlyUsageLimit' AS usage_limit_override,
+           SELECT limits ->> 'monthlyUsageLimit' AS report_usage_limit_override,
                   limits ->> 'resetAt' AS usage_reset_at
            FROM entitlements
            WHERE user_id = users.id
@@ -476,7 +475,7 @@ const createAccountService = ({
            WHERE user_id = users.id
          ) report_activity ON TRUE
          LEFT JOIN LATERAL (
-           SELECT limits ->> 'monthlyUsageLimit' AS usage_limit_override,
+           SELECT limits ->> 'monthlyUsageLimit' AS ai_usage_limit_override,
                   limits ->> 'resetAt' AS usage_reset_at
            FROM entitlements
            WHERE user_id = users.id
@@ -486,7 +485,8 @@ const createAccountService = ({
          ) usage_limit ON TRUE
          LEFT JOIN LATERAL (
            SELECT COUNT(*) FILTER (
-                    WHERE created_at >= GREATEST(
+                    WHERE status = 'success'
+                      AND created_at >= GREATEST(
                       DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC',
                       COALESCE(
                         NULLIF(usage_limit.usage_reset_at, '')::timestamptz,
@@ -650,14 +650,13 @@ const createAccountService = ({
            SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
                updated_at = NOW()
            WHERE user_id = $1
-             AND feature_key IN ('ai_usage', 'report_usage')`,
+             AND feature_key = 'ai_usage'`,
           [userId],
         );
       } else {
         await query(
           `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
-           VALUES ($1, 'ai_usage', 'admin', $2::jsonb, NOW()),
-                  ($1, 'report_usage', 'admin', $2::jsonb, NOW())
+           VALUES ($1, 'ai_usage', 'admin', $2::jsonb, NOW())
            ON CONFLICT (user_id, feature_key) DO UPDATE
            SET source = 'admin',
                valid_until = NULL,
@@ -670,9 +669,90 @@ const createAccountService = ({
       return {
         user: serializeAdminUser({
           ...account.rows[0],
-          usage_limit_override: limit,
+          ai_usage_limit_override: limit,
         }),
         limit,
+      };
+    });
+  };
+
+  const updateUserReportUsageLimit = async ({
+    userId: rawUserId,
+    limit: rawLimit,
+    actorUserId: rawActorUserId,
+  } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    const actorUserId = validateAdminUserId(rawActorUserId);
+    const limit = validateAdminUsageLimit(rawLimit);
+
+    return runInTransaction(async (query) => {
+      const account = await query(
+        `SELECT id, email, display_name, auth_provider, status, created_at, updated_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId],
+      );
+      if (!account.rows[0]) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+
+      if (limit === null) {
+        await query(
+          `UPDATE entitlements
+           SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
+               updated_at = NOW()
+           WHERE user_id = $1
+             AND feature_key = 'report_usage'`,
+          [userId],
+        );
+      } else {
+        await query(
+          `INSERT INTO entitlements (user_id, feature_key, source, limits, updated_at)
+           VALUES ($1, 'report_usage', 'admin', $2::jsonb, NOW())
+           ON CONFLICT (user_id, feature_key) DO UPDATE
+           SET source = 'admin',
+               valid_until = NULL,
+               limits = entitlements.limits || EXCLUDED.limits,
+               updated_at = NOW()`,
+          [userId, JSON.stringify({ monthlyUsageLimit: limit, limitActorUserId: actorUserId })],
+        );
+      }
+
+      return {
+        user: serializeAdminUser({
+          ...account.rows[0],
+          report_usage_limit_override: limit,
+        }),
+        limit,
+      };
+    });
+  };
+
+  const resetAllUserUsageLimits = async ({ actorUserId: rawActorUserId } = {}) => {
+    ensureAvailable();
+    validateAdminUserId(rawActorUserId);
+    return runInTransaction(async (query) => {
+      const resetAI = await query(
+        `UPDATE entitlements
+         SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
+             updated_at = NOW()
+         WHERE feature_key = 'ai_usage'
+           AND limits ? 'monthlyUsageLimit'
+         RETURNING user_id`,
+      );
+      const resetReports = await query(
+        `UPDATE entitlements
+         SET limits = limits - 'monthlyUsageLimit' - 'limitActorUserId',
+             updated_at = NOW()
+         WHERE feature_key = 'report_usage'
+           AND limits ? 'monthlyUsageLimit'
+         RETURNING user_id`,
+      );
+      return {
+        resetAIAccounts: asNonNegativeNumber(resetAI.rowCount ?? resetAI.rows?.length),
+        resetReportAccounts: asNonNegativeNumber(resetReports.rowCount ?? resetReports.rows?.length),
       };
     });
   };
@@ -919,11 +999,13 @@ const createAccountService = ({
     loginWithGoogle,
     logout,
     resetAllUserUsage,
+    resetAllUserUsageLimits,
     resetUserUsage,
     register,
     revokeUserSessions,
     updatePreferences,
     updateUserTier,
+    updateUserReportUsageLimit,
     updateUserUsageLimit,
     updateUserStatus,
   };

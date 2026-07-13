@@ -9,7 +9,8 @@ const {
   validateFreeMonthlyUsageLimit,
 } = require('./monthly-usage-limit');
 
-const USAGE_SETTINGS_KEY = 'monthly_usage_limits';
+const AI_USAGE_SETTINGS_KEY = 'ai_usage_limits';
+const LEGACY_USAGE_SETTINGS_KEY = 'monthly_usage_limits';
 
 class AIUsageLimitError extends Error {
   constructor(usage) {
@@ -48,29 +49,31 @@ const createAIUsageLimitService = ({
 
   const getSettings = () => ({
     persistent: Boolean(settingsStore?.configured),
-    freeMonthlyUsageLimit: freeLimitRequests,
-    environmentFreeMonthlyUsageLimit: environmentFreeLimitRequests,
+    freeMonthlyAIUsageLimit: freeLimitRequests,
+    environmentFreeMonthlyAIUsageLimit: environmentFreeLimitRequests,
     maxFreeMonthlyUsageLimit: MAX_FREE_MONTHLY_USAGE_LIMIT,
   });
 
   const initializeSettings = async () => {
     if (typeof settingsStore?.getAdminSetting !== 'function') return getSettings();
-    const persisted = await settingsStore.getAdminSetting(USAGE_SETTINGS_KEY);
-    if (persisted?.freeMonthlyUsageLimit !== undefined) {
+    const persisted = await settingsStore.getAdminSetting(AI_USAGE_SETTINGS_KEY)
+      ?? await settingsStore.getAdminSetting(LEGACY_USAGE_SETTINGS_KEY);
+    const persistedLimit = persisted?.freeMonthlyAIUsageLimit ?? persisted?.freeMonthlyUsageLimit;
+    if (persistedLimit !== undefined) {
       freeLimitRequests = parseFreeMonthlyUsageLimit(
-        persisted.freeMonthlyUsageLimit,
+        persistedLimit,
         environmentFreeLimitRequests,
       );
     }
     return getSettings();
   };
 
-  const updateSettings = async ({ freeMonthlyUsageLimit: nextLimit } = {}) => {
+  const updateSettings = async ({ freeMonthlyAIUsageLimit: nextLimit } = {}) => {
     const validatedLimit = validateFreeMonthlyUsageLimit(nextLimit);
-    const next = { freeMonthlyUsageLimit: validatedLimit };
+    const next = { freeMonthlyAIUsageLimit: validatedLimit };
     try {
       if (typeof settingsStore?.setAdminSetting === 'function') {
-        await settingsStore.setAdminSetting(USAGE_SETTINGS_KEY, next);
+        await settingsStore.setAdminSetting(AI_USAGE_SETTINGS_KEY, next);
       }
     } catch (error) {
       const persistenceError = new Error('Usage limits could not be saved.');

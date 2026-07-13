@@ -8,7 +8,8 @@ const {
   validateFreeMonthlyUsageLimit,
 } = require('./monthly-usage-limit');
 
-const USAGE_SETTINGS_KEY = 'monthly_usage_limits';
+const REPORT_USAGE_SETTINGS_KEY = 'report_usage_limits';
+const LEGACY_USAGE_SETTINGS_KEY = 'monthly_usage_limits';
 
 const summarizeReportUsage = ({ usedReports, tierKey, freeLimitReports, window }) => {
   const resolvedTierKey = tierKey === 'premium' ? 'premium' : 'free';
@@ -64,29 +65,31 @@ const createReportUsageLimitService = ({
 
   const getSettings = () => ({
     persistent: Boolean(settingsStore?.configured),
-    freeMonthlyUsageLimit: freeLimitReports,
-    environmentFreeMonthlyUsageLimit: environmentFreeLimitReports,
+    freeMonthlyReportUsageLimit: freeLimitReports,
+    environmentFreeMonthlyReportUsageLimit: environmentFreeLimitReports,
     maxFreeMonthlyUsageLimit: MAX_FREE_MONTHLY_USAGE_LIMIT,
   });
 
   const initializeSettings = async () => {
     if (typeof settingsStore?.getAdminSetting !== 'function') return getSettings();
-    const persisted = await settingsStore.getAdminSetting(USAGE_SETTINGS_KEY);
-    if (persisted?.freeMonthlyUsageLimit !== undefined) {
+    const persisted = await settingsStore.getAdminSetting(REPORT_USAGE_SETTINGS_KEY)
+      ?? await settingsStore.getAdminSetting(LEGACY_USAGE_SETTINGS_KEY);
+    const persistedLimit = persisted?.freeMonthlyReportUsageLimit ?? persisted?.freeMonthlyUsageLimit;
+    if (persistedLimit !== undefined) {
       freeLimitReports = parseFreeMonthlyUsageLimit(
-        persisted.freeMonthlyUsageLimit,
+        persistedLimit,
         environmentFreeLimitReports,
       );
     }
     return getSettings();
   };
 
-  const updateSettings = async ({ freeMonthlyUsageLimit: nextLimit } = {}) => {
+  const updateSettings = async ({ freeMonthlyReportUsageLimit: nextLimit } = {}) => {
     const validatedLimit = validateFreeMonthlyUsageLimit(nextLimit);
-    const next = { freeMonthlyUsageLimit: validatedLimit };
+    const next = { freeMonthlyReportUsageLimit: validatedLimit };
     try {
       if (typeof settingsStore?.setAdminSetting === 'function') {
-        await settingsStore.setAdminSetting(USAGE_SETTINGS_KEY, next);
+        await settingsStore.setAdminSetting(REPORT_USAGE_SETTINGS_KEY, next);
       }
     } catch (error) {
       const persistenceError = new Error('Usage limits could not be saved.');

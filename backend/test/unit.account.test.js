@@ -279,7 +279,8 @@ describe('password accounts', () => {
         saved_reports: '4',
         ai_calls: '9',
         ai_tokens: '12500',
-        usage_limit_override: '75',
+        ai_usage_limit_override: '75',
+        report_usage_limit_override: '60',
         total_count: '1',
         active_count: '1',
         suspended_count: '0',
@@ -306,7 +307,8 @@ describe('password accounts', () => {
         savedReports: 4,
         aiCalls: 9,
         aiTokens: 12500,
-        usageLimitOverride: 75,
+        aiUsageLimitOverride: 75,
+        reportUsageLimitOverride: 60,
       }],
       total: 1,
       summary: { active: 1, suspended: 0, free: 0, premium: 1, activeSessions: 2 },
@@ -391,7 +393,7 @@ describe('password accounts', () => {
       limit: 75,
       actorUserId,
     })).resolves.toMatchObject({
-      user: { id: USER_ROW.id, usageLimitOverride: 75 },
+      user: { id: USER_ROW.id, aiUsageLimitOverride: 75 },
       limit: 75,
     });
     expect(query.mock.calls[1][0]).toContain('INSERT INTO entitlements');
@@ -405,7 +407,7 @@ describe('password accounts', () => {
       limit: null,
       actorUserId,
     })).resolves.toMatchObject({
-      user: { id: USER_ROW.id, usageLimitOverride: null },
+      user: { id: USER_ROW.id, aiUsageLimitOverride: null },
       limit: null,
     });
     expect(query.mock.calls[3][0]).toContain("limits - 'monthlyUsageLimit'");
@@ -423,6 +425,63 @@ describe('password accounts', () => {
       actorUserId: 'f39db25c-3498-41f9-9448-7c8004b8f688',
     })).rejects.toMatchObject({ code: 'INVALID_USAGE_LIMIT' });
     expect(transaction).not.toHaveBeenCalled();
+  });
+
+  test('sets and restores a managed account generated report limit', async () => {
+    const actorUserId = 'f39db25c-3498-41f9-9448-7c8004b8f688';
+    const account = {
+      ...USER_ROW,
+      auth_provider: 'password',
+      status: 'active',
+      updated_at: new Date('2026-07-13T08:00:00.000Z'),
+    };
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [account] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [account] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    await expect(service.updateUserReportUsageLimit({
+      userId: USER_ROW.id,
+      limit: 60,
+      actorUserId,
+    })).resolves.toMatchObject({
+      user: { id: USER_ROW.id, reportUsageLimitOverride: 60 },
+      limit: 60,
+    });
+    expect(query.mock.calls[1][0]).toContain("'report_usage'");
+    expect(query.mock.calls[1][1]).toEqual([
+      USER_ROW.id,
+      JSON.stringify({ monthlyUsageLimit: 60, limitActorUserId: actorUserId }),
+    ]);
+
+    await expect(service.updateUserReportUsageLimit({
+      userId: USER_ROW.id,
+      limit: null,
+      actorUserId,
+    })).resolves.toMatchObject({
+      user: { id: USER_ROW.id, reportUsageLimitOverride: null },
+      limit: null,
+    });
+    expect(query.mock.calls[3][0]).toContain("limits - 'monthlyUsageLimit'");
+  });
+
+  test('restores default AI and generated report limits for every account', async () => {
+    const actorUserId = 'f39db25c-3498-41f9-9448-7c8004b8f688';
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [{ user_id: USER_ROW.id }, { user_id: actorUserId }], rowCount: 2 })
+      .mockResolvedValueOnce({ rows: [{ user_id: USER_ROW.id }], rowCount: 1 });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({ database: { configured: true, query, transaction } });
+
+    await expect(service.resetAllUserUsageLimits({ actorUserId })).resolves.toEqual({
+      resetAIAccounts: 2,
+      resetReportAccounts: 1,
+    });
+    expect(query.mock.calls[0][0]).toContain("feature_key = 'ai_usage'");
+    expect(query.mock.calls[1][0]).toContain("feature_key = 'report_usage'");
   });
 
   test('resets current-month AI and report usage for one account or every account', async () => {

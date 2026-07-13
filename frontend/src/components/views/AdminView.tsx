@@ -159,7 +159,8 @@ interface AdminUserRecord {
   savedReports: number;
   aiCalls: number;
   aiTokens: number;
-  usageLimitOverride: number | null;
+  aiUsageLimitOverride: number | null;
+  reportUsageLimitOverride: number | null;
   isOwner: boolean;
 }
 
@@ -178,8 +179,10 @@ interface AdminUserDirectory {
 
 interface AdminUsageSettings {
   persistent: boolean;
-  freeMonthlyUsageLimit: number;
-  environmentFreeMonthlyUsageLimit: number;
+  freeMonthlyAIUsageLimit: number;
+  environmentFreeMonthlyAIUsageLimit: number;
+  freeMonthlyReportUsageLimit: number;
+  environmentFreeMonthlyReportUsageLimit: number;
   maxFreeMonthlyUsageLimit: number;
 }
 
@@ -814,7 +817,9 @@ function AdminDashboard() {
   const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, activeSessions: 0 });
   const [usageSettings, setUsageSettings] = useState<AdminUsageSettings | null>(null);
   const [usageLimitDraft, setUsageLimitDraft] = useState('');
+  const [reportLimitDraft, setReportLimitDraft] = useState('');
   const [userUsageLimitDrafts, setUserUsageLimitDrafts] = useState<Record<string, string>>({});
+  const [userReportLimitDrafts, setUserReportLimitDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -986,7 +991,8 @@ function AdminDashboard() {
       if (usageSettingsResult.response.ok && usageSettingsResult.payload && typeof usageSettingsResult.payload === 'object') {
         const nextUsageSettings = usageSettingsResult.payload as AdminUsageSettings;
         setUsageSettings(nextUsageSettings);
-        setUsageLimitDraft(String(nextUsageSettings.freeMonthlyUsageLimit));
+        setUsageLimitDraft(String(nextUsageSettings.freeMonthlyAIUsageLimit));
+        setReportLimitDraft(String(nextUsageSettings.freeMonthlyReportUsageLimit));
         setUsageSettingsError(null);
       } else {
         setUsageSettingsError('Usage limits are temporarily unavailable.');
@@ -1156,11 +1162,19 @@ function AdminDashboard() {
     }
   };
 
-  const updateDefaultUsageLimit = async (rawLimit: string | number = usageLimitDraft) => {
-    const limit = Number(rawLimit);
+  const updateDefaultUsageLimits = async (
+    rawAILimit: string | number = usageLimitDraft,
+    rawReportLimit: string | number = reportLimitDraft,
+  ) => {
+    const aiLimit = Number(rawAILimit);
+    const reportLimit = Number(rawReportLimit);
     const maxLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
-    if (!Number.isFinite(limit) || limit <= 0 || limit > maxLimit) {
-      setUsageSettingsError(`Enter a monthly limit between 1 and ${maxLimit.toLocaleString()}.`);
+    if (!Number.isFinite(aiLimit) || aiLimit <= 0 || aiLimit > maxLimit) {
+      setUsageSettingsError(`Enter an AI request limit between 1 and ${maxLimit.toLocaleString()}.`);
+      return;
+    }
+    if (!Number.isFinite(reportLimit) || reportLimit <= 0 || reportLimit > maxLimit) {
+      setUsageSettingsError(`Enter a generated report limit between 1 and ${maxLimit.toLocaleString()}.`);
       return;
     }
     setUsageSettingsPending(true);
@@ -1169,7 +1183,10 @@ function AdminDashboard() {
       const result = await fetchApi('/api/admin/usage-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ freeMonthlyUsageLimit: Math.round(limit) }),
+        body: JSON.stringify({
+          freeMonthlyAIUsageLimit: Math.round(aiLimit),
+          freeMonthlyReportUsageLimit: Math.round(reportLimit),
+        }),
       });
       if (!result.response.ok || !result.payload || typeof result.payload !== 'object') {
         const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
@@ -1180,7 +1197,8 @@ function AdminDashboard() {
       }
       const nextSettings = result.payload as AdminUsageSettings;
       setUsageSettings(nextSettings);
-      setUsageLimitDraft(String(nextSettings.freeMonthlyUsageLimit));
+      setUsageLimitDraft(String(nextSettings.freeMonthlyAIUsageLimit));
+      setReportLimitDraft(String(nextSettings.freeMonthlyReportUsageLimit));
       await fetchUserDirectory();
       void fetchAuditTrail();
     } catch {
@@ -1220,6 +1238,41 @@ function AdminDashboard() {
       void fetchAuditTrail();
     } catch {
       setUsersError('Could not reach the server to update this account usage limit.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const updateManagedUserReportUsageLimit = async (user: AdminUserRecord, limit: number | null) => {
+    const maxLimit = usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000;
+    if (limit !== null && (!Number.isFinite(limit) || limit <= 0 || limit > maxLimit)) {
+      setUsersError(`Enter a monthly generated report limit between 1 and ${maxLimit.toLocaleString()}.`);
+      return;
+    }
+    setUserActionPending(`${user.id}:report-usage-limit`);
+    setUsersError(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}/report-usage-limit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: limit === null ? null : Math.round(limit) }),
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The account generated report limit could not be updated.';
+        setUsersError(message);
+        return;
+      }
+      setUserReportLimitDrafts((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to update this account generated report limit.');
     } finally {
       setUserActionPending(null);
     }
@@ -1266,6 +1319,30 @@ function AdminDashboard() {
       void fetchAuditTrail();
     } catch {
       setUsersError('Could not reach the server to reset monthly usage.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
+  const resetAllManagedUserUsageLimits = async () => {
+    if (!window.confirm('Restore the default AI and generated report limits for every account? Current usage will not be reset.')) return;
+    setUserActionPending('all:usage-limit-reset');
+    setUsersError(null);
+    try {
+      const result = await fetchApi('/api/admin/users/reset-usage-limits', { method: 'POST' });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'Custom account limits could not be reset.';
+        setUsersError(message);
+        return;
+      }
+      setUserUsageLimitDrafts({});
+      setUserReportLimitDrafts({});
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to reset custom account limits.');
     } finally {
       setUserActionPending(null);
     }
@@ -1901,50 +1978,87 @@ function AdminDashboard() {
           <div className="admin-usage-policy-copy">
             <span><Gauge size={16} aria-hidden /></span>
             <div>
-              <strong>Default Free monthly usage limit</strong>
+              <strong>Default Free monthly allowances</strong>
               <small>{usageSettings?.persistent ? 'Saved in PostgreSQL and applied immediately' : 'Applied for this server session'}</small>
             </div>
           </div>
-          <label className="admin-usage-limit-field">
-            <span>Uses</span>
-            <input
-              type="number"
-              min="1"
-              max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
-              step="1"
-              inputMode="numeric"
-              value={usageLimitDraft}
-              onChange={(event) => setUsageLimitDraft(event.target.value)}
-              disabled={usageSettingsPending || !usageSettings}
-              aria-label="Default Free monthly usage limit"
-            />
-          </label>
+          <div className="admin-usage-policy-fields">
+            <label className="admin-usage-limit-field">
+              <span>AI</span>
+              <input
+                type="number"
+                min="1"
+                max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
+                step="1"
+                inputMode="numeric"
+                value={usageLimitDraft}
+                onChange={(event) => setUsageLimitDraft(event.target.value)}
+                disabled={usageSettingsPending || !usageSettings}
+                aria-label="Default Free monthly AI request limit"
+              />
+              <span>requests</span>
+            </label>
+            <label className="admin-usage-limit-field">
+              <span>Reports</span>
+              <input
+                type="number"
+                min="1"
+                max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
+                step="1"
+                inputMode="numeric"
+                value={reportLimitDraft}
+                onChange={(event) => setReportLimitDraft(event.target.value)}
+                disabled={usageSettingsPending || !usageSettings}
+                aria-label="Default Free monthly generated report limit"
+              />
+            </label>
+          </div>
           <div className="admin-usage-policy-actions">
             <button
               type="button"
               className="logs-btn"
-              onClick={() => void updateDefaultUsageLimit()}
-              disabled={usageSettingsPending || !usageSettings || Number(usageLimitDraft) === usageSettings.freeMonthlyUsageLimit}
+              onClick={() => void updateDefaultUsageLimits()}
+              disabled={usageSettingsPending || !usageSettings || (
+                Number(usageLimitDraft) === usageSettings.freeMonthlyAIUsageLimit
+                && Number(reportLimitDraft) === usageSettings.freeMonthlyReportUsageLimit
+              )}
             >
               {usageSettingsPending ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <Gauge size={14} aria-hidden />}
-              Save limit
+              Save limits
             </button>
             <button
               type="button"
               className="logs-btn"
-              onClick={() => usageSettings && void updateDefaultUsageLimit(usageSettings.environmentFreeMonthlyUsageLimit)}
-              disabled={usageSettingsPending || !usageSettings || usageSettings.freeMonthlyUsageLimit === usageSettings.environmentFreeMonthlyUsageLimit}
+              onClick={() => usageSettings && void updateDefaultUsageLimits(
+                usageSettings.environmentFreeMonthlyAIUsageLimit,
+                usageSettings.environmentFreeMonthlyReportUsageLimit,
+              )}
+              disabled={usageSettingsPending || !usageSettings || (
+                usageSettings.freeMonthlyAIUsageLimit === usageSettings.environmentFreeMonthlyAIUsageLimit
+                && usageSettings.freeMonthlyReportUsageLimit === usageSettings.environmentFreeMonthlyReportUsageLimit
+              )}
             >
-              Restore default
+              Restore defaults
+            </button>
+            <button
+              type="button"
+              className="logs-btn"
+              onClick={() => void resetAllManagedUserUsageLimits()}
+              disabled={Boolean(userActionPending)}
+              title="Remove every per-user override and use the default Free allowances"
+            >
+              {userActionPending === 'all:usage-limit-reset' ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <Gauge size={14} aria-hidden />}
+              Default all users
             </button>
             <button
               type="button"
               className="logs-btn admin-usage-reset-all"
               onClick={() => void resetAllManagedUserUsage()}
               disabled={Boolean(userActionPending)}
+              title="Reset current AI and generated report usage for every account"
             >
               {userActionPending === 'all:usage-reset' ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <RefreshCw size={14} aria-hidden />}
-              Reset everyone
+              Reset usage
             </button>
           </div>
           {usageSettingsError && <p className="admin-usage-policy-error" role="alert"><AlertTriangle size={14} aria-hidden /> {usageSettingsError}</p>}
@@ -2007,14 +2121,20 @@ function AdminDashboard() {
                   const sessionsPending = userActionPending === `${user.id}:sessions`;
                   const tierPending = userActionPending === `${user.id}:tier`;
                   const usageLimitPending = userActionPending === `${user.id}:usage-limit`;
+                  const reportUsageLimitPending = userActionPending === `${user.id}:report-usage-limit`;
                   const usageResetPending = userActionPending === `${user.id}:usage-reset`;
                   const isActive = user.status === 'active';
                   const tier = user.tier === 'premium' ? 'premium' : 'free';
-                  const effectiveUsageLimit = tier === 'premium'
+                  const effectiveAIUsageLimit = tier === 'premium'
                     ? null
-                    : user.usageLimitOverride ?? usageSettings?.freeMonthlyUsageLimit ?? 50;
-                  const usageLimitDraftForUser = userUsageLimitDrafts[user.id] ?? String(effectiveUsageLimit ?? '');
+                    : user.aiUsageLimitOverride ?? usageSettings?.freeMonthlyAIUsageLimit ?? 50;
+                  const usageLimitDraftForUser = userUsageLimitDrafts[user.id] ?? String(effectiveAIUsageLimit ?? '');
                   const parsedUsageLimitDraft = Number(usageLimitDraftForUser);
+                  const effectiveReportUsageLimit = tier === 'premium'
+                    ? null
+                    : user.reportUsageLimitOverride ?? usageSettings?.freeMonthlyReportUsageLimit ?? 50;
+                  const reportLimitDraftForUser = userReportLimitDrafts[user.id] ?? String(effectiveReportUsageLimit ?? '');
+                  const parsedReportLimitDraft = Number(reportLimitDraftForUser);
                   return (
                     <tr key={user.id}>
                       <td data-label="Account">
@@ -2049,54 +2169,92 @@ function AdminDashboard() {
                       <td data-label="Monthly usage">
                         <div className="admin-user-usage">
                           <div className="admin-user-usage-metrics">
-                            <span><strong>AI</strong> {user.aiCalls.toLocaleString()}{effectiveUsageLimit === null ? ' requests' : ` / ${effectiveUsageLimit.toLocaleString()}`}</span>
-                            <span><strong>Reports</strong> {user.savedReports.toLocaleString()}{effectiveUsageLimit === null ? ' generated' : ` / ${effectiveUsageLimit.toLocaleString()}`}</span>
+                            <span><strong>AI</strong> {user.aiCalls.toLocaleString()}{effectiveAIUsageLimit === null ? ' requests' : ` / ${effectiveAIUsageLimit.toLocaleString()}`}</span>
+                            <span><strong>Reports</strong> {user.savedReports.toLocaleString()}{effectiveReportUsageLimit === null ? ' generated' : ` / ${effectiveReportUsageLimit.toLocaleString()}`}</span>
                           </div>
                           {tier === 'premium' ? (
                             <small><Crown size={11} aria-hidden /> Unlimited on Premium</small>
                           ) : (
-                            <div className="admin-user-limit-controls">
-                              <input
-                                type="number"
-                                min="1"
-                                max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
-                                step="1"
-                                inputMode="numeric"
-                                value={usageLimitDraftForUser}
-                                onChange={(event) => setUserUsageLimitDrafts((current) => ({ ...current, [user.id]: event.target.value }))}
-                                disabled={Boolean(userActionPending)}
-                                aria-label={`${user.displayName} monthly usage limit`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void updateManagedUserUsageLimit(user, parsedUsageLimitDraft)}
-                                disabled={Boolean(userActionPending) || !Number.isFinite(parsedUsageLimitDraft) || parsedUsageLimitDraft <= 0 || parsedUsageLimitDraft === effectiveUsageLimit}
-                              >
-                                {usageLimitPending ? <LoaderCircle className="logs-spin" size={12} aria-hidden /> : 'Set'}
-                              </button>
-                              {user.usageLimitOverride != null && (
-                                <button
-                                  type="button"
-                                  onClick={() => void updateManagedUserUsageLimit(user, null)}
-                                  disabled={Boolean(userActionPending)}
-                                  title="Use the default Free usage limit"
-                                >
-                                  Default
-                                </button>
-                              )}
+                            <div className="admin-user-quota-controls">
+                              <div className="admin-user-quota-row">
+                                <span>AI</span>
+                                <div className="admin-user-limit-controls">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
+                                    step="1"
+                                    inputMode="numeric"
+                                    value={usageLimitDraftForUser}
+                                    onChange={(event) => setUserUsageLimitDrafts((current) => ({ ...current, [user.id]: event.target.value }))}
+                                    disabled={Boolean(userActionPending)}
+                                    aria-label={`${user.displayName} monthly AI request limit`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void updateManagedUserUsageLimit(user, parsedUsageLimitDraft)}
+                                    disabled={Boolean(userActionPending) || !Number.isFinite(parsedUsageLimitDraft) || parsedUsageLimitDraft <= 0 || parsedUsageLimitDraft === effectiveAIUsageLimit}
+                                  >
+                                    {usageLimitPending ? <LoaderCircle className="logs-spin" size={12} aria-hidden /> : 'Set'}
+                                  </button>
+                                  {user.aiUsageLimitOverride != null && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void updateManagedUserUsageLimit(user, null)}
+                                      disabled={Boolean(userActionPending)}
+                                      title="Use the default Free AI request limit"
+                                    >
+                                      Default
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="admin-user-quota-row">
+                                <span>Reports</span>
+                                <div className="admin-user-limit-controls">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={usageSettings?.maxFreeMonthlyUsageLimit ?? 10_000}
+                                    step="1"
+                                    inputMode="numeric"
+                                    value={reportLimitDraftForUser}
+                                    onChange={(event) => setUserReportLimitDrafts((current) => ({ ...current, [user.id]: event.target.value }))}
+                                    disabled={Boolean(userActionPending)}
+                                    aria-label={`${user.displayName} monthly generated report limit`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void updateManagedUserReportUsageLimit(user, parsedReportLimitDraft)}
+                                    disabled={Boolean(userActionPending) || !Number.isFinite(parsedReportLimitDraft) || parsedReportLimitDraft <= 0 || parsedReportLimitDraft === effectiveReportUsageLimit}
+                                  >
+                                    {reportUsageLimitPending ? <LoaderCircle className="logs-spin" size={12} aria-hidden /> : 'Set'}
+                                  </button>
+                                  {user.reportUsageLimitOverride != null && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void updateManagedUserReportUsageLimit(user, null)}
+                                      disabled={Boolean(userActionPending)}
+                                      title="Use the default Free generated report limit"
+                                    >
+                                      Default
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           )}
                           <div className="admin-user-usage-foot">
                             <small>
                               {formatTokenCount(user.aiTokens)} AI tokens
-                              {user.usageLimitOverride != null && tier !== 'premium' ? ' · Custom limit' : ''}
+                              {(user.aiUsageLimitOverride != null || user.reportUsageLimitOverride != null) && tier !== 'premium' ? ' · Custom limits' : ''}
                             </small>
                             <button
                               type="button"
                               className="logs-icon-btn"
                               onClick={() => void resetManagedUserUsage(user)}
-                              disabled={Boolean(userActionPending) || (user.aiTokens === 0 && user.savedReports === 0)}
-                              title={user.aiTokens === 0 && user.savedReports === 0 ? 'Usage is already at zero' : 'Reset current-month AI and report usage'}
+                              disabled={Boolean(userActionPending) || (user.aiCalls === 0 && user.savedReports === 0)}
+                              title={user.aiCalls === 0 && user.savedReports === 0 ? 'Usage is already at zero' : 'Reset current-month AI and generated report usage'}
                               aria-label={`Reset ${user.displayName} current-month AI and report usage`}
                             >
                               {usageResetPending ? <LoaderCircle className="logs-spin" size={13} aria-hidden /> : <RefreshCw size={13} aria-hidden />}

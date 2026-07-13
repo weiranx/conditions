@@ -165,18 +165,18 @@ test('loads and persists the administrator default Free report allowance', async
 
   await expect(service.initializeSettings()).resolves.toEqual({
     persistent: true,
-    freeMonthlyUsageLimit: 60,
-    environmentFreeMonthlyUsageLimit: 50,
+    freeMonthlyReportUsageLimit: 60,
+    environmentFreeMonthlyReportUsageLimit: 50,
     maxFreeMonthlyUsageLimit: 10_000,
   });
-  await expect(service.updateSettings({ freeMonthlyUsageLimit: 80 })).resolves.toMatchObject({
-    freeMonthlyUsageLimit: 80,
+  await expect(service.updateSettings({ freeMonthlyReportUsageLimit: 80 })).resolves.toMatchObject({
+    freeMonthlyReportUsageLimit: 80,
   });
   expect(settingsStore.setAdminSetting).toHaveBeenCalledWith(
-    'monthly_usage_limits',
-    { freeMonthlyUsageLimit: 80 },
+    'report_usage_limits',
+    { freeMonthlyReportUsageLimit: 80 },
   );
-  await expect(service.updateSettings({ freeMonthlyUsageLimit: 0 })).rejects.toMatchObject({
+  await expect(service.updateSettings({ freeMonthlyReportUsageLimit: 0 })).rejects.toMatchObject({
     code: 'INVALID_USAGE_LIMIT',
   });
 });

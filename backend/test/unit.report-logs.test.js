@@ -69,27 +69,27 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const readSystemResources = jest.fn(async () => systemResourcesPayload);
   let usageSettings = {
     persistent: true,
-    freeMonthlyUsageLimit: 50,
-    environmentFreeMonthlyUsageLimit: 50,
+    freeMonthlyAIUsageLimit: 50,
+    environmentFreeMonthlyAIUsageLimit: 50,
     maxFreeMonthlyUsageLimit: 10_000,
   };
   const usageService = {
     getSettings: jest.fn(() => usageSettings),
-    updateSettings: jest.fn(async ({ freeMonthlyUsageLimit }) => {
-      usageSettings = { ...usageSettings, freeMonthlyUsageLimit };
+    updateSettings: jest.fn(async ({ freeMonthlyAIUsageLimit }) => {
+      usageSettings = { ...usageSettings, freeMonthlyAIUsageLimit };
       return usageSettings;
     }),
   };
   let reportUsageSettings = {
     persistent: true,
-    freeMonthlyUsageLimit: 50,
-    environmentFreeMonthlyUsageLimit: 50,
+    freeMonthlyReportUsageLimit: 50,
+    environmentFreeMonthlyReportUsageLimit: 50,
     maxFreeMonthlyUsageLimit: 10_000,
   };
   const reportUsageService = {
     getSettings: jest.fn(() => reportUsageSettings),
-    updateSettings: jest.fn(async ({ freeMonthlyUsageLimit }) => {
-      reportUsageSettings = { ...reportUsageSettings, freeMonthlyUsageLimit };
+    updateSettings: jest.fn(async ({ freeMonthlyReportUsageLimit }) => {
+      reportUsageSettings = { ...reportUsageSettings, freeMonthlyReportUsageLimit };
       return reportUsageSettings;
     }),
   };
@@ -120,7 +120,11 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     tier,
   }));
   const updateUserUsageLimit = jest.fn(async ({ limit }) => ({
-    user: { ...managedUser, usageLimitOverride: limit },
+    user: { ...managedUser, aiUsageLimitOverride: limit },
+    limit,
+  }));
+  const updateUserReportUsageLimit = jest.fn(async ({ limit }) => ({
+    user: { ...managedUser, reportUsageLimitOverride: limit },
     limit,
   }));
   const resetUserUsage = jest.fn(async () => ({
@@ -138,15 +142,21 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     periodEnd: '2026-08-01T00:00:00.000Z',
     resetAt: '2026-08-01T00:00:00.000Z',
   }));
+  const resetAllUserUsageLimits = jest.fn(async () => ({
+    resetAIAccounts: 2,
+    resetReportAccounts: 1,
+  }));
   const revokeUserSessions = jest.fn(async () => ({ user: managedUser, revokedSessions: 1 }));
   const accountService = {
     available: true,
     listUsers,
     resetAllUserUsage,
+    resetAllUserUsageLimits,
     resetUserUsage,
     updateUserStatus,
     revokeUserSessions,
     updateUserTier,
+    updateUserReportUsageLimit,
     updateUserUsageLimit,
     getUserForSession: jest.fn(async (token) => (
       token === 'admin-session-token'
@@ -245,11 +255,14 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const updateUsageSettingsResponse = createResponse();
   await routes.patch.get('/api/admin/usage-settings')({
     headers,
-    body: { freeMonthlyUsageLimit: 75 },
+    body: { freeMonthlyAIUsageLimit: 75, freeMonthlyReportUsageLimit: 60 },
   }, updateUsageSettingsResponse);
-  expect(usageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyUsageLimit: 75 });
-  expect(reportUsageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyUsageLimit: 75 });
-  expect(updateUsageSettingsResponse.payload.freeMonthlyUsageLimit).toBe(75);
+  expect(usageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyAIUsageLimit: 75 });
+  expect(reportUsageService.updateSettings).toHaveBeenCalledWith({ freeMonthlyReportUsageLimit: 60 });
+  expect(updateUsageSettingsResponse.payload).toMatchObject({
+    freeMonthlyAIUsageLimit: 75,
+    freeMonthlyReportUsageLimit: 60,
+  });
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'usage.limits.updated',
     category: 'configuration',
@@ -269,6 +282,23 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(updateUserUsageLimitResponse.payload).toMatchObject({ limit: 90 });
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'account.usage-limit.updated',
+    category: 'accounts',
+  }));
+
+  const updateUserReportUsageLimitResponse = createResponse();
+  await routes.patch.get('/api/admin/users/:userId/report-usage-limit')({
+    headers,
+    params: { userId: managedUser.id },
+    body: { limit: 60 },
+  }, updateUserReportUsageLimitResponse);
+  expect(updateUserReportUsageLimit).toHaveBeenCalledWith({
+    userId: managedUser.id,
+    limit: 60,
+    actorUserId: adminUser.id,
+  });
+  expect(updateUserReportUsageLimitResponse.payload).toMatchObject({ limit: 60 });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'account.report-usage-limit.updated',
     category: 'accounts',
   }));
 
@@ -293,6 +323,15 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(resetAllUsageResponse.payload).toMatchObject({ resetAIAccounts: 2, resetReportAccounts: 2 });
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'account.usage.reset-all',
+    category: 'accounts',
+  }));
+
+  const resetAllUsageLimitsResponse = createResponse();
+  await routes.post.get('/api/admin/users/reset-usage-limits')({ headers }, resetAllUsageLimitsResponse);
+  expect(resetAllUserUsageLimits).toHaveBeenCalledWith({ actorUserId: adminUser.id });
+  expect(resetAllUsageLimitsResponse.payload).toEqual({ resetAIAccounts: 2, resetReportAccounts: 1 });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'account.usage-limits.reset-all',
     category: 'accounts',
   }));
 

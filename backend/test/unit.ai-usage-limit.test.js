@@ -154,19 +154,19 @@ test('loads and persists the administrator default Free allowance', async () => 
 
   await expect(service.initializeSettings()).resolves.toEqual({
     persistent: true,
-    freeMonthlyUsageLimit: 60,
-    environmentFreeMonthlyUsageLimit: 50,
+    freeMonthlyAIUsageLimit: 60,
+    environmentFreeMonthlyAIUsageLimit: 50,
     maxFreeMonthlyUsageLimit: 10_000,
   });
-  await expect(service.updateSettings({ freeMonthlyUsageLimit: 80 })).resolves.toMatchObject({
-    freeMonthlyUsageLimit: 80,
+  await expect(service.updateSettings({ freeMonthlyAIUsageLimit: 80 })).resolves.toMatchObject({
+    freeMonthlyAIUsageLimit: 80,
   });
   expect(settingsStore.setAdminSetting).toHaveBeenCalledWith(
-    'monthly_usage_limits',
-    { freeMonthlyUsageLimit: 80 },
+    'ai_usage_limits',
+    { freeMonthlyAIUsageLimit: 80 },
   );
   expect(service.getLimitRequests('free')).toBe(80);
-  await expect(service.updateSettings({ freeMonthlyUsageLimit: 0 })).rejects.toMatchObject({
+  await expect(service.updateSettings({ freeMonthlyAIUsageLimit: 0 })).rejects.toMatchObject({
     code: 'INVALID_USAGE_LIMIT',
   });
 });
