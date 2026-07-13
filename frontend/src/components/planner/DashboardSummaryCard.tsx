@@ -5,6 +5,7 @@ import {
   Database,
   Download,
   LoaderCircle,
+  PencilLine,
   Printer,
   ShieldCheck,
   Snowflake,
@@ -92,6 +93,7 @@ export interface DashboardSummaryCardProps {
   aiBriefNarrative: string | null;
   aiBriefError: string | null;
   aiBriefLoading: boolean;
+  onNewReport: () => void;
   onRequestAiBrief: () => void;
   rawReportPayload: string;
   reportChatMessages: PersistedReportChatMessage[];
@@ -124,6 +126,7 @@ export function DashboardSummaryCard({
   aiBriefNarrative,
   aiBriefError,
   aiBriefLoading,
+  onNewReport,
   onRequestAiBrief,
   rawReportPayload,
   reportChatMessages,
@@ -363,7 +366,12 @@ export function DashboardSummaryCard({
           {recheckChanges.length > 0 && <ul>{recheckChanges.slice(0, 3).map((change) => <li key={change}>{change}</li>)}</ul>}
         </div>
 
-        <div className="ssr-dash-field-actions" aria-label="Field brief actions">
+        <div className="ssr-dash-field-actions" aria-label="Report actions">
+          {readOnly && (
+            <button type="button" onClick={onNewReport}>
+              <PencilLine size={15} aria-hidden /> New report
+            </button>
+          )}
           <button type="button" onClick={saveFieldBrief}>
             <Download size={15} aria-hidden /> {fieldBriefSaved ? 'Field brief saved' : 'Save offline field brief'}
           </button>
