@@ -37,7 +37,7 @@ export function sanitizeExternalUrl(rawUrl?: string): string | null {
 }
 
 export function parseLinkState(todayDate: string, maxForecastDate: string, preferences: UserPreferences): LinkState {
-  const initialForecastDate = getInitialForecastDate(todayDate, preferences.defaultStartTime);
+  const initialForecastDate = getInitialForecastDate(todayDate);
   const defaults: LinkState = {
     view: 'home',
     activity: preferences.defaultActivity,

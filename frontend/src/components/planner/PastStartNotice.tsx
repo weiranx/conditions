@@ -32,11 +32,11 @@ export function PastStartPrompt({
         aria-labelledby="past-start-dialog-title"
         aria-describedby="past-start-dialog-description"
       >
-        <span className="past-start-eyebrow">Timing needs attention</span>
-        <h2 id="past-start-dialog-title">That start time has passed</h2>
+        <span className="past-start-eyebrow">Report day needs attention</span>
+        <h2 id="past-start-dialog-title">That report day has passed</h2>
         <p id="past-start-dialog-description">
-          {prompt.date} at {prompt.time} has already passed in {formatTimeZoneLabel(prompt.timeZone)}.
-          Choose a current or future start before generating a report.
+          {prompt.date} is earlier than today in {formatTimeZoneLabel(prompt.timeZone)}.
+          Choose today or a future day before generating a report.
         </p>
         <div className="past-start-actions">
           <button type="button" className="past-start-action-primary" onClick={onUseNow} autoFocus>
@@ -83,7 +83,7 @@ export function PassedReportNotice({
   return (
     <section className="passed-report-notice" role="status" aria-live="polite">
       <div>
-        <strong>This plan’s start time has passed.</strong>
+        <strong>This report is from an earlier day.</strong>
         <span>Create a new report before relying on current conditions.</span>
       </div>
       <div className="passed-report-actions">
