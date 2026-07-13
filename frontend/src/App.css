@@ -8852,15 +8852,6 @@ button.collapsible-card-header:hover .collapsible-chevron {
   cursor: default;
 }
 
-.route-analyze-btn:not(.route-gpx-upload-btn)::before,
-.route-picker-card .route-option-name::before,
-.route-picker-card .route-picker-custom button::before {
-  content: '✦';
-  color: currentColor;
-  font-size: 0.9em;
-  line-height: 1;
-}
-
 .route-waypoints {
   display: flex;
   flex-direction: column;
