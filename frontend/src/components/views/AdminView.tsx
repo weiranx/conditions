@@ -515,6 +515,105 @@ function buildTopLocations(entries: ReportLogEntry[]) {
     .slice(0, 6);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDateOnlyUtc(value: string | null): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value ?? '');
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+    ? timestamp
+    : null;
+}
+
+function withDistributionShares<T extends { count: number }>(items: T[]) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  return {
+    total,
+    items: items.map((item) => ({ ...item, share: total ? (item.count / total) * 100 : 0 })),
+  };
+}
+
+function buildPlanningInsights(entries: ReportLogEntry[]) {
+  const leadTime = [
+    { key: 'same-day', label: 'Same day', count: 0 },
+    { key: 'next-day', label: 'Next day', count: 0 },
+    { key: 'two-three-days', label: '2–3 days ahead', count: 0 },
+    { key: 'four-plus-days', label: '4+ days ahead', count: 0 },
+  ];
+  const startTimes = [
+    { key: 'early', label: 'Before 6 AM', count: 0 },
+    { key: 'morning', label: '6–9:59 AM', count: 0 },
+    { key: 'midday', label: '10 AM–1:59 PM', count: 0 },
+    { key: 'late', label: '2 PM or later', count: 0 },
+  ];
+
+  entries.filter((entry) => entry.statusCode === 200).forEach((entry) => {
+    const selectedDate = parseDateOnlyUtc(entry.date);
+    const requestedAt = new Date(entry.timestamp);
+    if (selectedDate != null && !Number.isNaN(requestedAt.getTime())) {
+      const requestDate = Date.UTC(requestedAt.getUTCFullYear(), requestedAt.getUTCMonth(), requestedAt.getUTCDate());
+      const leadDays = Math.round((selectedDate - requestDate) / DAY_MS);
+      // UTC can be one calendar day ahead of a western-U.S. request in the evening.
+      // The product does not generate reports for past dates, so -1 is still same-day intent.
+      if (leadDays === 0 || leadDays === -1) leadTime[0].count += 1;
+      else if (leadDays === 1) leadTime[1].count += 1;
+      else if (leadDays >= 2 && leadDays <= 3) leadTime[2].count += 1;
+      else if (leadDays >= 4) leadTime[3].count += 1;
+    }
+
+    const startMatch = /^(\d{2}):(\d{2})$/u.exec(entry.startTime ?? '');
+    if (!startMatch) return;
+    const hour = Number(startMatch[1]);
+    const minute = Number(startMatch[2]);
+    if (hour > 23 || minute > 59) return;
+    if (hour < 6) startTimes[0].count += 1;
+    else if (hour < 10) startTimes[1].count += 1;
+    else if (hour < 14) startTimes[2].count += 1;
+    else startTimes[3].count += 1;
+  });
+
+  return {
+    leadTime: withDistributionShares(leadTime),
+    startTimes: withDistributionShares(startTimes),
+  };
+}
+
+function buildReliabilityHotspots(entries: ReportLogEntry[]) {
+  const locations = new Map<string, {
+    name: string;
+    total: number;
+    issues: number;
+    durations: number[];
+  }>();
+
+  entries.forEach((entry) => {
+    const name = entry.name?.trim();
+    // Validation failures describe bad requests, not destination reliability.
+    if (!name || (entry.statusCode >= 400 && entry.statusCode < 500)) return;
+    const key = name.toLocaleLowerCase();
+    const current = locations.get(key) ?? { name, total: 0, issues: 0, durations: [] };
+    current.total += 1;
+    if (entry.partialData === true || entry.statusCode >= 500) current.issues += 1;
+    if (Number.isFinite(entry.durationMs)) current.durations.push(entry.durationMs);
+    locations.set(key, current);
+  });
+
+  return [...locations.values()]
+    .filter((location) => location.issues > 0)
+    .map(({ durations, ...location }) => ({
+      ...location,
+      issueRate: (location.issues / location.total) * 100,
+      p95Duration: durations.length ? percentile(durations, 0.95) : null,
+    }))
+    .sort((left, right) => right.issues - left.issues || right.issueRate - left.issueRate || right.total - left.total)
+    .slice(0, 6);
+}
+
 function buildAITrendData(entries: AIUsageEntry[], range: AnalyticsRange, now: number) {
   const rangeConfig = getAnalyticsRange(range);
   const rangeDuration = rangeConfig.durationMs;
@@ -1084,6 +1183,12 @@ function AdminDashboard() {
     const healthy = rangeLogs.filter(isHealthyResponse).length;
     const issues = rangeLogs.length - healthy;
     const durations = rangeLogs.map((entry) => entry.durationMs).filter(Number.isFinite);
+    const networkCounts = new Map<string, number>();
+    rangeLogs.forEach((entry) => {
+      if (entry.ip) networkCounts.set(entry.ip, (networkCounts.get(entry.ip) ?? 0) + 1);
+    });
+    const networkedReports = [...networkCounts.values()].reduce((sum, count) => sum + count, 0);
+    const repeatNetworks = [...networkCounts.values()].filter((count) => count > 1).length;
     const previousStart = referenceTime - selectedRange.durationMs * 2;
     const previousEnd = referenceTime - selectedRange.durationMs;
     const previousLogs = analyticsRange !== '7d'
@@ -1113,7 +1218,9 @@ function AdminDashboard() {
         ? p95Duration - previousP95Duration
         : null,
       medianDuration: durations.length ? percentile(durations, 0.5) : null,
-      uniqueVisitors: new Set(rangeLogs.map((entry) => entry.ip).filter(Boolean)).size,
+      uniqueVisitors: networkCounts.size,
+      reportsPerNetwork: networkCounts.size ? networkedReports / networkCounts.size : null,
+      repeatNetworkRate: networkCounts.size ? Math.round((repeatNetworks / networkCounts.size) * 100) : null,
       issues,
       volumeDelta,
     };
@@ -1125,6 +1232,8 @@ function AdminDashboard() {
   );
   const hourlyDistribution = useMemo(() => buildHourlyDistribution(rangeLogs), [rangeLogs]);
   const topLocations = useMemo(() => buildTopLocations(rangeLogs), [rangeLogs]);
+  const planningInsights = useMemo(() => buildPlanningInsights(rangeLogs), [rangeLogs]);
+  const reliabilityHotspots = useMemo(() => buildReliabilityHotspots(rangeLogs), [rangeLogs]);
   const aiTrendData = useMemo(
     () => buildAITrendData(rangeAIUsage, analyticsRange, referenceTime),
     [analyticsRange, rangeAIUsage, referenceTime],
@@ -1277,6 +1386,8 @@ function AdminDashboard() {
       range: { value: analyticsRange, label: selectedRange.label },
       system: health,
       reportMetrics: metrics,
+      planningInsights,
+      reliabilityHotspots,
       aiMetrics,
       aiStatus: aiSettings,
       productFeatures: featureFlagStatus,
@@ -2065,7 +2176,7 @@ function AdminDashboard() {
           <span className="logs-metric-icon"><Activity size={18} aria-hidden /></span>
           <div>
             <strong>{metrics.total.toLocaleString()}</strong>
-            <span>Total reports{metrics.volumeDelta != null ? ` · ${metrics.volumeDelta >= 0 ? '+' : ''}${metrics.volumeDelta}% vs prior period` : ''}</span>
+            <span>Total reports{metrics.volumeDelta != null ? ` · ${metrics.volumeDelta >= 0 ? '+' : ''}${metrics.volumeDelta}% vs prior period` : ''}{metrics.reportsPerNetwork != null ? ` · ${metrics.reportsPerNetwork.toFixed(1)} per network` : ''}</span>
           </div>
         </article>
         <article className="logs-metric-card">
@@ -2078,7 +2189,7 @@ function AdminDashboard() {
         </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon"><Users size={18} aria-hidden /></span>
-          <div><strong>{metrics.uniqueVisitors}</strong><span>Unique masked networks</span></div>
+          <div><strong>{metrics.uniqueVisitors}</strong><span>Masked networks{metrics.repeatNetworkRate != null ? ` · ${metrics.repeatNetworkRate}% generated 2+ reports` : ''}</span></div>
         </article>
         <article className="logs-metric-card">
           <span className="logs-metric-icon is-amber"><AlertTriangle size={18} aria-hidden /></span>
@@ -2179,6 +2290,67 @@ function AdminDashboard() {
               </BarChart>
             </ResponsiveContainer>}
           </div>
+        </article>
+      </section>
+
+      <section className="admin-insights-grid" aria-label="Planning and reliability insights" hidden={activeSection !== 'analytics'}>
+        <article className="logs-chart-card admin-planning-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Planning behavior</h2>
+              <p>When successful reports are planned for and intended to start</p>
+            </div>
+            <CalendarRange size={18} aria-hidden />
+          </div>
+          <div className="admin-planning-splits">
+            <div>
+              <div className="admin-insight-subhead"><strong>Planning horizon</strong><span>{planningInsights.leadTime.total.toLocaleString()} dated reports</span></div>
+              <ul className="admin-breakdown-list">
+                {planningInsights.leadTime.items.map((item) => (
+                  <li key={item.key}>
+                    <div><strong>{item.label}</strong><span>{item.count.toLocaleString()} · {Math.round(item.share)}%</span></div>
+                    <span className="admin-breakdown-track"><span style={{ width: `${item.share}%` }} /></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="admin-insight-subhead"><strong>Planned start time</strong><span>{planningInsights.startTimes.total.toLocaleString()} timed reports</span></div>
+              <ul className="admin-breakdown-list">
+                {planningInsights.startTimes.items.map((item) => (
+                  <li key={item.key}>
+                    <div><strong>{item.label}</strong><span>{item.count.toLocaleString()} · {Math.round(item.share)}%</span></div>
+                    <span className="admin-breakdown-track"><span style={{ width: `${item.share}%` }} /></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article className="logs-chart-card admin-hotspots-card">
+          <div className="logs-chart-head">
+            <div>
+              <h2>Reliability hotspots</h2>
+              <p>Named locations with partial or server-failed reports</p>
+            </div>
+            <AlertTriangle size={18} aria-hidden />
+          </div>
+          {reliabilityHotspots.length ? (
+            <ol className="admin-hotspot-list">
+              {reliabilityHotspots.map((location) => (
+                <li key={location.name}>
+                  <div>
+                    <strong>{location.name}</strong>
+                    <span>{location.issues} of {location.total} affected · {Math.round(location.issueRate)}%</span>
+                  </div>
+                  <span><strong>{formatDuration(location.p95Duration)}</strong><small>P95</small></span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="logs-chart-empty admin-hotspots-empty"><CheckCircle2 size={20} aria-hidden /> No named location has a report issue in this period.</div>
+          )}
         </article>
       </section>
 
