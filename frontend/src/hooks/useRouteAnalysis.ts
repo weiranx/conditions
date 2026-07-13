@@ -1,4 +1,4 @@
-import { useState, useCallback, type Dispatch, type SetStateAction } from 'react';
+import { useState, useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { fetchApi, readApiErrorMessage } from '../lib/api-client';
 import type { GpxCheckpoint } from '../lib/gpx';
 
@@ -81,11 +81,19 @@ export interface RouteAnalysisOptions {
   routeMetadata?: GpxRouteMetadata;
 }
 
+export interface RouteLoadingState {
+  kind: 'suggestions' | 'analysis';
+  routeName: string;
+  checkpointCount?: number;
+  startedAt: number;
+}
+
 export interface UseRouteAnalysisReturn {
   routeSuggestions: RouteOption[] | null;
   setRouteSuggestions: Dispatch<SetStateAction<RouteOption[] | null>>;
   routeAnalysis: RouteAnalysisResult | null;
   routeLoading: boolean;
+  routeLoadingState: RouteLoadingState | null;
   routeError: string | null;
   setRouteError: Dispatch<SetStateAction<string | null>>;
   customRouteName: string;
@@ -108,35 +116,72 @@ export interface UseRouteAnalysisReturn {
 export function useRouteAnalysis(): UseRouteAnalysisReturn {
   const [routeSuggestions, setRouteSuggestions] = useState<RouteOption[] | null>(null);
   const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResult | null>(null);
-  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeLoadingState, setRouteLoadingState] = useState<RouteLoadingState | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [customRouteName, setCustomRouteName] = useState('');
+  const activeRequestRef = useRef<{ id: number; controller: AbortController } | null>(null);
+  const nextRequestIdRef = useRef(0);
+
+  const beginRequest = useCallback((loadingState: Omit<RouteLoadingState, 'startedAt'>) => {
+    activeRequestRef.current?.controller.abort();
+    const request = {
+      id: nextRequestIdRef.current + 1,
+      controller: new AbortController(),
+    };
+    nextRequestIdRef.current = request.id;
+    activeRequestRef.current = request;
+    setRouteLoadingState({ ...loadingState, startedAt: Date.now() });
+    return request;
+  }, []);
+
+  const isCurrentRequest = useCallback((requestId: number) => activeRequestRef.current?.id === requestId, []);
+
+  const finishRequest = useCallback((requestId: number) => {
+    if (!isCurrentRequest(requestId)) return;
+    activeRequestRef.current = null;
+    setRouteLoadingState(null);
+  }, [isCurrentRequest]);
+
+  useEffect(() => () => {
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = null;
+    nextRequestIdRef.current += 1;
+  }, []);
 
   const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number) => {
+    const request = beginRequest({ kind: 'suggestions', routeName: peak });
     setRouteSuggestions(null);
     setRouteAnalysis(null);
     setRouteError(null);
-    setRouteLoading(true);
     setCustomRouteName('');
     try {
-      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`);
+      const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`, {
+        signal: request.controller.signal,
+      });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to load route suggestions'));
+      if (!isCurrentRequest(request.id)) return;
       setRouteSuggestions(payload as RouteOption[]);
     } catch (err) {
+      if (request.controller.signal.aborted || !isCurrentRequest(request.id)) return;
       setRouteError(err instanceof Error ? err.message : 'Could not load route suggestions. Try again.');
     } finally {
-      setRouteLoading(false);
+      finishRequest(request.id);
     }
-  }, []);
+  }, [beginRequest, finishRequest, isCurrentRequest]);
 
   const fetchRouteAnalysis = useCallback(async (peak: string, route: string, lat: number, lon: number, date: string, start: string, travelWindowHours: number, units?: RouteAnalysisUnits, options?: RouteAnalysisOptions) => {
+    const request = beginRequest({
+      kind: 'analysis',
+      routeName: route,
+      ...(options?.waypoints ? { checkpointCount: options.waypoints.length } : {}),
+    });
     setRouteAnalysis(null);
     setRouteError(null);
-    setRouteLoading(true);
     try {
       const { response, payload } = await fetchApi('/api/route-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: request.controller.signal,
         body: JSON.stringify({
           peak,
           route,
@@ -151,15 +196,21 @@ export function useRouteAnalysis(): UseRouteAnalysisReturn {
         }),
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
+      if (!isCurrentRequest(request.id)) return;
       setRouteAnalysis(payload as RouteAnalysisResult);
     } catch (err) {
+      if (request.controller.signal.aborted || !isCurrentRequest(request.id)) return;
       setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');
     } finally {
-      setRouteLoading(false);
+      finishRequest(request.id);
     }
-  }, []);
+  }, [beginRequest, finishRequest, isCurrentRequest]);
 
   const resetRouteState = useCallback(() => {
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = null;
+    nextRequestIdRef.current += 1;
+    setRouteLoadingState(null);
     setRouteSuggestions(null);
     setRouteAnalysis(null);
     setRouteError(null);
@@ -169,7 +220,8 @@ export function useRouteAnalysis(): UseRouteAnalysisReturn {
     routeSuggestions,
     setRouteSuggestions,
     routeAnalysis,
-    routeLoading,
+    routeLoading: routeLoadingState !== null,
+    routeLoadingState,
     routeError,
     setRouteError,
     customRouteName,

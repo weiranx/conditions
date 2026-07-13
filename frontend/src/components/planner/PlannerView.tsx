@@ -30,7 +30,7 @@ import type {
 import type { ReportCardOrder } from '../../app/card-ordering';
 import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
-import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
+import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult, RouteLoadingState } from '../../hooks/useRouteAnalysis';
 import type { AppView } from '../../hooks/useUrlState';
 import { ACTIVITY_PROFILES } from '../../app/activity-profiles';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
@@ -164,6 +164,7 @@ export interface PlannerViewProps {
   routeSuggestions: RouteOption[] | null;
   routeAnalysis: RouteAnalysisResult | null;
   routeLoading: boolean;
+  routeLoadingState: RouteLoadingState | null;
   routeError: string | null;
   fetchRouteSuggestions: (name: string, lat: number, lng: number) => void;
   fetchRouteAnalysis: (objectiveName: string, routeName: string, lat: number, lng: number, date: string, startTime: string, hours: number, options?: RouteAnalysisOptions) => void;
@@ -556,7 +557,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     // Route analysis
     routeSuggestions,
     routeAnalysis,
-    routeLoading,
+    routeLoading, routeLoadingState,
     routeError,
     fetchRouteSuggestions,
     fetchRouteAnalysis,
@@ -819,6 +820,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
                       routeSuggestions={routeSuggestions}
                       routeAnalysis={routeAnalysis}
                       routeLoading={routeLoading}
+                      routeLoadingState={routeLoadingState}
                       routeError={routeError}
                       fetchRouteSuggestions={fetchRouteSuggestions}
                       fetchRouteAnalysis={fetchRouteAnalysis}

@@ -455,7 +455,54 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-.ssr-route-card .route-loading { padding: 22px 12px; }
+.ssr-route-card .route-loading {
+  align-items: stretch;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--ssr-line);
+  border-radius: 10px;
+  background: var(--ssr-surface-2);
+}
+.ssr-route-card .route-loading-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ssr-surface-3);
+}
+.ssr-route-card .route-loading-progress span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ssr-brand-dark);
+  animation: ssr-route-loading-sweep 1.6s ease-in-out infinite;
+}
+.ssr-route-card .route-loading-copy { display: grid; gap: 4px; }
+.ssr-route-card .route-loading-copy strong { color: var(--ssr-text); font-size: 14px; line-height: 1.35; }
+.ssr-route-card .route-loading-copy > span { color: var(--ssr-text-2); font-size: 12px; line-height: 1.5; }
+.ssr-route-card .route-loading-steps { display: flex; flex-wrap: wrap; gap: 7px; }
+.ssr-route-card .route-loading-steps span {
+  padding: 5px 8px;
+  border: 1px solid var(--ssr-line);
+  border-radius: 999px;
+  background: var(--ssr-surface);
+  color: var(--ssr-text-2);
+  font-size: 10px;
+  font-weight: 700;
+}
+.ssr-route-card .route-loading-time {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ssr-text-3);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.ssr-route-card .route-loading-time span:last-child { text-align: right; }
+@keyframes ssr-route-loading-sweep {
+  0% { transform: translateX(-115%); }
+  55%, 100% { transform: translateX(265%); }
+}
 .ssr-route-card .route-error {
   padding: 12px 14px;
   border: 1px solid color-mix(in oklch, var(--ssr-nogo) 28%, var(--ssr-line));
@@ -503,10 +550,18 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
 .ssr-route-card .route-gpx-card p,
 .ssr-route-card .route-analysis-disclaimer { color: var(--ssr-text-3); }
 .ssr-route-card .route-analysis-route-title { color: var(--ssr-text); font-family: var(--ssr-display); }
-.ssr-route-card .route-loading-label,
 .ssr-route-card .route-picker-cancel { color: var(--ssr-text-3); }
 .ssr-route-card .route-loading-dots span,
 .ssr-route-card .route-gpx-analyze { background: var(--ssr-brand-dark); }
+
+@media (max-width: 640px) {
+  .ssr-route-card .route-loading-time { flex-direction: column; gap: 3px; }
+  .ssr-route-card .route-loading-time span:last-child { text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssr-route-card .route-loading-progress span { animation: none; width: 100%; opacity: .65; }
+}
 
 /* =========================================================
    STRIP CHART — travel-window timeline

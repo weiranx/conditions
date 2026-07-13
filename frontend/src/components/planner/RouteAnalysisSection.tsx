@@ -2,12 +2,54 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ChangeEv
 import { ChevronDown, ChevronUp, ExternalLink, FileCheck2, Route, Upload } from 'lucide-react';
 import { formatRouteAnalysisSections } from '../../app/text-utils';
 import { parseGpxFile, type ParsedGpxRoute } from '../../lib/gpx';
-import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
+import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult, RouteLoadingState } from '../../hooks/useRouteAnalysis';
 import { AiInsightBriefing } from './AiInsightBriefing';
 
+const loadRouteConditionsProfile = () => import('./cards/RouteConditionsProfile');
 const RouteConditionsProfile = lazy(() =>
-  import('./cards/RouteConditionsProfile').then((module) => ({ default: module.RouteConditionsProfile })),
+  loadRouteConditionsProfile().then((module) => ({ default: module.RouteConditionsProfile })),
 );
+
+function RouteAnalysisLoading({ state }: { state: RouteLoadingState }) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000)));
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [state.startedAt]);
+
+  const isAnalysis = state.kind === 'analysis';
+  const checkpointCopy = state.checkpointCount
+    ? `${state.checkpointCount} timed checkpoint${state.checkpointCount === 1 ? '' : 's'}`
+    : 'timed route checkpoints';
+
+  return (
+    <div className="route-loading" role="status" aria-live="polite" aria-busy="true">
+      <div className="route-loading-progress" aria-hidden="true"><span /></div>
+      <div className="route-loading-copy">
+        <strong>{isAnalysis ? `Analyzing ${state.routeName}` : `Finding routes for ${state.routeName}`}</strong>
+        <span>
+          {isAnalysis
+            ? `Checking ${checkpointCopy}, then building a field briefing.`
+            : 'Checking mapped trail sources and preparing route options.'}
+        </span>
+      </div>
+      {isAnalysis && (
+        <div className="route-loading-steps" aria-hidden="true">
+          <span>Route geometry</span>
+          <span>{state.checkpointCount ? `${state.checkpointCount} forecasts` : 'Checkpoint forecasts'}</span>
+          <span>Field briefing</span>
+        </div>
+      )}
+      <div className="route-loading-time" aria-hidden="true">
+        <span>{elapsedSeconds < 5 ? 'Starting…' : `${elapsedSeconds}s elapsed`}</span>
+        {isAnalysis && <span>Live checks run in parallel; complex routes can take a minute or more.</span>}
+      </div>
+    </div>
+  );
+}
 
 export interface RouteAnalysisSectionProps {
   objectiveName: string;
@@ -20,6 +62,7 @@ export interface RouteAnalysisSectionProps {
   routeSuggestions: RouteOption[] | null;
   routeAnalysis: RouteAnalysisResult | null;
   routeLoading: boolean;
+  routeLoadingState: RouteLoadingState | null;
   routeError: string | null;
   fetchRouteSuggestions: (name: string, lat: number, lng: number) => void;
   fetchRouteAnalysis: (objectiveName: string, routeName: string, lat: number, lng: number, date: string, startTime: string, hours: number, options?: RouteAnalysisOptions) => void;
@@ -38,7 +81,7 @@ export interface RouteAnalysisSectionProps {
 export function RouteAnalysisSection({
   objectiveName, positionLat, positionLng,
   forecastDate, alpineStartTime, travelWindowHours, order,
-  routeSuggestions, routeAnalysis, routeLoading, routeError,
+  routeSuggestions, routeAnalysis, routeLoading, routeLoadingState, routeError,
   fetchRouteSuggestions, fetchRouteAnalysis,
   customRouteName, setCustomRouteName, setRouteSuggestions, setRouteError,
   getScoreColor, formatTempDisplay, formatWindDisplay, formatElevationDisplay, formatDistanceDisplay,
@@ -57,6 +100,12 @@ export function RouteAnalysisSection({
   useEffect(() => {
     setShowAllWaypoints(false);
   }, [routeAnalysis]);
+
+  useEffect(() => {
+    if (routeLoadingState?.kind === 'analysis') {
+      void loadRouteConditionsProfile();
+    }
+  }, [routeLoadingState]);
 
   const handleGpxFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -191,16 +240,7 @@ export function RouteAnalysisSection({
         </div>
       )}
 
-      {routeLoading && (
-        <div className="route-loading">
-          <div className="route-loading-dots">
-            <span /><span /><span />
-          </div>
-          <div className="route-loading-label">
-            {routeAnalysis === null && routeSuggestions ? 'Running safety checks along route...' : 'Fetching routes...'}
-          </div>
-        </div>
-      )}
+      {routeLoading && routeLoadingState && <RouteAnalysisLoading key={routeLoadingState.startedAt} state={routeLoadingState} />}
 
       {routeError && (
         <div className="route-error">{routeError}</div>

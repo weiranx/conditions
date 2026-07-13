@@ -241,7 +241,7 @@ function App() {
   } = useHealthChecks();
 
   const {
-    routeSuggestions, setRouteSuggestions, routeAnalysis, routeLoading, routeError, setRouteError,
+    routeSuggestions, setRouteSuggestions, routeAnalysis, routeLoading, routeLoadingState, routeError, setRouteError,
     customRouteName, setCustomRouteName,
     fetchRouteSuggestions, fetchRouteAnalysis, resetRouteState,
   } = useRouteAnalysis();
@@ -1923,6 +1923,7 @@ function App() {
       routeSuggestions={routeSuggestions}
       routeAnalysis={routeAnalysis}
       routeLoading={routeLoading}
+      routeLoadingState={routeLoadingState}
       routeError={routeError}
       fetchRouteSuggestions={fetchRouteSuggestions}
       fetchRouteAnalysis={handleFetchRouteAnalysis}
