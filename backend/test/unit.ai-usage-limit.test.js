@@ -1,20 +1,21 @@
 const {
   AIUsageLimitError,
   AIUsageUnavailableError,
-  DEFAULT_FREE_MONTHLY_TOKEN_LIMIT,
-  DEFAULT_MONTHLY_TOKEN_LIMIT,
   createAIUsageLimitService,
-  getMonthlyWindow,
-  parseMonthlyTokenLimit,
 } = require('../src/auth/ai-usage-limit');
+const {
+  DEFAULT_FREE_MONTHLY_USAGE_LIMIT,
+  getMonthlyWindow,
+  parseFreeMonthlyUsageLimit,
+} = require('../src/auth/monthly-usage-limit');
 
 const USER_ID = '8c696be4-e175-4b6a-965b-82bdf3758e0c';
 
-test('parses a bounded monthly token allowance and builds UTC month windows', () => {
-  expect(parseMonthlyTokenLimit('500000')).toBe(500_000);
-  expect(DEFAULT_MONTHLY_TOKEN_LIMIT).toBe(DEFAULT_FREE_MONTHLY_TOKEN_LIMIT);
-  expect(parseMonthlyTokenLimit('0')).toBe(DEFAULT_MONTHLY_TOKEN_LIMIT);
-  expect(parseMonthlyTokenLimit('not-a-number')).toBe(DEFAULT_MONTHLY_TOKEN_LIMIT);
+test('parses the shared monthly usage allowance and builds UTC month windows', () => {
+  expect(parseFreeMonthlyUsageLimit('75')).toBe(75);
+  expect(parseFreeMonthlyUsageLimit('0')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
+  expect(parseFreeMonthlyUsageLimit('not-a-number')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
+  expect(parseFreeMonthlyUsageLimit('10001')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
   expect(getMonthlyWindow('2026-07-31T23:30:00-07:00')).toEqual({
     periodStart: '2026-08-01T00:00:00.000Z',
     periodEnd: '2026-09-01T00:00:00.000Z',
@@ -22,20 +23,21 @@ test('parses a bounded monthly token allowance and builds UTC month windows', ()
   });
 });
 
-test('summarizes provider-reported tokens for one user in the current month', async () => {
-  const query = jest.fn().mockResolvedValue({ rows: [{ used_tokens: '125050' }] });
+test('summarizes successful AI requests while retaining token analytics', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [{ used_requests: '25', used_tokens: '125050' }] });
   const service = createAIUsageLimitService({
     database: { configured: true, query },
-    monthlyTokenLimit: 250_000,
+    freeMonthlyUsageLimit: 50,
     now: () => Date.parse('2026-07-13T08:00:00.000Z'),
   });
 
   await expect(service.getUserUsage(USER_ID)).resolves.toEqual({
     tierKey: 'free',
     unlimited: false,
+    usedRequests: 25,
     usedTokens: 125_050,
-    limitTokens: 250_000,
-    remainingTokens: 124_950,
+    limitRequests: 50,
+    remainingRequests: 25,
     percentUsed: 50,
     periodStart: '2026-07-01T00:00:00.000Z',
     periodEnd: '2026-08-01T00:00:00.000Z',
@@ -49,22 +51,23 @@ test('summarizes provider-reported tokens for one user in the current month', as
   ]);
 });
 
-test('tracks Premium usage without applying a token ceiling', async () => {
+test('tracks Premium usage without applying a request ceiling', async () => {
   const service = createAIUsageLimitService({
     database: {
       configured: true,
-      query: jest.fn().mockResolvedValue({ rows: [{ used_tokens: '300000' }] }),
+      query: jest.fn().mockResolvedValue({ rows: [{ used_requests: '75', used_tokens: '300000' }] }),
     },
-    freeMonthlyTokenLimit: 250_000,
+    freeMonthlyUsageLimit: 50,
     now: () => Date.parse('2026-07-13T08:00:00.000Z'),
   });
 
   await expect(service.getUserUsage(USER_ID, 'premium')).resolves.toEqual({
     tierKey: 'premium',
     unlimited: true,
+    usedRequests: 75,
     usedTokens: 300_000,
-    limitTokens: null,
-    remainingTokens: null,
+    limitRequests: null,
+    remainingRequests: null,
     percentUsed: null,
     periodStart: '2026-07-01T00:00:00.000Z',
     periodEnd: '2026-08-01T00:00:00.000Z',
@@ -78,7 +81,7 @@ test('tracks Premium usage without applying a token ceiling', async () => {
   await expect(service.getUserUsage(USER_ID, 'unknown')).resolves.toMatchObject({
     tierKey: 'free',
     unlimited: false,
-    limitTokens: 250_000,
+    limitRequests: 50,
     exhausted: true,
   });
 });
@@ -87,9 +90,9 @@ test('blocks a user whose monthly allowance is exhausted', async () => {
   const service = createAIUsageLimitService({
     database: {
       configured: true,
-      query: jest.fn().mockResolvedValue({ rows: [{ used_tokens: '250001' }] }),
+      query: jest.fn().mockResolvedValue({ rows: [{ used_requests: '50', used_tokens: '250001' }] }),
     },
-    monthlyTokenLimit: 250_000,
+    freeMonthlyUsageLimit: 50,
     now: () => Date.parse('2026-07-13T08:00:00.000Z'),
   });
 
@@ -97,7 +100,7 @@ test('blocks a user whose monthly allowance is exhausted', async () => {
     name: AIUsageLimitError.name,
     code: 'AI_USAGE_LIMIT_REACHED',
     statusCode: 429,
-    usage: expect.objectContaining({ exhausted: true, remainingTokens: 0 }),
+    usage: expect.objectContaining({ exhausted: true, remainingRequests: 0 }),
   });
 });
 

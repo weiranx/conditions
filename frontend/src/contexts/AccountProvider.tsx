@@ -66,7 +66,9 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
   const dateFields = ['periodStart', 'periodEnd', 'resetAt'] as const;
   const unlimited = record.unlimited === true;
   if (
-    typeof record.usedTokens !== 'number'
+    typeof record.usedRequests !== 'number'
+    || !Number.isFinite(record.usedRequests)
+    || typeof record.usedTokens !== 'number'
     || !Number.isFinite(record.usedTokens)
     || dateFields.some((field) => typeof record[field] !== 'string')
     || typeof record.exhausted !== 'boolean'
@@ -74,12 +76,12 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     || (record.unlimited !== undefined && typeof record.unlimited !== 'boolean')
     || (unlimited && record.tierKey !== 'premium')
     || (unlimited && (
-      record.limitTokens !== null
-      || record.remainingTokens !== null
+      record.limitRequests !== null
+      || record.remainingRequests !== null
       || record.percentUsed !== null
       || record.exhausted
     ))
-    || (!unlimited && [record.limitTokens, record.remainingTokens, record.percentUsed]
+    || (!unlimited && [record.limitRequests, record.remainingRequests, record.percentUsed]
       .some((field) => typeof field !== 'number' || !Number.isFinite(field)))
   ) {
     return null;
@@ -87,6 +89,7 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
   const tierKey: AccountAIUsage['tierKey'] = record.tierKey === 'premium' ? 'premium' : 'free';
   const baseUsage = {
     tierKey,
+    usedRequests: record.usedRequests as number,
     usedTokens: record.usedTokens as number,
     periodStart: record.periodStart as string,
     periodEnd: record.periodEnd as string,
@@ -96,8 +99,8 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     return {
       ...baseUsage,
       unlimited: true,
-      limitTokens: null,
-      remainingTokens: null,
+      limitRequests: null,
+      remainingRequests: null,
       percentUsed: null,
       exhausted: false,
     };
@@ -105,8 +108,8 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
   return {
     ...baseUsage,
     unlimited: false,
-    limitTokens: record.limitTokens as number,
-    remainingTokens: record.remainingTokens as number,
+    limitRequests: record.limitRequests as number,
+    remainingRequests: record.remainingRequests as number,
     percentUsed: record.percentUsed as number,
     exhausted: record.exhausted,
   };

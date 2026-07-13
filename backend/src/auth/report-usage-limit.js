@@ -1,16 +1,9 @@
 'use strict';
 
-const { getMonthlyWindow } = require('./ai-usage-limit');
-
-const DEFAULT_FREE_MONTHLY_REPORT_LIMIT = 50;
-const MAX_MONTHLY_REPORT_LIMIT = 10_000;
-
-const parseMonthlyReportLimit = (value, fallback = DEFAULT_FREE_MONTHLY_REPORT_LIMIT) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_MONTHLY_REPORT_LIMIT
-    ? Math.round(parsed)
-    : fallback;
-};
+const {
+  getMonthlyWindow,
+  resolveFreeMonthlyUsageLimit,
+} = require('./monthly-usage-limit');
 
 const summarizeReportUsage = ({ usedReports, tierKey, freeLimitReports, window }) => {
   const resolvedTierKey = tierKey === 'premium' ? 'premium' : 'free';
@@ -33,7 +26,7 @@ const summarizeReportUsage = ({ usedReports, tierKey, freeLimitReports, window }
 
 class ReportUsageLimitError extends Error {
   constructor(usage) {
-    super('Monthly report limit reached. Your allowance resets at the start of next month.');
+    super('Monthly generated report limit reached. Your allowance resets at the start of next month.');
     this.name = 'ReportUsageLimitError';
     this.code = 'REPORT_USAGE_LIMIT_REACHED';
     this.statusCode = 429;
@@ -52,10 +45,10 @@ class ReportUsageUnavailableError extends Error {
 
 const createReportUsageLimitService = ({
   database,
-  freeMonthlyReportLimit = process.env.REPORT_FREE_MONTHLY_LIMIT,
+  freeMonthlyUsageLimit,
   now = Date.now,
 } = {}) => {
-  const freeLimitReports = parseMonthlyReportLimit(freeMonthlyReportLimit);
+  const freeLimitReports = resolveFreeMonthlyUsageLimit(freeMonthlyUsageLimit);
   const available = Boolean(
     database?.configured
     && typeof database.query === 'function'
@@ -130,11 +123,8 @@ const createReportUsageLimitService = ({
 };
 
 module.exports = {
-  DEFAULT_FREE_MONTHLY_REPORT_LIMIT,
-  MAX_MONTHLY_REPORT_LIMIT,
   ReportUsageLimitError,
   ReportUsageUnavailableError,
   createReportUsageLimitService,
-  parseMonthlyReportLimit,
   summarizeReportUsage,
 };

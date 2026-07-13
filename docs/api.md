@@ -337,13 +337,26 @@ Returns account availability and the current user, if signed in:
     "cancelAtPeriodEnd": false
   },
   "reportCount": 7,
+  "reportUsage": {
+    "tierKey": "free",
+    "unlimited": false,
+    "usedReports": 7,
+    "limitReports": 50,
+    "remainingReports": 43,
+    "percentUsed": 14,
+    "periodStart": "2026-07-01T00:00:00.000Z",
+    "periodEnd": "2026-08-01T00:00:00.000Z",
+    "resetAt": "2026-08-01T00:00:00.000Z",
+    "exhausted": false
+  },
   "aiUsage": {
     "tierKey": "free",
     "unlimited": false,
+    "usedRequests": 12,
     "usedTokens": 12500,
-    "limitTokens": 250000,
-    "remainingTokens": 237500,
-    "percentUsed": 5,
+    "limitRequests": 50,
+    "remainingRequests": 38,
+    "percentUsed": 24,
     "periodStart": "2026-07-01T00:00:00.000Z",
     "periodEnd": "2026-08-01T00:00:00.000Z",
     "resetAt": "2026-08-01T00:00:00.000Z",
@@ -356,9 +369,11 @@ Every account resolves to Free unless it has a current `premium`, `premium_month
 subscription with `active` or `trialing` status. When the database is not configured, this endpoint remains
 available and returns `available: false`.
 
-For Premium accounts, `aiUsage.unlimited` is `true`; `limitTokens`, `remainingTokens`, and `percentUsed`
-are `null`, while `usedTokens` continues to report the current month's provider-reported usage. Premium
-report generation and history have no usage quota, and `reportCount` remains the lifetime generated total.
+Free accounts receive the same count-based monthly allowance for successful AI requests and generated reports;
+the two meters apply that allowance separately and reset together at the next UTC month. `usedTokens` remains
+available for cost analytics but does not determine the user limit. For Premium accounts, both usage objects set
+`unlimited` to `true`; their limit, remaining, and percentage fields are `null`, while current-month totals remain
+visible. `reportCount` remains the lifetime generated total.
 
 ### `POST /api/auth/register`
 

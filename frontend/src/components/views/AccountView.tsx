@@ -42,8 +42,6 @@ const formatMemberSince = (value: string) => {
     : `Member since ${parsed.toLocaleDateString([], { month: 'long', year: 'numeric' })}`;
 };
 
-const formatTokens = (value: number) => Math.max(0, Math.round(value)).toLocaleString();
-
 const formatUsageReset = (value: string) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
@@ -62,6 +60,92 @@ const formatPlanPeriod = (value: string) => {
       timeZone: 'UTC',
     });
 };
+
+interface MonthlyUsageMeterProps {
+  icon: React.ReactNode;
+  label: string;
+  singularUnit: string;
+  pluralUnit: string;
+  used: number | null;
+  limit: number | null;
+  remaining: number | null;
+  percentUsed: number | null;
+  resetAt: string | null;
+  unlimited: boolean;
+  note: string;
+}
+
+function MonthlyUsageMeter({
+  icon,
+  label,
+  singularUnit,
+  pluralUnit,
+  used,
+  limit,
+  remaining,
+  percentUsed,
+  resetAt,
+  unlimited,
+  note,
+}: MonthlyUsageMeterProps) {
+  const available = used !== null
+    && resetAt !== null
+    && (unlimited || (limit !== null && remaining !== null && percentUsed !== null));
+  const usedUnit = used === 1 ? singularUnit : pluralUnit;
+
+  return (
+    <section className="account-usage-card" aria-label={label}>
+      <div className="account-usage-heading">
+        <span>{icon} {label}</span>
+        <small>Monthly</small>
+      </div>
+      {available && used !== null && resetAt !== null ? (
+        <>
+          <p className="account-usage-total">
+            <strong>{used.toLocaleString()}</strong>
+            <span>
+              {unlimited
+                ? ` ${usedUnit} used this month`
+                : ` / ${limit?.toLocaleString()} ${pluralUnit}`}
+            </span>
+          </p>
+          {unlimited ? (
+            <>
+              <div className="account-usage-unlimited">
+                <Crown aria-hidden />
+                <span>Unlimited {label.toLowerCase()}</span>
+              </div>
+              <div className="account-usage-meta">
+                <span>No monthly cap</span>
+                <span>Tracking resets {formatUsageReset(resetAt)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className="account-usage-progress"
+                role="progressbar"
+                aria-label={`Monthly ${label.toLowerCase()}`}
+                aria-valuemin={0}
+                aria-valuemax={limit ?? 0}
+                aria-valuenow={Math.min(used, limit ?? 0)}
+              >
+                <span style={{ width: `${percentUsed}%` }} />
+              </div>
+              <div className="account-usage-meta">
+                <span>{remaining?.toLocaleString()} {remaining === 1 ? singularUnit : pluralUnit} remaining</span>
+                <span>Resets {formatUsageReset(resetAt)}</span>
+              </div>
+            </>
+          )}
+          <p className="account-usage-note">{note}</p>
+        </>
+      ) : (
+        <p className="account-usage-unavailable">Usage meter temporarily unavailable.</p>
+      )}
+    </section>
+  );
+}
 
 export function AccountView({
   appShellClassName,
@@ -136,6 +220,9 @@ export function AccountView({
   const errorMessage = formError || account.error;
   const isPremium = account.tier?.key === 'premium';
   const reportUsage = account.reportUsage;
+  const freeMonthlyLimit = !isPremium
+    ? reportUsage?.limitReports ?? account.aiUsage?.limitRequests ?? null
+    : null;
   const planPeriodEnd = account.tier?.currentPeriodEnd
     ? formatPlanPeriod(account.tier.currentPeriodEnd)
     : null;
@@ -195,26 +282,6 @@ export function AccountView({
               <h2>{account.user.displayName}</h2>
               <p className="account-profile-email"><Mail aria-hidden /> {account.user.email}</p>
               <p className="account-member-since">{formatMemberSince(account.user.createdAt)}</p>
-              <section className="account-report-counter" aria-label="Generated report count">
-                <FileText aria-hidden />
-                <div>
-                  <strong>
-                    {reportUsage?.unlimited
-                      ? account.reportCount?.toLocaleString() ?? '—'
-                      : reportUsage
-                        ? `${reportUsage.usedReports.toLocaleString()} / ${reportUsage.limitReports.toLocaleString()}`
-                        : account.reportCount?.toLocaleString() ?? '—'}
-                  </strong>
-                  <span>{reportUsage?.unlimited ? 'Reports generated' : 'Reports this month'}</span>
-                </div>
-                <small>
-                  {reportUsage?.unlimited
-                    ? 'Unlimited reports'
-                    : reportUsage
-                      ? `${reportUsage.remainingReports.toLocaleString()} remaining · resets ${formatUsageReset(reportUsage.resetAt)}`
-                      : 'Monthly allowance'}
-                </small>
-              </section>
               <div className="account-profile-note">
                 <ShieldCheck aria-hidden />
                 <div>
@@ -233,7 +300,9 @@ export function AccountView({
                 <p>
                   {isPremium
                     ? 'All Free features, with unlimited AI tools and report generation.'
-                    : 'Account sync, report history, and monthly allowances for reports and AI-powered planning.'}
+                    : freeMonthlyLimit
+                      ? `The same ${freeMonthlyLimit.toLocaleString()}-use monthly allowance applies separately to generated reports and AI requests.`
+                      : 'The same monthly allowance applies separately to generated reports and AI requests.'}
                 </p>
                 <ul aria-label={`${account.tier?.label || 'Free'} plan features`}>
                   <li>
@@ -248,8 +317,8 @@ export function AccountView({
                     <Check aria-hidden />
                     {isPremium
                       ? 'Unlimited AI usage'
-                      : account.aiUsage?.limitTokens != null
-                        ? `${formatTokens(account.aiUsage.limitTokens)} AI tokens each month`
+                      : account.aiUsage?.limitRequests != null
+                        ? `${account.aiUsage.limitRequests.toLocaleString()} AI requests each month`
                         : 'Standard monthly AI allowance'}
                   </li>
                 </ul>
@@ -259,58 +328,34 @@ export function AccountView({
                   </small>
                 )}
               </section>
-              <div className="account-usage-card">
-                <div className="account-usage-heading">
-                  <span><Sparkles aria-hidden /> AI usage</span>
-                  <small>Monthly</small>
-                </div>
-                {account.aiUsage ? (
-                  <>
-                    <p className="account-usage-total">
-                      <strong>{formatTokens(account.aiUsage.usedTokens)}</strong>
-                      <span>
-                        {account.aiUsage.unlimited
-                          ? ' tokens used this month'
-                          : ` / ${formatTokens(account.aiUsage.limitTokens)} tokens`}
-                      </span>
-                    </p>
-                    {account.aiUsage.unlimited ? (
-                      <>
-                        <div className="account-usage-unlimited">
-                          <Crown aria-hidden />
-                          <span>Unlimited AI usage</span>
-                        </div>
-                        <div className="account-usage-meta">
-                          <span>No monthly token cap</span>
-                          <span>Tracking resets {formatUsageReset(account.aiUsage.resetAt)}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div
-                          className="account-usage-progress"
-                          role="progressbar"
-                          aria-label="Monthly AI token usage"
-                          aria-valuemin={0}
-                          aria-valuemax={account.aiUsage.limitTokens}
-                          aria-valuenow={Math.min(account.aiUsage.usedTokens, account.aiUsage.limitTokens)}
-                        >
-                          <span style={{ width: `${account.aiUsage.percentUsed}%` }} />
-                        </div>
-                        <div className="account-usage-meta">
-                          <span>{formatTokens(account.aiUsage.remainingTokens)} tokens remaining</span>
-                          <span>Resets {formatUsageReset(account.aiUsage.resetAt)}</span>
-                        </div>
-                      </>
-                    )}
-                    <p className="account-usage-note">
-                      Different AI tools use different amounts. This meter follows provider-reported tokens.
-                    </p>
-                  </>
-                ) : (
-                  <p className="account-usage-unavailable">Usage meter temporarily unavailable.</p>
-                )}
-              </div>
+              <section className="account-usage-list" aria-label="Monthly usage limits">
+                <MonthlyUsageMeter
+                  icon={<FileText aria-hidden />}
+                  label="Generated report usage"
+                  singularUnit="report"
+                  pluralUnit="reports"
+                  used={reportUsage?.usedReports ?? null}
+                  limit={reportUsage?.limitReports ?? null}
+                  remaining={reportUsage?.remainingReports ?? null}
+                  percentUsed={reportUsage?.percentUsed ?? null}
+                  resetAt={reportUsage?.resetAt ?? null}
+                  unlimited={reportUsage?.unlimited ?? false}
+                  note="Each successfully generated report counts once, including reports added to your account history."
+                />
+                <MonthlyUsageMeter
+                  icon={<Sparkles aria-hidden />}
+                  label="AI usage"
+                  singularUnit="request"
+                  pluralUnit="requests"
+                  used={account.aiUsage?.usedRequests ?? null}
+                  limit={account.aiUsage?.limitRequests ?? null}
+                  remaining={account.aiUsage?.remainingRequests ?? null}
+                  percentUsed={account.aiUsage?.percentUsed ?? null}
+                  resetAt={account.aiUsage?.resetAt ?? null}
+                  unlimited={account.aiUsage?.unlimited ?? false}
+                  note="Each successful AI brief, chat reply, imagery insight, or AI-assisted analysis counts once."
+                />
+              </section>
               {errorMessage && <p className="account-error" role="alert">{errorMessage}</p>}
               <div className="account-profile-actions">
                 <button type="button" className="account-primary" onClick={openPlannerView}>Open planner</button>

@@ -1,9 +1,12 @@
 const {
-  DEFAULT_FREE_MONTHLY_REPORT_LIMIT,
   ReportUsageUnavailableError,
   createReportUsageLimitService,
-  parseMonthlyReportLimit,
 } = require('../src/auth/report-usage-limit');
+const { createAIUsageLimitService } = require('../src/auth/ai-usage-limit');
+const {
+  DEFAULT_FREE_MONTHLY_USAGE_LIMIT,
+  parseFreeMonthlyUsageLimit,
+} = require('../src/auth/monthly-usage-limit');
 
 const USER_ID = '8c696be4-e175-4b6a-965b-82bdf3758e0c';
 const NOW = () => Date.parse('2026-07-13T08:00:00.000Z');
@@ -14,18 +17,22 @@ const makeDatabase = (query) => ({
   transaction: jest.fn((callback) => callback(query)),
 });
 
-test('parses a bounded monthly Free report allowance', () => {
-  expect(parseMonthlyReportLimit('75')).toBe(75);
-  expect(parseMonthlyReportLimit('0')).toBe(DEFAULT_FREE_MONTHLY_REPORT_LIMIT);
-  expect(parseMonthlyReportLimit('not-a-number')).toBe(DEFAULT_FREE_MONTHLY_REPORT_LIMIT);
-  expect(parseMonthlyReportLimit('10001')).toBe(DEFAULT_FREE_MONTHLY_REPORT_LIMIT);
+test('uses the shared bounded monthly Free allowance', () => {
+  expect(parseFreeMonthlyUsageLimit('75')).toBe(75);
+  expect(parseFreeMonthlyUsageLimit('0')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
+  expect(parseFreeMonthlyUsageLimit('not-a-number')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
+  expect(parseFreeMonthlyUsageLimit('10001')).toBe(DEFAULT_FREE_MONTHLY_USAGE_LIMIT);
+
+  const database = makeDatabase(jest.fn());
+  expect(createAIUsageLimitService({ database, freeMonthlyUsageLimit: 75 }).freeLimitRequests).toBe(75);
+  expect(createReportUsageLimitService({ database, freeMonthlyUsageLimit: 75 }).freeLimitReports).toBe(75);
 });
 
 test('summarizes Free and Premium report usage for the current UTC month', async () => {
   const query = jest.fn().mockResolvedValue({ rows: [{ used_reports: '17' }] });
   const service = createReportUsageLimitService({
     database: makeDatabase(query),
-    freeMonthlyReportLimit: 50,
+    freeMonthlyUsageLimit: 50,
     now: NOW,
   });
 
@@ -66,7 +73,7 @@ test('atomically locks, checks, and consumes one report slot', async () => {
   const database = makeDatabase(query);
   const service = createReportUsageLimitService({
     database,
-    freeMonthlyReportLimit: 50,
+    freeMonthlyUsageLimit: 50,
     now: NOW,
   });
   const createReport = jest.fn((transactionQuery) => transactionQuery('INSERT REPORT'));
@@ -94,7 +101,7 @@ test('blocks Free report creation after the monthly allowance is exhausted', asy
     .mockResolvedValueOnce({ rows: [{ used_reports: '50' }] });
   const service = createReportUsageLimitService({
     database: makeDatabase(query),
-    freeMonthlyReportLimit: 50,
+    freeMonthlyUsageLimit: 50,
     now: NOW,
   });
   const createReport = jest.fn();

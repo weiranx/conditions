@@ -46,10 +46,11 @@ const USER_ROW = {
 const AI_USAGE = {
   tierKey: 'free',
   unlimited: false,
+  usedRequests: 12,
   usedTokens: 12500,
-  limitTokens: 250000,
-  remainingTokens: 237500,
-  percentUsed: 5,
+  limitRequests: 50,
+  remainingRequests: 38,
+  percentUsed: 24,
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',
   resetAt: '2026-08-01T00:00:00.000Z',
@@ -755,8 +756,8 @@ describe('AI account access', () => {
       ...AI_USAGE,
       tierKey: 'premium',
       unlimited: true,
-      limitTokens: null,
-      remainingTokens: null,
+      limitRequests: null,
+      remainingRequests: null,
       percentUsed: null,
       exhausted: false,
     });
@@ -781,8 +782,8 @@ describe('AI account access', () => {
   });
 
   test('blocks AI work when the account has exhausted its monthly allowance', async () => {
-    const usage = { ...AI_USAGE, usedTokens: 250000, remainingTokens: 0, percentUsed: 100, exhausted: true };
-    const limitError = Object.assign(new Error('Monthly AI usage limit reached.'), {
+    const usage = { ...AI_USAGE, usedRequests: 50, remainingRequests: 0, percentUsed: 100, exhausted: true };
+    const limitError = Object.assign(new Error('Monthly AI request limit reached.'), {
       code: 'AI_USAGE_LIMIT_REACHED',
       statusCode: 429,
       usage,
@@ -796,7 +797,7 @@ describe('AI account access', () => {
 
     expect(response.status).toBe(429);
     expect(response.body).toEqual({
-      error: 'Monthly AI usage limit reached.',
+      error: 'Monthly AI request limit reached.',
       code: 'AI_USAGE_LIMIT_REACHED',
       aiUsage: usage,
     });

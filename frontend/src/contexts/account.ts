@@ -21,6 +21,7 @@ export interface AccountTier {
 
 interface AccountAIUsageBase {
   tierKey: AccountTierKey;
+  usedRequests: number;
   usedTokens: number;
   periodStart: string;
   periodEnd: string;
@@ -31,15 +32,15 @@ interface AccountAIUsageBase {
 export type AccountAIUsage = AccountAIUsageBase & (
   | {
     unlimited: true;
-    limitTokens: null;
-    remainingTokens: null;
+    limitRequests: null;
+    remainingRequests: null;
     percentUsed: null;
     exhausted: false;
   }
   | {
     unlimited: false;
-    limitTokens: number;
-    remainingTokens: number;
+    limitRequests: number;
+    remainingRequests: number;
     percentUsed: number;
   }
 );
