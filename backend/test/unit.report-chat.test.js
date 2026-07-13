@@ -4,6 +4,7 @@ const {
   MAX_MESSAGE_LENGTH,
   MAX_MESSAGES,
   MAX_REPORT_LENGTH,
+  REPORT_CHAT_SYSTEM_PROMPT,
   createContextualFollowUps,
   normalizeReport,
   registerReportChatRoute,
@@ -12,6 +13,14 @@ const {
 } = require('../src/routes/report-chat');
 
 describe('report chat request handling', () => {
+  test('allows useful outside-report route guidance without weakening live-condition guardrails', () => {
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/supplement the report with well-established general backcountry knowledge/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Do not refuse or stop merely because the report lacks a route line/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Lead with the answer, not a disclaimer/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Never invent current conditions/i);
+    expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/never fabricate a name/i);
+  });
+
   test('normalizes object and JSON-string reports', () => {
     expect(normalizeReport({ safety: { score: 72 } })).toBe('{"safety":{"score":72}}');
     expect(normalizeReport('{"decision":{"level":"CAUTION"}}')).toBe('{"decision":{"level":"CAUTION"}}');
