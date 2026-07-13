@@ -18,6 +18,7 @@ import {
   Gauge,
   History,
   KeyRound,
+  LayoutDashboard,
   LoaderCircle,
   Layers,
   LogOut,
@@ -296,8 +297,8 @@ export function AdminView({ navigateToView, openPlannerView, openTripToolView }:
         <header className="logs-page-head">
           <div>
             <div className="logs-kicker"><ShieldCheck size={14} aria-hidden /> Administration</div>
-            <h1>Admin console</h1>
-            <p>Monitor system health, investigate report issues, and understand AI and request usage from one protected workspace.</p>
+            <h1>Admin dashboard</h1>
+            <p>Run the platform, support users, and spot issues from one protected workspace.</p>
           </div>
         </header>
         <AdminDashboard />
@@ -311,6 +312,20 @@ type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow'
 type AnalyticsRange = '6h' | '24h' | '7d';
 type AuditFilter = 'all' | 'accounts' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
 type UserStatusFilter = 'all' | 'active' | 'suspended';
+type AdminSection = 'overview' | 'users' | 'operations' | 'analytics' | 'activity';
+
+const ADMIN_SECTIONS = [
+  { value: 'overview', label: 'Overview', description: 'Platform status', icon: LayoutDashboard },
+  { value: 'users', label: 'Users', description: 'Accounts and access', icon: Users },
+  { value: 'operations', label: 'Operations', description: 'Services and controls', icon: Server },
+  { value: 'analytics', label: 'Analytics', description: 'Reports and AI usage', icon: BarChart3 },
+  { value: 'activity', label: 'Activity', description: 'Admin audit trail', icon: History },
+] as const satisfies ReadonlyArray<{
+  value: AdminSection;
+  label: string;
+  description: string;
+  icon: typeof LayoutDashboard;
+}>;
 
 const ANALYTICS_RANGES: Array<{
   value: AnalyticsRange;
@@ -686,10 +701,12 @@ function AdminDashboard() {
   const [auditQuery, setAuditQuery] = useState('');
   const [userQuery, setUserQuery] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all');
+  const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [visibleLogCount, setVisibleLogCount] = useState(LOG_PAGE_SIZE);
   const hasLoadedRef = useRef(false);
+  const dashboardContentRef = useRef<HTMLDivElement>(null);
   const requestActivityRef = useRef<HTMLElement>(null);
   const aiUsageRef = useRef<HTMLElement>(null);
 
@@ -1199,6 +1216,14 @@ function AdminDashboard() {
     () => hourlyDistribution.reduce((busiest, current) => current.requests > busiest.requests ? current : busiest, hourlyDistribution[0]),
     [hourlyDistribution],
   );
+  const dashboardAttentionCount = metrics.issues + slowReports + aiMetrics.failures + diagnosticSummary.failed + userSummary.suspended;
+  const sectionCounts: Record<AdminSection, number> = {
+    overview: dashboardAttentionCount,
+    users: usersTotal,
+    operations: diagnosticSummary.failed,
+    analytics: rangeLogs.length,
+    activity: auditEntries.length,
+  };
 
   const filteredAndSorted = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -1271,7 +1296,18 @@ function AdminDashboard() {
 
   const showRequestFilter = (filter: StatusFilter) => {
     setStatusFilter(filter);
-    window.requestAnimationFrame(() => requestActivityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    setActiveSection('analytics');
+    window.setTimeout(() => requestActivityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
+
+  const showAIUsage = () => {
+    setActiveSection('analytics');
+    window.setTimeout(() => aiUsageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
+
+  const selectAdminSection = (section: AdminSection) => {
+    setActiveSection(section);
+    window.setTimeout(() => dashboardContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
   if (loading) {
@@ -1288,28 +1324,53 @@ function AdminDashboard() {
         </div>
       )}
 
+      <nav className="admin-dashboard-nav" aria-label="Admin dashboard sections">
+        {ADMIN_SECTIONS.map((section) => {
+          const Icon = section.icon;
+          const count = sectionCounts[section.value];
+          const selected = activeSection === section.value;
+          return (
+            <button
+              type="button"
+              key={section.value}
+              className={selected ? 'is-active' : ''}
+              onClick={() => selectAdminSection(section.value)}
+              aria-current={selected ? 'page' : undefined}
+            >
+              <span className="admin-dashboard-nav-icon"><Icon size={17} aria-hidden /></span>
+              <span><strong>{section.label}</strong><small>{section.description}</small></span>
+              <b className={section.value === 'overview' && count === 0 ? 'is-clear' : ''}>
+                {section.value === 'overview' && count === 0 ? <CheckCircle2 size={14} aria-label="All clear" /> : count.toLocaleString()}
+              </b>
+            </button>
+          );
+        })}
+      </nav>
+
       <section className="logs-dashboard-toolbar" aria-label="Admin dashboard controls">
         <div>
-          <h2>Overview</h2>
-          <p>{rangeLogs.length.toLocaleString()} reports in the selected period</p>
+          <h2>{ADMIN_SECTIONS.find((section) => section.value === activeSection)?.label}</h2>
+          <p>{ADMIN_SECTIONS.find((section) => section.value === activeSection)?.description}</p>
         </div>
         <div className="logs-toolbar-actions">
           <span className="logs-refresh-status" aria-live="polite">
             {refreshing ? 'Refreshing…' : lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
           </span>
-          <div className="logs-range-control" aria-label="Analytics date range">
-            {ANALYTICS_RANGES.map((option) => (
-              <button
-                type="button"
-                key={option.value}
-                className={analyticsRange === option.value ? 'is-active' : ''}
-                onClick={() => setAnalyticsRange(option.value)}
-                aria-pressed={analyticsRange === option.value}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          {(activeSection === 'overview' || activeSection === 'analytics') && (
+            <div className="logs-range-control" aria-label="Analytics date range">
+              {ANALYTICS_RANGES.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  className={analyticsRange === option.value ? 'is-active' : ''}
+                  onClick={() => setAnalyticsRange(option.value)}
+                  aria-pressed={analyticsRange === option.value}
+                >
+                  {option.label.replace('Last ', '')}
+                </button>
+              ))}
+            </div>
+          )}
           <button type="button" className="logs-btn logs-btn-quiet" onClick={downloadOperationsSnapshot} title="Export a JSON snapshot of current admin data">
             <FileJson size={15} aria-hidden /> Export snapshot
           </button>
@@ -1329,7 +1390,41 @@ function AdminDashboard() {
         </div>
       </section>
 
-      <section className="admin-operations-grid" aria-label="System operations">
+      <div ref={dashboardContentRef} className="admin-dashboard-content">
+      {activeSection === 'overview' && (
+        <header className="admin-workspace-heading">
+          <div>
+            <span>Today at a glance</span>
+            <h2>{dashboardAttentionCount === 0 ? 'Everything looks ready' : `${dashboardAttentionCount} ${dashboardAttentionCount === 1 ? 'signal needs' : 'signals need'} attention`}</h2>
+            <p>Live status and usage for {selectedRange.label.toLowerCase()}.</p>
+          </div>
+          <span className={dashboardAttentionCount === 0 ? 'is-clear' : 'is-attention'}>
+            {dashboardAttentionCount === 0 ? <CheckCircle2 size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
+            {dashboardAttentionCount === 0 ? 'All systems normal' : 'Review action center'}
+          </span>
+        </header>
+      )}
+
+      <section className="admin-dashboard-kpis" aria-label="Dashboard summary" hidden={activeSection !== 'overview'}>
+        <button type="button" onClick={() => selectAdminSection('operations')}>
+          <span className={health ? 'admin-kpi-icon is-green' : 'admin-kpi-icon is-red'}><Server size={18} aria-hidden /></span>
+          <span><small>Platform</small><strong>{health ? 'Online' : 'Unavailable'}</strong><em>{backendLatencyMs == null ? 'Health status' : `${formatDuration(backendLatencyMs)} response`}</em></span>
+        </button>
+        <button type="button" onClick={() => selectAdminSection('analytics')}>
+          <span className={metrics.issues === 0 ? 'admin-kpi-icon is-green' : 'admin-kpi-icon is-amber'}><Activity size={18} aria-hidden /></span>
+          <span><small>Report health</small><strong>{metrics.healthyRate == null ? '—' : `${metrics.healthyRate}%`}</strong><em>{metrics.total.toLocaleString()} reports analyzed</em></span>
+        </button>
+        <button type="button" onClick={() => selectAdminSection('users')}>
+          <span className="admin-kpi-icon"><Users size={18} aria-hidden /></span>
+          <span><small>Active accounts</small><strong>{userSummary.active.toLocaleString()}</strong><em>{userSummary.activeSessions.toLocaleString()} live sessions</em></span>
+        </button>
+        <button type="button" onClick={() => selectAdminSection('analytics')}>
+          <span className={aiMetrics.failures === 0 ? 'admin-kpi-icon' : 'admin-kpi-icon is-amber'}><Sparkles size={18} aria-hidden /></span>
+          <span><small>AI usage</small><strong>{formatEstimatedCost(aiMetrics.estimatedCostUsd)}</strong><em>{aiMetrics.calls.toLocaleString()} model calls</em></span>
+        </button>
+      </section>
+
+      <section className="admin-operations-grid" aria-label="System operations" hidden={activeSection !== 'overview'}>
         <article className="logs-chart-card admin-system-card">
           <div className="logs-chart-head">
             <div>
@@ -1396,21 +1491,33 @@ function AdminDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => aiUsageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              onClick={showAIUsage}
               disabled={aiMetrics.failures === 0}
             >
               <span className="is-amber"><Bot size={15} aria-hidden /></span>
               <span><strong>AI failures</strong><small>Unsuccessful model calls</small></span>
               <b>{aiMetrics.failures}</b>
             </button>
+            <button type="button" onClick={() => selectAdminSection('users')} disabled={userSummary.suspended === 0}>
+              <span className="is-amber"><Ban size={15} aria-hidden /></span>
+              <span><strong>Suspended accounts</strong><small>Users without platform access</small></span>
+              <b>{userSummary.suspended}</b>
+            </button>
           </div>
-          {metrics.issues === 0 && slowReports === 0 && aiMetrics.failures === 0 && (
+          {metrics.issues === 0 && slowReports === 0 && aiMetrics.failures === 0 && userSummary.suspended === 0 && (
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
         </article>
       </section>
 
-      <section className="logs-panel admin-users-panel" aria-labelledby="admin-users-title">
+      {activeSection === 'users' && (
+        <header className="admin-workspace-heading">
+          <div><span>Accounts</span><h2>Manage who can use the platform</h2><p>Find users, review access, and resolve account issues.</p></div>
+          <span className="is-neutral"><Users size={16} aria-hidden /> {usersTotal.toLocaleString()} total</span>
+        </header>
+      )}
+
+      <section className="logs-panel admin-users-panel" aria-labelledby="admin-users-title" hidden={activeSection !== 'users'}>
         <div className="logs-panel-head">
           <div className="admin-users-heading">
             <span className="logs-section-icon"><Users size={17} aria-hidden /></span>
@@ -1562,7 +1669,17 @@ function AdminDashboard() {
         </footer>
       </section>
 
-      <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title">
+      {activeSection === 'operations' && (
+        <header className="admin-workspace-heading">
+          <div><span>Operations</span><h2>Services and product controls</h2><p>Diagnose providers, configure AI, and manage feature availability.</p></div>
+          <span className={diagnosticSummary.failed === 0 ? 'is-clear' : 'is-attention'}>
+            {diagnosticSummary.failed === 0 ? <CheckCircle2 size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
+            {diagnosticSummary.failed === 0 ? 'Core services ready' : `${diagnosticSummary.failed} failed`}
+          </span>
+        </header>
+      )}
+
+      <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title" hidden={activeSection !== 'operations'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-diagnostics-title">Service diagnostics</h2>
@@ -1637,7 +1754,14 @@ function AdminDashboard() {
         )}
       </section>
 
-      <section className="logs-panel admin-audit-panel" aria-labelledby="admin-audit-title">
+      {activeSection === 'activity' && (
+        <header className="admin-workspace-heading">
+          <div><span>Audit trail</span><h2>Recent administrative activity</h2><p>Review account, configuration, maintenance, and diagnostic changes.</p></div>
+          <span className="is-neutral"><History size={16} aria-hidden /> {auditEntries.length.toLocaleString()} events</span>
+        </header>
+      )}
+
+      <section className="logs-panel admin-audit-panel" aria-labelledby="admin-audit-title" hidden={activeSection !== 'activity'}>
         <div className="logs-panel-head">
           <div className="admin-audit-heading">
             <span className="logs-section-icon"><History size={17} aria-hidden /></span>
@@ -1710,7 +1834,7 @@ function AdminDashboard() {
         </footer>
       </section>
 
-      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title">
+      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title" hidden={activeSection !== 'operations'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-ai-controls-title">AI controls</h2>
@@ -1886,7 +2010,7 @@ function AdminDashboard() {
         </div>
       </section>
 
-      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-feature-flags-title">
+      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-feature-flags-title" hidden={activeSection !== 'operations'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-feature-flags-title">Product feature flags</h2>
@@ -1926,7 +2050,17 @@ function AdminDashboard() {
         </div>
       </section>
 
-      <section className="logs-metrics" aria-label="Report analytics summary">
+      {activeSection === 'analytics' && (
+        <header className="admin-workspace-heading">
+          <div><span>Analytics</span><h2>Reports and AI usage</h2><p>Understand demand, reliability, speed, and model cost for {selectedRange.label.toLowerCase()}.</p></div>
+          <span className={metrics.issues === 0 ? 'is-clear' : 'is-attention'}>
+            {metrics.issues === 0 ? <CheckCircle2 size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
+            {metrics.issues === 0 ? 'Reports healthy' : `${metrics.issues} report issues`}
+          </span>
+        </header>
+      )}
+
+      <section className="logs-metrics" aria-label="Report analytics summary" hidden={activeSection !== 'analytics'}>
         <article className="logs-metric-card">
           <span className="logs-metric-icon"><Activity size={18} aria-hidden /></span>
           <div>
@@ -1952,7 +2086,7 @@ function AdminDashboard() {
         </article>
       </section>
 
-      <section className="logs-analytics-grid" aria-label="Report activity charts">
+      <section className="logs-analytics-grid" aria-label="Report activity charts" hidden={activeSection !== 'analytics'}>
         <article className="logs-chart-card logs-chart-card-wide">
           <div className="logs-chart-head">
             <div>
@@ -1962,7 +2096,7 @@ function AdminDashboard() {
             <Activity size={18} aria-hidden />
           </div>
           <div className="logs-chart-wrap">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 500, height: 238 }}>
+            {activeSection === 'analytics' && <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 500, height: 238 }}>
               <BarChart data={trendData} margin={{ top: 8, right: 6, bottom: 0, left: -18 }}>
                 <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={28} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
@@ -1973,7 +2107,7 @@ function AdminDashboard() {
                 <Bar dataKey="partial" name="Partial" stackId="responses" fill="var(--ui-risk-3)" />
                 <Bar dataKey="errors" name="Failed" stackId="responses" fill="var(--ui-risk-4)" radius={[3, 3, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </article>
 
@@ -1986,7 +2120,7 @@ function AdminDashboard() {
             <Clock3 size={18} aria-hidden />
           </div>
           <div className="logs-chart-wrap">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 360, height: 238 }}>
+            {activeSection === 'analytics' && <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 360, height: 238 }}>
               <LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -14 }}>
                 <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={28} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
@@ -1996,7 +2130,7 @@ function AdminDashboard() {
                 <Line type="monotone" dataKey="p95Seconds" name="P95" stroke="var(--ui-risk-3)" strokeWidth={2} dot={false} connectNulls />
                 <Line type="monotone" dataKey="medianSeconds" name="Median" stroke="var(--ui-brand-strong)" strokeWidth={2} dot={false} connectNulls />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </article>
 
@@ -2035,7 +2169,7 @@ function AdminDashboard() {
             <BarChart3 size={18} aria-hidden />
           </div>
           <div className="logs-chart-wrap logs-chart-wrap-compact">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 360, height: 205 }}>
+            {activeSection === 'analytics' && <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 360, height: 205 }}>
               <BarChart data={hourlyDistribution} margin={{ top: 8, right: 6, bottom: 0, left: -18 }}>
                 <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
                 <XAxis dataKey="label" interval={2} axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
@@ -2043,12 +2177,12 @@ function AdminDashboard() {
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} cursor={{ fill: 'var(--ui-surface-subtle)' }} />
                 <Bar dataKey="requests" name="Reports" fill="var(--ui-brand-strong)" radius={[3, 3, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </article>
       </section>
 
-      <section ref={aiUsageRef} className="logs-ai-section" aria-labelledby="logs-ai-title">
+      <section ref={aiUsageRef} className="logs-ai-section" aria-labelledby="logs-ai-title" hidden={activeSection !== 'analytics'}>
         <div className="logs-section-head">
           <div>
             <span className="logs-section-icon"><Sparkles size={17} aria-hidden /></span>
@@ -2102,7 +2236,7 @@ function AdminDashboard() {
             </div>
             {rangeAIUsage.length ? (
               <div className="logs-chart-wrap logs-chart-wrap-compact">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 500, height: 205 }}>
+                {activeSection === 'analytics' && <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 500, height: 205 }}>
                   <BarChart data={aiTrendData} margin={{ top: 8, right: 6, bottom: 0, left: -8 }}>
                     <CartesianGrid vertical={false} stroke="var(--ui-line)" strokeDasharray="3 3" />
                     <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={28} tick={{ fill: 'var(--ui-text-4)', fontSize: 10 }} />
@@ -2112,7 +2246,7 @@ function AdminDashboard() {
                     <Bar dataKey="inputTokens" name="Input" stackId="tokens" fill="var(--ui-brand-strong)" />
                     <Bar dataKey="outputTokens" name="Output" stackId="tokens" fill="var(--ui-risk-3)" radius={[3, 3, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer>}
               </div>
             ) : (
               <div className="logs-chart-empty">No AI calls in this period.</div>
@@ -2177,7 +2311,7 @@ function AdminDashboard() {
         </div>
       </section>
 
-      <section ref={requestActivityRef} className="logs-panel">
+      <section ref={requestActivityRef} className="logs-panel" hidden={activeSection !== 'analytics'}>
         <div className="logs-panel-head">
           <div>
             <h2>Request activity</h2>
@@ -2274,6 +2408,7 @@ function AdminDashboard() {
           <span>{autoRefresh ? 'Auto-refreshes every 30 seconds' : 'Auto-refresh paused'}</span>
         </footer>
       </section>
+      </div>
     </div>
   );
 }
