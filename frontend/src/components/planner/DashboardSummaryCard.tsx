@@ -6,6 +6,8 @@ import {
   Sparkles,
   LoaderCircle,
   Sun,
+  ShieldCheck,
+  Database,
 } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences, TravelWindowRow, TravelWindowInsights } from '../../app/types';
 import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
@@ -80,6 +82,13 @@ export function DashboardSummaryCard({
         : 'poor';
   const dashOffset = GAUGE_C * (1 - Math.max(0, Math.min(100, score)) / 100);
   const tierLabel = safetyData.safety.tier ? `${safetyData.safety.tier} risk` : `${decision.level} risk`;
+  const confidenceLabel = confidence === null
+    ? null
+    : confidence >= 80
+      ? 'High confidence'
+      : confidence >= 60
+        ? 'Moderate confidence'
+        : 'Limited confidence';
   const aiBriefSections = formatAiBriefSections(aiBriefNarrative);
   const maxGustMph = preferences.maxWindGustMph || 35;
 
@@ -99,73 +108,43 @@ export function DashboardSummaryCard({
     <div className="ssr-dash">
       <section className={`ssr-dash-risk ${lvClass}`}>
         <div className="ssr-dash-top">
-          <div className="ssr-dash-gauge">
-            <svg width="128" height="128" viewBox="0 0 128 128">
-              <circle cx="64" cy="64" r={GAUGE_R} fill="none" stroke="var(--d-surface-3)" strokeWidth="11" />
-              <circle
-                cx="64"
-                cy="64"
-                r={GAUGE_R}
-                fill="none"
-                stroke={scoreColor}
-                strokeWidth="11"
-                strokeLinecap="round"
-                strokeDasharray={GAUGE_C.toFixed(1)}
-                strokeDashoffset={dashOffset.toFixed(1)}
-              />
-            </svg>
-            <div className="ssr-dash-gauge-center">
-              <span className="ssr-dash-gauge-num">{score}</span>
-              <span className="ssr-dash-gauge-den">/ 100</span>
+          <div className="ssr-dash-score-block">
+            <span className="ssr-dash-score-label"><ShieldCheck size={14} aria-hidden /> Safety score</span>
+            <div
+              className="ssr-dash-gauge"
+              role="meter"
+              aria-label={`Safety score ${score} out of 100, ${tierLabel}. Higher scores indicate lower modeled risk.`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={score}
+            >
+              <svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true">
+                <circle cx="64" cy="64" r={GAUGE_R} fill="none" stroke="var(--d-surface-3)" strokeWidth="11" />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r={GAUGE_R}
+                  fill="none"
+                  stroke={scoreColor}
+                  strokeWidth="11"
+                  strokeLinecap="round"
+                  strokeDasharray={GAUGE_C.toFixed(1)}
+                  strokeDashoffset={dashOffset.toFixed(1)}
+                />
+              </svg>
+              <div className="ssr-dash-gauge-center">
+                <span className="ssr-dash-gauge-num">{score}</span>
+                <span className="ssr-dash-gauge-den">out of 100</span>
+              </div>
             </div>
+            <span className="ssr-dash-score-direction">Higher is lower risk</span>
           </div>
 
           <div className="ssr-dash-mid">
             <div className="ssr-dash-pill-row">
               <span className="ssr-dash-pill">{tierLabel}</span>
-              {pleasantnessScore !== null && (
-                <span
-                  className={`ssr-dash-pleasantness ${pleasantnessTone}`}
-                  aria-label={`Pleasantness ${pleasantnessScore} out of 100, ${pleasantness?.label || 'rated'}. ${pleasantness?.summary || ''}`}
-                >
-                  <Sun size={14} aria-hidden />
-                  <span>Pleasantness</span>
-                  <b>{pleasantnessScore}</b>
-                  <small>/100 · {pleasantness?.label}</small>
-                </span>
-              )}
-              {confidence !== null && (
-                <span className="ssr-dash-conf">
-                  Confidence <b>{confidence}%</b>
-                  <span className="ssr-dash-conf-bar"><i style={{ width: `${confidence}%` }} /></span>
-                </span>
-              )}
+              <span className="ssr-dash-model-note">Modeled planning signal</span>
             </div>
-            {pleasantnessScore !== null && pleasantness?.summary && (
-              <div className="ssr-dash-pleasantness-explanation">
-                <p><b>Comfort outlook.</b> {pleasantness.summary}</p>
-                {Array.isArray(pleasantness.factors) && pleasantness.factors.length > 0 && (
-                  <details>
-                    <summary>How this score is calculated</summary>
-                    <ul>
-                      {pleasantness.factors.map((factor) => (
-                        <li key={factor.factor}>
-                          <b>{factor.factor}: {Math.round(factor.score)}/100.</b> {factor.message}
-                        </li>
-                      ))}
-                    </ul>
-                    {pleasantness.disclaimer && <small>{pleasantness.disclaimer}</small>}
-                  </details>
-                )}
-              </div>
-            )}
-            {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0 && (
-              <ul className="ssr-dash-conf-reasons">
-                {safetyData.safety.confidenceReasons.map((reason, idx) => (
-                  <li key={idx}>{reason}</li>
-                ))}
-              </ul>
-            )}
             <h2 className="ssr-dash-head">{decision.headline}</h2>
             <div className="ssr-dash-where">
               <b>{objectiveName || 'Objective'}</b>
@@ -180,6 +159,64 @@ export function DashboardSummaryCard({
             </div>
           </div>
         </div>
+
+        {(confidence !== null || pleasantnessScore !== null) && (
+          <div className={`ssr-dash-context-grid ${confidence === null || pleasantnessScore === null ? 'single' : ''}`}>
+            {confidence !== null && (
+              <div className="ssr-dash-context-card confidence">
+                <div className="ssr-dash-context-icon"><Database size={17} aria-hidden /></div>
+                <div className="ssr-dash-context-body">
+                  <div className="ssr-dash-context-heading">
+                    <div>
+                      <span>Evidence confidence</span>
+                      <strong>{confidenceLabel}</strong>
+                    </div>
+                    <b className="ssr-dash-context-score">{confidence}<small>%</small></b>
+                  </div>
+                  <span className="ssr-dash-context-bar" aria-hidden="true"><i style={{ width: `${confidence}%` }} /></span>
+                  {Array.isArray(safetyData.safety.confidenceReasons) && safetyData.safety.confidenceReasons.length > 0 ? (
+                    <ul className="ssr-dash-conf-reasons">
+                      {safetyData.safety.confidenceReasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>How completely the expected source data supports this score.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {pleasantnessScore !== null && (
+              <div className={`ssr-dash-context-card pleasantness ${pleasantnessTone}`}>
+                <div className="ssr-dash-context-icon"><Sun size={17} aria-hidden /></div>
+                <div className="ssr-dash-context-body">
+                  <div className="ssr-dash-context-heading">
+                    <div>
+                      <span>Comfort outlook</span>
+                      <strong>{pleasantness?.label || 'Rated'}</strong>
+                    </div>
+                    <b className="ssr-dash-context-score">{pleasantnessScore}<small>/100</small></b>
+                  </div>
+                  {pleasantness?.summary && <p>{pleasantness.summary}</p>}
+                  {Array.isArray(pleasantness?.factors) && pleasantness.factors.length > 0 && (
+                    <details>
+                      <summary>See comfort factors</summary>
+                      <ul>
+                        {pleasantness.factors.map((factor) => (
+                          <li key={factor.factor}>
+                            <b>{factor.factor}: {Math.round(factor.score)}/100.</b> {factor.message}
+                          </li>
+                        ))}
+                      </ul>
+                      {pleasantness.disclaimer && <small>{pleasantness.disclaimer}</small>}
+                    </details>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="ssr-dash-cond-strip">
           <div className="ssr-dash-cond">
