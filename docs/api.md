@@ -328,11 +328,31 @@ Returns account availability and the current user, if signed in:
       "defaultStartTime": "06:30",
       "themeMode": "dark"
     }
+  },
+  "accountTier": {
+    "key": "free",
+    "label": "Free",
+    "status": "active",
+    "currentPeriodEnd": null,
+    "cancelAtPeriodEnd": false
+  },
+  "aiUsage": {
+    "tierKey": "free",
+    "usedTokens": 12500,
+    "limitTokens": 250000,
+    "remainingTokens": 237500,
+    "percentUsed": 5,
+    "periodStart": "2026-07-01T00:00:00.000Z",
+    "periodEnd": "2026-08-01T00:00:00.000Z",
+    "resetAt": "2026-08-01T00:00:00.000Z",
+    "exhausted": false
   }
 }
 ```
 
-When the database is not configured, this endpoint remains available and returns `available: false`.
+Every account resolves to Free unless it has a current `premium`, `premium_monthly`, or `premium_annual`
+subscription with `active` or `trialing` status. When the database is not configured, this endpoint remains
+available and returns `available: false`.
 
 ### `POST /api/auth/register`
 

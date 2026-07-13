@@ -12,6 +12,7 @@ import {
   AccountContext,
   type AccountAIUsage,
   type AccountContextValue,
+  type AccountTier,
   type AccountUser,
   type GoogleAuthConfig,
 } from './account';
@@ -20,12 +21,14 @@ interface AccountResponse {
   available: boolean;
   authenticated: boolean;
   user: AccountUser | null;
+  accountTier: AccountTier | null;
   aiUsage: AccountAIUsage | null;
 }
 
 interface AccountState {
   available: boolean | null;
   user: AccountUser | null;
+  tier: AccountTier | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
@@ -34,6 +37,14 @@ interface AccountState {
   preferenceError: string | null;
   google: GoogleAuthConfig;
 }
+
+const LEGACY_FREE_TIER: AccountTier = {
+  key: 'free',
+  label: 'Free',
+  status: 'active',
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+};
 
 function parseGoogleAuthConfig(payload: unknown): Omit<GoogleAuthConfig, 'loading'> | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
@@ -53,10 +64,12 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     numberFields.some((field) => typeof record[field] !== 'number' || !Number.isFinite(record[field]))
     || dateFields.some((field) => typeof record[field] !== 'string')
     || typeof record.exhausted !== 'boolean'
+    || (record.tierKey !== undefined && record.tierKey !== 'free' && record.tierKey !== 'premium')
   ) {
     return null;
   }
   return {
+    tierKey: record.tierKey === 'premium' ? 'premium' : 'free',
     usedTokens: record.usedTokens as number,
     limitTokens: record.limitTokens as number,
     remainingTokens: record.remainingTokens as number,
@@ -65,6 +78,27 @@ function parseAIUsage(value: unknown): AccountAIUsage | null {
     periodEnd: record.periodEnd as string,
     resetAt: record.resetAt as string,
     exhausted: record.exhausted,
+  };
+}
+
+function parseAccountTier(value: unknown): AccountTier | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    (record.key !== 'free' && record.key !== 'premium')
+    || record.label !== (record.key === 'premium' ? 'Premium' : 'Free')
+    || (record.status !== 'active' && record.status !== 'trialing')
+    || (record.currentPeriodEnd !== null && typeof record.currentPeriodEnd !== 'string')
+    || typeof record.cancelAtPeriodEnd !== 'boolean'
+  ) {
+    return null;
+  }
+  return {
+    key: record.key,
+    label: record.key === 'premium' ? 'Premium' : 'Free',
+    status: record.status,
+    currentPeriodEnd: record.currentPeriodEnd,
+    cancelAtPeriodEnd: record.cancelAtPeriodEnd,
   };
 }
 
@@ -97,10 +131,13 @@ function parseAccountResponse(payload: unknown): AccountResponse | null {
   if (typeof record.available !== 'boolean' || typeof record.authenticated !== 'boolean') return null;
   const user = parseAccountUser(record.user);
   if (record.authenticated && !user) return null;
+  const accountTier = parseAccountTier(record.accountTier);
+  if (record.authenticated && !accountTier && record.accountTier !== undefined) return null;
   return {
     available: record.available,
     authenticated: record.authenticated,
     user,
+    accountTier: record.authenticated ? accountTier || LEGACY_FREE_TIER : null,
     aiUsage: parseAIUsage(record.aiUsage),
   };
 }
@@ -109,6 +146,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AccountState>({
     available: null,
     user: null,
+    tier: null,
     aiUsage: null,
     loading: true,
     busy: false,
@@ -154,6 +192,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       ...current,
       available: account.available,
       user: account.authenticated ? account.user : null,
+      tier: account.authenticated ? account.accountTier : null,
       aiUsage: account.authenticated ? account.aiUsage : null,
       loading: false,
       busy: false,
@@ -258,7 +297,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           });
           if (!response.ok) {
             if (response.status === 401) {
-              setState((current) => ({ ...current, user: null, aiUsage: null }));
+              setState((current) => ({ ...current, user: null, tier: null, aiUsage: null }));
             }
             throw new Error(readApiErrorMessage(payload, 'Could not save account preferences.'));
           }
@@ -268,6 +307,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             ...current,
             available: account.available,
             user: account.user,
+            tier: account.accountTier,
             aiUsage: account.aiUsage,
             preferenceSyncState: 'saved',
             preferenceError: null,

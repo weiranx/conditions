@@ -8,7 +8,7 @@
     "start": "node index.js",
     "db:migrate": "node scripts/migrate.js",
     "test": "jest --runInBand",
-    "test:unit": "jest --runInBand test/unit.helpers.test.js test/unit.pleasantness-score.test.js test/unit.route-analysis-gpx.test.js test/unit.database.test.js test/unit.app-data-store.test.js test/unit.health-route.test.js test/unit.account.test.js",
+    "test:unit": "jest --runInBand test/unit.helpers.test.js test/unit.pleasantness-score.test.js test/unit.route-analysis-gpx.test.js test/unit.database.test.js test/unit.app-data-store.test.js test/unit.health-route.test.js test/unit.account.test.js test/unit.account-tier.test.js test/unit.ai-usage-limit.test.js",
     "test:integration": "jest --runInBand test/integration.api.test.js"
   },
   "keywords": [],

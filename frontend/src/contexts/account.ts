@@ -9,7 +9,18 @@ export interface AccountUser {
   preferences: Partial<UserPreferences>;
 }
 
+export type AccountTierKey = 'free' | 'premium';
+
+export interface AccountTier {
+  key: AccountTierKey;
+  label: 'Free' | 'Premium';
+  status: 'active' | 'trialing';
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
 export interface AccountAIUsage {
+  tierKey: AccountTierKey;
   usedTokens: number;
   limitTokens: number;
   remainingTokens: number;
@@ -32,6 +43,7 @@ export interface GoogleAuthConfig {
 export interface AccountContextValue {
   available: boolean | null;
   user: AccountUser | null;
+  tier: AccountTier | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;

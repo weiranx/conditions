@@ -1,6 +1,8 @@
 'use strict';
 
-const DEFAULT_MONTHLY_TOKEN_LIMIT = 250_000;
+const DEFAULT_FREE_MONTHLY_TOKEN_LIMIT = 250_000;
+const DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT = 2_000_000;
+const DEFAULT_MONTHLY_TOKEN_LIMIT = DEFAULT_FREE_MONTHLY_TOKEN_LIMIT;
 const MAX_MONTHLY_TOKEN_LIMIT = 100_000_000;
 
 const parseMonthlyTokenLimit = (value, fallback = DEFAULT_MONTHLY_TOKEN_LIMIT) => {
@@ -43,16 +45,30 @@ class AIUsageUnavailableError extends Error {
 
 const createAIUsageLimitService = ({
   database,
-  monthlyTokenLimit = process.env.AI_USER_MONTHLY_TOKEN_LIMIT,
+  monthlyTokenLimit,
+  freeMonthlyTokenLimit = process.env.AI_FREE_MONTHLY_TOKEN_LIMIT
+    || process.env.AI_USER_MONTHLY_TOKEN_LIMIT
+    || monthlyTokenLimit,
+  premiumMonthlyTokenLimit = process.env.AI_PREMIUM_MONTHLY_TOKEN_LIMIT,
   now = Date.now,
 } = {}) => {
-  const limitTokens = parseMonthlyTokenLimit(monthlyTokenLimit);
+  const freeLimitTokens = parseMonthlyTokenLimit(freeMonthlyTokenLimit);
+  const premiumLimitTokens = parseMonthlyTokenLimit(
+    premiumMonthlyTokenLimit,
+    DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT,
+  );
   const available = Boolean(database?.configured && typeof database.query === 'function');
 
-  const getUserUsage = async (userId) => {
+  const getLimitTokens = (tierKey = 'free') => (
+    tierKey === 'premium' ? premiumLimitTokens : freeLimitTokens
+  );
+
+  const getUserUsage = async (userId, tierKey = 'free') => {
     if (!available) throw new AIUsageUnavailableError();
     if (!userId) throw new TypeError('userId is required');
 
+    const resolvedTierKey = tierKey === 'premium' ? 'premium' : 'free';
+    const limitTokens = getLimitTokens(resolvedTierKey);
     const window = getMonthlyWindow(now());
     let result;
     try {
@@ -70,6 +86,7 @@ const createAIUsageLimitService = ({
     const usedTokens = Math.max(0, Math.round(Number(result?.rows?.[0]?.used_tokens) || 0));
     const remainingTokens = Math.max(0, limitTokens - usedTokens);
     return {
+      tierKey: resolvedTierKey,
       usedTokens,
       limitTokens,
       remainingTokens,
@@ -79,15 +96,18 @@ const createAIUsageLimitService = ({
     };
   };
 
-  const assertUserCanGenerate = async (userId) => {
-    const usage = await getUserUsage(userId);
+  const assertUserCanGenerate = async (userId, tierKey = 'free') => {
+    const usage = await getUserUsage(userId, tierKey);
     if (usage.exhausted) throw new AIUsageLimitError(usage);
     return usage;
   };
 
   return {
     available,
-    limitTokens,
+    freeLimitTokens,
+    getLimitTokens,
+    limitTokens: freeLimitTokens,
+    premiumLimitTokens,
     assertUserCanGenerate,
     getUserUsage,
   };
@@ -96,7 +116,9 @@ const createAIUsageLimitService = ({
 module.exports = {
   AIUsageLimitError,
   AIUsageUnavailableError,
+  DEFAULT_FREE_MONTHLY_TOKEN_LIMIT,
   DEFAULT_MONTHLY_TOKEN_LIMIT,
+  DEFAULT_PREMIUM_MONTHLY_TOKEN_LIMIT,
   createAIUsageLimitService,
   getMonthlyWindow,
   parseMonthlyTokenLimit,

@@ -1,5 +1,7 @@
 'use strict';
 
+const { FREE_ACCOUNT_TIER } = require('./account-tier');
+
 const ACCOUNT_COOKIE_NAME = 'bc_session';
 const ACCOUNT_REQUIRED_MESSAGE = 'Sign in or create an account to use AI features.';
 
@@ -27,7 +29,7 @@ const denyUnconfiguredAccountAccess = async (_req, res) => {
   return false;
 };
 
-const createAccountAccessGuard = ({ service, usageService } = {}) => async (req, res) => {
+const createAccountAccessGuard = ({ service, tierService, usageService } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!service?.available || typeof service.getUserForSession !== 'function') {
     res.status(503).json({
@@ -53,7 +55,16 @@ const createAccountAccessGuard = ({ service, usageService } = {}) => async (req,
       });
       return false;
     }
-    req.aiUsage = await usageService.assertUserCanGenerate(user.id);
+    let accountTier = { ...FREE_ACCOUNT_TIER };
+    if (typeof tierService?.getAccountTier === 'function') {
+      try {
+        accountTier = await tierService.getAccountTier(user.id);
+      } catch (error) {
+        req.log?.warn({ err: error, userId: user.id }, 'AI account tier could not be loaded');
+      }
+    }
+    req.aiUsage = await usageService.assertUserCanGenerate(user.id, accountTier.key);
+    req.accountTier = accountTier;
     req.accountUser = user;
     return true;
   } catch (error) {

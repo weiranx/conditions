@@ -44,6 +44,7 @@ const USER_ROW = {
 };
 
 const AI_USAGE = {
+  tierKey: 'free',
   usedTokens: 12500,
   limitTokens: 250000,
   remainingTokens: 237500,
@@ -52,6 +53,14 @@ const AI_USAGE = {
   periodEnd: '2026-08-01T00:00:00.000Z',
   resetAt: '2026-08-01T00:00:00.000Z',
   exhausted: false,
+};
+
+const FREE_TIER = {
+  key: 'free',
+  label: 'Free',
+  status: 'active',
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
 };
 
 describe('password accounts', () => {
@@ -412,10 +421,21 @@ describe('account routes', () => {
     available: true,
     getUserUsage: jest.fn().mockResolvedValue(AI_USAGE),
   };
+  const tierService = {
+    available: true,
+    getAccountTier: jest.fn().mockResolvedValue(FREE_TIER),
+  };
   const makeApp = (service, googleVerifier) => {
     const app = express();
     app.use(express.json());
-    registerAccountRoutes({ app, service, usageService, googleVerifier, isProduction: false });
+    registerAccountRoutes({
+      app,
+      service,
+      tierService,
+      usageService,
+      googleVerifier,
+      isProduction: false,
+    });
     return app;
   };
 
@@ -458,6 +478,7 @@ describe('account routes', () => {
       available: true,
       authenticated: true,
       user,
+      accountTier: FREE_TIER,
       aiUsage: AI_USAGE,
     });
     expect(service.getUserForSession).toHaveBeenCalledWith('test-session-token');
@@ -477,7 +498,13 @@ describe('account routes', () => {
     const response = await request(makeApp({ available: false })).get('/api/auth/session');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ available: false, authenticated: false, user: null, aiUsage: null });
+    expect(response.body).toEqual({
+      available: false,
+      authenticated: false,
+      user: null,
+      accountTier: null,
+      aiUsage: null,
+    });
   });
 
   test('exchanges a nonce-bound Google credential for the existing session cookie', async () => {
@@ -523,7 +550,13 @@ describe('account routes', () => {
       preferences: PREFERENCES,
     });
     expect(loginResponse.status).toBe(200);
-    expect(loginResponse.body).toEqual({ available: true, authenticated: true, user, aiUsage: AI_USAGE });
+    expect(loginResponse.body).toEqual({
+      available: true,
+      authenticated: true,
+      user,
+      accountTier: FREE_TIER,
+      aiUsage: AI_USAGE,
+    });
     expect(googleVerifier.verify).toHaveBeenCalledWith('header.payload.signature-value', {
       nonce: configResponse.body.nonce,
     });
@@ -567,12 +600,16 @@ describe('AI account access', () => {
     available: true,
     assertUserCanGenerate: jest.fn().mockResolvedValue(AI_USAGE),
   };
-  const makeApp = (service, usageService = allowUsageService) => {
+  const freeTierService = {
+    available: true,
+    getAccountTier: jest.fn().mockResolvedValue(FREE_TIER),
+  };
+  const makeApp = (service, usageService = allowUsageService, tierService = freeTierService) => {
     const app = express();
-    const ensureAccountAccess = createAccountAccessGuard({ service, usageService });
+    const ensureAccountAccess = createAccountAccessGuard({ service, tierService, usageService });
     app.get('/api/protected-ai', async (req, res) => {
       if (!(await ensureAccountAccess(req, res))) return;
-      return res.json({ user: req.accountUser });
+      return res.json({ user: req.accountUser, accountTier: req.accountTier });
     });
     return app;
   };
@@ -599,8 +636,26 @@ describe('AI account access', () => {
       .set('Cookie', 'bc_session=valid-session-token');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ user });
+    expect(response.body).toEqual({ user, accountTier: FREE_TIER });
     expect(getUserForSession).toHaveBeenCalledWith('valid-session-token');
+    expect(allowUsageService.assertUserCanGenerate).toHaveBeenCalledWith(USER_ROW.id, 'free');
+  });
+
+  test('uses the Premium allowance when an account has a current subscription', async () => {
+    const user = { id: USER_ROW.id, email: USER_ROW.email };
+    const premiumTier = { ...FREE_TIER, key: 'premium', label: 'Premium' };
+    const assertUserCanGenerate = jest.fn().mockResolvedValue({ ...AI_USAGE, tierKey: 'premium' });
+    const response = await request(makeApp(
+      { available: true, getUserForSession: jest.fn().mockResolvedValue(user) },
+      { available: true, assertUserCanGenerate },
+      { available: true, getAccountTier: jest.fn().mockResolvedValue(premiumTier) },
+    ))
+      .get('/api/protected-ai')
+      .set('Cookie', 'bc_session=valid-session-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body.accountTier).toEqual(premiumTier);
+    expect(assertUserCanGenerate).toHaveBeenCalledWith(USER_ROW.id, 'premium');
   });
 
   test('fails closed when account storage cannot verify sessions', async () => {

@@ -53,6 +53,7 @@ const { registerAccountRoutes } = require('./src/routes/account');
 const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
+const { createAccountTierService } = require('./src/auth/account-tier');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -796,16 +797,19 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
 });
 registerFeatureFlagRoutes(app);
+const accountTierService = createAccountTierService({ database });
 const aiUsageLimitService = createAIUsageLimitService({ database });
 const accountService = registerAccountRoutes({
   app,
   database,
   isProduction: IS_PRODUCTION,
+  tierService: accountTierService,
   usageService: aiUsageLimitService,
 });
 registerSavedReportRoutes({ app, database, accountService });
 const ensureAccountAccess = createAccountAccessGuard({
   service: accountService,
+  tierService: accountTierService,
   usageService: aiUsageLimitService,
 });
 const observableCaches = [

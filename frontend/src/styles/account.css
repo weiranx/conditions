@@ -267,6 +267,18 @@
 .account-profile-note strong { font-size: 11.5px; }
 .account-profile-note span { color: var(--ui-text-3); font-size: 10.5px; line-height: 1.5; }
 
+.account-plan-card { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 16px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface-subtle); text-align: left; }
+.account-plan-card.is-premium { border-color: color-mix(in oklch, var(--ui-brand) 45%, var(--ui-line)); background: linear-gradient(135deg, color-mix(in oklch, var(--ui-brand-soft) 74%, var(--ui-surface)), var(--ui-surface)); }
+.account-plan-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-plan-heading > span { display: inline-flex; align-items: center; gap: 7px; color: var(--ui-text-2); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.account-plan-heading svg { width: 16px; height: 16px; color: var(--ui-brand); }
+.account-plan-heading strong { padding: 4px 8px; border-radius: 999px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); font-size: 10.5px; letter-spacing: .02em; }
+.account-plan-card > p { margin: 12px 0 0; color: var(--ui-text-2); font-size: 10.5px; line-height: 1.5; }
+.account-plan-card ul { margin: 12px 0 0; padding: 0; display: grid; gap: 7px; list-style: none; }
+.account-plan-card li { display: flex; align-items: center; gap: 7px; color: var(--ui-text-2); font-size: 10px; line-height: 1.35; }
+.account-plan-card li svg { width: 14px; height: 14px; flex: none; color: var(--ui-brand); }
+.account-plan-card > small { display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--ui-line); color: var(--ui-text-3); font-size: 9.5px; }
+
 .account-usage-card { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 16px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface); text-align: left; }
 .account-usage-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .account-usage-heading > span { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 720; }

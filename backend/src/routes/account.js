@@ -7,6 +7,7 @@ const {
   DuplicateEmailError,
   createAccountService,
 } = require('../auth/account-service');
+const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const {
   ACCOUNT_COOKIE_NAME,
   parseCookies,
@@ -22,6 +23,7 @@ const registerAccountRoutes = ({
   database,
   isProduction = process.env.NODE_ENV === 'production',
   service = createAccountService({ database }),
+  tierService,
   usageService,
   googleVerifier = createGoogleIdentityVerifier(),
 } = {}) => {
@@ -50,21 +52,35 @@ const registerAccountRoutes = ({
   const clearSessionCookie = (res) => res.clearCookie(ACCOUNT_COOKIE_NAME, cookieOptions);
   const clearGoogleNonceCookie = (res) => res.clearCookie(GOOGLE_NONCE_COOKIE_NAME, cookieOptions);
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
-  const getAIUsage = async (req, user) => {
+  const getAccountTier = async (req, user) => {
+    if (!user) return null;
+    if (typeof tierService?.getAccountTier !== 'function') return { ...FREE_ACCOUNT_TIER };
+    try {
+      return await tierService.getAccountTier(user.id);
+    } catch (error) {
+      req.log?.warn({ err: error, userId: user.id }, 'Account tier could not be loaded');
+      return { ...FREE_ACCOUNT_TIER };
+    }
+  };
+  const getAIUsage = async (req, user, accountTier) => {
     if (!user || !usageService?.available || typeof usageService.getUserUsage !== 'function') return null;
     try {
-      return await usageService.getUserUsage(user.id);
+      return await usageService.getUserUsage(user.id, accountTier?.key);
     } catch (error) {
       req.log?.warn({ err: error, userId: user.id }, 'Account AI usage could not be loaded');
       return null;
     }
   };
-  const accountResponse = async (req, user, available = true) => ({
-    available,
-    authenticated: Boolean(user),
-    user,
-    aiUsage: await getAIUsage(req, user),
-  });
+  const accountResponse = async (req, user, available = true) => {
+    const accountTier = await getAccountTier(req, user);
+    return {
+      available,
+      authenticated: Boolean(user),
+      user,
+      accountTier,
+      aiUsage: await getAIUsage(req, user, accountTier),
+    };
+  };
 
   const handleError = (req, res, error) => {
     if (error instanceof AccountValidationError) {
@@ -101,7 +117,13 @@ const registerAccountRoutes = ({
   app.get('/api/auth/session', async (req, res) => {
     setNoStore(res);
     if (!service.available) {
-      return res.json({ available: false, authenticated: false, user: null, aiUsage: null });
+      return res.json({
+        available: false,
+        authenticated: false,
+        user: null,
+        accountTier: null,
+        aiUsage: null,
+      });
     }
     try {
       const token = readSessionToken(req);
@@ -184,7 +206,13 @@ const registerAccountRoutes = ({
     try {
       if (service.available) await service.logout(token);
       clearSessionCookie(res);
-      return res.json({ available: service.available, authenticated: false, user: null, aiUsage: null });
+      return res.json({
+        available: service.available,
+        authenticated: false,
+        user: null,
+        accountTier: null,
+        aiUsage: null,
+      });
     } catch (error) {
       clearSessionCookie(res);
       return handleError(req, res, error);

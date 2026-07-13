@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Check,
   CircleUserRound,
+  Crown,
   KeyRound,
   LoaderCircle,
   LogOut,
@@ -45,6 +46,18 @@ const formatUsageReset = (value: string) => {
   return Number.isNaN(parsed.getTime())
     ? 'next month'
     : parsed.toLocaleDateString([], { month: 'long', day: 'numeric', timeZone: 'UTC' });
+};
+
+const formatPlanPeriod = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : parsed.toLocaleDateString([], {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
 };
 
 export function AccountView({
@@ -117,6 +130,10 @@ export function AccountView({
   };
 
   const errorMessage = formError || account.error;
+  const isPremium = account.tier?.key === 'premium';
+  const planPeriodEnd = account.tier?.currentPeriodEnd
+    ? formatPlanPeriod(account.tier.currentPeriodEnd)
+    : null;
 
   return (
     <div
@@ -140,7 +157,7 @@ export function AccountView({
           <p className="account-eyebrow">Your account</p>
           <h1 id="account-title">A secure home for your profile.</h1>
           <p className="account-lede">
-            Create an account or sign back in. Ten reports are available without an account; sign in for continued planning and AI features.
+            Every account starts on Free, with saved preferences, report history, and AI tools. Premium adds a larger monthly AI allowance.
           </p>
           <div className="account-benefits" aria-label="Account details">
             <span><ShieldCheck aria-hidden /> Verified Google or password sign-in</span>
@@ -175,9 +192,37 @@ export function AccountView({
                 <ShieldCheck aria-hidden />
                 <div>
                   <strong>Your session is protected.</strong>
-                  <span>Planning preferences sync to your account. Saved objectives and recent reports remain on this device.</span>
+                  <span>Planning preferences and generated report history sync to your account.</span>
                 </div>
               </div>
+              <section
+                className={`account-plan-card${isPremium ? ' is-premium' : ''}`}
+                aria-label="Current account plan"
+              >
+                <div className="account-plan-heading">
+                  <span>{isPremium ? <Crown aria-hidden /> : <ShieldCheck aria-hidden />} Current plan</span>
+                  <strong>{account.tier?.label || 'Free'}</strong>
+                </div>
+                <p>
+                  {isPremium
+                    ? 'All Free features, with a larger monthly allowance for AI-powered planning.'
+                    : 'Account sync, report history, and a monthly allowance for AI-powered planning.'}
+                </p>
+                <ul aria-label={`${account.tier?.label || 'Free'} plan features`}>
+                  <li><Check aria-hidden /> Preferences and reports saved to your account</li>
+                  <li>
+                    <Check aria-hidden />
+                    {account.aiUsage
+                      ? `${formatTokens(account.aiUsage.limitTokens)} AI tokens each month`
+                      : `${isPremium ? 'Expanded' : 'Standard'} monthly AI allowance`}
+                  </li>
+                </ul>
+                {isPremium && planPeriodEnd && (
+                  <small>
+                    {account.tier?.cancelAtPeriodEnd ? 'Premium access ends' : 'Current period through'} {planPeriodEnd}
+                  </small>
+                )}
+              </section>
               <div className="account-usage-card">
                 <div className="account-usage-heading">
                   <span><Sparkles aria-hidden /> AI usage</span>
