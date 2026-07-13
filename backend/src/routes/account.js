@@ -21,6 +21,8 @@ const parseCookies = (header) => {
   return cookies;
 };
 
+const readSessionToken = (req) => parseCookies(req?.headers?.cookie)[ACCOUNT_COOKIE_NAME] || null;
+
 const registerAccountRoutes = ({
   app,
   database,
@@ -50,7 +52,6 @@ const registerAccountRoutes = ({
   };
 
   const clearSessionCookie = (res) => res.clearCookie(ACCOUNT_COOKIE_NAME, cookieOptions);
-  const readSessionToken = (req) => parseCookies(req.headers.cookie)[ACCOUNT_COOKIE_NAME] || null;
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
 
   const handleError = (req, res, error) => {
@@ -139,5 +140,6 @@ const registerAccountRoutes = ({
 module.exports = {
   ACCOUNT_COOKIE_NAME,
   parseCookies,
+  readSessionToken,
   registerAccountRoutes,
 };

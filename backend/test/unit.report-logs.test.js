@@ -1,9 +1,16 @@
-const { isRouteWaypointEntry } = require('../src/routes/report-logs');
+const { isAdminAccount, isRouteWaypointEntry } = require('../src/routes/report-logs');
 
 test('identifies internal route waypoint log entries', () => {
   expect(isRouteWaypointEntry({ name: 'Route waypoint: Trailhead' })).toBe(true);
   expect(isRouteWaypointEntry({ name: 'Mount Rainier' })).toBe(false);
   expect(isRouteWaypointEntry({ name: null })).toBe(false);
+});
+
+test('recognizes only the configured administrator account', () => {
+  expect(isAdminAccount({ email: ' weiranxiong@gmail.com ' })).toBe(true);
+  expect(isAdminAccount({ email: 'WEIRANXIONG@GMAIL.COM' })).toBe(true);
+  expect(isAdminAccount({ email: 'climber@example.com' })).toBe(false);
+  expect(isAdminAccount(null)).toBe(false);
 });
 
 test('authorized AI admin routes read and update runtime settings', async () => {
@@ -38,8 +45,23 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const runDiagnostics = jest.fn(async () => diagnosticsPayload);
   const modelCatalogPayload = { fetchedAt: '2026-07-12T12:00:00.000Z', providers: {} };
   const loadModelCatalog = jest.fn(async () => modelCatalogPayload);
+  const accountService = {
+    available: true,
+    getUserForSession: jest.fn(async (token) => (
+      token === 'admin-session-token'
+        ? { email: 'weiranxiong@gmail.com' }
+        : token === 'other-session-token'
+          ? { email: 'climber@example.com' }
+          : null
+    )),
+  };
   const { registerReportLogsRoute } = require('../src/routes/report-logs');
-  registerReportLogsRoute(app, { caches: [firstCache, null, secondCache], runDiagnostics, loadModelCatalog });
+  registerReportLogsRoute(app, {
+    accountService,
+    caches: [firstCache, null, secondCache],
+    runDiagnostics,
+    loadModelCatalog,
+  });
 
   const createResponse = () => ({
     statusCode: 200,
@@ -47,14 +69,17 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     status(code) { this.statusCode = code; return this; },
     json(payload) { this.payload = payload; return this; },
   });
-  const headers = { authorization: 'Bearer admin-test-secret' };
+  const headers = {
+    authorization: 'Bearer admin-test-secret',
+    cookie: 'bc_session=admin-session-token',
+  };
 
   const auditResponse = createResponse();
   await routes.get.get('/api/admin/audit-log')({ headers }, auditResponse);
   expect(auditResponse.payload).toEqual(auditEntries);
 
   const getResponse = createResponse();
-  routes.get.get('/api/admin/ai-settings')({ headers }, getResponse);
+  await routes.get.get('/api/admin/ai-settings')({ headers }, getResponse);
   expect(getResponse.payload).toEqual({ enabled: true, provider: 'openai' });
 
   const patchResponse = createResponse();
@@ -98,7 +123,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(refreshModelsResponse.payload).toEqual(modelCatalogPayload);
 
   const getFlagsResponse = createResponse();
-  routes.get.get('/api/admin/feature-flags')({ headers }, getFlagsResponse);
+  await routes.get.get('/api/admin/feature-flags')({ headers }, getFlagsResponse);
   expect(getFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
 
   const patchFlagsResponse = createResponse();
@@ -134,14 +159,28 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(resetFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
 
   const unauthorizedResponse = createResponse();
-  await routes.post.get('/api/admin/maintenance/ai-usage')({ headers: {} }, unauthorizedResponse);
+  await routes.post.get('/api/admin/maintenance/ai-usage')({
+    headers: { cookie: 'bc_session=admin-session-token' },
+  }, unauthorizedResponse);
   expect(unauthorizedResponse.statusCode).toBe(401);
   expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
 
   const unauthorizedModelsResponse = createResponse();
-  await routes.get.get('/api/admin/ai-models')({ headers: {} }, unauthorizedModelsResponse);
+  await routes.get.get('/api/admin/ai-models')({
+    headers: { cookie: 'bc_session=admin-session-token' },
+  }, unauthorizedModelsResponse);
   expect(unauthorizedModelsResponse.statusCode).toBe(401);
   expect(loadModelCatalog).toHaveBeenCalledTimes(2);
+
+  const hiddenFromOtherAccountResponse = createResponse();
+  await routes.get.get('/api/admin/ai-settings')({
+    headers: {
+      authorization: 'Bearer admin-test-secret',
+      cookie: 'bc_session=other-session-token',
+    },
+  }, hiddenFromOtherAccountResponse);
+  expect(hiddenFromOtherAccountResponse.statusCode).toBe(404);
+  expect(hiddenFromOtherAccountResponse.payload).toEqual({ error: 'Not found' });
 
   expect(routes.post.has('/api/admin/maintenance/report-logs')).toBe(true);
 
@@ -155,7 +194,9 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }));
 
   const unauthorizedDiagnosticsResponse = createResponse();
-  await routes.post.get('/api/admin/diagnostics')({ headers: {} }, unauthorizedDiagnosticsResponse);
+  await routes.post.get('/api/admin/diagnostics')({
+    headers: { cookie: 'bc_session=admin-session-token' },
+  }, unauthorizedDiagnosticsResponse);
   expect(unauthorizedDiagnosticsResponse.statusCode).toBe(401);
   expect(runDiagnostics).toHaveBeenCalledTimes(1);
 

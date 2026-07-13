@@ -160,6 +160,7 @@ const TripView = React.lazy(() =>
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 const TARGET_ELEVATION_STEP_FEET = 1000;
+const ADMIN_ACCOUNT_EMAIL = 'weiranxiong@gmail.com';
 
 function airQualityPillClass(aqi: number | null | undefined): 'go' | 'caution' | 'nogo' {
   // AQI only uses a three-tier scale (no 'watch' tier); collapsing the
@@ -545,6 +546,8 @@ function App() {
     }, [clearWakeRetry, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
   });
   const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
+  const isAdminAccount = accountUser?.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL;
+  const showAdminNotFound = view === 'admin' && !accountLoading && !isAdminAccount;
 
   useEffect(() => {
     if (!featureFlags.tripPlanning && view === 'trip') {
@@ -606,7 +609,7 @@ function App() {
       return;
     }
 
-    if (view === 'not-found') {
+    if (view === 'not-found' || showAdminNotFound) {
       document.title = 'Page Not Found - Backcountry Conditions';
       return;
     }
@@ -618,7 +621,7 @@ function App() {
     } else {
       document.title = 'Backcountry Conditions Planner';
     }
-  }, [view, objectiveName, committedSearchQuery]);
+  }, [view, showAdminNotFound, objectiveName, committedSearchQuery]);
 
   useSyncUrlEffect({
     view,
@@ -1690,16 +1693,18 @@ function App() {
       />
       </React.Activity>
 
-      <React.Activity name="admin-page" mode={view === 'admin' ? 'visible' : 'hidden'}>
-      <div key="view-admin" className={appShellClassName} aria-busy={isViewPending}>
-        <section className="settings-shell">
-          <AdminView
-            navigateToView={navigateToView}
-            openPlannerView={openPlannerView}
-            openTripToolView={openTripToolView}
-          />
-        </section>
-      </div>
+      <React.Activity name="admin-page" mode={view === 'admin' && isAdminAccount ? 'visible' : 'hidden'}>
+      {isAdminAccount ? (
+        <div key="view-admin" className={appShellClassName} aria-busy={isViewPending}>
+          <section className="settings-shell">
+            <AdminView
+              navigateToView={navigateToView}
+              openPlannerView={openPlannerView}
+              openTripToolView={openTripToolView}
+            />
+          </section>
+        </div>
+      ) : null}
       </React.Activity>
 
       <React.Activity name="settings-page" mode={view === 'settings' ? 'visible' : 'hidden'}>
@@ -1885,7 +1890,7 @@ function App() {
         />
       </React.Activity>
 
-      <React.Activity name="not-found-page" mode={view === 'not-found' ? 'visible' : 'hidden'}>
+      <React.Activity name="not-found-page" mode={view === 'not-found' || showAdminNotFound ? 'visible' : 'hidden'}>
         <NotFoundView
           appShellClassName={appShellClassName}
           isViewPending={isViewPending}

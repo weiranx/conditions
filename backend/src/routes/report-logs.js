@@ -5,6 +5,9 @@ const { clearAIUsageEntries, getAIUsageEntries } = require('../utils/ai-usage');
 const { getAIStatus, updateAISettings } = require('../utils/ai-client');
 const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require('../utils/feature-flags');
 const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit');
+const { readSessionToken } = require('./account');
+
+const ADMIN_ACCOUNT_EMAIL = 'weiranxiong@gmail.com';
 
 const isRouteWaypointEntry = (entry) =>
   typeof entry?.name === 'string' && entry.name.startsWith('Route waypoint:');
@@ -84,7 +87,20 @@ const secretsMatch = (provided, expected) => {
   return crypto.timingSafeEqual(providedBuf, expectedBuf);
 };
 
-const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, loadModelCatalog = null } = {}) => {
+const isAdminAccount = (user) => (
+  typeof user?.email === 'string'
+  && user.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL
+);
+
+const registerReportLogsRoute = (
+  app,
+  {
+    accountService = null,
+    caches = [],
+    runDiagnostics = null,
+    loadModelCatalog = null,
+  } = {},
+) => {
   let diagnosticsInFlight = null;
   const audit = async (req, event) => {
     try {
@@ -96,7 +112,19 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
       logger.error({ err: error, action: event.action }, 'Admin audit event could not be persisted');
     }
   };
-  const authorize = (req, res) => {
+  const authorize = async (req, res) => {
+    let accountUser = null;
+    try {
+      if (accountService?.available && typeof accountService.getUserForSession === 'function') {
+        accountUser = await accountService.getUserForSession(readSessionToken(req));
+      }
+    } catch (error) {
+      req.log?.warn({ err: error }, 'Admin account authorization failed');
+    }
+    if (!isAdminAccount(accountUser)) {
+      res.status(404).json({ error: 'Not found' });
+      return false;
+    }
     if (!LOGS_SECRET) {
       res.status(403).json({ error: 'Logs endpoint disabled — LOGS_SECRET not configured' });
       return false;
@@ -111,28 +139,28 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   };
 
   app.get('/api/report-logs', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     const entries = await getReportLogs();
     res.json(entries.filter((entry) => !isRouteWaypointEntry(entry)));
   });
 
   app.get('/api/ai-usage', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     res.json(await getAIUsageEntries());
   });
 
   app.get('/api/admin/audit-log', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     res.json(await getAdminAuditEntries());
   });
 
-  app.get('/api/admin/ai-settings', (req, res) => {
-    if (!authorize(req, res)) return;
+  app.get('/api/admin/ai-settings', async (req, res) => {
+    if (!await authorize(req, res)) return;
     res.json(getAIStatus());
   });
 
   app.patch('/api/admin/ai-settings', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     if (body.enabled === undefined && body.provider === undefined && body.features === undefined && body.models === undefined) {
       res.status(400).json({ error: 'Provide enabled, provider, features, or models' });
@@ -171,7 +199,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 
   const sendModelCatalog = async (req, res, force = false) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     if (typeof loadModelCatalog !== 'function') {
       res.status(503).json({ error: 'AI model catalog is unavailable' });
       return;
@@ -202,13 +230,13 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   app.get('/api/admin/ai-models', (req, res) => sendModelCatalog(req, res));
   app.post('/api/admin/ai-models/refresh', (req, res) => sendModelCatalog(req, res, true));
 
-  app.get('/api/admin/feature-flags', (req, res) => {
-    if (!authorize(req, res)) return;
+  app.get('/api/admin/feature-flags', async (req, res) => {
+    if (!await authorize(req, res)) return;
     res.json(getFeatureFlagStatus());
   });
 
   app.patch('/api/admin/feature-flags', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     try {
       const updated = await updateFeatureFlags(body.flags);
@@ -234,7 +262,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 
   app.post('/api/admin/maintenance/report-logs', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     try {
       const cleared = await clearReportLogs();
       await audit(req, {
@@ -252,7 +280,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 
   app.post('/api/admin/maintenance/ai-usage', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     try {
       const cleared = await clearAIUsageEntries();
       await audit(req, {
@@ -270,7 +298,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 
   app.post('/api/admin/maintenance/caches', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     const cleared = caches.flatMap((cache) => {
       if (!cache || typeof cache.clear !== 'function') return [];
       const stats = typeof cache.stats === 'function' ? cache.stats() : null;
@@ -287,7 +315,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 
   app.post('/api/admin/maintenance/feature-flags', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     try {
       const updated = await resetFeatureFlags();
       await audit(req, {
@@ -305,7 +333,7 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 
   app.post('/api/admin/diagnostics', async (req, res) => {
-    if (!authorize(req, res)) return;
+    if (!await authorize(req, res)) return;
     if (typeof runDiagnostics !== 'function') {
       res.status(503).json({ error: 'External diagnostics are unavailable' });
       return;
@@ -339,4 +367,10 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, load
   });
 };
 
-module.exports = { clearReportLogs, logReportRequest, registerReportLogsRoute, isRouteWaypointEntry };
+module.exports = {
+  clearReportLogs,
+  isAdminAccount,
+  isRouteWaypointEntry,
+  logReportRequest,
+  registerReportLogsRoute,
+};

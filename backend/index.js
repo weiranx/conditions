@@ -793,7 +793,7 @@ registerSearchRoutes({
   peaks: POPULAR_PEAKS,
 });
 registerFeatureFlagRoutes(app);
-registerAccountRoutes({ app, database, isProduction: IS_PRODUCTION });
+const accountService = registerAccountRoutes({ app, database, isProduction: IS_PRODUCTION });
 const observableCaches = [
   noaaPointsCache,
   elevationCache,
@@ -808,6 +808,7 @@ registerHealthRoutes(app, {
   database,
 });
 registerReportLogsRoute(app, {
+  accountService,
   caches: observableCaches,
   runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
   loadModelCatalog: (options) => aiModelCatalog.load(options),

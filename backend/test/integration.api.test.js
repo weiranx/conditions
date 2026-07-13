@@ -300,23 +300,23 @@ test('POST /api/route-analysis rejects non-numeric lat', async () => {
 
 // ── /api/report-logs ─────────────────────────────────────────────────────────
 
-test('GET /api/report-logs rejects access without the admin key', async () => {
+test('GET /api/report-logs returns 404 without the administrator account', async () => {
   const res = await request(app).get('/api/report-logs');
-  expect([401, 403]).toContain(res.status);
+  expect(res.status).toBe(404);
 });
 
-test('AI admin settings endpoints reject access without the admin key', async () => {
+test('AI admin settings endpoints return 404 without the administrator account', async () => {
   const getResponse = await request(app).get('/api/admin/ai-settings');
   const patchResponse = await request(app).patch('/api/admin/ai-settings').send({ enabled: false });
   const modelsResponse = await request(app).get('/api/admin/ai-models');
   const refreshModelsResponse = await request(app).post('/api/admin/ai-models/refresh');
   const auditResponse = await request(app).get('/api/admin/audit-log');
 
-  expect([401, 403]).toContain(getResponse.status);
-  expect([401, 403]).toContain(patchResponse.status);
-  expect([401, 403]).toContain(modelsResponse.status);
-  expect([401, 403]).toContain(refreshModelsResponse.status);
-  expect([401, 403]).toContain(auditResponse.status);
+  expect(getResponse.status).toBe(404);
+  expect(patchResponse.status).toBe(404);
+  expect(modelsResponse.status).toBe(404);
+  expect(refreshModelsResponse.status).toBe(404);
+  expect(auditResponse.status).toBe(404);
 });
 
 test.each([
@@ -325,9 +325,9 @@ test.each([
   '/api/admin/maintenance/caches',
   '/api/admin/maintenance/feature-flags',
   '/api/admin/diagnostics',
-])('POST %s rejects access without the admin key', async (path) => {
+])('POST %s returns 404 without the administrator account', async (path) => {
   const response = await request(app).post(path);
-  expect([401, 403]).toContain(response.status);
+  expect(response.status).toBe(404);
 });
 
 // ── Response shape / header assertions ───────────────────────────────────────
