@@ -124,7 +124,7 @@ Browser
 | `backend/src/routes/search.js` | `GET /api/search` |
 | `backend/src/routes/route-analysis.js` | `GET /api/route-suggestions`, `POST /api/route-analysis` |
 | `backend/src/routes/ai-brief.js` | `POST /api/ai-brief` |
-| `backend/src/routes/account.js` | `GET /api/auth/session`, `POST /api/auth/register`, `/api/auth/login`, `PATCH /api/account/preferences`, `POST /api/auth/logout` |
+| `backend/src/routes/account.js` | Password and Google login, first-party sessions, account preferences, and logout |
 | `backend/src/routes/report-logs.js` | `GET /api/report-logs`, `POST /api/report-logs` |
 | `backend/src/routes/health.js` | `GET /healthz`, `/health`, `/api/healthz`, `/api/health` |
 

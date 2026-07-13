@@ -16,6 +16,8 @@ Express API for the SummitSafe backcountry planning app.
 | GET | `/api/auth/session` | Current optional-account session |
 | POST | `/api/auth/register` | Create an email/password account and session |
 | POST | `/api/auth/login` | Sign in and create a session |
+| GET | `/api/auth/google/config` | Google sign-in client configuration and browser nonce |
+| POST | `/api/auth/google` | Verify Google identity and create a session |
 | PATCH | `/api/account/preferences` | Save planning preferences for the signed-in account |
 | POST | `/api/auth/logout` | End the current session |
 | GET | `/api/report-logs` | Retrieve logged reports (administrator account only) |

@@ -4,6 +4,7 @@ const request = require('supertest');
 const {
   AccountValidationError,
   DuplicateEmailError,
+  GoogleAccountLinkError,
   createAccountService,
   normalizeEmail,
   parseSessionTtlMs,
@@ -11,6 +12,7 @@ const {
   validateDisplayName,
   validatePassword,
 } = require('../src/auth/account-service');
+const { createGoogleIdentityVerifier } = require('../src/auth/google-identity');
 const { hashPassword, hashSessionToken, verifyPassword } = require('../src/auth/password');
 const { createAccountAccessGuard } = require('../src/auth/account-access');
 const { registerAccountRoutes } = require('../src/routes/account');
@@ -133,6 +135,82 @@ describe('password accounts', () => {
     expect(sessionParams[1]).not.toContain(result.token);
   });
 
+  test('creates a Google account and first-party session in one transaction', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [USER_ROW] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({
+      database: { configured: true, query, transaction },
+      sessionTtlMs: 60_000,
+      now: () => Date.parse('2026-07-12T10:00:00.000Z'),
+    });
+
+    const result = await service.loginWithGoogle({
+      subject: 'google-account-123',
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      emailAuthoritative: true,
+      preferences: PREFERENCES,
+    });
+
+    expect(result.user.email).toBe(USER_ROW.email);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[2][0]).toContain("VALUES ('google'");
+    expect(query.mock.calls[3][0]).toContain('INSERT INTO account_identities');
+    expect(query.mock.calls[4][0]).toContain('INSERT INTO user_sessions');
+    expect(query.mock.calls[4][1][1]).toBe(hashSessionToken(result.token));
+  });
+
+  test('does not auto-link a non-authoritative Google email to an existing account', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ...USER_ROW, status: 'active', google_subject: null }] });
+    const service = createAccountService({
+      database: {
+        configured: true,
+        query,
+        transaction: (callback) => callback(query),
+      },
+    });
+
+    await expect(service.loginWithGoogle({
+      subject: 'google-account-123',
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      emailAuthoritative: false,
+    })).rejects.toBeInstanceOf(GoogleAccountLinkError);
+  });
+
+  test('links an authoritative Google identity without removing password access', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ...USER_ROW, status: 'active', google_subject: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = createAccountService({
+      database: {
+        configured: true,
+        query,
+        transaction: (callback) => callback(query),
+      },
+    });
+
+    await expect(service.loginWithGoogle({
+      subject: 'google-account-123',
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      emailAuthoritative: true,
+    })).resolves.toMatchObject({ user: { id: USER_ROW.id } });
+
+    expect(query).toHaveBeenCalledTimes(4);
+    expect(query.mock.calls[2][0]).toContain('INSERT INTO account_identities');
+    expect(query.mock.calls.every(([sql]) => !sql.includes('INSERT INTO account_credentials'))).toBe(true);
+  });
+
   test('maps a unique-email database conflict to a safe account error', async () => {
     const duplicate = Object.assign(new Error('duplicate key detail'), { code: '23505' });
     const service = createAccountService({
@@ -164,15 +242,66 @@ describe('password accounts', () => {
   });
 });
 
+describe('Google identity verification', () => {
+  const NONCE = 'a-secure-google-nonce-value-123456789';
+
+  test('verifies audience and nonce before returning a normalized identity', async () => {
+    const verifyIdToken = jest.fn().mockResolvedValue({
+      getPayload: () => ({
+        sub: 'google-account-123',
+        email: 'CLIMBER@Example.COM',
+        email_verified: true,
+        hd: 'example.com',
+        name: 'Avery Stone',
+        nonce: NONCE,
+      }),
+    });
+    const verifier = createGoogleIdentityVerifier({
+      clientId: 'web-client.apps.googleusercontent.com',
+      client: { verifyIdToken },
+    });
+
+    await expect(verifier.verify('header.payload.signature-value', { nonce: NONCE })).resolves.toEqual({
+      subject: 'google-account-123',
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      emailAuthoritative: true,
+    });
+    expect(verifyIdToken).toHaveBeenCalledWith({
+      idToken: 'header.payload.signature-value',
+      audience: 'web-client.apps.googleusercontent.com',
+    });
+  });
+
+  test('rejects a valid Google token when the browser nonce does not match', async () => {
+    const verifier = createGoogleIdentityVerifier({
+      clientId: 'web-client.apps.googleusercontent.com',
+      client: {
+        verifyIdToken: jest.fn().mockResolvedValue({
+          getPayload: () => ({
+            sub: 'google-account-123',
+            email: USER_ROW.email,
+            email_verified: true,
+            nonce: 'a-different-google-nonce-value-12345',
+          }),
+        }),
+      },
+    });
+
+    await expect(verifier.verify('header.payload.signature-value', { nonce: NONCE }))
+      .rejects.toMatchObject({ code: 'INVALID_GOOGLE_CREDENTIAL' });
+  });
+});
+
 describe('account routes', () => {
   const usageService = {
     available: true,
     getUserUsage: jest.fn().mockResolvedValue(AI_USAGE),
   };
-  const makeApp = (service) => {
+  const makeApp = (service, googleVerifier) => {
     const app = express();
     app.use(express.json());
-    registerAccountRoutes({ app, service, usageService, isProduction: false });
+    registerAccountRoutes({ app, service, usageService, googleVerifier, isProduction: false });
     return app;
   };
 
@@ -235,6 +364,61 @@ describe('account routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ available: false, authenticated: false, user: null, aiUsage: null });
+  });
+
+  test('exchanges a nonce-bound Google credential for the existing session cookie', async () => {
+    const user = {
+      id: USER_ROW.id,
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      createdAt: USER_ROW.created_at.toISOString(),
+      preferences: PREFERENCES,
+    };
+    const service = {
+      available: true,
+      loginWithGoogle: jest.fn().mockResolvedValue({
+        user,
+        token: 'google-session-token',
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    };
+    const googleVerifier = {
+      available: true,
+      clientId: 'web-client.apps.googleusercontent.com',
+      verify: jest.fn().mockResolvedValue({
+        subject: 'google-account-123',
+        email: USER_ROW.email,
+        displayName: USER_ROW.display_name,
+        emailAuthoritative: true,
+      }),
+    };
+    const agent = request.agent(makeApp(service, googleVerifier));
+
+    const configResponse = await agent.get('/api/auth/google/config');
+    expect(configResponse.status).toBe(200);
+    expect(configResponse.body).toMatchObject({
+      available: true,
+      clientId: googleVerifier.clientId,
+    });
+    expect(configResponse.body.nonce).toHaveLength(43);
+    expect(configResponse.headers['set-cookie'][0]).toMatch(/bc_google_nonce=/);
+    expect(configResponse.headers['set-cookie'][0]).toMatch(/HttpOnly/);
+
+    const loginResponse = await agent.post('/api/auth/google').send({
+      credential: 'header.payload.signature-value',
+      preferences: PREFERENCES,
+    });
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.body).toEqual({ available: true, authenticated: true, user, aiUsage: AI_USAGE });
+    expect(googleVerifier.verify).toHaveBeenCalledWith('header.payload.signature-value', {
+      nonce: configResponse.body.nonce,
+    });
+    expect(service.loginWithGoogle).toHaveBeenCalledWith(expect.objectContaining({
+      subject: 'google-account-123',
+      preferences: PREFERENCES,
+    }));
+    expect(loginResponse.headers['set-cookie'].join(';')).toMatch(/bc_session=google-session-token/);
+    expect(loginResponse.headers['set-cookie'].join(';')).toMatch(/bc_google_nonce=;/);
   });
 
   test('returns field-safe registration conflicts', async () => {

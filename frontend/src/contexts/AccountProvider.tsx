@@ -13,6 +13,7 @@ import {
   type AccountAIUsage,
   type AccountContextValue,
   type AccountUser,
+  type GoogleAuthConfig,
 } from './account';
 
 interface AccountResponse {
@@ -31,6 +32,16 @@ interface AccountState {
   error: string | null;
   preferenceSyncState: AccountContextValue['preferenceSyncState'];
   preferenceError: string | null;
+  google: GoogleAuthConfig;
+}
+
+function parseGoogleAuthConfig(payload: unknown): Omit<GoogleAuthConfig, 'loading'> | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.available !== 'boolean') return null;
+  if (!record.available) return { available: false, clientId: null, nonce: null };
+  if (typeof record.clientId !== 'string' || typeof record.nonce !== 'string') return null;
+  return { available: true, clientId: record.clientId, nonce: record.nonce };
 }
 
 function parseAIUsage(value: unknown): AccountAIUsage | null {
@@ -104,8 +115,37 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     error: null,
     preferenceSyncState: 'idle',
     preferenceError: null,
+    google: {
+      available: null,
+      clientId: null,
+      nonce: null,
+      loading: true,
+    },
   });
   const preferenceSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+
+  const loadGoogleConfig = useCallback(async (signal?: AbortSignal) => {
+    setState((current) => ({
+      ...current,
+      google: { ...current.google, loading: true },
+    }));
+    try {
+      const { response, payload } = await fetchApi('/api/auth/google/config', { signal });
+      if (!response.ok) throw new Error('Google sign-in configuration is unavailable.');
+      const config = parseGoogleAuthConfig(payload);
+      if (!config) throw new Error('Google sign-in configuration is invalid.');
+      if (!signal?.aborted) {
+        setState((current) => ({ ...current, google: { ...config, loading: false } }));
+      }
+    } catch {
+      if (!signal?.aborted) {
+        setState((current) => ({
+          ...current,
+          google: { available: false, clientId: null, nonce: null, loading: false },
+        }));
+      }
+    }
+  }, []);
 
   const applyResponse = useCallback((payload: unknown) => {
     const account = parseAccountResponse(payload);
@@ -148,8 +188,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, [fetchAccount]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadGoogleConfig(controller.signal);
+    return () => controller.abort();
+  }, [loadGoogleConfig]);
+
   const runAction = useCallback(async (
-    path: '/api/auth/register' | '/api/auth/login' | '/api/auth/logout',
+    path: '/api/auth/register' | '/api/auth/login' | '/api/auth/google' | '/api/auth/logout',
     body?: object,
   ) => {
     setState((current) => ({ ...current, busy: true, error: null }));
@@ -180,6 +226,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback((input: { email: string; password: string }) => (
     runAction('/api/auth/login', input)
   ), [runAction]);
+
+  const signInWithGoogle = useCallback(async (input: {
+    credential: string;
+    preferences: UserPreferences;
+  }) => {
+    try {
+      return await runAction('/api/auth/google', input);
+    } catch (error) {
+      await loadGoogleConfig();
+      throw error;
+    }
+  }, [loadGoogleConfig, runAction]);
 
   const signOut = useCallback(() => runAction('/api/auth/logout'), [runAction]);
 
@@ -236,10 +294,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     ...state,
     createAccount,
     signIn,
+    signInWithGoogle,
     signOut,
     refreshAccount,
     savePreferences,
-  }), [createAccount, refreshAccount, savePreferences, signIn, signOut, state]);
+  }), [createAccount, refreshAccount, savePreferences, signIn, signInWithGoogle, signOut, state]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

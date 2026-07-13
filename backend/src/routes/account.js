@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const rateLimit = require('express-rate-limit');
 const {
   AccountValidationError,
@@ -11,6 +12,10 @@ const {
   parseCookies,
   readSessionToken,
 } = require('../auth/account-access');
+const { createGoogleIdentityVerifier } = require('../auth/google-identity');
+
+const GOOGLE_NONCE_COOKIE_NAME = 'bc_google_nonce';
+const GOOGLE_NONCE_TTL_MS = 10 * 60 * 1000;
 
 const registerAccountRoutes = ({
   app,
@@ -18,6 +23,7 @@ const registerAccountRoutes = ({
   isProduction = process.env.NODE_ENV === 'production',
   service = createAccountService({ database }),
   usageService,
+  googleVerifier = createGoogleIdentityVerifier(),
 } = {}) => {
   const cookieOptions = {
     httpOnly: true,
@@ -42,6 +48,7 @@ const registerAccountRoutes = ({
   };
 
   const clearSessionCookie = (res) => res.clearCookie(ACCOUNT_COOKIE_NAME, cookieOptions);
+  const clearGoogleNonceCookie = (res) => res.clearCookie(GOOGLE_NONCE_COOKIE_NAME, cookieOptions);
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
   const getAIUsage = async (req, user) => {
     if (!user || !usageService?.available || typeof usageService.getUserUsage !== 'function') return null;
@@ -68,6 +75,18 @@ const registerAccountRoutes = ({
     }
     if (error?.code === 'INVALID_CREDENTIALS') {
       return res.status(401).json({ error: error.message });
+    }
+    if (error?.code === 'INVALID_GOOGLE_CREDENTIAL') {
+      return res.status(401).json({ error: error.message });
+    }
+    if (error?.code === 'GOOGLE_ACCOUNT_LINK_REQUIRED') {
+      return res.status(409).json({ error: error.message });
+    }
+    if (error?.code === 'ACCOUNT_DISABLED') {
+      return res.status(403).json({ error: error.message });
+    }
+    if (error?.code === 'GOOGLE_AUTH_UNAVAILABLE') {
+      return res.status(503).json({ error: error.message });
     }
     if (error?.code === 'AUTHENTICATION_REQUIRED') {
       return res.status(401).json({ error: error.message });
@@ -116,6 +135,39 @@ const registerAccountRoutes = ({
     }
   });
 
+  app.get('/api/auth/google/config', (req, res) => {
+    setNoStore(res);
+    if (!service.available || !googleVerifier.available) {
+      clearGoogleNonceCookie(res);
+      return res.json({ available: false, clientId: null, nonce: null });
+    }
+    const nonce = crypto.randomBytes(32).toString('base64url');
+    res.cookie(GOOGLE_NONCE_COOKIE_NAME, nonce, {
+      ...cookieOptions,
+      maxAge: GOOGLE_NONCE_TTL_MS,
+    });
+    return res.json({ available: true, clientId: googleVerifier.clientId, nonce });
+  });
+
+  app.post('/api/auth/google', authLimiter, async (req, res) => {
+    setNoStore(res);
+    try {
+      const identity = await googleVerifier.verify(req.body?.credential, {
+        nonce: parseCookies(req.headers.cookie)[GOOGLE_NONCE_COOKIE_NAME] || null,
+      });
+      const session = await service.loginWithGoogle({
+        ...identity,
+        preferences: req.body?.preferences,
+      });
+      clearGoogleNonceCookie(res);
+      setSessionCookie(res, session);
+      return res.json(await accountResponse(req, session.user));
+    } catch (error) {
+      clearGoogleNonceCookie(res);
+      return handleError(req, res, error);
+    }
+  });
+
   app.patch('/api/account/preferences', async (req, res) => {
     setNoStore(res);
     try {
@@ -144,6 +196,7 @@ const registerAccountRoutes = ({
 
 module.exports = {
   ACCOUNT_COOKIE_NAME,
+  GOOGLE_NONCE_COOKIE_NAME,
   parseCookies,
   readSessionToken,
   registerAccountRoutes,

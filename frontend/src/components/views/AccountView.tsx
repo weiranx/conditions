@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
+import { GoogleSignInButton } from '../account/GoogleSignInButton';
 import { ProductNav } from './ProductNav';
 import { LegalLinks } from '../../app/legal-links';
 import { persistUserPreferences } from '../../app/preferences';
@@ -106,6 +107,15 @@ export function AccountView({
     }
   };
 
+  const handleGoogleCredential = async (credential: string) => {
+    setFormError(null);
+    try {
+      await account.signInWithGoogle({ credential, preferences });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Google sign-in failed.');
+    }
+  };
+
   const errorMessage = formError || account.error;
 
   return (
@@ -133,7 +143,7 @@ export function AccountView({
             Create an account or sign back in. Ten reports are available without an account; sign in for continued planning and AI features.
           </p>
           <div className="account-benefits" aria-label="Account details">
-            <span><ShieldCheck aria-hidden /> Passwords are salted and hashed</span>
+            <span><ShieldCheck aria-hidden /> Verified Google or password sign-in</span>
             <span><KeyRound aria-hidden /> Secure, HTTP-only device session</span>
             <span><Check aria-hidden /> Preferences follow your account</span>
           </div>
@@ -238,6 +248,19 @@ export function AccountView({
                 <h2>{mode === 'create' ? 'Create your account' : 'Sign in to your account'}</h2>
               </div>
 
+              {account.google.available && account.google.clientId && account.google.nonce && (
+                <div className="account-google-auth">
+                  <GoogleSignInButton
+                    busy={account.busy}
+                    clientId={account.google.clientId}
+                    nonce={account.google.nonce}
+                    onCredential={handleGoogleCredential}
+                    onError={setFormError}
+                  />
+                  <div className="account-auth-divider"><span>or use email</span></div>
+                </div>
+              )}
+
               <form className="account-form" onSubmit={handleSubmit}>
                 {mode === 'create' && (
                   <label>
@@ -315,9 +338,9 @@ export function AccountView({
                 </button>
               </form>
 
-              {mode === 'create' && (
+              {(mode === 'create' || account.google.available) && (
                 <p className="account-legal">
-                  By creating an account, you agree to the{' '}
+                  By creating an account or continuing with Google, you agree to the{' '}
                   <button type="button" onClick={() => navigateToView('terms')}>Terms of Use</button>
                   {' '}and acknowledge the{' '}
                   <button type="button" onClick={() => navigateToView('privacy')}>Privacy Policy</button>.

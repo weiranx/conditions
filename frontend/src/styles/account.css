@@ -185,6 +185,14 @@
   letter-spacing: -.025em;
 }
 
+.account-google-auth { margin-top: 24px; }
+.account-google-button { width: 100%; min-height: 44px; display: flex; justify-content: center; overflow: hidden; transition: opacity .16s ease; }
+.account-google-button.is-busy { pointer-events: none; opacity: .65; }
+.account-auth-divider { margin: 18px 0 0; display: flex; align-items: center; gap: 12px; color: var(--ui-text-3); font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.account-auth-divider::before,
+.account-auth-divider::after { content: ''; height: 1px; flex: 1; background: var(--ui-line); }
+.account-auth-divider span { flex: none; }
+
 .account-form { margin-top: 26px; display: grid; gap: 17px; }
 .account-form label { display: grid; gap: 7px; color: var(--ui-text-2); font-size: 11.5px; font-weight: 700; }
 .account-form label small { color: var(--ui-text-3); font-size: 10.5px; font-weight: 520; }

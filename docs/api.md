@@ -308,7 +308,7 @@ Generates an on-demand AI narrative field brief summarizing current conditions. 
 
 Accounts are optional and require `DATABASE_URL`. Successful registration and login responses set an opaque,
 HTTP-only session cookie. The browser should send requests with credentials enabled; the web client does this
-automatically. Passwords must contain 12 to 128 characters.
+automatically. Passwords must contain 12 to 128 characters. Google login additionally requires `GOOGLE_CLIENT_ID`.
 
 ### `GET /api/auth/session`
 
@@ -366,6 +366,20 @@ Returns `201` and the signed-in account. Duplicate emails return `409`.
 ### `POST /api/auth/login`
 
 Accepts `email` and `password`, then returns the signed-in account. Invalid credentials return `401`.
+
+### `GET /api/auth/google/config`
+
+Returns the public Google web client ID and a short-lived nonce when Google login is configured. The nonce is
+also set in an HTTP-only cookie and must be included by Google in the returned ID token. If Google login or the
+account database is unavailable, returns `{ "available": false, "clientId": null, "nonce": null }`.
+
+### `POST /api/auth/google`
+
+Accepts the Google Identity Services ID token as `credential` and the current complete `preferences` object.
+The backend verifies the Google signature, audience, issuer, expiry, verified email, and browser nonce before
+creating the normal first-party session. New Google users are created automatically. An existing Gmail or
+Google Workspace email can be linked to the same account; other email domains must use their existing sign-in
+method to avoid unsafe email-based account linking.
 
 ### `PATCH /api/account/preferences`
 

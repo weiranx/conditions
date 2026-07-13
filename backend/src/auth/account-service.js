@@ -41,6 +41,14 @@ class DuplicateEmailError extends Error {
   }
 }
 
+class GoogleAccountLinkError extends Error {
+  constructor() {
+    super('This email is already connected to another sign-in. Use the existing sign-in method.');
+    this.name = 'GoogleAccountLinkError';
+    this.code = 'GOOGLE_ACCOUNT_LINK_REQUIRED';
+  }
+}
+
 const characterCount = (value) => Array.from(value).length;
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -165,6 +173,14 @@ const parseSessionTtlMs = (value) => {
     : DEFAULT_SESSION_TTL_MS;
 };
 
+const validateGoogleSubject = (value) => {
+  const subject = String(value || '').trim();
+  if (!subject || subject.length > 255 || CONTROL_CHAR_PATTERN.test(subject)) {
+    throw new AccountValidationError('Google account identity is invalid.', 'credential');
+  }
+  return subject;
+};
+
 const createAccountService = ({
   database,
   sessionTtlMs = parseSessionTtlMs(process.env.ACCOUNT_SESSION_DAYS),
@@ -185,6 +201,106 @@ const createAccountService = ({
       [userId, hashSessionToken(token), expiresAt],
     );
     return { token, expiresAt };
+  };
+
+  const loginWithGoogle = async ({
+    subject: rawSubject,
+    email: rawEmail,
+    displayName: rawDisplayName,
+    emailAuthoritative = false,
+    preferences: rawPreferences,
+  } = {}) => {
+    ensureAvailable();
+    const subject = validateGoogleSubject(rawSubject);
+    const email = validateEmail(rawEmail);
+    const displayName = validateDisplayName(rawDisplayName);
+    const preferences = rawPreferences === undefined ? {} : validateAccountPreferences(rawPreferences);
+    const token = createSessionToken();
+    const expiresAt = new Date(now() + sessionTtlMs);
+    const runTransaction = typeof database.transaction === 'function'
+      ? database.transaction.bind(database)
+      : async (callback) => callback(database.query.bind(database));
+
+    const persistGoogleLogin = async (query) => {
+      const identityResult = await query(
+        `SELECT DISTINCT users.id, users.email, users.display_name, users.created_at, users.preferences, users.status
+         FROM users
+         LEFT JOIN account_identities
+           ON account_identities.user_id = users.id
+          AND account_identities.provider = 'google'
+          AND account_identities.subject = $1
+         WHERE (
+             account_identities.user_id IS NOT NULL
+             OR (users.auth_provider = 'google' AND users.auth_subject = $1)
+           )
+         LIMIT 1`,
+        [subject],
+      );
+      let row = identityResult.rows[0] || null;
+
+      if (row && row.status !== 'active') {
+        const error = new Error('This account is unavailable.');
+        error.code = 'ACCOUNT_DISABLED';
+        throw error;
+      }
+
+      if (!row) {
+        const emailResult = await query(
+          `SELECT users.id, users.email, users.display_name, users.created_at, users.preferences, users.status,
+                  account_identities.subject AS google_subject
+           FROM users
+           LEFT JOIN account_identities
+             ON account_identities.user_id = users.id
+            AND account_identities.provider = 'google'
+           WHERE LOWER(users.email) = $1
+           LIMIT 1
+           FOR UPDATE OF users`,
+          [email],
+        );
+        row = emailResult.rows[0] || null;
+
+        if (row && row.status !== 'active') {
+          const error = new Error('This account is unavailable.');
+          error.code = 'ACCOUNT_DISABLED';
+          throw error;
+        }
+        if (row && (!emailAuthoritative || (row.google_subject && row.google_subject !== subject))) {
+          throw new GoogleAccountLinkError();
+        }
+        if (!row) {
+          const insertResult = await query(
+            `INSERT INTO users (auth_provider, auth_subject, email, display_name, preferences)
+             VALUES ('google', $1, $2, $3, $4::jsonb)
+             RETURNING id, email, display_name, created_at, preferences`,
+            [subject, email, displayName, JSON.stringify(preferences)],
+          );
+          row = insertResult.rows[0];
+        }
+      }
+
+      await query(
+        `INSERT INTO account_identities (provider, subject, user_id, email_at_link)
+         VALUES ('google', $1, $2, $3)
+         ON CONFLICT (provider, subject) DO NOTHING`,
+        [subject, row.id, email],
+      );
+      await query(
+        `INSERT INTO user_sessions (user_id, token_hash, expires_at)
+         VALUES ($1, $2, $3)`,
+        [row.id, hashSessionToken(token), expiresAt],
+      );
+
+      return { user: serializeUser(row), token, expiresAt };
+    };
+
+    try {
+      return await runTransaction(persistGoogleLogin);
+    } catch (error) {
+      if (error?.code === '23505') {
+        return runTransaction(persistGoogleLogin);
+      }
+      throw error;
+    }
   };
 
   const register = async ({
@@ -313,6 +429,7 @@ const createAccountService = ({
     sessionTtlMs,
     getUserForSession,
     login,
+    loginWithGoogle,
     logout,
     register,
     updatePreferences,
@@ -323,12 +440,14 @@ module.exports = {
   AccountValidationError,
   DEFAULT_SESSION_TTL_MS,
   DuplicateEmailError,
+  GoogleAccountLinkError,
   createAccountService,
   normalizeDisplayName,
   normalizeEmail,
   parseSessionTtlMs,
   validateDisplayName,
   validateEmail,
+  validateGoogleSubject,
   validatePassword,
   validateAccountPreferences,
 };

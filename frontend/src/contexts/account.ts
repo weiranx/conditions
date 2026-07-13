@@ -22,6 +22,13 @@ export interface AccountAIUsage {
 
 export type PreferenceSyncState = 'idle' | 'saving' | 'saved' | 'error';
 
+export interface GoogleAuthConfig {
+  available: boolean | null;
+  clientId: string | null;
+  nonce: string | null;
+  loading: boolean;
+}
+
 export interface AccountContextValue {
   available: boolean | null;
   user: AccountUser | null;
@@ -31,6 +38,7 @@ export interface AccountContextValue {
   error: string | null;
   preferenceSyncState: PreferenceSyncState;
   preferenceError: string | null;
+  google: GoogleAuthConfig;
   createAccount: (input: {
     displayName: string;
     email: string;
@@ -38,6 +46,10 @@ export interface AccountContextValue {
     preferences: UserPreferences;
   }) => Promise<AccountUser | null>;
   signIn: (input: { email: string; password: string }) => Promise<AccountUser | null>;
+  signInWithGoogle: (input: {
+    credential: string;
+    preferences: UserPreferences;
+  }) => Promise<AccountUser | null>;
   signOut: () => Promise<AccountUser | null>;
   refreshAccount: () => Promise<AccountUser | null>;
   savePreferences: (preferences: UserPreferences) => Promise<AccountUser>;
