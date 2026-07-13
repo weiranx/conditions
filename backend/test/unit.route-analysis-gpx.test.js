@@ -105,6 +105,63 @@ test('disabled AI route assistance blocks suggestions without disabling route an
   expect(askAI).not.toHaveBeenCalled();
 });
 
+test('AI named routes use specific landmark names instead of mapped checkpoint labels', async () => {
+  const app = express();
+  app.use(express.json());
+  const aiCalls = [];
+  let waypointAttempt = 0;
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => {
+      aiCalls.push({ prompt, options });
+      if (options.feature === 'route-waypoints') {
+        waypointAttempt += 1;
+        if (waypointAttempt === 1) {
+          return '[{"name":"Mist Trail checkpoint 2","lat":37.73,"lon":-119.55,"elev_ft":4300},{"name":"Half Dome","lat":37.7459,"lon":-119.5332,"elev_ft":8846}]';
+        }
+        return '[{"name":"Happy Isles Trailhead","lat":37.7329,"lon":-119.5587,"elev_ft":4035},{"name":"Vernal Fall Footbridge","lat":37.7275,"lon":-119.5431,"elev_ft":4400},{"name":"Half Dome","lat":37.7459,"lon":-119.5332,"elev_ft":8846}]';
+      }
+      return 'Named route briefing';
+    },
+    invokeSafetyHandler: async () => ({
+      statusCode: 200,
+      payload: {
+        weather: { elevation: 6000, temp: 45, windGust: 18, description: 'Clear' },
+        safety: { score: 80 },
+        avalanche: { relevant: false },
+        alerts: { alerts: [] },
+        snowpack: {},
+      },
+    }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Half Dome Named Waypoint Test',
+      route: 'Mist Trail',
+      lat: 37.7459,
+      lon: -119.5332,
+      date: '2026-07-12',
+      start: '06:00',
+    });
+
+  expect(response.status).toBe(200);
+  expect(response.body.routeSource).toBe('generated');
+  expect(response.body.waypoints.map((waypoint) => waypoint.name)).toEqual([
+    'Happy Isles Trailhead',
+    'Vernal Fall Footbridge',
+    'Half Dome',
+  ]);
+  expect(response.body.waypoints.map((waypoint) => waypoint.name).join(' ')).not.toMatch(/checkpoint\s+\d/i);
+  const waypointCalls = aiCalls.filter((call) => call.options.feature === 'route-waypoints');
+  expect(waypointCalls).toHaveLength(2);
+  expect(waypointCalls[0].prompt).toMatch(/Never use generic labels/i);
+  expect(aiCalls.at(-1).options.feature).toBe('route-analysis');
+});
+
 test('GPX route analysis uses supplied coordinates without generating or geocoding waypoints', async () => {
   const app = express();
   app.use(express.json());

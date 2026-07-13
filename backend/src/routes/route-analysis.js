@@ -105,6 +105,35 @@ const parseJsonArrayFromAI = (text) => {
   }
 };
 
+const sanitizeGeneratedWaypoints = (rawWaypoints) => {
+  if (!Array.isArray(rawWaypoints) || rawWaypoints.length < 2 || rawWaypoints.length > MAX_SUPPLIED_WAYPOINTS) {
+    throw new Error(`AI waypoints must contain between 2 and ${MAX_SUPPLIED_WAYPOINTS} entries`);
+  }
+
+  return rawWaypoints.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') {
+      throw new Error(`AI waypoint ${index + 1} must be an object`);
+    }
+    const name = String(raw.name || '').trim().slice(0, 100);
+    if (!name || /\b(?:checkpoint|waypoint)\s*(?:#\s*)?\d+\b/i.test(name)) {
+      throw new Error(`AI waypoint ${index + 1} must use a specific place name`);
+    }
+    const lat = Number(raw.lat);
+    const lon = Number(raw.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      throw new Error(`AI waypoint ${index + 1} must have valid coordinates`);
+    }
+    const elevation = raw.elev_ft == null ? null : Number(raw.elev_ft);
+    return {
+      ...raw,
+      name,
+      lat,
+      lon,
+      ...(Number.isFinite(elevation) ? { elev_ft: Math.round(elevation) } : {}),
+    };
+  });
+};
+
 // Haversine distance in km between two lat/lon points
 const haversineKm = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
@@ -303,14 +332,56 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     }
 
     try {
-      // Step 1: Use authoritative GPX checkpoints when provided. Otherwise retain
-      // the existing generated-waypoint workflow for named routes.
+      // Step 1: Use authoritative GPX checkpoints when provided. For named routes,
+      // AI-assisted analysis uses real named landmarks; mapped trail geometry is
+      // the non-AI fallback.
       let routeSource = 'generated';
       let routeSourceDetails = null;
       let waypointsCopy;
       if (suppliedWaypoints) {
         routeSource = 'gpx';
         waypointsCopy = suppliedWaypoints.map((waypoint) => ({ ...waypoint }));
+      } else if (aiFeatureEnabled) {
+        // Version the cache key so older generic "checkpoint 2" results are not
+        // reused after tightening the waypoint-name contract.
+        const wpCacheKey = `named-v2|${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
+        const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
+          let lastError;
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const waypointText = await withTimeout(askAI(
+              `Return 4-5 real, named landmarks along the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
+Use the specific proper name of each trailhead, junction, camp, lake, pass, ridge feature, or summit that a traveler would recognize on a map. The final entry must use the objective's proper name. Never use generic labels such as "Checkpoint 2", "Waypoint 3", "route start", or "route objective". If the route does not have enough reliably named landmarks, return fewer entries rather than inventing names.
+List them in order from trailhead to summit.
+Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
+[{"name":"Specific Place Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
+              { maxTokens: 1024, tier: 'fast', feature: 'route-waypoints' }
+            ), 20000, 'Waypoint lookup');
+            try {
+              return sanitizeGeneratedWaypoints(parseJsonArrayFromAI(waypointText));
+            } catch (error) {
+              lastError = error;
+            }
+          }
+          throw lastError;
+        });
+        // Clone so summit pinning doesn't mutate the cached array.
+        waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
+        const summit = waypointsCopy[waypointsCopy.length - 1];
+        summit.lat = safeLat;
+        summit.lon = safeLon;
+
+        await Promise.all(
+          waypointsCopy.slice(0, -1).map(async (wp) => {
+            const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
+            if (geo) {
+              wp.lat = geo.lat;
+              wp.lon = geo.lon;
+              wp.geocodingVerified = true;
+            } else {
+              wp.geocodingVerified = false;
+            }
+          })
+        );
       } else {
         const mappedRoute = await routeDataService.resolveMappedRoute({
           peak: safePeak,
@@ -328,42 +399,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           };
           waypointsCopy = mappedRoute.waypoints.map((waypoint) => ({ ...waypoint }));
         } else {
-          if (!aiFeatureEnabled) {
-            return res.status(503).json({
-              error: 'AI waypoint generation is unavailable. Import a GPX route or enter a mapped trail name.',
-            });
-          }
-          const wpCacheKey = `${normalizeTextKey(safePeak)}|${normalizeTextKey(safeRoute)}|${normalizeCoordKey(safeLat, safeLon)}`;
-          const generatedWaypoints = await waypointCache.getOrFetch(wpCacheKey, async () => {
-            const waypointText = await withTimeout(askAI(
-              `Return 4-5 key waypoints for the "${safeRoute}" on ${safePeak} near (${safeLat}, ${safeLon}).
-List them in order from trailhead to summit.
-Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
-[{"name":"Waypoint Name","lat":0.0,"lon":0.0,"elev_ft":0}]`,
-              { maxTokens: 1024, tier: 'fast', feature: 'route-waypoints' }
-            ), 20000, 'Waypoint lookup');
-            return parseJsonArrayFromAI(waypointText);
+          return res.status(503).json({
+            error: 'AI waypoint generation is unavailable. Import a GPX route or enter a mapped trail name.',
           });
-          // Clone so summit pinning doesn't mutate the cached array.
-          waypointsCopy = generatedWaypoints.map((wp) => ({ ...wp }));
-          if (waypointsCopy.length > 0) {
-            const summit = waypointsCopy[waypointsCopy.length - 1];
-            summit.lat = safeLat;
-            summit.lon = safeLon;
-          }
-
-          await Promise.all(
-            waypointsCopy.slice(0, -1).map(async (wp) => {
-              const geo = await geocodeWaypoint(wp.name, safeLat, safeLon, fetchWithTimeout, fetchHeaders);
-              if (geo) {
-                wp.lat = geo.lat;
-                wp.lon = geo.lon;
-                wp.geocodingVerified = true;
-              } else {
-                wp.geocodingVerified = false;
-              }
-            })
-          );
         }
       }
 
