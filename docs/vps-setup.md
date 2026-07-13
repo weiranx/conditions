@@ -303,9 +303,9 @@ Run the backend utility scripts from the production checkout:
 
 ```bash
 cd /opt/summitsafe
-./scripts/backend-maintenance.sh status  # Show backend container and health status
-./scripts/backend-maintenance.sh stop    # Gracefully stop backend for maintenance
-./scripts/backend-maintenance.sh start   # Start backend and wait for /healthz
+./scripts/backend-maintenance.sh status  # Show backend and PostgreSQL health
+./scripts/backend-maintenance.sh stop    # Stop backend, then PostgreSQL
+./scripts/backend-maintenance.sh start   # Start PostgreSQL, then backend
 ./scripts/backend-health.sh      # Show container status and check /healthz
 ./scripts/backend-logs.sh        # Follow the latest 200 backend log lines
 ./scripts/backend-restart.sh     # Restart the existing backend container
