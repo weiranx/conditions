@@ -59,6 +59,7 @@ const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, isAIAvailable } = require('./src/utils/ai-client');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
+const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
 const { logger } = require('./src/utils/logger');
 const POPULAR_PEAKS = require('./peaks.json');
 
@@ -99,6 +100,7 @@ const app = createApp({
 });
 
 const fetchWithTimeout = createFetchWithTimeout(REQUEST_TIMEOUT_MS);
+const aiModelCatalog = createAIModelCatalog({ fetchWithTimeout, getAIStatus });
 
 // Circuit breakers for the two chronically-flaky, single-endpoint upstreams that sit on
 // the critical path of every /api/safety request. Once either upstream fails repeatedly
@@ -798,6 +800,7 @@ registerHealthRoutes(app, {
 registerReportLogsRoute(app, {
   caches: observableCaches,
   runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
+  loadModelCatalog: (options) => aiModelCatalog.load(options),
 });
 registerRouteAnalysisRoutes({ app, askAI, invokeSafetyHandler, fetchWithTimeout, fetchHeaders: DEFAULT_FETCH_HEADERS });
 registerAiBriefRoute({ app, askAI });

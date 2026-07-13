@@ -32,8 +32,10 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const secondCache = { clear: jest.fn(), stats: jest.fn(() => ({ name: 'imagery', size: 2 })) };
   const diagnosticsPayload = { summary: { total: 2, operational: 2, failed: 0, notConfigured: 0 }, services: [] };
   const runDiagnostics = jest.fn(async () => diagnosticsPayload);
+  const modelCatalogPayload = { fetchedAt: '2026-07-12T12:00:00.000Z', providers: {} };
+  const loadModelCatalog = jest.fn(async () => modelCatalogPayload);
   const { registerReportLogsRoute } = require('../src/routes/report-logs');
-  registerReportLogsRoute(app, { caches: [firstCache, null, secondCache], runDiagnostics });
+  registerReportLogsRoute(app, { caches: [firstCache, null, secondCache], runDiagnostics, loadModelCatalog });
 
   const createResponse = () => ({
     statusCode: 200,
@@ -72,6 +74,16 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     models: { anthropic: { primary: 'claude-model', fast: 'claude-fast' } },
   });
 
+  const getModelsResponse = createResponse();
+  await routes.get.get('/api/admin/ai-models')({ headers }, getModelsResponse);
+  expect(loadModelCatalog).toHaveBeenCalledWith({ force: false });
+  expect(getModelsResponse.payload).toEqual(modelCatalogPayload);
+
+  const refreshModelsResponse = createResponse();
+  await routes.post.get('/api/admin/ai-models/refresh')({ headers }, refreshModelsResponse);
+  expect(loadModelCatalog).toHaveBeenLastCalledWith({ force: true });
+  expect(refreshModelsResponse.payload).toEqual(modelCatalogPayload);
+
   const getFlagsResponse = createResponse();
   routes.get.get('/api/admin/feature-flags')({ headers }, getFlagsResponse);
   expect(getFlagsResponse.payload).toEqual({ persistent: true, flags: { tripPlanning: true } });
@@ -104,6 +116,11 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   routes.post.get('/api/admin/maintenance/ai-usage')({ headers: {} }, unauthorizedResponse);
   expect(unauthorizedResponse.statusCode).toBe(401);
   expect(clearAIUsageEntries).toHaveBeenCalledTimes(1);
+
+  const unauthorizedModelsResponse = createResponse();
+  await routes.get.get('/api/admin/ai-models')({ headers: {} }, unauthorizedModelsResponse);
+  expect(unauthorizedModelsResponse.statusCode).toBe(401);
+  expect(loadModelCatalog).toHaveBeenCalledTimes(2);
 
   expect(routes.post.has('/api/admin/maintenance/report-logs')).toBe(true);
 

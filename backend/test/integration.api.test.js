@@ -308,9 +308,13 @@ test('GET /api/report-logs rejects access without the admin key', async () => {
 test('AI admin settings endpoints reject access without the admin key', async () => {
   const getResponse = await request(app).get('/api/admin/ai-settings');
   const patchResponse = await request(app).patch('/api/admin/ai-settings').send({ enabled: false });
+  const modelsResponse = await request(app).get('/api/admin/ai-models');
+  const refreshModelsResponse = await request(app).post('/api/admin/ai-models/refresh');
 
   expect([401, 403]).toContain(getResponse.status);
   expect([401, 403]).toContain(patchResponse.status);
+  expect([401, 403]).toContain(modelsResponse.status);
+  expect([401, 403]).toContain(refreshModelsResponse.status);
 });
 
 test.each([

@@ -148,6 +148,15 @@ interface AIAdminSettings {
   }>;
 }
 
+interface AIModelCatalog {
+  fetchedAt: string;
+  providers: Record<AIProvider, {
+    models: string[];
+    source: 'provider' | 'configured';
+    error: string | null;
+  }>;
+}
+
 type AIFeatureKey = 'aiBrief' | 'reportChat' | 'routeAnalysis' | 'snowVision';
 
 const AI_FEATURE_CONTROLS = [
@@ -570,6 +579,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [logs, setLogs] = useState<ReportLogEntry[]>([]);
   const [aiUsage, setAIUsage] = useState<AIUsageEntry[]>([]);
   const [aiSettings, setAISettings] = useState<AIAdminSettings | null>(null);
+  const [aiModelCatalog, setAIModelCatalog] = useState<AIModelCatalog | null>(null);
   const [featureFlagStatus, setFeatureFlagStatus] = useState<ProductFeatureFlagStatus | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -578,6 +588,8 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [aiUsageError, setAIUsageError] = useState<string | null>(null);
   const [aiSettingsError, setAISettingsError] = useState<string | null>(null);
   const [aiSettingsPending, setAISettingsPending] = useState(false);
+  const [aiModelCatalogPending, setAIModelCatalogPending] = useState(false);
+  const [aiModelCatalogError, setAIModelCatalogError] = useState<string | null>(null);
   const [modelDrafts, setModelDrafts] = useState<Record<AIProvider, { primary: string; fast: string }>>({
     openai: { primary: '', fast: '' },
     anthropic: { primary: '', fast: '' },
@@ -605,14 +617,15 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     if (background) setRefreshing(true);
     try {
       const headers = { Authorization: `Bearer ${secretKey}` };
-      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, aiSettingsResult, featureFlagsResult, aiModelsResult] = await Promise.all([
         fetchApi('/api/report-logs', { headers }),
         fetchApi('/api/ai-usage', { headers }),
         fetchApi('/api/healthz'),
         fetchApi('/api/admin/ai-settings', { headers }),
         fetchApi('/api/admin/feature-flags', { headers }),
+        fetchApi('/api/admin/ai-models', { headers }),
       ]);
-      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status, featureFlagsResult.response.status].some((status) => status === 401 || status === 403)) {
+      if ([logsResult.response.status, aiUsageResult.response.status, aiSettingsResult.response.status, featureFlagsResult.response.status, aiModelsResult.response.status].some((status) => status === 401 || status === 403)) {
         onUnauthorized();
         return;
       }
@@ -647,17 +660,48 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       } else {
         setFeatureFlagsError('Product feature flags are temporarily unavailable.');
       }
+      if (aiModelsResult.response.ok && aiModelsResult.payload && typeof aiModelsResult.payload === 'object') {
+        setAIModelCatalog(aiModelsResult.payload as AIModelCatalog);
+        setAIModelCatalogError(null);
+      } else {
+        setAIModelCatalogError('Provider model lists are temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
       setHealthError('System details are temporarily unavailable.');
       setAISettingsError('AI controls are temporarily unavailable.');
       setFeatureFlagsError('Product feature flags are temporarily unavailable.');
+      setAIModelCatalogError('Provider model lists are temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [secretKey, onUnauthorized]);
+
+  const refreshModelCatalog = useCallback(async () => {
+    setAIModelCatalogPending(true);
+    setAIModelCatalogError(null);
+    try {
+      const result = await fetchApi('/api/admin/ai-models/refresh', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      if (result.response.status === 401 || result.response.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      if (result.response.ok && result.payload && typeof result.payload === 'object') {
+        setAIModelCatalog(result.payload as AIModelCatalog);
+        return;
+      }
+      setAIModelCatalogError('Provider model lists could not be refreshed.');
+    } catch {
+      setAIModelCatalogError('Could not reach the server to refresh provider models.');
+    } finally {
+      setAIModelCatalogPending(false);
+    }
+  }, [onUnauthorized, secretKey]);
 
   const updateAIControl = useCallback(async (settings: {
     enabled?: boolean;
@@ -1228,12 +1272,25 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
               ? 'Changes apply immediately but persistence is unavailable in this environment'
               : 'Changes apply immediately and persist across backend restarts'}</p>
           </div>
-          <span className={aiSettings?.enabled ? 'admin-ai-status is-enabled' : 'admin-ai-status is-stopped'}>
-            <span aria-hidden /> {aiSettings ? (aiSettings.enabled ? 'AI enabled' : 'AI stopped') : 'Status unavailable'}
-          </span>
+          <div className="admin-ai-head-actions">
+            <button
+              type="button"
+              className="logs-icon-btn"
+              onClick={() => void refreshModelCatalog()}
+              disabled={aiModelCatalogPending}
+              title="Fetch the latest provider model lists"
+              aria-label="Refresh AI model lists"
+            >
+              <RefreshCw size={15} className={aiModelCatalogPending ? 'is-spinning' : ''} aria-hidden />
+            </button>
+            <span className={aiSettings?.enabled ? 'admin-ai-status is-enabled' : 'admin-ai-status is-stopped'}>
+              <span aria-hidden /> {aiSettings ? (aiSettings.enabled ? 'AI enabled' : 'AI stopped') : 'Status unavailable'}
+            </span>
+          </div>
         </div>
 
         {aiSettingsError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {aiSettingsError}</div>}
+        {aiModelCatalogError && <div className="logs-inline-note"><AlertTriangle size={15} aria-hidden /> {aiModelCatalogError}</div>}
 
         <div className="admin-ai-control-grid">
           <div className="admin-ai-setting">
@@ -1289,7 +1346,13 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
             const changed = Boolean(providerConfig)
               && (draft.primary.trim() !== providerConfig?.primary || draft.fast.trim() !== providerConfig?.fast);
             const providerLabel = provider === 'openai' ? 'OpenAI models' : 'Claude models';
-            const modelOptions = providerConfig?.options ?? [];
+            const catalogProvider = aiModelCatalog?.providers?.[provider];
+            const modelOptions = Array.from(new Set([
+              ...(catalogProvider?.models ?? []),
+              ...(providerConfig?.options ?? []),
+              providerConfig?.primary,
+              providerConfig?.fast,
+            ].filter((model): model is string => Boolean(model)))).sort((left, right) => left.localeCompare(right));
             return (
               <div className="admin-model-card" key={`${provider}-models`}>
                 <div className="admin-model-card-head">
@@ -1299,7 +1362,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                     <p>Choose the primary model for deeper work and the fast model for latency-sensitive requests.</p>
                   </div>
                   <span className={providerConfig?.configured ? 'is-configured' : ''}>
-                    {providerConfig?.configured ? 'API key ready' : 'API key missing'}
+                    {providerConfig?.configured
+                      ? `${modelOptions.length.toLocaleString()} ${catalogProvider?.source === 'provider' ? 'available' : 'configured'}`
+                      : 'API key missing'}
                   </span>
                 </div>
                 <div className="admin-model-fields">
@@ -1340,6 +1405,9 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
                     {aiSettingsPending ? 'Saving…' : 'Save models'}
                   </button>
                 </div>
+                {catalogProvider?.error && (
+                  <p className="admin-model-catalog-note"><AlertTriangle size={13} aria-hidden /> {catalogProvider.error}; showing configured models.</p>
+                )}
               </div>
             );
           })}

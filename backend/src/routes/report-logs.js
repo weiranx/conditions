@@ -149,7 +149,7 @@ const secretsMatch = (provided, expected) => {
   return crypto.timingSafeEqual(providedBuf, expectedBuf);
 };
 
-const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null } = {}) => {
+const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null, loadModelCatalog = null } = {}) => {
   let diagnosticsInFlight = null;
   const authorize = (req, res) => {
     if (!LOGS_SECRET) {
@@ -203,6 +203,22 @@ const registerReportLogsRoute = (app, { caches = [], runDiagnostics = null } = {
       res.status(status).json({ error: error instanceof Error ? error.message : 'Invalid AI settings' });
     }
   });
+
+  const sendModelCatalog = async (req, res, force = false) => {
+    if (!authorize(req, res)) return;
+    if (typeof loadModelCatalog !== 'function') {
+      res.status(503).json({ error: 'AI model catalog is unavailable' });
+      return;
+    }
+    try {
+      res.json(await loadModelCatalog({ force }));
+    } catch {
+      res.status(502).json({ error: 'AI model catalog could not be loaded' });
+    }
+  };
+
+  app.get('/api/admin/ai-models', (req, res) => sendModelCatalog(req, res));
+  app.post('/api/admin/ai-models/refresh', (req, res) => sendModelCatalog(req, res, true));
 
   app.get('/api/admin/feature-flags', (req, res) => {
     if (!authorize(req, res)) return;
