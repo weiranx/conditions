@@ -17,6 +17,7 @@ import { useAccount } from '../../hooks/useAccount';
 import { GoogleSignInButton } from '../account/GoogleSignInButton';
 import { ProductNav } from './ProductNav';
 import { LegalLinks } from '../../app/legal-links';
+import { GUEST_REPORT_LIMIT } from '../../app/guest-report-limit';
 import { persistUserPreferences } from '../../app/preferences';
 import type { UserPreferences } from '../../app/types';
 import '../../styles/account.css';
@@ -28,6 +29,7 @@ interface AccountViewProps {
   openPlannerView: () => void;
   openTripToolView: () => void;
   preferences: UserPreferences;
+  guestReportCount: number;
   embedded?: boolean;
 }
 
@@ -68,6 +70,7 @@ export function AccountView({
   openPlannerView,
   openTripToolView,
   preferences,
+  guestReportCount,
   embedded = false,
 }: AccountViewProps) {
   const account = useAccount();
@@ -135,6 +138,8 @@ export function AccountView({
   const planPeriodEnd = account.tier?.currentPeriodEnd
     ? formatPlanPeriod(account.tier.currentPeriodEnd)
     : null;
+  const guestReportsRemaining = Math.max(0, GUEST_REPORT_LIMIT - guestReportCount);
+  const guestReportPercentUsed = Math.min(100, (guestReportCount / GUEST_REPORT_LIMIT) * 100);
 
   return (
     <div
@@ -296,6 +301,40 @@ export function AccountView({
                   Sign in
                 </button>
               </div>
+
+              <section className="account-usage-card account-guest-usage" aria-label="Generated report usage without an account">
+                <div className="account-usage-heading">
+                  <span><FileText aria-hidden /> Generated report usage</span>
+                  <small>Browser limit</small>
+                </div>
+                <p className="account-usage-total">
+                  <strong>{guestReportCount}</strong>
+                  <span> / {GUEST_REPORT_LIMIT} reports</span>
+                </p>
+                <div
+                  className="account-usage-progress"
+                  role="progressbar"
+                  aria-label="Generated reports used without an account"
+                  aria-valuemin={0}
+                  aria-valuemax={GUEST_REPORT_LIMIT}
+                  aria-valuenow={guestReportCount}
+                >
+                  <span style={{ width: `${guestReportPercentUsed}%` }} />
+                </div>
+                <div className="account-usage-meta">
+                  <span>
+                    {guestReportsRemaining === 1
+                      ? '1 report remaining'
+                      : `${guestReportsRemaining} reports remaining`}
+                  </span>
+                  <span>Stored in this browser</span>
+                </div>
+                <p className="account-usage-note">
+                  {guestReportsRemaining > 0
+                    ? 'Create a free account for more reports and saved history.'
+                    : 'Your browser quota is used. Sign in or create a free account to continue.'}
+                </p>
+              </section>
 
               <div className="account-form-head">
                 <p>{mode === 'create' ? 'Get started' : 'Welcome back'}</p>

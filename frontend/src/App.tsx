@@ -2035,6 +2035,7 @@ function App() {
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
         preferences={preferences}
+        guestReportCount={guestReportCount}
         displayDefaultStartTime={displayDefaultStartTime}
         travelWindowHoursLabel={travelWindowHoursLabel}
         windThresholdDisplay={windThresholdDisplay}

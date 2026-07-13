@@ -33,6 +33,7 @@ export interface SettingsViewProps {
   appShellClassName: string;
   isViewPending: boolean;
   preferences: UserPreferences;
+  guestReportCount: number;
 
   // Display values
   displayDefaultStartTime: string;
@@ -158,6 +159,7 @@ export function SettingsView({
   appShellClassName,
   isViewPending,
   preferences,
+  guestReportCount,
   displayDefaultStartTime,
   travelWindowHoursLabel,
   windThresholdDisplay,
@@ -273,6 +275,7 @@ export function SettingsView({
               openPlannerView={openPlannerView}
               openTripToolView={openTripToolView}
               preferences={preferences}
+              guestReportCount={guestReportCount}
               embedded
             />
 

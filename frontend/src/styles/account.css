@@ -298,6 +298,7 @@
 .account-usage-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--ui-brand); transition: width .2s ease; }
 .account-usage-meta { margin-top: 8px; display: flex; justify-content: space-between; gap: 12px; color: var(--ui-text-3); font-size: 9.5px; }
 .account-usage-note, .account-usage-unavailable { margin: 12px 0 0; color: var(--ui-text-3); font-size: 10px; line-height: 1.45; }
+.account-guest-usage { margin: 0 0 26px; }
 
 .account-profile .account-error { width: 100%; box-sizing: border-box; margin-top: 16px; text-align: left; }
 .account-profile-actions { width: 100%; margin-top: auto; padding-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
