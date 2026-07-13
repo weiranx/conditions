@@ -8,6 +8,9 @@ const { recordAIUsage } = require('./ai-usage');
 const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic']);
 const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision'];
 const AI_FEATURE_KEY_SET = new Set(AI_FEATURE_KEYS);
+const MODEL_TIER_KEYS = ['primary', 'fast'];
+const MODEL_TIER_KEY_SET = new Set(MODEL_TIER_KEYS);
+const MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/;
 const DEFAULT_AI_PROVIDER = String(process.env.AI_PROVIDER || 'openai').trim().toLowerCase();
 if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
   throw new Error(`AI_PROVIDER must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
@@ -19,15 +22,27 @@ const AI_SETTINGS_FILE = process.env.AI_SETTINGS_FILE
     ? null
     : path.resolve(__dirname, '../../data/ai-settings.json');
 
+const parseModelOptions = (value, defaults) => [...new Set([
+  ...defaults,
+  ...String(value || '').split(',').map((model) => model.trim()).filter((model) => MODEL_ID_PATTERN.test(model)),
+])];
+
+const openAIPrimaryModel = process.env.OPENAI_MODEL || 'gpt-5.6-terra';
+const openAIFastModel = process.env.OPENAI_FAST_MODEL || 'gpt-5.6-luna';
+const anthropicPrimaryModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+const anthropicFastModel = process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001';
+
 const MODEL_CONFIG = {
   openai: {
-    primary: process.env.OPENAI_MODEL || 'gpt-5.6-terra',
-    fast: process.env.OPENAI_FAST_MODEL || 'gpt-5.6-luna',
+    primary: openAIPrimaryModel,
+    fast: openAIFastModel,
+    options: parseModelOptions(process.env.OPENAI_MODEL_OPTIONS, [openAIPrimaryModel, openAIFastModel]),
     configured: Boolean(process.env.OPENAI_API_KEY),
   },
   anthropic: {
-    primary: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
-    fast: process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001',
+    primary: anthropicPrimaryModel,
+    fast: anthropicFastModel,
+    options: parseModelOptions(process.env.ANTHROPIC_MODEL_OPTIONS, [anthropicPrimaryModel, anthropicFastModel]),
     configured: Boolean(process.env.ANTHROPIC_API_KEY),
   },
 };
@@ -79,6 +94,23 @@ const loadPersistedAISettings = () => {
     } else if (persisted.features !== undefined) {
       logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI feature settings');
     }
+    if (persisted.models && typeof persisted.models === 'object' && !Array.isArray(persisted.models)) {
+      Object.entries(persisted.models).forEach(([provider, tiers]) => {
+        if (!SUPPORTED_PROVIDERS.has(provider) || !tiers || typeof tiers !== 'object' || Array.isArray(tiers)) {
+          logger.warn({ file: AI_SETTINGS_FILE, provider }, 'Ignoring invalid persisted AI model settings');
+          return;
+        }
+        MODEL_TIER_KEYS.forEach((tier) => {
+          const model = typeof tiers[tier] === 'string' ? tiers[tier].trim() : '';
+          if (MODEL_ID_PATTERN.test(model)) MODEL_CONFIG[provider][tier] = model;
+          else if (tiers[tier] !== undefined) {
+            logger.warn({ file: AI_SETTINGS_FILE, provider, tier }, 'Ignoring invalid persisted AI model ID');
+          }
+        });
+      });
+    } else if (persisted.models !== undefined) {
+      logger.warn({ file: AI_SETTINGS_FILE }, 'Ignoring invalid persisted AI models');
+    }
     if (!aiEnabled) {
       aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, false]));
     }
@@ -98,7 +130,15 @@ const persistAISettings = () => {
     fs.mkdirSync(path.dirname(AI_SETTINGS_FILE), { recursive: true });
     fs.writeFileSync(
       tempFile,
-      `${JSON.stringify({ enabled: aiEnabled, provider: activeProvider, features: aiFeatures }, null, 2)}\n`,
+      `${JSON.stringify({
+        enabled: aiEnabled,
+        provider: activeProvider,
+        features: aiFeatures,
+        models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, {
+          primary: MODEL_CONFIG[provider].primary,
+          fast: MODEL_CONFIG[provider].fast,
+        }])),
+      }, null, 2)}\n`,
       { encoding: 'utf8', mode: 0o600 },
     );
     fs.renameSync(tempFile, AI_SETTINGS_FILE);
@@ -353,7 +393,14 @@ const getAIStatus = () => {
     fallbackPrimaryModel: MODEL_CONFIG[fallbackProvider].primary,
     fallbackFastModel: MODEL_CONFIG[fallbackProvider].fast,
     fallbackConfigured: MODEL_CONFIG[fallbackProvider].configured,
-    providers: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, { ...MODEL_CONFIG[provider] }])),
+    providers: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, {
+      ...MODEL_CONFIG[provider],
+      options: [...new Set([
+        ...MODEL_CONFIG[provider].options,
+        MODEL_CONFIG[provider].primary,
+        MODEL_CONFIG[provider].fast,
+      ])],
+    }])),
     features: Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, {
       enabled: aiFeatures[feature],
       available: available && aiFeatures[feature],
@@ -363,7 +410,7 @@ const getAIStatus = () => {
   };
 };
 
-const updateAISettings = ({ enabled, provider, features } = {}) => {
+const updateAISettings = ({ enabled, provider, features, models } = {}) => {
   if (enabled !== undefined && typeof enabled !== 'boolean') {
     const error = new TypeError('enabled must be a boolean');
     error.code = 'INVALID_AI_SETTINGS';
@@ -399,19 +446,81 @@ const updateAISettings = ({ enabled, provider, features } = {}) => {
     });
   }
 
-  const previous = { enabled: aiEnabled, provider: activeProvider, features: { ...aiFeatures } };
+  const normalizedModels = {};
+  if (models !== undefined && (!models || typeof models !== 'object' || Array.isArray(models))) {
+    const error = new TypeError('models must be an object');
+    error.code = 'INVALID_AI_SETTINGS';
+    throw error;
+  }
+  if (models !== undefined) {
+    const providerEntries = Object.entries(models);
+    if (providerEntries.length === 0) {
+      const error = new TypeError('Provide at least one model setting');
+      error.code = 'INVALID_AI_SETTINGS';
+      throw error;
+    }
+    providerEntries.forEach(([modelProvider, tiers]) => {
+      if (!SUPPORTED_PROVIDERS.has(modelProvider)) {
+        const error = new TypeError(`Unknown AI model provider: ${modelProvider}`);
+        error.code = 'INVALID_AI_SETTINGS';
+        throw error;
+      }
+      if (!tiers || typeof tiers !== 'object' || Array.isArray(tiers)) {
+        const error = new TypeError(`${modelProvider} models must be an object`);
+        error.code = 'INVALID_AI_SETTINGS';
+        throw error;
+      }
+      const tierEntries = Object.entries(tiers);
+      if (tierEntries.length === 0) {
+        const error = new TypeError(`Provide at least one ${modelProvider} model`);
+        error.code = 'INVALID_AI_SETTINGS';
+        throw error;
+      }
+      normalizedModels[modelProvider] = {};
+      tierEntries.forEach(([tier, value]) => {
+        if (!MODEL_TIER_KEY_SET.has(tier)) {
+          const error = new TypeError(`Unknown AI model tier: ${tier}`);
+          error.code = 'INVALID_AI_SETTINGS';
+          throw error;
+        }
+        const model = typeof value === 'string' ? value.trim() : '';
+        if (!MODEL_ID_PATTERN.test(model)) {
+          const error = new TypeError(`${modelProvider} ${tier} model must be a valid model ID`);
+          error.code = 'INVALID_AI_SETTINGS';
+          throw error;
+        }
+        normalizedModels[modelProvider][tier] = model;
+      });
+    });
+  }
+
+  const previous = {
+    enabled: aiEnabled,
+    provider: activeProvider,
+    features: { ...aiFeatures },
+    models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((modelProvider) => [modelProvider, {
+      primary: MODEL_CONFIG[modelProvider].primary,
+      fast: MODEL_CONFIG[modelProvider].fast,
+    }])),
+  };
   if (enabled !== undefined) {
     aiEnabled = enabled;
     aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, enabled]));
   }
   if (provider !== undefined) activeProvider = provider;
   if (features !== undefined) aiFeatures = { ...aiFeatures, ...features };
+  Object.entries(normalizedModels).forEach(([modelProvider, tiers]) => {
+    MODEL_CONFIG[modelProvider] = { ...MODEL_CONFIG[modelProvider], ...tiers };
+  });
   try {
     persistAISettings();
   } catch (error) {
     aiEnabled = previous.enabled;
     activeProvider = previous.provider;
     aiFeatures = previous.features;
+    Object.entries(previous.models).forEach(([modelProvider, tiers]) => {
+      MODEL_CONFIG[modelProvider] = { ...MODEL_CONFIG[modelProvider], ...tiers };
+    });
     logger.error({ err: error, file: AI_SETTINGS_FILE }, 'Failed to persist AI runtime settings');
     const persistenceError = new Error('AI settings could not be saved');
     persistenceError.code = 'AI_SETTINGS_PERSIST_FAILED';
@@ -419,7 +528,18 @@ const updateAISettings = ({ enabled, provider, features } = {}) => {
     throw persistenceError;
   }
   logger.warn(
-    { previous, current: { enabled: aiEnabled, provider: activeProvider, features: aiFeatures } },
+    {
+      previous,
+      current: {
+        enabled: aiEnabled,
+        provider: activeProvider,
+        features: aiFeatures,
+        models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((modelProvider) => [modelProvider, {
+          primary: MODEL_CONFIG[modelProvider].primary,
+          fast: MODEL_CONFIG[modelProvider].fast,
+        }])),
+      },
+    },
     'AI runtime settings changed by administrator',
   );
   return getAIStatus();

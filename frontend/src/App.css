@@ -1045,6 +1045,52 @@ input {
 .admin-provider-options span { font-size: 11px; font-weight: 700; }
 .admin-provider-options small { overflow: hidden; margin-top: 2px; color: var(--ui-text-4); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
+.admin-model-card {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+}
+
+.admin-model-card-head {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+}
+
+.admin-model-card-head > div { min-width: 0; }
+.admin-model-card-head > div > strong { color: var(--ui-text); font-size: 12px; }
+.admin-model-card-head > div > p { margin: 3px 0 0; color: var(--ui-text-3); font-size: 10.5px; line-height: 1.45; }
+.admin-model-card-head > span:last-child { color: var(--ui-text-4); font-size: 9.5px; font-weight: 650; white-space: nowrap; }
+.admin-model-card-head > span:last-child.is-configured { color: var(--ui-go-ink); }
+
+.admin-model-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.admin-model-fields label { display: grid; gap: 5px; min-width: 0; }
+.admin-model-fields label > span { color: var(--ui-text-3); font-size: 9.5px; font-weight: 650; }
+.admin-model-fields input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: 10.5px var(--font-data);
+}
+.admin-model-fields input:focus { border-color: var(--ui-brand); outline: 2px solid var(--ui-brand-soft); }
+.admin-model-fields .logs-btn { min-height: 34px; white-space: nowrap; }
+
 .logs-metric-card {
   display: flex;
   align-items: center;
@@ -11128,6 +11174,8 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-ai-setting { grid-template-columns: 36px minmax(0, 1fr); }
   .admin-ai-setting > button,
   .admin-ai-setting > .admin-provider-options { grid-column: 1 / -1; }
+  .admin-model-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-model-fields .logs-btn { grid-column: 1 / -1; justify-content: center; }
   .logs-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .logs-analytics-grid { grid-template-columns: minmax(0, 1fr); }
   .logs-ai-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -11408,6 +11456,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-diagnostics-card .logs-chart-head .logs-btn { width: 100%; justify-content: center; }
   .admin-diagnostics-summary > small { width: 100%; margin-left: 0; }
   .admin-diagnostics-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-model-card-head { grid-template-columns: 36px minmax(0, 1fr); }
+  .admin-model-card-head > span:last-child { grid-column: 1 / -1; }
+  .admin-model-fields { grid-template-columns: minmax(0, 1fr); }
+  .admin-model-fields .logs-btn { grid-column: auto; }
   .admin-maintenance-grid {
     grid-template-columns: minmax(0, 1fr);
   }

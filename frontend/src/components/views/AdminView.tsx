@@ -139,6 +139,7 @@ interface AIAdminSettings {
   providers: Record<AIProvider, {
     primary: string;
     fast: string;
+    options: string[];
     configured: boolean;
   }>;
   features: Record<AIFeatureKey, {
@@ -577,6 +578,10 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
   const [aiUsageError, setAIUsageError] = useState<string | null>(null);
   const [aiSettingsError, setAISettingsError] = useState<string | null>(null);
   const [aiSettingsPending, setAISettingsPending] = useState(false);
+  const [modelDrafts, setModelDrafts] = useState<Record<AIProvider, { primary: string; fast: string }>>({
+    openai: { primary: '', fast: '' },
+    anthropic: { primary: '', fast: '' },
+  });
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
@@ -658,6 +663,7 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     enabled?: boolean;
     provider?: AIProvider;
     features?: Partial<Record<AIFeatureKey, boolean>>;
+    models?: Partial<Record<AIProvider, { primary?: string; fast?: string }>>;
   }) => {
     setAISettingsPending(true);
     setAISettingsError(null);
@@ -672,24 +678,40 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
       });
       if (result.response.status === 401 || result.response.status === 403) {
         onUnauthorized();
-        return;
+        return null;
       }
       if (result.response.ok && result.payload && typeof result.payload === 'object') {
         const nextSettings = result.payload as AIAdminSettings;
         setAISettings(nextSettings);
         publishAiAvailability(nextSettings);
-        return;
+        return nextSettings;
       }
       const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
         ? String(result.payload.error)
         : 'The server could not update AI controls.';
       setAISettingsError(message);
+      return null;
     } catch {
       setAISettingsError('Could not reach the server to update AI controls.');
+      return null;
     } finally {
       setAISettingsPending(false);
     }
   }, [onUnauthorized, secretKey]);
+
+  useEffect(() => {
+    if (!aiSettings) return;
+    setModelDrafts({
+      openai: {
+        primary: aiSettings.providers.openai.primary,
+        fast: aiSettings.providers.openai.fast,
+      },
+      anthropic: {
+        primary: aiSettings.providers.anthropic.primary,
+        fast: aiSettings.providers.anthropic.fast,
+      },
+    });
+  }, [aiSettings]);
 
   const toggleAIEnabled = () => {
     if (!aiSettings) return;
@@ -701,6 +723,14 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
     const current = aiSettings?.features?.[feature]?.enabled;
     if (typeof current !== 'boolean') return;
     void updateAIControl({ features: { [feature]: !current } });
+  };
+
+  const saveProviderModels = async (provider: AIProvider) => {
+    const draft = modelDrafts[provider];
+    const primary = draft.primary.trim();
+    const fast = draft.fast.trim();
+    if (!primary || !fast) return;
+    await updateAIControl({ models: { [provider]: { primary, fast } } });
   };
 
   const toggleProductFeature = async (feature: ProductFeatureKey) => {
@@ -1252,6 +1282,72 @@ function AdminDashboard({ secretKey, onUnauthorized }: { secretKey: string; onUn
               })}
             </div>
           </div>
+
+          {(['openai', 'anthropic'] as const).map((provider) => {
+            const providerConfig = aiSettings?.providers[provider];
+            const draft = modelDrafts[provider];
+            const changed = Boolean(providerConfig)
+              && (draft.primary.trim() !== providerConfig?.primary || draft.fast.trim() !== providerConfig?.fast);
+            const providerLabel = provider === 'openai' ? 'OpenAI models' : 'Claude models';
+            const optionsId = `admin-${provider}-model-options`;
+            return (
+              <div className="admin-model-card" key={`${provider}-models`}>
+                <div className="admin-model-card-head">
+                  <span className="admin-ai-setting-icon"><Cpu size={18} aria-hidden /></span>
+                  <div>
+                    <strong>{providerLabel}</strong>
+                    <p>Choose the primary model for deeper work and the fast model for latency-sensitive requests.</p>
+                  </div>
+                  <span className={providerConfig?.configured ? 'is-configured' : ''}>
+                    {providerConfig?.configured ? 'API key ready' : 'API key missing'}
+                  </span>
+                </div>
+                <div className="admin-model-fields">
+                  <label>
+                    <span>Primary model</span>
+                    <input
+                      type="text"
+                      list={optionsId}
+                      value={draft.primary}
+                      onChange={(event) => setModelDrafts((current) => ({
+                        ...current,
+                        [provider]: { ...current[provider], primary: event.target.value },
+                      }))}
+                      disabled={!providerConfig || aiSettingsPending}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <label>
+                    <span>Fast model</span>
+                    <input
+                      type="text"
+                      list={optionsId}
+                      value={draft.fast}
+                      onChange={(event) => setModelDrafts((current) => ({
+                        ...current,
+                        [provider]: { ...current[provider], fast: event.target.value },
+                      }))}
+                      disabled={!providerConfig || aiSettingsPending}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <datalist id={optionsId}>
+                    {(providerConfig?.options ?? []).map((model) => <option value={model} key={model} />)}
+                  </datalist>
+                  <button
+                    type="button"
+                    className="logs-btn logs-btn-primary"
+                    onClick={() => void saveProviderModels(provider)}
+                    disabled={!changed || !draft.primary.trim() || !draft.fast.trim() || aiSettingsPending}
+                  >
+                    {aiSettingsPending ? 'Saving…' : 'Save models'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
 
           {AI_FEATURE_CONTROLS.map((feature) => {
             const featureSettings = aiSettings?.features?.[feature.key];

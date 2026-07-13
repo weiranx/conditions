@@ -19,9 +19,11 @@ const ENV_KEYS = [
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
   'OPENAI_FAST_MODEL',
+  'OPENAI_MODEL_OPTIONS',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_MODEL',
   'ANTHROPIC_FAST_MODEL',
+  'ANTHROPIC_MODEL_OPTIONS',
   'AI_PRIMARY_TIMEOUT_MS',
   'AI_FAST_TIMEOUT_MS',
 ];
@@ -41,8 +43,10 @@ describe('AI provider client wrapper', () => {
     process.env.ANTHROPIC_API_KEY = 'anthropic-test-key';
     delete process.env.OPENAI_MODEL;
     delete process.env.OPENAI_FAST_MODEL;
+    delete process.env.OPENAI_MODEL_OPTIONS;
     delete process.env.ANTHROPIC_MODEL;
     delete process.env.ANTHROPIC_FAST_MODEL;
+    delete process.env.ANTHROPIC_MODEL_OPTIONS;
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
     delete process.env.AI_ENABLED;
@@ -161,11 +165,13 @@ describe('AI provider client wrapper', () => {
         openai: {
           primary: 'gpt-5.6-terra',
           fast: 'gpt-5.6-luna',
+          options: ['gpt-5.6-terra', 'gpt-5.6-luna'],
           configured: true,
         },
         anthropic: {
           primary: 'claude-sonnet-5',
           fast: 'claude-haiku-4-5-20251001',
+          options: ['claude-sonnet-5', 'claude-haiku-4-5-20251001'],
           configured: true,
         },
       },
@@ -227,6 +233,16 @@ describe('AI provider client wrapper', () => {
           routeAnalysis: false,
           snowVision: false,
         },
+        models: {
+          openai: {
+            primary: 'gpt-5.6-terra',
+            fast: 'gpt-5.6-luna',
+          },
+          anthropic: {
+            primary: 'claude-sonnet-5',
+            fast: 'claude-haiku-4-5-20251001',
+          },
+        },
       });
       expect(fs.statSync(settingsFile).mode & 0o777).toBe(0o600);
 
@@ -261,6 +277,55 @@ describe('AI provider client wrapper', () => {
     expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
     expect(mockOpenAICreate).not.toHaveBeenCalled();
     expect(getAIStatus().fallbackProvider).toBe('openai');
+  });
+
+  test('switches provider model tiers at runtime and uses them for requests', async () => {
+    process.env.OPENAI_MODEL_OPTIONS = 'gpt-custom-primary,gpt-custom-fast';
+    process.env.ANTHROPIC_MODEL_OPTIONS = 'claude-custom-primary,claude-custom-fast';
+    mockOpenAICreate.mockResolvedValue({ status: 'completed', output_text: 'custom openai' });
+    mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'custom claude' }] });
+    const { askAI, getAIStatus, updateAISettings } = loadClient('openai');
+
+    const status = updateAISettings({
+      models: {
+        openai: { primary: 'gpt-custom-primary', fast: 'gpt-custom-fast' },
+        anthropic: { primary: 'claude-custom-primary', fast: 'claude-custom-fast' },
+      },
+    });
+
+    expect(status.providers).toMatchObject({
+      openai: {
+        primary: 'gpt-custom-primary',
+        fast: 'gpt-custom-fast',
+        options: expect.arrayContaining(['gpt-custom-primary', 'gpt-custom-fast']),
+      },
+      anthropic: {
+        primary: 'claude-custom-primary',
+        fast: 'claude-custom-fast',
+        options: expect.arrayContaining(['claude-custom-primary', 'claude-custom-fast']),
+      },
+    });
+
+    await askAI('primary request');
+    await askAI('fast request', { tier: 'fast' });
+    expect(mockOpenAICreate).toHaveBeenNthCalledWith(1,
+      expect.objectContaining({ model: 'gpt-custom-primary' }),
+      expect.any(Object));
+    expect(mockOpenAICreate).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ model: 'gpt-custom-fast' }),
+      expect.any(Object));
+    expect(getAIStatus().primaryModel).toBe('gpt-custom-primary');
+  });
+
+  test('rejects invalid model settings', () => {
+    const { updateAISettings } = loadClient('openai');
+
+    expect(() => updateAISettings({ models: { unknown: { primary: 'model-id' } } }))
+      .toThrow('Unknown AI model provider');
+    expect(() => updateAISettings({ models: { openai: { slow: 'model-id' } } }))
+      .toThrow('Unknown AI model tier');
+    expect(() => updateAISettings({ models: { openai: { primary: 'model id with spaces' } } }))
+      .toThrow('must be a valid model ID');
   });
 
   test('kill switch synchronizes every feature flag and blocks provider calls', async () => {

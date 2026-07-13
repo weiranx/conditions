@@ -56,8 +56,21 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     enabled: false,
     provider: undefined,
     features: { aiBrief: false },
+    models: undefined,
   });
   expect(patchResponse.payload).toEqual({ enabled: false, provider: 'openai' });
+
+  const patchModelsResponse = createResponse();
+  routes.patch.get('/api/admin/ai-settings')({
+    headers,
+    body: { models: { anthropic: { primary: 'claude-model', fast: 'claude-fast' } } },
+  }, patchModelsResponse);
+  expect(updateAISettings).toHaveBeenLastCalledWith({
+    enabled: undefined,
+    provider: undefined,
+    features: undefined,
+    models: { anthropic: { primary: 'claude-model', fast: 'claude-fast' } },
+  });
 
   const getFlagsResponse = createResponse();
   routes.get.get('/api/admin/feature-flags')({ headers }, getFlagsResponse);
