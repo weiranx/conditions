@@ -52,6 +52,8 @@ const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
 const { registerAccountRoutes } = require('./src/routes/account');
 const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
 const { registerObjectiveWatchRoutes } = require('./src/routes/objective-watches');
+const { registerObjectiveWatchCheckRoute } = require('./src/routes/objective-watch-checks');
+const { createObjectiveWatchChecker } = require('./src/services/objective-watch-checker');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { createReportUsageLimitService } = require('./src/auth/report-usage-limit');
@@ -836,6 +838,17 @@ registerObjectiveWatchRoutes({
   app,
   database,
   accountService,
+});
+const objectiveWatchChecker = createObjectiveWatchChecker({
+  database,
+  invokeSafetyHandler,
+  emailService,
+  log: logger,
+});
+registerObjectiveWatchCheckRoute({
+  app,
+  checker: objectiveWatchChecker,
+  log: logger,
 });
 const ensureAccountAccess = createAccountAccessGuard({
   service: accountService,

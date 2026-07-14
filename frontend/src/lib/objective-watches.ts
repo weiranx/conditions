@@ -6,6 +6,14 @@ export interface ObjectiveWatch {
   title: string;
   plan: PersistedReportPlan;
   baselineReport?: PersistedReport;
+  lastCheckedAt: string | null;
+  nextCheckAt: string | null;
+  lastChange: {
+    checkedAt?: string;
+    reasons?: Array<{ key?: string; label?: string }>;
+  } | null;
+  consecutiveFailures: number;
+  notificationsEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +62,21 @@ export async function saveObjectiveWatch(report: PersistedReport): Promise<Objec
     body: JSON.stringify({ report }),
   });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not save this objective watch.'));
+  const watch = parseObjectiveWatch((payload as { watch?: unknown } | null)?.watch);
+  if (!watch) throw new Error('Objective watches returned an unexpected response.');
+  return watch;
+}
+
+export async function setObjectiveWatchNotifications(
+  watchId: string,
+  notificationsEnabled: boolean,
+): Promise<ObjectiveWatch> {
+  const { response, payload } = await fetchApi(`/api/account/objective-watches/${encodeURIComponent(watchId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notificationsEnabled }),
+  });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not update Objective Watch alerts.'));
   const watch = parseObjectiveWatch((payload as { watch?: unknown } | null)?.watch);
   if (!watch) throw new Error('Objective watches returned an unexpected response.');
   return watch;

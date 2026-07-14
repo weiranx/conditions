@@ -78,6 +78,16 @@ Monitor for:
 - In non-production environments, requests are logged with timing information.
 - `5xx` responses are logged in all environments.
 - Set `DEBUG_AVY=true` to enable verbose avalanche pipeline debug logs (useful when diagnosing zone-matching or bulletin parsing issues).
+- The host runs `scripts/objective-watch-cron.sh` at minute 7 hourly. Successful runs log an `Objective Watch cron completed` summary from the backend; failures cause the trigger script to exit non-zero.
+
+### Objective Watch scheduling
+
+- Watches more than 48 hours from their planned start are checked every three hours.
+- Watches inside the final 48 hours are checked hourly; expired plan dates are disabled.
+- Identical coordinate/date/start/window plans share one upstream safety refresh.
+- `OBJECTIVE_WATCH_CONCURRENCY` defaults to `4` and `OBJECTIVE_WATCH_BATCH_SIZE` defaults to `100`.
+- Full snapshots overwrite the previous snapshot; only meaningful risk-increase events are retained, for 90 days.
+- Email alerts are opt-in and only deliver to verified account email addresses.
 
 ---
 

@@ -5,6 +5,8 @@ import {
   CalendarDays,
   Clock3,
   LoaderCircle,
+  MailCheck,
+  MailPlus,
   MapPinned,
   Timer,
   Trash2,
@@ -15,6 +17,7 @@ import { useAccount } from '../../hooks/useAccount';
 import {
   deleteObjectiveWatch,
   listObjectiveWatches,
+  setObjectiveWatchNotifications,
   type ObjectiveWatch,
 } from '../../lib/objective-watches';
 import { ProductNav } from './ProductNav';
@@ -55,6 +58,13 @@ const formatPlanDate = (value: string) => {
       });
 };
 
+const monitoringLabel = (watch: ObjectiveWatch) => {
+  if (!watch.nextCheckAt) return 'Monitoring ended';
+  const plannedStart = new Date(`${watch.plan.forecastDate}T${watch.plan.alpineStartTime || '12:00'}:00Z`);
+  const hoursUntilStart = (plannedStart.getTime() - Date.now()) / (60 * 60 * 1000);
+  return Number.isFinite(hoursUntilStart) && hoursUntilStart > 48 ? 'Every 3 hours' : 'Hourly checks';
+};
+
 export function WatchesView({
   appShellClassName,
   isViewPending,
@@ -65,9 +75,11 @@ export function WatchesView({
 }: WatchesViewProps) {
   const account = useAccount();
   const accountUserId = account.user?.id;
+  const emailVerified = account.user?.emailVerified === true;
   const [watches, setWatches] = useState<ObjectiveWatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingAlertsId, setUpdatingAlertsId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,8 +122,26 @@ export function WatchesView({
     }
   };
 
+  const toggleAlerts = async (watch: ObjectiveWatch) => {
+    if (!emailVerified) {
+      navigateToView('settings');
+      return;
+    }
+    if (updatingAlertsId) return;
+    setUpdatingAlertsId(watch.id);
+    setError(null);
+    try {
+      const updated = await setObjectiveWatchNotifications(watch.id, !watch.notificationsEnabled);
+      setWatches((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Could not update Objective Watch alerts.');
+    } finally {
+      setUpdatingAlertsId(null);
+    }
+  };
+
   return (
-    <div className={`${appShellClassName} watches-page-shell`} aria-busy={isViewPending || loading || Boolean(deletingId)}>
+    <div className={`${appShellClassName} watches-page-shell`} aria-busy={isViewPending || loading || Boolean(deletingId) || Boolean(updatingAlertsId)}>
       <ProductNav
         active="watches"
         navigateToView={navigateToView}
@@ -123,12 +153,12 @@ export function WatchesView({
           <div className="watches-head-icon" aria-hidden><BellRing /></div>
           <p>Objective monitoring</p>
           <h1>Your watched objectives</h1>
-          <span>See every saved baseline and reopen the exact plan you chose to monitor.</span>
+          <span>See automatic check status, important changes, and every saved comparison baseline.</span>
         </header>
 
         <aside className="watches-explainer" aria-label="How Objective Watch works">
           <strong>How it works</strong>
-          <span>Each watch is a saved comparison baseline. Open its plan and generate fresh conditions to see what changed; watches do not refresh in the background.</span>
+          <span>Checks run every three hours, then hourly during the final 48 hours. Duplicate plans share one refresh, expired objectives stop automatically, and alerts only cover meaningful risk increases.</span>
         </aside>
 
         {!account.user ? (
@@ -165,10 +195,12 @@ export function WatchesView({
                     <div className="watch-card-main">
                       <div className="watch-card-heading">
                         <div>
-                          <span className="watch-card-kicker">Baseline saved {formatTimestamp(watch.updatedAt)}</span>
+                          <span className="watch-card-kicker">
+                            {watch.lastCheckedAt ? `Last checked ${formatTimestamp(watch.lastCheckedAt)}` : 'Automatic check queued'}
+                          </span>
                           <h2>{watch.title}</h2>
                         </div>
-                        <span className="watch-status"><span aria-hidden /> Baseline saved</span>
+                        <span className={`watch-status ${watch.nextCheckAt ? '' : 'is-ended'}`}><span aria-hidden /> {monitoringLabel(watch)}</span>
                       </div>
                       <div className="watch-card-meta">
                         <span><CalendarDays aria-hidden /> {formatPlanDate(watch.plan.forecastDate)}</span>
@@ -176,6 +208,19 @@ export function WatchesView({
                         <span><Timer aria-hidden /> {watch.plan.travelWindowHours}h window</span>
                         <span><MapPinned aria-hidden /> {watch.plan.lat.toFixed(4)}, {watch.plan.lon.toFixed(4)}</span>
                       </div>
+                      {watch.lastChange?.reasons && watch.lastChange.reasons.length > 0 && (
+                        <div className="watch-change" role="status">
+                          <strong>Important change detected {watch.lastChange.checkedAt ? formatTimestamp(watch.lastChange.checkedAt) : ''}</strong>
+                          <ul>
+                            {watch.lastChange.reasons.map((reason) => (
+                              <li key={`${reason.key || 'change'}:${reason.label || ''}`}>{reason.label || 'Conditions changed.'}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {watch.consecutiveFailures > 0 && (
+                        <p className="watch-retry">The latest check failed. A retry is scheduled automatically.</p>
+                      )}
                     </div>
                     <div className="watch-card-actions">
                       <button
@@ -185,6 +230,20 @@ export function WatchesView({
                         disabled={Boolean(deletingId)}
                       >
                         Open plan <ArrowRight aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        className={`watch-alerts ${watch.notificationsEnabled ? 'is-enabled' : ''}`}
+                        onClick={() => void toggleAlerts(watch)}
+                        disabled={Boolean(updatingAlertsId) || Boolean(deletingId)}
+                        title={!emailVerified ? 'Verify your email to enable alerts' : undefined}
+                      >
+                        {updatingAlertsId === watch.id
+                          ? <LoaderCircle className="watches-spinner" aria-hidden />
+                          : watch.notificationsEnabled ? <MailCheck aria-hidden /> : <MailPlus aria-hidden />}
+                        {!emailVerified
+                          ? 'Verify email for alerts'
+                          : watch.notificationsEnabled ? 'Email alerts on' : 'Enable email alerts'}
                       </button>
                       {isConfirming ? (
                         <div className="watch-delete-confirm" role="group" aria-label={`Stop watching ${watch.title}?`}>

@@ -27,6 +27,9 @@ Express API for the SummitSafe backcountry planning app.
 | GET | `/api/account/reports/:reportId` | Retrieve one account-owned report snapshot |
 | POST | `/api/account/reports` | Add a newly generated report to account history |
 | PUT | `/api/account/reports/:reportId` | Add later AI and route sections without changing the generated report's plan |
+| GET | `/api/account/objective-watches` | List the signed-in account's watched objectives and automatic-check status |
+| PATCH | `/api/account/objective-watches/:watchId` | Opt a watch into or out of meaningful-change email alerts |
+| POST | `/api/internal/objective-watch-checks` | Secret-protected hourly Objective Watch worker trigger |
 | GET | `/api/reports/shared/:shareToken` | Retrieve a read-only generated report by its random public token |
 | POST | `/api/auth/logout` | End the current session |
 | GET | `/api/report-logs` | Retrieve logged reports (administrator account only) |

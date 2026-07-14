@@ -156,6 +156,17 @@ if [ "$backend_ready" != true ]; then
   exit 1
 fi
 
+if grep -Eq '^OBJECTIVE_WATCH_CRON_SECRET=.+$' .env; then
+  if command -v crontab >/dev/null 2>&1; then
+    echo "==> Installing Objective Watch hourly cron..."
+    "$APP_DIR/scripts/install-objective-watch-cron.sh"
+  else
+    echo "==> Warning: crontab is unavailable; Objective Watch hourly checks were not installed." >&2
+  fi
+else
+  echo "==> Objective Watch cron disabled (OBJECTIVE_WATCH_CRON_SECRET is not configured)."
+fi
+
 if [ "$NO_NGINX" = false ]; then
   echo "==> Validating and reloading host nginx..."
   nginx -t && systemctl reload nginx

@@ -141,6 +141,28 @@ test('deletes only watches owned by the signed-in account', async () => {
   expect(query.mock.calls[0][1]).toEqual([WATCH_ID, USER_ID]);
 });
 
+test('updates email alert preference only for an account-owned watch', async () => {
+  const query = jest.fn().mockResolvedValue({
+    rows: [{
+      id: WATCH_ID,
+      title: 'Mount Rainier',
+      plan: SNAPSHOT.plan,
+      baseline_report: SNAPSHOT,
+      notifications_enabled: true,
+      created_at: CREATED_AT,
+      updated_at: CREATED_AT,
+    }],
+  });
+  const response = await request(makeApp({ query }))
+    .patch(`/api/account/objective-watches/${WATCH_ID}`)
+    .set('Cookie', 'bc_session=test-session')
+    .send({ notificationsEnabled: true });
+
+  expect(response.status).toBe(200);
+  expect(response.body.watch.notificationsEnabled).toBe(true);
+  expect(query.mock.calls[0][1]).toEqual([WATCH_ID, USER_ID, true]);
+});
+
 test('requires an account before reading objective watches', async () => {
   const query = jest.fn();
   const response = await request(makeApp({ query, user: null })).get('/api/account/objective-watches');

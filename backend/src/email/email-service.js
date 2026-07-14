@@ -1,7 +1,7 @@
 'use strict';
 
 const { Resend } = require('resend');
-const { buildPasswordResetEmail, buildVerificationEmail } = require('./templates');
+const { buildObjectiveWatchChangeEmail, buildPasswordResetEmail, buildVerificationEmail } = require('./templates');
 
 const normalizeBaseUrl = (value) => {
   const raw = String(value || '').trim();
@@ -88,8 +88,24 @@ const createEmailService = ({
     });
   };
 
+  const sendObjectiveWatchChangeEmail = ({ eventId, changeKey, watchId, title, change, to, displayName }) => {
+    if (!normalizedBaseUrl) {
+      const error = new Error('Email links are not configured.');
+      error.code = 'EMAIL_SERVICE_UNAVAILABLE';
+      throw error;
+    }
+    const actionUrl = new URL('/watches', normalizedBaseUrl).toString();
+    const reasons = Array.isArray(change?.reasons) ? change.reasons.map((reason) => reason?.label) : [];
+    return send({
+      to,
+      template: buildObjectiveWatchChangeEmail({ displayName, title, reasons, actionUrl }),
+      idempotencyKey: `objective-watch/${watchId}/${eventId}/${changeKey}`,
+    });
+  };
+
   return {
     available,
+    sendObjectiveWatchChangeEmail,
     sendPasswordResetEmail,
     sendVerificationEmail,
   };

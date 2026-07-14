@@ -49,4 +49,31 @@ describe('transactional email service', () => {
     expect(createEmailService({ apiKey: '', fromAddress: '', appBaseUrl: '' }).available).toBe(false);
     expect(normalizeBaseUrl('javascript:alert(1)')).toBeNull();
   });
+
+  test('sends escaped, idempotent Objective Watch change alerts to the watches dashboard', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'watch-email-123' }, error: null });
+    const service = createEmailService({
+      apiKey: 're_test',
+      fromAddress: 'accounts@mail.example.com',
+      appBaseUrl: 'https://conditions.example.com',
+      client: { emails: { send } },
+    });
+
+    await service.sendObjectiveWatchChangeEmail({
+      eventId: 'event-4',
+      changeKey: 'abc123',
+      watchId: 'watch-7',
+      title: '<Mount Rainier>',
+      change: { reasons: [{ label: '<Road closed>' }] },
+      to: 'climber@example.com',
+      displayName: 'Avery',
+    });
+
+    const [message, options] = send.mock.calls[0];
+    expect(message.subject).toContain('<Mount Rainier>');
+    expect(message.html).toContain('&lt;Road closed&gt;');
+    expect(message.html).not.toContain('<Road closed>');
+    expect(message.html).toContain('https://conditions.example.com/watches');
+    expect(options).toEqual({ idempotencyKey: 'objective-watch/watch-7/event-4/abc123' });
+  });
 });

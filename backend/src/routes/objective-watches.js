@@ -49,6 +49,11 @@ const mapObjectiveWatch = (row, { includeBaseline = false } = {}) => ({
   title: row.title,
   plan: row.plan,
   ...(includeBaseline ? { baselineReport: row.baseline_report } : {}),
+  lastCheckedAt: normalizeTimestamp(row.last_checked_at),
+  nextCheckAt: normalizeTimestamp(row.next_check_at),
+  lastChange: row.last_change || null,
+  consecutiveFailures: Math.max(0, Number(row.consecutive_failures) || 0),
+  notificationsEnabled: row.notifications_enabled === true,
   createdAt: normalizeTimestamp(row.created_at),
   updatedAt: normalizeTimestamp(row.updated_at),
 });
@@ -118,7 +123,8 @@ const registerObjectiveWatchRoutes = ({
         const lat = normalizeCoordinate(req.query.lat, -90, 90, 'latitude');
         const lon = normalizeCoordinate(req.query.lon, -180, 180, 'longitude');
         const result = await database.query(`
-          SELECT id, title, plan, baseline_report, created_at, updated_at
+          SELECT id, title, plan, baseline_report, last_checked_at, next_check_at,
+                 last_change, consecutive_failures, notifications_enabled, created_at, updated_at
           FROM objective_watches
           WHERE user_id = $1 AND fingerprint = $2
           LIMIT 1
@@ -126,7 +132,8 @@ const registerObjectiveWatchRoutes = ({
         return res.json({ watch: result.rows[0] ? mapObjectiveWatch(result.rows[0], { includeBaseline: true }) : null });
       }
       const result = await database.query(`
-        SELECT id, title, plan, created_at, updated_at
+        SELECT id, title, plan, last_checked_at, next_check_at, last_change,
+               consecutive_failures, notifications_enabled, created_at, updated_at
         FROM objective_watches
         WHERE user_id = $1
         ORDER BY updated_at DESC, id DESC
@@ -151,10 +158,41 @@ const registerObjectiveWatchRoutes = ({
         SET title = EXCLUDED.title,
             plan = EXCLUDED.plan,
             baseline_report = EXCLUDED.baseline_report,
+            last_checked_at = NULL,
+            next_check_at = NOW(),
+            last_snapshot = NULL,
+            last_change = NULL,
+            consecutive_failures = 0,
             updated_at = NOW()
-        RETURNING id, title, plan, baseline_report, created_at, updated_at
+        RETURNING id, title, plan, baseline_report, last_checked_at, next_check_at,
+                  last_change, consecutive_failures, notifications_enabled, created_at, updated_at
       `, [user.id, watch.fingerprint, watch.title, watch.serializedPlan, watch.serializedReport]);
       return res.status(201).json({ watch: mapObjectiveWatch(result.rows[0], { includeBaseline: true }) });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.patch('/api/account/objective-watches/:watchId', async (req, res) => {
+    if (!requireFeature(res)) return;
+    const user = await requireUser(req, res);
+    if (!user || !ensureDatabase(res)) return;
+    if (!UUID_PATTERN.test(String(req.params.watchId || ''))) {
+      return res.status(400).json({ error: 'Invalid objective watch ID.' });
+    }
+    if (typeof req.body?.notificationsEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'notificationsEnabled must be true or false.' });
+    }
+    try {
+      const result = await database.query(`
+        UPDATE objective_watches
+        SET notifications_enabled = $3, updated_at = NOW()
+        WHERE id = $1 AND user_id = $2
+        RETURNING id, title, plan, baseline_report, last_checked_at, next_check_at,
+                  last_change, consecutive_failures, notifications_enabled, created_at, updated_at
+      `, [req.params.watchId, user.id, req.body.notificationsEnabled]);
+      if (!result.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
+      return res.json({ watch: mapObjectiveWatch(result.rows[0], { includeBaseline: true }) });
     } catch (error) {
       return handleError(req, res, error);
     }

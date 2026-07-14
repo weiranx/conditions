@@ -268,7 +268,29 @@ curl -I https://api.example.com/healthz
 
 ---
 
-## 8. First Deploy
+## 8. Configure Objective Watch Checks
+
+Objective Watch uses the existing backend and PostgreSQL container; the host cron only triggers the protected worker. Add a random secret to `/opt/summitsafe/.env`:
+
+Generate a value with `openssl rand -hex 32`, then paste the output into the file:
+
+```dotenv
+OBJECTIVE_WATCH_CRON_SECRET=replace-with-generated-64-character-value
+```
+
+The deploy script installs an idempotent crontab entry at minute 7 of every hour when this setting is present. To install or verify it manually:
+
+```bash
+./scripts/install-objective-watch-cron.sh
+crontab -l | grep summitsafe-objective-watch
+./scripts/objective-watch-cron.sh
+```
+
+The hourly trigger checks objectives every three hours normally and every hour during the final 48 hours. Expired objectives stop automatically, duplicate plans share one upstream refresh, and each run limits provider concurrency.
+
+---
+
+## 9. First Deploy
 
 ```bash
 cd /opt/summitsafe
@@ -289,7 +311,7 @@ curl https://api.example.com/healthz
 
 ---
 
-## 9. Wire Up GitHub Actions CI/CD
+## 10. Wire Up GitHub Actions CI/CD
 
 In your GitHub repository: **Settings → Secrets and variables → Actions**
 
@@ -304,7 +326,7 @@ Push to `main` to trigger the deploy workflow. Monitor progress in the
 
 ---
 
-## 10. Ongoing Operations
+## 11. Ongoing Operations
 
 Run the backend utility scripts from the production checkout:
 

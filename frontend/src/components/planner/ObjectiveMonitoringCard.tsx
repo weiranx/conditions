@@ -111,8 +111,8 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, readOnly 
             <strong>{watch ? `${watch.title} has a saved baseline` : 'Track this exact objective'}</strong>
             <p>
               {watch
-                ? 'New reports are compared with the baseline until you explicitly update it.'
-                : 'Save the current report as a baseline, then generate this plan again to see material changes.'}
+                ? `${watch.nextCheckAt ? 'Automatic checks are active' : 'Automatic checks have ended for this plan date'}${watch.lastCheckedAt ? `; last checked ${formatBaselineTime(watch.lastCheckedAt)}` : ''}. New reports still compare with your saved baseline.`
+                : 'Save the current report as a baseline. Automatic checks run every three hours, then hourly during the final 48 hours.'}
             </p>
           </div>
           {user ? (

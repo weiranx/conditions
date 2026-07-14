@@ -83,7 +83,28 @@ const buildPasswordResetEmail = ({ displayName, actionUrl }) => {
   };
 };
 
+const buildObjectiveWatchChangeEmail = ({ displayName, title, reasons, actionUrl }) => {
+  const safeTitle = String(title || 'Watched objective').replace(/[\r\n]+/gu, ' ').trim().slice(0, 160) || 'Watched objective';
+  const safeReasons = Array.isArray(reasons) ? reasons.map((reason) => String(reason || '').trim()).filter(Boolean) : [];
+  const greeting = displayName ? `Hi ${escapeHtml(displayName)},` : 'Hello,';
+  const textReasons = safeReasons.map((reason) => `- ${reason}`).join('\n');
+  const htmlReasons = safeReasons.map((reason) => `<li style="margin:0 0 8px;">${escapeHtml(reason)}</li>`).join('');
+  return {
+    subject: `Conditions changed for ${safeTitle}`,
+    text: `${displayName ? `Hi ${displayName},\n\n` : ''}Important conditions changed for ${safeTitle}:\n\n${textReasons}\n\nReview the latest watch before relying on the plan.\n\n${actionUrl}`,
+    html: emailShell({
+      preview: `Conditions changed for ${safeTitle}`,
+      heading: `Conditions changed for ${safeTitle}`,
+      body: `<p style="margin:0 0 14px;">${greeting}</p><p style="margin:0 0 14px;">Objective Watch detected a meaningful risk increase:</p><ul style="margin:0;padding-left:20px;">${htmlReasons}</ul><p style="margin:16px 0 0;">Review fresh source data and use your own judgment before relying on the plan.</p>`,
+      actionLabel: 'Review objective watches',
+      actionUrl,
+      footer: 'Automated checks can miss changes or receive incomplete source data. This is planning support, not a safety guarantee.',
+    }),
+  };
+};
+
 module.exports = {
+  buildObjectiveWatchChangeEmail,
   buildPasswordResetEmail,
   buildVerificationEmail,
   escapeHtml,
