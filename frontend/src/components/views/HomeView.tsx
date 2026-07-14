@@ -44,6 +44,63 @@ const FEATURED_PEAKS: Suggestion[] = [
   { name: 'Mount Hood, Oregon', lat: 45.3735, lon: -121.6959, class: 'popular', type: 'peak' },
 ];
 
+const DATA_SOURCE_GROUPS = [
+  {
+    label: 'Weather & daylight',
+    sources: [
+      ['NOAA / NWS', 'Forecasts, alerts, stations & MADIS observations'],
+      ['Open-Meteo', 'Forecast fallback, UV, freezing level, air quality & precipitation history'],
+      ['SunriseSunset.io', 'Sunrise and sunset timing'],
+    ],
+  },
+  {
+    label: 'Avalanche & snow',
+    sources: [
+      ['Avalanche.org + regional centers', 'Official forecast coverage, bulletins & avalanche problems'],
+      ['USDA NRCS SNOTEL / AWDB', 'Station snow depth, SWE & history'],
+      ['NOAA NOHRSC', 'Gridded snow analysis'],
+      ['California DWR CDEC', 'California snow sensors'],
+      ['NASA / NOAA VIIRS', 'Daily satellite snow cover'],
+    ],
+  },
+  {
+    label: 'Terrain, maps & imagery',
+    sources: [
+      ['OpenStreetMap', 'Search, basemaps & mapped trail geometry'],
+      ['OpenTopoMap / SRTM', 'Topographic basemap & relief'],
+      ['National Park Service', 'Public trail geometry'],
+      ['USGS 3DEP', 'Objective elevation'],
+      ['Copernicus Sentinel-2 / Sentinel Hub', 'Recent satellite imagery'],
+    ],
+  },
+  {
+    label: 'Water & coast',
+    sources: [
+      ['USGS NWIS', 'Stream gauges & observed flow'],
+      ['NOAA NWPS', 'River-stage and streamflow forecasts'],
+      ['NOAA CO-OPS', 'Tide predictions'],
+    ],
+  },
+  {
+    label: 'Nowcast, air & fire',
+    sources: [
+      ['NOAA MRMS + NWS RFC', 'Radar reflectivity & precipitation estimates'],
+      ['NOAA GOES-R GLM', 'Satellite lightning observations'],
+      ['EPA AirNow', 'Nearby observed air quality'],
+      ['NIFC WFIGS', 'Current wildfire perimeters'],
+      ['NASA FIRMS / VIIRS', 'Near-real-time active-fire detections'],
+    ],
+  },
+  {
+    label: 'Access & closures',
+    sources: [
+      ['National Park Service', 'Park alerts and closures'],
+      ['USDA Forest Service EDW', 'Forest road status'],
+      ['Caltrans QuickMap', 'California road closures'],
+    ],
+  },
+] as const;
+
 export interface HomeViewProps {
   appShellClassName: string;
   isViewPending: boolean;
@@ -542,12 +599,27 @@ export function HomeView({
               <p>Every brief keeps source age, coverage, and limitations visible so you know what the result is—and what it isn’t.</p>
             </div>
           </div>
-          <div className="ssr-h-source-names" aria-label="Example data providers">
-            <span><b>NWS</b> Weather</span>
-            <span><b>Avalanche.org</b> Bulletins</span>
-            <span><b>NRCS</b> Snowpack</span>
-            <span><b>NOAA</b> Snow & climate</span>
-            <span><b>OpenStreetMap</b> Search & terrain</span>
+          <div className="ssr-h-source-groups" aria-label="Data providers used by Backcountry Conditions">
+            {DATA_SOURCE_GROUPS.map((group, index) => (
+              <article className="ssr-h-source-group" key={group.label}>
+                <div className="ssr-h-source-group-head">
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <h3>{group.label}</h3>
+                </div>
+                <ul>
+                  {group.sources.map(([name, purpose]) => (
+                    <li key={name}>
+                      <strong>{name}</strong>
+                      <span>{purpose}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+          <div className="ssr-h-source-ai">
+            <Sparkles size={16} aria-hidden />
+            <p><strong>Optional AI synthesis</strong> OpenAI or Anthropic turns the structured source data into briefings and follow-up answers when AI is enabled. Official provider data remains visible and authoritative.</p>
           </div>
           <div className="ssr-h-source-standards">
             <span><Check size={14} aria-hidden /> Source timestamps on every brief</span>
