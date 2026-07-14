@@ -698,7 +698,7 @@ export interface SnowpackSnapshotInsights {
 }
 
 export interface LinkState {
-  view: 'home' | 'planner' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
+  view: 'home' | 'planner' | 'watches' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
   sharedReportToken: string | null;
   activity: ActivityType;
   position: L.LatLng;

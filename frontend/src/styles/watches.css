@@ -1,0 +1,68 @@
+.watches-page-shell { min-height: 100vh; background: var(--ui-bg); color: var(--ui-text); }
+.watches-page { width: min(940px, calc(100% - 48px)); margin: 0 auto; padding: 64px 0 88px; }
+.watches-head { max-width: 660px; margin-bottom: 36px; }
+.watches-head-icon { width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: 20px; border: 1px solid color-mix(in oklch, var(--ui-brand) 38%, transparent); border-radius: 13px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+.watches-head-icon svg { width: 22px; height: 22px; }
+.watches-head > p { margin: 0 0 9px; color: var(--ui-brand-strong); font-size: 10px; font-weight: 760; letter-spacing: .13em; text-transform: uppercase; }
+.watches-head h1 { margin: 0; font-family: var(--ssr-display); font-size: clamp(38px, 6vw, 58px); font-weight: 480; line-height: 1; letter-spacing: -.045em; }
+.watches-head > span { display: block; max-width: 580px; margin-top: 18px; color: var(--ui-text-2); font-size: 14px; line-height: 1.65; }
+.watches-explainer { margin: -12px 0 28px; padding: 14px 16px; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 12px; border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-surface-subtle); color: var(--ui-text-2); font-size: 11px; line-height: 1.55; }
+.watches-explainer strong { color: var(--ui-brand-strong); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.watches-summary { width: fit-content; display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px; padding: 7px 10px; border: 1px solid var(--ui-line); border-radius: 999px; background: var(--ui-surface-subtle); color: var(--ui-text-2); font-size: 10px; letter-spacing: .03em; }
+.watches-summary svg { width: 13px; height: 13px; color: var(--ui-brand); }
+.watches-summary strong { color: var(--ui-text); font-family: var(--ssr-mono); }
+.watches-list { display: grid; gap: 12px; }
+.watch-card { min-width: 0; padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-surface); box-shadow: 0 16px 44px -42px color-mix(in oklch, var(--ui-text) 62%, transparent); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.watch-card:hover { border-color: color-mix(in oklch, var(--ui-brand) 55%, var(--ui-line)); transform: translateY(-1px); box-shadow: 0 22px 52px -40px color-mix(in oklch, var(--ui-brand-strong) 46%, transparent); }
+.watch-card-main { min-width: 0; display: grid; gap: 14px; }
+.watch-card-heading { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.watch-card-heading > div { min-width: 0; }
+.watch-card-kicker { display: block; margin-bottom: 7px; color: var(--ui-text-3); font-family: var(--ssr-mono); font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; }
+.watch-card h2 { overflow: hidden; margin: 0; font-family: var(--ssr-display); font-size: 25px; font-weight: 560; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
+.watch-status { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); font-size: 9px; font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
+.watch-status > span { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.watch-card-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--ui-text-2); font-size: 11px; }
+.watch-card-meta > span { display: inline-flex; align-items: center; gap: 6px; }
+.watch-card-meta svg { width: 14px; height: 14px; color: var(--ui-brand); }
+.watch-card-actions { min-width: 132px; display: grid; justify-items: stretch; gap: 8px; }
+.watch-card-actions button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 10px; font-weight: 720; cursor: pointer; }
+.watch-card-actions button:disabled { cursor: wait; opacity: .62; }
+.watch-card-actions button svg { width: 14px; height: 14px; }
+.watch-open { border: 1px solid var(--ui-brand-strong); background: var(--ui-brand-strong); color: var(--ui-on-strong); }
+.watch-delete { border: 1px solid var(--ui-line); background: var(--ui-surface-subtle); color: var(--ui-text-2); }
+.watch-delete:hover { border-color: color-mix(in oklch, var(--ui-risk-4) 42%, var(--ui-line)); color: var(--ui-nogo-ink); }
+.watch-delete-confirm { padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 1px solid color-mix(in oklch, var(--ui-risk-4) 30%, var(--ui-line)); border-radius: 9px; background: color-mix(in oklch, var(--ui-risk-4) 6%, var(--ui-surface)); }
+.watch-delete-confirm > span { grid-column: 1 / -1; color: var(--ui-text-2); font-size: 9px; font-weight: 700; text-align: center; }
+.watch-delete-confirm button { min-height: 30px; padding: 0 8px; border: 1px solid var(--ui-line); background: var(--ui-surface); color: var(--ui-text); }
+.watch-delete-confirm .is-danger { border-color: color-mix(in oklch, var(--ui-risk-4) 45%, var(--ui-line)); color: var(--ui-nogo-ink); }
+.watches-loading { min-height: 220px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--ui-text-2); font-size: 12px; }
+.watches-empty { min-height: 300px; padding: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed var(--ui-line-strong); border-radius: 16px; background: var(--ui-surface-subtle); text-align: center; }
+.watches-empty > svg { width: 32px; height: 32px; color: var(--ui-brand); }
+.watches-empty h2 { margin: 18px 0 8px; font-family: var(--ssr-display); font-size: 27px; font-weight: 540; }
+.watches-empty p { max-width: 440px; margin: 0; color: var(--ui-text-2); font-size: 12px; line-height: 1.6; }
+.watches-empty button { min-height: 42px; margin-top: 22px; padding: 0 18px; border: 1px solid var(--ui-brand-strong); border-radius: 9px; background: var(--ui-brand-strong); color: var(--ui-on-strong); font: inherit; font-size: 11px; font-weight: 720; cursor: pointer; }
+.watches-error { margin: 16px 0 0; padding: 12px 14px; border: 1px solid color-mix(in oklch, var(--ui-risk-4) 34%, transparent); border-radius: 9px; background: color-mix(in oklch, var(--ui-risk-4) 8%, var(--ui-surface)); color: var(--ui-nogo-ink); font-size: 11px; }
+.watches-spinner { width: 17px; height: 17px; animation: watches-spin .8s linear infinite; }
+@keyframes watches-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .watches-page { width: calc(100% - 28px); padding: 38px 0 60px; }
+  .watches-head { margin-bottom: 28px; }
+  .watches-explainer { margin-top: -8px; grid-template-columns: 1fr; gap: 5px; }
+  .watch-card { padding: 19px 18px; grid-template-columns: 1fr; gap: 18px; }
+  .watch-card-heading { display: grid; }
+  .watch-status { width: fit-content; }
+  .watch-card-actions { width: 100%; grid-template-columns: 1fr 1fr; }
+  .watch-delete-confirm { min-width: 0; }
+  .watches-empty { min-height: 260px; padding: 30px 22px; }
+}
+
+@media (max-width: 440px) {
+  .watch-card-actions { grid-template-columns: 1fr; }
+  .watch-card-meta { display: grid; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watch-card { transition: none; }
+  .watches-spinner { animation-duration: 1.8s; }
+}

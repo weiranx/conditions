@@ -74,6 +74,38 @@ test('loads a matching objective watch with its comparison baseline', async () =
   expect(query.mock.calls[0][1]).toEqual([USER_ID, '46.8523:-121.7603']);
 });
 
+test('lists watched objectives for the signed-in account without returning baseline payloads', async () => {
+  const secondWatchId = '8ed9f6ea-a737-4cd1-bc02-3b3561591592';
+  const query = jest.fn().mockResolvedValue({
+    rows: [
+      {
+        id: WATCH_ID,
+        title: 'Mount Rainier',
+        plan: SNAPSHOT.plan,
+        created_at: CREATED_AT,
+        updated_at: CREATED_AT,
+      },
+      {
+        id: secondWatchId,
+        title: 'Mount Baker',
+        plan: { ...SNAPSHOT.plan, lat: 48.7768, lon: -121.8144, objectiveName: 'Mount Baker' },
+        created_at: CREATED_AT,
+        updated_at: CREATED_AT,
+      },
+    ],
+  });
+  const response = await request(makeApp({ query }))
+    .get('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body.watches).toHaveLength(2);
+  expect(response.body.watches[0]).toMatchObject({ id: WATCH_ID, title: 'Mount Rainier' });
+  expect(response.body.watches[0]).not.toHaveProperty('baselineReport');
+  expect(query.mock.calls[0][0]).toContain('ORDER BY updated_at DESC, id DESC');
+  expect(query.mock.calls[0][1]).toEqual([USER_ID]);
+});
+
 test('creates or explicitly updates a watch baseline for the signed-in account', async () => {
   const query = jest.fn().mockResolvedValue({
     rows: [{

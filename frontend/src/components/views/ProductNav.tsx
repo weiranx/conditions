@@ -1,4 +1,4 @@
-import { CalendarRange, CircleUserRound, FileClock, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { BellRing, CalendarRange, CircleUserRound, FileClock, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 import { useAccount } from '../../hooks/useAccount';
@@ -24,6 +24,9 @@ export function ProductNav({
     { id: 'planner', label: 'Planner', icon: Map, action: openPlannerView || (() => navigateToView('planner')) },
     ...(featureFlags.tripPlanning
       ? [{ id: 'trip' as const, label: 'Compare', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) }]
+      : []),
+    ...(user && featureFlags.objectiveWatch
+      ? [{ id: 'watches' as const, label: 'Watches', icon: BellRing, action: () => navigateToView('watches') }]
       : []),
     ...(user && featureFlags.reportHistory
       ? [{ id: 'history' as const, label: 'History', icon: FileClock, action: () => navigateToView('history') }]

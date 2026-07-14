@@ -24,6 +24,18 @@ const parseObjectiveWatch = (value: unknown): ObjectiveWatch | null => {
   return watch as ObjectiveWatch;
 };
 
+export async function listObjectiveWatches(signal?: AbortSignal): Promise<ObjectiveWatch[]> {
+  const { response, payload } = await fetchApi('/api/account/objective-watches', { signal });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not load objective watches.'));
+  const values = (payload as { watches?: unknown } | null)?.watches;
+  if (!Array.isArray(values)) throw new Error('Objective watches returned an unexpected response.');
+  const watches = values.map(parseObjectiveWatch);
+  if (watches.some((watch) => watch === null)) {
+    throw new Error('Objective watches returned an unexpected response.');
+  }
+  return watches as ObjectiveWatch[];
+}
+
 export async function getObjectiveWatch(lat: number, lon: number, signal?: AbortSignal): Promise<ObjectiveWatch | null> {
   const params = new URLSearchParams({ lat: String(lat), lon: String(lon) });
   const { response, payload } = await fetchApi(`/api/account/objective-watches?${params.toString()}`, { signal });

@@ -119,6 +119,7 @@ import {
   persistReport,
   type PersistedReport,
   type PersistedReportChatMessage,
+  type PersistedReportPlan,
 } from './app/report-storage';
 import { copyTextToClipboard } from './app/clipboard';
 import { HomeView } from './components/views/HomeView';
@@ -175,6 +176,9 @@ const TripView = React.lazy(() =>
 );
 const HistoryView = React.lazy(() =>
   import('./components/views/HistoryView').then((module) => ({ default: module.HistoryView })),
+);
+const WatchesView = React.lazy(() =>
+  import('./components/views/WatchesView').then((module) => ({ default: module.WatchesView })),
 );
 const SharedReportStatusView = React.lazy(() =>
   import('./components/views/SharedReportStatusView').then((module) => ({ default: module.SharedReportStatusView })),
@@ -717,7 +721,10 @@ function App() {
     if (!featureFlags.reportHistory && view === 'history') {
       startViewChange(() => setView('planner'));
     }
-  }, [featureFlags.reportHistory, featureFlags.tripPlanning, setView, startViewChange, view]);
+    if (!featureFlags.objectiveWatch && view === 'watches') {
+      startViewChange(() => setView('planner'));
+    }
+  }, [featureFlags.objectiveWatch, featureFlags.reportHistory, featureFlags.tripPlanning, setView, startViewChange, view]);
 
   useEffect(() => {
     if (!hasObjective || !safetyData) {
@@ -750,6 +757,11 @@ function App() {
 
     if (view === 'history') {
       document.title = 'Report History - Backcountry Conditions';
+      return;
+    }
+
+    if (view === 'watches') {
+      document.title = 'Objective Watches - Backcountry Conditions';
       return;
     }
 
@@ -1369,6 +1381,38 @@ function App() {
     initializeTripView(forecastDate, alpineStartTime);
     startViewChange(() => setView('trip'));
   };
+
+  const handleOpenObjectiveWatch = useCallback((plan: PersistedReportPlan) => {
+    sharedReportResolvedTokenRef.current = null;
+    setSharedReportToken(null);
+    setSharedReportLoading(false);
+    setSharedReportError(null);
+    clearLastLoadedKey();
+    setPendingAutoGenerate(false);
+    setPreviousSafetyData(null);
+    setPastStartPrompt(null);
+    updateObjectivePosition(new L.LatLng(plan.lat, plan.lon), plan.objectiveName || 'Watched objective');
+    const searchLabel = plan.searchQuery || plan.objectiveName || 'Watched objective';
+    setSearchInputValue(searchLabel);
+    setCommittedSearchQuery(searchLabel);
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+    setForecastDate(plan.forecastDate);
+    setAlpineStartTime(plan.alpineStartTime);
+    setTargetElevationInput(plan.targetElevationInput);
+    setTargetElevationManual(Boolean(plan.targetElevationInput));
+    setPreferences((current) => ({ ...current, travelWindowHours: plan.travelWindowHours }));
+    startViewChange(() => setView('planner'));
+  }, [
+    clearLastLoadedKey,
+    setActiveSuggestionIndex,
+    setCommittedSearchQuery,
+    setSearchInputValue,
+    setShowSuggestions,
+    setView,
+    startViewChange,
+    updateObjectivePosition,
+  ]);
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
   const liveSearchQuery = searchQuery;
   const trimmedSearchQuery = liveSearchQuery.trim();
@@ -2180,6 +2224,17 @@ function App() {
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
         openTripToolView={openTripToolView}
+      />
+      </React.Activity>
+
+      <React.Activity name="watches-page" mode={featureFlags.objectiveWatch && view === 'watches' ? 'visible' : 'hidden'}>
+      <WatchesView
+        appShellClassName={appShellClassName}
+        isViewPending={isViewPending}
+        navigateToView={navigateToView}
+        openPlannerView={openPlannerView}
+        openTripToolView={openTripToolView}
+        onOpenWatch={handleOpenObjectiveWatch}
       />
       </React.Activity>
 

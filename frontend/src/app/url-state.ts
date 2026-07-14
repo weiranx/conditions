@@ -71,6 +71,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const viewParam = pathSegment || params.get('view') || '';
   const hasExplicitSettingsView = viewParam === 'settings';
   const hasExplicitAccountView = viewParam === 'account';
+  const hasExplicitWatchesView = viewParam === 'watches';
   const hasExplicitHistoryView = viewParam === 'history';
   const hasExplicitStatusView = viewParam === 'status';
   const hasExplicitTripView = viewParam === 'trip';
@@ -80,6 +81,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
   const hasUnknownView = Boolean(viewParam) && !sharedReportToken && ![
     'home',
     'planner',
+    'watches',
     'history',
     'settings',
     'account',
@@ -100,21 +102,23 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
       ? 'settings'
       : hasExplicitAccountView
         ? 'account'
-        : hasExplicitHistoryView
-          ? 'history'
-          : hasExplicitStatusView
-            ? 'status'
-            : hasExplicitTripView
-              ? 'trip'
-              : hasExplicitAdminView
-                ? 'admin'
-                : hasExplicitPrivacyView
-                  ? 'privacy'
-                  : hasExplicitTermsView
-                    ? 'terms'
-                    : viewParam === 'planner' || hasCoords
-                      ? 'planner'
-                      : 'home',
+        : hasExplicitWatchesView
+          ? 'watches'
+          : hasExplicitHistoryView
+            ? 'history'
+            : hasExplicitStatusView
+              ? 'status'
+              : hasExplicitTripView
+                ? 'trip'
+                : hasExplicitAdminView
+                  ? 'admin'
+                  : hasExplicitPrivacyView
+                    ? 'privacy'
+                    : hasExplicitTermsView
+                      ? 'terms'
+                      : viewParam === 'planner' || hasCoords
+                        ? 'planner'
+                        : 'home',
     sharedReportToken,
     activity: normalizeActivity(params.get('activity') || preferences.defaultActivity),
     position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
@@ -131,7 +135,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 }
 
 export function buildShareQuery(state: {
-  view: 'home' | 'planner' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
+  view: 'home' | 'planner' | 'watches' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
   hasObjective: boolean;
   position: L.LatLng;
   objectiveName: string;
