@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  CalendarRange,
   Check,
   CircleUserRound,
   Crown,
@@ -285,6 +286,7 @@ export function AccountView({
   const heading = authHeading(mode);
   const isPremium = account.tier?.key === 'premium';
   const reportUsage = account.reportUsage;
+  const multiDayUsage = account.multiDayUsage;
   const planPeriodEnd = account.tier?.currentPeriodEnd
     ? formatPlanPeriod(account.tier.currentPeriodEnd)
     : null;
@@ -399,6 +401,14 @@ export function AccountView({
                         ? `${account.aiUsage.limitTokens.toLocaleString()} AI tokens each month`
                         : 'Monthly AI token allowance'}
                   </li>
+                  <li>
+                    <Check aria-hidden />
+                    {isPremium
+                      ? 'Unlimited multi-day forecast comparisons'
+                      : multiDayUsage?.limitRuns != null
+                        ? `${multiDayUsage.limitRuns.toLocaleString()} multi-day forecast comparisons each month`
+                        : 'Monthly multi-day forecast allowance'}
+                  </li>
                 </ul>
                 {isPremium && planPeriodEnd && (
                   <small>
@@ -419,6 +429,19 @@ export function AccountView({
                   resetAt={reportUsage?.resetAt ?? null}
                   unlimited={reportUsage?.unlimited ?? false}
                   note="Each successfully generated report counts once, including reports added to your account history."
+                />
+                <MonthlyUsageMeter
+                  icon={<CalendarRange aria-hidden />}
+                  label="Multi-day forecast usage"
+                  singularUnit="comparison"
+                  pluralUnit="comparisons"
+                  used={multiDayUsage?.usedRuns ?? null}
+                  limit={multiDayUsage?.limitRuns ?? null}
+                  remaining={multiDayUsage?.remainingRuns ?? null}
+                  percentUsed={multiDayUsage?.percentUsed ?? null}
+                  resetAt={multiDayUsage?.resetAt ?? null}
+                  unlimited={multiDayUsage?.unlimited ?? false}
+                  note="Each successful 2–7 day comparison counts once, regardless of how many forecast days it includes."
                 />
                 <MonthlyUsageMeter
                   icon={<Sparkles aria-hidden />}

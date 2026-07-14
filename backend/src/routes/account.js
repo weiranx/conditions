@@ -27,6 +27,7 @@ const registerAccountRoutes = ({
   tierService,
   usageService,
   reportUsageService,
+  multiDayUsageService,
   googleVerifier = createGoogleIdentityVerifier(),
   emailService = createEmailService(),
 } = {}) => {
@@ -106,11 +107,22 @@ const registerAccountRoutes = ({
       return null;
     }
   };
+  const getMultiDayUsage = async (req, user, accountTier) => {
+    if (!user || !multiDayUsageService?.available || typeof multiDayUsageService.getUserUsage !== 'function') return null;
+    try {
+      return await multiDayUsageService.getUserUsage(user.id, accountTier?.key);
+    } catch (error) {
+      req.log?.warn({ err: error, userId: user.id }, 'Account multi-day usage could not be loaded');
+      return null;
+    }
+  };
   const accountResponse = async (req, user, available = true) => {
     const accountTier = await getAccountTier(req, user);
-    const [reportCount, reportUsage] = await Promise.all([
+    const [reportCount, reportUsage, multiDayUsage, aiUsage] = await Promise.all([
       getReportCount(req, user),
       getReportUsage(req, user, accountTier),
+      getMultiDayUsage(req, user, accountTier),
+      getAIUsage(req, user, accountTier),
     ]);
     return {
       available,
@@ -119,7 +131,8 @@ const registerAccountRoutes = ({
       accountTier,
       reportCount,
       reportUsage,
-      aiUsage: await getAIUsage(req, user, accountTier),
+      multiDayUsage,
+      aiUsage,
     };
   };
 
@@ -172,6 +185,7 @@ const registerAccountRoutes = ({
         accountTier: null,
         reportCount: null,
         reportUsage: null,
+        multiDayUsage: null,
         aiUsage: null,
       });
     }
@@ -346,6 +360,7 @@ const registerAccountRoutes = ({
         accountTier: null,
         reportCount: null,
         reportUsage: null,
+        multiDayUsage: null,
         aiUsage: null,
       });
     } catch (error) {

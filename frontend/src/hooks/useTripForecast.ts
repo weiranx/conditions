@@ -6,6 +6,7 @@ import { addDaysToIsoDate, normalizeForecastDate } from '../app/core';
 import { parseTimeInputMinutes } from '../app/core';
 import { evaluateBackcountryDecision, normalizedDecisionScore } from '../app/decision';
 import { buildTravelWindowRows, buildTravelWindowInsights, buildTrendWindowFromStart } from '../app/travel-window';
+import { parseMultiDayUsage, type MultiDayUsage } from '../app/multi-day-usage';
 
 export type MultiDayTripForecastDay = {
   date: string;
@@ -64,6 +65,9 @@ export interface UseTripForecastParams {
   initialStartDate: string;
   initialStartTime: string;
   preferences: UserPreferences;
+  objectiveName: string;
+  onUsageUpdated?: (usage: MultiDayUsage) => void;
+  onUsageLimitReached?: (usage: MultiDayUsage) => void;
 }
 
 export interface UseTripForecastReturn {
@@ -91,10 +95,13 @@ export function useTripForecast({
   initialStartDate,
   initialStartTime,
   preferences,
+  objectiveName,
+  onUsageUpdated,
+  onUsageLimitReached,
 }: UseTripForecastParams): UseTripForecastReturn {
   const [tripStartDate, setTripStartDate] = useState(initialStartDate);
   const [tripStartTime, setTripStartTime] = useState(initialStartTime);
-  const [tripDurationDays, setTripDurationDays] = useState(3);
+  const [tripDurationDays, setTripDurationDays] = useState(7);
   const [tripForecastRows, setTripForecastRows] = useState<MultiDayTripForecastDay[]>([]);
   const [tripForecastLoading, setTripForecastLoading] = useState(false);
   const [tripForecastError, setTripForecastError] = useState<string | null>(null);
@@ -109,7 +116,7 @@ export function useTripForecast({
     }
     const safeStartDate = normalizeForecastDate(tripStartDate, todayDate, maxForecastDate);
     const safeStartTime = parseTimeInputMinutes(tripStartTime) === null ? preferences.defaultStartTime : tripStartTime;
-    const safeDurationDays = Math.max(2, Math.min(7, Math.round(Number(tripDurationDays) || 3)));
+    const safeDurationDays = Math.max(2, Math.min(7, Math.round(Number(tripDurationDays) || 7)));
     if (safeStartDate !== tripStartDate) {
       setTripStartDate(safeStartDate);
     }
@@ -135,9 +142,9 @@ export function useTripForecast({
       cursor = addDaysToIsoDate(cursor, 1);
     }
 
-    if (dates.length === 0) {
+    if (dates.length < 2) {
       setTripForecastRows([]);
-      setTripForecastError('No forecast dates available in this range. Adjust start date/duration.');
+      setTripForecastError('At least two forecast dates are required. Choose an earlier start date.');
       setTripForecastNote(null);
       return;
     }
@@ -147,18 +154,49 @@ export function useTripForecast({
     setTripForecastNote(null);
 
     try {
-      const dailyResults = await Promise.all(
-        dates.map(async (date) => {
+      const { response, payload } = await fetchApi('/api/trip-forecasts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          lat: position.lat,
+          lon: position.lng,
+          startDate: safeStartDate,
+          startTime: safeStartTime,
+          durationDays: dates.length,
+          travelWindowHours: safeTravelWindowHours,
+          objectiveName,
+        }),
+      });
+      const responseRecord = payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? payload as Record<string, unknown>
+        : null;
+      const usage = parseMultiDayUsage(responseRecord?.multiDayUsage);
+      if (usage) onUsageUpdated?.(usage);
+      if (!response.ok) {
+        if (response.status === 429 && usage) {
+          onUsageLimitReached?.(usage);
+          setTripForecastError(null);
+          return;
+        }
+        const message = typeof responseRecord?.error === 'string'
+          ? responseRecord.error
+          : 'Could not load multi-day forecasts right now. Try again in a moment.';
+        setTripForecastRows([]);
+        setTripForecastError(message);
+        setTripForecastNote(null);
+        return;
+      }
+      const serverDays = Array.isArray(responseRecord?.days) ? responseRecord.days : [];
+      const dailyResults = serverDays.map((entry, index) => {
           try {
-            const { response, payload } = await fetchApi(
-              `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(
-                safeStartTime,
-              )}&travel_window_hours=${safeTravelWindowHours}`,
-            );
-            if (!response.ok || !payload || typeof payload !== 'object') {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
               return null;
             }
-            const dayData = payload as SafetyData;
+            const dayData = entry as SafetyData;
+            const fallbackDate = dates[index] || safeStartDate;
             const decisionOptions = { ignoreAvalancheForDecision: true } as const;
             const dayDecision = evaluateBackcountryDecision(dayData, safeStartTime, preferences, decisionOptions);
             const trendWindow = buildTrendWindowFromStart(dayData.weather?.trend || [], safeStartTime, safeTravelWindowHours);
@@ -201,7 +239,7 @@ export function useTripForecast({
               : airQualityCategoryRaw;
 
             return {
-              date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : date,
+              date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : fallbackDate,
               decisionLevel,
               decisionHeadline,
               score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
@@ -235,8 +273,7 @@ export function useTripForecast({
           } catch {
             return null;
           }
-        }),
-      );
+        });
 
       const rows = dailyResults.filter((entry): entry is MultiDayTripForecastDay => Boolean(entry)).sort((a, b) => a.date.localeCompare(b.date));
       // Day-over-day trend deltas relative to the previous available day.
@@ -270,6 +307,10 @@ export function useTripForecast({
       } else {
         setTripForecastNote(null);
       }
+    } catch {
+      setTripForecastRows([]);
+      setTripForecastError('Could not load multi-day forecasts right now. Try again in a moment.');
+      setTripForecastNote(null);
     } finally {
       setTripForecastLoading(false);
     }
@@ -283,6 +324,9 @@ export function useTripForecast({
     preferences,
     position.lat,
     position.lng,
+    objectiveName,
+    onUsageLimitReached,
+    onUsageUpdated,
   ]);
 
   return {

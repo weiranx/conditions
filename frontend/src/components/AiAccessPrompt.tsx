@@ -1,11 +1,16 @@
 import React from 'react';
-import { Crown, FileText, KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
+import { CalendarRange, Crown, FileText, KeyRound, LoaderCircle, LockKeyhole, Mail, Sparkles, UserRound, X } from 'lucide-react';
 import type { UserPreferences } from '../app/types';
 import { useAccount } from '../hooks/useAccount';
 import { GoogleSignInButton } from './account/GoogleSignInButton';
 import '../styles/ai-access-prompt.css';
 
-export type AccountAccessReason = 'ai' | 'guest-report-limit' | 'account-report-limit';
+export type AccountAccessReason =
+  | 'ai'
+  | 'guest-report-limit'
+  | 'account-report-limit'
+  | 'guest-multi-day-limit'
+  | 'account-multi-day-limit';
 
 interface AiAccessPromptProps {
   reason: AccountAccessReason | null;
@@ -16,7 +21,7 @@ interface AiAccessPromptProps {
 
 type AuthMode = 'signin' | 'create';
 
-const formatReportReset = (value?: string) => {
+const formatUsageReset = (value?: string) => {
   const parsed = new Date(value || '');
   return Number.isNaN(parsed.getTime())
     ? 'at the start of next month'
@@ -40,19 +45,34 @@ export function AiAccessPrompt({
   const open = reason !== null;
   const guestReportLimitReached = reason === 'guest-report-limit';
   const accountReportLimitReached = reason === 'account-report-limit';
-  const reportLimitReached = guestReportLimitReached || accountReportLimitReached;
-  const resetAt = formatReportReset(account.reportUsage?.resetAt);
-  const eyebrow = reportLimitReached ? 'Free report limit reached' : 'Free with an account';
-  const title = accountReportLimitReached
-    ? 'You’ve reached this month’s report limit'
-    : guestReportLimitReached
-      ? 'Sign in to create more reports'
-      : 'AI is free to use';
-  const description = accountReportLimitReached
-    ? `Your Free report allowance resets ${resetAt}. Premium accounts can generate unlimited reports.`
-    : guestReportLimitReached
-      ? 'You have used the 10 reports available without an account in this browser. Sign in or create an account below to continue planning.'
-      : 'AI features are free to use, but you need an account. Sign in or create one below to use AI analysis, report chat, snow imagery insights, and route assistance.';
+  const guestMultiDayLimitReached = reason === 'guest-multi-day-limit';
+  const accountMultiDayLimitReached = reason === 'account-multi-day-limit';
+  const guestLimitReached = guestReportLimitReached || guestMultiDayLimitReached;
+  const accountLimitReached = accountReportLimitReached || accountMultiDayLimitReached;
+  const usageLimitReached = guestLimitReached || accountLimitReached;
+  const accountUsage = accountMultiDayLimitReached ? account.multiDayUsage : account.reportUsage;
+  const resetAt = formatUsageReset(accountUsage?.resetAt);
+  const eyebrow = accountMultiDayLimitReached || guestMultiDayLimitReached
+    ? 'Free multi-day limit reached'
+    : usageLimitReached ? 'Free report limit reached' : 'Free with an account';
+  const title = accountMultiDayLimitReached
+    ? 'You’ve reached this month’s multi-day limit'
+    : guestMultiDayLimitReached
+      ? 'Sign in to compare more trips'
+      : accountReportLimitReached
+        ? 'You’ve reached this month’s report limit'
+        : guestReportLimitReached
+          ? 'Sign in to create more reports'
+          : 'AI is free to use';
+  const description = accountMultiDayLimitReached
+    ? `Your Free multi-day allowance resets ${resetAt}. Premium accounts can run unlimited comparisons.`
+    : guestMultiDayLimitReached
+      ? 'You have used the multi-day comparisons available without an account in this browser. Sign in or create an account below to continue planning.'
+      : accountReportLimitReached
+        ? `Your Free report allowance resets ${resetAt}. Premium accounts can generate unlimited reports.`
+        : guestReportLimitReached
+          ? 'You have used the 10 reports available without an account in this browser. Sign in or create an account below to continue planning.'
+          : 'AI features are free to use, but you need an account. Sign in or create one below to use AI analysis, report chat, snow imagery insights, and route assistance.';
 
   React.useEffect(() => {
     if (!open) {
@@ -136,31 +156,43 @@ export function AiAccessPrompt({
           <X size={18} aria-hidden />
         </button>
         <div className="ai-access-icon" aria-hidden>
-          {reportLimitReached ? <FileText size={22} /> : <Sparkles size={22} />}
+          {accountMultiDayLimitReached || guestMultiDayLimitReached
+            ? <CalendarRange size={22} />
+            : usageLimitReached ? <FileText size={22} /> : <Sparkles size={22} />}
         </div>
         <span className="ai-access-eyebrow"><LockKeyhole size={13} aria-hidden /> {eyebrow}</span>
         <h2 id="ai-access-title">{title}</h2>
         <p id="ai-access-description">{description}</p>
 
         <div className="ai-access-account" aria-live="polite">
-          {accountReportLimitReached ? (
+          {accountLimitReached ? (
             <div className="ai-access-limit">
               <div className="ai-access-limit-summary">
-                <FileText aria-hidden />
+                {accountMultiDayLimitReached ? <CalendarRange aria-hidden /> : <FileText aria-hidden />}
                 <div>
                   <strong>
-                    {account.reportUsage?.usedReports.toLocaleString() ?? 'All'}
-                    {account.reportUsage?.limitReports != null
-                      ? ` of ${account.reportUsage.limitReports.toLocaleString()}`
-                      : ''}
-                    {' '}reports used
+                    {accountMultiDayLimitReached
+                      ? account.multiDayUsage?.usedRuns.toLocaleString() ?? 'All'
+                      : account.reportUsage?.usedReports.toLocaleString() ?? 'All'}
+                    {accountMultiDayLimitReached
+                      ? account.multiDayUsage?.limitRuns != null
+                        ? ` of ${account.multiDayUsage.limitRuns.toLocaleString()}`
+                        : ''
+                      : account.reportUsage?.limitReports != null
+                        ? ` of ${account.reportUsage.limitReports.toLocaleString()}`
+                        : ''}
+                    {' '}{accountMultiDayLimitReached ? 'comparisons' : 'reports'} used
                   </strong>
                   <span>Monthly usage resets {resetAt}.</span>
                 </div>
               </div>
               <div className="ai-access-limit-upgrade">
                 <Crown aria-hidden />
-                <span>Premium includes unlimited report generation and history.</span>
+                <span>
+                  {accountMultiDayLimitReached
+                    ? 'Premium includes unlimited multi-day forecast comparisons.'
+                    : 'Premium includes unlimited report generation and history.'}
+                </span>
               </div>
               <div className="ai-access-limit-actions">
                 <button type="button" className="ai-access-primary" onClick={onOpenAccount}>View account</button>
@@ -176,7 +208,7 @@ export function AiAccessPrompt({
             <div className="ai-access-unavailable" role="status">
               <strong>Accounts are temporarily unavailable.</strong>
               <span>
-                Try again later to {reportLimitReached ? 'create more reports' : 'use AI features'} on this deployment.
+                Try again later to {usageLimitReached ? 'continue planning' : 'use AI features'} on this deployment.
               </span>
               <button type="button" className="ai-access-secondary" onClick={onClose}>Not now</button>
             </div>

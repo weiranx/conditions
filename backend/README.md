@@ -33,7 +33,7 @@ Express API for the SummitSafe backcountry planning app.
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Health check (also `/health`, `/api/healthz`, `/api/health`) |
 
-AI features require an account. Free accounts default to 250,000 AI tokens and 50 generated reports per UTC month, configurable with `AI_FREE_MONTHLY_TOKEN_LIMIT` and `FREE_MONTHLY_USAGE_LIMIT`; Premium accounts have unlimited AI and report usage while their totals remain visible. Authenticated account responses include both meters and their shared UTC-month reset date. The legacy `REPORT_FREE_MONTHLY_LIMIT` remains a fallback for the generated-report allowance.
+AI features require an account. Free accounts default to 250,000 AI tokens, 50 generated reports, and 10 multi-day forecast comparisons per UTC month, configurable with `AI_FREE_MONTHLY_TOKEN_LIMIT`, `FREE_MONTHLY_USAGE_LIMIT`, and `FREE_MONTHLY_MULTI_DAY_LIMIT`; Premium accounts have unlimited usage while their totals remain visible. Guest browsers receive 3 multi-day comparisons by default through `GUEST_MULTI_DAY_LIMIT`. Authenticated account responses include all three meters and their shared UTC-month reset date. The legacy `REPORT_FREE_MONTHLY_LIMIT` remains a fallback for the generated-report allowance.
 
 ## Run Locally
 

@@ -55,9 +55,11 @@ const { registerObjectiveWatchRoutes } = require('./src/routes/objective-watches
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { createReportUsageLimitService } = require('./src/auth/report-usage-limit');
+const { createMultiDayUsageLimitService } = require('./src/auth/multi-day-usage-limit');
 const { createAccountTierService } = require('./src/auth/account-tier');
 const { createEmailService } = require('./src/email/email-service');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
+const { registerTripForecastRoutes } = require('./src/routes/trip-forecasts');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
@@ -803,6 +805,7 @@ registerFeatureFlagRoutes(app);
 const accountTierService = createAccountTierService({ database });
 const aiUsageLimitService = createAIUsageLimitService({ database, settingsStore: appDataStore });
 const reportUsageLimitService = createReportUsageLimitService({ database, settingsStore: appDataStore });
+const multiDayUsageLimitService = createMultiDayUsageLimitService({ database });
 const emailService = createEmailService();
 const accountService = registerAccountRoutes({
   app,
@@ -811,7 +814,16 @@ const accountService = registerAccountRoutes({
   tierService: accountTierService,
   usageService: aiUsageLimitService,
   reportUsageService: reportUsageLimitService,
+  multiDayUsageService: multiDayUsageLimitService,
   emailService,
+});
+registerTripForecastRoutes({
+  app,
+  accountService,
+  tierService: accountTierService,
+  usageService: multiDayUsageLimitService,
+  invokeSafetyHandler,
+  isProduction: IS_PRODUCTION,
 });
 registerSavedReportRoutes({
   app,

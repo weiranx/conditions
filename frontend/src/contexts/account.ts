@@ -1,5 +1,6 @@
 import { createContext } from 'react';
 import type { UserPreferences } from '../app/types';
+import type { AccountMultiDayUsage } from '../app/multi-day-usage';
 
 export interface AccountUser {
   id: string;
@@ -86,6 +87,7 @@ export interface AccountContextValue {
   tier: AccountTier | null;
   reportCount: number | null;
   reportUsage: AccountReportUsage | null;
+  multiDayUsage: AccountMultiDayUsage | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
@@ -115,6 +117,7 @@ export interface AccountContextValue {
     reportCount: number,
     reportUsage: AccountReportUsage,
   ) => void;
+  syncMultiDayUsage: (userId: string, usage: AccountMultiDayUsage) => void;
   savePreferences: (preferences: UserPreferences) => Promise<AccountUser>;
 }
 

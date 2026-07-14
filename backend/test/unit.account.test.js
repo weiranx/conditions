@@ -71,6 +71,19 @@ const REPORT_USAGE = {
   exhausted: false,
 };
 
+const MULTI_DAY_USAGE = {
+  tierKey: 'free',
+  unlimited: false,
+  usedRuns: 2,
+  limitRuns: 10,
+  remainingRuns: 8,
+  percentUsed: 20,
+  periodStart: '2026-07-01T00:00:00.000Z',
+  periodEnd: '2026-08-01T00:00:00.000Z',
+  resetAt: '2026-08-01T00:00:00.000Z',
+  exhausted: false,
+};
+
 const FREE_TIER = {
   key: 'free',
   label: 'Free',
@@ -789,6 +802,10 @@ describe('account routes', () => {
     available: true,
     getUserUsage: jest.fn().mockResolvedValue(REPORT_USAGE),
   };
+  const multiDayUsageService = {
+    available: true,
+    getUserUsage: jest.fn().mockResolvedValue(MULTI_DAY_USAGE),
+  };
   const reportDatabase = {
     configured: true,
     query: jest.fn().mockResolvedValue({ rows: [{ report_count: '7' }] }),
@@ -803,6 +820,7 @@ describe('account routes', () => {
       tierService,
       usageService,
       reportUsageService,
+      multiDayUsageService,
       googleVerifier,
       emailService,
       isProduction: false,
@@ -853,6 +871,7 @@ describe('account routes', () => {
       accountTier: FREE_TIER,
       reportCount: 7,
       reportUsage: REPORT_USAGE,
+      multiDayUsage: MULTI_DAY_USAGE,
       aiUsage: AI_USAGE,
     });
     expect(service.getUserForSession).toHaveBeenCalledWith('test-session-token');
@@ -883,6 +902,7 @@ describe('account routes', () => {
       accountTier: null,
       reportCount: null,
       reportUsage: null,
+      multiDayUsage: null,
       aiUsage: null,
     });
   });
@@ -938,6 +958,7 @@ describe('account routes', () => {
       accountTier: FREE_TIER,
       reportCount: 7,
       reportUsage: REPORT_USAGE,
+      multiDayUsage: MULTI_DAY_USAGE,
       aiUsage: AI_USAGE,
     });
     expect(googleVerifier.verify).toHaveBeenCalledWith('header.payload.signature-value', {

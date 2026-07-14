@@ -592,7 +592,7 @@ export function TripView({
               <select
                 value={tripDurationDays}
                 onChange={(e) => {
-                  setTripDurationDays(Math.max(2, Math.min(7, Math.round(Number(e.target.value) || 3))));
+                  setTripDurationDays(Math.max(2, Math.min(7, Math.round(Number(e.target.value) || 7))));
                   clearForecastState();
                 }}
               >

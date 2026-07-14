@@ -18,6 +18,10 @@ import {
   type GoogleAuthConfig,
 } from './account';
 import { parseAccountReportUsage } from './report-usage';
+import {
+  parseAccountMultiDayUsage,
+  type AccountMultiDayUsage,
+} from '../app/multi-day-usage';
 
 interface AccountResponse {
   available: boolean;
@@ -26,6 +30,7 @@ interface AccountResponse {
   accountTier: AccountTier | null;
   reportCount: number | null;
   reportUsage: AccountReportUsage | null;
+  multiDayUsage: AccountMultiDayUsage | null;
   aiUsage: AccountAIUsage | null;
 }
 
@@ -35,6 +40,7 @@ interface AccountState {
   tier: AccountTier | null;
   reportCount: number | null;
   reportUsage: AccountReportUsage | null;
+  multiDayUsage: AccountMultiDayUsage | null;
   aiUsage: AccountAIUsage | null;
   loading: boolean;
   busy: boolean;
@@ -189,6 +195,7 @@ function parseAccountResponse(payload: unknown): AccountResponse | null {
     accountTier: record.authenticated ? accountTier || LEGACY_FREE_TIER : null,
     reportCount: record.authenticated ? reportCount : null,
     reportUsage: record.authenticated ? parseAccountReportUsage(record.reportUsage) : null,
+    multiDayUsage: record.authenticated ? parseAccountMultiDayUsage(record.multiDayUsage) : null,
     aiUsage: parseAIUsage(record.aiUsage),
   };
 }
@@ -200,6 +207,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     tier: null,
     reportCount: null,
     reportUsage: null,
+    multiDayUsage: null,
     aiUsage: null,
     loading: true,
     busy: false,
@@ -248,6 +256,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       tier: account.authenticated ? account.accountTier : null,
       reportCount: account.authenticated ? account.reportCount : null,
       reportUsage: account.authenticated ? account.reportUsage : null,
+      multiDayUsage: account.authenticated ? account.multiDayUsage : null,
       aiUsage: account.authenticated ? account.aiUsage : null,
       loading: false,
       busy: false,
@@ -297,6 +306,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           : Math.max(current.reportCount, reportCount),
         reportUsage: shouldApplyUsage ? reportUsage : current.reportUsage,
       };
+    });
+  }, []);
+
+  const syncMultiDayUsage = useCallback((userId: string, usage: AccountMultiDayUsage) => {
+    setState((current) => {
+      if (current.user?.id !== userId) return current;
+      const currentPeriodStart = current.multiDayUsage?.periodStart || '';
+      const shouldApplyUsage = !current.multiDayUsage
+        || usage.periodStart > currentPeriodStart
+        || (
+          usage.periodStart === currentPeriodStart
+          && usage.usedRuns >= current.multiDayUsage.usedRuns
+        );
+      return shouldApplyUsage ? { ...current, multiDayUsage: usage } : current;
     });
   }, []);
 
@@ -437,6 +460,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
                 tier: null,
                 reportCount: null,
                 reportUsage: null,
+                multiDayUsage: null,
                 aiUsage: null,
               }));
             }
@@ -451,6 +475,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             tier: account.accountTier,
             reportCount: account.reportCount,
             reportUsage: account.reportUsage,
+            multiDayUsage: account.multiDayUsage,
             aiUsage: account.aiUsage,
             preferenceSyncState: 'saved',
             preferenceError: null,
@@ -484,6 +509,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     signOut,
     refreshAccount,
     syncGeneratedReportUsage,
+    syncMultiDayUsage,
     savePreferences,
     verifyEmail,
   }), [
@@ -498,6 +524,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     signOut,
     state,
     syncGeneratedReportUsage,
+    syncMultiDayUsage,
     verifyEmail,
   ]);
 

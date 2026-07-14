@@ -45,6 +45,7 @@ describe('server rate limiting', () => {
         accountTier: null,
         reportCount: null,
         reportUsage: null,
+        multiDayUsage: null,
         aiUsage: null,
       });
     await request(app)

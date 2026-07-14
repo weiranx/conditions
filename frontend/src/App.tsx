@@ -103,6 +103,7 @@ import {
 } from './app/travel-window';
 import { sanitizeExternalUrl, parseLinkState } from './app/url-state';
 import { readAccountLinkAction } from './app/account-links';
+import type { MultiDayUsage } from './app/multi-day-usage';
 import {
   evaluateBackcountryDecision,
 } from './app/decision';
@@ -213,12 +214,23 @@ function App() {
     loading: accountLoading,
     refreshAccount,
     reportUsage: accountReportUsage,
+    syncMultiDayUsage,
     savePreferences: saveAccountPreferences,
     syncGeneratedReportUsage,
     user: accountUser,
   } = useAccount();
   const accountUserId = accountUser?.id;
   const [accountAccessReason, setAccountAccessReason] = useState<AccountAccessReason | null>(null);
+  const handleMultiDayUsageUpdated = useCallback((usage: MultiDayUsage) => {
+    if (usage.tierKey !== 'guest' && accountUserId) {
+      syncMultiDayUsage(accountUserId, usage);
+    }
+  }, [accountUserId, syncMultiDayUsage]);
+  const handleMultiDayUsageLimitReached = useCallback((usage: MultiDayUsage) => {
+    setAccountAccessReason(usage.tierKey === 'guest'
+      ? 'guest-multi-day-limit'
+      : 'account-multi-day-limit');
+  }, []);
   const [guestReportCount, setGuestReportCount] = useState(loadGuestReportCount);
   const isProductionBuild = import.meta.env.PROD;
   const todayDate = formatDateInput(new Date());
@@ -495,6 +507,9 @@ function App() {
     initialStartDate: forecastDate,
     initialStartTime: alpineStartTime,
     preferences,
+    objectiveName,
+    onUsageUpdated: handleMultiDayUsageUpdated,
+    onUsageLimitReached: handleMultiDayUsageLimitReached,
   });
   const {
     tripStartDate, setTripStartDate, tripStartTime, setTripStartTime,
