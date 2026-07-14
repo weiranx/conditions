@@ -711,12 +711,14 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   const nearbyObservation = localConditions?.weatherObservation || null;
   const radarObservation = localConditions?.radar || null;
   const streamflowObservation = localConditions?.streamflow || null;
+  const parkAccessObservation = localConditions?.closures || null;
   const accessObservation = localConditions?.access || null;
   const wildfireObservation = localConditions?.wildfire || null;
   const hasLocalObservations = Boolean(
     nearbyObservation?.available
       || radarObservation?.available
       || streamflowObservation?.available
+      || parkAccessObservation?.available
       || accessObservation?.available
       || wildfireObservation?.available,
   );
@@ -1869,11 +1871,38 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         {hasLocalObservations && (() => {
           const forestRoadCount = Number(accessObservation?.closedRoadCount || 0);
           const stateRoadCount = Number(accessObservation?.caltransClosureCount || 0);
-          const accessIssueCount = forestRoadCount + stateRoadCount;
+          const parkAlertCount = Number(parkAccessObservation?.alertCount || parkAccessObservation?.alerts?.length || 0);
+          const accessIssueCount = forestRoadCount + stateRoadCount + parkAlertCount;
           const wildfireCount = Number(wildfireObservation?.nearbyIncidentCount || 0);
           const streamTrend = String(streamflowObservation?.trend || '').toLowerCase();
-          const needsAttention = accessIssueCount > 0 || wildfireCount > 0 || radarObservation?.echoDetected === true || streamTrend === 'rising';
           const hasNumericValue = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+          const observationTimeMs = nearbyObservation?.observedTime ? Date.parse(nearbyObservation.observedTime) : Number.NaN;
+          const reportTimeMs = localConditions?.generatedTime ? Date.parse(localConditions.generatedTime) : Number.NaN;
+          const observationAgeHours = Number.isFinite(observationTimeMs) && Number.isFinite(reportTimeMs)
+            ? Math.max(0, (reportTimeMs - observationTimeMs) / 3_600_000)
+            : null;
+          const stationElevationDeltaFt = hasNumericValue(nearbyObservation?.elevationFt)
+            ? Number(nearbyObservation?.elevationFt) - objectiveElevationFt
+            : null;
+          const stationIsLimited = nearbyObservation?.available && (
+            (observationAgeHours !== null && observationAgeHours > 2)
+            || (hasNumericValue(nearbyObservation.distanceKm) && Number(nearbyObservation.distanceKm) > 30)
+            || (stationElevationDeltaFt !== null && Math.abs(stationElevationDeltaFt) > 1500)
+          );
+          const actionSignals = [
+            accessIssueCount > 0 ? `${accessIssueCount} road or land-manager alert${accessIssueCount === 1 ? '' : 's'} near the objective` : null,
+            radarObservation?.echoDetected === true ? 'precipitation showing at the objective on the latest radar analysis' : null,
+            streamTrend === 'rising' ? 'a rising nearby gauge where water crossings may be more consequential' : null,
+            wildfireCount > 0 ? `${wildfireCount} current fire perimeter${wildfireCount === 1 ? '' : 's'} within the fire-feed search area` : null,
+            hasNumericValue(nearbyObservation?.gustMph) && Number(nearbyObservation?.gustMph) >= maxGustMph
+              ? `station gusts at or above your ${formatWindDisplay(maxGustMph)} limit`
+              : null,
+          ].filter((signal): signal is string => Boolean(signal));
+          const needsAttention = actionSignals.length > 0;
+          const stationContext = [
+            nearbyObservation?.observedTime ? formatAgeFromNow(nearbyObservation.observedTime) : null,
+            hasNumericValue(nearbyObservation?.distanceKm) ? localizeUnitText(`${nearbyObservation?.distanceKm} km away`) : null,
+          ].filter(Boolean).join(' · ');
 
           return (
             <section className="ssr-card" id="planner-section-observations">
@@ -1883,16 +1912,23 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                   Observations &amp; Access
                 </h2>
                 <span className={`ssr-pill ${needsAttention ? 'caution' : 'go'}`}>
-                  {needsAttention ? 'Review before travel' : 'No flagged signal'}
+                  {needsAttention ? `${actionSignals.length} item${actionSignals.length === 1 ? '' : 's'} to verify` : 'Current sources checked'}
                 </span>
               </div>
               <div className="ssr-card-b">
                 <div className="ssr-obs-status-grid" aria-label="Current observations and access summary">
-                  {accessObservation?.available && (
-                    <div className={`ssr-obs-status ${accessIssueCount > 0 ? 'warn' : 'good'}`}>
-                      <span className="ssr-k">Trailhead access</span>
-                      <strong>{accessIssueCount > 0 ? `${accessIssueCount} mapped issue${accessIssueCount === 1 ? '' : 's'}` : 'No mapped issues'}</strong>
-                      <small>{hasNumericValue(accessObservation.searchRadiusKm) ? `Checked within ${localizeUnitText(`${accessObservation.searchRadiusKm} km`)}` : 'Available road feeds checked'}</small>
+                  {nearbyObservation?.available && (
+                    <div className={`ssr-obs-status ${stationIsLimited ? 'warn' : 'good'}`}>
+                      <span className="ssr-k">Latest field reading</span>
+                      <strong>{nearbyObservation.textDescription || (hasNumericValue(nearbyObservation.tempF) ? formatTempDisplay(Number(nearbyObservation.tempF)) : 'Station reporting')}</strong>
+                      <small>{stationContext || nearbyObservation.stationName || 'Nearby NWS station'}</small>
+                    </div>
+                  )}
+                  {(accessObservation?.available || parkAccessObservation?.available) && (
+                    <div className={`ssr-obs-status ${accessIssueCount > 0 ? 'warn' : 'neutral'}`}>
+                      <span className="ssr-k">Road &amp; land access</span>
+                      <strong>{accessIssueCount > 0 ? `${accessIssueCount} result${accessIssueCount === 1 ? '' : 's'} to review` : 'No closure returned'}</strong>
+                      <small>{accessIssueCount > 0 ? 'Open each item below for scope and details' : 'Checked feeds do not confirm the full approach'}</small>
                     </div>
                   )}
                   {radarObservation?.available && (
@@ -1900,6 +1936,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                       <span className="ssr-k">Precipitation now</span>
                       <strong>{radarObservation.echoDetected ? 'Radar echo detected' : 'No radar echo'}</strong>
                       <small>{radarObservation.observedTime ? formatAgeFromNow(radarObservation.observedTime) : 'Latest available radar scan'}</small>
+                    </div>
+                  )}
+                  {streamflowObservation?.available && (
+                    <div className={`ssr-obs-status ${streamTrend === 'rising' ? 'warn' : 'neutral'}`}>
+                      <span className="ssr-k">Water crossing context</span>
+                      <strong>{streamTrend === 'rising' ? 'Nearby gauge rising' : hasNumericValue(streamflowObservation.dischargeCfs) ? `${Math.round(Number(streamflowObservation.dischargeCfs))} cfs · ${streamTrend || 'trend unknown'}` : streamTrend || 'Gauge reporting'}</strong>
+                      <small>{[streamflowObservation.siteName, hasNumericValue(streamflowObservation.distanceKm) ? localizeUnitText(`${streamflowObservation.distanceKm} km away`) : null].filter(Boolean).join(' · ')}</small>
                     </div>
                   )}
                   {wildfireObservation?.available && (
@@ -1911,6 +1954,17 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                   )}
                 </div>
 
+                <div className={`ssr-obs-takeaway ${needsAttention ? 'warn' : ''}`}>
+                  <span className="ssr-obs-eyebrow">What changes the plan</span>
+                  {needsAttention ? (
+                    <ul>
+                      {actionSignals.map((signal) => <li key={signal}>{signal}</li>)}
+                    </ul>
+                  ) : (
+                    <p>No checked feed raised a specific current flag. Still verify the exact approach, seasonal gates, parking, and same-day land-manager notices before departure.</p>
+                  )}
+                </div>
+
                 {nearbyObservation?.available && (
                   <div className="ssr-obs-section">
                     <div className="ssr-obs-section-h">
@@ -1918,11 +1972,16 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                         <span className="ssr-obs-eyebrow">Latest station observation</span>
                         <strong>{nearbyObservation.stationName || nearbyObservation.stationId || 'Nearby NWS station'}</strong>
                       </div>
-                      <span>{[
-                        nearbyObservation.observedTime ? formatAgeFromNow(nearbyObservation.observedTime) : null,
-                        hasNumericValue(nearbyObservation.distanceKm) ? localizeUnitText(`${nearbyObservation.distanceKm} km away`) : null,
-                      ].filter(Boolean).join(' · ')}</span>
+                      <span>{stationContext}</span>
                     </div>
+                    {(stationIsLimited || stationElevationDeltaFt !== null) && (
+                      <p className={`ssr-obs-context ${stationIsLimited ? 'warn' : ''}`}>
+                        {stationElevationDeltaFt !== null
+                          ? `The station is ${formatElevationDisplay(Math.abs(stationElevationDeltaFt), { precision: 0 })} ${stationElevationDeltaFt < 0 ? 'below' : 'above'} the objective. `
+                          : ''}
+                        Use this as a ground-truth check, not as the objective conditions; terrain, elevation, and observation age can produce large differences.
+                      </p>
+                    )}
                     <div className="ssr-meta-grid">
                       {nearbyObservation.textDescription && <div className="ssr-meta ssr-meta-wide"><span className="ssr-k">Observed conditions</span><span className="ssr-v">{nearbyObservation.textDescription}</span></div>}
                       {hasNumericValue(nearbyObservation.tempF) && <div className="ssr-meta"><span className="ssr-k">Temperature</span><span className="ssr-v">{formatTempDisplay(Number(nearbyObservation.tempF))}</span></div>}
@@ -1977,20 +2036,32 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                   </div>
                 )}
 
-                {accessObservation?.available && (
+                {(accessObservation?.available || parkAccessObservation?.available) && (
                   <div className="ssr-obs-section">
                     <div className="ssr-obs-section-h">
-                      <div><span className="ssr-obs-eyebrow">Trailhead access check</span><strong>{accessIssueCount > 0 ? 'Confirm the approach before departure' : 'No mapped closure found'}</strong></div>
-                      <span className={`ssr-pill ${accessIssueCount > 0 ? 'caution' : 'go'}`}>{accessIssueCount > 0 ? `${accessIssueCount} issue${accessIssueCount === 1 ? '' : 's'}` : 'Feeds clear'}</span>
+                      <div><span className="ssr-obs-eyebrow">Road &amp; land-manager access</span><strong>{accessIssueCount > 0 ? 'Review the named results, then verify your exact approach' : 'No closure returned by checked feeds'}</strong></div>
+                      <span className={`ssr-pill ${accessIssueCount > 0 ? 'caution' : 'neutral'}`}>{accessIssueCount > 0 ? `${accessIssueCount} result${accessIssueCount === 1 ? '' : 's'}` : 'Route unverified'}</span>
                     </div>
-                    {accessIssueCount === 0 && (
-                      <p className="ssr-obs-caveat">This is not an access guarantee. Seasonal gates, temporary orders, county roads, and trailhead parking restrictions may not appear in these feeds.</p>
+                    {parkAccessObservation?.available && parkAlertCount > 0 && (
+                      <div className="ssr-cc-group">
+                        <div className="ssr-cc-group-h warn"><AlertTriangle size={13} /> {parkAccessObservation.parkName || 'National Park Service'} alerts <span className="ssr-cc-count">{parkAlertCount}</span></div>
+                        <ul className="ssr-bullets ssr-obs-list">
+                          {(parkAccessObservation.alerts || []).slice(0, 4).map((alert, index) => (
+                            <li key={`${alert.title}-${index}`}>
+                              {alert.url ? (
+                                <a href={alert.url} target="_blank" rel="noreferrer"><strong>{alert.title || 'Access alert'}</strong><ExternalLink size={11} aria-hidden /></a>
+                              ) : <strong>{alert.title || 'Access alert'}</strong>}
+                              {alert.description && <span>{summarizeText(toPlainText(alert.description), 240)}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                     {forestRoadCount > 0 && (
                       <div className="ssr-cc-group">
                         <div className="ssr-cc-group-h warn"><Route size={13} /> Forest Service road status <span className="ssr-cc-count">{forestRoadCount}</span></div>
                         <ul className="ssr-bullets ssr-obs-list">
-                          {(accessObservation.roads || []).slice(0, 4).map((road, index) => (
+                          {(accessObservation?.roads || []).slice(0, 4).map((road, index) => (
                             <li key={`${road.id || road.name}-${index}`}>
                               <strong>{road.name || road.id || 'Unnamed road'}</strong>
                               <span>{[road.routeStatus, road.operatingLevel, road.county].filter(Boolean).join(' · ') || 'Closure listed in Forest Service feed'}</span>
@@ -2004,7 +2075,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                       <div className="ssr-cc-group">
                         <div className="ssr-cc-group-h warn"><Route size={13} /> Caltrans closures <span className="ssr-cc-count">{stateRoadCount}</span></div>
                         <ul className="ssr-bullets ssr-obs-list">
-                          {(accessObservation.caltransClosures || []).slice(0, 4).map((closure, index) => (
+                          {(accessObservation?.caltransClosures || []).slice(0, 4).map((closure, index) => (
                             <li key={`${closure.name}-${index}`}>
                               <strong>{closure.name || 'Caltrans closure'}</strong>
                               {(closure.summary || closure.details) && <span>{summarizeText(toPlainText(closure.summary || closure.details || ''), 220)}</span>}
@@ -2014,12 +2085,27 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                         {stateRoadCount > 4 && <p className="ssr-muted">Showing 4 of {stateRoadCount} mapped closures.</p>}
                       </div>
                     )}
-                    {accessObservation.note && <p className="ssr-muted">{accessObservation.note}</p>}
-                    {accessObservation.sourceLink && (
-                      <a className="ssr-obs-source-link" href={accessObservation.sourceLink} target="_blank" rel="noreferrer">
-                        Open official road-status source <ExternalLink size={12} aria-hidden />
-                      </a>
+                    {accessIssueCount === 0 && (
+                      <p className="ssr-obs-caveat">“No closure returned” is not an access guarantee. These area searches do not confirm the road you will drive, seasonal gates, temporary orders, county roads, trailhead parking, or snow clearance.</p>
                     )}
+                    {accessObservation?.note && <p className="ssr-muted">{accessObservation.note}</p>}
+                    <div className="ssr-obs-source-links" aria-label="Official access verification links">
+                      {parkAccessObservation?.sourceLink && (
+                        <a className="ssr-obs-source-link" href={parkAccessObservation.sourceLink} target="_blank" rel="noreferrer">
+                          Check {parkAccessObservation.parkName || 'NPS'} conditions <ExternalLink size={12} aria-hidden />
+                        </a>
+                      )}
+                      {accessObservation?.sourceLink && (
+                        <a className="ssr-obs-source-link" href={accessObservation.sourceLink} target="_blank" rel="noreferrer">
+                          Check Forest Service visitor map <ExternalLink size={12} aria-hidden />
+                        </a>
+                      )}
+                      {accessObservation?.caltransSourceLink && (
+                        <a className="ssr-obs-source-link" href={accessObservation.caltransSourceLink} target="_blank" rel="noreferrer">
+                          Check Caltrans QuickMap <ExternalLink size={12} aria-hidden />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
 

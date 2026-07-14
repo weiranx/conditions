@@ -343,6 +343,7 @@ const createLocalConditionsService = ({
       alerts,
       alertCount: alerts.length,
       source: 'National Park Service',
+      sourceLink: `https://www.nps.gov/${nearest.parkCode}/planyourvisit/conditions.htm`,
       matchedBy: nearest.matchedBy || 'nearest_park_reference_point',
     };
   };

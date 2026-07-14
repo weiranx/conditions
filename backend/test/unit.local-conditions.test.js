@@ -85,15 +85,17 @@ describe('filterClosureAlerts', () => {
     const result = filterClosureAlerts([
       { title: 'Visitor center hours', category: 'Information' },
       { title: '', category: 'Park Closure' },
-      { title: 'Tioga Road closed', category: 'Park Closure', url: 'https://nps.gov/x' },
+      { title: 'Tioga Road closed', category: 'Park Closure', url: 'https://nps.gov/x', lastIndexedDate: '2026-07-14' },
       { title: 'Bear activity', category: 'Caution' },
     ]);
     expect(result[0].title).toBe('Tioga Road closed');
+    expect(result[0].lastIndexedDate).toBe('2026-07-14');
     expect(result.map((a) => a.title)).not.toContain('');
+    expect(result.map((a) => a.title)).not.toContain('Visitor center hours');
   });
 
   test('respects the limit', () => {
-    const many = Array.from({ length: 10 }, (_, i) => ({ title: `Alert ${i}`, category: 'Information' }));
+    const many = Array.from({ length: 10 }, (_, i) => ({ title: `Alert ${i}`, category: 'Caution' }));
     expect(filterClosureAlerts(many, { limit: 3 })).toHaveLength(3);
   });
 });

@@ -501,9 +501,10 @@ export interface SafetyData {
       parkName?: string | null;
       parkCode?: string | null;
       distanceKm?: number | null;
-      alerts?: Array<{ title?: string; category?: string; description?: string; url?: string | null }>;
+      alerts?: Array<{ title?: string; category?: string; description?: string; url?: string | null; lastIndexedDate?: string | null }>;
       alertCount?: number;
       source?: string;
+      sourceLink?: string | null;
       note?: string;
       matchedBy?: 'boundary' | 'nearest_park_reference_point';
     } | null;
@@ -559,6 +560,8 @@ export interface SafetyData {
       caltransClosures?: Array<{ name?: string | null; summary?: string | null; details?: string | null }>;
       source?: string;
       sourceLink?: string | null;
+      dataSourceLink?: string | null;
+      caltransSourceLink?: string | null;
       note?: string;
     } | null;
     wildfire?: {

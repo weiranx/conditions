@@ -347,8 +347,10 @@ const createEnvironmentalObservationService = ({
         source: isCalifornia
           ? 'USDA Forest Service road status + Caltrans QuickMap closure feed'
           : 'USDA Forest Service Enterprise Data Warehouse — roads closed to motorized uses',
-        sourceLink: USFS_CLOSED_ROADS_URL,
-        note: 'This is the Forest Service system-road status layer; temporary emergency closures and state/county road restrictions may require separate verification.',
+        sourceLink: 'https://www.fs.usda.gov/ivm/',
+        dataSourceLink: USFS_CLOSED_ROADS_URL,
+        caltransSourceLink: isCalifornia ? 'https://quickmap.dot.ca.gov/' : null,
+        note: 'The map search covers Forest Service roads closed to motorized use within 25 km and, in California, Caltrans closures within 75 km. It does not verify the exact driving route, seasonal gates, parking, county roads, or temporary orders.',
       };
     },
   );

@@ -108,7 +108,7 @@ const filterClosureAlerts = (alerts, { limit = 6 } = {}) => {
     lastIndexedDate: alert?.lastIndexedDate || null,
   }));
   const ranked = normalized
-    .filter((alert) => alert.title)
+    .filter((alert) => alert.title && CLOSURE_CATEGORIES.includes(alert.category.toLowerCase()))
     .sort((a, b) => {
       const aClosure = CLOSURE_CATEGORIES.includes(a.category.toLowerCase()) ? 0 : 1;
       const bClosure = CLOSURE_CATEGORIES.includes(b.category.toLowerCase()) ? 0 : 1;
