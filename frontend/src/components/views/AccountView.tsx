@@ -292,6 +292,7 @@ export function AccountView({
     : null;
   const guestReportsRemaining = Math.max(0, GUEST_REPORT_LIMIT - guestReportCount);
   const guestReportPercentUsed = Math.min(100, (guestReportCount / GUEST_REPORT_LIMIT) * 100);
+  const isSignedIn = Boolean(account.user && mode !== 'reset');
 
   return (
     <div
@@ -309,22 +310,24 @@ export function AccountView({
         />
       )}
 
-      <main className={embedded ? 'account-settings-card' : 'account-page'}>
-        <section className="account-intro" aria-labelledby="account-title">
-          <div className="account-intro-icon" aria-hidden><CircleUserRound /></div>
-          <p className="account-eyebrow">Your account</p>
-          <h1 id="account-title">A secure home for your profile.</h1>
-          <p className="account-lede">
-            Every account starts on Free, with saved preferences, report history, and AI tools. Premium adds unlimited AI and reports.
-          </p>
-          <div className="account-benefits" aria-label="Account details">
-            <span><ShieldCheck aria-hidden /> Verified Google or password sign-in</span>
-            <span><KeyRound aria-hidden /> Secure, HTTP-only device session</span>
-            <span><Check aria-hidden /> Preferences follow your account</span>
-          </div>
-        </section>
+      <main className={`${embedded ? 'account-settings-card' : 'account-page'}${isSignedIn ? ' is-signed-in' : ''}`}>
+        {!isSignedIn && (
+          <section className="account-intro" aria-labelledby="account-title">
+            <div className="account-intro-icon" aria-hidden><CircleUserRound /></div>
+            <p className="account-eyebrow">Your account</p>
+            <h1 id="account-title">A secure home for your profile.</h1>
+            <p className="account-lede">
+              Every account starts on Free, with saved preferences, report history, and AI tools. Premium adds unlimited AI and reports.
+            </p>
+            <div className="account-benefits" aria-label="Account details">
+              <span><ShieldCheck aria-hidden /> Verified Google or password sign-in</span>
+              <span><KeyRound aria-hidden /> Secure, HTTP-only device session</span>
+              <span><Check aria-hidden /> Preferences follow your account</span>
+            </div>
+          </section>
+        )}
 
-        <section className="account-panel" aria-live="polite">
+        <section className={`account-panel${isSignedIn ? ' is-profile-panel' : ''}`} aria-live="polite">
           {account.loading ? (
             <div className="account-loading" role="status">
               <LoaderCircle className="account-spinner" aria-hidden />
@@ -339,13 +342,24 @@ export function AccountView({
             </div>
           ) : account.user && mode !== 'reset' ? (
             <div className="account-profile">
-              <div className="account-avatar" aria-hidden>
-                {account.user.displayName.slice(0, 1).toUpperCase() || <UserRound />}
-              </div>
-              <p className="account-profile-kicker">Signed in</p>
-              <h2>{account.user.displayName}</h2>
-              <p className="account-profile-email"><Mail aria-hidden /> {account.user.email}</p>
-              <p className="account-member-since">{formatMemberSince(account.user.createdAt)}</p>
+              <header className="account-profile-header">
+                <div className="account-avatar" aria-hidden>
+                  {account.user.displayName.slice(0, 1).toUpperCase() || <UserRound />}
+                </div>
+                <div className="account-profile-identity">
+                  <p className="account-profile-kicker">Signed in</p>
+                  <h2>{account.user.displayName}</h2>
+                  <p className="account-profile-email"><Mail aria-hidden /> {account.user.email}</p>
+                  <p className="account-member-since">{formatMemberSince(account.user.createdAt)}</p>
+                </div>
+                <div className={`account-plan-badge${isPremium ? ' is-premium' : ''}`}>
+                  {isPremium ? <Crown aria-hidden /> : <ShieldCheck aria-hidden />}
+                  <span>
+                    <small>Current plan</small>
+                    <strong>{account.tier?.label || 'Free'}</strong>
+                  </span>
+                </div>
+              </header>
               {account.user.emailVerified ? (
                 <div className="account-profile-note">
                   <ShieldCheck aria-hidden />
@@ -371,6 +385,54 @@ export function AccountView({
                   </div>
                 </div>
               )}
+              <div className="account-section-heading">
+                <div>
+                  <p className="account-profile-kicker">Allowance</p>
+                  <h3>Usage this month</h3>
+                </div>
+                <span>Updates after each successful action</span>
+              </div>
+              <section className="account-usage-list" aria-label="Monthly usage limits">
+                <MonthlyUsageMeter
+                  icon={<FileText aria-hidden />}
+                  label="Generated report usage"
+                  singularUnit="report"
+                  pluralUnit="reports"
+                  used={reportUsage?.usedReports ?? null}
+                  limit={reportUsage?.limitReports ?? null}
+                  remaining={reportUsage?.remainingReports ?? null}
+                  percentUsed={reportUsage?.percentUsed ?? null}
+                  resetAt={reportUsage?.resetAt ?? null}
+                  unlimited={reportUsage?.unlimited ?? false}
+                  note="Each successfully generated report counts once, including reports added to your account history."
+                />
+                <MonthlyUsageMeter
+                  icon={<CalendarRange aria-hidden />}
+                  label="Multi-day forecast usage"
+                  singularUnit="comparison"
+                  pluralUnit="comparisons"
+                  used={multiDayUsage?.usedRuns ?? null}
+                  limit={multiDayUsage?.limitRuns ?? null}
+                  remaining={multiDayUsage?.remainingRuns ?? null}
+                  percentUsed={multiDayUsage?.percentUsed ?? null}
+                  resetAt={multiDayUsage?.resetAt ?? null}
+                  unlimited={multiDayUsage?.unlimited ?? false}
+                  note="Each successful 2–7 day comparison counts once, regardless of how many forecast days it includes."
+                />
+                <MonthlyUsageMeter
+                  icon={<Sparkles aria-hidden />}
+                  label="AI usage"
+                  singularUnit="token"
+                  pluralUnit="tokens"
+                  used={account.aiUsage?.usedTokens ?? null}
+                  limit={account.aiUsage?.limitTokens ?? null}
+                  remaining={account.aiUsage?.remainingTokens ?? null}
+                  percentUsed={account.aiUsage?.percentUsed ?? null}
+                  resetAt={account.aiUsage?.resetAt ?? null}
+                  unlimited={account.aiUsage?.unlimited ?? false}
+                  note="Input and output tokens from AI briefs, chat replies, imagery insights, and AI-assisted analysis count toward this allowance."
+                />
+              </section>
               <section
                 className={`account-plan-card${isPremium ? ' is-premium' : ''}`}
                 aria-label="Current account plan"
@@ -421,47 +483,6 @@ export function AccountView({
                     {account.tier?.cancelAtPeriodEnd ? 'Premium access ends' : 'Current period through'} {planPeriodEnd}
                   </small>
                 )}
-              </section>
-              <section className="account-usage-list" aria-label="Monthly usage limits">
-                <MonthlyUsageMeter
-                  icon={<FileText aria-hidden />}
-                  label="Generated report usage"
-                  singularUnit="report"
-                  pluralUnit="reports"
-                  used={reportUsage?.usedReports ?? null}
-                  limit={reportUsage?.limitReports ?? null}
-                  remaining={reportUsage?.remainingReports ?? null}
-                  percentUsed={reportUsage?.percentUsed ?? null}
-                  resetAt={reportUsage?.resetAt ?? null}
-                  unlimited={reportUsage?.unlimited ?? false}
-                  note="Each successfully generated report counts once, including reports added to your account history."
-                />
-                <MonthlyUsageMeter
-                  icon={<CalendarRange aria-hidden />}
-                  label="Multi-day forecast usage"
-                  singularUnit="comparison"
-                  pluralUnit="comparisons"
-                  used={multiDayUsage?.usedRuns ?? null}
-                  limit={multiDayUsage?.limitRuns ?? null}
-                  remaining={multiDayUsage?.remainingRuns ?? null}
-                  percentUsed={multiDayUsage?.percentUsed ?? null}
-                  resetAt={multiDayUsage?.resetAt ?? null}
-                  unlimited={multiDayUsage?.unlimited ?? false}
-                  note="Each successful 2–7 day comparison counts once, regardless of how many forecast days it includes."
-                />
-                <MonthlyUsageMeter
-                  icon={<Sparkles aria-hidden />}
-                  label="AI usage"
-                  singularUnit="token"
-                  pluralUnit="tokens"
-                  used={account.aiUsage?.usedTokens ?? null}
-                  limit={account.aiUsage?.limitTokens ?? null}
-                  remaining={account.aiUsage?.remainingTokens ?? null}
-                  percentUsed={account.aiUsage?.percentUsed ?? null}
-                  resetAt={account.aiUsage?.resetAt ?? null}
-                  unlimited={account.aiUsage?.unlimited ?? false}
-                  note="Input and output tokens from AI briefs, chat replies, imagery insights, and AI-assisted analysis count toward this allowance."
-                />
               </section>
               {formNotice && <p className="account-notice" role="status">{formNotice}</p>}
               {errorMessage && <p className="account-error" role="alert">{errorMessage}</p>}

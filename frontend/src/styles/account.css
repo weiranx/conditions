@@ -16,6 +16,10 @@
   align-items: stretch;
 }
 
+.account-settings-card.is-signed-in {
+  display: block;
+}
+
 .account-settings-card .account-intro {
   align-self: center;
   padding: 36px 32px;
@@ -49,6 +53,10 @@
   box-shadow: none;
 }
 
+.account-settings-card .account-panel.is-profile-panel {
+  border-left: 0;
+}
+
 .account-page {
   width: min(1060px, calc(100% - 48px));
   min-height: calc(100vh - 146px);
@@ -58,6 +66,11 @@
   grid-template-columns: minmax(0, .88fr) minmax(380px, 1fr);
   align-items: center;
   gap: clamp(48px, 8vw, 112px);
+}
+
+.account-page.is-signed-in {
+  display: block;
+  width: min(1180px, calc(100% - 48px));
 }
 
 .account-intro-icon {
@@ -294,20 +307,34 @@
 .account-legal { margin: 18px 4px 0; color: var(--ui-text-3); font-size: 10.5px; line-height: 1.55; text-align: center; }
 .account-legal button { padding: 0; border: 0; background: none; color: var(--ui-brand-strong); font: inherit; text-decoration: underline; cursor: pointer; }
 
-.account-profile { min-height: 480px; padding: 46px 42px 38px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.account-avatar { width: 72px; height: 72px; display: grid; place-items: center; margin-bottom: 24px; border: 1px solid color-mix(in oklch, var(--ui-brand) 42%, transparent); border-radius: 50%; background: var(--ui-brand-soft); color: var(--ui-brand-strong); font-family: var(--ssr-display); font-size: 30px; }
+.account-profile { min-height: 480px; padding: 38px 40px 32px; display: flex; flex-direction: column; text-align: left; }
+.account-profile-header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; }
+.account-avatar { width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid color-mix(in oklch, var(--ui-brand) 42%, transparent); border-radius: 18px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); font-family: var(--ssr-display); font-size: 27px; }
 .account-avatar svg { width: 28px; }
-.account-profile-email { margin: 12px 0 0; display: inline-flex; align-items: center; gap: 7px; color: var(--ui-text-2); font-size: 12.5px; }
+.account-profile-identity { min-width: 0; }
+.account-profile-identity .account-profile-kicker { margin-bottom: 4px; }
+.account-profile-email { margin: 7px 0 0; display: flex; align-items: center; gap: 7px; color: var(--ui-text-2); font-size: 12.5px; overflow-wrap: anywhere; }
 .account-profile-email svg { width: 15px; }
-.account-member-since { margin: 7px 0 0; color: var(--ui-text-3); font-size: 11px; }
+.account-member-since { margin: 5px 0 0; color: var(--ui-text-3); font-size: 10.5px; }
+.account-plan-badge { min-width: 136px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ui-line); border-radius: 12px; background: var(--ui-surface-subtle); }
+.account-plan-badge.is-premium { border-color: color-mix(in oklch, var(--ui-brand) 45%, var(--ui-line)); background: var(--ui-brand-soft); }
+.account-plan-badge > svg { width: 19px; height: 19px; color: var(--ui-brand); }
+.account-plan-badge > span { display: grid; gap: 2px; }
+.account-plan-badge small { color: var(--ui-text-3); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.account-plan-badge strong { color: var(--ui-text); font-size: 13px; }
 
-.account-profile-note { width: 100%; margin-top: 30px; padding: 16px; display: flex; gap: 12px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface-subtle); text-align: left; }
+.account-profile-note { width: 100%; box-sizing: border-box; margin-top: 24px; padding: 14px 16px; display: flex; gap: 12px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface-subtle); text-align: left; }
 .account-profile-note > svg { width: 19px; height: 19px; flex: none; color: var(--ui-brand); }
 .account-profile-note div { display: grid; gap: 4px; }
 .account-profile-note strong { font-size: 11.5px; }
 .account-profile-note span { color: var(--ui-text-3); font-size: 10.5px; line-height: 1.5; }
 .account-profile-note.is-warning { border-color: color-mix(in oklch, var(--ui-risk-3) 38%, var(--ui-line)); background: color-mix(in oklch, var(--ui-risk-3) 8%, var(--ui-surface-subtle)); }
 .account-profile-note.is-warning > svg { color: var(--ui-caution-ink); }
+
+.account-section-heading { margin-top: 30px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.account-section-heading .account-profile-kicker { margin-bottom: 4px; }
+.account-section-heading h3 { margin: 0; font-family: var(--ssr-display); font-size: 22px; font-weight: 540; letter-spacing: -.02em; }
+.account-section-heading > span { color: var(--ui-text-3); font-size: 10px; }
 
 .account-plan-card { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 16px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface-subtle); text-align: left; }
 .account-plan-card.is-premium { border-color: color-mix(in oklch, var(--ui-brand) 45%, var(--ui-line)); background: linear-gradient(135deg, color-mix(in oklch, var(--ui-brand-soft) 74%, var(--ui-surface)), var(--ui-surface)); }
@@ -322,7 +349,7 @@
 .account-plan-card > small { display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--ui-line); color: var(--ui-text-3); font-size: 9.5px; }
 
 .account-usage-card { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 16px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface); text-align: left; }
-.account-usage-list { width: 100%; margin-top: 14px; display: grid; gap: 14px; }
+.account-usage-list { width: 100%; margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .account-usage-list .account-usage-card { margin-top: 0; }
 .account-usage-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .account-usage-heading > span { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 720; }
@@ -340,7 +367,8 @@
 
 .account-profile .account-error,
 .account-profile .account-notice { width: 100%; box-sizing: border-box; margin-top: 16px; text-align: left; }
-.account-profile-actions { width: 100%; margin-top: auto; padding-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.account-profile-actions { width: 100%; margin-top: auto; padding-top: 24px; display: flex; justify-content: flex-end; gap: 10px; }
+.account-profile-actions > button { min-width: 142px; }
 .account-signout { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--ui-line-strong); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text-2); font: inherit; font-size: 12px; font-weight: 680; cursor: pointer; }
 .account-signout:hover:not(:disabled) { border-color: var(--ui-brand); color: var(--ui-brand-strong); }
 .account-signout svg { width: 16px; }
@@ -364,6 +392,8 @@
   .account-intro h1, .account-lede { margin-right: auto; margin-left: auto; }
   .account-benefits { width: fit-content; margin-right: auto; margin-left: auto; text-align: left; }
   .account-panel { width: min(100%, 520px); margin: 0 auto; }
+  .account-page.is-signed-in .account-panel { width: 100%; }
+  .account-usage-list { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 520px) {
@@ -373,7 +403,12 @@
   .account-panel { min-height: 0; border-radius: 14px; }
   .account-auth { padding: 10px 22px 24px; }
   .account-loading, .account-unavailable, .account-profile { min-height: 430px; padding-right: 24px; padding-left: 24px; }
+  .account-profile-header { grid-template-columns: auto minmax(0, 1fr); }
+  .account-plan-badge { grid-column: 1 / -1; }
+  .account-section-heading { align-items: start; flex-direction: column; gap: 4px; }
   .account-profile-actions { grid-template-columns: 1fr; }
+  .account-profile-actions { display: grid; }
+  .account-profile-actions > button { width: 100%; }
   .account-usage-meta { flex-direction: column; gap: 3px; }
   .account-footer { width: calc(100% - 28px); flex-direction: column; justify-content: center; }
 }
