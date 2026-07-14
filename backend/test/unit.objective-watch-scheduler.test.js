@@ -8,13 +8,13 @@ const NOW = new Date('2026-07-14T20:00:00.000Z').getTime();
 const baseRow = {
   enabled: true,
   check_interval_minutes: 180,
-  last_heartbeat_at: '2026-07-14T19:07:00.000Z',
-  last_started_at: '2026-07-14T19:07:01.000Z',
-  last_completed_at: '2026-07-14T19:07:15.000Z',
+  last_heartbeat_at: '2026-07-14T19:57:00.000Z',
+  last_started_at: '2026-07-14T19:57:01.000Z',
+  last_completed_at: '2026-07-14T19:57:15.000Z',
   last_status: 'succeeded',
   last_error: null,
   last_summary: { checked: 2, failed: 0 },
-  updated_at: '2026-07-14T19:07:15.000Z',
+  updated_at: '2026-07-14T19:57:15.000Z',
 };
 
 test('derives healthy, stale, stopped, and unconfigured scheduler states', () => {
@@ -64,7 +64,8 @@ test('persists scheduler controls and run lifecycle state', async () => {
   await scheduler.recordSkipped('skipped_disabled');
   await expect(scheduler.setEnabled(false)).resolves.toMatchObject({ enabled: false, health: 'stopped' });
   await expect(scheduler.setCheckInterval(360)).resolves.toMatchObject({ checkIntervalMinutes: 360 });
-  await expect(scheduler.setCheckInterval(90)).rejects.toThrow('whole number of hours');
+  await expect(scheduler.setCheckInterval(30)).resolves.toMatchObject({ checkIntervalMinutes: 30 });
+  await expect(scheduler.setCheckInterval(7)).rejects.toThrow('5-minute increments');
 
   expect(query.mock.calls.some(([sql]) => sql.includes("last_status = 'running'"))).toBe(true);
   expect(query.mock.calls.some(([sql, params]) => sql.includes("last_status = 'succeeded'") && params[0] === '{"checked":3}')).toBe(true);

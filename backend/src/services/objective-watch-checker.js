@@ -80,11 +80,13 @@ const calculateNextCheckAt = (plan, checkedAt, standardIntervalMinutes = DEFAULT
   const plannedStart = parsePlannedStart(plan);
   const untilStartMs = plannedStart ? plannedStart.getTime() - now.getTime() : 0;
   const parsedIntervalMinutes = Number(standardIntervalMinutes);
-  const cadenceMs = untilStartMs > FORTY_EIGHT_HOURS_MS
-    ? (Number.isFinite(parsedIntervalMinutes) && parsedIntervalMinutes >= 60
-        ? parsedIntervalMinutes
-        : DEFAULT_CHECK_INTERVAL_MINUTES) * 60 * 1000
-    : ONE_HOUR_MS;
+  const normalizedIntervalMinutes = Number.isFinite(parsedIntervalMinutes) && parsedIntervalMinutes >= 5
+    ? parsedIntervalMinutes
+    : DEFAULT_CHECK_INTERVAL_MINUTES;
+  const cadenceMinutes = untilStartMs > FORTY_EIGHT_HOURS_MS
+    ? normalizedIntervalMinutes
+    : Math.min(normalizedIntervalMinutes, 60);
+  const cadenceMs = cadenceMinutes * 60 * 1000;
   return new Date(now.getTime() + cadenceMs);
 };
 

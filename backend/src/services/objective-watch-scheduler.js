@@ -1,10 +1,10 @@
 'use strict';
 
-const EXPECTED_INTERVAL_MINUTES = 60;
-const STALE_AFTER_MINUTES = 90;
+const EXPECTED_INTERVAL_MINUTES = 5;
+const STALE_AFTER_MINUTES = 15;
 const STALE_AFTER_MS = STALE_AFTER_MINUTES * 60 * 1000;
 const DEFAULT_CHECK_INTERVAL_MINUTES = 180;
-const MIN_CHECK_INTERVAL_MINUTES = 60;
+const MIN_CHECK_INTERVAL_MINUTES = 5;
 const MAX_CHECK_INTERVAL_MINUTES = 1440;
 
 const timestamp = (value) => {
@@ -18,7 +18,7 @@ const deriveSchedulerStatus = ({ row, secretConfigured, running = false, now = D
   const lastHeartbeatAt = timestamp(row?.last_heartbeat_at);
   const heartbeatAgeMs = lastHeartbeatAt ? Math.max(0, now - new Date(lastHeartbeatAt).getTime()) : null;
   let health = 'healthy';
-  let message = 'The hourly scheduler heartbeat is current.';
+  let message = 'The five-minute scheduler heartbeat is current.';
 
   if (!enabled) {
     health = 'stopped';
@@ -31,10 +31,10 @@ const deriveSchedulerStatus = ({ row, secretConfigured, running = false, now = D
     message = 'An Objective Watch check run is currently in progress.';
   } else if (!lastHeartbeatAt || row?.last_status === 'waiting') {
     health = 'waiting';
-    message = 'Waiting for the first hourly scheduler heartbeat.';
+    message = 'Waiting for the first five-minute scheduler heartbeat.';
   } else if (heartbeatAgeMs > STALE_AFTER_MS) {
     health = 'unhealthy';
-    message = 'The hourly scheduler heartbeat is overdue.';
+    message = 'The five-minute scheduler heartbeat is overdue.';
   } else if (row?.last_status === 'failed') {
     health = 'failed';
     message = row?.last_error || 'The latest Objective Watch check run failed.';
@@ -119,8 +119,8 @@ const createObjectiveWatchScheduler = ({
     if (!Number.isInteger(parsed)
       || parsed < MIN_CHECK_INTERVAL_MINUTES
       || parsed > MAX_CHECK_INTERVAL_MINUTES
-      || parsed % 60 !== 0) {
-      throw new RangeError('Objective Watch check interval must be a whole number of hours from 1 to 24.');
+      || parsed % 5 !== 0) {
+      throw new RangeError('Objective Watch check interval must be from 5 to 1440 minutes in 5-minute increments.');
     }
     const result = await database.query(`
       UPDATE objective_watch_scheduler_state

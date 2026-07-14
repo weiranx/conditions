@@ -122,6 +122,7 @@ const registerReportLogsRoute = (
     runtimeEnvService = defaultRuntimeEnvService,
     backendRestartController = defaultBackendRestartController,
     objectiveWatchScheduler = null,
+    objectiveWatchCheckController = null,
   } = {},
 ) => {
   let diagnosticsInFlight = null;
@@ -218,10 +219,10 @@ const registerReportLogsRoute = (
       return;
     }
     if (hasCheckInterval && (!Number.isInteger(req.body.checkIntervalMinutes)
-      || req.body.checkIntervalMinutes < 60
+      || req.body.checkIntervalMinutes < 5
       || req.body.checkIntervalMinutes > 1440
-      || req.body.checkIntervalMinutes % 60 !== 0)) {
-      res.status(400).json({ error: 'checkIntervalMinutes must be a whole number of hours from 60 to 1440 minutes.' });
+      || req.body.checkIntervalMinutes % 5 !== 0)) {
+      res.status(400).json({ error: 'checkIntervalMinutes must be from 5 to 1440 minutes in 5-minute increments.' });
       return;
     }
     try {
@@ -243,6 +244,38 @@ const registerReportLogsRoute = (
     } catch (error) {
       req.log?.error?.({ err: error }, 'Objective Watch scheduler state could not be updated');
       res.status(500).json({ error: 'Objective Watch scheduler state could not be updated.' });
+    }
+  });
+
+  app.post('/api/admin/objective-watch-scheduler/run', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (typeof objectiveWatchCheckController?.runNow !== 'function'
+      || typeof objectiveWatchScheduler?.getStatus !== 'function') {
+      res.status(503).json({ error: 'Objective Watch manual checks are unavailable.' });
+      return;
+    }
+    try {
+      const manualRun = await objectiveWatchCheckController.runNow();
+      const status = await objectiveWatchScheduler.getStatus();
+      await audit(req, {
+        action: 'objective-watch.scheduler.manual-run',
+        category: 'maintenance',
+        summary: manualRun.alreadyRunning
+          ? 'Requested an Objective Watch check while another run was active'
+          : `Ran Objective Watch checks manually (${manualRun.summary?.checked || 0} checked)`,
+        details: { alreadyRunning: manualRun.alreadyRunning, summary: manualRun.summary || null },
+      });
+      res.status(manualRun.alreadyRunning ? 202 : 200).json({ ...status, manualRun });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Objective Watch checks could not be run.';
+      await audit(req, {
+        action: 'objective-watch.scheduler.manual-run',
+        category: 'maintenance',
+        status: 'error',
+        summary: message,
+      });
+      req.log?.error?.({ err: error }, 'Objective Watch manual check failed');
+      res.status(error?.statusCode || error?.status || 500).json({ error: message });
     }
   });
 

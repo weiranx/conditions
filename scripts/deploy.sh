@@ -168,10 +168,10 @@ fi
 
 if grep -Eq '^OBJECTIVE_WATCH_CRON_SECRET=.+$' .env; then
   if command -v crontab >/dev/null 2>&1; then
-    echo "==> Installing Objective Watch hourly cron..."
+    echo "==> Installing Objective Watch five-minute cron..."
     "$APP_DIR/scripts/install-objective-watch-cron.sh"
   else
-    echo "==> Warning: crontab is unavailable; Objective Watch hourly checks were not installed." >&2
+    echo "==> Warning: crontab is unavailable; Objective Watch automatic checks were not installed." >&2
   fi
 else
   echo "==> Objective Watch cron disabled (OBJECTIVE_WATCH_CRON_SECRET is not configured)."

@@ -24,6 +24,37 @@ const registerObjectiveWatchCheckRoute = ({
 } = {}) => {
   let activeRun = null;
 
+  const runNow = async () => {
+    ensureFeatureEnabled();
+    if (!checker || typeof checker.run !== 'function') {
+      const error = new Error('Objective Watch checker is unavailable.');
+      error.statusCode = 503;
+      throw error;
+    }
+    if (activeRun) return { alreadyRunning: true };
+
+    activeRun = (async () => {
+      await scheduler?.recordStarted?.();
+      return checker.run();
+    })();
+    try {
+      const summary = await activeRun;
+      await scheduler?.recordCompleted?.(summary);
+      log.info?.(summary, 'Objective Watch check completed');
+      return { alreadyRunning: false, summary };
+    } catch (error) {
+      try {
+        await scheduler?.recordFailed?.(error);
+      } catch {
+        // Preserve the original checker failure for the caller and logs.
+      }
+      log.error?.({ err: error }, 'Objective Watch check failed');
+      throw error;
+    } finally {
+      activeRun = null;
+    }
+  };
+
   app.post('/api/internal/objective-watch-checks', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const configuredSecret = String(secret || '').trim();
@@ -56,33 +87,16 @@ const registerObjectiveWatchCheckRoute = ({
       }
       return res.json({ ok: true, skipped: true, reason: 'feature_disabled' });
     }
-    if (!checker || typeof checker.run !== 'function') {
-      return res.status(503).json({ error: 'Objective Watch checker is unavailable.' });
-    }
-    if (activeRun) {
-      return res.status(202).json({ ok: true, alreadyRunning: true });
-    }
-    activeRun = (async () => {
-      await scheduler?.recordStarted?.();
-      return checker.run();
-    })();
     try {
-      const summary = await activeRun;
-      await scheduler?.recordCompleted?.(summary);
-      log.info?.(summary, 'Objective Watch cron completed');
-      return res.json({ ok: true, ...summary });
+      const result = await runNow();
+      if (result.alreadyRunning) return res.status(202).json({ ok: true, alreadyRunning: true });
+      return res.json({ ok: true, ...result.summary });
     } catch (error) {
-      try {
-        await scheduler?.recordFailed?.(error);
-      } catch {
-        // Preserve the original checker failure in the response and logs.
-      }
-      log.error?.({ err: error }, 'Objective Watch cron failed');
-      return res.status(500).json({ error: 'Objective Watch cron failed.' });
-    } finally {
-      activeRun = null;
+      return res.status(error?.statusCode || 500).json({ error: error?.statusCode ? error.message : 'Objective Watch cron failed.' });
     }
   });
+
+  return { runNow };
 };
 
 module.exports = {

@@ -876,7 +876,7 @@ registerObjectiveWatchRoutes({
   tierService: accountTierService,
   checker: objectiveWatchChecker,
 });
-registerObjectiveWatchCheckRoute({
+const objectiveWatchCheckController = registerObjectiveWatchCheckRoute({
   app,
   checker: objectiveWatchChecker,
   scheduler: objectiveWatchScheduler,
@@ -909,6 +909,7 @@ registerReportLogsRoute(app, {
   runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
   loadModelCatalog: (options) => aiModelCatalog.load(options),
   objectiveWatchScheduler,
+  objectiveWatchCheckController,
 });
 registerRouteAnalysisRoutes({
   app,

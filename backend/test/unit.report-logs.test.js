@@ -111,7 +111,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     configured: true,
     running: false,
     health: 'healthy',
-    message: 'The hourly scheduler heartbeat is current.',
+    message: 'The five-minute scheduler heartbeat is current.',
     lastHeartbeatAt: '2026-07-14T19:07:00.000Z',
     lastStartedAt: '2026-07-14T19:07:01.000Z',
     lastCompletedAt: '2026-07-14T19:07:15.000Z',
@@ -119,8 +119,8 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     lastError: null,
     lastSummary: { checked: 2, failed: 0 },
     checkIntervalMinutes: 180,
-    expectedIntervalMinutes: 60,
-    staleAfterMinutes: 90,
+    expectedIntervalMinutes: 5,
+    staleAfterMinutes: 15,
     updatedAt: '2026-07-14T19:07:15.000Z',
   };
   const objectiveWatchScheduler = {
@@ -133,6 +133,12 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     setCheckInterval: jest.fn(async (checkIntervalMinutes) => ({
       ...objectiveWatchSchedulerStatus,
       checkIntervalMinutes,
+    })),
+  };
+  const objectiveWatchCheckController = {
+    runNow: jest.fn(async () => ({
+      alreadyRunning: false,
+      summary: { checked: 3, changed: 1, failed: 0 },
     })),
   };
   let usageSettings = {
@@ -264,6 +270,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     runtimeEnvService,
     backendRestartController,
     objectiveWatchScheduler,
+    objectiveWatchCheckController,
   });
 
   const createResponse = () => ({
@@ -329,6 +336,17 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     category: 'configuration',
   }));
 
+  const manualSchedulerResponse = createResponse();
+  await routes.post.get('/api/admin/objective-watch-scheduler/run')({ headers }, manualSchedulerResponse);
+  expect(objectiveWatchCheckController.runNow).toHaveBeenCalledTimes(1);
+  expect(manualSchedulerResponse.payload).toMatchObject({
+    manualRun: { alreadyRunning: false, summary: { checked: 3, changed: 1, failed: 0 } },
+  });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'objective-watch.scheduler.manual-run',
+    category: 'maintenance',
+  }));
+
   const invalidSchedulerResponse = createResponse();
   await routes.patch.get('/api/admin/objective-watch-scheduler')({
     headers,
@@ -339,7 +357,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const invalidIntervalResponse = createResponse();
   await routes.patch.get('/api/admin/objective-watch-scheduler')({
     headers,
-    body: { checkIntervalMinutes: 90 },
+    body: { checkIntervalMinutes: 7 },
   }, invalidIntervalResponse);
   expect(invalidIntervalResponse.statusCode).toBe(400);
 
@@ -658,6 +676,13 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, hiddenSchedulerResponse);
   expect(hiddenSchedulerResponse.statusCode).toBe(404);
   expect(objectiveWatchScheduler.setEnabled).toHaveBeenCalledTimes(1);
+
+  const hiddenManualSchedulerResponse = createResponse();
+  await routes.post.get('/api/admin/objective-watch-scheduler/run')({
+    headers: { cookie: 'bc_session=other-session-token' },
+  }, hiddenManualSchedulerResponse);
+  expect(hiddenManualSchedulerResponse.statusCode).toBe(404);
+  expect(objectiveWatchCheckController.runNow).toHaveBeenCalledTimes(1);
 
   const hiddenBackendRestartResponse = createResponse();
   await routes.post.get('/api/admin/maintenance/backend-restart')({

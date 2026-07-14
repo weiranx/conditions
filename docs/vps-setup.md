@@ -278,7 +278,7 @@ Generate a value with `openssl rand -hex 32`, then paste the output into the fil
 OBJECTIVE_WATCH_CRON_SECRET=replace-with-generated-64-character-value
 ```
 
-The deploy script installs an idempotent crontab entry at minute 7 of every hour when this setting is present. To install or verify it manually:
+The deploy script installs an idempotent crontab entry every five minutes when this setting is present. To install or verify it manually:
 
 ```bash
 ./scripts/install-objective-watch-cron.sh
@@ -286,9 +286,9 @@ crontab -l | grep summitsafe-objective-watch
 ./scripts/objective-watch-cron.sh
 ```
 
-The hourly trigger checks objectives every three hours normally and every hour during the final 48 hours. Expired objectives stop automatically, duplicate plans share one upstream refresh, and each run limits provider concurrency.
+The five-minute host trigger checks only objectives whose own due time has arrived. The standard interval defaults to three hours and can be configured from 5 minutes to 24 hours in 5-minute increments; during the final 48 hours, the faster of hourly or the configured interval applies. Expired objectives stop automatically, duplicate plans share one upstream refresh, and each run limits provider concurrency.
 
-After deployment, Admin → Operations → Objective Watch scheduler reports the hourly heartbeat and latest run. It also controls the standard objective check interval (three hours by default; checks remain hourly in the final 48 hours). Start and Stop control automatic processing without removing the host cron; retaining the heartbeat lets Admin detect a missing or stalled cron after 90 minutes. The raw cron secret is never shown in the browser.
+After deployment, Admin → Operations → Objective Watch scheduler reports the five-minute heartbeat and latest run. It also controls the standard objective check interval and provides Run now for a one-off owner-authorized cycle. Start and Stop control automatic processing without removing the host cron; retaining the heartbeat lets Admin detect a missing or stalled cron after 15 minutes. Run now does not change Start or Stop state or record a host heartbeat. The raw cron secret is never shown in the browser.
 
 ---
 

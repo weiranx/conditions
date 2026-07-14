@@ -9,7 +9,7 @@ const makeApp = ({
   ensureFeatureEnabled = () => {},
 } = {}) => {
   const app = express();
-  registerObjectiveWatchCheckRoute({
+  const controller = registerObjectiveWatchCheckRoute({
     app,
     secret,
     checker,
@@ -17,7 +17,7 @@ const makeApp = ({
     ensureFeatureEnabled,
     log: { info: jest.fn(), error: jest.fn() },
   });
-  return { app, checker };
+  return { app, checker, controller };
 };
 
 test('compares cron secrets without exposing their length or contents', () => {
@@ -61,6 +61,25 @@ test('records scheduler health around successful automatic checks', async () => 
   expect(scheduler.recordStarted).toHaveBeenCalledTimes(1);
   expect(scheduler.recordCompleted).toHaveBeenCalledWith({ checked: 2 });
   expect(scheduler.recordFailed).not.toHaveBeenCalled();
+});
+
+test('runs an owner-triggered check without recording a host heartbeat', async () => {
+  const scheduler = {
+    recordHeartbeat: jest.fn().mockResolvedValue({ enabled: false }),
+    recordStarted: jest.fn().mockResolvedValue(),
+    recordCompleted: jest.fn().mockResolvedValue(),
+    recordFailed: jest.fn().mockResolvedValue(),
+  };
+  const { controller, checker } = makeApp({ scheduler });
+
+  await expect(controller.runNow()).resolves.toEqual({
+    alreadyRunning: false,
+    summary: { checked: 2 },
+  });
+  expect(checker.run).toHaveBeenCalledTimes(1);
+  expect(scheduler.recordHeartbeat).not.toHaveBeenCalled();
+  expect(scheduler.recordStarted).toHaveBeenCalledTimes(1);
+  expect(scheduler.recordCompleted).toHaveBeenCalledWith({ checked: 2 });
 });
 
 test('keeps the host heartbeat healthy while automatic checks are stopped', async () => {

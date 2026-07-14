@@ -14,6 +14,6 @@ else
   exit 1
 fi
 
-printf '7 * * * * %q/scripts/objective-watch-cron.sh >/dev/null 2>&1 %s\n' "$APP_DIR" "$MARKER" >> "$CRON_FILE"
+printf '*/5 * * * * %q/scripts/objective-watch-cron.sh >/dev/null 2>&1 %s\n' "$APP_DIR" "$MARKER" >> "$CRON_FILE"
 crontab "$CRON_FILE"
-echo "Objective Watch cron installed for minute 7 of every hour."
+echo "Objective Watch cron installed for every five minutes."
