@@ -64,13 +64,15 @@ describe('transactional email service', () => {
       to: 'climber@example.com',
       displayName: '<Avery>',
       report: {
-        plan: { objectiveName: 'Mount Rainier & Friends', forecastDate: '2026-07-15', alpineStartTime: '05:30' },
-        preferences: { temperatureUnit: 'c', windSpeedUnit: 'kph' },
+        plan: { objectiveName: 'Mount Rainier & Friends', forecastDate: '2026-07-15', alpineStartTime: '05:30', travelWindowHours: 12 },
+        preferences: { temperatureUnit: 'c', windSpeedUnit: 'kph', defaultActivity: 'alpine-climbing' },
         safetyData: {
           safety: { score: 72, tier: 'Caution', explanations: ['Check wind & <script>alert(1)</script>'] },
           weather: { temp: 35, windSpeed: 12, windGust: 28, precipChance: 20, description: 'Cloudy' },
           avalanche: { risk: 'Moderate', dangerUnknown: false },
           alerts: { activeCount: 1 },
+          partialData: true,
+          apiWarning: 'One provider was unavailable.',
         },
       },
     });
@@ -81,6 +83,14 @@ describe('transactional email service', () => {
     expect(message.html).toContain('Mount Rainier &amp; Friends report');
     expect(message.html).toContain('Check wind &amp;');
     expect(message.html).not.toContain('<script>');
+    expect(message.html).toContain('Conditions at a glance');
+    expect(message.html).toContain('What matters most');
+    expect(message.html).toContain('Alpine climbing');
+    expect(message.html).toContain('05:30 departure · 12h window');
+    expect(message.html).toContain('Some source data was incomplete');
+    expect(message.html).toContain('font-family:Georgia');
+    expect(message.html).not.toContain('undefined');
+    expect(message.html).not.toContain('[object Object]');
     expect(message.text).toContain('72/100 · Caution');
     expect(message.text).toContain('2°C, wind 19 kph, gusts 45 kph');
     expect(message.html).toContain('https://conditions.example.com/');

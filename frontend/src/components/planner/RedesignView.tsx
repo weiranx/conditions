@@ -969,6 +969,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
   return (
     <div className="ssr-report">
+      <div className="ssr-print-masthead" aria-hidden="true">
+        <div>
+          <span>Backcountry Conditions</span>
+          <strong>Field conditions report</strong>
+        </div>
+        <p>Generated {props.formatGeneratedAt(safetyData.generatedAt || null)}</p>
+      </div>
       {/* OBJECTIVE HEADER */}
       <header className="ssr-hdr">
         <div className="ssr-hdr-title">
@@ -2793,6 +2800,11 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           );
         })()}
       </div>
+
+      <footer className="ssr-print-note">
+        <strong>Recheck before departure.</strong>
+        <span>This is a point-in-time planning snapshot, not a safety guarantee. Verify official forecasts, access, avalanche information, and current field conditions.</span>
+      </footer>
 
     </div>
   );
