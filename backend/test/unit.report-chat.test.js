@@ -6,6 +6,7 @@ const {
   MAX_REPORT_LENGTH,
   REPORT_CHAT_MAX_OUTPUT_TOKENS,
   REPORT_CHAT_SYSTEM_PROMPT,
+  TRIP_CHAT_SYSTEM_PROMPT,
   createContextualFollowUps,
   normalizeReport,
   registerReportChatRoute: registerReportChatRouteWithoutAccount,
@@ -37,6 +38,15 @@ describe('report chat request handling', () => {
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/one brief redirect/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/Never invent current conditions/i);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/never fabricate a name/i);
+  });
+
+  test('keeps multi-day chat focused on weather-window tradeoffs and current-source checks', () => {
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/compare the forecast days/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/WEATHER CLEAR label is not a trip GO/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/does not account for projected avalanche danger/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/Compare the whole window/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/specific dates and supplied values/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/clearly unrelated/i);
   });
 
   test('normalizes object and JSON-string reports', () => {
@@ -188,6 +198,31 @@ describe('report chat request handling', () => {
     expect(response.body.reportJson).toContain('CAUTION');
     expect(createStream).toHaveBeenCalledTimes(1);
     expect(pipeStream).toHaveBeenCalledTimes(1);
+  });
+
+  test('passes multi-day context through to the trip-specific stream', async () => {
+    const app = express();
+    app.use(express.json());
+    const createStream = jest.fn(async ({ messages, reportJson, contextType }) => ({
+      messages,
+      reportJson,
+      contextType,
+    }));
+    const pipeStream = jest.fn(({ response, stream }) => response.status(200).json(stream));
+    registerReportChatRoute({ app, createStream, pipeStream });
+
+    const response = await request(app)
+      .post('/api/report-chat')
+      .send({
+        contextType: 'trip',
+        report: { days: [{ date: '2026-07-15', weatherWindowScore: 82 }] },
+        messages: [{ id: 'question', role: 'user', parts: [{ type: 'text', text: 'Which day is best?' }] }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.contextType).toBe('trip');
+    expect(response.body.reportJson).toContain('weatherWindowScore');
+    expect(createStream).toHaveBeenCalledTimes(1);
   });
 
   test('rejects requests without report context or a final user message', async () => {

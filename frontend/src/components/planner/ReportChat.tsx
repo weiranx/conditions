@@ -18,11 +18,20 @@ import { useAiAccess } from '../../hooks/useAiAccess';
 import '../../styles/report-chat.css';
 import type { PersistedReportChatMessage } from '../../app/report-storage';
 
-const STARTER_QUESTIONS = [
-  'What is driving the risk score?',
-  'What should I verify before leaving?',
-  'How does the timing affect this plan?',
-];
+const STARTER_QUESTIONS = {
+  report: [
+    'What is driving the risk score?',
+    'What should I verify before leaving?',
+    'How does the timing affect this plan?',
+  ],
+  trip: [
+    'Which day has the best overall weather window?',
+    'What are the biggest tradeoffs between these days?',
+    'What should I verify before committing to this trip?',
+  ],
+} as const;
+
+const EMPTY_MESSAGES: PersistedReportChatMessage[] = [];
 
 type ReportChatMessage = UIMessage<never, {
   followUpSuggestions: { suggestions: string[] };
@@ -46,11 +55,18 @@ function getFollowUpQuestions(message: ReportChatMessage | undefined): string[] 
 export interface ReportChatProps {
   readOnly: boolean;
   reportPayload: string;
-  initialMessages: PersistedReportChatMessage[];
-  onMessagesChange: (messages: PersistedReportChatMessage[]) => void;
+  contextType?: 'report' | 'trip';
+  initialMessages?: PersistedReportChatMessage[];
+  onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
 }
 
-function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessagesChange }: ReportChatProps) {
+function ReportChatComponent({
+  readOnly,
+  reportPayload,
+  contextType = 'report',
+  initialMessages = EMPTY_MESSAGES,
+  onMessagesChange,
+}: ReportChatProps) {
   const { requestAiAccess } = useAiAccess();
   const [isOpen, setIsOpen] = React.useState(readOnly && initialMessages.length > 0);
   const [input, setInput] = React.useState('');
@@ -88,10 +104,10 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
 
   React.useEffect(() => {
     resetChatForReport();
-  }, [reportPayload]);
+  }, [contextType, reportPayload]);
 
   React.useEffect(() => {
-    if (readOnly) return;
+    if (readOnly || !onMessagesChange) return;
     const serialized = JSON.stringify(messages);
     if (serialized === lastReportedMessagesRef.current) return;
     lastReportedMessagesRef.current = serialized;
@@ -106,9 +122,9 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
     setInput('');
     void sendMessage(
       { text },
-      { body: { report: reportPayload } },
+      { body: { report: reportPayload, contextType } },
     );
-  }, [isBusy, readOnly, reportPayload, requestAiAccess, sendMessage]);
+  }, [contextType, isBusy, readOnly, reportPayload, requestAiAccess, sendMessage]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -132,8 +148,20 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
       >
         <span className="report-chat-toggle-icon"><Sparkles size={17} aria-hidden /></span>
         <span>
-          <strong>{readOnly ? 'Saved AI conversation' : 'Ask about this report'}</strong>
-          <small>{readOnly ? 'Read-only text stored with this report' : 'Chat with the report data already attached'}</small>
+          <strong>
+            {readOnly
+              ? 'Saved AI conversation'
+              : contextType === 'trip'
+                ? 'Ask about this multi-day plan'
+                : 'Ask about this report'}
+          </strong>
+          <small>
+            {readOnly
+              ? 'Read-only text stored with this report'
+              : contextType === 'trip'
+                ? 'Compare days, tradeoffs, timing, and preparation'
+                : 'Chat with the report data already attached'}
+          </small>
         </span>
         <ChevronDown className="report-chat-chevron" size={17} aria-hidden />
       </button>
@@ -144,9 +172,13 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
             <ConversationContent className="report-chat-messages">
               {messages.length === 0 ? (
                 <div className="report-chat-empty">
-                  <p>Ask what is driving the decision, how conditions interact, or what needs a current field check.</p>
+                  <p>
+                    {contextType === 'trip'
+                      ? 'Ask which day fits your plan, how conditions change, or what could alter the choice.'
+                      : 'Ask what is driving the decision, how conditions interact, or what needs a current field check.'}
+                  </p>
                   {!readOnly && <div className="report-chat-suggestions" aria-label="Suggested questions">
-                    {STARTER_QUESTIONS.map((question) => (
+                    {STARTER_QUESTIONS[contextType].map((question) => (
                       <button key={question} type="button" onClick={() => submitQuestion(question)}>
                         <Sparkles size={12} aria-hidden /> {question}
                       </button>
@@ -174,7 +206,7 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
               )}
               {status === 'submitted' && (
                 <div className="report-chat-thinking" role="status" aria-live="polite">
-                  <span /><span /><span /> Reading the report…
+                  <span /><span /><span /> {contextType === 'trip' ? 'Comparing the trip days…' : 'Reading the report…'}
                 </div>
               )}
               {!readOnly && followUpQuestions.length > 0 && (
@@ -196,7 +228,7 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
               )}
               {error && (
                 <div className="report-chat-error" role="alert">
-                  The report assistant couldn’t answer. Please try again.
+                  The {contextType === 'trip' ? 'trip' : 'report'} assistant couldn’t answer. Please try again.
                 </div>
               )}
             </ConversationContent>
@@ -213,8 +245,8 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
                   submitQuestion(input);
                 }
               }}
-              placeholder="Ask a question about this report…"
-              aria-label="Question about this report"
+              placeholder={contextType === 'trip' ? 'Ask a question about this multi-day plan…' : 'Ask a question about this report…'}
+              aria-label={contextType === 'trip' ? 'Question about this multi-day plan' : 'Question about this report'}
               rows={2}
               disabled={!reportPayload}
             />
@@ -228,7 +260,11 @@ function ReportChatComponent({ readOnly, reportPayload, initialMessages, onMessa
               </button>
             )}
           </form>}
-          <p className="report-chat-disclaimer">Planning support only. Confirm official forecasts and current field conditions.</p>
+          <p className="report-chat-disclaimer">
+            {contextType === 'trip'
+              ? 'Weather-window planning support only. Review the selected day in Planner and confirm official forecasts.'
+              : 'Planning support only. Confirm official forecasts and current field conditions.'}
+          </p>
         </div>
       )}
     </div>

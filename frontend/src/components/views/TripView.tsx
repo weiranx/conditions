@@ -25,7 +25,9 @@ import type { DecisionLevel, TimeStyle } from '../../app/types';
 import { formatClockForStyle } from '../../app/core';
 import { weatherConditionEmoji } from '../../app/weather-display';
 import type { MultiDayTripForecastDay } from '../../hooks/useTripForecast';
+import { useAiAvailability } from '../../hooks/useAiAvailability';
 import type { Suggestion } from '../../lib/search';
+import { ReportChat } from '../planner/ReportChat';
 import { SearchBox } from '../planner/SearchBox';
 import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
@@ -310,6 +312,7 @@ export function TripView({
   openPlannerView,
   onUseDayInPlanner,
 }: TripViewProps) {
+  const aiAvailability = useAiAvailability();
   const [sel, setSel] = React.useState(0);
   const [briefCopied, setBriefCopied] = React.useState(false);
   const dayRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -394,6 +397,69 @@ export function TripView({
   const averageScore = scoredValues.length > 0
     ? Math.round(scoredValues.reduce((sum, score) => sum + score, 0) / scoredValues.length)
     : null;
+  const tripChatPayload = JSON.stringify({
+    contextType: 'multi-day-trip-plan',
+    objective: {
+      name: objectiveSummary,
+      latitude: position.lat,
+      longitude: position.lng,
+    },
+    plan: {
+      startDate: tripStartDate,
+      dailyStartTime: tripStartTime,
+      durationDays: tripDurationDays,
+      travelWindow: travelWindowHoursLabel,
+      scope: 'Weather-window comparison only; avalanche danger is not projected here.',
+    },
+    summary: {
+      bestWeatherWindowDate: best?.date ?? null,
+      weakestWeatherWindowDate: watchDay?.date ?? null,
+      weatherClearDays: goCount,
+      weatherCautionDays: cautionCount,
+      weatherBlockedDays: noGoCount,
+      averageWeatherWindowScore: averageScore,
+      scoreChangeFirstToLastDay: tripScoreChange,
+      trend: tripTrend,
+      partialDataDays: partialDayCount,
+      forecastNote: tripForecastNote,
+    },
+    days: tripForecastRows.map((day) => ({
+      date: day.date,
+      weatherWindowLabel: weatherWindowLabel(day.decisionLevel),
+      decisionLevel: day.decisionLevel,
+      decisionHeadline: day.decisionHeadline,
+      weatherWindowScore: day.score,
+      weatherDescription: day.weatherDescription,
+      temperatureHighF: day.tempHighF,
+      temperatureLowF: day.tempLowF,
+      peakWindGustMph: day.windGustMph,
+      windDirection: day.windDirection,
+      precipitationChancePct: day.precipChance,
+      expectedRainIn: day.expectedRainIn,
+      expectedSnowIn: day.expectedSnowIn,
+      travelHoursPassingThresholds: day.travelPassHours,
+      travelHoursEvaluated: day.travelTotalHours,
+      sunrise: day.sunrise,
+      sunset: day.sunset,
+      daylightLength: day.dayLength,
+      visibilityRisk: day.visibilityLevel,
+      visibilitySummary: day.visibilitySummary,
+      activeWeatherAlerts: day.alertCount,
+      airQualityAqi: day.airQualityAqi,
+      airQualityCategory: day.airQualityCategory,
+      partialData: day.partialData,
+      dataWarning: day.apiWarning,
+      forecastIssuedTime: day.sourceIssuedTime,
+      hourlyTravelWindow: day.hourlyWeather.map((hour) => ({
+        time: hour.time,
+        temperatureF: hour.temp,
+        windMph: hour.wind,
+        gustMph: hour.gust,
+        precipitationChancePct: hour.precipChance,
+        condition: hour.condition,
+      })),
+    })),
+  });
 
   const clearForecastState = () => {
     setTripForecastRows([]);
@@ -649,6 +715,16 @@ export function TripView({
                 )}
               </div>
             </div>
+
+            {aiAvailability.reportChat && (
+              <section className="ssr-trip-panel ssr-trip-chat" aria-label="Multi-day planning assistant">
+                <ReportChat
+                  readOnly={false}
+                  contextType="trip"
+                  reportPayload={tripChatPayload}
+                />
+              </section>
+            )}
 
             {/* PLANNING SIGNALS */}
             <section className="ssr-trip-panel ssr-trip-insights" aria-labelledby="trip-insights-title">

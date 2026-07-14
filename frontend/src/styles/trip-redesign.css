@@ -24,6 +24,17 @@
   box-shadow: var(--ssr-trip-section-shadow);
 }
 
+.ssr-trip-chat .report-chat {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.ssr-trip-chat .report-chat-toggle {
+  min-height: 72px;
+  padding: 14px 18px;
+}
+
 /* ---------- HEADER + SETUP ---------- */
 .ssr-trip-head {
   display: grid;
@@ -648,6 +659,7 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   .ssr-product-nav,
   .ssr-trip-setup,
   .ssr-trip-panel-actions,
+  .ssr-trip-chat,
   .ssr-trip-recommendation-action,
   .ssr-trip-detail-h .ssr-btn,
   .ssr-trip-disclaimer { display: none !important; }
