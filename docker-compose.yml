@@ -17,6 +17,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3001"
+      # The admin restart action sends SIGTERM to this process; the restart
+      # policy above then creates a fresh backend process in the same container.
+      ADMIN_BACKEND_RESTART_ENABLED: "true"
     volumes:
       # Named volume — initialized from the image's /app/data dir (owned by appuser).
       # Bind mounts would be owned by root on the host, causing EACCES for appuser.

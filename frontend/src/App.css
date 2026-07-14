@@ -1638,6 +1638,7 @@ input {
 .admin-model-fields .logs-btn { min-height: 34px; white-space: nowrap; }
 
 .admin-runtime-environment { display: grid; gap: 12px; }
+.admin-runtime-head-actions { display: flex; align-items: center; gap: 7px; }
 .admin-runtime-restart {
   display: inline-flex;
   align-items: center;
@@ -1650,6 +1651,14 @@ input {
   font-weight: 700;
   white-space: nowrap;
 }
+.admin-runtime-restart-button {
+  min-height: 30px;
+  border-color: color-mix(in oklch, var(--ui-risk-4) 38%, var(--ui-line));
+  background: color-mix(in oklch, var(--ui-risk-4) 7%, var(--ui-surface));
+  color: var(--ui-nogo-ink);
+}
+.admin-runtime-restart-button:hover:not(:disabled) { border-color: var(--ui-risk-4); background: color-mix(in oklch, var(--ui-risk-4) 12%, var(--ui-surface)); }
+.admin-runtime-restart-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .logs-inline-note.is-success { color: var(--ui-go-ink); }
 .admin-runtime-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .admin-runtime-group { overflow: hidden; min-width: 0; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-surface-subtle); }
@@ -12613,6 +12622,9 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-ai-setting > button { width: 100%; }
   .admin-ai-head-actions { width: 100%; justify-content: space-between; }
   .admin-runtime-environment .logs-chart-head { align-items: flex-start; flex-direction: column; }
+  .admin-runtime-head-actions { align-items: stretch; width: 100%; flex-direction: column; }
+  .admin-runtime-restart { justify-content: center; }
+  .admin-runtime-restart-button { justify-content: center; }
   .admin-runtime-field { align-items: stretch; flex-direction: column; }
   .admin-runtime-actions { width: 100%; }
   .admin-runtime-actions .logs-btn { flex: 1; justify-content: center; }

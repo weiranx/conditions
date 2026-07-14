@@ -91,6 +91,21 @@ test('authorized AI admin routes read and update runtime settings', async () => 
       entries: [{ key: 'REQUEST_TIMEOUT_MS', value: '12000', secret: false }],
     })),
   };
+  const backendRestartStatus = {
+    available: true,
+    scheduled: false,
+    scheduledAt: null,
+    restartDelayMs: 1500,
+    reason: null,
+  };
+  const backendRestartController = {
+    getStatus: jest.fn(() => backendRestartStatus),
+    scheduleRestart: jest.fn(() => ({
+      ...backendRestartStatus,
+      scheduled: true,
+      scheduledAt: '2026-07-14T19:00:00.000Z',
+    })),
+  };
   let usageSettings = {
     persistent: true,
     freeMonthlyAITokenLimit: 250_000,
@@ -218,6 +233,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     readHealthMonitorHistory,
     readSystemResources,
     runtimeEnvService,
+    backendRestartController,
   });
 
   const createResponse = () => ({
@@ -252,6 +268,21 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'runtime.environment.updated',
     details: { changed: ['REQUEST_TIMEOUT_MS'], restartRequired: true },
+  }));
+
+  const backendRestartStatusResponse = createResponse();
+  await routes.get.get('/api/admin/maintenance/backend-restart')({ headers }, backendRestartStatusResponse);
+  expect(backendRestartStatusResponse.payload).toEqual(backendRestartStatus);
+
+  const backendRestartResponse = createResponse();
+  await routes.post.get('/api/admin/maintenance/backend-restart')({ headers }, backendRestartResponse);
+  expect(backendRestartResponse.statusCode).toBe(202);
+  expect(backendRestartController.scheduleRestart).toHaveBeenCalledTimes(1);
+  expect(backendRestartResponse.payload).toMatchObject({ scheduled: true });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'maintenance.backend.restart-requested',
+    category: 'maintenance',
+    details: { restartDelayMs: 1500 },
   }));
 
   const healthHistoryResponse = createResponse();
@@ -546,6 +577,13 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, hiddenRuntimeEnvironmentResponse);
   expect(hiddenRuntimeEnvironmentResponse.statusCode).toBe(404);
   expect(runtimeEnvService.getStatus).toHaveBeenCalledTimes(1);
+
+  const hiddenBackendRestartResponse = createResponse();
+  await routes.post.get('/api/admin/maintenance/backend-restart')({
+    headers: { cookie: 'bc_session=other-session-token' },
+  }, hiddenBackendRestartResponse);
+  expect(hiddenBackendRestartResponse.statusCode).toBe(404);
+  expect(backendRestartController.scheduleRestart).toHaveBeenCalledTimes(1);
 
   const hiddenHealthHistoryResponse = createResponse();
   await routes.get.get('/api/admin/health-monitor-history')({

@@ -6,6 +6,7 @@ const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require(
 const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit');
 const { getSystemResources } = require('../utils/system-resources');
 const { runtimeEnvService: defaultRuntimeEnvService } = require('../utils/runtime-env');
+const { backendRestartController: defaultBackendRestartController } = require('../server/backend-restart');
 const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
 const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
@@ -119,6 +120,7 @@ const registerReportLogsRoute = (
     readSystemResources = getSystemResources,
     readHealthMonitorHistory = () => healthHistoryStore.list(),
     runtimeEnvService = defaultRuntimeEnvService,
+    backendRestartController = defaultBackendRestartController,
   } = {},
 ) => {
   let diagnosticsInFlight = null;
@@ -211,6 +213,51 @@ const registerReportLogsRoute = (
         summary: message,
       });
       res.status(status).json({ error: message });
+    }
+  });
+
+  app.get('/api/admin/maintenance/backend-restart', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (typeof backendRestartController?.getStatus !== 'function') {
+      res.status(503).json({ error: 'Backend restart status is unavailable.' });
+      return;
+    }
+    res.json(backendRestartController.getStatus());
+  });
+
+  app.post('/api/admin/maintenance/backend-restart', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (
+      typeof backendRestartController?.getStatus !== 'function'
+      || typeof backendRestartController?.scheduleRestart !== 'function'
+    ) {
+      res.status(503).json({ error: 'Backend restart is unavailable.' });
+      return;
+    }
+    const status = backendRestartController.getStatus();
+    if (!status.available) {
+      res.status(503).json({ error: status.reason || 'Backend restart is unavailable in this deployment.' });
+      return;
+    }
+    try {
+      await audit(req, {
+        action: 'maintenance.backend.restart-requested',
+        category: 'maintenance',
+        summary: 'Requested a graceful backend restart',
+        details: { restartDelayMs: status.restartDelayMs },
+      });
+      const scheduled = backendRestartController.scheduleRestart();
+      res.status(202).json(scheduled);
+    } catch (error) {
+      const responseStatus = error?.code === 'BACKEND_RESTART_DISABLED' ? 503 : 500;
+      const message = error instanceof Error ? error.message : 'Backend restart could not be scheduled.';
+      await audit(req, {
+        action: 'maintenance.backend.restart-failed',
+        category: 'maintenance',
+        status: 'error',
+        summary: message,
+      });
+      res.status(responseStatus).json({ error: message });
     }
   });
 

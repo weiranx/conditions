@@ -241,6 +241,14 @@ interface RuntimeEnvironmentStatus {
   entries: RuntimeEnvironmentEntry[];
 }
 
+interface BackendRestartStatus {
+  available: boolean;
+  scheduled: boolean;
+  scheduledAt: string | null;
+  restartDelayMs: number;
+  reason: string | null;
+}
+
 interface ExternalDiagnosticsResult {
   startedAt: string;
   completedAt: string;
@@ -961,6 +969,7 @@ function AdminDashboard() {
   const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, verified: 0, unverified: 0, activeSessions: 0 });
   const [usageSettings, setUsageSettings] = useState<AdminUsageSettings | null>(null);
   const [runtimeEnvironment, setRuntimeEnvironment] = useState<RuntimeEnvironmentStatus | null>(null);
+  const [backendRestartStatus, setBackendRestartStatus] = useState<BackendRestartStatus | null>(null);
   const [runtimeEnvironmentDrafts, setRuntimeEnvironmentDrafts] = useState<Record<string, string>>({});
   const [usageLimitDraft, setUsageLimitDraft] = useState('');
   const [reportLimitDraft, setReportLimitDraft] = useState('');
@@ -991,6 +1000,7 @@ function AdminDashboard() {
   const [runtimeEnvironmentError, setRuntimeEnvironmentError] = useState<string | null>(null);
   const [runtimeEnvironmentNotice, setRuntimeEnvironmentNotice] = useState<string | null>(null);
   const [runtimeEnvironmentPendingKey, setRuntimeEnvironmentPendingKey] = useState<string | null>(null);
+  const [backendRestartPending, setBackendRestartPending] = useState(false);
   const [userActionPending, setUserActionPending] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
@@ -1095,7 +1105,7 @@ function AdminDashboard() {
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult, runtimeEnvironmentResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult, runtimeEnvironmentResult, backendRestartResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
@@ -1108,6 +1118,7 @@ function AdminDashboard() {
         fetchApi('/api/admin/users?limit=500'),
         fetchApi('/api/admin/usage-settings'),
         fetchApi('/api/admin/runtime-environment'),
+        fetchApi('/api/admin/maintenance/backend-restart'),
       ]);
       if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
         setLogs(logsResult.payload as ReportLogEntry[]);
@@ -1180,6 +1191,11 @@ function AdminDashboard() {
       if (!runtimeEnvironmentResult.response.ok || !applyRuntimeEnvironment(runtimeEnvironmentResult.payload)) {
         setRuntimeEnvironmentError('Runtime environment settings are temporarily unavailable.');
       }
+      if (backendRestartResult.response.ok && backendRestartResult.payload && typeof backendRestartResult.payload === 'object') {
+        setBackendRestartStatus(backendRestartResult.payload as BackendRestartStatus);
+      } else {
+        setBackendRestartStatus(null);
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
@@ -1193,6 +1209,7 @@ function AdminDashboard() {
       setUsersError('The account directory is temporarily unavailable.');
       setUsageSettingsError('Usage limits are temporarily unavailable.');
       setRuntimeEnvironmentError('Runtime environment settings are temporarily unavailable.');
+      setBackendRestartStatus(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1618,6 +1635,58 @@ function AdminDashboard() {
     } finally {
       setRuntimeEnvironmentPendingKey(null);
     }
+  };
+
+  const waitForBackendAfterRestart = async (previousUptime: number | undefined) => {
+    await new Promise((resolve) => window.setTimeout(resolve, 1800));
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      try {
+        const healthResult = await fetchHealthSnapshot();
+        const nextHealth = healthResult.payload as Partial<AdminHealthSnapshot> | null;
+        const uptimeReset = previousUptime == null
+          || (typeof nextHealth?.uptime === 'number' && nextHealth.uptime + 2 < previousUptime)
+          || attempt >= 5;
+        if (healthResult.response.ok && uptimeReset && applyHealthSnapshot(healthResult)) {
+          const statusResult = await fetchApi('/api/admin/maintenance/backend-restart');
+          if (statusResult.response.ok && statusResult.payload && typeof statusResult.payload === 'object') {
+            setBackendRestartStatus(statusResult.payload as BackendRestartStatus);
+          }
+          setRuntimeEnvironmentNotice('Backend restart completed and the health check is responding.');
+          setBackendRestartPending(false);
+          void fetchAuditTrail();
+          return;
+        }
+      } catch {
+        // A connection failure is expected while Docker replaces the process.
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    }
+    setBackendRestartPending(false);
+    setRuntimeEnvironmentError('The restart was requested, but the backend did not become healthy within 30 seconds.');
+  };
+
+  const restartBackend = async () => {
+    if (!backendRestartStatus?.available || backendRestartPending) return;
+    if (!window.confirm('Restart the backend now? Requests may be unavailable briefly while Docker starts a fresh process. This does not recreate the container or reread the host .env file.')) return;
+    setBackendRestartPending(true);
+    setRuntimeEnvironmentError(null);
+    setRuntimeEnvironmentNotice(null);
+    try {
+      const result = await fetchApi('/api/admin/maintenance/backend-restart', { method: 'POST' });
+      if (result.response.ok && result.payload && typeof result.payload === 'object') {
+        setBackendRestartStatus(result.payload as BackendRestartStatus);
+        setRuntimeEnvironmentNotice('Backend restart requested. Waiting for the health check to return…');
+        void waitForBackendAfterRestart(health?.uptime);
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : 'The backend restart could not be scheduled.';
+      setRuntimeEnvironmentError(message);
+    } catch {
+      setRuntimeEnvironmentError('Could not reach the backend to schedule a restart.');
+    }
+    setBackendRestartPending(false);
   };
 
   const toggleProductFeature = async (feature: ProductFeatureKey) => {
@@ -2998,9 +3067,21 @@ function AdminDashboard() {
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-runtime-environment-title">Runtime environment</h2>
-            <p>View deployment values and save persistent backend overrides. Credentials are never displayed after they are stored.</p>
+            <p>View deployment values and save persistent backend overrides. Restarting applies saved overrides, but does not reread the host .env file.</p>
           </div>
-          <span className="admin-runtime-restart"><RefreshCw size={13} aria-hidden /> Restart required after changes</span>
+          <div className="admin-runtime-head-actions">
+            <span className="admin-runtime-restart"><RefreshCw size={13} aria-hidden /> Restart required after changes</span>
+            <button
+              type="button"
+              className="logs-btn admin-runtime-restart-button"
+              onClick={() => void restartBackend()}
+              disabled={!backendRestartStatus?.available || backendRestartStatus.scheduled || backendRestartPending}
+              title={backendRestartStatus?.reason ?? 'Gracefully restart the Docker-managed backend'}
+            >
+              <RefreshCw className={backendRestartPending ? 'logs-spin' : ''} size={14} aria-hidden />
+              {backendRestartPending ? 'Restarting…' : backendRestartStatus?.scheduled ? 'Restart scheduled' : backendRestartStatus?.available ? 'Restart backend' : 'Restart unavailable'}
+            </button>
+          </div>
         </div>
 
         {runtimeEnvironmentError && <div className="logs-inline-note" role="alert"><AlertTriangle size={15} aria-hidden /> {runtimeEnvironmentError}</div>}
