@@ -9,6 +9,7 @@ import {
   MailCheck,
   MailPlus,
   MapPinned,
+  Pause,
   RefreshCw,
   Timer,
   Trash2,
@@ -19,6 +20,7 @@ import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
 import {
   deleteObjectiveWatch,
+  formatObjectiveWatchCadence,
   getObjectiveWatchChecks,
   listObjectiveWatches,
   refreshObjectiveWatch,
@@ -70,23 +72,34 @@ const planHasEnded = (watch: ObjectiveWatch) => {
   return !Number.isFinite(planEnd) || Date.now() > planEnd + 14 * 60 * 60 * 1000;
 };
 
-const monitoringLabel = (watch: ObjectiveWatch, automaticChecks: boolean) => {
-  if (planHasEnded(watch)) return 'Plan ended';
-  if (!automaticChecks) return 'Manual refresh';
-  if (!watch.nextCheckAt) return 'Check queued';
+const effectiveWatchIntervalMinutes = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy) => {
   const plannedStart = new Date(`${watch.plan.forecastDate}T${watch.plan.alpineStartTime || '12:00'}:00Z`);
   const hoursUntilStart = (plannedStart.getTime() - Date.now()) / (60 * 60 * 1000);
-  return Number.isFinite(hoursUntilStart) && hoursUntilStart > 48 ? 'Every 3 hours' : 'Hourly checks';
+  return Number.isFinite(hoursUntilStart) && hoursUntilStart > 48
+    ? policy.checkIntervalMinutes
+    : Math.min(policy.checkIntervalMinutes, 60);
 };
 
-const monitoringDetail = (watch: ObjectiveWatch, automaticChecks: boolean) => {
+const monitoringLabel = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy) => {
+  if (planHasEnded(watch)) return 'Plan ended';
+  if (!policy.automaticChecks) return 'Manual refresh';
+  if (!policy.schedulerEnabled) return 'Checks paused';
+  if (!watch.nextCheckAt) return 'Check queued';
+  const cadence = formatObjectiveWatchCadence(effectiveWatchIntervalMinutes(watch, policy));
+  return `${cadence.charAt(0).toUpperCase()}${cadence.slice(1)}`;
+};
+
+const monitoringDetail = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy) => {
   if (planHasEnded(watch)) return 'Monitoring complete · check history remains available';
+  if (policy.automaticChecks && !policy.schedulerEnabled) {
+    return `Automatic processing is paused · configured cadence is ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`;
+  }
   if (watch.consecutiveFailures > 0) {
-    return automaticChecks
+    return policy.automaticChecks
       ? 'Latest check failed · an automatic retry is scheduled'
       : 'Latest refresh failed · try again when source data is available';
   }
-  if (!automaticChecks) {
+  if (!policy.automaticChecks) {
     return watch.lastCheckedAt
       ? `Last refreshed ${formatTimestamp(watch.lastCheckedAt)} · refresh when you want a new comparison`
       : 'Ready for the first manual refresh';
@@ -250,9 +263,11 @@ export function WatchesView({
 
   const activeWatchCount = watches.filter((watch) => !planHasEnded(watch)).length;
   const automaticChecks = policy?.automaticChecks === true;
+  const schedulerEnabled = policy?.schedulerEnabled !== false;
+  const automaticChecksActive = automaticChecks && schedulerEnabled;
   const watchesWithChanges = watches.filter((watch) => !planHasEnded(watch) && (watch.lastChange?.reasons?.length || 0) > 0).length;
   const watchesWithFailures = watches.filter((watch) => !planHasEnded(watch) && watch.consecutiveFailures > 0).length;
-  const nextScheduledWatch = automaticChecks
+  const nextScheduledWatch = automaticChecksActive
     ? watches
       .filter((watch) => !planHasEnded(watch) && watch.nextCheckAt)
       .sort((left, right) => new Date(left.nextCheckAt || 0).getTime() - new Date(right.nextCheckAt || 0).getTime())[0]
@@ -291,7 +306,7 @@ export function WatchesView({
             {policy === null
               ? 'Loading your Objective Watch access…'
               : automaticChecks
-              ? `Premium checks up to ${policy?.activeWatchLimit || 10} active watches every three hours, then hourly during the final 48 hours. Every run appears in ${policy?.historyDays || 90}-day check history; email alerts cover meaningful risk increases.`
+              ? `Premium checks up to ${policy?.activeWatchLimit || 10} active watches ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}. Inside the final 48 hours, checks use the faster of hourly or that interval. ${schedulerEnabled ? 'Automatic processing is active.' : 'Automatic processing is currently paused.'} Every run appears in ${policy?.historyDays || 90}-day check history; email alerts cover meaningful risk increases.`
               : `Free includes ${policy?.activeWatchLimit || 1} active watch with manual refresh, in-app updates, and ${policy?.historyDays || 14} days of check history. Current reports and official safety information remain available.`}
           </span>
         </aside>
@@ -332,15 +347,17 @@ export function WatchesView({
                   <strong>{watchesWithChanges} <em>{watchesWithChanges === 1 ? 'objective' : 'objectives'}</em></strong>
                 </span>
               </div>
-              <div className={watchesWithFailures > 0 ? 'has-error' : ''}>
-                <span className="watches-overview-icon">{automaticChecks ? <Clock3 aria-hidden /> : <RefreshCw aria-hidden />}</span>
+              <div className={watchesWithFailures > 0 ? 'has-error' : !schedulerEnabled && automaticChecks ? 'has-attention' : ''}>
+                <span className="watches-overview-icon">{automaticChecks ? schedulerEnabled ? <Clock3 aria-hidden /> : <Pause aria-hidden /> : <RefreshCw aria-hidden />}</span>
                 <span>
-                  <small>{automaticChecks ? 'Next automatic check' : 'Monitoring cadence'}</small>
+                  <small>{automaticChecksActive ? 'Next automatic check' : automaticChecks ? 'Automatic checks' : 'Monitoring cadence'}</small>
                   <strong>
-                    {automaticChecks
+                    {automaticChecksActive
                       ? nextScheduledWatch?.nextCheckAt ? formatTimestamp(nextScheduledWatch.nextCheckAt) : 'Queued'
+                      : automaticChecks ? 'Paused'
                       : 'Manual refresh'}
                   </strong>
+                  {automaticChecks && watchesWithFailures === 0 && <em>Standard cadence {formatObjectiveWatchCadence(policy?.checkIntervalMinutes || 180)}</em>}
                   {watchesWithFailures > 0 && <em>{watchesWithFailures} {watchesWithFailures === 1 ? 'check needs' : 'checks need'} retry</em>}
                 </span>
               </div>
@@ -357,11 +374,11 @@ export function WatchesView({
                           <span className="watch-card-kicker">
                             {watch.lastCheckedAt
                               ? `Last ${automaticChecks ? 'checked' : 'refreshed'} ${formatTimestamp(watch.lastCheckedAt)}`
-                              : automaticChecks ? 'Automatic check queued' : 'Ready for manual refresh'}
+                              : automaticChecks ? schedulerEnabled ? 'Automatic check queued' : 'Automatic checks paused' : 'Ready for manual refresh'}
                           </span>
                           <h2>{watch.title}</h2>
                         </div>
-                        <span className={`watch-status ${planHasEnded(watch) ? 'is-ended' : ''}`}><span aria-hidden /> {monitoringLabel(watch, automaticChecks)}</span>
+                        <span className={`watch-status ${planHasEnded(watch) ? 'is-ended' : !schedulerEnabled && automaticChecks ? 'is-paused' : ''}`}><span aria-hidden /> {monitoringLabel(watch, policy!)}</span>
                       </div>
                       <div className="watch-card-meta">
                         <span><CalendarDays aria-hidden /> {formatPlanDate(watch.plan.forecastDate)}</span>
@@ -370,7 +387,7 @@ export function WatchesView({
                         <span><MapPinned aria-hidden /> {watch.plan.lat.toFixed(4)}, {watch.plan.lon.toFixed(4)}</span>
                       </div>
                       <p className={`watch-monitoring-detail ${watch.consecutiveFailures > 0 ? 'has-error' : ''}`}>
-                        {monitoringDetail(watch, automaticChecks)}
+                        {monitoringDetail(watch, policy!)}
                       </p>
                       {watch.lastChange?.reasons && watch.lastChange.reasons.length > 0 && (
                         <div className="watch-change" role="status">

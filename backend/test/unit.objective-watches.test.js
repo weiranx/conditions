@@ -36,6 +36,7 @@ const makeApp = ({
   user = { id: USER_ID },
   tierKey = 'free',
   checker,
+  scheduler,
   now,
   ensureFeatureEnabled,
 } = {}) => {
@@ -50,6 +51,7 @@ const makeApp = ({
     },
     tierService: { getAccountTier: jest.fn().mockResolvedValue({ key: tierKey }) },
     ...(checker ? { checker } : {}),
+    ...(scheduler ? { scheduler } : {}),
     ...(now ? { now } : {}),
     ...(ensureFeatureEnabled ? { ensureFeatureEnabled } : {}),
   });
@@ -134,6 +136,24 @@ test('lists watched objectives for the signed-in account without returning basel
   expect(query.mock.calls[0][0]).toContain('ORDER BY updated_at DESC, id DESC');
   expect(query.mock.calls[0][1]).toEqual([USER_ID]);
   expect(response.body.policy).toMatchObject({ tierKey: 'free', historyDays: 14 });
+});
+
+test('returns the configured cadence and stopped state with the watch policy', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [] });
+  const scheduler = {
+    getStatus: jest.fn().mockResolvedValue({ enabled: false, checkIntervalMinutes: 30 }),
+  };
+  const response = await request(makeApp({ query, tierKey: 'premium', scheduler }))
+    .get('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body.policy).toMatchObject({
+    automaticChecks: true,
+    schedulerEnabled: false,
+    checkIntervalMinutes: 30,
+  });
+  expect(scheduler.getStatus).toHaveBeenCalledTimes(1);
 });
 
 test('creates or explicitly updates a watch baseline for the signed-in account', async () => {

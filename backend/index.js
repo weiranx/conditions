@@ -875,6 +875,7 @@ registerObjectiveWatchRoutes({
   accountService,
   tierService: accountTierService,
   checker: objectiveWatchChecker,
+  scheduler: objectiveWatchScheduler,
 });
 const objectiveWatchCheckController = registerObjectiveWatchCheckRoute({
   app,

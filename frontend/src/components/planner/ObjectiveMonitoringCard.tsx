@@ -5,6 +5,7 @@ import { compareReports } from '../../app/report-changes';
 import { useAccount } from '../../hooks/useAccount';
 import {
   deleteObjectiveWatch,
+  formatObjectiveWatchCadence,
   getObjectiveWatch,
   saveObjectiveWatch,
   type ObjectiveWatch,
@@ -82,13 +83,20 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSou
   const monitoringDescription = policy === null
     ? 'Your account’s watch cadence will be applied when you save it.'
     : policy.automaticChecks
-      ? 'Automatic checks run every three hours, then hourly during the final 48 hours.'
+      ? `${policy.schedulerEnabled ? `Automatic checks run ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}` : `Automatic checks are currently paused; the configured cadence is ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`}. Inside the final 48 hours, checks use the faster of hourly or that interval.`
       : 'Free includes one active watch with in-app history and manual refresh from the Watch dashboard.';
   const createDescription = reportSource === 'shared'
     ? `Create a private watch from this shared snapshot. The sender’s report stays unchanged. ${monitoringDescription}`
     : reportSource === 'saved'
       ? `Watch this saved plan without changing the historical report. ${monitoringDescription}`
       : `Save the current report as a baseline. ${monitoringDescription}`;
+  const watchMonitoringStatus = !policy?.automaticChecks
+    ? 'Manual refresh is available from the Watch dashboard'
+    : !policy.schedulerEnabled
+      ? `Automatic checks are paused; configured cadence is ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`
+      : watch?.nextCheckAt
+        ? `Automatic checks are active · ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`
+        : 'Automatic checks have ended for this plan date';
 
   const saveWatch = async () => {
     if (mutating) return;
@@ -131,7 +139,7 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSou
             <strong>{watch ? `${watch.title} has a saved baseline` : 'Track this exact plan'}</strong>
             <p>
               {watch
-                ? `${policy?.automaticChecks ? watch.nextCheckAt ? 'Automatic checks are active' : 'Automatic checks have ended for this plan date' : 'Manual refresh is available from the Watch dashboard'}${watch.lastCheckedAt ? `; last checked ${formatBaselineTime(watch.lastCheckedAt)}` : ''}. New reports still compare with your saved baseline.`
+                ? `${watchMonitoringStatus}${watch.lastCheckedAt ? `; last checked ${formatBaselineTime(watch.lastCheckedAt)}` : ''}. New reports still compare with your saved baseline.`
                 : createDescription}
             </p>
           </div>

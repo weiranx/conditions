@@ -115,6 +115,7 @@ const registerObjectiveWatchRoutes = ({
   accountService,
   tierService,
   checker,
+  scheduler = null,
   now = Date.now,
   ensureFeatureEnabled = () => assertFeatureEnabled('objectiveWatch'),
 } = {}) => {
@@ -169,7 +170,20 @@ const registerObjectiveWatchRoutes = ({
         req.log?.warn({ err: error, userId: user.id }, 'Objective Watch tier lookup failed');
       }
     }
-    return resolveObjectiveWatchPolicy(tier?.key);
+    const policy = resolveObjectiveWatchPolicy(tier?.key);
+    try {
+      const status = typeof scheduler?.getStatus === 'function'
+        ? await scheduler.getStatus()
+        : null;
+      return {
+        ...policy,
+        schedulerEnabled: status?.enabled !== false,
+        checkIntervalMinutes: Number(status?.checkIntervalMinutes) || 180,
+      };
+    } catch (error) {
+      req.log?.warn?.({ err: error }, 'Objective Watch scheduler settings could not be loaded');
+      return { ...policy, schedulerEnabled: true, checkIntervalMinutes: 180 };
+    }
   };
 
   const handleError = (req, res, error) => {

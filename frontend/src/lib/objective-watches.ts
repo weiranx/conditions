@@ -25,6 +25,8 @@ export interface ObjectiveWatchPolicy {
   emailAlerts: boolean;
   historyDays: number;
   manualRefreshCooldownMinutes: number;
+  schedulerEnabled: boolean;
+  checkIntervalMinutes: number;
 }
 
 export interface ObjectiveWatchEvent {
@@ -86,7 +88,21 @@ const parseObjectiveWatchPolicy = (value: unknown): ObjectiveWatchPolicy | null 
     || !Number.isInteger(policy.manualRefreshCooldownMinutes)
     || Number(policy.manualRefreshCooldownMinutes) < 1
   ) return null;
-  return policy as ObjectiveWatchPolicy;
+  const checkIntervalMinutes = Number.isInteger(policy.checkIntervalMinutes)
+    && Number(policy.checkIntervalMinutes) >= 5
+    ? Number(policy.checkIntervalMinutes)
+    : 180;
+  return {
+    ...policy,
+    schedulerEnabled: typeof policy.schedulerEnabled === 'boolean' ? policy.schedulerEnabled : true,
+    checkIntervalMinutes,
+  } as ObjectiveWatchPolicy;
+};
+
+export const formatObjectiveWatchCadence = (minutes: number) => {
+  if (minutes === 60) return 'hourly';
+  if (minutes < 60 || minutes % 60 !== 0) return `every ${minutes} minutes`;
+  return `every ${minutes / 60} hours`;
 };
 
 const requirePolicy = (payload: unknown): ObjectiveWatchPolicy => {
