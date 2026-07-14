@@ -463,6 +463,7 @@ function App() {
     setAiBriefError(null);
     setReportChatMessages([]);
     setReportChatSessionKey((current) => current + 1);
+    resetRouteState();
     clearLastLoadedKey();
     if (!viewingHistoryReport && restoredReportSource !== 'shared') clearPersistedReport();
     setError('Risk feature settings changed. Generate a new report to recalculate the score.');
@@ -472,6 +473,7 @@ function App() {
     featureFlags,
     featureFlagsReady,
     resetSavedReportTracking,
+    resetRouteState,
     restoredReportSource,
     safetyData,
     setAiBriefError,
@@ -1935,7 +1937,7 @@ function App() {
             forecast: safetyData.forecast || null,
             weather: safetyData.weather,
             solar: safetyData.solar,
-            avalanche: safetyData.avalanche,
+            ...(safetyData.avalanche ? { avalanche: safetyData.avalanche } : {}),
             alerts: safetyData.alerts || null,
             airQuality: safetyData.airQuality || null,
             rainfall: rainfallPayload || null,
@@ -1983,7 +1985,7 @@ function App() {
     }
   })();
   const weatherLinkCta = weatherLinkHostLabel ? `View full weather forecast at ${weatherLinkHostLabel} →` : 'View full weather forecast source →';
-  const safeAvalancheLink = sanitizeExternalUrl(safetyData?.avalanche.link);
+  const safeAvalancheLink = sanitizeExternalUrl(safetyData?.avalanche?.link);
   const safeRainfallLink = sanitizeExternalUrl(rainfallPayload?.link || undefined);
   const safeSnotelLink = sanitizeExternalUrl(safetyData?.snowpack?.snotel?.link || undefined);
   const safeNohrscLink = sanitizeExternalUrl(safetyData?.snowpack?.nohrsc?.link || undefined);

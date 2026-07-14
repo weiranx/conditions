@@ -15,25 +15,26 @@ export function buildAvalancheDisplayState(
   safetyData: SafetyData | null,
   localizeUnitText: (text: string) => string,
 ): AvalancheDisplayState {
-  const relevant = safetyData ? safetyData.avalanche.relevant !== false : true;
-  const expiredForSelectedStart = safetyData ? safetyData.avalanche.coverageStatus === 'expired_for_selected_start' : false;
-  const coverageUnknown = safetyData
-    ? ['no_center_coverage', 'temporarily_unavailable', 'no_active_forecast'].includes(String(safetyData.avalanche.coverageStatus || ''))
+  const avalanche = safetyData?.avalanche;
+  const relevant = Boolean(avalanche && avalanche.relevant !== false);
+  const expiredForSelectedStart = avalanche?.coverageStatus === 'expired_for_selected_start';
+  const coverageUnknown = avalanche
+    ? ['no_center_coverage', 'temporarily_unavailable', 'no_active_forecast'].includes(String(avalanche.coverageStatus || ''))
     : false;
-  const unknown = safetyData
-    ? relevant && Boolean(safetyData.avalanche.dangerUnknown || coverageUnknown)
+  const unknown = avalanche
+    ? relevant && Boolean(avalanche.dangerUnknown || coverageUnknown)
     : false;
-  const overallLevel = safetyData && !unknown ? normalizeDangerLevel(safetyData.avalanche.dangerLevel) : null;
-  const notApplicableReason = safetyData
+  const overallLevel = avalanche && !unknown ? normalizeDangerLevel(avalanche.dangerLevel) : null;
+  const notApplicableReason = avalanche
     ? localizeUnitText(
-        safetyData.avalanche.relevanceReason || 'Avalanche forecast is not applicable for this objective/date based on seasonal and snowpack context.',
+        avalanche.relevanceReason || 'Avalanche forecast is not applicable for this objective/date based on seasonal and snowpack context.',
       )
     : '';
-  const elevationRows = safetyData && !unknown
+  const elevationRows = avalanche && !unknown
     ? [
-        { key: 'above', label: 'Above treeline', rating: safetyData.avalanche.elevations?.above?.level ?? null },
-        { key: 'at', label: 'Near treeline', rating: safetyData.avalanche.elevations?.at?.level ?? null },
-        { key: 'below', label: 'Below treeline', rating: safetyData.avalanche.elevations?.below?.level ?? null },
+        { key: 'above', label: 'Above treeline', rating: avalanche.elevations?.above?.level ?? null },
+        { key: 'at', label: 'Near treeline', rating: avalanche.elevations?.at?.level ?? null },
+        { key: 'below', label: 'Below treeline', rating: avalanche.elevations?.below?.level ?? null },
       ]
     : [];
   return { relevant, expiredForSelectedStart, coverageUnknown, unknown, overallLevel, notApplicableReason, elevationRows };

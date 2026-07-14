@@ -246,22 +246,23 @@ export function DashboardSummaryCard({
     icon: <Wind size={16} aria-hidden />,
   };
 
-  const avalancheProblem = safetyData.avalanche.problems?.[0];
-  const avalancheRelevant = safetyData.avalanche.relevant !== false;
+  const avalanche = safetyData.avalanche;
+  const avalancheProblem = avalanche?.problems?.[0];
+  const avalancheRelevant = Boolean(avalanche && avalanche.relevant !== false);
   const avalancheSignal: BriefSignal = avalancheRelevant
     ? {
         title: avalancheProblem?.name ? `Avalanche: ${avalancheProblem.name}` : 'Avalanche problem',
         detail: compactText(
-          safetyData.avalanche.relevanceReason
+          avalanche?.relevanceReason
             || avalancheProblem?.problem_description
             || avalancheProblem?.discussion
-            || safetyData.avalanche.bottomLine,
-          safetyData.avalanche.dangerUnknown
+            || avalanche?.bottomLine,
+          avalanche?.dangerUnknown
             ? 'Danger is unknown for this objective; verify the current bulletin before entering avalanche terrain.'
-            : `${safetyData.avalanche.risk || 'Current danger'} for the selected objective and time.`,
+            : `${avalanche?.risk || 'Current danger'} for the selected objective and time.`,
         ),
-        tag: safetyData.avalanche.dangerUnknown ? 'Verify' : safetyData.avalanche.dangerLevel >= 2 || avalancheProblem ? 'Watch' : 'Supports',
-        tone: safetyData.avalanche.dangerUnknown ? 'neutral' : safetyData.avalanche.dangerLevel >= 2 || avalancheProblem ? 'caution' : 'positive',
+        tag: avalanche?.dangerUnknown ? 'Verify' : Number(avalanche?.dangerLevel) >= 2 || avalancheProblem ? 'Watch' : 'Supports',
+        tone: avalanche?.dangerUnknown ? 'neutral' : Number(avalanche?.dangerLevel) >= 2 || avalancheProblem ? 'caution' : 'positive',
         icon: <TriangleAlert size={16} aria-hidden />,
       }
     : {

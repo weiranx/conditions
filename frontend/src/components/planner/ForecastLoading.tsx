@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 const STEP_LABELS = ['Weather', 'Avalanche', 'Alerts', 'Air Quality', 'Precipitation', 'Snowpack'];
 const SLOW_RESPONSE_DELAY_MS = 8_000;
 
-export function ForecastLoading() {
+export function ForecastLoading({ showAvalanche = true }: { showAvalanche?: boolean }) {
   const [isTakingLonger, setIsTakingLonger] = useState(false);
+  const stepLabels = showAvalanche ? STEP_LABELS : STEP_LABELS.filter((label) => label !== 'Avalanche');
 
   useEffect(() => {
     const slowResponseTimer = window.setTimeout(() => {
@@ -40,11 +41,11 @@ export function ForecastLoading() {
         <span className="forecast-loading-eyebrow">Conditions report</span>
         <strong>Building your forecast brief</strong>
         <span id="forecast-loading-description">
-          Combining fresh conditions from {STEP_LABELS.length} source groups for your objective.
+          Combining fresh conditions from {stepLabels.length} source groups for your objective.
         </span>
       </div>
       <div className="forecast-loading-steps" aria-hidden="true">
-        {STEP_LABELS.map((label, index) => (
+        {stepLabels.map((label, index) => (
           <span key={label} className="forecast-loading-step" style={{ animationDelay: `${index * 0.18}s` }}>
             <span className="forecast-loading-step-dot" />
             <span>{label}</span>

@@ -40,7 +40,7 @@ export function useDayComparisons({
         temperatureUnit,
         windSpeedUnit,
         safetyData.safety.score,
-        safetyData.avalanche.dangerLevel,
+        safetyData.avalanche?.dangerLevel,
         safetyData.weather.windGust,
         safetyData.weather.feelsLike,
         safetyData.weather.temp,

@@ -785,7 +785,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         routeAnalysis={routeAnalysis}
       />
 
-      {loading && !safetyData && <ForecastLoading />}
+      {loading && !safetyData && <ForecastLoading showAvalanche={featureFlags.avalancheDetails} />}
 
       {loading && safetyData && (
         <div className="loading-state inline-loading-state" role="status" aria-live="polite">

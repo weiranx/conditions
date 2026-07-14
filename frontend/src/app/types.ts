@@ -160,7 +160,7 @@ export interface SafetyData {
     };
   };
   solar: { sunrise: string; sunset: string; dayLength: string };
-  avalanche: {
+  avalanche?: {
     risk: string;
     dangerLevel: number;
     dangerUnknown?: boolean;

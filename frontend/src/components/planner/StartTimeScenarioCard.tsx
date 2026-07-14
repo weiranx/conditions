@@ -72,6 +72,7 @@ export function StartTimeScenarioCard({
   const current = comparison?.scenarios.find((scenario) => scenario.startTime === currentStartTime) ?? null;
   const currentIsBest = current?.startTime === comparison?.bestStartTime;
   const scenarioCount = comparison?.scenarios.length ?? 0;
+  const showAvalanche = Boolean(best?.data.avalanche);
   const recommendationReason = comparison && best
     ? comparison.recommendationReason.replace(
         best.startTime,
@@ -162,7 +163,7 @@ export function StartTimeScenarioCard({
                     <div className={comparison.drivingRisk === 'Wind' ? 'is-driver' : ''}><dt>Wind gust</dt><dd><b>{formatWindDisplay(scenario.peakGustMph)}</b><small>{formatWindDelta(scenario.peakGustMph, best.peakGustMph, formatWindDisplay)}</small></dd></div>
                     <div className={comparison.drivingRisk === 'Heat' ? 'is-driver' : ''}><dt>Feels like</dt><dd><b>{formatTempDisplay(scenario.peakFeelsLikeF)}</b><small>{scenario.peakFeelsLikeF === null || best.peakFeelsLikeF === null ? '—' : formatTemperatureDelta(scenario.peakFeelsLikeF, best.peakFeelsLikeF, preferences.temperatureUnit)}</small></dd></div>
                     <div className={comparison.drivingRisk === 'Precipitation' ? 'is-driver' : ''}><dt>Precipitation</dt><dd><b>{Math.round(scenario.peakPrecipChance)}%</b><small>{formatDelta(scenario.peakPrecipChance, best.peakPrecipChance, ' pp')}</small></dd></div>
-                    <div className={comparison.drivingRisk === 'Avalanche' ? 'is-driver' : ''}><dt>Avalanche danger</dt><dd><b>{scenario.avalancheLabel}</b><small>{scenario.avalancheLevel === null || best.avalancheLevel === null ? '—' : formatDelta(scenario.avalancheLevel, best.avalancheLevel, '')}</small></dd></div>
+                    {showAvalanche && <div className={comparison.drivingRisk === 'Avalanche' ? 'is-driver' : ''}><dt>Avalanche danger</dt><dd><b>{scenario.avalancheLabel}</b><small>{scenario.avalancheLevel === null || best.avalancheLevel === null ? '—' : formatDelta(scenario.avalancheLevel, best.avalancheLevel, '')}</small></dd></div>}
                     <div className={comparison.drivingRisk === 'Storm / lightning' ? 'is-driver' : ''}><dt>Storm-free hours</dt><dd><b>{scenario.cleanHours}h</b><small>{scenario.stormHours > 0 ? `${scenario.stormHours}h storm signal` : 'no storm signal'}</small></dd></div>
                   </dl>
                   {!isCurrent && (

@@ -69,7 +69,8 @@ export function evaluateBackcountryDecision(
     }
   };
 
-  const danger = data.avalanche.dangerLevel || 0;
+  const avalanche = data.avalanche;
+  const danger = avalanche?.dangerLevel || 0;
   let gust = data.weather.windGust ?? 0;
   let precip = data.weather.precipChance ?? 0;
   let feelsLike: number | null = data.weather.feelsLike ?? data.weather.temp ?? null;
@@ -103,10 +104,10 @@ export function evaluateBackcountryDecision(
     }
   }
   const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
-  const avalancheRelevant = !ignoreAvalancheForDecision && data.avalanche.relevant !== false;
-  const avalancheExpired = avalancheRelevant && data.avalanche.coverageStatus === 'expired_for_selected_start';
+  const avalancheRelevant = Boolean(avalanche && !ignoreAvalancheForDecision && avalanche.relevant !== false);
+  const avalancheExpired = avalancheRelevant && avalanche?.coverageStatus === 'expired_for_selected_start';
   const avalancheUnknown = avalancheRelevant && !avalancheExpired &&
-    Boolean(data.avalanche.dangerUnknown || data.avalanche.coverageStatus !== 'reported');
+    Boolean(avalanche?.dangerUnknown || avalanche?.coverageStatus !== 'reported');
   const avalancheGateRequired = avalancheRelevant;
   const unknownSnowpackMode = avalancheGateRequired && avalancheUnknown;
   const avalancheCheckLabel = (safeDangerLabel: string): string => {
@@ -168,7 +169,7 @@ export function evaluateBackcountryDecision(
     12,
   );
   const avalancheFreshnessState = avalancheRelevant
-    ? freshnessClass(pickOldestIsoTimestamp([data.avalanche.publishedTime || null]), 24)
+    ? freshnessClass(pickOldestIsoTimestamp([avalanche?.publishedTime || null]), 24)
     : null;
   const alertsFreshnessState = alertsRelevantForSelectedStart
     ? alertsNoActiveForSelectedStart || alertsWindowCovered
@@ -318,7 +319,7 @@ export function evaluateBackcountryDecision(
   }
 
   const checks: SummitDecision['checks'] = [
-    {
+    ...(avalanche ? [{
       key: 'avalanche',
       label: avalancheGateRequired ? 'Avalanche danger is Moderate or lower' : avalancheCheckLabel('Moderate or lower'),
       ok: avalancheGateRequired ? (!avalancheUnknown && danger <= 2) : true,
@@ -333,7 +334,7 @@ export function evaluateBackcountryDecision(
           : avalancheGateRequired && danger > 2
             ? 'Choose non-avalanche terrain or delay until the hazard and avalanche problems can be managed.'
             : undefined,
-    },
+    }] : []),
     {
       key: 'convective-signal',
       label: 'No convective storm signal (thunder/lightning/hail)',

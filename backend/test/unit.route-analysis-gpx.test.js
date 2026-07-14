@@ -297,6 +297,58 @@ test('GPX route analysis uses supplied coordinates without generating or geocodi
   });
 });
 
+test('route analysis removes avalanche data and narrative when the product domain is disabled', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn().mockResolvedValue(
+    'OTHER CONCERNS: Avalanche danger is Considerable. Wind gusts reach 40 mph.',
+  );
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler: async () => ({
+      statusCode: 200,
+      payload: {
+        featureFlags: { avalancheDetails: false },
+        weather: { elevation: 6000, windGust: 40, description: 'Windy' },
+        safety: {
+          score: 70,
+          factors: [{ group: 'avalanche', hazard: 'Avalanche', impact: 20 }],
+        },
+        avalanche: { relevant: true, risk: 'Considerable', dangerLevel: 3 },
+        alerts: { alerts: [] },
+        snowpack: { snotel: { snowDepthIn: 20 } },
+      },
+    }),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureAIEnabled: () => {},
+    getProductFeatureFlags: () => ({ avalancheDetails: false }),
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Test Peak',
+      route: 'Imported route',
+      lat: 46.85,
+      lon: -121.76,
+      date: '2026-07-14',
+      waypoints: [
+        { name: 'Start', lat: 46.8, lon: -121.7 },
+        { name: 'Finish', lat: 46.85, lon: -121.76 },
+      ],
+    });
+
+  expect(response.status).toBe(200);
+  expect(response.body.summaries.every((summary) => summary.avalanche === undefined)).toBe(true);
+  expect(response.body.analysis).toBe('OTHER CONCERNS: Wind gusts reach 40 mph.');
+  expect(JSON.stringify(response.body)).not.toMatch(/Considerable/);
+  const routePrompt = askAI.mock.calls[0][0];
+  expect(routePrompt).toMatch(/Do not mention it/i);
+  expect(routePrompt).not.toMatch(/such as avalanche conditions/i);
+});
+
 test('GPX route analysis remains available without AI and returns a deterministic briefing', async () => {
   const app = express();
   app.use(express.json());

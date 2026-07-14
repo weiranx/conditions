@@ -44,6 +44,51 @@ const reportMatchesScoreFeatures = (report, flags) => {
 };
 
 const cloneReport = (report) => JSON.parse(JSON.stringify(report));
+const AVALANCHE_REFERENCE_PATTERN = /avalanche/iu;
+
+const containsAvalancheReference = (value) => {
+  try {
+    return AVALANCHE_REFERENCE_PATTERN.test(JSON.stringify(value));
+  } catch {
+    return false;
+  }
+};
+
+const scrubAvalancheReferences = (value, preserveKeys = false) => {
+  if (typeof value === 'string') {
+    return AVALANCHE_REFERENCE_PATTERN.test(value) ? undefined : value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => !containsAvalancheReference(item))
+      .map((item) => scrubAvalancheReferences(item))
+      .filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(Object.entries(value).flatMap(([key, item]) => {
+    if (key === 'featureFlags') return [[key, scrubAvalancheReferences(item, true)]];
+    if (!preserveKeys && AVALANCHE_REFERENCE_PATTERN.test(key)) return [];
+    const scrubbed = scrubAvalancheReferences(item, preserveKeys);
+    return scrubbed === undefined ? [] : [[key, scrubbed]];
+  }));
+};
+
+const removeAvalancheNarrativeReferences = (value) => String(value || '')
+  .split('\n')
+  .map((line) => {
+    const labelMatch = /^([A-Z][A-Z ]+:)\s*(.*)$/u.exec(line.trim());
+    const label = labelMatch?.[1] || '';
+    const body = labelMatch?.[2] ?? line;
+    const keptSentences = body
+      .match(/[^.!?]+[.!?]?/gu)
+      ?.map((sentence) => sentence.trim())
+      .filter((sentence) => sentence && !AVALANCHE_REFERENCE_PATTERN.test(sentence)) || [];
+    if (keptSentences.length > 0) return `${label}${label ? ' ' : ''}${keptSentences.join(' ')}`;
+    return label ? `${label} No enabled-domain concern is available for this section.` : '';
+  })
+  .filter(Boolean)
+  .join('\n');
 
 const factorBelongsToDisabledFeature = (factor, flags) => {
   const hazard = String(factor?.hazard || '').toLowerCase();
@@ -99,6 +144,31 @@ const removeDisabledAnalysisDetails = (analysis, flags) => {
   return filtered;
 };
 
+const removeAvalancheReferences = (report) => {
+  const filtered = cloneReport(report);
+  delete filtered.avalanche;
+  delete filtered.disabledProductDomains;
+  filtered.safety = removeDisabledAnalysisDetails(filtered.safety, { avalancheDetails: false });
+  if (Array.isArray(filtered.gear)) {
+    filtered.gear = filtered.gear.filter((item) => !containsAvalancheReference(item));
+  }
+  if (filtered.alerts && typeof filtered.alerts === 'object' && Array.isArray(filtered.alerts.alerts)) {
+    filtered.alerts.alerts = filtered.alerts.alerts.filter((alert) => !containsAvalancheReference(alert));
+    filtered.alerts.activeCount = filtered.alerts.alerts.length;
+    filtered.alerts.totalActiveCount = filtered.alerts.alerts.length;
+    if (filtered.alerts.alerts.length === 0) {
+      filtered.alerts.status = 'none';
+      delete filtered.alerts.highestSeverity;
+    } else {
+      const severityRank = { Unknown: 0, Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
+      filtered.alerts.highestSeverity = filtered.alerts.alerts.reduce((highest, alert) => (
+        (severityRank[alert?.severity] || 0) > (severityRank[highest] || 0) ? alert.severity : highest
+      ), 'Unknown');
+    }
+  }
+  return scrubAvalancheReferences(filtered);
+};
+
 const sanitizeReportForFeatureFlags = (report, flags) => {
   const filtered = cloneReport(report);
   filtered.featureFlags = getScoreFeatureSnapshot(flags);
@@ -145,14 +215,17 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
   }
 
   filtered.safety = removeDisabledAnalysisDetails(filtered.safety, flags);
-  filtered.disabledProductDomains = getDisabledScoreFeatureLabels(flags);
-  return filtered;
+  return !isFeatureEnabled(flags, 'avalancheDetails')
+    ? removeAvalancheReferences(filtered)
+    : filtered;
 };
 
 module.exports = {
   SCORE_FEATURE_KEYS,
   getDisabledScoreFeatureLabels,
   getScoreFeatureSnapshot,
+  removeAvalancheReferences,
+  removeAvalancheNarrativeReferences,
   reportMatchesScoreFeatures,
   sanitizeReportForFeatureFlags,
 };

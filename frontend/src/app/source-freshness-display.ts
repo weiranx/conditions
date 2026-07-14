@@ -47,7 +47,7 @@ export function buildSourceFreshnessDisplay(
     : null;
   const avalancheFreshnessTimestamp = safetyData
     ? pickOldestIsoTimestamp([
-        safetyData.avalanche.publishedTime || null,
+        safetyData.avalanche?.publishedTime || null,
       ])
     : null;
   const alertsFreshnessTimestamp = safetyData

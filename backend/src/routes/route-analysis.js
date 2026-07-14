@@ -1,8 +1,12 @@
 const { createCache, normalizeCoordKey, normalizeTextKey } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
-const { assertFeatureEnabled } = require('../utils/feature-flags');
+const { assertFeatureEnabled, getFeatureFlags } = require('../utils/feature-flags');
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
+const {
+  removeAvalancheNarrativeReferences,
+  removeAvalancheReferences,
+} = require('../utils/report-feature-filter');
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 
@@ -248,6 +252,7 @@ const registerRouteAnalysisRoutes = ({
   ensureRouteAnalysisEnabled = () => assertFeatureEnabled('routeAnalysis'),
   ensureGpxImportEnabled = () => assertFeatureEnabled('gpxImport'),
   ensureAIEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
+  getProductFeatureFlags = getFeatureFlags,
 }) => {
   const routeDataService = createRouteDataService({
     fetchWithTimeout,
@@ -441,17 +446,19 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       // Step 3: Build a compact per-waypoint summary for the UI (waypoint list,
       // elevation/score chart) — this is a display concern, separate from what
       // gets fed to the AI below.
+      const avalancheEnabled = getProductFeatureFlags().avalancheDetails;
       const summaries = waypointsCopy.map((wp, i) => {
         const settled = safetySettled[i];
         const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
-        const p = dataAvailable ? settled.value.payload : {};
+        const rawPayload = dataAvailable ? settled.value.payload : {};
+        const p = avalancheEnabled ? rawPayload : removeAvalancheReferences(rawPayload);
         const resolvedElevationFt = Number.isFinite(Number(wp.elev_ft))
           ? Number(wp.elev_ft)
           : Number.isFinite(Number(p.weather?.elevation))
             ? Math.round(Number(p.weather.elevation))
             : 0;
         wp.elev_ft = resolvedElevationFt;
-        const avyRelevant = p.avalanche?.relevant !== false;
+        const avyRelevant = Boolean(p.avalanche && p.avalanche.relevant !== false);
         const snowDepthIn = p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null;
         const hasSnow = snowDepthIn != null && snowDepthIn > 0;
         return {
@@ -487,14 +494,19 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,
           dataAvailable,
-          report: dataAvailable ? settled.value.payload : null,
+          report: dataAvailable
+            ? avalancheEnabled ? settled.value.payload : removeAvalancheReferences(settled.value.payload)
+            : null,
         };
       });
       const failedWaypointNames = rawWaypointReports.filter((r) => !r.dataAvailable).map((r) => r.name).filter(Boolean);
       const partialData = failedWaypointNames.length > 0;
       const reportsJson = JSON.stringify(rawWaypointReports).slice(0, MAX_WAYPOINT_REPORTS_LENGTH);
+      const disabledDomainInstruction = avalancheEnabled
+        ? ''
+        : '\nAvalanche is disabled for this product report. Do not mention it, infer it, recommend avalanche-specific checks or gear, or refer the user to avalanche sources.\n';
 
-      const analysis = aiFeatureEnabled ? await withTimeout(askAI(
+      const generatedAnalysis = aiFeatureEnabled ? await withTimeout(askAI(
         `${describeUnitsInstruction(units)}
 
 You are analyzing backcountry conditions for a trip on ${safePeak}.
@@ -513,13 +525,14 @@ Date: ${date}${start ? `, Start time: ${start}` : ''}
 ${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
 Raw safety report per waypoint, trailhead to summit (JSON):
 ${reportsJson}
+${disabledDomainInstruction}
 
 Turn the route data into a decision-ready field briefing rather than a compressed recap or raw-data inventory. Reference specific waypoint names, elevations, distances or progress, times, and actual values. Explain how and why conditions change along the route, how hazards may combine, and what the traveler should do with that information. Distinguish observed, forecast, modeled, and missing evidence when the reports provide that context. Do not assume pace or method of travel. Only discuss hazards present in the reports, and clearly note unavailable waypoint data. Never invent a terrain feature, route detail, timing threshold, or condition that is not supported by the supplied route metadata, terrain profile, or waypoint reports.
 
 Return exactly these six labeled sections, each on its own line, with no other introduction or closing:
 HAZARD ZONES: 3-5 sentences identifying where conditions materially change by named waypoint, elevation, distance, or progress and explaining the practical consequence of each change.
 WEATHER WINDOW: 2-4 sentences explaining how conditions evolve across the selected travel window, the best-supported timing advantage, and the time-based signs that should trigger reassessment.
-OTHER CONCERNS: 2-4 sentences covering only relevant secondary hazards such as avalanche conditions, terrain surface, freezing level, heat, fire, air quality, thunderstorms, or missing data, including interactions with the main hazard.
+OTHER CONCERNS: 2-4 sentences covering only relevant secondary hazards such as ${avalancheEnabled ? 'avalanche conditions, ' : ''}terrain surface, freezing level, heat, fire, air quality, thunderstorms, or missing data, including interactions with the main hazard.
 DECISION POINTS: 2-4 sentences naming specific checkpoints or condition thresholds where the traveler should pause, verify conditions, turn around, or choose lower-exposure terrain. If exact thresholds are unavailable, state what observable change matters instead of inventing a number.
 GEAR CHECK: 4-7 short condition-specific items separated by semicolons, with no bullets; tie each item to a reported condition or a clearly identified verification need.
 BOTTOM LINE: 2-3 sentences stating go, go-with-caution, or no-go, identifying the decisive evidence, and explaining what new observation or forecast change would alter that conclusion. Never soften a NO-GO reported at any relevant waypoint.
@@ -529,6 +542,9 @@ Aim for a substantive 300-550 word briefing when the route evidence supports it.
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
         { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis', userId: req.accountUser.id }
       ), 60000, 'Route synthesis') : buildDeterministicRouteBriefing(summaries, failedWaypointNames);
+      const analysis = avalancheEnabled
+        ? generatedAnalysis
+        : removeAvalancheNarrativeReferences(generatedAnalysis);
 
       return res.json({
         waypoints: waypointsCopy,

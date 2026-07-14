@@ -2,6 +2,7 @@
 
 const {
   getScoreFeatureSnapshot,
+  removeAvalancheNarrativeReferences,
   reportMatchesScoreFeatures,
   sanitizeReportForFeatureFlags,
 } = require('../src/utils/report-feature-filter');
@@ -13,6 +14,18 @@ describe('report feature filtering', () => {
       featureFlags: getScoreFeatureSnapshot(flags),
       weather: { description: 'Cloudy', temp: 31 },
       avalanche: { risk: 'Considerable', problems: [{ name: 'Deep Persistent Slab' }] },
+      alerts: {
+        activeCount: 2,
+        totalActiveCount: 2,
+        highestSeverity: 'Severe',
+        alerts: [
+          { event: 'Avalanche Warning', severity: 'Severe' },
+          { event: 'High Wind Warning', severity: 'Moderate' },
+        ],
+      },
+      localConditions: {
+        closures: { alerts: [{ title: 'Road closed for avalanche control' }, { title: 'Trailhead gate closed' }] },
+      },
       gear: [
         { id: 'avalanche-kit', title: 'Avalanche rescue kit' },
         { id: 'layering-core', title: 'Layering system' },
@@ -40,7 +53,11 @@ describe('report feature filtering', () => {
     expect(filtered.safety.sourcesUsed).toEqual(['NOAA forecast']);
     expect(filtered.safety.groupImpacts).toEqual({ weather: -5 });
     expect(filtered.safety.primaryHazard).toBe('Wind');
-    expect(JSON.stringify(filtered)).not.toMatch(/Considerable|Deep Persistent Slab|Avalanche rescue kit/);
+    expect(filtered.alerts.alerts).toEqual([{ event: 'High Wind Warning', severity: 'Moderate' }]);
+    expect(filtered.alerts.activeCount).toBe(1);
+    expect(filtered.localConditions.closures.alerts).toEqual([{ title: 'Trailhead gate closed' }]);
+    const { featureFlags, ...reportWithoutFlagMetadata } = filtered;
+    expect(JSON.stringify(reportWithoutFlagMetadata)).not.toMatch(/avalanche|Considerable|Deep Persistent Slab/i);
     expect(report.avalanche.risk).toBe('Considerable');
   });
 
@@ -53,5 +70,13 @@ describe('report feature filtering', () => {
     expect(reportMatchesScoreFeatures(matchingReport, enabledFlags)).toBe(false);
     expect(reportMatchesScoreFeatures({}, enabledFlags)).toBe(true);
     expect(reportMatchesScoreFeatures({}, disabledFlags)).toBe(false);
+  });
+
+  test('removes avalanche sentences while preserving brief section labels and enabled content', () => {
+    expect(removeAvalancheNarrativeReferences(
+      'BIG PICTURE: Avalanche danger is high. Wind gusts reach 45 mph.\nBEST MOVE: Check the avalanche bulletin. Use sheltered terrain.',
+    )).toBe(
+      'BIG PICTURE: Wind gusts reach 45 mph.\nBEST MOVE: Use sheltered terrain.',
+    );
   });
 });

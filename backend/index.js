@@ -70,6 +70,7 @@ const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable } = require('./src/utils/ai-client');
 const { getFeatureFlags, initializeFeatureFlags } = require('./src/utils/feature-flags');
+const { removeAvalancheReferences } = require('./src/utils/report-feature-filter');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
@@ -301,7 +302,9 @@ const buildSafetyResponsePayload = ({
     payload.apiWarning = partial.apiWarning;
   }
 
-  return payload;
+  return featureFlags?.avalancheDetails === false
+    ? removeAvalancheReferences(payload)
+    : payload;
 };
 
 const safetyHandler = async (req, res) => {

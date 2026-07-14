@@ -113,12 +113,14 @@ export function buildStartTimeScenario(
   );
   const returnMinutes = startMinutes + durationMinutes;
   const sunsetMinutes = parseSolarClockMinutes(data.solar?.sunset);
-  const avalancheRelevant = data.avalanche?.relevant !== false;
+  const avalancheRelevant = Boolean(data.avalanche && data.avalanche.relevant !== false);
   const avalancheKnown = avalancheRelevant && !data.avalanche?.dangerUnknown && data.avalanche?.coverageStatus === 'reported';
   const avalancheLevel = avalancheKnown && Number.isFinite(Number(data.avalanche?.dangerLevel))
-    ? Number(data.avalanche.dangerLevel)
+    ? Number(data.avalanche?.dangerLevel)
     : null;
-  const avalancheLabel = !avalancheRelevant
+  const avalancheLabel = !data.avalanche
+    ? ''
+    : !avalancheRelevant
     ? 'Not relevant'
     : avalancheLevel !== null
       ? `D${avalancheLevel}`
@@ -188,7 +190,15 @@ export function compareStartTimeScenarios(
     return a.startTime.localeCompare(b.startTime);
   });
   const best = sorted[0];
-  const risks: Exclude<StartTimeScenarioRisk, 'Daylight'>[] = ['Storm / lightning', 'Wind', 'Heat', 'Precipitation', 'Avalanche', 'Visibility'];
+  const avalancheAvailable = scenarios.some((scenario) => Boolean(scenario.data.avalanche));
+  const risks: Exclude<StartTimeScenarioRisk, 'Daylight'>[] = [
+    'Storm / lightning',
+    'Wind',
+    'Heat',
+    'Precipitation',
+    ...(avalancheAvailable ? ['Avalanche' as const] : []),
+    'Visibility',
+  ];
   const normalizedSpread: Record<Exclude<StartTimeScenarioRisk, 'Daylight'>, number> = {
     'Storm / lightning': range(scenarios.map((scenario) => scenario.stormHours)) / Math.max(1, preferences.travelWindowHours),
     Wind: range(scenarios.map((scenario) => scenario.peakGustMph)) / Math.max(1, preferences.maxWindGustMph),

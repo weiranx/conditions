@@ -63,6 +63,10 @@ export function buildTerrainWindow({
   secondaryAspects: string[];
   preferences: UserPreferences;
 }): TerrainWindowModel {
+  const avalancheEnabled = avalancheRelevant
+    || avalancheUnknown
+    || avalancheProblems.length > 0
+    || avalancheDanger !== null;
   const problemTerrain = avalancheProblems.map((problem) => ({
     name: problem.name || 'Avalanche problem',
     ...parseTerrainFromLocation(problem.location),
@@ -136,6 +140,8 @@ export function buildTerrainWindow({
     hours: travelRows,
     lanes,
     lowerRiskHourIndexes,
-    explanation: 'Cells combine your hourly thresholds with forecast elevation estimates, active avalanche problem terrain, and wind-loading aspects.',
+    explanation: avalancheEnabled
+      ? 'Cells combine your hourly thresholds with forecast elevation estimates, active avalanche problem terrain, and wind-loading aspects.'
+      : 'Cells combine your hourly thresholds with forecast elevation estimates and wind-exposure aspects.',
   };
 }

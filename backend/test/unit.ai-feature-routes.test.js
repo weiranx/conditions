@@ -89,7 +89,7 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
   const app = express();
   app.use(express.json());
   const flags = { avalancheDetails: false };
-  const askAI = jest.fn().mockResolvedValue('BIG PICTURE: Weather is the enabled concern.');
+  const askAI = jest.fn().mockResolvedValue('BIG PICTURE: Avalanche danger is Considerable. Weather is the enabled concern.');
   registerAiBriefRoute({ app, askAI, getProductFeatureFlags: () => flags });
 
   const response = await request(app)
@@ -112,6 +112,8 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
     });
 
   expect(response.status).toBe(200);
+  expect(response.body.narrative).toBe('BIG PICTURE: Weather is the enabled concern.');
+  expect(response.body.narrative).not.toMatch(/avalanche/i);
   expect(askAI).toHaveBeenCalledTimes(1);
   const prompt = askAI.mock.calls[0][0];
   expect(prompt).toMatch(/Disabled product domains: avalanche/i);
