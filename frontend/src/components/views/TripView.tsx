@@ -20,6 +20,7 @@ import {
   TrendingDown,
   TrendingUp,
   Wind,
+  X,
 } from 'lucide-react';
 import type { DecisionLevel, TimeStyle } from '../../app/types';
 import { formatClockForStyle } from '../../app/core';
@@ -315,7 +316,11 @@ export function TripView({
   const aiAvailability = useAiAvailability();
   const [sel, setSel] = React.useState(0);
   const [briefCopied, setBriefCopied] = React.useState(false);
+  const [plannerDayPickerOpen, setPlannerDayPickerOpen] = React.useState(false);
+  const [plannerDayPickerIndex, setPlannerDayPickerIndex] = React.useState(0);
   const dayRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const plannerDayOptionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const plannerDayDialogRef = React.useRef<HTMLElement | null>(null);
   const detailRef = React.useRef<HTMLDivElement | null>(null);
   const anchoredRowsRef = React.useRef<MultiDayTripForecastDay[] | null>(null);
   const copyResetTimerRef = React.useRef<number | null>(null);
@@ -323,6 +328,47 @@ export function TripView({
   React.useEffect(() => () => {
     if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
   }, []);
+
+  React.useEffect(() => {
+    if (!plannerDayPickerOpen) return undefined;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => {
+      plannerDayDialogRef.current
+        ?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')
+        ?.focus();
+    }, 0);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setPlannerDayPickerOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = plannerDayDialogRef.current;
+      const focusable = dialog
+        ? Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+        : [];
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [plannerDayPickerOpen]);
 
   // Re-anchor selection to the best day whenever a fresh forecast lands.
   React.useEffect(() => {
@@ -332,6 +378,7 @@ export function TripView({
     anchoredRowsRef.current = tripForecastRows;
     if (tripForecastRows.length === 0) {
       setSel(0);
+      setPlannerDayPickerOpen(false);
       return;
     }
     let bestIdx = 0;
@@ -468,6 +515,8 @@ export function TripView({
   };
 
   const selected = tripForecastRows[sel] ?? null;
+  const plannerDay = tripForecastRows[plannerDayPickerIndex] ?? null;
+  const plannerDayPickerVisible = plannerDayPickerOpen && plannerDay !== null;
 
   const selectDay = (index: number, moveFocus = false) => {
     const boundedIndex = Math.max(0, Math.min(tripForecastRows.length - 1, index));
@@ -492,6 +541,27 @@ export function TripView({
     window.requestAnimationFrame(() => {
       detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  };
+
+  const requestPlannerView = () => {
+    if (tripForecastRows.length === 0) {
+      openPlannerView();
+      return;
+    }
+    const nextIndex = Math.min(Math.max(sel, 0), tripForecastRows.length - 1);
+    setPlannerDayPickerIndex(nextIndex);
+    setPlannerDayPickerOpen(true);
+  };
+
+  const choosePlannerDay = (index: number, moveFocus = false) => {
+    setPlannerDayPickerIndex(index);
+    if (moveFocus) plannerDayOptionRefs.current[index]?.focus();
+  };
+
+  const openPlannerForSelectedDay = () => {
+    if (!plannerDay) return;
+    setPlannerDayPickerOpen(false);
+    onUseDayInPlanner(plannerDay.date, tripStartTime);
   };
 
   const buildTripBrief = () => {
@@ -524,8 +594,8 @@ export function TripView({
 
   return (
     <div key="view-trip" className={appShellClassName} aria-busy={isViewPending || tripForecastLoading}>
-      <div className="ssr-trip">
-        <ProductNav active="trip" navigateToView={navigateToView} openPlannerView={openPlannerView} />
+      <div className="ssr-trip" aria-hidden={plannerDayPickerVisible ? true : undefined}>
+        <ProductNav active="trip" navigateToView={navigateToView} openPlannerView={requestPlannerView} />
         {/* HEADER + SETUP */}
         <div className="ssr-trip-head">
           <div className="ssr-trip-intro">
@@ -626,7 +696,7 @@ export function TripView({
               <h3>Objective required</h3>
               <p>Select an objective in Planner first, then use this tool for multi-day forecasting.</p>
             </div>
-            <button type="button" className="ssr-trip-banner-action" onClick={openPlannerView}>
+            <button type="button" className="ssr-trip-banner-action" onClick={requestPlannerView}>
               <Route size={15} aria-hidden /> Open planner
             </button>
           </div>
@@ -960,7 +1030,7 @@ export function TripView({
                     </div>
                     <p>{localizeUnitText(selected.decisionHeadline)}</p>
                   </div>
-                  <button type="button" className="ssr-btn primary" onClick={() => onUseDayInPlanner(selected.date, tripStartTime)}>
+                  <button type="button" className="ssr-btn primary" onClick={requestPlannerView}>
                     Review full Planner assessment
                   </button>
                 </div>
@@ -1031,6 +1101,101 @@ export function TripView({
         )}
 
       </div>
+      {plannerDayPickerVisible && plannerDay && (
+        <div
+          className="ssr-trip-day-picker-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPlannerDayPickerOpen(false);
+          }}
+        >
+          <section
+            ref={plannerDayDialogRef}
+            className="ssr-trip-day-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trip-day-picker-title"
+            aria-describedby="trip-day-picker-description"
+            tabIndex={-1}
+          >
+            <header className="ssr-trip-day-picker-head">
+              <div>
+                <span>Open Planner</span>
+                <h2 id="trip-day-picker-title">Choose the report day</h2>
+                <p id="trip-day-picker-description">
+                  Select which multi-day forecast should become the active Planner date for {objectiveSummary}.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ssr-trip-day-picker-close"
+                onClick={() => setPlannerDayPickerOpen(false)}
+                aria-label="Close day picker"
+              >
+                <X aria-hidden />
+              </button>
+            </header>
+            <div className="ssr-trip-day-picker-options" role="radiogroup" aria-label="Planner report day">
+              {tripForecastRows.map((day, index) => {
+                const active = plannerDayPickerIndex === index;
+                return (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    tabIndex={active ? 0 : -1}
+                    key={day.date}
+                    ref={(node) => { plannerDayOptionRefs.current[index] = node; }}
+                    className={`ssr-trip-day-picker-option ${active ? 'is-selected' : ''}`}
+                    onClick={() => choosePlannerDay(index)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        choosePlannerDay((index + 1) % tripForecastRows.length, true);
+                      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        choosePlannerDay((index - 1 + tripForecastRows.length) % tripForecastRows.length, true);
+                      } else if (event.key === 'Home') {
+                        event.preventDefault();
+                        choosePlannerDay(0, true);
+                      } else if (event.key === 'End') {
+                        event.preventDefault();
+                        choosePlannerDay(tripForecastRows.length - 1, true);
+                      }
+                    }}
+                  >
+                    <span className={`ssr-trip-day-picker-band ${levelClass(day.decisionLevel)}`} />
+                    <span className="ssr-trip-day-picker-date">
+                      <strong>{weekdayLabel(day.date)}</strong>
+                      <span>{monthDayLabel(day.date)}</span>
+                    </span>
+                    <span className={`ssr-trip-day-pill ${levelClass(day.decisionLevel)}`}>
+                      {weatherWindowLabel(day.decisionLevel)}
+                    </span>
+                    <span className="ssr-trip-day-picker-weather">
+                      {formatTemperatureRange(day.tempHighF, day.tempLowF, formatTempDisplay)} · {formatWindDisplay(day.windGustMph)} gust
+                    </span>
+                    <span className="ssr-trip-day-picker-score">
+                      {day.score !== null ? `${day.score}/100` : 'No score'}
+                    </span>
+                    {active && <Check className="ssr-trip-day-picker-check" aria-hidden />}
+                  </button>
+                );
+              })}
+            </div>
+            <footer className="ssr-trip-day-picker-actions">
+              <div>
+                <strong>{weekdayLabel(plannerDay.date)}, {monthDayLabel(plannerDay.date)}</strong>
+                <span>{tripStartDisplay} start · {travelWindowHoursLabel} travel window</span>
+              </div>
+              <button type="button" className="ssr-btn" onClick={() => setPlannerDayPickerOpen(false)}>Cancel</button>
+              <button type="button" className="ssr-btn primary" onClick={openPlannerForSelectedDay}>
+                Open selected day <ArrowRight aria-hidden />
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
