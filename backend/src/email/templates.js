@@ -99,6 +99,163 @@ const finiteNumber = (value) => {
   return Number.isFinite(number) ? number : null;
 };
 
+const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const hasReportValue = (value) => {
+  if (value === null || value === undefined || value === '') return false;
+  if (Array.isArray(value)) return value.some(hasReportValue);
+  if (isRecord(value)) return Object.values(value).some(hasReportValue);
+  return true;
+};
+
+const REPORT_LABELS = Object.freeze({
+  ai: 'AI',
+  apiWarning: 'Data warning',
+  gpx: 'GPX',
+  lat: 'Latitude',
+  lon: 'Longitude',
+  nohrsc: 'NOHRSC',
+  nws: 'NWS',
+  pm25: 'PM2.5',
+  pm10: 'PM10',
+  snotel: 'SNOTEL',
+  swe: 'SWE',
+  usAqi: 'US AQI',
+  viirs: 'VIIRS',
+});
+
+const reportLabel = (key) => {
+  if (Object.hasOwn(REPORT_LABELS, key)) return REPORT_LABELS[key];
+  return String(key || 'Details')
+    .replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/gu, (letter) => letter.toUpperCase());
+};
+
+const isWebUrl = (value) => {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const reportDisplayValue = (key, value) => {
+  if (key === 'snowVisionImage' && typeof value === 'string' && value) {
+    return isWebUrl(value)
+      ? value
+      : 'Snow image retained in the saved report; open the app to view it.';
+  }
+  if (key === 'displayTrack' && Array.isArray(value)) {
+    return `${value.length} mapped track points retained in the saved report; open the app to view the route geometry.`;
+  }
+  return value;
+};
+
+const renderReportScalarHtml = (value) => {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  const text = String(value);
+  if (isWebUrl(text)) {
+    const safeUrl = escapeHtml(text);
+    return `<a href="${safeUrl}" style="color:#315f45;text-decoration:underline;word-break:break-word;">${safeUrl}</a>`;
+  }
+  return escapeHtml(text).replaceAll('\n', '<br>');
+};
+
+const renderReportValueHtml = (value, key = '') => {
+  const displayValue = reportDisplayValue(key, value);
+  if (!hasReportValue(displayValue)) return '<span style="color:#879087;">Not available</span>';
+  if (!Array.isArray(displayValue) && !isRecord(displayValue)) return renderReportScalarHtml(displayValue);
+
+  if (Array.isArray(displayValue)) {
+    return displayValue.map((item, index) => {
+      const content = renderReportValueHtml(item);
+      return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:${index === 0 ? '0' : '8px'} 0 0;border-collapse:separate;background:#fbfcfa;border:1px solid #e5e9e3;border-radius:9px;"><tr><td style="padding:10px 12px;color:#445249;font-size:12px;line-height:1.55;">${content}</td></tr></table>`;
+    }).join('');
+  }
+
+  const rows = Object.entries(displayValue)
+    .filter(([, item]) => hasReportValue(item))
+    .map(([childKey, item]) => `<tr>
+      <td valign="top" style="width:30%;padding:8px 10px 8px 0;border-bottom:1px solid #edf0eb;color:#758078;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;">${escapeHtml(reportLabel(childKey))}</td>
+      <td valign="top" style="padding:8px 0 8px 10px;border-bottom:1px solid #edf0eb;color:#344139;font-size:12px;line-height:1.55;word-break:break-word;">${renderReportValueHtml(item, childKey)}</td>
+    </tr>`)
+    .join('');
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table>`;
+};
+
+const renderReportValueText = (value, key = '', depth = 0) => {
+  const displayValue = reportDisplayValue(key, value);
+  if (!hasReportValue(displayValue)) return '';
+  const indent = '  '.repeat(depth);
+  if (!Array.isArray(displayValue) && !isRecord(displayValue)) {
+    return String(typeof displayValue === 'boolean' ? (displayValue ? 'Yes' : 'No') : displayValue);
+  }
+  if (Array.isArray(displayValue)) {
+    return displayValue.map((item) => {
+      const rendered = renderReportValueText(item, '', depth + 1);
+      return `${indent}- ${rendered.replace(/^\s+/u, '')}`;
+    }).join('\n');
+  }
+  return Object.entries(displayValue)
+    .filter(([, item]) => hasReportValue(item))
+    .map(([childKey, item]) => {
+      const rendered = renderReportValueText(item, childKey, depth + 1);
+      if (!Array.isArray(reportDisplayValue(childKey, item)) && !isRecord(reportDisplayValue(childKey, item))) {
+        return `${indent}${reportLabel(childKey)}: ${rendered}`;
+      }
+      return `${indent}${reportLabel(childKey)}:\n${rendered}`;
+    })
+    .join('\n');
+};
+
+const pickReportFields = (source, keys) => Object.fromEntries(
+  keys.filter((key) => hasReportValue(source?.[key])).map((key) => [key, source[key]]),
+);
+
+const omitReportFields = (source, keys) => Object.fromEntries(
+  Object.entries(isRecord(source) ? source : {}).filter(([key, value]) => !keys.includes(key) && hasReportValue(value)),
+);
+
+const buildCompleteReport = (report) => {
+  const safetyData = isRecord(report?.safetyData) ? report.safetyData : {};
+  const groupedSafetyKeys = [
+    'safety', 'pleasantness', 'terrainCondition', 'trail', 'gear',
+    'forecast', 'weather', 'solar', 'atmosphere', 'heatRisk', 'airQuality', 'rainfall',
+    'avalanche', 'snowpack', 'alerts', 'fireRisk', 'localConditions',
+    'generatedAt', 'partialData', 'apiWarning', 'location', 'capabilities',
+  ];
+  const groupedReportKeys = ['version', 'savedAt', 'plan', 'preferences', 'safetyData', 'route', 'ai'];
+  const sections = [
+    ['Plan details', report?.plan],
+    ['Decision, scoring, terrain, and gear', pickReportFields(safetyData, ['safety', 'pleasantness', 'terrainCondition', 'trail', 'gear'])],
+    ['Weather, travel window, and atmosphere', pickReportFields(safetyData, ['forecast', 'weather', 'solar', 'atmosphere', 'heatRisk', 'airQuality', 'rainfall'])],
+    ['Avalanche and snowpack', pickReportFields(safetyData, ['avalanche', 'snowpack'])],
+    ['Alerts, fire, access, and field observations', pickReportFields(safetyData, ['alerts', 'fireRisk', 'localConditions'])],
+    ['Route plan and analysis', report?.route],
+    ['AI analysis and report conversation', report?.ai],
+    ['Report metadata and preferences', {
+      savedAt: report?.savedAt,
+      version: report?.version,
+      preferences: report?.preferences,
+      ...pickReportFields(safetyData, ['generatedAt', 'partialData', 'apiWarning', 'location', 'capabilities']),
+    }],
+    ['Additional report data', {
+      safetyData: omitReportFields(safetyData, groupedSafetyKeys),
+      report: omitReportFields(report, groupedReportKeys),
+    }],
+  ].filter(([, value]) => hasReportValue(value));
+
+  return {
+    html: sections.map(([heading, value], index) => `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:${index === 0 ? '0' : '14px'} 0 0;border-collapse:separate;background:#ffffff;border:1px solid #dfe5de;border-radius:12px;">
+      <tr><td style="padding:14px 16px 10px;border-bottom:1px solid #e5e9e3;color:#27382d;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;line-height:1.3;">${escapeHtml(heading)}</td></tr>
+      <tr><td style="padding:6px 16px 12px;">${renderReportValueHtml(value)}</td></tr>
+    </table>`).join(''),
+    text: sections.map(([heading, value]) => `${heading.toUpperCase()}\n${renderReportValueText(value)}`).join('\n\n'),
+  };
+};
+
 const ACTIVITY_LABELS = Object.freeze({
   hiking: 'Mountain hiking',
   scrambling: 'Exposed scrambling',
@@ -128,6 +285,7 @@ const reportEmailShell = ({
   alertDetail,
   highlightsHtml,
   partialWarning,
+  completeReportHtml,
   actionUrl,
 }) => {
   const safeUrl = escapeHtml(actionUrl);
@@ -232,6 +390,15 @@ const reportEmailShell = ({
                   </td></tr>
                 </table>
 
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 14px;border-collapse:separate;background:#173d2b;border-radius:14px;">
+                  <tr><td style="padding:18px 20px;color:#ffffff;">
+                    <p style="margin:0 0 4px;color:#b8d5c4;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">Full field record</p>
+                    <h2 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:500;line-height:1.2;">Complete report</h2>
+                    <p style="margin:7px 0 0;color:#dbe9df;font-size:12px;line-height:1.5;">Every available section from this saved report snapshot is included below.</p>
+                  </td></tr>
+                </table>
+                <div style="margin:0 0 26px;">${completeReportHtml}</div>
+
                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;"><tr><td bgcolor="#315f45" style="border-radius:10px;"><a href="${safeUrl}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:14px;font-weight:800;text-decoration:none;">Open Backcountry Conditions&nbsp;&nbsp;→</a></td></tr></table>
                 <p style="margin:0 0 6px;color:#7a867e;font-size:11px;line-height:1.5;">Button not working? Copy this link:</p>
                 <p style="margin:0;word-break:break-all;font-size:11px;line-height:1.5;"><a href="${safeUrl}" style="color:#315f45;">${safeUrl}</a></p>
@@ -328,10 +495,11 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
     : ['Recheck official forecasts, access, and field observations before departure.'])
     .map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`)
     .join('');
+  const completeReport = buildCompleteReport(report);
 
   return {
     subject: `${objectiveName} report · ${forecastDate}`,
-    text: `${displayName ? `Hi ${compactText(displayName, '', 80)},\n\n` : ''}${objectiveName}\n${forecastDate} at ${startTime}\n${scoreLine}\n\nWeather: ${condition}${weatherParts.length ? ` (${weatherParts.join(', ')})` : ''}\nAvalanche: ${avalancheRisk}\nAlerts: ${alertLine}\n\nKey report notes:\n${textHighlights}\n\nOpen Backcountry Conditions:\n${actionUrl}\n\nThis is a point-in-time planning snapshot, not a safety guarantee. Recheck official sources and current field conditions before departure.`,
+    text: `${displayName ? `Hi ${compactText(displayName, '', 80)},\n\n` : ''}${objectiveName}\n${forecastDate} at ${startTime}\n${scoreLine}\n\nWeather: ${condition}${weatherParts.length ? ` (${weatherParts.join(', ')})` : ''}\nAvalanche: ${avalancheRisk}\nAlerts: ${alertLine}\n\nKey report notes:\n${textHighlights}\n\nCOMPLETE REPORT\n\n${completeReport.text}\n\nOpen Backcountry Conditions:\n${actionUrl}\n\nThis is a point-in-time planning snapshot, not a safety guarantee. Recheck official sources and current field conditions before departure.`,
     html: reportEmailShell({
       preview: `${objectiveName} report for ${forecastDate}`,
       objectiveName,
@@ -351,6 +519,7 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
       alertDetail,
       highlightsHtml: htmlHighlights,
       partialWarning,
+      completeReportHtml: completeReport.html,
       actionUrl,
     }),
   };

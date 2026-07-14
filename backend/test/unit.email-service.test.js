@@ -50,7 +50,7 @@ describe('transactional email service', () => {
     expect(normalizeBaseUrl('javascript:alert(1)')).toBeNull();
   });
 
-  test('sends an escaped report brief only to the supplied account address', async () => {
+  test('sends an escaped complete report only to the supplied account address', async () => {
     const send = jest.fn().mockResolvedValue({ data: { id: 'report-email-123' }, error: null });
     const service = createEmailService({
       apiKey: 're_test',
@@ -70,9 +70,24 @@ describe('transactional email service', () => {
           safety: { score: 72, tier: 'Caution', explanations: ['Check wind & <script>alert(1)</script>'] },
           weather: { temp: 35, windSpeed: 12, windGust: 28, precipChance: 20, description: 'Cloudy' },
           avalanche: { risk: 'Moderate', dangerUnknown: false },
-          alerts: { activeCount: 1 },
+          alerts: { activeCount: 1, alerts: [{ headline: 'High wind warning', instruction: 'Avoid exposed ridges until winds ease.' }] },
+          solar: { sunrise: '05:22', sunset: '21:01', dayLength: '15h 39m' },
+          snowpack: { summary: 'A long snowpack narrative that must remain complete, including the final sentence.' },
+          localConditions: { access: { available: true, roads: [{ name: 'Paradise Road', routeStatus: 'Open' }] } },
+          gear: [{ title: 'Ice axe', detail: 'Carry for firm snow travel.', category: 'Snow', tone: 'watch' }],
           partialData: true,
           apiWarning: 'One provider was unavailable.',
+        },
+        route: {
+          customRouteName: 'Disappointment Cleaver',
+          routeAnalysis: { analysis: 'Climb the route conservatively and reassess at each waypoint.', summaries: [{ name: 'Ingraham Flats', score: 64 }] },
+          gpxRoute: { displayTrack: [{ lat: 46.8, lon: -121.7 }, { lat: 46.9, lon: -121.8 }] },
+        },
+        ai: {
+          aiBriefNarrative: 'The complete AI briefing belongs in the email.',
+          snowVisionAnalysis: 'Surface snow appears wind affected near ridgelines.',
+          snowVisionImage: 'data:image/jpeg;base64,very-large-image-data',
+          reportChatMessages: [{ id: 'chat-1', role: 'assistant', parts: [{ type: 'text', text: 'Recheck the upper mountain wind forecast.' }] }],
         },
       },
     });
@@ -85,6 +100,23 @@ describe('transactional email service', () => {
     expect(message.html).not.toContain('<script>');
     expect(message.html).toContain('Conditions at a glance');
     expect(message.html).toContain('What matters most');
+    expect(message.html).toContain('Complete report');
+    expect(message.html).toContain('Every available section from this saved report snapshot is included below.');
+    expect(message.html).toContain('Weather, travel window, and atmosphere');
+    expect(message.html).toContain('Avalanche and snowpack');
+    expect(message.html).toContain('Alerts, fire, access, and field observations');
+    expect(message.html).toContain('Route plan and analysis');
+    expect(message.html).toContain('AI analysis and report conversation');
+    expect(message.html).toContain('including the final sentence.');
+    expect(message.html).toContain('Avoid exposed ridges until winds ease.');
+    expect(message.html).toContain('Paradise Road');
+    expect(message.html).toContain('Disappointment Cleaver');
+    expect(message.html).toContain('Climb the route conservatively');
+    expect(message.html).toContain('The complete AI briefing belongs in the email.');
+    expect(message.html).toContain('Recheck the upper mountain wind forecast.');
+    expect(message.html).toContain('2 mapped track points retained in the saved report');
+    expect(message.html).toContain('Snow image retained in the saved report');
+    expect(message.html).not.toContain('very-large-image-data');
     expect(message.html).toContain('Alpine climbing');
     expect(message.html).toContain('05:30 departure · 12h window');
     expect(message.html).toContain('Some source data was incomplete');
@@ -93,6 +125,8 @@ describe('transactional email service', () => {
     expect(message.html).not.toContain('[object Object]');
     expect(message.text).toContain('72/100 · Caution');
     expect(message.text).toContain('2°C, wind 19 kph, gusts 45 kph');
+    expect(message.text).toContain('COMPLETE REPORT');
+    expect(message.text).toContain('A long snowpack narrative that must remain complete, including the final sentence.');
     expect(message.html).toContain('https://conditions.example.com/');
     expect(options).toEqual({ idempotencyKey: 'report-email/user-1/report-1/12345' });
   });
