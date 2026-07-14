@@ -123,6 +123,7 @@ import {
   type PersistedReportPlan,
 } from './app/report-storage';
 import { copyTextToClipboard } from './app/clipboard';
+import { parseReportSectionHash } from './app/report-sections';
 import { HomeView } from './components/views/HomeView';
 import { LegalView } from './components/views/LegalView';
 import { NotFoundView } from './components/views/NotFoundView';
@@ -1127,7 +1128,10 @@ function App() {
     }
 
     const shareToken = sharedReportToken || activeSavedReportShareToken;
-    const link = shareToken ? buildSavedReportShareUrl(shareToken) : window.location.href;
+    const reportSectionId = parseReportSectionHash(window.location.hash);
+    const link = shareToken
+      ? buildSavedReportShareUrl(shareToken, window.location.origin, reportSectionId)
+      : window.location.href;
     try {
       const copied = await copyTextToClipboard(link);
       if (!copied) throw new Error('Clipboard unavailable');

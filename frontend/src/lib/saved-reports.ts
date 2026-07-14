@@ -1,6 +1,7 @@
 import type { PersistedReport } from '../app/report-storage';
 import type { AccountReportUsage } from '../contexts/account';
 import { parseAccountReportUsage } from '../contexts/report-usage';
+import { buildReportSectionHash } from '../app/report-sections';
 import { fetchApi, readApiErrorMessage } from './api-client';
 
 export interface SavedReportSummary {
@@ -66,8 +67,12 @@ const requireCreatedSavedReport = (payload: unknown): CreatedSavedReport => {
   return { ...identity, reportCount, reportUsage };
 };
 
-export function buildSavedReportShareUrl(shareToken: string, origin = window.location.origin): string {
-  return `${origin.replace(/\/+$/u, '')}/report/${encodeURIComponent(shareToken)}`;
+export function buildSavedReportShareUrl(
+  shareToken: string,
+  origin = window.location.origin,
+  sectionId?: string | null,
+): string {
+  return `${origin.replace(/\/+$/u, '')}/report/${encodeURIComponent(shareToken)}${buildReportSectionHash(sectionId)}`;
 }
 
 export async function createSavedReport(report: PersistedReport): Promise<CreatedSavedReport> {

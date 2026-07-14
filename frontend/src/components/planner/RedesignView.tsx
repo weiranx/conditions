@@ -44,6 +44,7 @@ import { CautionsAlertsSection } from './CautionsAlertsSection';
 import { ObjectiveMonitoringCard } from './ObjectiveMonitoringCard';
 import { TerrainWindowCard } from './TerrainWindowCard';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import { buildReportSectionHash } from '../../app/report-sections';
 import '../../styles/planning-intelligence.css';
 
 const DANGER_COLORS = [
@@ -432,7 +433,7 @@ function ReportJumpNav({
   const [activeId, setActiveId] = React.useState(sections[0]?.id || '');
   const sectionsRef = React.useRef(sections);
   const navRef = React.useRef<HTMLElement>(null);
-  const buttonRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const buttonRefs = React.useRef(new Map<string, HTMLAnchorElement>());
   const sectionKey = sections.map((section) => section.id).join('|');
 
   React.useEffect(() => {
@@ -495,19 +496,23 @@ function ReportJumpNav({
   return (
     <nav ref={navRef} className="ssr-jump-nav" aria-label="Jump to report section">
       {sections.map((section) => (
-        <button
+        <a
           key={section.id}
           ref={(node) => {
             if (node) buttonRefs.current.set(section.id, node);
             else buttonRefs.current.delete(section.id);
           }}
-          type="button"
+          href={buildReportSectionHash(section.id)}
           className={`ssr-jump-chip ${activeId === section.id ? 'active' : ''}`}
           aria-current={activeId === section.id ? 'location' : undefined}
-          onClick={(event) => onJump(section.id, event.detail === 0)}
+          onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            onJump(section.id, event.detail === 0);
+          }}
         >
           {section.label}
-        </button>
+        </a>
       ))}
     </nav>
   );
@@ -936,6 +941,14 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   const jumpToSection = (id: string, moveFocus: boolean) => {
     const target = document.getElementById(id);
     if (!target) return;
+    const sectionHash = buildReportSectionHash(id);
+    if (sectionHash) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${window.location.pathname}${window.location.search}${sectionHash}`,
+      );
+    }
     if (moveFocus) {
       const focusTarget = target.querySelector<HTMLElement>('h2') || target;
       if (!focusTarget.hasAttribute('tabindex')) focusTarget.setAttribute('tabindex', '-1');

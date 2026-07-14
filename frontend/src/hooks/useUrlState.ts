@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import L from 'leaflet';
 import type { UserPreferences } from '../app/types';
 import { parseLinkState, buildShareQuery } from '../app/url-state';
+import { buildReportSectionHash, parseReportSectionHash } from '../app/report-sections';
 
 /**
  * Cross-fade between views using the View Transitions API when available.
@@ -173,10 +174,13 @@ export function useSyncUrlEffect(params: {
       : '';
 
     const viewPath = view === 'home' ? '' : view;
+    const reportSectionHash = hasSharedReport
+      ? buildReportSectionHash(parseReportSectionHash(window.location.hash))
+      : '';
     const nextUrl = hasSharedReport
-      ? `/report/${encodeURIComponent(sharedReportToken || '')}`
+      ? `/report/${encodeURIComponent(sharedReportToken || '')}${reportSectionHash}`
       : `/${viewPath}${query ? `?${query}` : ''}`;
-    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${hasSharedReport ? window.location.hash : ''}`;
     if (nextUrl !== currentUrl) {
       if (isApplyingPopStateRef.current || !hasInitializedHistoryRef.current) {
         window.history.replaceState(null, '', nextUrl);

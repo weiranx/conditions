@@ -404,6 +404,8 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
 }
 .ssr-jump-nav::-webkit-scrollbar { display: none; }
 .ssr-jump-chip {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
   padding: 8px 12px;
   border: 1px solid transparent;
@@ -413,6 +415,7 @@ html[data-theme="dark"] .ssr-h-icon.icon-neutral {
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
+  text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
 }

@@ -33,6 +33,7 @@ import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult, RouteLoadingState } from '../../hooks/useRouteAnalysis';
 import type { AppView } from '../../hooks/useUrlState';
+import { parseReportSectionHash } from '../../app/report-sections';
 import { ACTIVITY_PROFILES } from '../../app/activity-profiles';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
@@ -646,21 +647,26 @@ function PlannerViewComponent(props: PlannerViewProps) {
       return;
     }
     if (loading || reportResumeHandledRef.current) return;
-    const scrollToReport = () => {
-      const report = document.getElementById('planner-section-decision');
+    const requestedSectionId = parseReportSectionHash(window.location.hash);
+    const defaultSectionId = 'planner-section-decision';
+    const scrollToSection = (sectionId: string) => {
+      const report = document.getElementById(sectionId);
       if (!report) return false;
       reportResumeHandledRef.current = true;
       report.scrollIntoView({ behavior: 'auto', block: 'start' });
       return true;
     };
-    if (scrollToReport()) return;
+    if (scrollToSection(requestedSectionId || defaultSectionId)) return;
     const root = document.getElementById('planner-main-content');
     if (!root) return;
     const observer = new MutationObserver(() => {
-      if (scrollToReport()) observer.disconnect();
+      if (scrollToSection(requestedSectionId || defaultSectionId)) observer.disconnect();
     });
     observer.observe(root, { childList: true, subtree: true });
-    const timeout = window.setTimeout(() => observer.disconnect(), 2500);
+    const timeout = window.setTimeout(() => {
+      observer.disconnect();
+      if (requestedSectionId) scrollToSection(defaultSectionId);
+    }, 2500);
     return () => {
       observer.disconnect();
       window.clearTimeout(timeout);
