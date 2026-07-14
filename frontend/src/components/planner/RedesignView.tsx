@@ -32,6 +32,7 @@ import type { ElevationForecastBand } from '../../app/types';
 import type { AiFeatureAvailability } from '../../hooks/useAiAvailability';
 import { formatSnowVisionSections } from '../../app/text-utils';
 import { getTemperatureBand } from '../../app/weather-display';
+import { computeFeelsLikeF } from '../../app/planner-helpers';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
@@ -56,10 +57,35 @@ const DANGER_COLORS = [
   'var(--ssr-risk-5)',
 ];
 
+const TEMP_LAPSE_F_PER_1000FT = 3.3;
+const WIND_INCREASE_MPH_PER_1000FT = 2;
+const GUST_INCREASE_MPH_PER_1000FT = 2.5;
+
 function bandRisk(gustMph: number, maxGustMph: number): 'low' | 'watch' | 'high' {
   if (Number.isFinite(gustMph) && gustMph >= maxGustMph) return 'high';
   if (Number.isFinite(gustMph) && gustMph >= maxGustMph * 0.7) return 'watch';
   return 'low';
+}
+
+function projectElevationBandAtHour(
+  band: ElevationForecastBand,
+  point: PlannerViewProps['weatherHourQuickOptions'][number]['point'],
+): ElevationForecastBand {
+  const deltaKft = band.deltaFromObjectiveFt / 1000;
+  const temp = Math.round(Number(point.temp) - deltaKft * TEMP_LAPSE_F_PER_1000FT);
+  const windSpeed = Math.max(0, Math.round(Number(point.wind) + deltaKft * WIND_INCREASE_MPH_PER_1000FT));
+  const windGust = Math.max(
+    windSpeed,
+    Math.round(Number(point.gust) + deltaKft * GUST_INCREASE_MPH_PER_1000FT),
+  );
+
+  return {
+    ...band,
+    temp,
+    feelsLike: computeFeelsLikeF(temp, windSpeed),
+    windSpeed,
+    windGust,
+  };
 }
 
 /* ── Elevation cross-section plot ── */
@@ -201,6 +227,10 @@ function ElevationProfileSection({
   elevationUnitLabel,
   targetElevationForecast,
   targetElevationFt,
+  hourlyOptions,
+  selectedHourIndex,
+  onHourSelect,
+  weatherConditionEmoji,
   formatTempDisplay,
   formatWindDisplay,
   formatElevationDisplay,
@@ -215,6 +245,10 @@ function ElevationProfileSection({
   elevationUnitLabel: string;
   targetElevationForecast: PlannerViewProps['targetElevationForecast'];
   targetElevationFt: number;
+  hourlyOptions: PlannerViewProps['weatherHourQuickOptions'];
+  selectedHourIndex: number;
+  onHourSelect: PlannerViewProps['handleWeatherHourSelect'];
+  weatherConditionEmoji: PlannerViewProps['weatherConditionEmojiValue'];
   formatTempDisplay: PlannerViewProps['formatTempDisplay'];
   formatWindDisplay: PlannerViewProps['formatWindDisplay'];
   formatElevationDisplay: PlannerViewProps['formatElevationDisplay'];
@@ -234,17 +268,23 @@ function ElevationProfileSection({
       }
     : null;
 
-  let profileBands = bands;
+  let profileBandTemplates = bands;
   if (manualTarget) {
     const matchingBandIndex = bands.findIndex((band) => Math.abs(band.elevationFt - manualTarget.elevationFt) < 10);
-    profileBands = matchingBandIndex >= 0
+    profileBandTemplates = matchingBandIndex >= 0
       ? bands.map((band, index) => (index === matchingBandIndex ? manualTarget : band))
       : [...bands, manualTarget].sort((a, b) => a.elevationFt - b.elevationFt);
   }
 
+  const selectedHour = selectedHourIndex >= 0 ? hourlyOptions[selectedHourIndex] : null;
+  const profileBands = selectedHour
+    ? profileBandTemplates.map((band) => projectElevationBandAtHour(band, selectedHour.point))
+    : profileBandTemplates;
+
   const targetBandIndex = manualTarget
     ? profileBands.findIndex((band) => band.label === manualTarget.label && band.elevationFt === manualTarget.elevationFt)
     : -1;
+  const displayedManualTarget = targetBandIndex >= 0 ? profileBands[targetBandIndex] : null;
   const defaultBandIndex = targetBandIndex >= 0 ? targetBandIndex : Math.max(0, profileBands.length - 1);
   const profileKey = profileBands.map((band) => `${band.label}:${band.elevationFt}`).join('|');
   const [selectedIndex, setSelectedIndex] = React.useState(defaultBandIndex);
@@ -284,7 +324,7 @@ function ElevationProfileSection({
           <span>Conditions at</span>
           <strong>{forecastPeriodLabel}</strong>
         </div>
-        <p>Every elevation band uses this same forecast hour.</p>
+        <p>Select an hour below to update every elevation band.</p>
       </div>
 
       <div className="ssr-elev-input-row">
@@ -322,14 +362,14 @@ function ElevationProfileSection({
         </div>
       </div>
 
-      {manualTarget && (
+      {displayedManualTarget && (
         <div className="ssr-elev-target" role="status">
           <Mountain size={17} aria-hidden />
           <div>
             <span>Manual objective elevation</span>
-            <strong>{formatElevationDisplay(manualTarget.elevationFt)} · {formatElevationDeltaDisplay(manualTarget.deltaFromObjectiveFt)} vs mapped elevation</strong>
+            <strong>{formatElevationDisplay(displayedManualTarget.elevationFt)} · {formatElevationDeltaDisplay(displayedManualTarget.deltaFromObjectiveFt)} vs mapped elevation</strong>
           </div>
-          <p>{formatTempDisplay(manualTarget.temp)} · feels {formatTempDisplay(manualTarget.feelsLike)} · gusts {formatWindDisplay(manualTarget.windGust)}</p>
+          <p>{formatTempDisplay(displayedManualTarget.temp)} · feels {formatTempDisplay(displayedManualTarget.feelsLike)} · gusts {formatWindDisplay(displayedManualTarget.windGust)}</p>
         </div>
       )}
 
@@ -360,6 +400,49 @@ function ElevationProfileSection({
           </button>
         ))}
       </div>
+
+      {hourlyOptions.length > 1 && (
+        <div className="ssr-elev-hourly">
+          <div className="ssr-elev-hourly-h">
+            <div>
+              <span>{activeBand.label} over time</span>
+              <strong>Hourly conditions at {formatElevationDisplay(activeBand.elevationFt)}</strong>
+            </div>
+            <p>Choose an hour to update the profile.</p>
+          </div>
+          <div className="ssr-elev-hourly-scroll" role="group" aria-label={`Hourly conditions for ${activeBand.label}`}>
+            {hourlyOptions.map((option, index) => {
+              const hourlyBand = projectElevationBandAtHour(profileBandTemplates[activeIndex], option.point);
+              const risk = bandRisk(hourlyBand.windGust, maxGustMph);
+              const isSelected = index === selectedHourIndex;
+              const precipChance = Number(option.point.precipChance);
+              const compactTime = option.label.replace(/ AM/i, 'a').replace(/ PM/i, 'p');
+              return (
+                <button
+                  key={`${option.value}-${activeBand.elevationFt}`}
+                  type="button"
+                  className={`ssr-elev-hour${isSelected ? ' is-active' : ''} ${risk}`}
+                  aria-pressed={isSelected}
+                  aria-label={`${option.label}, ${option.point.condition}, ${formatTempDisplay(hourlyBand.temp)}, feels like ${formatTempDisplay(hourlyBand.feelsLike)}, gusts ${formatWindDisplay(hourlyBand.windGust)}${Number.isFinite(precipChance) ? `, ${Math.round(precipChance)}% precipitation` : ''}`}
+                  onClick={() => onHourSelect(option.value)}
+                >
+                  <span className="ssr-elev-hour-time">{compactTime}</span>
+                  <span className="ssr-elev-hour-condition" title={option.point.condition}>
+                    <b aria-hidden>{weatherConditionEmoji(option.point.condition, option.point.isDaytime ?? null)}</b>
+                    <small>{option.point.condition}</small>
+                  </span>
+                  <strong>{formatTempDisplay(hourlyBand.temp)}</strong>
+                  <span className="ssr-elev-hour-metrics">
+                    <small>Feels {formatTempDisplay(hourlyBand.feelsLike, { includeUnit: false })}</small>
+                    <small>G {formatWindDisplay(hourlyBand.windGust)}</small>
+                    {Number.isFinite(precipChance) && <small>{Math.round(precipChance)}% precip</small>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className={`ssr-elev-active ${activeRisk}`} aria-live="polite">
         <div className="ssr-elev-active-h">
@@ -536,7 +619,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     formatWindDisplay,
     formatElevationDisplay,
     formatElevationDeltaDisplay,
-    formatForecastPeriodLabel,
     alpineStartTime,
     setAlpineStartTime,
     setMobileMapControlsExpanded,
@@ -1568,15 +1650,16 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             bands={bands}
             maxGustMph={maxGustMph}
             note={safetyData.weather.elevationForecastNote}
-            forecastPeriodLabel={formatForecastPeriodLabel(
-              safetyData.weather.forecastStartTime,
-              safetyData.weather.timezone || null,
-            )}
+            forecastPeriodLabel={weatherForecastPeriodLabel}
             targetElevationInput={targetElevationInput}
             handleTargetElevationChange={handleTargetElevationChange}
             elevationUnitLabel={elevationUnitLabel}
             targetElevationForecast={targetElevationForecast}
             targetElevationFt={targetElevationFt}
+            hourlyOptions={weatherHourQuickOptions}
+            selectedHourIndex={selectedWeatherHourIndex}
+            onHourSelect={handleWeatherHourSelect}
+            weatherConditionEmoji={weatherConditionEmojiValue}
             formatTempDisplay={formatTempDisplay}
             formatWindDisplay={formatWindDisplay}
             formatElevationDisplay={formatElevationDisplay}
