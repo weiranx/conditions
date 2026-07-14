@@ -295,4 +295,48 @@ describe('provider raw-payload caches', () => {
     expect(early.alerts.map((alert) => alert.event)).toEqual(['Early Warning']);
     expect(late.alerts.map((alert) => alert.event)).toEqual(['Late Warning']);
   });
+
+  test('air quality uses future hourly forecasts but rejects targets beyond the provider horizon', async () => {
+    const airQualityPayload = {
+      timezone: 'UTC',
+      hourly: {
+        time: ['2026-07-10T00:00', '2026-07-12T09:00', '2026-07-14T23:00'],
+        us_aqi: [25, 83, 48],
+        pm2_5: [4.2, 22.8, 9.1],
+        pm10: [7.3, 31.4, 15.2],
+        ozone: [41, 62, 50],
+      },
+    };
+    const fetchWithTimeout = jest.fn(async () => okJsonResponse(airQualityPayload));
+    const { fetchAirQualityData } = createAlertsService({ fetchWithTimeout });
+
+    const future = await fetchAirQualityData(
+      46.123456,
+      -121.654321,
+      '2026-07-12T09:00:00Z',
+      {},
+    );
+    const outsideHorizon = await fetchAirQualityData(
+      46.123456,
+      -121.654321,
+      '2026-07-18T09:00:00Z',
+      {},
+    );
+
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+    expect(fetchWithTimeout.mock.calls[0][0]).toContain('forecast_days=7');
+    expect(future).toMatchObject({
+      status: 'ok',
+      usAqi: 83,
+      category: 'Moderate',
+      pm25: 22.8,
+      validTime: '2026-07-12T09:00Z',
+      dataType: 'modeled_forecast',
+    });
+    expect(outsideHorizon).toMatchObject({
+      status: 'not_applicable_future_date',
+      usAqi: null,
+    });
+    expect(outsideHorizon.note).toMatch(/outside the provider forecast horizon/i);
+  });
 });

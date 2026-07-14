@@ -109,7 +109,7 @@ export function buildSourceFreshnessDisplay(
           label: 'Air Quality',
           issued: airQualityFreshnessTimestamp,
           staleHours: 8,
-          displayValue: airQualityFutureNotApplicable ? 'Current-day only' : undefined,
+          displayValue: airQualityFutureNotApplicable ? 'Outside forecast' : undefined,
           stateOverride: airQualityFutureNotApplicable ? ('fresh' as const) : undefined,
         },
         {

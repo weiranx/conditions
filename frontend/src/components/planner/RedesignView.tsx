@@ -2395,12 +2395,12 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 Air Quality
               </h2>
               <span className={`ssr-pill ${airQualityFutureNotApplicable ? 'go' : airQualityPillClassFn(safetyData.airQuality?.usAqi)}`}>
-                {airQualityFutureNotApplicable ? 'Current-day only' : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}
+                {airQualityFutureNotApplicable ? 'Forecast unavailable' : `AQI ${Number.isFinite(Number(safetyData.airQuality?.usAqi)) ? Math.round(Number(safetyData.airQuality?.usAqi)) : 'N/A'}`}
               </span>
             </div>
             <div className="ssr-card-b">
               {airQualityFutureNotApplicable ? (
-                <p className="ssr-muted">Air quality readings are current-day only and don’t apply to this future window.</p>
+                <p className="ssr-muted">Modeled air quality is not available for this travel window.</p>
               ) : (() => {
                 const aqi = Number(safetyData.airQuality?.usAqi);
                 const hasAqi = Number.isFinite(aqi);

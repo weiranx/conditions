@@ -4,6 +4,7 @@ const { createCache, normalizeCoordKey } = require('./cache');
 
 const airQualityCache = createCache({ name: 'air-quality', ttlMs: 30 * 60 * 1000, staleTtlMs: 30 * 60 * 1000, maxEntries: 100 });
 const ACTIVE_ALERTS_CACHE_TTL_MS = 2 * 60 * 1000;
+const AIR_QUALITY_SAMPLE_TOLERANCE_MS = 90 * 60 * 1000;
 
 const ALERT_SEVERITY_RANK = {
   unknown: 0,
@@ -284,7 +285,7 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     const cacheKey = normalizeCoordKey(lat, lon);
     const aqiJson = await airQualityCache.getOrFetch(cacheKey, async () => {
       const aqiRes = await fetchWithTimeout(
-        `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&timezone=UTC`,
+        `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone&forecast_days=7&timezone=UTC`,
         fetchOptions,
       );
       if (!aqiRes.ok) {
@@ -303,6 +304,13 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     const timeIdx = findClosestTimeIndex(timeArray, targetTimeMs);
     if (timeIdx < 0) {
       return createUnavailableAirQualityData('no_data');
+    }
+    const selectedTimeMs = parseIsoTimeToMs(timeArray[timeIdx]);
+    if (selectedTimeMs === null || Math.abs(selectedTimeMs - targetTimeMs) > AIR_QUALITY_SAMPLE_TOLERANCE_MS) {
+      return {
+        ...createUnavailableAirQualityData('not_applicable_future_date'),
+        note: 'Modeled air-quality forecast is unavailable outside the provider forecast horizon.',
+      };
     }
 
     const usAqi = Number(hourly?.us_aqi?.[timeIdx]);

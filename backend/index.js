@@ -20,10 +20,7 @@ const {
   buildPlannedStartIso,
   clampTravelWindowHours,
 } = require('./src/utils/time');
-const {
-  dateKeyInTimeZone,
-  createWeatherDataService,
-} = require('./src/utils/weather-data');
+const { createWeatherDataService } = require('./src/utils/weather-data');
 const {
   createUnavailableAirQualityData,
   createUnavailableAlertsData,
@@ -450,13 +447,6 @@ const safetyHandler = async (req, res) => {
     const airQualityTargetTime =
       selectedForecastPeriod?.startTime ||
       (selectedForecastDate ? `${selectedForecastDate}T12:00:00Z` : new Date().toISOString());
-    const objectiveTimeZone = typeof weatherData?.timezone === 'string' ? weatherData.timezone.trim() : '';
-    const objectiveTodayDate = dateKeyInTimeZone(new Date(), objectiveTimeZone || null);
-    const selectedDateForAirQuality = selectedForecastDate || requestedDate || objectiveTodayDate;
-    const useCurrentDayAirQuality =
-      Boolean(selectedDateForAirQuality)
-      && Boolean(objectiveTodayDate)
-      && selectedDateForAirQuality === objectiveTodayDate;
     const alertTargetTimeIso = buildPlannedStartIso({
       selectedDate: selectedForecastDate || requestedDate || '',
       startClock: requestedStartClock,
@@ -469,12 +459,7 @@ const safetyHandler = async (req, res) => {
     );
     const parallelBatchPromise = Promise.all([
       settle(fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
-      useCurrentDayAirQuality
-        ? settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions))
-        : settle(Promise.resolve({
-            ...createUnavailableAirQualityData('not_applicable_future_date'),
-            note: 'Air quality is current-day only and is not applied to future-date forecasts.',
-          })),
+      settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
       settle(fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
       prefetchedSnowpackPromise
         || settle(fetchSnowpackData(parsedLat, parsedLon, selectedForecastDate, fetchOptions)),
