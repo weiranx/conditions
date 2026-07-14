@@ -409,32 +409,32 @@ const PRODUCT_FEATURE_CONTROLS = [
   },
   {
     key: 'heatRiskDetails',
-    label: 'Heat-risk details',
-    description: 'Shows the detailed heat-risk assessment and terrain guidance module.',
+    label: 'Heat risk',
+    description: 'Controls heat-risk scoring and the detailed heat assessment and terrain guidance module.',
     icon: Gauge,
   },
   {
     key: 'fireRiskDetails',
-    label: 'Fire-risk details',
-    description: 'Shows the detailed fire-weather, wildfire, and smoke guidance module.',
+    label: 'Fire risk',
+    description: 'Controls fire-risk scoring and the detailed fire-weather, wildfire, and smoke guidance module.',
     icon: AlertTriangle,
   },
   {
     key: 'snowpackDetails',
-    label: 'Snowpack details',
-    description: 'Shows observed snow depth, water equivalent, and historical snowpack context.',
+    label: 'Snowpack',
+    description: 'Controls snowpack scoring and the observed depth, water equivalent, and historical context module.',
     icon: Layers,
   },
   {
     key: 'fieldObservations',
     label: 'Field observations',
-    description: 'Shows nearby stations, radar, access, streamflow, and wildfire observations.',
+    description: 'Controls scoring from nearby stations, radar, and streamflow plus their observation details.',
     icon: Activity,
   },
   {
     key: 'airQualityDetails',
-    label: 'Air-quality details',
-    description: 'Shows AQI, pollutant readings, and observation or model context.',
+    label: 'Air quality',
+    description: 'Controls air-quality scoring and the AQI, pollutant, and observation or model context module.',
     icon: Gauge,
   },
   {
@@ -445,14 +445,14 @@ const PRODUCT_FEATURE_CONTROLS = [
   },
   {
     key: 'windLoadingDetails',
-    label: 'Wind-loading details',
-    description: 'Shows transport timing, leeward aspects, and terrain-loading evidence.',
+    label: 'Wind loading',
+    description: 'Controls avalanche wind-loading compound scoring and its transport, aspect, and terrain evidence.',
     icon: Route,
   },
   {
     key: 'daylightTimeline',
-    label: 'Daylight timeline',
-    description: 'Shows planned start and return timing against sunrise and sunset.',
+    label: 'Daylight',
+    description: 'Controls darkness scoring and planned start and return timing against sunrise and sunset.',
     icon: Clock3,
   },
   {
@@ -463,8 +463,8 @@ const PRODUCT_FEATURE_CONTROLS = [
   },
   {
     key: 'weatherContextDetails',
-    label: 'Weather context details',
-    description: 'Shows supporting readings, pressure trends, and visibility context.',
+    label: 'Weather context',
+    description: 'Controls visibility-context scoring and the supporting readings and pressure-trend module.',
     icon: Activity,
   },
   {

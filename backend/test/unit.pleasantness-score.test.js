@@ -161,6 +161,61 @@ test('missing optional AQI lowers confidence without fabricating a comfort penal
   expect(result.factors.some((factor) => factor.factor === 'Air quality')).toBe(false);
 });
 
+test('disabled air quality is excluded from comfort without lowering confidence', () => {
+  const input = {
+    ...idealInput(),
+    airQualityData: { status: 'ok', usAqi: 220, category: 'Very Unhealthy' },
+  };
+  const enabled = calculatePleasantnessScore(input);
+  const disabled = calculatePleasantnessScore({
+    ...input,
+    scoreFeatures: { airQualityDetails: false },
+  });
+
+  expect(enabled.factors.some((factor) => factor.factor === 'Air quality')).toBe(true);
+  expect(disabled.factors.some((factor) => factor.factor === 'Air quality')).toBe(false);
+  expect(disabled.score).toBeGreaterThan(enabled.score);
+  expect(disabled.confidence).toBe(100);
+});
+
+test('disabled weather context removes visibility-risk weighting from comfort', () => {
+  const weatherData = {
+    ...idealInput().weatherData,
+    visibilityRisk: { score: 90 },
+  };
+  const enabled = calculatePleasantnessScore({ ...idealInput(), weatherData });
+  const disabled = calculatePleasantnessScore({
+    ...idealInput(),
+    weatherData,
+    scoreFeatures: { weatherContextDetails: false },
+  });
+  const enabledViews = enabled.factors.find((factor) => factor.factor === 'Views & daylight');
+  const disabledViews = disabled.factors.find((factor) => factor.factor === 'Views & daylight');
+
+  expect(disabledViews.score).toBeGreaterThan(enabledViews.score);
+  expect(disabledViews.message).not.toMatch(/visibility-risk/iu);
+  expect(disabled.score).toBeGreaterThan(enabled.score);
+});
+
+test('disabled daylight removes nighttime weighting from comfort', () => {
+  const weatherData = {
+    ...idealInput().weatherData,
+    isDaytime: false,
+    trend: trend({ isDaytime: false }),
+  };
+  const enabled = calculatePleasantnessScore({ ...idealInput(), weatherData });
+  const disabled = calculatePleasantnessScore({
+    ...idealInput(),
+    weatherData,
+    scoreFeatures: { daylightTimeline: false },
+  });
+  const enabledViews = enabled.factors.find((factor) => factor.factor === 'Views & daylight');
+  const disabledViews = disabled.factors.find((factor) => factor.factor === 'Views & daylight');
+
+  expect(disabledViews.score).toBeGreaterThan(enabledViews.score);
+  expect(disabled.score).toBeGreaterThan(enabled.score);
+});
+
 test('only hours inside the selected travel window affect pleasantness', () => {
   const fullTrend = [
     ...trend({}, 4),

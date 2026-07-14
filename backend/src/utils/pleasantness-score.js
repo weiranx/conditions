@@ -172,7 +172,12 @@ const calculatePleasantnessScore = ({
   weatherData,
   airQualityData,
   selectedTravelWindowHours = null,
+  scoreFeatures = null,
 }) => {
+  const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
+  const airQualityEnabled = scoreFeatureEnabled('airQualityDetails');
+  const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
+  const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
   const requestedHours = clampTravelWindowHours(selectedTravelWindowHours, 12);
   const weatherDescription = String(weatherData?.description || '');
   const trend = Array.isArray(weatherData?.trend)
@@ -258,20 +263,20 @@ const calculatePleasantnessScore = ({
     const coverScore = cloudCoverScore(finiteNumber(row?.cloudCover));
     let rowScore = conditionScore ?? coverScore;
     if (rowScore === null) return null;
-    if (row?.isDaytime === false) rowScore = Math.max(35, rowScore - 25);
+    if (daylightEnabled && row?.isDaytime === false) rowScore = Math.max(35, rowScore - 25);
     return rowScore;
   }).filter(Number.isFinite);
   if (viewRows.length === 0) {
     let pointViewScore = conditionViewScore(weatherDescription)
       ?? cloudCoverScore(finiteNumber(weatherData?.cloudCover));
-    if (pointViewScore !== null && weatherData?.isDaytime === false) {
+    if (daylightEnabled && pointViewScore !== null && weatherData?.isDaytime === false) {
       pointViewScore = Math.max(35, pointViewScore - 25);
     }
     if (pointViewScore !== null) viewRows.push(pointViewScore);
   }
 
   let viewsScore = combineWindowScores(viewRows);
-  const visibilityRisk = finiteNumber(weatherData?.visibilityRisk?.score);
+  const visibilityRisk = weatherContextEnabled ? finiteNumber(weatherData?.visibilityRisk?.score) : null;
   if (visibilityRisk !== null) {
     const visibilityComfort = clamp(100 - visibilityRisk);
     viewsScore = viewsScore === null
@@ -334,7 +339,7 @@ const calculatePleasantnessScore = ({
     },
     {
       factor: 'Air quality',
-      score: String(airQualityData?.status || '').toLowerCase() === 'not_applicable_future_date'
+      score: !airQualityEnabled || String(airQualityData?.status || '').toLowerCase() === 'not_applicable_future_date'
         ? null
         : scoreOnCurve(finiteNumber(airQualityData?.usAqi), AIR_QUALITY_CURVE),
       weight: PLEASANTNESS_CONFIG.weights.airQuality,
@@ -414,7 +419,8 @@ const calculatePleasantnessScore = ({
   const expectedTrendHours = Math.min(requestedHours, 12);
   const trendCoverage = expectedTrendHours > 0 ? Math.min(1, trend.length / expectedTrendHours) : 1;
   const trendPenalty = trend.length === 0 ? 15 : Math.round((1 - trendCoverage) * 10);
-  const confidence = clamp(Math.round(availableWeight - trendPenalty));
+  const disabledOptionalWeight = airQualityEnabled ? 0 : PLEASANTNESS_CONFIG.weights.airQuality;
+  const confidence = clamp(Math.round(availableWeight + disabledOptionalWeight - trendPenalty));
   const label = labelForScore(score);
   const limiters = factors.filter((factor) => factor.score < 85).slice(0, 2).map((factor) => factor.factor.toLowerCase());
   const summary = limiters.length > 0

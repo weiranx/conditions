@@ -69,7 +69,7 @@ const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable } = require('./src/utils/ai-client');
-const { initializeFeatureFlags, isFeatureEnabled } = require('./src/utils/feature-flags');
+const { getFeatureFlags, initializeFeatureFlags } = require('./src/utils/feature-flags');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
@@ -592,6 +592,7 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
     });
 
+    const scoreFeatures = getFeatureFlags();
     const analysis = calculateSafetyScore({
       weatherData,
       avalancheData,
@@ -607,12 +608,13 @@ const safetyHandler = async (req, res) => {
       solarData,
       selectedStartClock: requestedStartClock,
       selectedTravelWindowHours: requestedTravelWindowHours,
-      includeAvalanche: isFeatureEnabled('avalancheDetails'),
+      scoreFeatures,
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData,
       airQualityData,
       selectedTravelWindowHours: requestedTravelWindowHours,
+      scoreFeatures,
     });
     const todayDate = new Date().toISOString().slice(0, 10);
     const responseGeneratedAt = new Date().toISOString();
@@ -695,6 +697,7 @@ const safetyHandler = async (req, res) => {
     });
     const safeTrailStatus = safeTerrainCondition?.label || trailStatus || "⚠️ Data Partially Unavailable";
 
+    const scoreFeatures = getFeatureFlags();
     const analysis = calculateSafetyScore({
       weatherData: safeWeatherData,
       avalancheData: safeAvalancheData,
@@ -709,12 +712,13 @@ const safetyHandler = async (req, res) => {
       solarData,
       selectedStartClock: requestedStartClock,
       selectedTravelWindowHours: requestedTravelWindowHours,
-      includeAvalanche: isFeatureEnabled('avalancheDetails'),
+      scoreFeatures,
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData: safeWeatherData,
       airQualityData: safeAirQualityData,
       selectedTravelWindowHours: requestedTravelWindowHours,
+      scoreFeatures,
     });
 
     const fallbackGeneratedAt = new Date().toISOString();

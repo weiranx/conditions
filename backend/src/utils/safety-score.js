@@ -3,6 +3,7 @@ const { computeFeelsLikeF } = require('./weather-normalizers');
 const { parseWindMph } = require('./wind');
 const { clampTravelWindowHours, parseClockToMinutes, parseIsoClockMinutes } = require('./time');
 const { normalizeAlertSeverity } = require('./alerts');
+const { deriveTerrainCondition } = require('./terrain-condition');
 
 // --- Scoring Config: all thresholds, group scales, tier definitions ---
 // scoreVersion is stamped onto every result so logged scores stay comparable
@@ -255,11 +256,22 @@ const calculateSafetyScore = ({
   solarData,
   selectedStartClock,
   selectedTravelWindowHours = null,
+  scoreFeatures = null,
   includeAvalanche = true,
 }) => {
   const T = SCORING_CONFIG.thresholds;
   const explanations = [];
   const factors = [];
+  const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
+  const avalancheEnabled = includeAvalanche && scoreFeatureEnabled('avalancheDetails');
+  const airQualityEnabled = scoreFeatureEnabled('airQualityDetails');
+  const fireRiskEnabled = scoreFeatureEnabled('fireRiskDetails');
+  const heatRiskEnabled = scoreFeatureEnabled('heatRiskDetails');
+  const snowpackEnabled = scoreFeatureEnabled('snowpackDetails');
+  const fieldObservationsEnabled = scoreFeatureEnabled('fieldObservations');
+  const windLoadingEnabled = scoreFeatureEnabled('windLoadingDetails');
+  const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
+  const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
 
   const mapHazardToGroup = (hazard) => {
     const normalized = String(hazard || '').toLowerCase();
@@ -287,20 +299,20 @@ const calculateSafetyScore = ({
   const tempF = parseFloat(weatherData?.temp);
   const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
   const isDaytime = weatherData?.isDaytime;
-  const visibilityRiskScoreRaw = Number(weatherData?.visibilityRisk?.score);
+  const visibilityRiskScoreRaw = weatherContextEnabled ? Number(weatherData?.visibilityRisk?.score) : Number.NaN;
   const visibilityRiskScore = Number.isFinite(visibilityRiskScoreRaw) ? visibilityRiskScoreRaw : null;
   const visibilityRiskLevel = String(weatherData?.visibilityRisk?.level || '').trim();
-  const visibilityActiveHoursRaw = Number(weatherData?.visibilityRisk?.activeHours);
+  const visibilityActiveHoursRaw = weatherContextEnabled ? Number(weatherData?.visibilityRisk?.activeHours) : Number.NaN;
   const visibilityActiveHours = Number.isFinite(visibilityActiveHoursRaw) ? visibilityActiveHoursRaw : null;
-  const radarEchoDetected = localConditionsData?.radar?.echoDetected === true;
-  const observedRain24hIn = Number(localConditionsData?.radar?.rain24hIn);
-  const streamflowForecast = localConditionsData?.streamflow?.forecast || null;
+  const radarEchoDetected = fieldObservationsEnabled && localConditionsData?.radar?.echoDetected === true;
+  const observedRain24hIn = fieldObservationsEnabled ? Number(localConditionsData?.radar?.rain24hIn) : Number.NaN;
+  const streamflowForecast = fieldObservationsEnabled ? localConditionsData?.streamflow?.forecast || null : null;
   const streamPeakFlowCfs = Number(streamflowForecast?.peakFlowCfs);
-  const currentStreamflowCfs = Number(localConditionsData?.streamflow?.dischargeCfs);
-  const observedStation = localConditionsData?.weatherObservation || null;
+  const currentStreamflowCfs = fieldObservationsEnabled ? Number(localConditionsData?.streamflow?.dischargeCfs) : Number.NaN;
+  const observedStation = fieldObservationsEnabled ? localConditionsData?.weatherObservation || null : null;
 
   const normalizedRisk = String(avalancheData?.risk || '').toLowerCase();
-  const avalancheRelevant = includeAvalanche && avalancheData?.relevant !== false;
+  const avalancheRelevant = avalancheEnabled && avalancheData?.relevant !== false;
   const avalancheUnknown = avalancheRelevant
     && Boolean(avalancheData?.dangerUnknown || normalizedRisk.includes('unknown') || normalizedRisk.includes('no forecast'));
   const avalancheDangerLevel = Number(avalancheData?.dangerLevel);
@@ -332,7 +344,7 @@ const calculateSafetyScore = ({
   // Used both as a standalone route-condition factor and to scale the
   // "avalanche unknown" penalty when a center is closed/out of season.
   const snowpackMaxOf = (field) => {
-    if (!snowpackData || typeof snowpackData !== 'object') return null;
+    if (!snowpackEnabled || !snowpackData || typeof snowpackData !== 'object') return null;
     const vals = [snowpackData.snotel, snowpackData.nohrsc, snowpackData.cdec]
       .map((src) => Number(src?.[field]))
       .filter(Number.isFinite);
@@ -340,14 +352,14 @@ const calculateSafetyScore = ({
   };
   const snowpackMaxDepthIn = snowpackMaxOf('snowDepthIn');
   const snowpackMaxSweIn = snowpackMaxOf('sweIn');
-  const snowpackOverall = snowpackData?.historical?.overall || null;
+  const snowpackOverall = snowpackEnabled ? snowpackData?.historical?.overall || null : null;
   const snowpackPercentOfAverage = Number(snowpackOverall?.percentOfAverage);
   const snowpackAboveAverage = snowpackOverall?.status === 'above_average'
     && Number.isFinite(snowpackPercentOfAverage)
     && snowpackPercentOfAverage >= T.snowpack.aboveAveragePercent;
   const snowpackDeep = (Number.isFinite(snowpackMaxDepthIn) && snowpackMaxDepthIn >= T.snowpack.deepDepthIn)
     || (Number.isFinite(snowpackMaxSweIn) && snowpackMaxSweIn >= T.snowpack.deepSweIn);
-  const snowpackHasData = snowpackData && typeof snowpackData === 'object'
+  const snowpackHasData = snowpackEnabled && snowpackData && typeof snowpackData === 'object'
     && (Number.isFinite(snowpackMaxDepthIn) || Number.isFinite(snowpackMaxSweIn) || Number.isFinite(snowpackPercentOfAverage));
   const snowpackStrongSignal = snowpackAboveAverage || snowpackDeep;
   const snowpackMinimalSignal = snowpackHasData && !snowpackStrongSignal
@@ -363,7 +375,7 @@ const calculateSafetyScore = ({
 
   const usAqi = Number(airQualityData?.usAqi);
   const airQualityStatus = String(airQualityData?.status || '').toLowerCase();
-  const airQualityRelevantForScoring = airQualityStatus !== 'not_applicable_future_date';
+  const airQualityRelevantForScoring = airQualityEnabled && airQualityStatus !== 'not_applicable_future_date';
   const aqiCategory = String(airQualityData?.category || 'Unknown');
 
   const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
@@ -621,7 +633,7 @@ const calculateSafetyScore = ({
         weatherData?.visibilityRisk?.source || 'Derived weather visibility model',
       );
     }
-  } else if (/fog|smoke|haze/.test(weatherDescription)) {
+  } else if (weatherContextEnabled && /fog|smoke|haze/.test(weatherDescription)) {
     applyFactor('Visibility', T.visibilityDescriptionImpact, `Reduced-visibility weather in forecast ("${weatherData.description}").`, 'NOAA short forecast');
   }
 
@@ -651,7 +663,7 @@ const calculateSafetyScore = ({
     applyFactor('Cold', coldDurationImpact, coldLabel, 'NOAA hourly trend');
   }
 
-  const heatRiskLevel = Number(heatRiskData?.level);
+  const heatRiskLevel = heatRiskEnabled ? Number(heatRiskData?.level) : Number.NaN;
   if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 4) {
     applyFactor('Heat', T.heat.level4Impact, `Heat risk is ${heatRiskData?.label || 'Extreme'} with significant heat-stress potential in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 3) {
@@ -660,9 +672,9 @@ const calculateSafetyScore = ({
     applyFactor('Heat', T.heat.level2Impact, `Heat risk is ${heatRiskData?.label || 'Elevated'} in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 1) {
     applyFactor('Heat', T.heat.level1Impact, `Heat risk is ${heatRiskData?.label || 'Caution'}; monitor pace and hydration.`, heatRiskData?.source || 'Heat risk synthesis');
-  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.peakFeelsLike) {
+  } else if (heatRiskEnabled && Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.peakFeelsLike) {
     applyFactor('Heat', T.heat.peakImpact, `Peak apparent temperature in the window reaches ${Math.round(trendMaxFeelsLike)}F.`, 'NOAA temp + humidity');
-  } else if (Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.warmFeelsLike && weightedHeatExposureHours >= T.heat.warmDurHours) {
+  } else if (heatRiskEnabled && Number.isFinite(trendMaxFeelsLike) && trendMaxFeelsLike >= T.heat.warmFeelsLike && weightedHeatExposureHours >= T.heat.warmDurHours) {
     applyFactor('Heat', T.heat.warmImpact, `${heatExposureHours}/${trend.length} trend hours are warm (>=85F apparent).`, 'NOAA hourly trend');
   }
 
@@ -697,13 +709,20 @@ const calculateSafetyScore = ({
   // input is present and confidence is not low. Captured here as a surface
   // factor; diminishing returns within the weather group prevent double-count
   // with the rainfall factors above.
-  const terrainImpactLevel = String(terrainConditionData?.impact || '').toLowerCase();
-  const terrainConfidence = String(terrainConditionData?.confidence || '').toLowerCase();
-  if (terrainConditionData && typeof terrainConditionData === 'object' && terrainConfidence !== 'low') {
+  const terrainConditionForScoring = !terrainConditionData || snowpackEnabled
+    ? terrainConditionData
+    : deriveTerrainCondition(weatherData, null, rainfallData, {
+      solarData,
+      selectedStartClock,
+      selectedTravelWindowHours,
+    });
+  const terrainImpactLevel = String(terrainConditionForScoring?.impact || '').toLowerCase();
+  const terrainConfidence = String(terrainConditionForScoring?.confidence || '').toLowerCase();
+  if (terrainConditionForScoring && typeof terrainConditionForScoring === 'object' && terrainConfidence !== 'low') {
     if (terrainImpactLevel === 'high') {
-      applyFactor('Surface Conditions', T.surface.terrainHighImpact, `Trail surface is hazardous (${terrainConditionData.label || 'high-impact surface'}). ${terrainConditionData.recommendedTravel || ''}`.trim(), terrainConditionData.source || 'Terrain condition synthesis');
+      applyFactor('Surface Conditions', T.surface.terrainHighImpact, `Trail surface is hazardous (${terrainConditionForScoring.label || 'high-impact surface'}). ${terrainConditionForScoring.recommendedTravel || ''}`.trim(), terrainConditionForScoring.source || 'Terrain condition synthesis');
     } else if (terrainImpactLevel === 'moderate') {
-      applyFactor('Surface Conditions', T.surface.terrainModerateImpact, `Trail surface is variable (${terrainConditionData.label || 'moderate-impact surface'}).`, terrainConditionData.source || 'Terrain condition synthesis');
+      applyFactor('Surface Conditions', T.surface.terrainModerateImpact, `Trail surface is variable (${terrainConditionForScoring.label || 'moderate-impact surface'}).`, terrainConditionForScoring.source || 'Terrain condition synthesis');
     }
   }
 
@@ -730,7 +749,7 @@ const calculateSafetyScore = ({
     applyFactor('Winter Weather', T.storm.expectedSnowLowImpact, `Expected snowfall in selected travel window is ${expectedSnowWindowIn.toFixed(1)} in.`, rainfallData?.source || 'Open-Meteo precipitation forecast');
   }
 
-  if (isDaytime === false && !isNightBeforeSunrise) {
+  if (daylightEnabled && isDaytime === false && !isNightBeforeSunrise) {
     applyFactor('Darkness', T.darknessImpact, 'Selected forecast period is nighttime, reducing navigation margin and terrain visibility.', 'NOAA isDaytime flag');
   }
 
@@ -826,7 +845,7 @@ const calculateSafetyScore = ({
     }
   }
 
-  const fireLevel = fireRiskData?.level != null ? Number(fireRiskData.level) : null;
+  const fireLevel = fireRiskEnabled && fireRiskData?.level != null ? Number(fireRiskData.level) : null;
   if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
     applyFactor('Fire Danger', T.fire.level4, 'Extreme fire-weather/alert signal for this objective window.', fireRiskData?.source || 'Fire risk synthesis');
   } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
@@ -854,7 +873,7 @@ const calculateSafetyScore = ({
   const avalancheConsiderable = avalancheRelevant && Number.isFinite(avalancheDangerLevel) && avalancheDangerLevel >= 3;
   const avalancheModerate = avalancheRelevant && Number.isFinite(avalancheDangerLevel) && avalancheDangerLevel >= 2;
 
-  if (avalancheConsiderable && hasWindFactor) {
+  if (windLoadingEnabled && avalancheConsiderable && hasWindFactor) {
     applyFactor('Avalanche Wind Loading', T.crossGroup.avalancheWindLoading, 'Wind loading compounds avalanche hazard at considerable or higher danger.', 'Cross-group interaction');
   }
   if (avalancheModerate && hasStormOrWinterWeather) {
@@ -1044,7 +1063,7 @@ const calculateSafetyScore = ({
   } else if (forecastLeadHours !== null && forecastLeadHours >= 24) {
     applyConfidencePenalty(4, `Selected start is ${Math.round(forecastLeadHours)}h ahead (lower forecast certainty).`);
   }
-  if (!fireRiskData || fireRiskData.status === 'unavailable') {
+  if (fireRiskEnabled && (!fireRiskData || fireRiskData.status === 'unavailable')) {
     applyConfidencePenalty(3, 'Fire risk synthesis unavailable.');
   }
 
@@ -1064,8 +1083,8 @@ const calculateSafetyScore = ({
     (rainfallData?.status === 'ok' || rainfallData?.status === 'partial' || rainfallData?.status === 'no_data') && rainfallData?.fallbackMode !== 'zeroed_totals'
       ? 'Open-Meteo precipitation history/forecast'
       : null,
-    heatRiskData?.status === 'ok' ? 'Heat risk synthesis (forecast + lower-terrain adjustment)' : null,
-    fireRiskData?.status === 'ok' ? 'Fire risk synthesis (NOAA + NWS + AQI)' : null,
+    heatRiskEnabled && heatRiskData?.status === 'ok' ? 'Heat risk synthesis (forecast + lower-terrain adjustment)' : null,
+    fireRiskEnabled && fireRiskData?.status === 'ok' ? 'Fire risk synthesis (NOAA + NWS + AQI)' : null,
   ].filter(Boolean);
 
   // 5-tier display with confidence-modulated tier selection
