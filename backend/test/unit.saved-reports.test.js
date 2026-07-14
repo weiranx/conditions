@@ -130,6 +130,7 @@ test('creates cryptographically random URL-safe share tokens', () => {
 
 test('emails a validated report only to the verified signed-in account address', async () => {
   const sendReportEmail = jest.fn().mockResolvedValue({ id: 'email-123' });
+  const query = jest.fn().mockResolvedValue({ rows: [{ exists: true }] });
   const user = {
     id: USER_ID,
     email: 'climber@example.com',
@@ -137,21 +138,44 @@ test('emails a validated report only to the verified signed-in account address',
     emailVerified: true,
   };
   const response = await request(makeApp({
+    query,
     user,
+    emailService: { available: true, sendReportEmail },
+  }))
+    .post('/api/account/reports/email')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT, shareToken: SHARE_TOKEN });
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ message: 'Report sent to climber@example.com.' });
+  expect(sendReportEmail).toHaveBeenCalledWith(expect.objectContaining({
+    report: SNAPSHOT,
+    shareToken: SHARE_TOKEN,
+    to: 'climber@example.com',
+    displayName: 'Avery',
+    deliveryKey: expect.stringMatching(new RegExp(`^${USER_ID}/[a-f0-9]{24}/\\d+$`, 'u')),
+  }));
+  expect(query).toHaveBeenCalledWith(expect.stringContaining('FROM saved_reports'), [SHARE_TOKEN]);
+});
+
+test('requires a saved share URL before emailing a report', async () => {
+  const sendReportEmail = jest.fn();
+  const response = await request(makeApp({
+    user: {
+      id: USER_ID,
+      email: 'climber@example.com',
+      displayName: 'Avery',
+      emailVerified: true,
+    },
     emailService: { available: true, sendReportEmail },
   }))
     .post('/api/account/reports/email')
     .set('Cookie', 'bc_session=test-session')
     .send({ report: SNAPSHOT });
 
-  expect(response.status).toBe(200);
-  expect(response.body).toEqual({ message: 'Report sent to climber@example.com.' });
-  expect(sendReportEmail).toHaveBeenCalledWith(expect.objectContaining({
-    report: SNAPSHOT,
-    to: 'climber@example.com',
-    displayName: 'Avery',
-    deliveryKey: expect.stringMatching(new RegExp(`^${USER_ID}/[a-f0-9]{24}/\\d+$`, 'u')),
-  }));
+  expect(response.status).toBe(400);
+  expect(response.body.code).toBe('REPORT_SHARE_URL_REQUIRED');
+  expect(sendReportEmail).not.toHaveBeenCalled();
 });
 
 test('requires a verified account email before sending a report', async () => {

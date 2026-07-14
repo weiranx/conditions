@@ -1139,6 +1139,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           onRequestAiBrief={handleRequestAiBriefAction}
           onRequestReportEmailAccess={props.requestReportEmailAccess}
           reportSnapshot={props.reportSnapshot}
+          reportShareToken={props.reportShareToken}
           rawReportPayload={rawReportPayload}
           reportChatMessages={props.reportChatMessages}
           reportChatSessionKey={props.reportChatSessionKey}

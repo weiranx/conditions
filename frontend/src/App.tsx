@@ -2491,6 +2491,7 @@ function App() {
       restoredReportSource={restoredReportSource}
       reportSnapshot={reportSnapshot}
       activeSavedReportId={activeSavedReportId}
+      reportShareToken={sharedReportToken || activeSavedReportShareToken}
       requestReportEmailAccess={requestReportEmailAccess}
       // Navigation
       navigateToView={navigateToView}

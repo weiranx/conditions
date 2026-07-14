@@ -101,6 +101,7 @@ export interface DashboardSummaryCardProps {
   onRequestAiBrief: () => void;
   onRequestReportEmailAccess: () => boolean;
   reportSnapshot: PersistedReport | null;
+  reportShareToken: string | null;
   rawReportPayload: string;
   reportChatMessages: PersistedReportChatMessage[];
   reportChatSessionKey: number;
@@ -136,6 +137,7 @@ export function DashboardSummaryCard({
   onRequestAiBrief,
   onRequestReportEmailAccess,
   reportSnapshot,
+  reportShareToken,
   rawReportPayload,
   reportChatMessages,
   reportChatSessionKey,
@@ -336,10 +338,15 @@ export function DashboardSummaryCard({
       setEmailMessage('Verify your account email before sending reports.');
       return;
     }
+    if (!reportShareToken) {
+      setEmailState('error');
+      setEmailMessage('Wait for this report to finish saving before emailing it.');
+      return;
+    }
     setEmailState('sending');
     setEmailMessage('');
     try {
-      const message = await sendReportEmail(reportSnapshot);
+      const message = await sendReportEmail(reportSnapshot, reportShareToken);
       setEmailState('sent');
       setEmailMessage(message);
       if (emailStatusTimer.current !== null) window.clearTimeout(emailStatusTimer.current);

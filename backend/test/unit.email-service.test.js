@@ -61,6 +61,7 @@ describe('transactional email service', () => {
 
     await service.sendReportEmail({
       deliveryKey: 'user-1/report-1/12345',
+      shareToken: 'aB3dE5fG7hJ9kL2mN4pQ6rSt',
       to: 'climber@example.com',
       displayName: '<Avery>',
       report: {
@@ -138,7 +139,8 @@ describe('transactional email service', () => {
     expect(message.text).toContain('2°C, wind 19 kph, gusts 45 kph');
     expect(message.text).toContain('COMPLETE REPORT');
     expect(message.text).toContain('A long snowpack narrative that must remain complete, including the final sentence.');
-    expect(message.html).toContain('https://conditions.example.com/');
+    expect(message.html).toContain('https://conditions.example.com/report/aB3dE5fG7hJ9kL2mN4pQ6rSt');
+    expect(message.text).toContain('https://conditions.example.com/report/aB3dE5fG7hJ9kL2mN4pQ6rSt');
     expect(options).toEqual({ idempotencyKey: 'report-email/user-1/report-1/12345' });
   });
 
@@ -153,6 +155,7 @@ describe('transactional email service', () => {
 
     await service.sendReportEmail({
       deliveryKey: 'user-1/report-2/12345',
+      shareToken: 'aB3dE5fG7hJ9kL2mN4pQ6rSt',
       to: 'climber@example.com',
       report: {
         plan: { objectiveName: 'Weather-only objective', forecastDate: '2026-07-15', alpineStartTime: '06:00' },

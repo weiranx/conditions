@@ -95,11 +95,11 @@ export async function updateSavedReport(reportId: string, report: PersistedRepor
   requireReportIdentity(payload);
 }
 
-export async function sendReportEmail(report: PersistedReport): Promise<string> {
+export async function sendReportEmail(report: PersistedReport, shareToken: string): Promise<string> {
   const { response, payload } = await fetchApi('/api/account/reports/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ report }),
+    body: JSON.stringify({ report, shareToken }),
   });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not send this report by email.'));
   const message = (payload as { message?: unknown } | null)?.message;

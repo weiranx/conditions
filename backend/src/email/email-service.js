@@ -94,13 +94,13 @@ const createEmailService = ({
     });
   };
 
-  const sendReportEmail = ({ deliveryKey, report, to, displayName }) => {
+  const sendReportEmail = ({ deliveryKey, report, shareToken, to, displayName }) => {
     if (!normalizedBaseUrl) {
       const error = new Error('Email links are not configured.');
       error.code = 'EMAIL_SERVICE_UNAVAILABLE';
       throw error;
     }
-    const actionUrl = normalizedBaseUrl.toString();
+    const actionUrl = new URL(`/report/${encodeURIComponent(shareToken)}`, normalizedBaseUrl).toString();
     return send({
       to,
       template: buildReportEmail({ displayName, report, actionUrl }),

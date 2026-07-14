@@ -194,6 +194,7 @@ const registerSavedReportRoutes = ({
   app.post('/api/account/reports/email', reportEmailLimiter, async (req, res) => {
     const user = await requireUser(req, res);
     if (!user) return;
+    if (!ensureDatabase(res)) return;
     if (!user.emailVerified) {
       return res.status(403).json({
         error: 'Verify your account email before sending reports.',
@@ -205,12 +206,29 @@ const registerSavedReportRoutes = ({
     }
     try {
       const normalized = normalizeSavedReport(req.body?.report);
+      const shareToken = String(req.body?.shareToken || '');
+      if (!SHARE_TOKEN_PATTERN.test(shareToken)) {
+        return res.status(400).json({
+          error: 'Wait for this report to finish saving before emailing it.',
+          code: 'REPORT_SHARE_URL_REQUIRED',
+        });
+      }
+      const sharedReport = await database.query(`
+        SELECT 1
+        FROM saved_reports
+        WHERE share_token = $1
+        LIMIT 1
+      `, [shareToken]);
+      if (!sharedReport.rows[0]) {
+        return res.status(404).json({ error: 'Shared report not found.' });
+      }
       const report = JSON.parse(normalized.serialized);
       const reportKey = createHash('sha256').update(normalized.serialized).digest('hex').slice(0, 24);
       const deliveryKey = `${user.id}/${reportKey}/${Math.floor(Date.now() / 60000)}`;
       await emailService.sendReportEmail({
         deliveryKey,
         report,
+        shareToken,
         to: user.email,
         displayName: user.displayName,
       });
