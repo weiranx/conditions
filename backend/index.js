@@ -834,16 +834,18 @@ registerSavedReportRoutes({
   tierService: accountTierService,
   reportUsageService: reportUsageLimitService,
 });
-registerObjectiveWatchRoutes({
-  app,
-  database,
-  accountService,
-});
 const objectiveWatchChecker = createObjectiveWatchChecker({
   database,
   invokeSafetyHandler,
   emailService,
   log: logger,
+});
+registerObjectiveWatchRoutes({
+  app,
+  database,
+  accountService,
+  tierService: accountTierService,
+  checker: objectiveWatchChecker,
 });
 registerObjectiveWatchCheckRoute({
   app,

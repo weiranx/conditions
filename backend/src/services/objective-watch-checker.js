@@ -10,6 +10,29 @@ const FORTY_EIGHT_HOURS_MS = 48 * ONE_HOUR_MS;
 const PLAN_DATE_EXPIRY_GRACE_MS = 14 * ONE_HOUR_MS;
 const CHANGE_RETENTION_DAYS = 90;
 
+const ACCOUNT_TIER_JOIN = `
+  LEFT JOIN LATERAL (
+    SELECT CASE
+      WHEN LOWER(account_subscription.plan_key) = 'premium'
+        OR LEFT(LOWER(account_subscription.plan_key), 8) = 'premium_'
+      THEN 'premium'
+      ELSE 'free'
+    END AS tier_key
+    FROM subscriptions account_subscription
+    WHERE account_subscription.user_id = watches.user_id
+      AND LOWER(account_subscription.status) IN ('active', 'trialing')
+      AND (account_subscription.current_period_end IS NULL OR account_subscription.current_period_end > NOW())
+      AND (
+        (LOWER(account_subscription.provider) = 'admin' AND LOWER(account_subscription.plan_key) IN ('free', 'premium'))
+        OR LOWER(account_subscription.plan_key) = 'premium'
+        OR LEFT(LOWER(account_subscription.plan_key), 8) = 'premium_'
+      )
+    ORDER BY CASE WHEN LOWER(account_subscription.provider) = 'admin' THEN 0 ELSE 1 END,
+             account_subscription.updated_at DESC
+    LIMIT 1
+  ) account_tier ON TRUE
+`;
+
 const finiteNumber = (value) => {
   if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
@@ -181,11 +204,13 @@ const createObjectiveWatchChecker = ({
       FROM objective_watch_events events
       JOIN objective_watches watches ON watches.id = events.watch_id
       JOIN users ON users.id = watches.user_id
+      ${ACCOUNT_TIER_JOIN}
       WHERE events.notification_status IN ('pending', 'failed')
         AND events.notification_attempts < 3
         AND watches.notifications_enabled = TRUE
         AND users.email IS NOT NULL
         AND users.email_verified_at IS NOT NULL
+        AND COALESCE(account_tier.tier_key, 'free') = 'premium'
       ORDER BY events.created_at ASC
       LIMIT 20
     `);
@@ -221,7 +246,7 @@ const createObjectiveWatchChecker = ({
     return sent;
   };
 
-  const run = async () => {
+  const run = async ({ watchId = null, userId = null, manual = false } = {}) => {
     if (!database?.configured || typeof database.query !== 'function') {
       const error = new Error('Objective Watch checks require PostgreSQL.');
       error.code = 'DATABASE_UNAVAILABLE';
@@ -247,15 +272,28 @@ const createObjectiveWatchChecker = ({
     const dueResult = await database.query(`
       SELECT watches.id, watches.user_id, watches.title, watches.plan,
              watches.baseline_report, watches.last_snapshot, watches.consecutive_failures,
-             watches.notifications_enabled, users.email, users.display_name, users.email_verified_at
+             watches.notifications_enabled, users.email, users.display_name, users.email_verified_at,
+             COALESCE(account_tier.tier_key, 'free') AS tier_key
       FROM objective_watches watches
       JOIN users ON users.id = watches.user_id
-      WHERE watches.next_check_at IS NOT NULL
-        AND watches.next_check_at <= NOW()
-        AND users.status = 'active'
+      ${ACCOUNT_TIER_JOIN}
+      WHERE users.status = 'active'
+        AND (
+          ($2::uuid IS NOT NULL AND watches.id = $2::uuid AND watches.user_id = $3::uuid)
+          OR (
+            $2::uuid IS NULL
+            AND COALESCE(account_tier.tier_key, 'free') = 'premium'
+            AND (watches.next_check_at IS NULL OR watches.next_check_at <= NOW())
+            AND CASE
+              WHEN watches.plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                THEN (watches.plan->>'forecastDate')::date
+              ELSE NULL
+            END >= ((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC')::date
+          )
+        )
       ORDER BY watches.next_check_at ASC, watches.id ASC
       LIMIT $1
-    `, [Math.min(Math.max(1, Math.round(batchSize)), 500)]);
+    `, [Math.min(Math.max(1, Math.round(batchSize)), 500), manual ? watchId : null, manual ? userId : null]);
 
     const groups = new Map();
     let invalid = 0;
@@ -291,7 +329,8 @@ const createObjectiveWatchChecker = ({
         for (const watch of group) {
           const previousPayload = watch.last_snapshot || watch.baseline_report?.safetyData || null;
           const change = buildMeaningfulChange(previousPayload, result.payload, checkedAt);
-          const nextCheckAt = calculateNextCheckAt(watch.plan, checkedAt);
+          const premium = watch.tier_key === 'premium';
+          const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt) : null;
           await database.query(`
             UPDATE objective_watches
             SET last_checked_at = $2, next_check_at = $3,
@@ -308,7 +347,7 @@ const createObjectiveWatchChecker = ({
           checked += 1;
 
           if (change) {
-            const notificationStatus = watch.notifications_enabled && watch.email && watch.email_verified_at
+            const notificationStatus = premium && watch.notifications_enabled && watch.email && watch.email_verified_at
               ? 'pending'
               : 'not_requested';
             await database.query(`
@@ -325,17 +364,19 @@ const createObjectiveWatchChecker = ({
         for (const watch of group) {
           const failureCount = Math.max(0, Number(watch.consecutive_failures) || 0) + 1;
           const retryHours = Math.min(3, 2 ** Math.max(0, failureCount - 1));
-          const retryAt = new Date(checkedAt.getTime() + retryHours * ONE_HOUR_MS);
+          const retryAt = watch.tier_key === 'premium'
+            ? new Date(checkedAt.getTime() + retryHours * ONE_HOUR_MS)
+            : null;
           await database.query(`
             UPDATE objective_watches
             SET consecutive_failures = $2, next_check_at = $3
             WHERE id = $1
-          `, [watch.id, failureCount, retryAt.toISOString()]);
+          `, [watch.id, failureCount, retryAt?.toISOString() || null]);
         }
       }
     });
 
-    const notificationsSent = await deliverPendingNotifications();
+    const notificationsSent = manual ? 0 : await deliverPendingNotifications();
     return {
       due: dueResult.rows.length,
       checked,

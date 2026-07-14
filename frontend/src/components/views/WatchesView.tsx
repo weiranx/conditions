@@ -4,10 +4,12 @@ import {
   BellRing,
   CalendarDays,
   Clock3,
+  History,
   LoaderCircle,
   MailCheck,
   MailPlus,
   MapPinned,
+  RefreshCw,
   Timer,
   Trash2,
 } from 'lucide-react';
@@ -16,9 +18,13 @@ import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
 import {
   deleteObjectiveWatch,
+  getObjectiveWatchEvents,
   listObjectiveWatches,
+  refreshObjectiveWatch,
   setObjectiveWatchNotifications,
   type ObjectiveWatch,
+  type ObjectiveWatchEvent,
+  type ObjectiveWatchPolicy,
 } from '../../lib/objective-watches';
 import { ProductNav } from './ProductNav';
 import '../../styles/watches.css';
@@ -58,8 +64,15 @@ const formatPlanDate = (value: string) => {
       });
 };
 
-const monitoringLabel = (watch: ObjectiveWatch) => {
-  if (!watch.nextCheckAt) return 'Monitoring ended';
+const planHasEnded = (watch: ObjectiveWatch) => {
+  const planEnd = new Date(`${watch.plan.forecastDate}T23:59:59.999Z`).getTime();
+  return !Number.isFinite(planEnd) || Date.now() > planEnd + 14 * 60 * 60 * 1000;
+};
+
+const monitoringLabel = (watch: ObjectiveWatch, automaticChecks: boolean) => {
+  if (planHasEnded(watch)) return 'Plan ended';
+  if (!automaticChecks) return 'Manual refresh';
+  if (!watch.nextCheckAt) return 'Check queued';
   const plannedStart = new Date(`${watch.plan.forecastDate}T${watch.plan.alpineStartTime || '12:00'}:00Z`);
   const hoursUntilStart = (plannedStart.getTime() - Date.now()) / (60 * 60 * 1000);
   return Number.isFinite(hoursUntilStart) && hoursUntilStart > 48 ? 'Every 3 hours' : 'Hourly checks';
@@ -77,24 +90,36 @@ export function WatchesView({
   const accountUserId = account.user?.id;
   const emailVerified = account.user?.emailVerified === true;
   const [watches, setWatches] = useState<ObjectiveWatch[]>([]);
+  const [policy, setPolicy] = useState<ObjectiveWatchPolicy | null>(null);
+  const [eventsByWatch, setEventsByWatch] = useState<Record<string, ObjectiveWatchEvent[]>>({});
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingAlertsId, setUpdatingAlertsId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accountUserId) {
       setWatches([]);
+      setPolicy(null);
+      setEventsByWatch({});
       setLoading(false);
       return;
     }
     const controller = new AbortController();
+    setEventsByWatch({});
+    setExpandedHistoryId(null);
     setLoading(true);
     setError(null);
     void listObjectiveWatches(controller.signal)
-      .then((nextWatches) => {
-        if (!controller.signal.aborted) setWatches(nextWatches);
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setWatches(result.watches);
+          setPolicy(result.policy);
+        }
       })
       .catch((loadError) => {
         if (!controller.signal.aborted) {
@@ -114,6 +139,12 @@ export function WatchesView({
     try {
       await deleteObjectiveWatch(watch.id);
       setWatches((current) => current.filter((item) => item.id !== watch.id));
+      setEventsByWatch((current) => {
+        const next = { ...current };
+        delete next[watch.id];
+        return next;
+      });
+      setExpandedHistoryId((current) => current === watch.id ? null : current);
       setConfirmingId(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Could not stop watching this objective.');
@@ -131,8 +162,9 @@ export function WatchesView({
     setUpdatingAlertsId(watch.id);
     setError(null);
     try {
-      const updated = await setObjectiveWatchNotifications(watch.id, !watch.notificationsEnabled);
-      setWatches((current) => current.map((item) => item.id === updated.id ? updated : item));
+      const result = await setObjectiveWatchNotifications(watch.id, !watch.notificationsEnabled);
+      setWatches((current) => current.map((item) => item.id === result.watch.id ? result.watch : item));
+      setPolicy(result.policy);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Could not update Objective Watch alerts.');
     } finally {
@@ -140,8 +172,52 @@ export function WatchesView({
     }
   };
 
+  const refreshWatch = async (watch: ObjectiveWatch) => {
+    if (refreshingId) return;
+    setRefreshingId(watch.id);
+    setError(null);
+    try {
+      const result = await refreshObjectiveWatch(watch.id);
+      setWatches((current) => current.map((item) => item.id === result.watch.id ? result.watch : item));
+      setPolicy(result.policy);
+      setEventsByWatch((current) => {
+        const next = { ...current };
+        delete next[watch.id];
+        return next;
+      });
+      setExpandedHistoryId((current) => current === watch.id ? null : current);
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : 'Could not refresh this objective watch.');
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
+  const toggleHistory = async (watch: ObjectiveWatch) => {
+    if (expandedHistoryId === watch.id) {
+      setExpandedHistoryId(null);
+      return;
+    }
+    setExpandedHistoryId(watch.id);
+    if (eventsByWatch[watch.id] || historyLoadingId) return;
+    setHistoryLoadingId(watch.id);
+    setError(null);
+    try {
+      const result = await getObjectiveWatchEvents(watch.id);
+      setEventsByWatch((current) => ({ ...current, [watch.id]: result.events }));
+      setPolicy(result.policy);
+    } catch (historyError) {
+      setError(historyError instanceof Error ? historyError.message : 'Could not load Objective Watch history.');
+    } finally {
+      setHistoryLoadingId(null);
+    }
+  };
+
+  const activeWatchCount = watches.filter((watch) => !planHasEnded(watch)).length;
+  const automaticChecks = policy?.automaticChecks === true;
+
   return (
-    <div className={`${appShellClassName} watches-page-shell`} aria-busy={isViewPending || loading || Boolean(deletingId) || Boolean(updatingAlertsId)}>
+    <div className={`${appShellClassName} watches-page-shell`} aria-busy={isViewPending || loading || Boolean(deletingId) || Boolean(updatingAlertsId) || Boolean(refreshingId) || Boolean(historyLoadingId)}>
       <ProductNav
         active="watches"
         navigateToView={navigateToView}
@@ -153,12 +229,18 @@ export function WatchesView({
           <div className="watches-head-icon" aria-hidden><BellRing /></div>
           <p>Objective monitoring</p>
           <h1>Your watched objectives</h1>
-          <span>See automatic check status, important changes, and every saved comparison baseline.</span>
+          <span>See watch status, refresh conditions, and review meaningful changes for every saved plan.</span>
         </header>
 
         <aside className="watches-explainer" aria-label="How Objective Watch works">
           <strong>How it works</strong>
-          <span>Checks run every three hours, then hourly during the final 48 hours. Duplicate plans share one refresh, expired objectives stop automatically, and alerts only cover meaningful risk increases.</span>
+          <span>
+            {policy === null
+              ? 'Loading your Objective Watch access…'
+              : automaticChecks
+              ? `Premium checks up to ${policy?.activeWatchLimit || 10} active watches every three hours, then hourly during the final 48 hours. Email alerts cover meaningful risk increases.`
+              : `Free includes ${policy?.activeWatchLimit || 1} active watch with manual refresh, in-app updates, and ${policy?.historyDays || 14} days of change history. Current reports and official safety information remain available.`}
+          </span>
         </aside>
 
         {!account.user ? (
@@ -184,7 +266,7 @@ export function WatchesView({
           <>
             <div className="watches-summary" role="status">
               <BellRing aria-hidden />
-              <strong>{watches.length}</strong> active {watches.length === 1 ? 'watch' : 'watches'}
+              <strong>{activeWatchCount}/{policy?.activeWatchLimit || 1}</strong> active {activeWatchCount === 1 ? 'watch' : 'watches'} · {automaticChecks ? 'Premium automatic checks' : 'Free manual checks'}
             </div>
             <section className="watches-list" aria-label="Watched objectives">
               {watches.map((watch) => {
@@ -196,11 +278,13 @@ export function WatchesView({
                       <div className="watch-card-heading">
                         <div>
                           <span className="watch-card-kicker">
-                            {watch.lastCheckedAt ? `Last checked ${formatTimestamp(watch.lastCheckedAt)}` : 'Automatic check queued'}
+                            {watch.lastCheckedAt
+                              ? `Last ${automaticChecks ? 'checked' : 'refreshed'} ${formatTimestamp(watch.lastCheckedAt)}`
+                              : automaticChecks ? 'Automatic check queued' : 'Ready for manual refresh'}
                           </span>
                           <h2>{watch.title}</h2>
                         </div>
-                        <span className={`watch-status ${watch.nextCheckAt ? '' : 'is-ended'}`}><span aria-hidden /> {monitoringLabel(watch)}</span>
+                        <span className={`watch-status ${planHasEnded(watch) ? 'is-ended' : ''}`}><span aria-hidden /> {monitoringLabel(watch, automaticChecks)}</span>
                       </div>
                       <div className="watch-card-meta">
                         <span><CalendarDays aria-hidden /> {formatPlanDate(watch.plan.forecastDate)}</span>
@@ -219,7 +303,30 @@ export function WatchesView({
                         </div>
                       )}
                       {watch.consecutiveFailures > 0 && (
-                        <p className="watch-retry">The latest check failed. A retry is scheduled automatically.</p>
+                        <p className="watch-retry">The latest check failed. {automaticChecks ? 'A retry is scheduled automatically.' : 'Try a manual refresh again later.'}</p>
+                      )}
+                      {expandedHistoryId === watch.id && (
+                        <section className="watch-history" id={`watch-history-${watch.id}`} aria-label={`${watch.title} change history`}>
+                          <strong>Change history · last {policy?.historyDays || 14} days</strong>
+                          {historyLoadingId === watch.id ? (
+                            <p><LoaderCircle className="watches-spinner" aria-hidden /> Loading history…</p>
+                          ) : (eventsByWatch[watch.id] || []).length === 0 ? (
+                            <p>No meaningful risk increases recorded in this period.</p>
+                          ) : (
+                            <ol>
+                              {(eventsByWatch[watch.id] || []).map((event) => (
+                                <li key={event.id}>
+                                  <time dateTime={event.checkedAt || undefined}>{event.checkedAt ? formatTimestamp(event.checkedAt) : 'Date unavailable'}</time>
+                                  <ul>
+                                    {(event.change?.reasons || []).map((reason) => (
+                                      <li key={`${event.id}:${reason.key || reason.label}`}>{reason.label || 'Conditions changed.'}</li>
+                                    ))}
+                                  </ul>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </section>
                       )}
                     </div>
                     <div className="watch-card-actions">
@@ -233,15 +340,37 @@ export function WatchesView({
                       </button>
                       <button
                         type="button"
+                        className="watch-refresh"
+                        onClick={() => void refreshWatch(watch)}
+                        disabled={Boolean(refreshingId) || Boolean(deletingId) || planHasEnded(watch)}
+                      >
+                        {refreshingId === watch.id ? <LoaderCircle className="watches-spinner" aria-hidden /> : <RefreshCw aria-hidden />}
+                        Refresh now
+                      </button>
+                      <button
+                        type="button"
+                        className="watch-history-toggle"
+                        onClick={() => void toggleHistory(watch)}
+                        disabled={Boolean(historyLoadingId) || Boolean(deletingId)}
+                        aria-expanded={expandedHistoryId === watch.id}
+                        aria-controls={`watch-history-${watch.id}`}
+                      >
+                        {historyLoadingId === watch.id ? <LoaderCircle className="watches-spinner" aria-hidden /> : <History aria-hidden />}
+                        {expandedHistoryId === watch.id ? 'Hide history' : 'Change history'}
+                      </button>
+                      <button
+                        type="button"
                         className={`watch-alerts ${watch.notificationsEnabled ? 'is-enabled' : ''}`}
-                        onClick={() => void toggleAlerts(watch)}
+                        onClick={() => policy?.emailAlerts ? void toggleAlerts(watch) : navigateToView('settings')}
                         disabled={Boolean(updatingAlertsId) || Boolean(deletingId)}
-                        title={!emailVerified ? 'Verify your email to enable alerts' : undefined}
+                        title={!policy?.emailAlerts ? 'Premium includes email alerts' : !emailVerified ? 'Verify your email to enable alerts' : undefined}
                       >
                         {updatingAlertsId === watch.id
                           ? <LoaderCircle className="watches-spinner" aria-hidden />
                           : watch.notificationsEnabled ? <MailCheck aria-hidden /> : <MailPlus aria-hidden />}
-                        {!emailVerified
+                        {!policy?.emailAlerts
+                          ? 'Upgrade for email alerts'
+                          : !emailVerified
                           ? 'Verify email for alerts'
                           : watch.notificationsEnabled ? 'Email alerts on' : 'Enable email alerts'}
                       </button>

@@ -55,6 +55,7 @@ test('deduplicates identical plans while updating every due watch', async () => 
       last_snapshot: null,
       consecutive_failures: 0,
       notifications_enabled: false,
+      tier_key: 'premium',
     },
     {
       id: 'watch-2',
@@ -64,6 +65,7 @@ test('deduplicates identical plans while updating every due watch', async () => 
       last_snapshot: null,
       consecutive_failures: 0,
       notifications_enabled: false,
+      tier_key: 'premium',
     },
   ];
   const query = jest.fn(async (sql) => {
@@ -87,4 +89,54 @@ test('deduplicates identical plans while updating every due watch', async () => 
   expect(summary).toMatchObject({ due: 2, checked: 2, changed: 2, failed: 0, uniquePlans: 1 });
   expect(query.mock.calls.filter(([sql]) => sql.includes('SET last_checked_at'))).toHaveLength(2);
   expect(query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO objective_watch_events'))).toHaveLength(2);
+  const dueCall = query.mock.calls.find(([sql]) => sql.includes('COALESCE(account_tier.tier_key'));
+  expect(dueCall[0]).toContain("COALESCE(account_tier.tier_key, 'free') = 'premium'");
+  expect(dueCall[1]).toEqual([100, null, null]);
+});
+
+test('manual Free refreshes update in-app state without scheduling or email', async () => {
+  const dueRows = [{
+    id: 'watch-1',
+    user_id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+    title: 'Mount Rainier',
+    plan: PLAN,
+    baseline_report: { safetyData: safetyPayload() },
+    last_snapshot: null,
+    consecutive_failures: 0,
+    notifications_enabled: true,
+    email: 'climber@example.com',
+    email_verified_at: new Date(),
+    tier_key: 'free',
+  }];
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('FROM objective_watches watches')) return { rows: dueRows };
+    return { rows: [] };
+  });
+  const invokeSafetyHandler = jest.fn().mockResolvedValue({
+    statusCode: 200,
+    payload: safetyPayload({ score: 55 }),
+  });
+  const checker = createObjectiveWatchChecker({
+    database: { configured: true, query },
+    invokeSafetyHandler,
+    emailService: { available: false },
+    now: () => new Date('2026-07-14T00:00:00.000Z'),
+  });
+
+  const summary = await checker.run({
+    watchId: '510b78d9-dae0-42aa-bad3-6be54a49625c',
+    userId: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+    manual: true,
+  });
+  expect(summary).toMatchObject({ checked: 1, changed: 1, failed: 0 });
+  const dueCall = query.mock.calls.find(([sql]) => sql.includes('FROM objective_watches watches'));
+  expect(dueCall[1]).toEqual([
+    100,
+    '510b78d9-dae0-42aa-bad3-6be54a49625c',
+    '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+  ]);
+  const updateCall = query.mock.calls.find(([sql]) => sql.includes('SET last_checked_at'));
+  expect(updateCall[1][2]).toBeNull();
+  const eventCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO objective_watch_events'));
+  expect(eventCall[1][3]).toBe('not_requested');
 });

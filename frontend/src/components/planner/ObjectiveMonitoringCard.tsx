@@ -8,13 +8,14 @@ import {
   getObjectiveWatch,
   saveObjectiveWatch,
   type ObjectiveWatch,
+  type ObjectiveWatchPolicy,
 } from '../../lib/objective-watches';
 import { getReportComparisonBaseline, type ReportComparisonBaseline } from '../../lib/saved-reports';
 
 interface ObjectiveMonitoringCardProps {
   report: PersistedReport;
   activeSavedReportId: string | null;
-  readOnly: boolean;
+  reportSource: 'live' | 'saved' | 'shared';
 }
 
 const formatBaselineTime = (value: string) => {
@@ -24,19 +25,20 @@ const formatBaselineTime = (value: string) => {
     : parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
-export function ObjectiveMonitoringCard({ report, activeSavedReportId, readOnly }: ObjectiveMonitoringCardProps) {
+export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSource }: ObjectiveMonitoringCardProps) {
   const { user } = useAccount();
   const [watch, setWatch] = useState<ObjectiveWatch | null>(null);
+  const [policy, setPolicy] = useState<ObjectiveWatchPolicy | null>(null);
   const [historyBaseline, setHistoryBaseline] = useState<ReportComparisonBaseline | null>(null);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const userId = user?.id;
-  const { lat, lon } = report.plan;
 
   useEffect(() => {
     if (!userId) {
       setWatch(null);
+      setPolicy(null);
       setHistoryBaseline(null);
       setLoading(false);
       return;
@@ -48,11 +50,12 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, readOnly 
       ? getReportComparisonBaseline(report, activeSavedReportId, controller.signal)
       : Promise.resolve(null);
     void Promise.all([
-      getObjectiveWatch(lat, lon, controller.signal),
+      getObjectiveWatch(report.plan, controller.signal),
       historyRequest,
-    ]).then(([nextWatch, nextBaseline]) => {
+    ]).then(([watchResult, nextBaseline]) => {
       if (controller.signal.aborted) return;
-      setWatch(nextWatch);
+      setWatch(watchResult.watch);
+      setPolicy(watchResult.policy);
       setHistoryBaseline(nextBaseline);
     }).catch((loadError) => {
       if (!controller.signal.aborted) {
@@ -62,7 +65,7 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, readOnly 
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [activeSavedReportId, lat, lon, report, userId]);
+  }, [activeSavedReportId, report, userId]);
 
   const baseline = watch?.baselineReport || historyBaseline?.snapshot || null;
   const comparison = useMemo(() => baseline ? compareReports(report, baseline) : null, [baseline, report]);
@@ -71,13 +74,30 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, readOnly 
     : historyBaseline
       ? `previous matching report from ${formatBaselineTime(historyBaseline.createdAt)}`
       : null;
+  const createActionLabel = reportSource === 'shared'
+    ? 'Watch a copy'
+    : reportSource === 'saved'
+      ? 'Watch this plan'
+      : 'Watch objective';
+  const monitoringDescription = policy === null
+    ? 'Your account’s watch cadence will be applied when you save it.'
+    : policy.automaticChecks
+      ? 'Automatic checks run every three hours, then hourly during the final 48 hours.'
+      : 'Free includes one active watch with in-app history and manual refresh from the Watch dashboard.';
+  const createDescription = reportSource === 'shared'
+    ? `Create a private watch from this shared snapshot. The sender’s report stays unchanged. ${monitoringDescription}`
+    : reportSource === 'saved'
+      ? `Watch this saved plan without changing the historical report. ${monitoringDescription}`
+      : `Save the current report as a baseline. ${monitoringDescription}`;
 
   const saveWatch = async () => {
     if (mutating) return;
     setMutating(true);
     setError(null);
     try {
-      setWatch(await saveObjectiveWatch(report));
+      const result = await saveObjectiveWatch(report);
+      setWatch(result.watch);
+      setPolicy(result.policy);
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : 'Could not save this objective watch.');
     } finally {
@@ -108,27 +128,33 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, readOnly 
       <div className="objective-monitor-body">
         <div className="objective-watch-pane">
           <div>
-            <strong>{watch ? `${watch.title} has a saved baseline` : 'Track this exact objective'}</strong>
+            <strong>{watch ? `${watch.title} has a saved baseline` : 'Track this exact plan'}</strong>
             <p>
               {watch
-                ? `${watch.nextCheckAt ? 'Automatic checks are active' : 'Automatic checks have ended for this plan date'}${watch.lastCheckedAt ? `; last checked ${formatBaselineTime(watch.lastCheckedAt)}` : ''}. New reports still compare with your saved baseline.`
-                : 'Save the current report as a baseline. Automatic checks run every three hours, then hourly during the final 48 hours.'}
+                ? `${policy?.automaticChecks ? watch.nextCheckAt ? 'Automatic checks are active' : 'Automatic checks have ended for this plan date' : 'Manual refresh is available from the Watch dashboard'}${watch.lastCheckedAt ? `; last checked ${formatBaselineTime(watch.lastCheckedAt)}` : ''}. New reports still compare with your saved baseline.`
+                : createDescription}
             </p>
           </div>
           {user ? (
             <div className="objective-watch-actions">
-              <button type="button" onClick={saveWatch} disabled={mutating || readOnly}>
-                {mutating ? <LoaderCircle className="objective-spin" size={14} /> : watch ? <RefreshCw size={14} /> : <BellRing size={14} />}
-                {watch ? 'Update baseline' : 'Watch objective'}
-              </button>
+              {(!watch || reportSource === 'live') && (
+                <button type="button" onClick={saveWatch} disabled={mutating}>
+                  {mutating ? <LoaderCircle className="objective-spin" size={14} /> : watch ? <RefreshCw size={14} /> : <BellRing size={14} />}
+                  {watch ? 'Update baseline' : createActionLabel}
+                </button>
+              )}
               {watch && (
-                <button className="quiet" type="button" onClick={stopWatch} disabled={mutating || readOnly}>
+                <button className="quiet" type="button" onClick={stopWatch} disabled={mutating}>
                   <Trash2 size={14} /> Stop
                 </button>
               )}
             </div>
           ) : (
-            <p className="objective-account-note">Sign in to save a watch. Reports and Terrain Window remain available without an account.</p>
+            <p className="objective-account-note">
+              {reportSource === 'shared'
+                ? 'Sign in to watch a private copy. The shared report remains unchanged.'
+                : 'Sign in to save a watch. Reports and Terrain Window remain available without an account.'}
+            </p>
           )}
         </div>
 

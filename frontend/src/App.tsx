@@ -409,6 +409,7 @@ function App() {
   );
   const [reportChatSessionKey, setReportChatSessionKey] = useState(0);
   const [viewingHistoryReport, setViewingHistoryReport] = useState(false);
+  const [restoredReportSource, setRestoredReportSource] = useState<'saved' | 'shared' | null>(null);
   const [activeSavedReportId, setActiveSavedReportId] = useState<string | null>(null);
   const [activeSavedReportShareToken, setActiveSavedReportShareToken] = useState<string | null>(null);
   const [reportGenerationPending, setReportGenerationPending] = useState(false);
@@ -454,6 +455,7 @@ function App() {
         ? 'save'
         : 'browser-only';
     setViewingHistoryReport(false);
+    setRestoredReportSource(null);
   }, [accountLoading, accountUserId, resetSavedReportTracking, safetyData]);
 
   useEffect(() => () => {
@@ -535,6 +537,7 @@ function App() {
     clearWakeRetry();
     resetSavedReportTracking();
     setViewingHistoryReport(false);
+    setRestoredReportSource(null);
     setReportChatMessages([]);
     setReportChatSessionKey((value) => value + 1);
     setPosition(nextPosition);
@@ -656,6 +659,7 @@ function App() {
       clearWakeRetry();
       resetSavedReportTracking();
       setViewingHistoryReport(false);
+      setRestoredReportSource(null);
       setReportChatMessages([]);
       setReportChatSessionKey((value) => value + 1);
       setSafetyData(null);
@@ -1264,6 +1268,7 @@ function App() {
     setSharedReportError(null);
     resetSavedReportTracking();
     setViewingHistoryReport(false);
+    setRestoredReportSource(null);
     setReportChatMessages([]);
     setReportChatSessionKey((value) => value + 1);
     setSafetyData(null);
@@ -1280,12 +1285,17 @@ function App() {
     return true;
   }, [resetSavedReportTracking, setSafetyData, setError, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, resetRouteState, requestNewReportAccess]);
 
-  const handleOpenSavedReport = useCallback((report: PersistedReport, shareToken: string) => {
+  const handleOpenSavedReport = useCallback((
+    report: PersistedReport,
+    shareToken: string,
+    source: 'saved' | 'shared' = 'saved',
+  ) => {
     clearWakeRetry();
     clearLastLoadedKey();
     resetSavedReportTracking();
     setPendingAutoGenerate(false);
     setViewingHistoryReport(true);
+    setRestoredReportSource(source);
     sharedReportResolvedTokenRef.current = shareToken;
     setSharedReportToken(shareToken);
     setSharedReportLoading(false);
@@ -1359,7 +1369,7 @@ function App() {
         if (controller.signal.aborted) return;
         const report = parsePersistedReport(rawReport);
         if (!report) throw new Error('This shared report is incomplete or no longer compatible.');
-        handleOpenSavedReport(report, sharedReportToken);
+        handleOpenSavedReport(report, sharedReportToken, 'shared');
       })
       .catch((loadError) => {
         if (controller.signal.aborted) return;
@@ -1389,6 +1399,7 @@ function App() {
     setSharedReportLoading(false);
     setSharedReportError(null);
     setViewingHistoryReport(false);
+    setRestoredReportSource(null);
     openPlannerView();
   };
 
@@ -2473,6 +2484,7 @@ function App() {
       appShellClassName={appShellClassName}
       isViewPending={isViewPending}
       restoredFromHistory={viewingHistoryReport}
+      restoredReportSource={restoredReportSource}
       reportSnapshot={reportSnapshot}
       activeSavedReportId={activeSavedReportId}
       // Navigation

@@ -1038,7 +1038,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           <ObjectiveMonitoringCard
             report={props.reportSnapshot}
             activeSavedReportId={props.activeSavedReportId}
-            readOnly={props.restoredFromHistory}
+            reportSource={props.restoredReportSource || 'live'}
           />
         )}
 

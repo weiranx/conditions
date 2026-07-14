@@ -59,6 +59,7 @@ export interface PlannerViewProps {
   appShellClassName: string;
   isViewPending: boolean;
   restoredFromHistory: boolean;
+  restoredReportSource: 'saved' | 'shared' | null;
   reportSnapshot: PersistedReport | null;
   activeSavedReportId: string | null;
 
@@ -680,8 +681,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
       <main id="planner-main-content" className="planner-page-main" tabIndex={-1}>
       {restoredFromHistory && (
         <div className="planner-history-notice" role="status">
-          <strong>Read-only generated report</strong>
-          <span>This exact generated report includes its AI text. Select New report to check current data.</span>
+          <strong>{props.restoredReportSource === 'shared' ? 'Read-only shared report' : 'Read-only saved report'}</strong>
+          <span>This snapshot stays unchanged. You can watch its plan privately or select New report to check current data.</span>
         </div>
       )}
       <PlannerHeader
