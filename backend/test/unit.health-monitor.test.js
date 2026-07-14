@@ -34,7 +34,11 @@ describe('production health monitor', () => {
         ai: { enabled: true, available: true },
       })),
     });
-    expect(healthy).toEqual(expect.objectContaining({ healthy: true }));
+    expect(healthy).toEqual(expect.objectContaining({
+      healthy: true,
+      statusCode: 200,
+      durationMs: expect.any(Number),
+    }));
 
     const unhealthy = await checkHealth({
       url: 'http://backend:3001/healthz',
@@ -46,6 +50,7 @@ describe('production health monitor', () => {
       })),
     });
     expect(unhealthy.healthy).toBe(false);
+    expect(unhealthy.statusCode).toBe(503);
     expect(unhealthy.summary).toContain('HTTP 503');
     expect(unhealthy.summary).toContain('PostgreSQL is unavailable');
   });
@@ -72,6 +77,7 @@ describe('production health monitor', () => {
       fetchImpl: jest.fn().mockRejectedValue(new Error('connection refused')),
     });
     expect(unreachable.summary).toContain('connection refused');
+    expect(unreachable.statusCode).toBeNull();
   });
 
   test('alerts once, waits until the reminder interval, then sends recovery', async () => {

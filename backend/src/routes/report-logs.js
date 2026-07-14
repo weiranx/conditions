@@ -9,6 +9,14 @@ const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
 const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
 const { isAdminAccount } = require('../auth/admin-account');
+const {
+  buildHealthHistorySummary,
+  createFileHealthHistoryStore,
+} = require('../services/health-monitor-history');
+
+const healthHistoryStore = createFileHealthHistoryStore(
+  process.env.HEALTH_MONITOR_ADMIN_HISTORY_FILE || '/app/health-monitor-data/health-monitor-history.json',
+);
 
 const isRouteWaypointEntry = (entry) =>
   typeof entry?.name === 'string' && entry.name.startsWith('Route waypoint:');
@@ -108,6 +116,7 @@ const registerReportLogsRoute = (
     runDiagnostics = null,
     loadModelCatalog = null,
     readSystemResources = getSystemResources,
+    readHealthMonitorHistory = () => healthHistoryStore.list(),
   } = {},
 ) => {
   let diagnosticsInFlight = null;
@@ -159,6 +168,17 @@ const registerReportLogsRoute = (
       res.json(await readSystemResources());
     } catch {
       res.status(500).json({ error: 'System resource usage is unavailable' });
+    }
+  });
+
+  app.get('/api/admin/health-monitor-history', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    try {
+      const entries = await readHealthMonitorHistory();
+      res.json({ entries: entries.slice(0, 100), summary: buildHealthHistorySummary(entries) });
+    } catch (error) {
+      req.log?.error({ err: error }, 'Health monitor history could not be loaded');
+      res.status(500).json({ error: 'Health monitor history is unavailable' });
     }
   });
 

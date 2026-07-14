@@ -132,6 +132,28 @@ interface AdminSystemResources {
   timestamp: string;
 }
 
+interface AdminHealthHistoryEntry {
+  checkedAt: string;
+  healthy: boolean;
+  summary: string;
+  statusCode: number | null;
+  durationMs: number | null;
+  action: string;
+  alertError: string | null;
+}
+
+interface AdminHealthHistoryPayload {
+  entries: AdminHealthHistoryEntry[];
+  summary: {
+    total: number;
+    healthy: number;
+    unhealthy: number;
+    availabilityPercent: number | null;
+    lastCheckAt: string | null;
+    lastUnhealthyAt: string | null;
+  };
+}
+
 interface ResourceUsageSnapshot {
   totalBytes: number;
   usedBytes: number;
@@ -564,6 +586,14 @@ function formatAccountDate(timestamp: string | null): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 
+function formatHealthMonitorAction(action: string): string {
+  if (action === 'alert-sent') return 'Alert emailed';
+  if (action === 'reminder-sent') return 'Reminder emailed';
+  if (action === 'recovery-sent') return 'Recovery emailed';
+  if (action === 'processing-failed') return 'Alert processing failed';
+  return 'No email needed';
+}
+
 function accountInitials(user: AdminUserRecord): string {
   const words = user.displayName.trim().split(/\s+/u).filter(Boolean);
   if (words.length > 1) return `${words[0][0]}${words.at(-1)?.[0] ?? ''}`.toUpperCase();
@@ -899,6 +929,7 @@ function AdminDashboard() {
   const [featureFlagStatus, setFeatureFlagStatus] = useState<ProductFeatureFlagStatus | null>(null);
   const [health, setHealth] = useState<AdminHealthSnapshot | null>(null);
   const [systemResources, setSystemResources] = useState<AdminSystemResources | null>(null);
+  const [healthHistory, setHealthHistory] = useState<AdminHealthHistoryPayload | null>(null);
   const [healthHttpStatus, setHealthHttpStatus] = useState<number | null>(null);
   const [backendLatencyMs, setBackendLatencyMs] = useState<number | null>(null);
   const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
@@ -926,6 +957,7 @@ function AdminDashboard() {
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [systemResourcesError, setSystemResourcesError] = useState<string | null>(null);
+  const [healthHistoryError, setHealthHistoryError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [usersNotice, setUsersNotice] = useState<string | null>(null);
@@ -1022,11 +1054,12 @@ function AdminDashboard() {
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
         fetchApi('/api/admin/system-resources'),
+        fetchApi('/api/admin/health-monitor-history'),
         fetchApi('/api/admin/ai-settings'),
         fetchApi('/api/admin/feature-flags'),
         fetchApi('/api/admin/ai-models'),
@@ -1053,6 +1086,18 @@ function AdminDashboard() {
         setSystemResourcesError(null);
       } else {
         setSystemResourcesError('Disk and RAM usage are temporarily unavailable.');
+      }
+      if (
+        healthHistoryResult.response.ok
+        && healthHistoryResult.payload
+        && typeof healthHistoryResult.payload === 'object'
+        && 'entries' in healthHistoryResult.payload
+        && Array.isArray(healthHistoryResult.payload.entries)
+      ) {
+        setHealthHistory(healthHistoryResult.payload as AdminHealthHistoryPayload);
+        setHealthHistoryError(null);
+      } else {
+        setHealthHistoryError('Automated health-check history is temporarily unavailable.');
       }
       if (aiSettingsResult.response.ok && aiSettingsResult.payload && typeof aiSettingsResult.payload === 'object') {
         setAISettings(aiSettingsResult.payload as AIAdminSettings);
@@ -1095,6 +1140,7 @@ function AdminDashboard() {
       setAIUsageError('AI usage data is temporarily unavailable.');
       setHealthError('System details are temporarily unavailable.');
       setSystemResourcesError('Disk and RAM usage are temporarily unavailable.');
+      setHealthHistoryError('Automated health-check history is temporarily unavailable.');
       setAISettingsError('AI controls are temporarily unavailable.');
       setFeatureFlagsError('Product feature flags are temporarily unavailable.');
       setAIModelCatalogError('Provider model lists are temporarily unavailable.');
@@ -1815,6 +1861,7 @@ function AdminDashboard() {
       range: { value: analyticsRange, label: selectedRange.label },
       system: health,
       systemResources,
+      automatedHealthChecks: healthHistory,
       reportMetrics: metrics,
       planningInsights,
       reliabilityHotspots,
@@ -2561,6 +2608,47 @@ function AdminDashboard() {
               <p className="admin-diagnostics-empty"><Activity size={16} aria-hidden /> Run all diagnostics to add live upstream provider checks.</p>
             )}
           </>
+        )}
+      </section>
+
+      <section className="logs-panel admin-health-history-panel" aria-labelledby="admin-health-history-title" hidden={activeSection !== 'operations'}>
+        <div className="logs-panel-head">
+          <div className="admin-audit-heading">
+            <span className="logs-section-icon"><History size={17} aria-hidden /></span>
+            <div>
+              <h2 id="admin-health-history-title">Automated health checks</h2>
+              <p>Persistent checks from the production monitor, including alert and recovery activity</p>
+            </div>
+          </div>
+          <div className="admin-health-history-summary" aria-label="Automated health-check summary">
+            <span className="is-healthy"><CheckCircle2 size={13} aria-hidden /> {healthHistory?.summary.healthy.toLocaleString() ?? 0} healthy</span>
+            <span className={healthHistory?.summary.unhealthy ? 'is-unhealthy' : undefined}><AlertTriangle size={13} aria-hidden /> {healthHistory?.summary.unhealthy.toLocaleString() ?? 0} unhealthy</span>
+            <strong>{healthHistory?.summary.availabilityPercent == null ? '—' : `${healthHistory.summary.availabilityPercent}%`} availability</strong>
+          </div>
+        </div>
+        {healthHistoryError && <div className="admin-audit-error" role="alert"><AlertTriangle size={15} aria-hidden /> {healthHistoryError}</div>}
+        {!healthHistoryError && (
+          !healthHistory || healthHistory.entries.length === 0 ? (
+            <div className="logs-empty"><Activity size={26} aria-hidden /><h3>No automated checks logged yet</h3><p>History appears after the production health-monitor worker completes its next interval.</p></div>
+          ) : (
+            <ol className="admin-health-history-list">
+              {healthHistory.entries.slice(0, 50).map((entry) => {
+                const time = formatLogTime(entry.checkedAt);
+                return (
+                  <li key={`${entry.checkedAt}-${entry.action}`} className={entry.healthy ? 'is-healthy' : 'is-unhealthy'}>
+                    <span className="admin-health-history-indicator" aria-hidden />
+                    <time dateTime={entry.checkedAt}><strong>{time.primary}</strong><small>{time.secondary}</small></time>
+                    <span className="admin-health-history-status">{entry.healthy ? 'Healthy' : 'Unhealthy'}</span>
+                    <span className="admin-health-history-detail"><strong>{entry.summary}</strong><small>{entry.statusCode == null ? 'No HTTP response' : `HTTP ${entry.statusCode}`} · {formatDuration(entry.durationMs)}</small></span>
+                    <span className="admin-health-history-action"><BellRing size={13} aria-hidden /> {entry.alertError || formatHealthMonitorAction(entry.action)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )
+        )}
+        {healthHistory && healthHistory.entries.length > 50 && (
+          <footer className="logs-panel-foot"><span>Showing the latest 50 of {healthHistory.summary.total.toLocaleString()} retained checks</span><span>Seven days retained at the default interval</span></footer>
         )}
       </section>
 

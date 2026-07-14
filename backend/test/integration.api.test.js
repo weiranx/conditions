@@ -312,6 +312,7 @@ test('Admin endpoints return 404 without the administrator account', async () =>
   const refreshModelsResponse = await request(app).post('/api/admin/ai-models/refresh');
   const auditResponse = await request(app).get('/api/admin/audit-log');
   const systemResourcesResponse = await request(app).get('/api/admin/system-resources');
+  const healthHistoryResponse = await request(app).get('/api/admin/health-monitor-history');
 
   expect(getResponse.status).toBe(404);
   expect(patchResponse.status).toBe(404);
@@ -319,6 +320,7 @@ test('Admin endpoints return 404 without the administrator account', async () =>
   expect(refreshModelsResponse.status).toBe(404);
   expect(auditResponse.status).toBe(404);
   expect(systemResourcesResponse.status).toBe(404);
+  expect(healthHistoryResponse.status).toBe(404);
 });
 
 test.each([

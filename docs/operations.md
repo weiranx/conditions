@@ -77,7 +77,8 @@ provider is unavailable. It emails `HEALTH_ALERT_EMAIL` immediately when an
 incident opens, sends a reminder every six hours while the service remains
 unhealthy, and sends a recovery notice. Incident state is retained in the
 `health-monitor-data` volume so ordinary container recreations do not duplicate
-alerts.
+alerts. The same volume retains bounded check history and is mounted read-only
+into the backend for the owner-only Admin Operations page.
 
 Configure the schedule in `/opt/summitsafe/.env`:
 
@@ -85,6 +86,7 @@ Configure the schedule in `/opt/summitsafe/.env`:
 HEALTH_ALERT_EMAIL=weiranxiong@gmail.com
 HEALTH_MONITOR_INTERVAL_SECONDS=300
 HEALTH_ALERT_REMINDER_SECONDS=21600
+HEALTH_MONITOR_HISTORY_LIMIT=2016
 ```
 
 `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_BASE_URL` must also be configured. The

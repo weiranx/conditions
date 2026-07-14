@@ -36,6 +36,7 @@ Express API for the SummitSafe backcountry planning app.
 | GET | `/api/reports/shared/:shareToken` | Retrieve a read-only generated report by its random public token |
 | POST | `/api/auth/logout` | End the current session |
 | GET | `/api/report-logs` | Retrieve logged reports (administrator account only) |
+| GET | `/api/admin/health-monitor-history` | Retrieve automated health-check history (administrator account only) |
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Health check (also `/health`, `/api/healthz`, `/api/health`) |
 

@@ -67,6 +67,18 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     timestamp: '2026-07-12T12:00:00.000Z',
   };
   const readSystemResources = jest.fn(async () => systemResourcesPayload);
+  const healthMonitorHistoryPayload = [
+    {
+      checkedAt: '2026-07-14T12:00:00.000Z',
+      healthy: false,
+      summary: 'PostgreSQL is unavailable.',
+      statusCode: 503,
+      durationMs: 25,
+      action: 'alert-sent',
+      alertError: null,
+    },
+  ];
+  const readHealthMonitorHistory = jest.fn(async () => healthMonitorHistoryPayload);
   let usageSettings = {
     persistent: true,
     freeMonthlyAITokenLimit: 250_000,
@@ -191,6 +203,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     caches: [firstCache, null, secondCache],
     runDiagnostics,
     loadModelCatalog,
+    readHealthMonitorHistory,
     readSystemResources,
   });
 
@@ -210,6 +223,21 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   await routes.get.get('/api/admin/system-resources')({ headers }, systemResourcesResponse);
   expect(readSystemResources).toHaveBeenCalledTimes(1);
   expect(systemResourcesResponse.payload).toEqual(systemResourcesPayload);
+
+  const healthHistoryResponse = createResponse();
+  await routes.get.get('/api/admin/health-monitor-history')({ headers }, healthHistoryResponse);
+  expect(readHealthMonitorHistory).toHaveBeenCalledTimes(1);
+  expect(healthHistoryResponse.payload).toEqual({
+    entries: healthMonitorHistoryPayload,
+    summary: {
+      total: 1,
+      healthy: 0,
+      unhealthy: 1,
+      availabilityPercent: 0,
+      lastCheckAt: '2026-07-14T12:00:00.000Z',
+      lastUnhealthyAt: '2026-07-14T12:00:00.000Z',
+    },
+  });
 
   const usersResponse = createResponse();
   await routes.get.get('/api/admin/users')({ headers, query: { limit: '250' } }, usersResponse);
@@ -481,6 +509,14 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, hiddenSystemResourcesResponse);
   expect(hiddenSystemResourcesResponse.statusCode).toBe(404);
   expect(readSystemResources).toHaveBeenCalledTimes(1);
+
+  const hiddenHealthHistoryResponse = createResponse();
+  await routes.get.get('/api/admin/health-monitor-history')({
+    headers: { cookie: 'bc_session=other-session-token' },
+  }, hiddenHealthHistoryResponse);
+  expect(hiddenHealthHistoryResponse.statusCode).toBe(404);
+  expect(hiddenHealthHistoryResponse.payload).toEqual({ error: 'Not found' });
+  expect(readHealthMonitorHistory).toHaveBeenCalledTimes(1);
 
   expect(routes.post.has('/api/admin/maintenance/report-logs')).toBe(true);
 

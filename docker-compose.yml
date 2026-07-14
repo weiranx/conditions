@@ -21,6 +21,9 @@ services:
       # Named volume — initialized from the image's /app/data dir (owned by appuser).
       # Bind mounts would be owned by root on the host, causing EACCES for appuser.
       - report-logs-data:/app/data
+      # Read-only access lets the owner-only admin endpoint display monitor
+      # history without allowing the backend to modify monitor state.
+      - health-monitor-data:/app/health-monitor-data:ro
     # 15s gives the existing 10s graceful-shutdown handler room to complete
     # before Docker sends SIGKILL.
     stop_grace_period: 15s

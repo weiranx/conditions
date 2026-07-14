@@ -486,6 +486,16 @@ Array of log entry objects, each containing the fields from the original report 
 
 ---
 
+## `GET /api/admin/health-monitor-history`
+
+Returns the latest 100 automated production health checks plus summary counts
+for all retained checks. Each entry includes its check time, healthy state,
+summary, HTTP status, duration, and whether an alert, reminder, or recovery
+email was sent. Access is limited to the signed-in administrator account; every
+other account receives `404`.
+
+---
+
 ## `POST /api/report-logs`
 
 Logs a report entry. Called by the frontend after generating a safety report. Entries with no `name` field are silently ignored.

@@ -35,6 +35,8 @@ const checkHealth = async ({
   now = () => new Date(),
 } = {}) => {
   const checkedAt = now();
+  const startedAt = Date.now();
+  const durationMs = () => Math.max(0, Date.now() - startedAt);
   try {
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
     const body = await response.text();
@@ -45,6 +47,8 @@ const checkHealth = async ({
       return {
         healthy: false,
         checkedAt: checkedAt.toISOString(),
+        statusCode: response.status,
+        durationMs: durationMs(),
         summary: `Health endpoint returned invalid JSON (HTTP ${response.status}).`,
       };
     }
@@ -61,6 +65,8 @@ const checkHealth = async ({
       return {
         healthy: true,
         checkedAt: checkedAt.toISOString(),
+        statusCode: response.status,
+        durationMs: durationMs(),
         summary: 'Backend, PostgreSQL, and enabled services are healthy.',
       };
     }
@@ -72,6 +78,8 @@ const checkHealth = async ({
     return {
       healthy: false,
       checkedAt: checkedAt.toISOString(),
+      statusCode: response.status,
+      durationMs: durationMs(),
       summary: [issues, timestampIssue].filter(Boolean).join(' '),
     };
   } catch (error) {
@@ -81,6 +89,8 @@ const checkHealth = async ({
     return {
       healthy: false,
       checkedAt: checkedAt.toISOString(),
+      statusCode: null,
+      durationMs: durationMs(),
       summary: `Health endpoint ${reason}.`,
     };
   }
