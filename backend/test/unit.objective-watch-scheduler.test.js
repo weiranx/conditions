@@ -51,7 +51,7 @@ test('persists scheduler controls and run lifecycle state', async () => {
     return { rows: [] };
   });
   const scheduler = createObjectiveWatchScheduler({
-    database: { configured: true, query },
+    database: { configured: true, query, transaction: (callback) => callback(query) },
     secretConfigured: () => true,
     now: () => NOW,
   });
@@ -71,6 +71,7 @@ test('persists scheduler controls and run lifecycle state', async () => {
   expect(query.mock.calls.some(([sql, params]) => sql.includes("last_status = 'succeeded'") && params[0] === '{"checked":3}')).toBe(true);
   expect(query.mock.calls.some(([sql, params]) => sql.includes("last_status = 'failed'") && params[0] === 'Network failed')).toBe(true);
   expect(query.mock.calls.some(([sql, params]) => sql.includes('last_status = $1') && params[0] === 'skipped_disabled')).toBe(true);
+  expect(query.mock.calls.some(([sql, params]) => sql.includes('UPDATE objective_watches') && params[0] === 30)).toBe(true);
 });
 
 test('requires PostgreSQL for scheduler state', async () => {

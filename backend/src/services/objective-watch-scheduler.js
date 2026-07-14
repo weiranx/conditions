@@ -122,13 +122,50 @@ const createObjectiveWatchScheduler = ({
       || parsed % 5 !== 0) {
       throw new RangeError('Objective Watch check interval must be from 5 to 1440 minutes in 5-minute increments.');
     }
-    const result = await database.query(`
-      UPDATE objective_watch_scheduler_state
-      SET check_interval_minutes = $1, updated_at = NOW()
-      WHERE id = 1
-      RETURNING enabled, check_interval_minutes, last_heartbeat_at, last_started_at, last_completed_at,
-                last_status, last_error, last_summary, updated_at
-    `, [parsed]);
+    const persistInterval = async (query) => {
+      const result = await query(`
+        UPDATE objective_watch_scheduler_state
+        SET check_interval_minutes = $1, updated_at = NOW()
+        WHERE id = 1
+        RETURNING enabled, check_interval_minutes, last_heartbeat_at, last_started_at, last_completed_at,
+                  last_status, last_error, last_summary, updated_at
+      `, [parsed]);
+      await query(`
+        UPDATE objective_watches
+        SET next_check_at = CASE
+          WHEN last_checked_at IS NULL THEN NOW()
+          ELSE GREATEST(
+            NOW(),
+            last_checked_at + make_interval(mins => CASE
+              WHEN CASE
+                WHEN plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                  AND COALESCE(NULLIF(plan->>'alpineStartTime', ''), '12:00') ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                THEN CONCAT(
+                  plan->>'forecastDate',
+                  'T',
+                  COALESCE(NULLIF(plan->>'alpineStartTime', ''), '12:00'),
+                  ':00Z'
+                )::timestamptz
+                ELSE NULL
+              END <= NOW() + INTERVAL '48 hours'
+              THEN LEAST($1, 60)
+              ELSE $1
+            END)
+          )
+        END,
+        updated_at = NOW()
+        WHERE next_check_at IS NOT NULL
+          AND CASE
+            WHEN plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+              THEN (plan->>'forecastDate')::date
+            ELSE NULL
+          END >= ((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC')::date
+      `, [parsed]);
+      return result;
+    };
+    const result = typeof database.transaction === 'function'
+      ? await database.transaction(persistInterval)
+      : await persistInterval(database.query);
     return deriveSchedulerStatus({
       row: result.rows[0],
       secretConfigured: secretConfigured(),

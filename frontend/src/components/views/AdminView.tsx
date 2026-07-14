@@ -1891,7 +1891,7 @@ function AdminDashboard() {
         body: JSON.stringify({ checkIntervalMinutes }),
       });
       if (result.response.ok && applyObjectiveWatchScheduler(result.payload)) {
-        setObjectiveWatchSchedulerNotice(`Standard Objective Watch checks will run ${formatCheckIntervalChoice(checkIntervalMinutes).toLowerCase()}.`);
+        setObjectiveWatchSchedulerNotice(`Standard Objective Watch checks will run ${formatCheckIntervalChoice(checkIntervalMinutes).toLowerCase()}. Active watches were rescheduled to match.`);
         void fetchAuditTrail();
         return;
       }
