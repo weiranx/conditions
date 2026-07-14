@@ -67,9 +67,11 @@ describe('transactional email service', () => {
         plan: { objectiveName: 'Mount Rainier & Friends', forecastDate: '2026-07-15', alpineStartTime: '05:30', travelWindowHours: 12 },
         preferences: { temperatureUnit: 'c', windSpeedUnit: 'kph', defaultActivity: 'alpine-climbing' },
         safetyData: {
-          safety: { score: 72, tier: 'Caution', explanations: ['Check wind & <script>alert(1)</script>'] },
-          weather: { temp: 35, windSpeed: 12, windGust: 28, precipChance: 20, description: 'Cloudy' },
-          avalanche: { risk: 'Moderate', dangerUnknown: false },
+          safety: { score: 72, tier: 'Caution', primaryHazard: 'Upper-mountain wind', confidence: 84, explanations: ['Check wind & <script>alert(1)</script>'] },
+          weather: { temp: 35, feelsLike: 29, windSpeed: 12, windGust: 28, precipChance: 20, humidity: 72, cloudCover: 60, description: 'Cloudy', trend: [{ time: '06:00', condition: 'Cloudy', temp: 35, wind: 12, gust: 28, precipChance: 20 }] },
+          atmosphere: { freezingLevelFt: 6500, snowLevelFt: 5200, thunderProbability: 10 },
+          terrainCondition: { label: 'Firm snow', summary: 'Firm early with wind effect near ridges.', recommendedTravel: 'Carry traction and reassess exposed slopes.' },
+          avalanche: { risk: 'Moderate', dangerUnknown: false, bottomLine: 'Wind slabs remain possible near ridgelines.', advice: 'Avoid freshly loaded features.' },
           alerts: { activeCount: 1, alerts: [{ headline: 'High wind warning', instruction: 'Avoid exposed ridges until winds ease.' }] },
           solar: { sunrise: '05:22', sunset: '21:01', dayLength: '15h 39m' },
           snowpack: { summary: 'A long snowpack narrative that must remain complete, including the final sentence.' },
@@ -101,12 +103,19 @@ describe('transactional email service', () => {
     expect(message.html).toContain('Conditions at a glance');
     expect(message.html).toContain('What matters most');
     expect(message.html).toContain('Complete report');
-    expect(message.html).toContain('Every available section from this saved report snapshot is included below.');
-    expect(message.html).toContain('Weather, travel window, and atmosphere');
-    expect(message.html).toContain('Avalanche and snowpack');
-    expect(message.html).toContain('Alerts, fire, access, and field observations');
-    expect(message.html).toContain('Route plan and analysis');
-    expect(message.html).toContain('AI analysis and report conversation');
+    expect(message.html).toContain('same decision-first order as the app');
+    expect(message.html).toContain('Decision snapshot');
+    expect(message.html).toContain('Upper-mountain wind');
+    expect(message.html).toContain('Weather and travel window');
+    expect(message.html).toContain('Hourly travel window');
+    expect(message.html).toContain('Surface and atmosphere');
+    expect(message.html).toContain('Avalanche conditions');
+    expect(message.html).toContain('Wind slabs remain possible');
+    expect(message.html).toContain('Snowpack and snow surface');
+    expect(message.html).toContain('Alerts, access, and observations');
+    expect(message.html).toContain('Route plan and waypoint conditions');
+    expect(message.html).toContain('AI briefing and report conversation');
+    expect(message.html).toContain('Sources and report details');
     expect(message.html).toContain('including the final sentence.');
     expect(message.html).toContain('Avoid exposed ridges until winds ease.');
     expect(message.html).toContain('Paradise Road');
@@ -114,8 +123,10 @@ describe('transactional email service', () => {
     expect(message.html).toContain('Climb the route conservatively');
     expect(message.html).toContain('The complete AI briefing belongs in the email.');
     expect(message.html).toContain('Recheck the upper mountain wind forecast.');
-    expect(message.html).toContain('2 mapped track points retained in the saved report');
-    expect(message.html).toContain('Snow image retained in the saved report');
+    expect(message.html).not.toContain('mapped track points retained');
+    expect(message.html).not.toContain('Snow image retained in the saved report');
+    expect(message.html).not.toContain('Display Track');
+    expect(message.html).not.toContain('Snow Vision Image');
     expect(message.html).not.toContain('very-large-image-data');
     expect(message.html).toContain('Alpine climbing');
     expect(message.html).toContain('05:30 departure · 12h window');

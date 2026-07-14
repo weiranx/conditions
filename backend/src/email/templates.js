@@ -155,38 +155,6 @@ const reportDisplayValue = (key, value) => {
   return value;
 };
 
-const renderReportScalarHtml = (value) => {
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  const text = String(value);
-  if (isWebUrl(text)) {
-    const safeUrl = escapeHtml(text);
-    return `<a href="${safeUrl}" style="color:#315f45;text-decoration:underline;word-break:break-word;">${safeUrl}</a>`;
-  }
-  return escapeHtml(text).replaceAll('\n', '<br>');
-};
-
-const renderReportValueHtml = (value, key = '') => {
-  const displayValue = reportDisplayValue(key, value);
-  if (!hasReportValue(displayValue)) return '<span style="color:#879087;">Not available</span>';
-  if (!Array.isArray(displayValue) && !isRecord(displayValue)) return renderReportScalarHtml(displayValue);
-
-  if (Array.isArray(displayValue)) {
-    return displayValue.map((item, index) => {
-      const content = renderReportValueHtml(item);
-      return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:${index === 0 ? '0' : '8px'} 0 0;border-collapse:separate;background:#fbfcfa;border:1px solid #e5e9e3;border-radius:9px;"><tr><td style="padding:10px 12px;color:#445249;font-size:12px;line-height:1.55;">${content}</td></tr></table>`;
-    }).join('');
-  }
-
-  const rows = Object.entries(displayValue)
-    .filter(([, item]) => hasReportValue(item))
-    .map(([childKey, item]) => `<tr>
-      <td valign="top" style="width:30%;padding:8px 10px 8px 0;border-bottom:1px solid #edf0eb;color:#758078;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;">${escapeHtml(reportLabel(childKey))}</td>
-      <td valign="top" style="padding:8px 0 8px 10px;border-bottom:1px solid #edf0eb;color:#344139;font-size:12px;line-height:1.55;word-break:break-word;">${renderReportValueHtml(item, childKey)}</td>
-    </tr>`)
-    .join('');
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table>`;
-};
-
 const renderReportValueText = (value, key = '', depth = 0) => {
   const displayValue = reportDisplayValue(key, value);
   if (!hasReportValue(displayValue)) return '';
@@ -251,12 +219,252 @@ const buildCompleteReport = (report) => {
   ].filter(([, value]) => hasReportValue(value));
 
   return {
-    html: sections.map(([heading, value], index) => `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:${index === 0 ? '0' : '14px'} 0 0;border-collapse:separate;background:#ffffff;border:1px solid #dfe5de;border-radius:12px;">
-      <tr><td style="padding:14px 16px 10px;border-bottom:1px solid #e5e9e3;color:#27382d;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;line-height:1.3;">${escapeHtml(heading)}</td></tr>
-      <tr><td style="padding:6px 16px 12px;">${renderReportValueHtml(value)}</td></tr>
-    </table>`).join(''),
     text: sections.map(([heading, value]) => `${heading.toUpperCase()}\n${renderReportValueText(value)}`).join('\n\n'),
   };
+};
+
+const fullReportText = (value, fallback = '') => compactText(value, fallback, 100000);
+
+const reportFactTable = (facts) => {
+  const rows = facts.filter(([, value]) => hasReportValue(value));
+  if (!rows.length) return '';
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows.map(([label, value, detail]) => `<tr>
+    <td valign="top" style="width:31%;padding:9px 12px 9px 0;border-bottom:1px solid #e8ece7;color:#718078;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;">${escapeHtml(label)}</td>
+    <td valign="top" style="padding:9px 0;border-bottom:1px solid #e8ece7;color:#25362c;font-size:13px;font-weight:650;line-height:1.45;">${isWebUrl(value) ? `<a href="${escapeHtml(value)}" style="color:#315f45;word-break:break-word;">${escapeHtml(detail || value)}</a>` : `${escapeHtml(value)}${detail ? `<span style="display:block;margin-top:2px;color:#6a776f;font-size:11px;font-weight:400;line-height:1.45;">${escapeHtml(detail)}</span>` : ''}`}</td>
+  </tr>`).join('')}</table>`;
+};
+
+const reportListHtml = (items, color = '#5d7767') => {
+  const values = items.map((item) => fullReportText(item)).filter(Boolean);
+  if (!values.length) return '';
+  return `<ul style="margin:0;padding:0;list-style:none;">${values.map((item) => `<li style="margin:0 0 8px;padding:0;color:#405047;font-size:13px;line-height:1.55;"><span style="color:${color};font-size:16px;line-height:1;">•</span>&nbsp;&nbsp;${escapeHtml(item)}</li>`).join('')}</ul>`;
+};
+
+const reportNarrativeHtml = (title, value, tone = 'neutral') => {
+  const text = fullReportText(value);
+  if (!text) return '';
+  const background = tone === 'warning' ? '#fff8e7' : tone === 'danger' ? '#fff1ee' : '#f5f8f5';
+  const border = tone === 'warning' ? '#d5a43d' : tone === 'danger' ? '#b75547' : '#5d7767';
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 12px;border-collapse:separate;background:${background};border-left:4px solid ${border};border-radius:9px;"><tr><td style="padding:13px 15px;">
+    ${title ? `<strong style="display:block;margin:0 0 5px;color:#27382d;font-size:11px;letter-spacing:.04em;text-transform:uppercase;">${escapeHtml(title)}</strong>` : ''}
+    <span style="display:block;color:#405047;font-size:13px;line-height:1.58;">${escapeHtml(text)}</span>
+  </td></tr></table>`;
+};
+
+const reportSectionHtml = ({ eyebrow, title, intro, body }) => {
+  if (!body) return '';
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 16px;border-collapse:separate;background:#ffffff;border:1px solid #dce3dc;border-radius:12px;overflow:hidden;">
+    <tr><td bgcolor="#f3f6f3" style="padding:14px 17px 12px;background:#f3f6f3;border-bottom:1px solid #dfe5df;">
+      ${eyebrow ? `<p style="margin:0 0 4px;color:#54705e;font-size:9px;font-weight:850;letter-spacing:.11em;text-transform:uppercase;">${escapeHtml(eyebrow)}</p>` : ''}
+      <h2 style="margin:0;color:#1e3025;font-family:Georgia,'Times New Roman',serif;font-size:21px;font-weight:600;line-height:1.2;">${escapeHtml(title)}</h2>
+      ${intro ? `<p style="margin:5px 0 0;color:#66736b;font-size:11px;line-height:1.5;">${escapeHtml(intro)}</p>` : ''}
+    </td></tr>
+    <tr><td style="padding:8px 17px 14px;">${body}</td></tr>
+  </table>`;
+};
+
+const reportItemCardsHtml = (items, renderItem) => {
+  const rendered = items.map(renderItem).filter(Boolean);
+  return rendered.map((content, index) => `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:${index ? '9px' : '4px'} 0 0;border-collapse:separate;background:#fbfcfb;border:1px solid #e3e8e3;border-radius:9px;"><tr><td style="padding:12px 13px;">${content}</td></tr></table>`).join('');
+};
+
+const buildReadableReportHtml = (report, { temperatureUnit, windUnit }) => {
+  const data = isRecord(report?.safetyData) ? report.safetyData : {};
+  const safety = isRecord(data.safety) ? data.safety : {};
+  const weather = isRecord(data.weather) ? data.weather : {};
+  const solar = isRecord(data.solar) ? data.solar : {};
+  const forecast = isRecord(data.forecast) ? data.forecast : {};
+  const atmosphere = isRecord(data.atmosphere) ? data.atmosphere : {};
+  const avalanche = isRecord(data.avalanche) ? data.avalanche : {};
+  const snowpack = isRecord(data.snowpack) ? data.snowpack : {};
+  const terrain = isRecord(data.terrainCondition) ? data.terrainCondition : {};
+  const alerts = isRecord(data.alerts) ? data.alerts : {};
+  const airQuality = isRecord(data.airQuality) ? data.airQuality : {};
+  const rainfall = isRecord(data.rainfall) ? data.rainfall : {};
+  const heatRisk = isRecord(data.heatRisk) ? data.heatRisk : {};
+  const fireRisk = isRecord(data.fireRisk) ? data.fireRisk : {};
+  const local = isRecord(data.localConditions) ? data.localConditions : {};
+  const route = isRecord(report?.route) ? report.route : {};
+  const routeAnalysis = isRecord(route.routeAnalysis) ? route.routeAnalysis : {};
+  const ai = isRecord(report?.ai) ? report.ai : {};
+  const temp = (value) => {
+    const number = finiteNumber(value);
+    if (number === null) return '';
+    return temperatureUnit === 'c' ? `${Math.round((number - 32) * (5 / 9))}°C` : `${Math.round(number)}°F`;
+  };
+  const wind = (value) => {
+    const number = finiteNumber(value);
+    if (number === null) return '';
+    return windUnit === 'kph' ? `${Math.round(number * 1.609344)} kph` : `${Math.round(number)} mph`;
+  };
+  const percent = (value) => finiteNumber(value) === null ? '' : `${Math.round(Number(value))}%`;
+  const numberWithUnit = (value, unit) => finiteNumber(value) === null ? '' : `${Math.round(Number(value) * 10) / 10} ${unit}`;
+  const sections = [];
+
+  const decisionBody = [
+    reportFactTable([
+      ['Primary hazard', fullReportText(safety.primaryHazard, 'Not identified')],
+      ['Confidence', percent(safety.confidence)],
+      ['Comfort outlook', isRecord(data.pleasantness) ? `${fullReportText(data.pleasantness.label, 'Unknown')}${finiteNumber(data.pleasantness.score) === null ? '' : ` · ${Math.round(Number(data.pleasantness.score))}/100`}` : ''],
+    ]),
+    reportNarrativeHtml('Decision context', Array.isArray(safety.explanations) ? safety.explanations.join(' · ') : ''),
+    reportListHtml(Array.isArray(safety.factors) ? safety.factors.map((factor) => factor?.message || factor?.hazard) : []),
+    reportListHtml(Array.isArray(safety.confidenceReasons) ? safety.confidenceReasons : [], '#87958c'),
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Verdict', title: 'Decision snapshot', intro: 'The strongest signals behind the score and conditions tier.', body: decisionBody }));
+
+  const trendRows = Array.isArray(weather.trend) ? weather.trend : [];
+  const hourlyHtml = trendRows.length ? `<p style="margin:14px 0 7px;color:#54705e;font-size:9px;font-weight:850;letter-spacing:.10em;text-transform:uppercase;">Hourly travel window</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:11px;">
+      <tr><th width="22%" align="left" style="padding:7px 5px;border-bottom:2px solid #cbd5cc;color:#6d7a72;">Time</th><th align="left" style="padding:7px 5px;border-bottom:2px solid #cbd5cc;color:#6d7a72;">Forecast</th></tr>
+      ${trendRows.map((point) => `<tr><td valign="top" style="padding:8px 5px;border-bottom:1px solid #e8ece8;color:#34463a;font-weight:750;">${escapeHtml(fullReportText(point?.time || point?.timeIso, '—'))}</td><td style="padding:8px 5px;border-bottom:1px solid #e8ece8;"><strong style="display:block;color:#34463a;font-size:11px;">${escapeHtml(fullReportText(point?.condition, '—'))}</strong><span style="display:block;margin-top:2px;color:#6a776f;font-size:10px;line-height:1.45;">${escapeHtml([temp(point?.temp), `wind ${wind(point?.wind) || '—'}`, `gusts ${wind(point?.gust) || '—'}`, `${percent(point?.precipChance) || '—'} precip`].filter(Boolean).join(' · '))}</span></td></tr>`).join('')}
+    </table>` : '';
+  const elevationRows = Array.isArray(weather.elevationForecast) ? weather.elevationForecast : [];
+  const elevationHtml = elevationRows.length ? reportItemCardsHtml(elevationRows, (band) => `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(band?.label, numberWithUnit(band?.elevationFt, 'ft')))}</strong><span style="display:block;margin-top:4px;color:#5f6d65;font-size:12px;line-height:1.5;">${escapeHtml([temp(band?.temp), `feels ${temp(band?.feelsLike)}`, `wind ${wind(band?.windSpeed)}`, `gusts ${wind(band?.windGust)}`].filter(Boolean).join(' · '))}</span>`) : '';
+  const weatherBody = [
+    reportFactTable([
+      ['Forecast period', [fullReportText(forecast.selectedStartTime), fullReportText(forecast.selectedEndTime)].filter(Boolean).join(' – ')],
+      ['Conditions', fullReportText(weather.description || weather.condition, 'Not available')],
+      ['Temperature', temp(weather.temp), temp(weather.feelsLike) ? `Feels like ${temp(weather.feelsLike)}` : ''],
+      ['Wind', wind(weather.windSpeed), wind(weather.windGust) ? `Gusts ${wind(weather.windGust)} · ${fullReportText(weather.windDirection)}` : fullReportText(weather.windDirection)],
+      ['Precipitation', percent(weather.precipChance)],
+      ['Humidity / cloud', [percent(weather.humidity), percent(weather.cloudCover)].filter(Boolean).join(' · ')],
+      ['Sunrise / sunset', [fullReportText(solar.sunrise), fullReportText(solar.sunset)].filter(Boolean).join(' · '), fullReportText(solar.dayLength)],
+      ['Visibility', isRecord(weather.visibilityRisk) ? fullReportText(weather.visibilityRisk.level, 'Unknown') : '', isRecord(weather.visibilityRisk) ? fullReportText(weather.visibilityRisk.summary) : ''],
+    ]),
+    reportNarrativeHtml('Elevation forecast', weather.elevationForecastNote),
+    elevationHtml,
+    hourlyHtml,
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Travel', title: 'Weather and travel window', intro: 'Forecast conditions for the selected start and travel window.', body: weatherBody }));
+
+  const terrainBody = [
+    reportFactTable([
+      ['Surface', fullReportText(terrain.label || data.trail, 'Not available')],
+      ['Impact', fullReportText(terrain.impact)],
+      ['Recommended travel', fullReportText(terrain.recommendedTravel)],
+      ['Freezing level', numberWithUnit(atmosphere.freezingLevelFt, 'ft')],
+      ['Snow level', numberWithUnit(atmosphere.snowLevelFt, 'ft')],
+      ['UV', finiteNumber(atmosphere.uvIndex) === null ? '' : `${atmosphere.uvIndex} · ${fullReportText(atmosphere.uvCategory)}`],
+      ['Thunder', percent(atmosphere.thunderProbability), fullReportText(atmosphere.thunderCategory)],
+    ]),
+    reportNarrativeHtml('Terrain summary', terrain.summary),
+    reportListHtml(Array.isArray(terrain.reasons) ? terrain.reasons : []),
+    isRecord(terrain.snowProfile) ? reportNarrativeHtml(fullReportText(terrain.snowProfile.label, 'Snow surface'), terrain.snowProfile.summary) : '',
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Terrain', title: 'Surface and atmosphere', intro: 'Modeled surface character and mountain-weather context.', body: terrainBody }));
+
+  const problems = Array.isArray(avalanche.problems) ? avalanche.problems : [];
+  const avalancheBody = [
+    reportFactTable([
+      ['Danger', avalanche.dangerUnknown ? 'Unknown — verify the bulletin' : fullReportText(avalanche.risk, 'Not available')],
+      ['Relevance', avalanche.relevant === false ? 'Not applicable to this objective' : fullReportText(avalanche.relevanceReason, 'Applicable terrain may be present')],
+      ['Center / zone', [fullReportText(avalanche.center), fullReportText(avalanche.zone)].filter(Boolean).join(' · ')],
+      ['Published / expires', [fullReportText(avalanche.publishedTime), fullReportText(avalanche.expiresTime)].filter(Boolean).join(' · ')],
+      ['Bulletin', fullReportText(avalanche.link), 'Open official avalanche bulletin'],
+    ]),
+    reportNarrativeHtml('Bottom line', avalanche.bottomLine, avalanche.dangerUnknown ? 'warning' : 'neutral'),
+    reportNarrativeHtml('Travel advice', avalanche.advice, 'warning'),
+    reportItemCardsHtml(problems, (problem) => {
+      const title = fullReportText(problem?.name, 'Avalanche problem');
+      const meta = [fullReportText(problem?.likelihood), Array.isArray(problem?.size) ? problem.size.join('–') : fullReportText(problem?.size), Array.isArray(problem?.location) ? problem.location.join(', ') : fullReportText(problem?.location)].filter(Boolean).join(' · ');
+      const discussion = fullReportText(problem?.discussion || problem?.problem_description);
+      return `<strong style="display:block;color:#26382c;font-size:14px;">${escapeHtml(title)}</strong>${meta ? `<span style="display:block;margin-top:3px;color:#8a641e;font-size:11px;font-weight:700;">${escapeHtml(meta)}</span>` : ''}${discussion ? `<p style="margin:7px 0 0;color:#526158;font-size:12px;line-height:1.55;">${escapeHtml(discussion)}</p>` : ''}`;
+    }),
+  ].join('');
+  if (data.featureFlags?.avalancheDetails !== false) {
+    sections.push(reportSectionHtml({ eyebrow: 'Avalanche', title: 'Avalanche conditions', intro: 'Official bulletin context and listed avalanche problems.', body: avalancheBody }));
+  }
+
+  const snowBody = [
+    reportNarrativeHtml('Snowpack summary', snowpack.summary),
+    reportFactTable([
+      ['SNOTEL', isRecord(snowpack.snotel) ? fullReportText(snowpack.snotel.stationName, 'Nearby station') : '', isRecord(snowpack.snotel) ? [numberWithUnit(snowpack.snotel.snowDepthIn, 'in depth'), numberWithUnit(snowpack.snotel.sweIn, 'in SWE'), fullReportText(snowpack.snotel.observedDate)].filter(Boolean).join(' · ') : ''],
+      ['NOHRSC', isRecord(snowpack.nohrsc) ? [numberWithUnit(snowpack.nohrsc.snowDepthIn, 'in depth'), numberWithUnit(snowpack.nohrsc.sweIn, 'in SWE')].filter(Boolean).join(' · ') : '', isRecord(snowpack.nohrsc) ? fullReportText(snowpack.nohrsc.sampledTime) : ''],
+      ['CDEC', isRecord(snowpack.cdec) ? fullReportText(snowpack.cdec.stationName, 'Nearby station') : '', isRecord(snowpack.cdec) ? [numberWithUnit(snowpack.cdec.snowDepthIn, 'in depth'), numberWithUnit(snowpack.cdec.sweIn, 'in SWE'), fullReportText(snowpack.cdec.observedDate)].filter(Boolean).join(' · ') : ''],
+      ['Historical context', isRecord(snowpack.historical) ? fullReportText(snowpack.historical.summary) : ''],
+    ]),
+    reportNarrativeHtml('Snow image analysis', ai.snowVisionAnalysis),
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Snowpack', title: 'Snowpack and snow surface', intro: 'Station, modeled, historical, and image-derived snow context.', body: snowBody }));
+
+  const alertItems = Array.isArray(alerts.alerts) ? alerts.alerts : [];
+  const closures = isRecord(local.closures) && Array.isArray(local.closures.alerts) ? local.closures.alerts : [];
+  const roads = isRecord(local.access) && Array.isArray(local.access.roads) ? local.access.roads : [];
+  const alertBody = [
+    reportFactTable([
+      ['Weather alerts', finiteNumber(alerts.activeCount) === null ? 'None included' : `${Math.round(Number(alerts.activeCount))} active`, fullReportText(alerts.highestSeverity)],
+      ['Access alerts', isRecord(local.closures) && finiteNumber(local.closures.alertCount) !== null ? `${Math.round(Number(local.closures.alertCount))} active` : 'None included', isRecord(local.closures) ? fullReportText(local.closures.parkName) : ''],
+      ['Nearby observation', isRecord(local.weatherObservation) ? fullReportText(local.weatherObservation.stationName, 'Available') : '', isRecord(local.weatherObservation) ? [temp(local.weatherObservation.tempF), wind(local.weatherObservation.windMph), fullReportText(local.weatherObservation.observedTime)].filter(Boolean).join(' · ') : ''],
+      ['Radar / lightning', isRecord(local.radar) ? fullReportText(local.radar.status, 'Available') : '', isRecord(local.radar?.lightning) ? fullReportText(local.radar.lightning.note) : ''],
+      ['Streamflow', isRecord(local.streamflow) ? fullReportText(local.streamflow.trend, 'Available') : '', isRecord(local.streamflow) ? [fullReportText(local.streamflow.siteName), numberWithUnit(local.streamflow.dischargeCfs, 'cfs')].filter(Boolean).join(' · ') : ''],
+    ]),
+    reportItemCardsHtml(alertItems, (alert) => `<strong style="display:block;color:#79372e;font-size:14px;">${escapeHtml(fullReportText(alert?.headline || alert?.event, 'Weather alert'))}</strong><span style="display:block;margin-top:3px;color:#7d655f;font-size:11px;font-weight:700;">${escapeHtml([fullReportText(alert?.severity), fullReportText(alert?.urgency), fullReportText(alert?.ends || alert?.expires)].filter(Boolean).join(' · '))}</span>${fullReportText(alert?.description) ? `<p style="margin:7px 0 0;color:#526158;font-size:12px;line-height:1.55;">${escapeHtml(fullReportText(alert.description))}</p>` : ''}${fullReportText(alert?.instruction) ? reportNarrativeHtml('Instruction', alert.instruction, 'warning') : ''}`),
+    reportItemCardsHtml(closures, (closure) => `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(closure?.title, 'Access notice'))}</strong>${fullReportText(closure?.description) ? `<p style="margin:6px 0 0;color:#526158;font-size:12px;line-height:1.55;">${escapeHtml(fullReportText(closure.description))}</p>` : ''}`),
+    reportItemCardsHtml(roads, (road) => `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(road?.name, 'Access road'))}</strong><span style="display:block;margin-top:3px;color:#66736b;font-size:11px;">${escapeHtml([fullReportText(road?.routeStatus), fullReportText(road?.operatingLevel), fullReportText(road?.county)].filter(Boolean).join(' · '))}</span>`),
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Field checks', title: 'Alerts, access, and observations', intro: 'Official alerts and nearby field signals captured in the report.', body: alertBody }));
+
+  const environmentBody = [
+    reportFactTable([
+      ['Air quality', finiteNumber(airQuality.usAqi) === null ? fullReportText(airQuality.status) : `AQI ${Math.round(Number(airQuality.usAqi))} · ${fullReportText(airQuality.category)}`, fullReportText(airQuality.note)],
+      ['Rain / snow window', isRecord(rainfall.expected) ? [numberWithUnit(rainfall.expected.rainWindowIn, 'in rain'), numberWithUnit(rainfall.expected.snowWindowIn, 'in snow')].filter(Boolean).join(' · ') : '', isRecord(rainfall.expected) ? fullReportText(rainfall.expected.note) : fullReportText(rainfall.note)],
+      ['Heat risk', fullReportText(heatRisk.label), fullReportText(heatRisk.guidance)],
+      ['Fire risk', fullReportText(fireRisk.label), fullReportText(fireRisk.guidance)],
+      ['Nearby wildfire', isRecord(local.wildfire) && finiteNumber(local.wildfire.nearbyIncidentCount) !== null ? `${Math.round(Number(local.wildfire.nearbyIncidentCount))} incident${Math.round(Number(local.wildfire.nearbyIncidentCount)) === 1 ? '' : 's'}` : '', isRecord(local.wildfire) ? fullReportText(local.wildfire.note) : ''],
+      ['Smoke', isRecord(local.smoke) ? fullReportText(local.smoke.currentCategory, 'Available') : '', isRecord(local.smoke) ? numberWithUnit(local.smoke.currentPm25, 'µg/m³ PM2.5') : ''],
+    ]),
+    reportListHtml(Array.isArray(heatRisk.reasons) ? heatRisk.reasons : []),
+    reportListHtml(Array.isArray(fireRisk.reasons) ? fireRisk.reasons : []),
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Environment', title: 'Air, heat, precipitation, and fire', intro: 'Additional environmental signals that can affect the plan.', body: environmentBody }));
+
+  const gear = Array.isArray(data.gear) ? data.gear : [];
+  if (gear.length) {
+    sections.push(reportSectionHtml({ eyebrow: 'Equipment', title: 'Recommended gear', intro: 'Items suggested by the conditions in this report.', body: reportItemCardsHtml(gear, (item) => typeof item === 'string'
+      ? `<strong style="color:#26382c;font-size:13px;">${escapeHtml(fullReportText(item))}</strong>`
+      : `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(item?.title, 'Gear item'))}</strong><span style="display:block;margin-top:3px;color:#718078;font-size:10px;font-weight:800;text-transform:uppercase;">${escapeHtml(fullReportText(item?.category))}</span>${fullReportText(item?.detail) ? `<p style="margin:6px 0 0;color:#526158;font-size:12px;line-height:1.5;">${escapeHtml(fullReportText(item.detail))}</p>` : ''}`) }));
+  }
+
+  const summaries = Array.isArray(routeAnalysis.summaries) ? routeAnalysis.summaries : [];
+  const suggestions = Array.isArray(route.routeSuggestions) ? route.routeSuggestions : [];
+  const routeBody = [
+    reportFactTable([
+      ['Selected route', fullReportText(route.customRouteName || route.gpxRoute?.name, 'No route selected')],
+      ['Source', fullReportText(routeAnalysis.routeSource)],
+      ['Analysis type', fullReportText(routeAnalysis.analysisSource)],
+      ['Partial data', routeAnalysis.partialData === true ? 'Yes — review waypoint gaps' : 'No'],
+    ]),
+    reportNarrativeHtml('Route analysis', routeAnalysis.analysis),
+    reportItemCardsHtml(summaries, (summary) => `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(summary?.name, 'Waypoint'))}</strong><span style="display:block;margin-top:3px;color:#66736b;font-size:11px;line-height:1.5;">${escapeHtml([fullReportText(summary?.etaTime), numberWithUnit(summary?.elev_ft, 'ft'), finiteNumber(summary?.score) === null ? '' : `score ${Math.round(Number(summary.score))}`, fullReportText(summary?.weather?.description), temp(summary?.weather?.temp), wind(summary?.weather?.windGust) ? `gusts ${wind(summary.weather.windGust)}` : ''].filter(Boolean).join(' · '))}</span>`),
+    suggestions.length ? reportItemCardsHtml(suggestions, (suggestion) => `<strong style="display:block;color:#26382c;font-size:13px;">${escapeHtml(fullReportText(suggestion?.name, 'Route option'))}</strong><span style="display:block;margin-top:3px;color:#66736b;font-size:11px;">${escapeHtml([numberWithUnit(suggestion?.distance_rt_miles, 'mi round trip'), numberWithUnit(suggestion?.elev_gain_ft, 'ft gain'), fullReportText(suggestion?.class)].filter(Boolean).join(' · '))}</span>${fullReportText(suggestion?.description) ? `<p style="margin:6px 0 0;color:#526158;font-size:12px;line-height:1.5;">${escapeHtml(fullReportText(suggestion.description))}</p>` : ''}`) : '',
+  ].join('');
+  sections.push(reportSectionHtml({ eyebrow: 'Route', title: 'Route plan and waypoint conditions', intro: 'Route-specific analysis retained with this report.', body: routeBody }));
+
+  const chatMessages = Array.isArray(ai.reportChatMessages) ? ai.reportChatMessages : [];
+  const chatHtml = reportItemCardsHtml(chatMessages, (message) => {
+    const text = Array.isArray(message?.parts) ? message.parts.map((part) => part?.text).filter(Boolean).join('\n') : '';
+    if (!text) return '';
+    return `<span style="display:block;margin-bottom:4px;color:#718078;font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;">${escapeHtml(message?.role === 'user' ? 'You' : 'Report assistant')}</span><p style="margin:0;color:#405047;font-size:12px;line-height:1.58;">${escapeHtml(fullReportText(text))}</p>`;
+  });
+  const aiBody = [
+    reportNarrativeHtml('AI briefing', ai.aiBriefNarrative),
+    reportNarrativeHtml('Snow image analysis', ai.snowVisionAnalysis),
+    chatHtml,
+  ].join('');
+  if (aiBody) sections.push(reportSectionHtml({ eyebrow: 'Analysis', title: 'AI briefing and report conversation', intro: 'Generated interpretation saved with this report.', body: aiBody }));
+
+  const sourcesBody = reportFactTable([
+    ['Generated', fullReportText(data.generatedAt || report?.savedAt)],
+    ['Location', isRecord(data.location) ? `${data.location.lat}, ${data.location.lon}` : ''],
+    ['Weather source', fullReportText(weather.forecastLink), 'Open official weather forecast'],
+    ['Avalanche source', fullReportText(avalanche.link), 'Open official avalanche bulletin'],
+    ['Rainfall source', fullReportText(rainfall.link), 'Open precipitation source'],
+    ['Data completeness', data.partialData ? 'Some inputs were incomplete' : 'All expected inputs were included', fullReportText(data.apiWarning)],
+  ]);
+  sections.push(reportSectionHtml({ eyebrow: 'Sources', title: 'Sources and report details', intro: 'Generation time, location, links, and data-completeness status.', body: sourcesBody }));
+
+  return sections.filter(Boolean).join('');
 };
 
 const ACTIVITY_LABELS = Object.freeze({
@@ -398,7 +606,7 @@ const reportEmailShell = ({
                   <tr><td style="padding:18px 20px;color:#ffffff;">
                     <p style="margin:0 0 4px;color:#b8d5c4;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">Full field record</p>
                     <h2 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:500;line-height:1.2;">Complete report</h2>
-                    <p style="margin:7px 0 0;color:#dbe9df;font-size:12px;line-height:1.5;">Every available section from this saved report snapshot is included below.</p>
+                    <p style="margin:7px 0 0;color:#dbe9df;font-size:12px;line-height:1.5;">The full report is organized below in the same decision-first order as the app.</p>
                   </td></tr>
                 </table>
                 <div style="margin:0 0 26px;">${completeReportHtml}</div>
@@ -503,6 +711,7 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
     .map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`)
     .join('');
   const completeReport = buildCompleteReport(filteredReport);
+  const readableReportHtml = buildReadableReportHtml(filteredReport, { temperatureUnit, windUnit });
 
   return {
     subject: `${objectiveName} report · ${forecastDate}`,
@@ -527,7 +736,7 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
       alertDetail,
       highlightsHtml: htmlHighlights,
       partialWarning,
-      completeReportHtml: completeReport.html,
+      completeReportHtml: readableReportHtml,
       actionUrl,
     }),
   };
