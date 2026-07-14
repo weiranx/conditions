@@ -47,8 +47,9 @@ function PrivacyPolicy() {
         <h3>Account information</h3>
         <p>
           If you create an account, we store the name and email address you provide, a salted cryptographic hash
-          of your password, your planning preferences, and records needed to keep you signed in. We do not store
-          your plain-text password. Session cookies are HTTP-only and expire automatically.
+          of your password, your planning preferences, email-verification status, and records needed to keep you
+          signed in or process a password reset. We do not store your plain-text password or raw verification and
+          reset tokens. Session cookies are HTTP-only and expire automatically.
         </p>
         <h3>Information stored on your device</h3>
         <p>
@@ -83,6 +84,10 @@ function PrivacyPolicy() {
           If you use an AI feature, the report content, your prompt, and related plan context are sent to the
           configured AI provider (OpenAI or Anthropic) to produce the response. Their handling of that information
           is governed by their own terms and privacy policies.
+        </p>
+        <p>
+          When you request account verification or password recovery, your email address and the transactional
+          message are sent to our email-delivery provider so it can deliver and monitor that message.
         </p>
         <p>
           Information may also be disclosed when reasonably necessary to comply with law, protect users or the

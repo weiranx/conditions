@@ -122,6 +122,11 @@ SNOTEL_STATION_CACHE_TTL_MS=43200000
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=1000
 
+# Transactional account email. Verify EMAIL_FROM's domain in Resend first.
+RESEND_API_KEY=re_replace_me
+EMAIL_FROM="Backcountry Conditions <accounts@mail.your-domain.example>"
+APP_BASE_URL=https://your-frontend-domain.example.com
+
 DEBUG_AVY=false
 
 # Choose the preferred provider. Configure both keys for automatic per-request

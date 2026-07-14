@@ -309,6 +309,8 @@ Generates an on-demand AI narrative field brief summarizing current conditions. 
 Accounts are optional and require `DATABASE_URL`. Successful registration and login responses set an opaque,
 HTTP-only session cookie. The browser should send requests with credentials enabled; the web client does this
 automatically. Passwords must contain 12 to 128 characters. Google login additionally requires `GOOGLE_CLIENT_ID`.
+Verification and password-reset email requires `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_BASE_URL`. Action tokens
+are random, stored only as hashes, expire, and can be used once.
 
 ### `GET /api/auth/session`
 
@@ -323,6 +325,7 @@ Returns account availability and the current user, if signed in:
     "email": "climber@example.com",
     "displayName": "Avery Stone",
     "createdAt": "2026-07-12T10:00:00.000Z",
+    "emailVerified": true,
     "preferences": {
       "defaultActivity": "ski-touring",
       "defaultStartTime": "06:30",
@@ -402,7 +405,9 @@ visible. `reportCount` remains the lifetime generated total.
 }
 ```
 
-Returns `201` and the signed-in account. Duplicate emails return `409`.
+Returns `201` and the signed-in account. Password accounts start with `emailVerified: false`; when email delivery
+is configured, the response also reports whether the initial verification message was accepted for delivery.
+Duplicate emails return `409`.
 
 ### `POST /api/auth/login`
 
@@ -421,6 +426,26 @@ The backend verifies the Google signature, audience, issuer, expiry, verified em
 creating the normal first-party session. New Google users are created automatically. An existing Gmail or
 Google Workspace email can be linked to the same account; other email domains must use their existing sign-in
 method to avoid unsafe email-based account linking.
+
+### `POST /api/auth/resend-verification`
+
+Requires the session cookie. Invalidates earlier unused verification tokens, creates a new 24-hour token, and
+sends a new verification link. Already-verified accounts receive a successful no-op response.
+
+### `POST /api/auth/verify-email`
+
+Accepts `token`. A valid, unused token marks the email verified. Invalid, expired, or previously used tokens
+return `400`.
+
+### `POST /api/auth/forgot-password`
+
+Accepts `email` and always returns the same `202` response for syntactically valid email addresses, whether or
+not a password account exists. A matching account receives a single-use link that expires after 45 minutes.
+
+### `POST /api/auth/reset-password`
+
+Accepts `token` and `password`. A successful reset changes the password, consumes the token, deletes all existing
+sessions for the account, and clears the current browser's session cookie.
 
 ### `PATCH /api/account/preferences`
 

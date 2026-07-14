@@ -28,8 +28,10 @@ import { ProductNav } from './ProductNav';
 import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
 import { AccountView } from './AccountView';
+import type { AccountLinkAction } from '../../app/account-links';
 
 export interface SettingsViewProps {
+  accountLinkAction: AccountLinkAction | null;
   appShellClassName: string;
   isViewPending: boolean;
   preferences: UserPreferences;
@@ -156,6 +158,7 @@ function Thresh({
 }
 
 export function SettingsView({
+  accountLinkAction,
   appShellClassName,
   isViewPending,
   preferences,
@@ -269,6 +272,7 @@ export function SettingsView({
           {/* PANELS */}
           <div className="ssr-set-panels">
             <AccountView
+              accountLinkAction={accountLinkAction}
               appShellClassName={appShellClassName}
               isViewPending={isViewPending}
               navigateToView={navigateToView}

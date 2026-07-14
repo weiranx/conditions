@@ -20,9 +20,11 @@ import { LegalLinks } from '../../app/legal-links';
 import { GUEST_REPORT_LIMIT } from '../../app/guest-report-limit';
 import { persistUserPreferences } from '../../app/preferences';
 import type { UserPreferences } from '../../app/types';
+import type { AccountLinkAction } from '../../app/account-links';
 import '../../styles/account.css';
 
 interface AccountViewProps {
+  accountLinkAction: AccountLinkAction | null;
   appShellClassName: string;
   isViewPending: boolean;
   navigateToView: (view: AppView) => void;
@@ -33,7 +35,22 @@ interface AccountViewProps {
   embedded?: boolean;
 }
 
-type AuthMode = 'create' | 'signin';
+type AuthMode = 'create' | 'signin' | 'forgot' | 'reset';
+
+const authHeading = (mode: AuthMode) => {
+  if (mode === 'forgot') return { kicker: 'Account recovery', title: 'Reset your password' };
+  if (mode === 'reset') return { kicker: 'Choose a new password', title: 'Secure your account' };
+  return mode === 'create'
+    ? { kicker: 'Get started', title: 'Create your account' }
+    : { kicker: 'Welcome back', title: 'Sign in to your account' };
+};
+
+const submitLabel = (mode: AuthMode, busy: boolean) => {
+  if (mode === 'forgot') return busy ? 'Sending reset link…' : 'Send reset link';
+  if (mode === 'reset') return busy ? 'Resetting password…' : 'Reset password';
+  if (mode === 'create') return busy ? 'Creating account…' : 'Create account';
+  return busy ? 'Signing in…' : 'Sign in';
+};
 
 const formatMemberSince = (value: string) => {
   const parsed = new Date(value);
@@ -148,6 +165,7 @@ function MonthlyUsageMeter({
 }
 
 export function AccountView({
+  accountLinkAction,
   appShellClassName,
   isViewPending,
   navigateToView,
@@ -158,35 +176,70 @@ export function AccountView({
   embedded = false,
 }: AccountViewProps) {
   const account = useAccount();
-  const [mode, setMode] = React.useState<AuthMode>('create');
+  const { verifyEmail } = account;
+  const [mode, setMode] = React.useState<AuthMode>(accountLinkAction?.type === 'reset-password' ? 'reset' : 'create');
   const [displayName, setDisplayName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [formNotice, setFormNotice] = React.useState<string | null>(null);
+  const verificationStartedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (accountLinkAction?.type !== 'verify-email' || verificationStartedRef.current) return;
+    verificationStartedRef.current = true;
+    setFormError(null);
+    void verifyEmail(accountLinkAction.token)
+      .then((message) => {
+        setMode('signin');
+        setFormNotice(message);
+      })
+      .catch((error) => {
+        setMode('signin');
+        setFormError(error instanceof Error ? error.message : 'Could not verify this email address.');
+      });
+  }, [accountLinkAction, verifyEmail]);
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setPassword('');
     setConfirmPassword('');
     setFormError(null);
+    setFormNotice(null);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
-    if (mode === 'create' && password !== confirmPassword) {
+    setFormNotice(null);
+    if ((mode === 'create' || mode === 'reset') && password !== confirmPassword) {
       setFormError('Passwords do not match.');
       return;
     }
     try {
-      if (mode === 'create') {
+      if (mode === 'forgot') {
+        const message = await account.requestPasswordReset(email);
+        setFormNotice(message);
+      } else if (mode === 'reset') {
+        if (!accountLinkAction?.token) {
+          setFormError('This password reset link is missing its token. Request a new link.');
+          return;
+        }
+        const message = await account.resetPassword({ token: accountLinkAction.token, password });
+        setMode('signin');
+        setFormNotice(message);
+        setPassword('');
+        setConfirmPassword('');
+      } else if (mode === 'create') {
         await account.createAccount({ displayName, email, password, preferences });
       } else {
         await account.signIn({ email, password });
       }
-      setPassword('');
-      setConfirmPassword('');
+      if (mode !== 'reset') {
+        setPassword('');
+        setConfirmPassword('');
+      }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Account request failed.');
     }
@@ -210,6 +263,7 @@ export function AccountView({
 
   const handleGoogleCredential = async (credential: string) => {
     setFormError(null);
+    setFormNotice(null);
     try {
       await account.signInWithGoogle({ credential, preferences });
     } catch (error) {
@@ -217,7 +271,18 @@ export function AccountView({
     }
   };
 
+  const handleResendVerification = async () => {
+    setFormError(null);
+    setFormNotice(null);
+    try {
+      setFormNotice(await account.resendVerification());
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not send a verification email.');
+    }
+  };
+
   const errorMessage = formError || account.error;
+  const heading = authHeading(mode);
   const isPremium = account.tier?.key === 'premium';
   const reportUsage = account.reportUsage;
   const planPeriodEnd = account.tier?.currentPeriodEnd
@@ -270,7 +335,7 @@ export function AccountView({
               <p>The database connection must be enabled before accounts can be created on this deployment.</p>
               <button type="button" onClick={openPlannerView}>Continue without an account</button>
             </div>
-          ) : account.user ? (
+          ) : account.user && mode !== 'reset' ? (
             <div className="account-profile">
               <div className="account-avatar" aria-hidden>
                 {account.user.displayName.slice(0, 1).toUpperCase() || <UserRound />}
@@ -279,13 +344,31 @@ export function AccountView({
               <h2>{account.user.displayName}</h2>
               <p className="account-profile-email"><Mail aria-hidden /> {account.user.email}</p>
               <p className="account-member-since">{formatMemberSince(account.user.createdAt)}</p>
-              <div className="account-profile-note">
-                <ShieldCheck aria-hidden />
-                <div>
-                  <strong>Your session is protected.</strong>
-                  <span>Planning preferences and generated report history sync to your account.</span>
+              {account.user.emailVerified ? (
+                <div className="account-profile-note">
+                  <ShieldCheck aria-hidden />
+                  <div>
+                    <strong>Email verified and session protected.</strong>
+                    <span>Planning preferences and generated report history sync to your account.</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="account-profile-note is-warning">
+                  <Mail aria-hidden />
+                  <div>
+                    <strong>Verify your email address.</strong>
+                    <span>We’ll send a secure, single-use link to {account.user.email}. The link expires after 24 hours.</span>
+                    <button
+                      type="button"
+                      className="account-inline-action"
+                      onClick={handleResendVerification}
+                      disabled={account.busy}
+                    >
+                      {account.busy ? 'Sending…' : 'Send verification email'}
+                    </button>
+                  </div>
+                </div>
+              )}
               <section
                 className={`account-plan-card${isPremium ? ' is-premium' : ''}`}
                 aria-label="Current account plan"
@@ -351,6 +434,7 @@ export function AccountView({
                   note="Input and output tokens from AI briefs, chat replies, imagery insights, and AI-assisted analysis count toward this allowance."
                 />
               </section>
+              {formNotice && <p className="account-notice" role="status">{formNotice}</p>}
               {errorMessage && <p className="account-error" role="alert">{errorMessage}</p>}
               <div className="account-profile-actions">
                 <button type="button" className="account-primary" onClick={openPlannerView}>Open planner</button>
@@ -362,28 +446,31 @@ export function AccountView({
             </div>
           ) : (
             <div className="account-auth">
-              <div className="account-tabs" role="tablist" aria-label="Account action">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === 'create'}
-                  className={mode === 'create' ? 'is-active' : ''}
-                  onClick={() => switchMode('create')}
-                >
-                  Create account
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === 'signin'}
-                  className={mode === 'signin' ? 'is-active' : ''}
-                  onClick={() => switchMode('signin')}
-                >
-                  Sign in
-                </button>
-              </div>
+              {(mode === 'create' || mode === 'signin') && (
+                <div className="account-tabs" role="tablist" aria-label="Account action">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === 'create'}
+                    className={mode === 'create' ? 'is-active' : ''}
+                    onClick={() => switchMode('create')}
+                  >
+                    Create account
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === 'signin'}
+                    className={mode === 'signin' ? 'is-active' : ''}
+                    onClick={() => switchMode('signin')}
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
 
-              <section className="account-usage-card account-guest-usage" aria-label="Generated report usage without an account">
+              {(mode === 'create' || mode === 'signin') && (
+                <section className="account-usage-card account-guest-usage" aria-label="Generated report usage without an account">
                 <div className="account-usage-heading">
                   <span><FileText aria-hidden /> Generated report usage</span>
                   <small>Browser limit</small>
@@ -415,14 +502,20 @@ export function AccountView({
                     ? 'Create a free account for more reports and saved history.'
                     : 'Your browser quota is used. Sign in or create a free account to continue.'}
                 </p>
-              </section>
+                </section>
+              )}
 
               <div className="account-form-head">
-                <p>{mode === 'create' ? 'Get started' : 'Welcome back'}</p>
-                <h2>{mode === 'create' ? 'Create your account' : 'Sign in to your account'}</h2>
+                <p>{heading.kicker}</p>
+                <h2>{heading.title}</h2>
+                {mode === 'forgot' && <span>Enter your email and we’ll send a single-use link if a password account exists.</span>}
+                {mode === 'reset' && <span>Use at least 12 characters. Saving this password signs out every existing device.</span>}
               </div>
 
-              {account.google.available && account.google.clientId && account.google.nonce && (
+              {(mode === 'create' || mode === 'signin')
+                && account.google.available
+                && account.google.clientId
+                && account.google.nonce && (
                 <div className="account-google-auth">
                   <GoogleSignInButton
                     busy={account.busy}
@@ -452,39 +545,48 @@ export function AccountView({
                     </div>
                   </label>
                 )}
-                <label>
-                  <span>Email</span>
-                  <div className="account-input-wrap">
-                    <Mail aria-hidden />
-                    <input
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      maxLength={254}
-                      required
-                    />
-                  </div>
-                </label>
-                <label>
-                  <span>Password</span>
-                  <div className="account-input-wrap">
-                    <KeyRound aria-hidden />
-                    <input
-                      type="password"
-                      autoComplete={mode === 'create' ? 'new-password' : 'current-password'}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      minLength={12}
-                      maxLength={128}
-                      aria-describedby={mode === 'create' ? 'account-password-help' : undefined}
-                      required
-                    />
-                  </div>
-                  {mode === 'create' && <small id="account-password-help">Use at least 12 characters.</small>}
-                </label>
-                {mode === 'create' && (
+                {mode !== 'reset' && (
+                  <label>
+                    <span>Email</span>
+                    <div className="account-input-wrap">
+                      <Mail aria-hidden />
+                      <input
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        maxLength={254}
+                        required
+                      />
+                    </div>
+                  </label>
+                )}
+                {mode !== 'forgot' && (
+                  <label>
+                    <span>{mode === 'reset' ? 'New password' : 'Password'}</span>
+                    <div className="account-input-wrap">
+                      <KeyRound aria-hidden />
+                      <input
+                        type="password"
+                        autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        minLength={12}
+                        maxLength={128}
+                        aria-describedby={mode === 'create' || mode === 'reset' ? 'account-password-help' : undefined}
+                        required
+                      />
+                    </div>
+                    {(mode === 'create' || mode === 'reset') && <small id="account-password-help">Use at least 12 characters.</small>}
+                  </label>
+                )}
+                {mode === 'signin' && (
+                  <button type="button" className="account-forgot-link" onClick={() => switchMode('forgot')}>
+                    Forgot password?
+                  </button>
+                )}
+                {(mode === 'create' || mode === 'reset') && (
                   <label>
                     <span>Confirm password</span>
                     <div className="account-input-wrap">
@@ -502,17 +604,21 @@ export function AccountView({
                   </label>
                 )}
 
+                {formNotice && <p className="account-notice" role="status">{formNotice}</p>}
                 {errorMessage && <p className="account-error" role="alert">{errorMessage}</p>}
 
                 <button type="submit" className="account-submit" disabled={account.busy}>
                   {account.busy && <LoaderCircle className="account-spinner" aria-hidden />}
-                  {account.busy
-                    ? (mode === 'create' ? 'Creating account…' : 'Signing in…')
-                    : (mode === 'create' ? 'Create account' : 'Sign in')}
+                  {submitLabel(mode, account.busy)}
                 </button>
+                {(mode === 'forgot' || mode === 'reset') && (
+                  <button type="button" className="account-back-link" onClick={() => switchMode('signin')}>
+                    Back to sign in
+                  </button>
+                )}
               </form>
 
-              {(mode === 'create' || account.google.available) && (
+              {(mode === 'create' || (mode === 'signin' && account.google.available)) && (
                 <p className="account-legal">
                   By creating an account or continuing with Google, you agree to the{' '}
                   <button type="button" onClick={() => navigateToView('terms')}>Terms of Use</button>

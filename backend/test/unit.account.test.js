@@ -40,6 +40,7 @@ const USER_ROW = {
   email: 'climber@example.com',
   display_name: 'Avery Stone',
   created_at: new Date('2026-07-12T10:00:00.000Z'),
+  email_verified_at: null,
   preferences: PREFERENCES,
 };
 
@@ -106,8 +107,10 @@ describe('password accounts', () => {
       .toThrow(AccountValidationError);
   });
 
-  test('creates a user, credentials, and session in one database statement', async () => {
-    const query = jest.fn().mockResolvedValue({ rows: [USER_ROW] });
+  test('creates a user, credentials, session, and hashed verification token in one database statement', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [{ ...USER_ROW, verification_token_id: '4df4041e-5ff1-441d-b62f-81283f372489' }],
+    });
     const service = createAccountService({
       database: { configured: true, query },
       sessionTtlMs: 60_000,
@@ -126,6 +129,7 @@ describe('password accounts', () => {
       email: USER_ROW.email,
       displayName: USER_ROW.display_name,
       createdAt: USER_ROW.created_at.toISOString(),
+      emailVerified: false,
       preferences: PREFERENCES,
     });
     expect(result.token).toHaveLength(43);
@@ -134,10 +138,15 @@ describe('password accounts', () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('INSERT INTO account_credentials');
     expect(sql).toContain('INSERT INTO user_sessions');
+    expect(sql).toContain('INSERT INTO account_action_tokens');
     expect(params[0]).toBe('climber@example.com');
     expect(JSON.parse(params[2])).toEqual(PREFERENCES);
     expect(params[3]).toMatch(/^scrypt\$/);
     expect(params[4]).toMatch(/^[a-f0-9]{64}$/);
+    expect(params[6]).toMatch(/^[a-f0-9]{64}$/);
+    expect(params[6]).toBe(hashSessionToken(result.verification.token));
+    expect(params[6]).not.toContain(result.verification.token);
+    expect(result.verification.tokenId).toBe('4df4041e-5ff1-441d-b62f-81283f372489');
   });
 
   test('logs in with valid credentials and stores only a session-token hash', async () => {
@@ -165,6 +174,7 @@ describe('password accounts', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [USER_ROW] })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ...USER_ROW, email_verified_at: new Date('2026-07-12T10:00:00.000Z') }] })
       .mockResolvedValueOnce({ rows: [] });
     const transaction = jest.fn((callback) => callback(query));
     const service = createAccountService({
@@ -182,11 +192,13 @@ describe('password accounts', () => {
     });
 
     expect(result.user.email).toBe(USER_ROW.email);
+    expect(result.user.emailVerified).toBe(true);
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[2][0]).toContain("VALUES ('google'");
     expect(query.mock.calls[3][0]).toContain('INSERT INTO account_identities');
-    expect(query.mock.calls[4][0]).toContain('INSERT INTO user_sessions');
-    expect(query.mock.calls[4][1][1]).toBe(hashSessionToken(result.token));
+    expect(query.mock.calls[4][0]).toContain('email_verified_at');
+    expect(query.mock.calls[5][0]).toContain('INSERT INTO user_sessions');
+    expect(query.mock.calls[5][1][1]).toBe(hashSessionToken(result.token));
   });
 
   test('does not auto-link a non-authoritative Google email to an existing account', async () => {
@@ -214,6 +226,7 @@ describe('password accounts', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ ...USER_ROW, status: 'active', google_subject: null }] })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ...USER_ROW, email_verified_at: new Date('2026-07-12T10:00:00.000Z') }] })
       .mockResolvedValueOnce({ rows: [] });
     const service = createAccountService({
       database: {
@@ -230,7 +243,7 @@ describe('password accounts', () => {
       emailAuthoritative: true,
     })).resolves.toMatchObject({ user: { id: USER_ROW.id } });
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(5);
     expect(query.mock.calls[2][0]).toContain('INSERT INTO account_identities');
     expect(query.mock.calls.every(([sql]) => !sql.includes('INSERT INTO account_credentials'))).toBe(true);
   });
@@ -263,6 +276,66 @@ describe('password accounts', () => {
     await expect(service.updatePreferences(null, PREFERENCES)).rejects.toMatchObject({
       code: 'AUTHENTICATION_REQUIRED',
     });
+  });
+
+  test('creates and consumes a single-use email verification token', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          ...USER_ROW,
+          verification_token_id: '740eb6d4-6200-4984-aecb-8d6a1d632c23',
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ ...USER_ROW, email_verified_at: new Date('2026-07-12T10:05:00.000Z') }],
+      });
+    const service = createAccountService({
+      database: { configured: true, query },
+      now: () => Date.parse('2026-07-12T10:00:00.000Z'),
+    });
+
+    const created = await service.createEmailVerification('current-session-token');
+    expect(created.verification.token).toHaveLength(43);
+    expect(query.mock.calls[0][1][0]).toBe(hashSessionToken('current-session-token'));
+    expect(query.mock.calls[0][1][1]).toBe(hashSessionToken(created.verification.token));
+
+    await expect(service.verifyEmailToken(created.verification.token)).resolves.toMatchObject({
+      email: USER_ROW.email,
+      emailVerified: true,
+    });
+    expect(query.mock.calls[1][1][0]).toBe(hashSessionToken(created.verification.token));
+  });
+
+  test('creates a password reset token and invalidates every session after use', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          id: USER_ROW.id,
+          email: USER_ROW.email,
+          display_name: USER_ROW.display_name,
+          reset_token_id: 'fda3fb9d-d397-44af-802f-7a3969b28945',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ user_id: USER_ROW.id }] })
+      .mockResolvedValueOnce({ rows: [{ user_id: USER_ROW.id }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({
+      database: { configured: true, query, transaction },
+      now: () => Date.parse('2026-07-12T10:00:00.000Z'),
+    });
+
+    const created = await service.createPasswordReset('CLIMBER@example.com');
+    expect(created.reset.token).toHaveLength(43);
+    expect(query.mock.calls[0][1][0]).toBe(USER_ROW.email);
+    expect(query.mock.calls[0][1][1]).toBe(hashSessionToken(created.reset.token));
+
+    await expect(service.resetPassword(created.reset.token, 'a replacement trail password'))
+      .resolves.toEqual({ userId: USER_ROW.id });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[1][1][0]).toBe(hashSessionToken(created.reset.token));
+    expect(query.mock.calls[2][1][1]).toMatch(/^scrypt\$/);
+    expect(query.mock.calls[3]).toEqual(['DELETE FROM user_sessions WHERE user_id = $1', [USER_ROW.id]]);
   });
 
   test('lists account activity and usage for the admin directory', async () => {
@@ -688,7 +761,7 @@ describe('account routes', () => {
     configured: true,
     query: jest.fn().mockResolvedValue({ rows: [{ report_count: '7' }] }),
   };
-  const makeApp = (service, googleVerifier, database = reportDatabase) => {
+  const makeApp = (service, googleVerifier, database = reportDatabase, emailService) => {
     const app = express();
     app.use(express.json());
     registerAccountRoutes({
@@ -699,6 +772,7 @@ describe('account routes', () => {
       usageService,
       reportUsageService,
       googleVerifier,
+      emailService,
       isProduction: false,
     });
     return app;
@@ -710,6 +784,7 @@ describe('account routes', () => {
       email: USER_ROW.email,
       displayName: USER_ROW.display_name,
       createdAt: USER_ROW.created_at.toISOString(),
+      emailVerified: false,
       preferences: PREFERENCES,
     };
     const service = {
@@ -786,6 +861,7 @@ describe('account routes', () => {
       email: USER_ROW.email,
       displayName: USER_ROW.display_name,
       createdAt: USER_ROW.created_at.toISOString(),
+      emailVerified: false,
       preferences: PREFERENCES,
     };
     const service = {
@@ -849,6 +925,7 @@ describe('account routes', () => {
       email: USER_ROW.email,
       displayName: USER_ROW.display_name,
       createdAt: USER_ROW.created_at.toISOString(),
+      emailVerified: false,
       preferences: PREFERENCES,
     };
     const response = await request(makeApp(
@@ -885,6 +962,114 @@ describe('account routes', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Sign in to save account preferences.' });
+  });
+
+  test('sends verification email after registration without exposing the action token', async () => {
+    const user = {
+      id: USER_ROW.id,
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      createdAt: USER_ROW.created_at.toISOString(),
+      emailVerified: false,
+      preferences: PREFERENCES,
+    };
+    const service = {
+      available: true,
+      register: jest.fn().mockResolvedValue({
+        user,
+        token: 'session-token',
+        expiresAt: new Date(Date.now() + 60_000),
+        verification: {
+          tokenId: 'verification-id',
+          token: 'raw-verification-token',
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      }),
+    };
+    const emailService = {
+      available: true,
+      sendVerificationEmail: jest.fn().mockResolvedValue({ id: 'email-id' }),
+    };
+
+    const response = await request(makeApp(service, undefined, reportDatabase, emailService))
+      .post('/api/auth/register')
+      .send({ email: USER_ROW.email });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      available: true,
+      authenticated: true,
+      user,
+      verificationEmailSent: true,
+    });
+    expect(JSON.stringify(response.body)).not.toContain('raw-verification-token');
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(expect.objectContaining({
+      token: 'raw-verification-token',
+      to: USER_ROW.email,
+    }));
+  });
+
+  test('supports verification, generic password recovery, and session-invalidating reset routes', async () => {
+    const verifiedUser = {
+      id: USER_ROW.id,
+      email: USER_ROW.email,
+      displayName: USER_ROW.display_name,
+      createdAt: USER_ROW.created_at.toISOString(),
+      emailVerified: true,
+      preferences: PREFERENCES,
+    };
+    const service = {
+      available: true,
+      createEmailVerification: jest.fn().mockResolvedValue({
+        alreadyVerified: false,
+        user: { ...verifiedUser, emailVerified: false },
+        verification: { tokenId: 'verify-id', token: 'verify-token' },
+      }),
+      verifyEmailToken: jest.fn().mockResolvedValue(verifiedUser),
+      createPasswordReset: jest.fn().mockResolvedValue({
+        email: USER_ROW.email,
+        displayName: USER_ROW.display_name,
+        reset: { tokenId: 'reset-id', token: 'reset-token' },
+      }),
+      resetPassword: jest.fn().mockResolvedValue({ userId: USER_ROW.id }),
+    };
+    const emailService = {
+      available: true,
+      sendVerificationEmail: jest.fn().mockResolvedValue({ id: 'verify-email-id' }),
+      sendPasswordResetEmail: jest.fn().mockResolvedValue({ id: 'reset-email-id' }),
+    };
+    const app = makeApp(service, undefined, reportDatabase, emailService);
+
+    const resendResponse = await request(app)
+      .post('/api/auth/resend-verification')
+      .set('Cookie', 'bc_session=current-session-token')
+      .send({});
+    expect(resendResponse.status).toBe(200);
+    expect(service.createEmailVerification).toHaveBeenCalledWith('current-session-token');
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(expect.objectContaining({
+      token: 'verify-token',
+      to: USER_ROW.email,
+    }));
+
+    const verifyResponse = await request(app).post('/api/auth/verify-email').send({ token: 'verify-token' });
+    expect(verifyResponse.status).toBe(200);
+    expect(service.verifyEmailToken).toHaveBeenCalledWith('verify-token');
+
+    const forgotResponse = await request(app).post('/api/auth/forgot-password').send({ email: USER_ROW.email });
+    expect(forgotResponse.status).toBe(202);
+    expect(forgotResponse.body.message).toMatch(/if a password account exists/i);
+    expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith(expect.objectContaining({
+      token: 'reset-token',
+      to: USER_ROW.email,
+    }));
+
+    const resetResponse = await request(app).post('/api/auth/reset-password').send({
+      token: 'reset-token',
+      password: 'a replacement trail password',
+    });
+    expect(resetResponse.status).toBe(200);
+    expect(service.resetPassword).toHaveBeenCalledWith('reset-token', 'a replacement trail password');
+    expect(resetResponse.headers['set-cookie'][0]).toMatch(/bc_session=;/);
   });
 });
 

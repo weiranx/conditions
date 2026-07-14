@@ -14,6 +14,7 @@ const {
   readSessionToken,
 } = require('../auth/account-access');
 const { createGoogleIdentityVerifier } = require('../auth/google-identity');
+const { createEmailService } = require('../email/email-service');
 
 const GOOGLE_NONCE_COOKIE_NAME = 'bc_google_nonce';
 const GOOGLE_NONCE_TTL_MS = 10 * 60 * 1000;
@@ -27,6 +28,7 @@ const registerAccountRoutes = ({
   usageService,
   reportUsageService,
   googleVerifier = createGoogleIdentityVerifier(),
+  emailService = createEmailService(),
 } = {}) => {
   const cookieOptions = {
     httpOnly: true,
@@ -146,6 +148,13 @@ const registerAccountRoutes = ({
     if (error?.code === 'AUTHENTICATION_REQUIRED') {
       return res.status(401).json({ error: error.message });
     }
+    if (error?.code === 'INVALID_ACCOUNT_TOKEN') {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error?.code === 'EMAIL_SERVICE_UNAVAILABLE' || error?.code === 'EMAIL_DELIVERY_FAILED') {
+      req.log?.warn({ err: error }, 'Account email delivery failed');
+      return res.status(503).json({ error: 'Email delivery is temporarily unavailable. Please try again later.' });
+    }
     if (error?.code === 'ACCOUNT_DATABASE_UNAVAILABLE') {
       return res.status(503).json({ error: error.message });
     }
@@ -181,7 +190,23 @@ const registerAccountRoutes = ({
     try {
       const session = await service.register(req.body);
       setSessionCookie(res, session);
-      return res.status(201).json(await accountResponse(req, session.user));
+      let verificationEmailSent = false;
+      if (session.verification && emailService.available) {
+        try {
+          await emailService.sendVerificationEmail({
+            ...session.verification,
+            to: session.user.email,
+            displayName: session.user.displayName,
+          });
+          verificationEmailSent = true;
+        } catch (error) {
+          req.log?.warn({ err: error }, 'Initial verification email delivery failed');
+        }
+      }
+      return res.status(201).json({
+        ...await accountResponse(req, session.user),
+        verificationEmailSent,
+      });
     } catch (error) {
       return handleError(req, res, error);
     }
@@ -227,6 +252,73 @@ const registerAccountRoutes = ({
       return res.json(await accountResponse(req, session.user));
     } catch (error) {
       clearGoogleNonceCookie(res);
+      return handleError(req, res, error);
+    }
+  });
+
+  app.post('/api/auth/resend-verification', accountLimiter, authAttemptLimiter, async (req, res) => {
+    setNoStore(res);
+    if (!emailService.available) {
+      return res.status(503).json({ error: 'Email delivery is not configured for this deployment.' });
+    }
+    try {
+      const result = await service.createEmailVerification(readSessionToken(req));
+      if (result.alreadyVerified) {
+        return res.json({ ok: true, verified: true, message: 'Your email address is already verified.' });
+      }
+      await emailService.sendVerificationEmail({
+        ...result.verification,
+        to: result.user.email,
+        displayName: result.user.displayName,
+      });
+      return res.json({ ok: true, verified: false, message: 'Verification email sent.' });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.post('/api/auth/verify-email', accountLimiter, authAttemptLimiter, async (req, res) => {
+    setNoStore(res);
+    try {
+      await service.verifyEmailToken(req.body?.token);
+      return res.json({ ok: true, message: 'Your email address has been verified.' });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.post('/api/auth/forgot-password', accountLimiter, authAttemptLimiter, async (req, res) => {
+    setNoStore(res);
+    if (!emailService.available) {
+      return res.status(503).json({ error: 'Password reset email is not configured for this deployment.' });
+    }
+    try {
+      const result = await service.createPasswordReset(req.body?.email);
+      if (result?.reset) {
+        void emailService.sendPasswordResetEmail({
+          ...result.reset,
+          to: result.email,
+          displayName: result.displayName,
+        }).catch((error) => {
+          req.log?.warn({ err: error }, 'Password reset email delivery failed');
+        });
+      }
+      return res.status(202).json({
+        ok: true,
+        message: 'If a password account exists for that email, a reset link will arrive shortly.',
+      });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.post('/api/auth/reset-password', accountLimiter, authAttemptLimiter, async (req, res) => {
+    setNoStore(res);
+    try {
+      await service.resetPassword(req.body?.token, req.body?.password);
+      clearSessionCookie(res);
+      return res.json({ ok: true, message: 'Your password has been reset. Sign in with your new password.' });
+    } catch (error) {
       return handleError(req, res, error);
     }
   });

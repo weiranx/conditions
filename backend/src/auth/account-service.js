@@ -13,6 +13,8 @@ const {
 const { MAX_MONTHLY_TOKEN_LIMIT } = require('./ai-usage-limit');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 45 * 60 * 1000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/u;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
@@ -165,6 +167,7 @@ const serializeUser = (row) => ({
   email: row.email,
   displayName: row.display_name,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  emailVerified: Boolean(row.email_verified_at),
   preferences: normalizeStoredPreferences(row.preferences),
 });
 
@@ -255,6 +258,18 @@ const createDatabaseUnavailableError = () => {
   return error;
 };
 
+const createAuthenticationRequiredError = (message = 'Sign in to manage your account.') => {
+  const error = new Error(message);
+  error.code = 'AUTHENTICATION_REQUIRED';
+  return error;
+};
+
+const createInvalidActionTokenError = () => {
+  const error = new Error('This account link is invalid or has expired. Request a new one and try again.');
+  error.code = 'INVALID_ACCOUNT_TOKEN';
+  return error;
+};
+
 const parseSessionTtlMs = (value) => {
   const days = Number(value);
   return Number.isFinite(days) && days > 0 && days <= 365
@@ -312,7 +327,8 @@ const createAccountService = ({
 
     const persistGoogleLogin = async (query) => {
       const identityResult = await query(
-        `SELECT DISTINCT users.id, users.email, users.display_name, users.created_at, users.preferences, users.status
+        `SELECT DISTINCT users.id, users.email, users.display_name, users.created_at, users.email_verified_at,
+                         users.preferences, users.status
          FROM users
          LEFT JOIN account_identities
            ON account_identities.user_id = users.id
@@ -335,7 +351,8 @@ const createAccountService = ({
 
       if (!row) {
         const emailResult = await query(
-          `SELECT users.id, users.email, users.display_name, users.created_at, users.preferences, users.status,
+          `SELECT users.id, users.email, users.display_name, users.created_at, users.email_verified_at,
+                  users.preferences, users.status,
                   account_identities.subject AS google_subject
            FROM users
            LEFT JOIN account_identities
@@ -358,9 +375,9 @@ const createAccountService = ({
         }
         if (!row) {
           const insertResult = await query(
-            `INSERT INTO users (auth_provider, auth_subject, email, display_name, preferences)
-             VALUES ('google', $1, $2, $3, $4::jsonb)
-             RETURNING id, email, display_name, created_at, preferences`,
+            `INSERT INTO users (auth_provider, auth_subject, email, display_name, email_verified_at, preferences)
+             VALUES ('google', $1, $2, $3, NOW(), $4::jsonb)
+             RETURNING id, email, display_name, created_at, email_verified_at, preferences`,
             [subject, email, displayName, JSON.stringify(preferences)],
           );
           row = insertResult.rows[0];
@@ -373,6 +390,15 @@ const createAccountService = ({
          ON CONFLICT (provider, subject) DO NOTHING`,
         [subject, row.id, email],
       );
+      const verifiedResult = await query(
+        `UPDATE users
+         SET email_verified_at = COALESCE(email_verified_at, NOW()),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, email, display_name, created_at, email_verified_at, preferences`,
+        [row.id],
+      );
+      row = verifiedResult.rows[0] || row;
       await query(
         `INSERT INTO user_sessions (user_id, token_hash, expires_at)
          VALUES ($1, $2, $3)`,
@@ -894,15 +920,17 @@ const createAccountService = ({
     const password = validatePassword(rawPassword);
     const preferences = rawPreferences === undefined ? {} : validateAccountPreferences(rawPreferences);
     const passwordHash = await hashPassword(password);
-    const token = createSessionToken();
-    const expiresAt = new Date(now() + sessionTtlMs);
+    const sessionToken = createSessionToken();
+    const sessionExpiresAt = new Date(now() + sessionTtlMs);
+    const verificationToken = createSessionToken();
+    const verificationExpiresAt = new Date(now() + EMAIL_VERIFICATION_TTL_MS);
 
     try {
       const result = await database.query(
         `WITH new_user AS (
            INSERT INTO users (auth_provider, auth_subject, email, display_name, preferences)
            VALUES ('password', $1, $1, $2, $3::jsonb)
-           RETURNING id, email, display_name, created_at, preferences
+           RETURNING id, email, display_name, created_at, email_verified_at, preferences
          ), new_credentials AS (
            INSERT INTO account_credentials (user_id, password_hash)
            SELECT id, $4 FROM new_user
@@ -911,14 +939,39 @@ const createAccountService = ({
            INSERT INTO user_sessions (user_id, token_hash, expires_at)
            SELECT id, $5, $6 FROM new_user
            RETURNING user_id
+         ), new_verification AS (
+           INSERT INTO account_action_tokens (user_id, purpose, token_hash, expires_at)
+           SELECT id, 'verify_email', $7, $8 FROM new_user
+           RETURNING id, user_id
          )
-         SELECT new_user.id, new_user.email, new_user.display_name, new_user.created_at, new_user.preferences
+         SELECT new_user.id, new_user.email, new_user.display_name, new_user.created_at,
+                new_user.email_verified_at, new_user.preferences,
+                new_verification.id AS verification_token_id
          FROM new_user
          JOIN new_credentials ON new_credentials.user_id = new_user.id
-         JOIN new_session ON new_session.user_id = new_user.id`,
-        [email, displayName, JSON.stringify(preferences), passwordHash, hashSessionToken(token), expiresAt],
+         JOIN new_session ON new_session.user_id = new_user.id
+         JOIN new_verification ON new_verification.user_id = new_user.id`,
+        [
+          email,
+          displayName,
+          JSON.stringify(preferences),
+          passwordHash,
+          hashSessionToken(sessionToken),
+          sessionExpiresAt,
+          hashSessionToken(verificationToken),
+          verificationExpiresAt,
+        ],
       );
-      return { user: serializeUser(result.rows[0]), token, expiresAt };
+      return {
+        user: serializeUser(result.rows[0]),
+        token: sessionToken,
+        expiresAt: sessionExpiresAt,
+        verification: {
+          tokenId: result.rows[0].verification_token_id,
+          token: verificationToken,
+          expiresAt: verificationExpiresAt,
+        },
+      };
     } catch (error) {
       if (error?.code === '23505') throw new DuplicateEmailError();
       throw error;
@@ -930,7 +983,8 @@ const createAccountService = ({
     const email = validateEmail(rawEmail);
     const password = validatePassword(rawPassword);
     const result = await database.query(
-      `SELECT users.id, users.email, users.display_name, users.created_at, users.preferences,
+      `SELECT users.id, users.email, users.display_name, users.created_at, users.email_verified_at,
+              users.preferences,
               account_credentials.password_hash
        FROM users
        JOIN account_credentials ON account_credentials.user_id = users.id
@@ -957,7 +1011,8 @@ const createAccountService = ({
     ensureAvailable();
     if (!token) return null;
     const result = await database.query(
-      `SELECT users.id, users.email, users.display_name, users.created_at, users.preferences
+      `SELECT users.id, users.email, users.display_name, users.created_at, users.email_verified_at,
+              users.preferences
        FROM user_sessions
        JOIN users ON users.id = user_sessions.user_id
        WHERE user_sessions.token_hash = $1
@@ -973,6 +1028,167 @@ const createAccountService = ({
     ensureAvailable();
     if (!token) return;
     await database.query('DELETE FROM user_sessions WHERE token_hash = $1', [hashSessionToken(token)]);
+  };
+
+  const createEmailVerification = async (sessionToken) => {
+    ensureAvailable();
+    if (!sessionToken) throw createAuthenticationRequiredError();
+    const verificationToken = createSessionToken();
+    const verificationExpiresAt = new Date(now() + EMAIL_VERIFICATION_TTL_MS);
+    const result = await database.query(
+      `WITH current_user AS (
+         SELECT users.id, users.email, users.display_name, users.created_at,
+                users.email_verified_at, users.preferences
+         FROM user_sessions
+         JOIN users ON users.id = user_sessions.user_id
+         WHERE user_sessions.token_hash = $1
+           AND user_sessions.expires_at > NOW()
+           AND users.status = 'active'
+         LIMIT 1
+       ), invalidated AS (
+         UPDATE account_action_tokens
+         SET consumed_at = NOW()
+         WHERE user_id IN (SELECT id FROM current_user)
+           AND purpose = 'verify_email'
+           AND consumed_at IS NULL
+         RETURNING id
+       ), new_verification AS (
+         INSERT INTO account_action_tokens (user_id, purpose, token_hash, expires_at)
+         SELECT id, 'verify_email', $2, $3
+         FROM current_user
+         WHERE email_verified_at IS NULL
+         RETURNING id, user_id
+       )
+       SELECT current_user.id, current_user.email, current_user.display_name,
+              current_user.created_at, current_user.email_verified_at, current_user.preferences,
+              new_verification.id AS verification_token_id
+       FROM current_user
+       LEFT JOIN new_verification ON new_verification.user_id = current_user.id`,
+      [hashSessionToken(sessionToken), hashSessionToken(verificationToken), verificationExpiresAt],
+    );
+    const row = result.rows[0];
+    if (!row) throw createAuthenticationRequiredError('Your session has expired. Sign in again.');
+    if (row.email_verified_at) return { user: serializeUser(row), alreadyVerified: true, verification: null };
+    return {
+      user: serializeUser(row),
+      alreadyVerified: false,
+      verification: {
+        tokenId: row.verification_token_id,
+        token: verificationToken,
+        expiresAt: verificationExpiresAt,
+      },
+    };
+  };
+
+  const verifyEmailToken = async (rawToken) => {
+    ensureAvailable();
+    const token = String(rawToken || '').trim();
+    if (!token || token.length > 512) throw createInvalidActionTokenError();
+    const result = await database.query(
+      `WITH matched_token AS (
+         UPDATE account_action_tokens
+         SET consumed_at = NOW()
+         WHERE token_hash = $1
+           AND purpose = 'verify_email'
+           AND consumed_at IS NULL
+           AND expires_at > NOW()
+         RETURNING user_id
+       ), verified_user AS (
+         UPDATE users
+         SET email_verified_at = COALESCE(email_verified_at, NOW()),
+             updated_at = NOW()
+         FROM matched_token
+         WHERE users.id = matched_token.user_id
+           AND users.status = 'active'
+         RETURNING users.id, users.email, users.display_name, users.created_at,
+                   users.email_verified_at, users.preferences
+       )
+       SELECT * FROM verified_user`,
+      [hashSessionToken(token)],
+    );
+    if (!result.rows[0]) throw createInvalidActionTokenError();
+    return serializeUser(result.rows[0]);
+  };
+
+  const createPasswordReset = async (rawEmail) => {
+    ensureAvailable();
+    const email = validateEmail(rawEmail);
+    const resetToken = createSessionToken();
+    const resetExpiresAt = new Date(now() + PASSWORD_RESET_TTL_MS);
+    const result = await database.query(
+      `WITH target_user AS (
+         SELECT users.id, users.email, users.display_name
+         FROM users
+         JOIN account_credentials ON account_credentials.user_id = users.id
+         WHERE LOWER(users.email) = $1
+           AND users.status = 'active'
+         LIMIT 1
+       ), invalidated AS (
+         UPDATE account_action_tokens
+         SET consumed_at = NOW()
+         WHERE user_id IN (SELECT id FROM target_user)
+           AND purpose = 'reset_password'
+           AND consumed_at IS NULL
+         RETURNING id
+       ), new_reset AS (
+         INSERT INTO account_action_tokens (user_id, purpose, token_hash, expires_at)
+         SELECT id, 'reset_password', $2, $3 FROM target_user
+         RETURNING id, user_id
+       )
+       SELECT target_user.id, target_user.email, target_user.display_name,
+              new_reset.id AS reset_token_id
+       FROM target_user
+       JOIN new_reset ON new_reset.user_id = target_user.id`,
+      [email, hashSessionToken(resetToken), resetExpiresAt],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      userId: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      reset: {
+        tokenId: row.reset_token_id,
+        token: resetToken,
+        expiresAt: resetExpiresAt,
+      },
+    };
+  };
+
+  const resetPassword = async (rawToken, rawPassword) => {
+    ensureAvailable();
+    const token = String(rawToken || '').trim();
+    if (!token || token.length > 512) throw createInvalidActionTokenError();
+    const password = validatePassword(rawPassword);
+    const passwordHash = await hashPassword(password);
+    return runInTransaction(async (query) => {
+      const tokenResult = await query(
+        `UPDATE account_action_tokens
+         SET consumed_at = NOW()
+         WHERE token_hash = $1
+           AND purpose = 'reset_password'
+           AND consumed_at IS NULL
+           AND expires_at > NOW()
+         RETURNING user_id`,
+        [hashSessionToken(token)],
+      );
+      const userId = tokenResult.rows[0]?.user_id;
+      if (!userId) throw createInvalidActionTokenError();
+      const credentialsResult = await query(
+        `UPDATE account_credentials
+         SET password_hash = $2,
+             password_updated_at = NOW()
+         FROM users
+         WHERE account_credentials.user_id = $1
+           AND users.id = account_credentials.user_id
+           AND users.status = 'active'
+         RETURNING account_credentials.user_id`,
+        [userId, passwordHash],
+      );
+      if (!credentialsResult.rows[0]) throw createInvalidActionTokenError();
+      await query('DELETE FROM user_sessions WHERE user_id = $1', [userId]);
+      return { userId };
+    });
   };
 
   const updatePreferences = async (token, rawPreferences) => {
@@ -992,7 +1208,8 @@ const createAccountService = ({
          AND user_sessions.token_hash = $1
          AND user_sessions.expires_at > NOW()
          AND users.status = 'active'
-       RETURNING users.id, users.email, users.display_name, users.created_at, users.preferences`,
+       RETURNING users.id, users.email, users.display_name, users.created_at,
+                 users.email_verified_at, users.preferences`,
       [hashSessionToken(token), JSON.stringify(preferences)],
     );
     if (!result.rows[0]) {
@@ -1006,6 +1223,8 @@ const createAccountService = ({
   return {
     available,
     sessionTtlMs,
+    createEmailVerification,
+    createPasswordReset,
     getUserForSession,
     listUsers,
     login,
@@ -1015,18 +1234,22 @@ const createAccountService = ({
     resetAllUserUsageLimits,
     resetUserUsage,
     register,
+    resetPassword,
     revokeUserSessions,
     updatePreferences,
     updateUserTier,
     updateUserReportUsageLimit,
     updateUserUsageLimit,
     updateUserStatus,
+    verifyEmailToken,
   };
 };
 
 module.exports = {
   AccountValidationError,
   DEFAULT_SESSION_TTL_MS,
+  EMAIL_VERIFICATION_TTL_MS,
+  PASSWORD_RESET_TTL_MS,
   DuplicateEmailError,
   GoogleAccountLinkError,
   createAccountService,

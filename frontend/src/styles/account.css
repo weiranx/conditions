@@ -185,6 +185,14 @@
   letter-spacing: -.025em;
 }
 
+.account-form-head > span {
+  display: block;
+  margin-top: 10px;
+  color: var(--ui-text-3);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
 .account-google-auth { margin-top: 24px; }
 .account-google-button { width: 100%; min-height: 44px; display: flex; justify-content: center; overflow: hidden; transition: opacity .16s ease; }
 .account-google-button.is-busy { pointer-events: none; opacity: .65; }
@@ -196,6 +204,27 @@
 .account-form { margin-top: 26px; display: grid; gap: 17px; }
 .account-form label { display: grid; gap: 7px; color: var(--ui-text-2); font-size: 11.5px; font-weight: 700; }
 .account-form label small { color: var(--ui-text-3); font-size: 10.5px; font-weight: 520; }
+
+.account-forgot-link,
+.account-back-link,
+.account-inline-action {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ui-brand-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.account-forgot-link { margin-top: -8px; justify-self: end; }
+.account-back-link { margin: 0 auto; }
+.account-inline-action { margin-top: 8px; }
+.account-inline-action:disabled { cursor: wait; opacity: .65; }
 
 .account-input-wrap {
   height: 44px;
@@ -251,6 +280,17 @@
   line-height: 1.45;
 }
 
+.account-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklch, var(--ui-brand) 32%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--ui-brand-soft) 55%, var(--ui-surface));
+  color: var(--ui-brand-strong);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
 .account-legal { margin: 18px 4px 0; color: var(--ui-text-3); font-size: 10.5px; line-height: 1.55; text-align: center; }
 .account-legal button { padding: 0; border: 0; background: none; color: var(--ui-brand-strong); font: inherit; text-decoration: underline; cursor: pointer; }
 
@@ -266,6 +306,8 @@
 .account-profile-note div { display: grid; gap: 4px; }
 .account-profile-note strong { font-size: 11.5px; }
 .account-profile-note span { color: var(--ui-text-3); font-size: 10.5px; line-height: 1.5; }
+.account-profile-note.is-warning { border-color: color-mix(in oklch, var(--ui-risk-3) 38%, var(--ui-line)); background: color-mix(in oklch, var(--ui-risk-3) 8%, var(--ui-surface-subtle)); }
+.account-profile-note.is-warning > svg { color: var(--ui-caution-ink); }
 
 .account-plan-card { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 16px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface-subtle); text-align: left; }
 .account-plan-card.is-premium { border-color: color-mix(in oklch, var(--ui-brand) 45%, var(--ui-line)); background: linear-gradient(135deg, color-mix(in oklch, var(--ui-brand-soft) 74%, var(--ui-surface)), var(--ui-surface)); }
@@ -296,7 +338,8 @@
 .account-usage-note, .account-usage-unavailable { margin: 12px 0 0; color: var(--ui-text-3); font-size: 10px; line-height: 1.45; }
 .account-guest-usage { margin: 0 0 26px; }
 
-.account-profile .account-error { width: 100%; box-sizing: border-box; margin-top: 16px; text-align: left; }
+.account-profile .account-error,
+.account-profile .account-notice { width: 100%; box-sizing: border-box; margin-top: 16px; text-align: left; }
 .account-profile-actions { width: 100%; margin-top: auto; padding-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .account-signout { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--ui-line-strong); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text-2); font: inherit; font-size: 12px; font-weight: 680; cursor: pointer; }
 .account-signout:hover:not(:disabled) { border-color: var(--ui-brand); color: var(--ui-brand-strong); }

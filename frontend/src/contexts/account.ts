@@ -6,6 +6,7 @@ export interface AccountUser {
   email: string;
   displayName: string;
   createdAt: string;
+  emailVerified: boolean;
   preferences: Partial<UserPreferences>;
 }
 
@@ -105,6 +106,10 @@ export interface AccountContextValue {
   }) => Promise<AccountUser | null>;
   signOut: () => Promise<AccountUser | null>;
   refreshAccount: () => Promise<AccountUser | null>;
+  resendVerification: () => Promise<string>;
+  verifyEmail: (token: string) => Promise<string>;
+  requestPasswordReset: (email: string) => Promise<string>;
+  resetPassword: (input: { token: string; password: string }) => Promise<string>;
   syncGeneratedReportUsage: (
     userId: string,
     reportCount: number,

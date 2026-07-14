@@ -18,6 +18,10 @@ Express API for the SummitSafe backcountry planning app.
 | POST | `/api/auth/login` | Sign in and create a session |
 | GET | `/api/auth/google/config` | Google sign-in client configuration and browser nonce |
 | POST | `/api/auth/google` | Verify Google identity and create a session |
+| POST | `/api/auth/resend-verification` | Send a new verification link to the signed-in password account |
+| POST | `/api/auth/verify-email` | Consume a single-use email verification token |
+| POST | `/api/auth/forgot-password` | Request a password reset without revealing whether an account exists |
+| POST | `/api/auth/reset-password` | Consume a reset token, update the password, and invalidate existing sessions |
 | PATCH | `/api/account/preferences` | Save planning preferences for the signed-in account |
 | GET | `/api/account/reports` | List report history for the signed-in account |
 | GET | `/api/account/reports/:reportId` | Retrieve one account-owned report snapshot |

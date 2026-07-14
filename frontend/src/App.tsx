@@ -102,6 +102,7 @@ import {
   buildTrendWindowFromStart,
 } from './app/travel-window';
 import { sanitizeExternalUrl, parseLinkState } from './app/url-state';
+import { readAccountLinkAction } from './app/account-links';
 import {
   evaluateBackcountryDecision,
 } from './app/decision';
@@ -224,6 +225,9 @@ function App() {
     () => parseLinkState(todayDate, maxForecastDate, initialPreferences),
     [todayDate, maxForecastDate, initialPreferences],
   );
+  // Capture account-action tokens before URL synchronization removes query parameters.
+  // The account panel is lazy-loaded through SettingsView and may render after cleanup.
+  const initialAccountLinkAction = React.useMemo(readAccountLinkAction, []);
   const initialLinkState = React.useMemo(() => {
     if (
       !initialPersistedReport ||
@@ -2119,6 +2123,7 @@ function App() {
 
       <React.Activity name="settings-page" mode={view === 'settings' || view === 'account' ? 'visible' : 'hidden'}>
       <SettingsView
+        accountLinkAction={initialAccountLinkAction}
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}
         preferences={preferences}

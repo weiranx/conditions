@@ -34,7 +34,7 @@ Built-in controls:
 | Helmet security headers | XSS, content-type sniffing, and clickjacking protection |
 | Gzip compression | Reduces response payload size |
 | API rate limiting | Protects `/api/*` from high-volume polling (configurable via env) |
-| Account protection | Salted scrypt password hashes, hashed opaque session tokens, HTTP-only cookies, and tighter account-attempt rate limits |
+| Account protection | Salted scrypt password hashes, hashed opaque session/action tokens, expiring single-use email links, HTTP-only cookies, and tighter account-attempt rate limits |
 | Request tracing (`X-Request-Id`) | Unique ID per request for log correlation |
 | Upstream timeout handling | Prevents hung requests from blocking the event loop |
 | Tiered in-memory caching | TTL + stale-while-revalidate caching across all upstream API calls (weather, avalanche, snowpack, AI brief, etc.) |
@@ -113,6 +113,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 | SNOTEL/NOHRSC variability | Snowpack section sparse or unavailable | Availability varies by location, elevation, and season |
 | Nominatim rate limiting | Search returns only local results | Nominatim enforces usage policies; heavy automated use will be throttled |
 | Preferred AI provider key missing | Requests use the configured fallback, or AI-powered endpoints fail if neither key is set | Set both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` for automatic failover |
+| Account email unavailable | Registration succeeds but verification is not sent; recovery returns `503` | Check `RESEND_API_KEY`, `EMAIL_FROM`, `APP_BASE_URL`, sender-domain verification, and backend logs |
 | Admin setting does not survive restart | PostgreSQL is unavailable or its admin migration was not applied | Check `/healthz`, run `npm run db:migrate`, and inspect the `admin_settings` table |
 | Both AI providers fail during route analysis | Route analysis returns `500` | Check both providers' key validity, model access, quota, and the configured AI timeouts. |
 | Rate limiting (`429`) | Clients receive `429 Too Many Requests` | Configurable via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX_REQUESTS` |
@@ -127,7 +128,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 3. **Inspect the response** for `partialData`, `apiWarning`, and per-section `status` fields to identify which upstream feed failed.
 4. **Correlate backend logs** using the `X-Request-Id` from the response header.
 5. **Enable avalanche debug logging** with `DEBUG_AVY=true` if the issue is in avalanche zone matching or bulletin parsing.
-6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `DATABASE_URL`, `AI_PROVIDER`, `AI_ENABLED`, and both provider API keys.
+6. **Verify environment variables** — check `CORS_ORIGIN`, `PORT`, timeout settings, cache TTLs, `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `APP_BASE_URL`, `AI_PROVIDER`, `AI_ENABLED`, and both AI provider keys.
 7. **Check network egress** — confirm the backend can reach all upstream providers (NOAA, Avalanche.org, NRCS, Open-Meteo).
 8. **Check the frontend proxy** — verify the frontend is pointing to the expected backend origin or proxy target.
 
@@ -146,3 +147,4 @@ Before deploying a new version:
 7. Verify the health endpoint returns `ok: true` in the deployed environment
 8. Verify API proxying routes correctly (check at least one `/api/safety` request end-to-end)
 9. If the selected AI provider is configured, verify route analysis: load a named peak report and click "Analyze Full Route"
+10. If account email is configured, create a password account, verify its email, request a password reset, and confirm the reset signs out existing sessions

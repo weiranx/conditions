@@ -52,6 +52,12 @@ const LEGACY_FREE_TIER: AccountTier = {
   cancelAtPeriodEnd: false,
 };
 
+function parseActionMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return fallback;
+  const message = (payload as Record<string, unknown>).message;
+  return typeof message === 'string' && message.trim() ? message : fallback;
+}
+
 function parseGoogleAuthConfig(payload: unknown): Omit<GoogleAuthConfig, 'loading'> | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const record = payload as Record<string, unknown>;
@@ -145,6 +151,7 @@ function parseAccountUser(value: unknown): AccountUser | null {
     || typeof record.email !== 'string'
     || typeof record.displayName !== 'string'
     || typeof record.createdAt !== 'string'
+    || typeof record.emailVerified !== 'boolean'
   ) {
     return null;
   }
@@ -156,6 +163,7 @@ function parseAccountUser(value: unknown): AccountUser | null {
     email: record.email,
     displayName: record.displayName,
     createdAt: record.createdAt,
+    emailVerified: record.emailVerified,
     preferences,
   };
 }
@@ -351,6 +359,61 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => runAction('/api/auth/logout'), [runAction]);
 
+  const runMessageAction = useCallback(async (
+    path: '/api/auth/resend-verification' | '/api/auth/verify-email' | '/api/auth/forgot-password' | '/api/auth/reset-password',
+    body: object,
+    fallback: string,
+    { refresh = false }: { refresh?: boolean } = {},
+  ) => {
+    setState((current) => ({ ...current, busy: true, error: null }));
+    try {
+      const { response, payload } = await fetchApi(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(readApiErrorMessage(payload, fallback));
+      const message = parseActionMessage(payload, fallback);
+      if (refresh) {
+        await refreshAccount();
+      } else {
+        setState((current) => ({ ...current, busy: false, error: null }));
+      }
+      return message;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : fallback;
+      setState((current) => ({ ...current, busy: false, error: message }));
+      throw new Error(message);
+    }
+  }, [refreshAccount]);
+
+  const resendVerification = useCallback(() => runMessageAction(
+    '/api/auth/resend-verification',
+    {},
+    'Could not send a verification email.',
+    { refresh: true },
+  ), [runMessageAction]);
+
+  const verifyEmail = useCallback((token: string) => runMessageAction(
+    '/api/auth/verify-email',
+    { token },
+    'Could not verify this email address.',
+    { refresh: true },
+  ), [runMessageAction]);
+
+  const requestPasswordReset = useCallback((email: string) => runMessageAction(
+    '/api/auth/forgot-password',
+    { email },
+    'Could not request a password reset.',
+  ), [runMessageAction]);
+
+  const resetPassword = useCallback((input: { token: string; password: string }) => runMessageAction(
+    '/api/auth/reset-password',
+    input,
+    'Could not reset this password.',
+    { refresh: true },
+  ), [runMessageAction]);
+
   const savePreferences = useCallback((preferences: UserPreferences) => {
     const operation = preferenceSaveChainRef.current
       .catch(() => undefined)
@@ -413,13 +476,30 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AccountContextValue>(() => ({
     ...state,
     createAccount,
+    requestPasswordReset,
+    resendVerification,
+    resetPassword,
     signIn,
     signInWithGoogle,
     signOut,
     refreshAccount,
     syncGeneratedReportUsage,
     savePreferences,
-  }), [createAccount, refreshAccount, savePreferences, signIn, signInWithGoogle, signOut, state, syncGeneratedReportUsage]);
+    verifyEmail,
+  }), [
+    createAccount,
+    refreshAccount,
+    requestPasswordReset,
+    resendVerification,
+    resetPassword,
+    savePreferences,
+    signIn,
+    signInWithGoogle,
+    signOut,
+    state,
+    syncGeneratedReportUsage,
+    verifyEmail,
+  ]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
