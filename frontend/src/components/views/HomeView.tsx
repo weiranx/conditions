@@ -2,6 +2,7 @@ import React from 'react';
 import {
   BarChart3,
   ArrowRight,
+  BellRing,
   CalendarRange,
   CalendarDays,
   Check,
@@ -414,6 +415,82 @@ export function HomeView({
             </div>
 
             <div className="ssr-h-preview-action"><Compass size={16} aria-hidden /><span><strong>Plan adjustment</strong> Set an 11 am turnaround for exposed upper-mountain travel.</span></div>
+          </div>
+        </section>
+
+        <section className="ssr-h-new" aria-labelledby="home-new-title">
+          <div className="ssr-h-new-head">
+            <div>
+              <span className="ssr-h-new-badge"><Sparkles size={12} aria-hidden /> New on the mountain</span>
+              <h2 id="home-new-title">More ways to find—and keep—the better window.</h2>
+            </div>
+            <p>
+              The latest planning tools go beyond a single forecast. Compare the days ahead, uncover
+              lower-risk timing, and keep important objectives close as conditions evolve.
+            </p>
+          </div>
+
+          <div className="ssr-h-new-grid">
+            {featureFlags.objectiveWatch && <article className="ssr-h-new-card ssr-h-new-card-featured">
+              <div className="ssr-h-new-card-top">
+                <span className="ssr-h-new-card-icon"><BellRing aria-hidden /></span>
+                <span className="ssr-h-new-label">Just shipped</span>
+              </div>
+              <div className="ssr-h-new-card-copy">
+                <span>Objective Watch</span>
+                <h3>Save the mountain.<br />Watch the window.</h3>
+                <p>
+                  Keep favorite objectives on one dashboard and return when the forecast moves in your
+                  favor—without rebuilding the plan from scratch.
+                </p>
+                <button type="button" onClick={() => navigateToView('watches')}>
+                  See your watches <ArrowRight size={15} aria-hidden />
+                </button>
+              </div>
+              <div className="ssr-h-new-watch-preview" aria-hidden="true">
+                <div><span>Mount Hood</span><b>Window improving</b></div>
+                <div className="ssr-h-new-watch-bars"><i /><i /><i /><i /><i /></div>
+                <small>Next 5 days</small>
+              </div>
+            </article>}
+
+            {featureFlags.terrainWindow && <article className="ssr-h-new-card ssr-h-new-card-terrain">
+              <div className="ssr-h-new-card-top">
+                <span className="ssr-h-new-card-icon"><Sunrise aria-hidden /></span>
+                <span className="ssr-h-new-label">New</span>
+              </div>
+              <div className="ssr-h-new-card-copy">
+                <span>Terrain Window</span>
+                <h3>See when the terrain gives you more room.</h3>
+                <p>Scan the day for lower-risk hours, the hazards shaping them, and the cutoff that should change your plan.</p>
+                <button type="button" onClick={openPlannerView}>
+                  Find a terrain window <ArrowRight size={15} aria-hidden />
+                </button>
+              </div>
+              <div className="ssr-h-new-window-preview" aria-label="Example lower-risk window from 5 am to 10 am">
+                <span>5 am</span><i /><i /><i className="closing" /><b>10 am</b>
+              </div>
+            </article>}
+
+            {featureFlags.tripPlanning && <article className="ssr-h-new-card ssr-h-new-card-trip">
+              <div className="ssr-h-new-card-top">
+                <span className="ssr-h-new-card-icon"><CalendarRange aria-hidden /></span>
+                <span className="ssr-h-new-label">New</span>
+              </div>
+              <div className="ssr-h-new-card-copy">
+                <span>Multi-day forecasts</span>
+                <h3>Stop guessing which day deserves the trip.</h3>
+                <p>Compare 2–7 days side by side across weather, travel hours, daylight, visibility, and active alerts.</p>
+                <button type="button" onClick={openTripToolView}>
+                  Compare forecast days <ArrowRight size={15} aria-hidden />
+                </button>
+              </div>
+              <div className="ssr-h-new-days-preview" aria-hidden="true">
+                <span><small>Fri</small><b>64</b></span>
+                <span className="best"><small>Sat</small><b>82</b><em>Best</em></span>
+                <span><small>Sun</small><b>71</b></span>
+              </div>
+            </article>}
           </div>
         </section>
 
