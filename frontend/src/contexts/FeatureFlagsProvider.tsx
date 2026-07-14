@@ -4,6 +4,7 @@ import {
   DEFAULT_FEATURE_FLAGS,
   FEATURE_FLAGS_EVENT,
   FeatureFlagsContext,
+  FeatureFlagsReadyContext,
   readFeatureFlags,
   type ProductFeatureFlags,
 } from './feature-flags';
@@ -12,6 +13,7 @@ const FEATURE_FLAGS_REFRESH_MS = 15_000;
 
 export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
   const [flags, setFlags] = useState<ProductFeatureFlags>(DEFAULT_FEATURE_FLAGS);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -27,7 +29,10 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
         });
         if (!result.response.ok) return;
         const nextFlags = readFeatureFlags(result.payload);
-        if (nextFlags) setFlags(nextFlags);
+        if (nextFlags) {
+          setFlags(nextFlags);
+          setReady(true);
+        }
       } catch {
         // Keep the last known values when configuration is temporarily unreachable.
       } finally {
@@ -38,7 +43,10 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
     const handleFlagsChange = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
       const nextFlags = readFeatureFlags(event.detail);
-      if (nextFlags) setFlags(nextFlags);
+      if (nextFlags) {
+        setFlags(nextFlags);
+        setReady(true);
+      }
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') void refresh();
@@ -57,5 +65,9 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <FeatureFlagsContext.Provider value={flags}>{children}</FeatureFlagsContext.Provider>;
+  return (
+    <FeatureFlagsReadyContext.Provider value={ready}>
+      <FeatureFlagsContext.Provider value={flags}>{children}</FeatureFlagsContext.Provider>
+    </FeatureFlagsReadyContext.Provider>
+  );
 }

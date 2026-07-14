@@ -131,6 +131,51 @@ describe('transactional email service', () => {
     expect(options).toEqual({ idempotencyKey: 'report-email/user-1/report-1/12345' });
   });
 
+  test('omits disabled avalanche content from report email output', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'report-email-456' }, error: null });
+    const service = createEmailService({
+      apiKey: 're_test',
+      fromAddress: 'accounts@mail.example.com',
+      appBaseUrl: 'https://conditions.example.com',
+      client: { emails: { send } },
+    });
+
+    await service.sendReportEmail({
+      deliveryKey: 'user-1/report-2/12345',
+      to: 'climber@example.com',
+      report: {
+        plan: { objectiveName: 'Weather-only objective', forecastDate: '2026-07-15', alpineStartTime: '06:00' },
+        safetyData: {
+          featureFlags: {
+            avalancheDetails: false,
+            airQualityDetails: true,
+            fireRiskDetails: true,
+            heatRiskDetails: true,
+            snowpackDetails: true,
+            fieldObservations: true,
+            windLoadingDetails: true,
+            daylightTimeline: true,
+            weatherContextDetails: true,
+          },
+          safety: {
+            score: 80,
+            tier: 'Good',
+            factors: [{ group: 'avalanche', hazard: 'Avalanche', impact: -25 }],
+            explanations: ['Avalanche danger is Considerable.', 'Weather is mild.'],
+          },
+          weather: { description: 'Mild' },
+          avalanche: { risk: 'Considerable', problems: [{ name: 'Deep Persistent Slab' }] },
+          alerts: { activeCount: 0 },
+        },
+      },
+    });
+
+    const message = send.mock.calls[0][0];
+    expect(message.html).not.toMatch(/Avalanche|Considerable|Deep Persistent Slab/i);
+    expect(message.text).not.toMatch(/Avalanche|Considerable|Deep Persistent Slab/i);
+    expect(message.html).toContain('Weather is mild.');
+  });
+
   test('sends escaped, idempotent Objective Watch change alerts to the watches dashboard', async () => {
     const send = jest.fn().mockResolvedValue({ data: { id: 'watch-email-123' }, error: null });
     const service = createEmailService({

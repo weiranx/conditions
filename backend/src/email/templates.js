@@ -1,5 +1,7 @@
 'use strict';
 
+const { sanitizeReportForFeatureFlags } = require('../utils/report-feature-filter');
+
 const APP_NAME = 'Backcountry Conditions';
 
 const escapeHtml = (value) => String(value ?? '')
@@ -225,6 +227,7 @@ const buildCompleteReport = (report) => {
     'forecast', 'weather', 'solar', 'atmosphere', 'heatRisk', 'airQuality', 'rainfall',
     'avalanche', 'snowpack', 'alerts', 'fireRisk', 'localConditions',
     'generatedAt', 'partialData', 'apiWarning', 'location', 'capabilities',
+    'featureFlags', 'disabledProductDomains',
   ];
   const groupedReportKeys = ['version', 'savedAt', 'plan', 'preferences', 'safetyData', 'route', 'ai'];
   const sections = [
@@ -280,6 +283,7 @@ const reportEmailShell = ({
   greeting,
   condition,
   weatherDetail,
+  avalancheEnabled,
   avalancheRisk,
   alertHeadline,
   alertDetail,
@@ -363,17 +367,17 @@ const reportEmailShell = ({
                 <p style="margin:0 0 10px;color:#6c786f;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">Conditions at a glance</p>
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;border-collapse:separate;border:1px solid #dfe5de;border-radius:14px;">
                   <tr>
-                    <td width="33.33%" class="mobile-stack" valign="top" style="width:33.33%;padding:18px 16px;border-right:1px solid #e5e9e3;">
+                    <td width="${avalancheEnabled ? '33.33%' : '50%'}" class="mobile-stack" valign="top" style="width:${avalancheEnabled ? '33.33%' : '50%'};padding:18px 16px;border-right:1px solid #e5e9e3;">
                       <span style="display:block;margin:0 0 7px;color:#467159;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">Weather</span>
                       <strong style="display:block;margin:0 0 5px;color:#1c2c22;font-size:15px;line-height:1.35;">${escapeHtml(condition)}</strong>
                       <span style="display:block;color:#69756c;font-size:12px;line-height:1.5;">${escapeHtml(weatherDetail)}</span>
                     </td>
-                    <td width="33.33%" class="mobile-stack" valign="top" style="width:33.33%;padding:18px 16px;border-right:1px solid #e5e9e3;">
+                    ${avalancheEnabled ? `<td width="33.33%" class="mobile-stack" valign="top" style="width:33.33%;padding:18px 16px;border-right:1px solid #e5e9e3;">
                       <span style="display:block;margin:0 0 7px;color:#9a6a14;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">Avalanche</span>
                       <strong style="display:block;margin:0 0 5px;color:#1c2c22;font-size:15px;line-height:1.35;">${escapeHtml(avalancheRisk)}</strong>
                       <span style="display:block;color:#69756c;font-size:12px;line-height:1.5;">Verify the latest official bulletin.</span>
-                    </td>
-                    <td width="33.33%" class="mobile-stack" valign="top" style="width:33.33%;padding:18px 16px;">
+                    </td>` : ''}
+                    <td width="${avalancheEnabled ? '33.33%' : '50%'}" class="mobile-stack" valign="top" style="width:${avalancheEnabled ? '33.33%' : '50%'};padding:18px 16px;">
                       <span style="display:block;margin:0 0 7px;color:#a34538;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">Alerts</span>
                       <strong style="display:block;margin:0 0 5px;color:#1c2c22;font-size:15px;line-height:1.35;">${escapeHtml(alertHeadline)}</strong>
                       <span style="display:block;color:#69756c;font-size:12px;line-height:1.5;">${escapeHtml(alertDetail)}</span>
@@ -420,11 +424,14 @@ const reportEmailShell = ({
 
 const buildReportEmail = ({ displayName, report, actionUrl }) => {
   const plan = report?.plan && typeof report.plan === 'object' ? report.plan : {};
-  const safetyData = report?.safetyData && typeof report.safetyData === 'object' ? report.safetyData : {};
+  const rawSafetyData = report?.safetyData && typeof report.safetyData === 'object' ? report.safetyData : {};
+  const safetyData = sanitizeReportForFeatureFlags(rawSafetyData, rawSafetyData.featureFlags || {});
+  const filteredReport = { ...report, safetyData };
   const preferences = report?.preferences && typeof report.preferences === 'object' ? report.preferences : {};
   const safety = safetyData?.safety && typeof safetyData.safety === 'object' ? safetyData.safety : {};
   const weather = safetyData?.weather && typeof safetyData.weather === 'object' ? safetyData.weather : {};
   const avalanche = safetyData?.avalanche && typeof safetyData.avalanche === 'object' ? safetyData.avalanche : {};
+  const avalancheEnabled = safetyData.featureFlags?.avalancheDetails !== false;
   const alerts = safetyData?.alerts && typeof safetyData.alerts === 'object' ? safetyData.alerts : {};
   const objectiveName = compactText(plan.objectiveName, 'Backcountry objective', 160);
   const forecastDate = compactText(plan.forecastDate, 'Date not available', 32);
@@ -495,11 +502,11 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
     : ['Recheck official forecasts, access, and field observations before departure.'])
     .map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`)
     .join('');
-  const completeReport = buildCompleteReport(report);
+  const completeReport = buildCompleteReport(filteredReport);
 
   return {
     subject: `${objectiveName} report · ${forecastDate}`,
-    text: `${displayName ? `Hi ${compactText(displayName, '', 80)},\n\n` : ''}${objectiveName}\n${forecastDate} at ${startTime}\n${scoreLine}\n\nWeather: ${condition}${weatherParts.length ? ` (${weatherParts.join(', ')})` : ''}\nAvalanche: ${avalancheRisk}\nAlerts: ${alertLine}\n\nKey report notes:\n${textHighlights}\n\nCOMPLETE REPORT\n\n${completeReport.text}\n\nOpen Backcountry Conditions:\n${actionUrl}\n\nThis is a point-in-time planning snapshot, not a safety guarantee. Recheck official sources and current field conditions before departure.`,
+    text: `${displayName ? `Hi ${compactText(displayName, '', 80)},\n\n` : ''}${objectiveName}\n${forecastDate} at ${startTime}\n${scoreLine}\n\nWeather: ${condition}${weatherParts.length ? ` (${weatherParts.join(', ')})` : ''}${avalancheEnabled ? `\nAvalanche: ${avalancheRisk}` : ''}\nAlerts: ${alertLine}\n\nKey report notes:\n${textHighlights}\n\nCOMPLETE REPORT\n\n${completeReport.text}\n\nOpen Backcountry Conditions:\n${actionUrl}\n\nThis is a point-in-time planning snapshot, not a safety guarantee. Recheck official sources and current field conditions before departure.`,
     html: reportEmailShell({
       preview: `${objectiveName} report for ${forecastDate}`,
       objectiveName,
@@ -514,6 +521,7 @@ const buildReportEmail = ({ displayName, report, actionUrl }) => {
       greeting,
       condition,
       weatherDetail: weatherParts.length ? weatherParts.join(' · ') : 'See the full report for weather details.',
+      avalancheEnabled,
       avalancheRisk,
       alertHeadline,
       alertDetail,

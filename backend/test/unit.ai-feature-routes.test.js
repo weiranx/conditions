@@ -11,6 +11,7 @@ const {
   SYSTEM_PROMPT: SNOW_VISION_SYSTEM_PROMPT,
   registerSnowVisionRoute: registerSnowVisionRouteWithoutAccount,
 } = require('../src/routes/snow-vision');
+const { getScoreFeatureSnapshot } = require('../src/utils/report-feature-filter');
 
 const allowAccountAccess = async (req) => {
   req.accountUser = { id: '8c696be4-e175-4b6a-965b-82bdf3758e0c' };
@@ -82,4 +83,53 @@ test('disabled snow vision is rejected before fetching imagery', async () => {
   expect(response.body.error).toBe('AI features are unavailable');
   expect(fetchWithTimeout).not.toHaveBeenCalled();
   expect(askAIVision).not.toHaveBeenCalled();
+});
+
+test('AI brief excludes a disabled avalanche domain from the model prompt', async () => {
+  const app = express();
+  app.use(express.json());
+  const flags = { avalancheDetails: false };
+  const askAI = jest.fn().mockResolvedValue('BIG PICTURE: Weather is the enabled concern.');
+  registerAiBriefRoute({ app, askAI, getProductFeatureFlags: () => flags });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({
+      decisionLevel: 'CAUTION',
+      report: {
+        featureFlags: getScoreFeatureSnapshot(flags),
+        weather: { description: 'Cloudy and windy', windGust: 42 },
+        avalanche: { risk: 'Considerable', problems: [{ name: 'Deep Persistent Slab' }] },
+        gear: [{ id: 'avalanche-kit', title: 'Avalanche rescue kit' }],
+        safety: {
+          factors: [
+            { group: 'avalanche', hazard: 'Avalanche', impact: -25 },
+            { group: 'weather', hazard: 'Wind', impact: -5 },
+          ],
+          explanations: ['Avalanche danger is Considerable.', 'Strong wind is expected.'],
+        },
+      },
+    });
+
+  expect(response.status).toBe(200);
+  expect(askAI).toHaveBeenCalledTimes(1);
+  const prompt = askAI.mock.calls[0][0];
+  expect(prompt).toMatch(/Disabled product domains: avalanche/i);
+  expect(prompt).toContain('Cloudy and windy');
+  expect(prompt).not.toMatch(/Considerable|Deep Persistent Slab|Avalanche rescue kit/);
+});
+
+test('AI brief rejects a report generated under different score feature settings', async () => {
+  const app = express();
+  app.use(express.json());
+  const askAI = jest.fn();
+  registerAiBriefRoute({ app, askAI, getProductFeatureFlags: () => ({ avalancheDetails: false }) });
+
+  const response = await request(app)
+    .post('/api/ai-brief')
+    .send({ report: { safety: { score: 80 } }, decisionLevel: 'GO' });
+
+  expect(response.status).toBe(409);
+  expect(response.body.code).toBe('REPORT_REGENERATION_REQUIRED');
+  expect(askAI).not.toHaveBeenCalled();
 });

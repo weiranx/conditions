@@ -91,6 +91,7 @@ export interface SafetyData {
   generatedAt?: string;
   partialData?: boolean;
   apiWarning?: string;
+  featureFlags?: Record<string, boolean>;
   capabilities?: {
     ai?: boolean;
     aiBrief?: boolean;

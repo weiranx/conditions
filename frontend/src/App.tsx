@@ -141,7 +141,11 @@ import { useDayComparisons } from './hooks/useDayComparisons';
 import { useStartTimeScenarios } from './hooks/useStartTimeScenarios';
 import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePreferenceHandlers';
 import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
-import { useProductFeatureFlags } from './contexts/feature-flags';
+import {
+  reportMatchesScoreFeatures,
+  useProductFeatureFlags,
+  useProductFeatureFlagsReady,
+} from './contexts/feature-flags';
 import { useAccount } from './hooks/useAccount';
 import { AiAccessContext } from './contexts/ai-access';
 import { AiAccessPrompt, type AccountAccessReason } from './components/AiAccessPrompt';
@@ -211,6 +215,7 @@ function formatIsoDateLabel(isoDate: string): string {
 
 function App() {
   const featureFlags = useProductFeatureFlags();
+  const featureFlagsReady = useProductFeatureFlagsReady();
   const {
     loading: accountLoading,
     refreshAccount,
@@ -444,6 +449,38 @@ function App() {
       reportSyncTimeoutRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    if (!featureFlagsReady || !safetyData || reportMatchesScoreFeatures(featureFlags, safetyData.featureFlags)) return;
+    clearWakeRetry();
+    resetSavedReportTracking();
+    setViewingHistoryReport(false);
+    setRestoredReportSource(null);
+    setSafetyData(null);
+    setPreviousSafetyData(null);
+    setAiBriefNarrative(null);
+    setAiBriefLoading(false);
+    setAiBriefError(null);
+    setReportChatMessages([]);
+    setReportChatSessionKey((current) => current + 1);
+    clearLastLoadedKey();
+    if (!viewingHistoryReport && restoredReportSource !== 'shared') clearPersistedReport();
+    setError('Risk feature settings changed. Generate a new report to recalculate the score.');
+  }, [
+    clearLastLoadedKey,
+    clearWakeRetry,
+    featureFlags,
+    featureFlagsReady,
+    resetSavedReportTracking,
+    restoredReportSource,
+    safetyData,
+    setAiBriefError,
+    setAiBriefLoading,
+    setAiBriefNarrative,
+    setError,
+    setSafetyData,
+    viewingHistoryReport,
+  ]);
 
   const beginReportGeneration = useCallback(() => {
     const priorSafetyData = safetyData;

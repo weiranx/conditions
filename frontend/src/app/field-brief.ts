@@ -42,9 +42,10 @@ function clockAtProgress(startTime: string, hours: number, progress: number): st
 }
 
 function officialLinks(data: SafetyData): Array<{ label: string; url: string }> {
+  const avalancheEnabled = data.featureFlags?.avalancheDetails !== false;
   const candidates: Array<{ label: string; url?: string | null }> = [
     { label: 'Official weather forecast', url: data.weather.forecastLink },
-    { label: 'Avalanche bulletin', url: data.avalanche.link },
+    ...(avalancheEnabled ? [{ label: 'Avalanche bulletin', url: data.avalanche.link }] : []),
     { label: 'Precipitation source', url: data.rainfall?.link },
     ...(data.alerts?.alerts || []).map((alert) => ({ label: alert.event || alert.headline || 'Weather alert', url: alert.link })),
     ...(data.localConditions?.closures?.alerts || []).map((alert) => ({ label: alert.title || 'Access alert', url: alert.url })),
@@ -68,6 +69,7 @@ function escapeHtml(value: string): string {
 
 export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   const { safetyData, decision } = input;
+  const avalancheEnabled = safetyData.featureFlags?.avalancheDetails !== false;
   const score = Math.round(Number(safetyData.safety?.score) || 0);
   const generatedAt = safetyData.generatedAt ? new Date(safetyData.generatedAt).toLocaleString() : 'Unknown';
   const hazards = [...decision.blockers, ...decision.cautions]
@@ -81,7 +83,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
 
   const verificationItems = [
     safetyData.partialData ? compact(safetyData.apiWarning || 'Some report inputs are missing.') : '',
-    safetyData.avalanche.relevant !== false && safetyData.avalanche.dangerUnknown
+    avalancheEnabled && safetyData.avalanche.relevant !== false && safetyData.avalanche.dangerUnknown
       ? 'Avalanche danger is unknown; verify the current official bulletin before entering avalanche terrain.'
       : '',
     safetyData.alerts?.activeCount

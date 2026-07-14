@@ -249,6 +249,7 @@ const buildSafetyResponsePayload = ({
   terrainConditionData,
   analysis,
   pleasantness,
+  featureFlags,
   partial = null,
 }) => {
   const stampGeneratedTime = (value) => {
@@ -267,6 +268,7 @@ const buildSafetyResponsePayload = ({
       ai: isAIAvailable(),
       ...getAIFeatureAvailability(),
     },
+    featureFlags,
     location: { lat: parsedLat, lon: parsedLon },
     forecast: {
       selectedDate,
@@ -579,6 +581,7 @@ const safetyHandler = async (req, res) => {
       relevanceReason: avalancheRelevance.reason,
     };
 
+    const scoreFeatures = getFeatureFlags();
     gearSuggestions = buildLayeringGearSuggestions({
       weatherData,
       trailStatus,
@@ -590,9 +593,9 @@ const safetyHandler = async (req, res) => {
       fireRiskData,
       heatRiskData,
       selectedTravelWindowHours: requestedTravelWindowHours,
+      scoreFeatures,
     });
 
-    const scoreFeatures = getFeatureFlags();
     const analysis = calculateSafetyScore({
       weatherData,
       avalancheData,
@@ -643,6 +646,7 @@ const safetyHandler = async (req, res) => {
       terrainConditionData,
       analysis,
       pleasantness,
+      featureFlags: scoreFeatures,
     });
     if (req.safetySignal?.aborted || res.headersSent) {
       return;
@@ -720,6 +724,19 @@ const safetyHandler = async (req, res) => {
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
     });
+    const safeGearSuggestions = buildLayeringGearSuggestions({
+      weatherData: safeWeatherData,
+      trailStatus: safeTrailStatus,
+      avalancheData: safeAvalancheData,
+      airQualityData: safeAirQualityData,
+      alertsData: safeAlertsData,
+      rainfallData: safeRainfallData,
+      snowpackData: safeSnowpackData,
+      fireRiskData: safeFireRiskData,
+      heatRiskData: safeHeatRiskData,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+      scoreFeatures,
+    });
 
     const fallbackGeneratedAt = new Date().toISOString();
 
@@ -742,11 +759,12 @@ const safetyHandler = async (req, res) => {
       heatRiskData: safeHeatRiskData,
       atmosphereData: buildAtmosphericData({ weatherData: safeWeatherData, fetched: {} }),
       localConditionsData: null,
-      gearSuggestions,
+      gearSuggestions: safeGearSuggestions,
       trailStatus: safeTrailStatus,
       terrainConditionData: safeTerrainCondition,
       analysis,
       pleasantness,
+      featureFlags: scoreFeatures,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     });
     await writeReportLog({ statusCode: 200, lat: parsedLat, lon: parsedLon, date: fallbackSelectedDate, startTime: requestedStartClock || null, safetyScore: analysis.score, partialData: true, durationMs: Date.now() - startedAt, ...baseLogFields });

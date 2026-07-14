@@ -1390,6 +1390,18 @@ describe('buildLayeringGearSuggestions — heat hydration and electrolytes', () 
 });
 
 describe('buildLayeringGearSuggestions — avalanche rescue kit', () => {
+  test('does not use avalanche conditions when avalanche scoring is disabled', () => {
+    const suggestions = buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      avalancheData: { relevant: true, dangerLevel: 5, dangerUnknown: true },
+      scoreFeatures: { avalancheDetails: false },
+    });
+
+    expect(suggestions.some((s) => s.id === 'avalanche-kit')).toBe(false);
+    expect(suggestions.some((s) => s.id === 'avalanche-unknown')).toBe(false);
+    expect(suggestions.some((s) => s.id === 'emergency-shelter')).toBe(false);
+  });
+
   test('marks rescue gear essential whenever avalanche terrain is relevant', () => {
     const suggestions = buildLayeringGearSuggestions({
       ...baseSuggestionInput(),

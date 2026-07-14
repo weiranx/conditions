@@ -27,6 +27,18 @@ export const PRODUCT_FEATURE_KEYS = [
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
 
+export const SCORE_AFFECTING_FEATURE_KEYS = [
+  'avalancheDetails',
+  'airQualityDetails',
+  'fireRiskDetails',
+  'heatRiskDetails',
+  'snowpackDetails',
+  'fieldObservations',
+  'windLoadingDetails',
+  'daylightTimeline',
+  'weatherContextDetails',
+] as const satisfies readonly ProductFeatureKey[];
+
 export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   tripPlanning: true,
   routeAnalysis: true,
@@ -54,6 +66,19 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
 export const FEATURE_FLAGS_EVENT = 'summitsafe:product-feature-flags-change';
 
 export const FeatureFlagsContext = createContext<ProductFeatureFlags>(DEFAULT_FEATURE_FLAGS);
+export const FeatureFlagsReadyContext = createContext(false);
+
+export function reportMatchesScoreFeatures(
+  currentFlags: ProductFeatureFlags,
+  reportFlags: Record<string, boolean> | null | undefined,
+): boolean {
+  if (!reportFlags) {
+    return SCORE_AFFECTING_FEATURE_KEYS.every((key) => currentFlags[key]);
+  }
+  return SCORE_AFFECTING_FEATURE_KEYS.every((key) => (
+    typeof reportFlags[key] === 'boolean' && reportFlags[key] === currentFlags[key]
+  ));
+}
 
 export function readFeatureFlags(payload: unknown): ProductFeatureFlags | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -68,4 +93,8 @@ export function publishProductFeatureFlags(flags: ProductFeatureFlags): void {
 
 export function useProductFeatureFlags(): ProductFeatureFlags {
   return useContext(FeatureFlagsContext);
+}
+
+export function useProductFeatureFlagsReady(): boolean {
+  return useContext(FeatureFlagsReadyContext);
 }

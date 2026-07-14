@@ -12,11 +12,19 @@ const buildLayeringGearSuggestions = ({
   fireRiskData,
   heatRiskData,
   selectedTravelWindowHours,
+  scoreFeatures = null,
 }) => {
   const MAX_GEAR_SUGGESTIONS = 12;
   const BASELINE_GEAR_IDS = new Set(['backcountry-essentials', 'layering-core']);
   const TONE_PRIORITY = { nogo: 0, caution: 1, watch: 2, go: 3 };
   const suggestionMap = new Map();
+  const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
+  const avalancheEnabled = scoreFeatureEnabled('avalancheDetails');
+  const airQualityEnabled = scoreFeatureEnabled('airQualityDetails');
+  const fireRiskEnabled = scoreFeatureEnabled('fireRiskDetails');
+  const heatRiskEnabled = scoreFeatureEnabled('heatRiskDetails');
+  const snowpackEnabled = scoreFeatureEnabled('snowpackDetails');
+  const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
   const addSuggestion = (id, title, detail, category, tone, priority = 50) => {
     if (typeof id !== 'string' || !id.trim() || typeof title !== 'string' || !title.trim()) {
       return;
@@ -73,12 +81,12 @@ const buildLayeringGearSuggestions = ({
   const windowPeakPrecipChance = [precipChance, ...trendPrecip].filter(Number.isFinite).reduce((max, value) => Math.max(max, value), Number.NEGATIVE_INFINITY);
   const rain24hIn = parseFloat(rainfallData?.totals?.rainPast24hIn ?? rainfallData?.totals?.past24hIn);
   const snow24hIn = parseFloat(rainfallData?.totals?.snowPast24hIn);
-  const snowDepthSamples = [
+  const snowDepthSamples = (snowpackEnabled ? [
     snowpackData?.snotelConsensus?.medianDepthIn,
     snowpackData?.snotel?.snowDepthIn,
     snowpackData?.nohrsc?.snowDepthIn,
     snowpackData?.cdec?.snowDepthIn,
-  ].map(toFiniteNumber).filter((value) => value !== null && value >= 0);
+  ] : []).map(toFiniteNumber).filter((value) => value !== null && value >= 0);
   const maxObservedSnowDepthIn = snowDepthSamples.length
     ? snowDepthSamples.reduce((max, current) => Math.max(max, current), 0)
     : null;
@@ -111,9 +119,9 @@ const buildLayeringGearSuggestions = ({
   const hasFreshSnow = Number.isFinite(snow24hIn) && snow24hIn >= 2;
   const hasDaylightInWindow = weatherData?.isDaytime !== false || trend.some((row) => row?.isDaytime === true);
   const convective = /thunder|lightning|t-storm|tstm/.test(windowDescription);
-  const avyDanger = Number(avalancheData?.dangerLevel);
+  const avyDanger = avalancheEnabled ? Number(avalancheData?.dangerLevel) : Number.NaN;
   const hasAlerts = Number(alertsData?.activeCount) > 0;
-  const heatLevel = Number(heatRiskData?.level);
+  const heatLevel = heatRiskEnabled ? Number(heatRiskData?.level) : Number.NaN;
 
   addSuggestion(
     'backcountry-essentials',
@@ -193,20 +201,20 @@ const buildLayeringGearSuggestions = ({
   if (Number.isFinite(humidity) && humidity > 80) {
     addSuggestion('humidity-management', 'Moisture backup', `Pack one dry base layer for high humidity (${Math.round(humidity)}% RH).`, 'Conditions', 'go', 48);
   }
-  if (Number(airQualityData?.usAqi) >= 101) {
+  if (airQualityEnabled && Number(airQualityData?.usAqi) >= 101) {
     addSuggestion('aq-health', 'Smoke respirator', `If travel is unavoidable, carry a well-fitting NIOSH-approved N95 or P100 respirator and reduce exertion (AQI ${Math.round(Number(airQualityData.usAqi))}). A Buff or cloth covering does not filter wildfire smoke.`, 'Exposure', 'watch', 30);
   }
   if (hasAlerts) {
     addSuggestion('alerts-comms', 'Alerts contingency', 'Verify active alert details and carry backup comms/power.', 'Safety', 'watch', 28);
   }
-  if (Number(fireRiskData?.level) >= 3) {
+  if (fireRiskEnabled && Number(fireRiskData?.level) >= 3) {
     addSuggestion('fire-risk', 'Heat/fire prep', `Extra water + sun protection; verify land-management restrictions (${fireRiskData.label || 'elevated fire risk'}).`, 'Exposure', 'watch', 36);
   }
 
-  if (avalancheData?.relevant !== false && (avyDanger >= 1 || avalancheData?.dangerUnknown)) {
+  if (avalancheEnabled && avalancheData?.relevant !== false && (avyDanger >= 1 || avalancheData?.dangerUnknown)) {
     addSuggestion('avalanche-kit', 'Avalanche rescue kit', 'Each traveler: transceiver on and checked, metal shovel, and probe — with partners trained and practiced in rescue.', 'Safety', 'nogo', 14);
   }
-  if (avalancheData?.relevant !== false && avalancheData?.dangerUnknown) {
+  if (avalancheEnabled && avalancheData?.relevant !== false && avalancheData?.dangerUnknown) {
     addSuggestion('avalanche-unknown', 'Avalanche coverage gap', 'No official rating. Choose non-avalanche terrain and conservative slopes.', 'Safety', 'nogo', 12);
   }
 
@@ -220,7 +228,7 @@ const buildLayeringGearSuggestions = ({
     addSuggestion('electrolytes-heat', 'Electrolytes', 'Pack electrolyte tabs or drink mix to offset sweat-salt loss in heat.', 'Exposure', 'watch', 42);
   }
 
-  if (/fog|mist|smoke|blizzard/.test(windowDescription)) {
+  if (weatherContextEnabled && /fog|mist|smoke|blizzard/.test(windowDescription)) {
     addSuggestion('navigation-low-vis', 'Navigation', 'GPS device or downloaded offline maps required in low-visibility conditions.', 'General', 'watch', 44);
   }
 
