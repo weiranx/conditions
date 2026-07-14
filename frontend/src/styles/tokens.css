@@ -22,7 +22,7 @@
   --ui-radius-control: 10px;
   --ui-radius-card:    16px;
   --ui-radius-shell:   22px;
-  --ui-meta-size:      11px;
+  --ui-meta-size:      11.5px;
   --ui-motion-fast:    160ms ease;
   --ui-shadow-xs:      0 1px 2px oklch(24% 0.02 155 / 0.06);
   --ui-shadow-sm:      0 1px 2px oklch(24% 0.02 155 / 0.05), 0 8px 24px -18px oklch(24% 0.02 155 / 0.28);

@@ -1,4 +1,4 @@
-import { CalendarRange, FileClock, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { CalendarRange, CircleUserRound, FileClock, House, Map, Mountain, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import type { AppView } from '../../hooks/useUrlState';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
 import { useAccount } from '../../hooks/useAccount';
@@ -28,7 +28,12 @@ export function ProductNav({
     ...(user
       ? [{ id: 'history' as const, label: 'History', icon: FileClock, action: () => navigateToView('history') }]
       : []),
-    { id: 'settings', label: 'Settings', icon: SlidersHorizontal, action: () => navigateToView('settings') },
+    {
+      id: 'settings',
+      label: user ? 'Account' : 'Settings',
+      icon: user ? CircleUserRound : SlidersHorizontal,
+      action: () => navigateToView('settings'),
+    },
   ];
   if (active === 'admin') {
     items.push({ id: 'admin', label: 'Admin', icon: ShieldCheck, action: () => navigateToView('admin') });
@@ -39,7 +44,10 @@ export function ProductNav({
       <div className="ssr-product-nav-inner">
         <button type="button" className="ssr-product-brand" onClick={() => navigateToView('home')}>
           <span className="ssr-product-mark"><Mountain size={16} strokeWidth={2.2} aria-hidden /></span>
-          <span>Backcountry Conditions</span>
+          <span className="ssr-product-brand-copy">
+            <strong>Backcountry Conditions</strong>
+            <small>Mountain planning intelligence</small>
+          </span>
         </button>
         <nav className="ssr-product-links" aria-label="Application navigation">
           {items.map(({ id, label, icon: Icon, action }) => (
