@@ -1,6 +1,8 @@
 const dotenv = require('dotenv');
+const { loadRuntimeEnvOverridesSync } = require('../utils/runtime-env');
 
 dotenv.config();
+loadRuntimeEnvOverridesSync();
 
 const parsePositiveInt = (rawValue, fallback) => {
   const parsed = Number(rawValue);

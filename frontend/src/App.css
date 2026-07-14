@@ -1637,6 +1637,52 @@ input {
 .admin-model-fields select:focus { border-color: var(--ui-brand); outline: 2px solid var(--ui-brand-soft); }
 .admin-model-fields .logs-btn { min-height: 34px; white-space: nowrap; }
 
+.admin-runtime-environment { display: grid; gap: 12px; }
+.admin-runtime-restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface));
+  color: var(--ui-caution-ink);
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.logs-inline-note.is-success { color: var(--ui-go-ink); }
+.admin-runtime-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.admin-runtime-group { overflow: hidden; min-width: 0; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-surface-subtle); }
+.admin-runtime-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--ui-line); background: var(--ui-surface); }
+.admin-runtime-group-head h3 { margin: 0; color: var(--ui-text); font-size: 11.5px; }
+.admin-runtime-group-head span { color: var(--ui-text-4); font-size: 9px; font-weight: 650; }
+.admin-runtime-list { display: grid; }
+.admin-runtime-entry { display: grid; gap: 9px; min-width: 0; padding: 11px 12px; }
+.admin-runtime-entry + .admin-runtime-entry { border-top: 1px solid var(--ui-line); }
+.admin-runtime-entry-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 8px; min-width: 0; }
+.admin-runtime-entry-copy label { overflow: hidden; color: var(--ui-text); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.admin-runtime-entry-copy code { color: var(--ui-text-4); font: 8.5px var(--font-data); }
+.admin-runtime-entry-copy p { grid-column: 1 / -1; margin: 0; color: var(--ui-text-3); font-size: 9.5px; line-height: 1.4; }
+.admin-runtime-entry-copy > span { grid-column: 1 / -1; justify-self: start; margin-top: 2px; padding: 2px 5px; border-radius: 999px; background: var(--ui-surface); color: var(--ui-text-4); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.035em; }
+.admin-runtime-entry-copy > span.is-override { background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+.admin-runtime-field { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.admin-runtime-field input,
+.admin-runtime-field select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: 10px var(--font-data);
+}
+.admin-runtime-field input:focus,
+.admin-runtime-field select:focus { border-color: var(--ui-brand); outline: 2px solid var(--ui-brand-soft); }
+.admin-runtime-actions { display: flex; gap: 5px; flex: none; }
+.admin-runtime-actions .logs-btn { min-height: 34px; padding-inline: 9px; }
+
 .logs-metric-card {
   display: flex;
   align-items: center;
@@ -12232,6 +12278,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-health-history-action { grid-column: 4; justify-content: flex-start; text-align: left; }
   .admin-system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ai-control-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-runtime-groups { grid-template-columns: minmax(0, 1fr); }
   .admin-ai-setting { grid-template-columns: 36px minmax(0, 1fr); }
   .admin-ai-setting > button,
   .admin-ai-setting > .admin-provider-options { grid-column: 1 / -1; }
@@ -12565,6 +12612,10 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-model-card { gap: 9px; padding: 11px; }
   .admin-ai-setting > button { width: 100%; }
   .admin-ai-head-actions { width: 100%; justify-content: space-between; }
+  .admin-runtime-environment .logs-chart-head { align-items: flex-start; flex-direction: column; }
+  .admin-runtime-field { align-items: stretch; flex-direction: column; }
+  .admin-runtime-actions { width: 100%; }
+  .admin-runtime-actions .logs-btn { flex: 1; justify-content: center; }
   .admin-planning-splits { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .logs-metrics,
   .logs-ai-metrics { gap: 8px; }

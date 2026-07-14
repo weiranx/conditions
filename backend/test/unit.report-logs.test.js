@@ -79,6 +79,18 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     },
   ];
   const readHealthMonitorHistory = jest.fn(async () => healthMonitorHistoryPayload);
+  const runtimeEnvironmentPayload = {
+    persistent: true,
+    restartRequired: true,
+    entries: [{ key: 'REQUEST_TIMEOUT_MS', value: '9000', secret: false }],
+  };
+  const runtimeEnvService = {
+    getStatus: jest.fn(() => runtimeEnvironmentPayload),
+    update: jest.fn(async () => ({
+      ...runtimeEnvironmentPayload,
+      entries: [{ key: 'REQUEST_TIMEOUT_MS', value: '12000', secret: false }],
+    })),
+  };
   let usageSettings = {
     persistent: true,
     freeMonthlyAITokenLimit: 250_000,
@@ -205,6 +217,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     loadModelCatalog,
     readHealthMonitorHistory,
     readSystemResources,
+    runtimeEnvService,
   });
 
   const createResponse = () => ({
@@ -223,6 +236,23 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   await routes.get.get('/api/admin/system-resources')({ headers }, systemResourcesResponse);
   expect(readSystemResources).toHaveBeenCalledTimes(1);
   expect(systemResourcesResponse.payload).toEqual(systemResourcesPayload);
+
+  const runtimeEnvironmentResponse = createResponse();
+  await routes.get.get('/api/admin/runtime-environment')({ headers }, runtimeEnvironmentResponse);
+  expect(runtimeEnvService.getStatus).toHaveBeenCalledTimes(1);
+  expect(runtimeEnvironmentResponse.payload).toEqual(runtimeEnvironmentPayload);
+
+  const updateRuntimeEnvironmentResponse = createResponse();
+  await routes.patch.get('/api/admin/runtime-environment')({
+    headers,
+    body: { values: { REQUEST_TIMEOUT_MS: '12000' } },
+  }, updateRuntimeEnvironmentResponse);
+  expect(runtimeEnvService.update).toHaveBeenCalledWith({ REQUEST_TIMEOUT_MS: '12000' });
+  expect(updateRuntimeEnvironmentResponse.payload.entries[0].value).toBe('12000');
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'runtime.environment.updated',
+    details: { changed: ['REQUEST_TIMEOUT_MS'], restartRequired: true },
+  }));
 
   const healthHistoryResponse = createResponse();
   await routes.get.get('/api/admin/health-monitor-history')({ headers }, healthHistoryResponse);
@@ -509,6 +539,13 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, hiddenSystemResourcesResponse);
   expect(hiddenSystemResourcesResponse.statusCode).toBe(404);
   expect(readSystemResources).toHaveBeenCalledTimes(1);
+
+  const hiddenRuntimeEnvironmentResponse = createResponse();
+  await routes.get.get('/api/admin/runtime-environment')({
+    headers: { cookie: 'bc_session=other-session-token' },
+  }, hiddenRuntimeEnvironmentResponse);
+  expect(hiddenRuntimeEnvironmentResponse.statusCode).toBe(404);
+  expect(runtimeEnvService.getStatus).toHaveBeenCalledTimes(1);
 
   const hiddenHealthHistoryResponse = createResponse();
   await routes.get.get('/api/admin/health-monitor-history')({

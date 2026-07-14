@@ -5,6 +5,7 @@ const { getAIStatus, updateAISettings } = require('../utils/ai-client');
 const { getFeatureFlagStatus, resetFeatureFlags, updateFeatureFlags } = require('../utils/feature-flags');
 const { getAdminAuditEntries, recordAdminAudit } = require('../utils/admin-audit');
 const { getSystemResources } = require('../utils/system-resources');
+const { runtimeEnvService: defaultRuntimeEnvService } = require('../utils/runtime-env');
 const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
 const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
@@ -117,6 +118,7 @@ const registerReportLogsRoute = (
     loadModelCatalog = null,
     readSystemResources = getSystemResources,
     readHealthMonitorHistory = () => healthHistoryStore.list(),
+    runtimeEnvService = defaultRuntimeEnvService,
   } = {},
 ) => {
   let diagnosticsInFlight = null;
@@ -168,6 +170,47 @@ const registerReportLogsRoute = (
       res.json(await readSystemResources());
     } catch {
       res.status(500).json({ error: 'System resource usage is unavailable' });
+    }
+  });
+
+  app.get('/api/admin/runtime-environment', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (typeof runtimeEnvService?.getStatus !== 'function') {
+      res.status(503).json({ error: 'Runtime environment settings are unavailable.' });
+      return;
+    }
+    res.json(runtimeEnvService.getStatus());
+  });
+
+  app.patch('/api/admin/runtime-environment', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (typeof runtimeEnvService?.update !== 'function') {
+      res.status(503).json({ error: 'Runtime environment settings are unavailable.' });
+      return;
+    }
+    const values = req.body?.values;
+    try {
+      const updated = await runtimeEnvService.update(values);
+      const changed = values && typeof values === 'object' && !Array.isArray(values)
+        ? Object.keys(values)
+        : [];
+      await audit(req, {
+        action: 'runtime.environment.updated',
+        category: 'configuration',
+        summary: `Updated runtime environment ${changed.length === 1 ? 'variable' : 'variables'}: ${changed.join(', ') || 'none'}`,
+        details: { changed, restartRequired: true },
+      });
+      res.json(updated);
+    } catch (error) {
+      const status = error?.code === 'INVALID_RUNTIME_ENV' ? 400 : 500;
+      const message = error instanceof Error ? error.message : 'Runtime environment settings could not be saved.';
+      await audit(req, {
+        action: 'runtime.environment.updated',
+        category: 'configuration',
+        status: 'error',
+        summary: message,
+      });
+      res.status(status).json({ error: message });
     }
   });
 

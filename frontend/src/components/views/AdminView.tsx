@@ -218,6 +218,29 @@ interface AdminUsageSettings {
   maxFreeMonthlyUsageLimit: number;
 }
 
+interface RuntimeEnvironmentEntry {
+  key: string;
+  label: string;
+  category: string;
+  description: string;
+  type: 'integer' | 'boolean' | 'enum' | 'url' | 'text' | 'secret';
+  options: string[] | null;
+  min: number | null;
+  max: number | null;
+  secret: boolean;
+  configured: boolean;
+  value: string | null;
+  source: 'admin override' | 'deployment environment' | 'not configured';
+  overridden: boolean;
+  restartRequired: boolean;
+}
+
+interface RuntimeEnvironmentStatus {
+  persistent: boolean;
+  restartRequired: boolean;
+  entries: RuntimeEnvironmentEntry[];
+}
+
 interface ExternalDiagnosticsResult {
   startedAt: string;
   completedAt: string;
@@ -937,6 +960,8 @@ function AdminDashboard() {
   const [usersTotal, setUsersTotal] = useState(0);
   const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, verified: 0, unverified: 0, activeSessions: 0 });
   const [usageSettings, setUsageSettings] = useState<AdminUsageSettings | null>(null);
+  const [runtimeEnvironment, setRuntimeEnvironment] = useState<RuntimeEnvironmentStatus | null>(null);
+  const [runtimeEnvironmentDrafts, setRuntimeEnvironmentDrafts] = useState<Record<string, string>>({});
   const [usageLimitDraft, setUsageLimitDraft] = useState('');
   const [reportLimitDraft, setReportLimitDraft] = useState('');
   const [userUsageLimitDrafts, setUserUsageLimitDrafts] = useState<Record<string, string>>({});
@@ -963,6 +988,9 @@ function AdminDashboard() {
   const [usersNotice, setUsersNotice] = useState<string | null>(null);
   const [usageSettingsError, setUsageSettingsError] = useState<string | null>(null);
   const [usageSettingsPending, setUsageSettingsPending] = useState(false);
+  const [runtimeEnvironmentError, setRuntimeEnvironmentError] = useState<string | null>(null);
+  const [runtimeEnvironmentNotice, setRuntimeEnvironmentNotice] = useState<string | null>(null);
+  const [runtimeEnvironmentPendingKey, setRuntimeEnvironmentPendingKey] = useState<string | null>(null);
   const [userActionPending, setUserActionPending] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
@@ -1026,6 +1054,19 @@ function AdminDashboard() {
     return true;
   }, []);
 
+  const applyRuntimeEnvironment = useCallback((payload: unknown) => {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !('entries' in payload)) return false;
+    const status = payload as RuntimeEnvironmentStatus;
+    if (!Array.isArray(status.entries)) return false;
+    setRuntimeEnvironment(status);
+    setRuntimeEnvironmentDrafts(Object.fromEntries(status.entries.map((entry) => [
+      entry.key,
+      entry.secret ? '' : entry.value ?? '',
+    ])));
+    setRuntimeEnvironmentError(null);
+    return true;
+  }, []);
+
   const fetchAuditTrail = useCallback(async () => {
     try {
       const result = await fetchApi('/api/admin/audit-log');
@@ -1054,7 +1095,7 @@ function AdminDashboard() {
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult, runtimeEnvironmentResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
@@ -1066,6 +1107,7 @@ function AdminDashboard() {
         fetchApi('/api/admin/audit-log'),
         fetchApi('/api/admin/users?limit=500'),
         fetchApi('/api/admin/usage-settings'),
+        fetchApi('/api/admin/runtime-environment'),
       ]);
       if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
         setLogs(logsResult.payload as ReportLogEntry[]);
@@ -1135,6 +1177,9 @@ function AdminDashboard() {
       } else {
         setUsageSettingsError('Usage limits are temporarily unavailable.');
       }
+      if (!runtimeEnvironmentResult.response.ok || !applyRuntimeEnvironment(runtimeEnvironmentResult.payload)) {
+        setRuntimeEnvironmentError('Runtime environment settings are temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
@@ -1147,11 +1192,12 @@ function AdminDashboard() {
       setAuditError('Administrative activity is temporarily unavailable.');
       setUsersError('The account directory is temporarily unavailable.');
       setUsageSettingsError('Usage limits are temporarily unavailable.');
+      setRuntimeEnvironmentError('Runtime environment settings are temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [applyHealthSnapshot, applyUserDirectory, fetchHealthSnapshot]);
+  }, [applyHealthSnapshot, applyRuntimeEnvironment, applyUserDirectory, fetchHealthSnapshot]);
 
   const refreshModelCatalog = useCallback(async () => {
     setAIModelCatalogPending(true);
@@ -1543,6 +1589,37 @@ function AdminDashboard() {
     }
   };
 
+  const updateRuntimeEnvironmentEntry = async (entry: RuntimeEnvironmentEntry, reset = false) => {
+    const draft = runtimeEnvironmentDrafts[entry.key] ?? '';
+    if (!reset && !draft.trim()) {
+      setRuntimeEnvironmentError(`${entry.label} cannot be empty; reset the override to use the deployment value.`);
+      return;
+    }
+    setRuntimeEnvironmentPendingKey(entry.key);
+    setRuntimeEnvironmentError(null);
+    setRuntimeEnvironmentNotice(null);
+    try {
+      const result = await fetchApi('/api/admin/runtime-environment', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: { [entry.key]: reset ? null : draft } }),
+      });
+      if (result.response.ok && applyRuntimeEnvironment(result.payload)) {
+        setRuntimeEnvironmentNotice(`${entry.key} ${reset ? 'restored to its deployment value' : 'saved'}. Restart the backend to apply it everywhere.`);
+        void fetchAuditTrail();
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : 'The server could not update the runtime environment.';
+      setRuntimeEnvironmentError(message);
+    } catch {
+      setRuntimeEnvironmentError('Could not reach the server to update the runtime environment.');
+    } finally {
+      setRuntimeEnvironmentPendingKey(null);
+    }
+  };
+
   const toggleProductFeature = async (feature: ProductFeatureKey) => {
     const current = featureFlagStatus?.flags[feature];
     if (typeof current !== 'boolean') return;
@@ -1855,6 +1932,14 @@ function AdminDashboard() {
     });
   }, [userQuery, users, userStatusFilter]);
 
+  const runtimeEnvironmentGroups = useMemo(() => {
+    const groups = new Map<string, RuntimeEnvironmentEntry[]>();
+    (runtimeEnvironment?.entries ?? []).forEach((entry) => {
+      groups.set(entry.category, [...(groups.get(entry.category) ?? []), entry]);
+    });
+    return [...groups.entries()];
+  }, [runtimeEnvironment]);
+
   const downloadOperationsSnapshot = () => {
     triggerJsonDownload(`admin-snapshot-${new Date().toISOString().replaceAll(':', '-').slice(0, 19)}.json`, {
       generatedAt: new Date().toISOString(),
@@ -1868,6 +1953,7 @@ function AdminDashboard() {
       aiMetrics,
       aiStatus: aiSettings,
       productFeatures: featureFlagStatus,
+      runtimeEnvironment,
       accounts: { total: usersTotal, ...userSummary },
       externalDiagnostics: diagnostics,
       recentAdminActivity: auditEntries.slice(0, 50),
@@ -2906,6 +2992,101 @@ function AdminDashboard() {
             );
           })}
         </div>
+      </section>
+
+      <section className="logs-chart-card admin-runtime-environment" aria-labelledby="admin-runtime-environment-title" hidden={activeSection !== 'operations'}>
+        <div className="logs-chart-head">
+          <div>
+            <h2 id="admin-runtime-environment-title">Runtime environment</h2>
+            <p>View deployment values and save persistent backend overrides. Credentials are never displayed after they are stored.</p>
+          </div>
+          <span className="admin-runtime-restart"><RefreshCw size={13} aria-hidden /> Restart required after changes</span>
+        </div>
+
+        {runtimeEnvironmentError && <div className="logs-inline-note" role="alert"><AlertTriangle size={15} aria-hidden /> {runtimeEnvironmentError}</div>}
+        {runtimeEnvironmentNotice && <div className="logs-inline-note is-success" role="status"><CheckCircle2 size={15} aria-hidden /> {runtimeEnvironmentNotice}</div>}
+
+        {runtimeEnvironmentGroups.length === 0 && !runtimeEnvironmentError ? (
+          <div className="logs-empty"><Server size={26} aria-hidden /><h3>No runtime variables available</h3><p>The backend did not return any editable environment settings.</p></div>
+        ) : (
+          <div className="admin-runtime-groups">
+            {runtimeEnvironmentGroups.map(([category, entries]) => (
+              <section className="admin-runtime-group" aria-labelledby={`admin-runtime-${category.replaceAll(' ', '-').toLowerCase()}`} key={category}>
+                <div className="admin-runtime-group-head">
+                  <h3 id={`admin-runtime-${category.replaceAll(' ', '-').toLowerCase()}`}>{category}</h3>
+                  <span>{entries.length} {entries.length === 1 ? 'variable' : 'variables'}</span>
+                </div>
+                <div className="admin-runtime-list">
+                  {entries.map((entry) => {
+                    const draft = runtimeEnvironmentDrafts[entry.key] ?? '';
+                    const unchanged = !entry.secret && draft.trim() === (entry.value ?? '');
+                    const pending = runtimeEnvironmentPendingKey === entry.key;
+                    const inputId = `runtime-env-${entry.key.toLowerCase().replaceAll('_', '-')}`;
+                    return (
+                      <article className="admin-runtime-entry" key={entry.key}>
+                        <div className="admin-runtime-entry-copy">
+                          <label htmlFor={inputId}>{entry.label}</label>
+                          <code>{entry.key}</code>
+                          <p>{entry.description}</p>
+                          <span className={entry.overridden ? 'is-override' : ''}>{entry.source}</span>
+                        </div>
+                        <div className="admin-runtime-field">
+                          {entry.type === 'boolean' || entry.type === 'enum' ? (
+                            <select
+                              id={inputId}
+                              value={draft}
+                              onChange={(event) => setRuntimeEnvironmentDrafts((current) => ({ ...current, [entry.key]: event.target.value }))}
+                              disabled={runtimeEnvironmentPendingKey !== null}
+                            >
+                              {!draft && <option value="">Choose a value</option>}
+                              {(entry.type === 'boolean' ? ['true', 'false'] : entry.options ?? []).map((option) => (
+                                <option value={option} key={option}>{option}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              id={inputId}
+                              type={entry.secret ? 'password' : entry.type === 'integer' ? 'number' : entry.type === 'url' ? 'url' : 'text'}
+                              value={draft}
+                              min={entry.min ?? undefined}
+                              max={entry.max ?? undefined}
+                              autoComplete={entry.secret ? 'new-password' : 'off'}
+                              placeholder={entry.secret
+                                ? entry.configured ? 'Configured — enter a replacement' : 'Not configured — enter a value'
+                                : 'Not configured'}
+                              onChange={(event) => setRuntimeEnvironmentDrafts((current) => ({ ...current, [entry.key]: event.target.value }))}
+                              disabled={runtimeEnvironmentPendingKey !== null}
+                            />
+                          )}
+                          <div className="admin-runtime-actions">
+                            <button
+                              type="button"
+                              className="logs-btn logs-btn-primary"
+                              onClick={() => void updateRuntimeEnvironmentEntry(entry)}
+                              disabled={runtimeEnvironmentPendingKey !== null || !draft.trim() || unchanged}
+                            >
+                              {pending ? 'Saving…' : entry.secret && entry.configured ? 'Replace' : 'Save'}
+                            </button>
+                            {entry.overridden && (
+                              <button
+                                type="button"
+                                className="logs-btn logs-btn-quiet"
+                                onClick={() => void updateRuntimeEnvironmentEntry(entry, true)}
+                                disabled={runtimeEnvironmentPendingKey !== null}
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-feature-flags-title" hidden={activeSection !== 'operations'}>
