@@ -409,7 +409,7 @@ export function DashboardSummaryCard({
             </button>
           )}
           <button type="button" onClick={saveFieldBrief}>
-            <Download size={15} aria-hidden /> {fieldBriefSaved ? 'Field brief saved' : 'Save offline field brief'}
+            <Download size={15} aria-hidden /> {fieldBriefSaved ? 'Field brief downloaded' : 'Download field brief'}
           </button>
           <button type="button" onClick={handleEmailReport} disabled={!reportSnapshot || emailState === 'sending'}>
             {emailState === 'sending'
@@ -429,7 +429,7 @@ export function DashboardSummaryCard({
             aria-live="polite"
             className={emailState === 'error' ? 'is-error' : undefined}
           >
-            {emailMessage || (fieldBriefSaved ? 'Standalone field brief downloaded for offline use.' : '')}
+            {emailMessage || (fieldBriefSaved ? 'Polished offline field brief downloaded.' : '')}
           </span>
         </div>
 

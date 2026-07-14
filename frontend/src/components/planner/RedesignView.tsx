@@ -970,11 +970,15 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   return (
     <div className="ssr-report">
       <div className="ssr-print-masthead" aria-hidden="true">
-        <div>
-          <span>Backcountry Conditions</span>
-          <strong>Field conditions report</strong>
+        <div className="ssr-print-title">
+          <span>Backcountry Conditions · Field report</span>
+          <strong>{objectiveName || 'Backcountry objective'}</strong>
+          <p>{props.formatIsoDateLabel(props.forecastDate)} · {region} · Generated {props.formatGeneratedAt(safetyData.generatedAt || null)}</p>
         </div>
-        <p>Generated {props.formatGeneratedAt(safetyData.generatedAt || null)}</p>
+        <div className="ssr-print-score">
+          <strong>{Math.round(safetyData.safety.score)}</strong>
+          <span>{safetyData.safety.tier || 'Conditions'} · out of 100</span>
+        </div>
       </div>
       {/* OBJECTIVE HEADER */}
       <header className="ssr-hdr">
