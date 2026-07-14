@@ -7,7 +7,6 @@ import { parseTimeInputMinutes } from '../app/core';
 import { evaluateBackcountryDecision } from '../app/decision';
 import { buildTravelWindowRows, buildTravelWindowInsights, buildTrendWindowFromStart } from '../app/travel-window';
 import { parseMultiDayUsage, type MultiDayUsage } from '../app/multi-day-usage';
-import { calculateTripWeatherWindowScore } from '../app/trip-weather-score';
 
 export type MultiDayTripForecastDay = {
   date: string;
@@ -218,12 +217,9 @@ export function useTripForecast({
               ? 'No travel hour meets every threshold — re-time the start, shorten the objective, or choose another day.'
               : dayDecision.headline;
 
-            const score = calculateTripWeatherWindowScore({
-              data: dayData,
-              trendWindow,
-              travelPassHours: travelInsights.passHours,
-              travelTotalHours: travelRows.length,
-            });
+            // Match the score shown by the individual Planner report exactly.
+            const rawSafetyScore = Number(dayData?.safety?.score);
+            const score = Number.isFinite(rawSafetyScore) ? Math.round(rawSafetyScore) : null;
             const tempHighRaw = finiteNumberOrNull(
               dayData?.weather?.dailyTempHighF ?? dayData?.weather?.temperatureContext24h?.maxTempF,
             );
