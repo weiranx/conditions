@@ -7,6 +7,7 @@ import '../styles/ai-access-prompt.css';
 
 export type AccountAccessReason =
   | 'ai'
+  | 'report-email'
   | 'guest-report-limit'
   | 'account-report-limit'
   | 'guest-multi-day-limit'
@@ -44,6 +45,7 @@ export function AiAccessPrompt({
   const [formError, setFormError] = React.useState<string | null>(null);
   const open = reason !== null;
   const guestReportLimitReached = reason === 'guest-report-limit';
+  const reportEmailRequested = reason === 'report-email';
   const accountReportLimitReached = reason === 'account-report-limit';
   const guestMultiDayLimitReached = reason === 'guest-multi-day-limit';
   const accountMultiDayLimitReached = reason === 'account-multi-day-limit';
@@ -52,10 +54,14 @@ export function AiAccessPrompt({
   const usageLimitReached = guestLimitReached || accountLimitReached;
   const accountUsage = accountMultiDayLimitReached ? account.multiDayUsage : account.reportUsage;
   const resetAt = formatUsageReset(accountUsage?.resetAt);
-  const eyebrow = accountMultiDayLimitReached || guestMultiDayLimitReached
+  const eyebrow = reportEmailRequested
+    ? 'Send reports to your inbox'
+    : accountMultiDayLimitReached || guestMultiDayLimitReached
     ? 'Free multi-day limit reached'
     : usageLimitReached ? 'Free report limit reached' : 'Free with an account';
-  const title = accountMultiDayLimitReached
+  const title = reportEmailRequested
+    ? 'Sign in to email this report'
+    : accountMultiDayLimitReached
     ? 'You’ve reached this month’s multi-day limit'
     : guestMultiDayLimitReached
       ? 'Sign in to compare more trips'
@@ -64,7 +70,9 @@ export function AiAccessPrompt({
         : guestReportLimitReached
           ? 'Sign in to create more reports'
           : 'AI is free to use';
-  const description = accountMultiDayLimitReached
+  const description = reportEmailRequested
+    ? 'Sign in or create a free account below. Reports are sent only to the email address on your account.'
+    : accountMultiDayLimitReached
     ? `Your Free multi-day allowance resets ${resetAt}. Premium accounts can run unlimited comparisons.`
     : guestMultiDayLimitReached
       ? 'You have used the multi-day comparisons available without an account in this browser. Sign in or create an account below to continue planning.'
@@ -156,7 +164,9 @@ export function AiAccessPrompt({
           <X size={18} aria-hidden />
         </button>
         <div className="ai-access-icon" aria-hidden>
-          {accountMultiDayLimitReached || guestMultiDayLimitReached
+          {reportEmailRequested
+            ? <Mail size={22} />
+            : accountMultiDayLimitReached || guestMultiDayLimitReached
             ? <CalendarRange size={22} />
             : usageLimitReached ? <FileText size={22} /> : <Sparkles size={22} />}
         </div>
@@ -208,7 +218,7 @@ export function AiAccessPrompt({
             <div className="ai-access-unavailable" role="status">
               <strong>Accounts are temporarily unavailable.</strong>
               <span>
-                Try again later to {usageLimitReached ? 'continue planning' : 'use AI features'} on this deployment.
+                Try again later to {usageLimitReached ? 'continue planning' : reportEmailRequested ? 'send this report' : 'use AI features'} on this deployment.
               </span>
               <button type="button" className="ai-access-secondary" onClick={onClose}>Not now</button>
             </div>

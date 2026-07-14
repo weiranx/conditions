@@ -1,6 +1,7 @@
 'use strict';
 
-const { randomBytes } = require('crypto');
+const { createHash, randomBytes } = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { readSessionToken } = require('../auth/account-access');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const { createReportUsageLimitService } = require('../auth/report-usage-limit');
@@ -76,10 +77,19 @@ const registerSavedReportRoutes = ({
   accountService,
   tierService,
   reportUsageService = createReportUsageLimitService({ database }),
+  emailService,
   ensureReportHistoryEnabled = () => assertFeatureEnabled('reportHistory'),
   ensureReportSharingEnabled = () => assertFeatureEnabled('reportSharing'),
 } = {}) => {
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
+  const reportEmailLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
+    message: { error: 'Too many report email requests. Please wait and try again.' },
+  });
 
   const requireFeature = (res, ensureEnabled, fallbackMessage) => {
     try {
@@ -144,6 +154,10 @@ const registerSavedReportRoutes = ({
     if (error?.code === 'REPORT_USAGE_UNAVAILABLE') {
       return res.status(503).json({ error: error.message, code: error.code });
     }
+    if (error?.code === 'EMAIL_SERVICE_UNAVAILABLE' || error?.code === 'EMAIL_DELIVERY_FAILED') {
+      req.log?.warn({ err: error }, 'Generated report email delivery failed');
+      return res.status(503).json({ error: 'Email delivery is temporarily unavailable. Please try again later.' });
+    }
     req.log?.error({ err: error }, 'Generated report request failed');
     return res.status(500).json({ error: 'Report history request failed. Please try again.' });
   };
@@ -173,6 +187,36 @@ const registerSavedReportRoutes = ({
           updatedAt: normalizeTimestamp(row.updated_at),
         },
       });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.post('/api/account/reports/email', reportEmailLimiter, async (req, res) => {
+    if (!requireFeature(res, ensureReportHistoryEnabled, 'Report email is unavailable.')) return;
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        error: 'Verify your account email before sending reports.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
+    }
+    if (!emailService?.available || typeof emailService.sendReportEmail !== 'function') {
+      return res.status(503).json({ error: 'Email delivery is temporarily unavailable. Please try again later.' });
+    }
+    try {
+      const normalized = normalizeSavedReport(req.body?.report);
+      const report = JSON.parse(normalized.serialized);
+      const reportKey = createHash('sha256').update(normalized.serialized).digest('hex').slice(0, 24);
+      const deliveryKey = `${user.id}/${reportKey}/${Math.floor(Date.now() / 60000)}`;
+      await emailService.sendReportEmail({
+        deliveryKey,
+        report,
+        to: user.email,
+        displayName: user.displayName,
+      });
+      return res.json({ message: `Report sent to ${user.email}.` });
     } catch (error) {
       return handleError(req, res, error);
     }

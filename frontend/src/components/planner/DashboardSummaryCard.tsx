@@ -5,6 +5,7 @@ import {
   Database,
   Download,
   LoaderCircle,
+  Mail,
   PencilLine,
   Printer,
   ShieldCheck,
@@ -29,7 +30,9 @@ import { buildFieldBrief, downloadFieldBrief } from '../../app/field-brief';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
-import type { PersistedReportChatMessage } from '../../app/report-storage';
+import type { PersistedReport, PersistedReportChatMessage } from '../../app/report-storage';
+import { useAccount } from '../../hooks/useAccount';
+import { sendReportEmail } from '../../lib/saved-reports';
 
 type BriefSignalTone = 'positive' | 'caution' | 'neutral';
 
@@ -95,6 +98,8 @@ export interface DashboardSummaryCardProps {
   aiBriefLoading: boolean;
   onNewReport: () => void;
   onRequestAiBrief: () => void;
+  onRequestReportEmailAccess: () => boolean;
+  reportSnapshot: PersistedReport | null;
   rawReportPayload: string;
   reportChatMessages: PersistedReportChatMessage[];
   reportChatSessionKey: number;
@@ -128,15 +133,22 @@ export function DashboardSummaryCard({
   aiBriefLoading,
   onNewReport,
   onRequestAiBrief,
+  onRequestReportEmailAccess,
+  reportSnapshot,
   rawReportPayload,
   reportChatMessages,
   reportChatSessionKey,
   onReportChatMessagesChange,
 }: DashboardSummaryCardProps) {
+  const account = useAccount();
   const [fieldBriefSaved, setFieldBriefSaved] = useState(false);
+  const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [emailMessage, setEmailMessage] = useState('');
   const fieldBriefTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const emailStatusTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   useEffect(() => () => {
     if (fieldBriefTimer.current !== null) window.clearTimeout(fieldBriefTimer.current);
+    if (emailStatusTimer.current !== null) window.clearTimeout(emailStatusTimer.current);
   }, []);
   const lvClass = decision.level.toLowerCase().replace('-', '');
   const score = Math.round(safetyData.safety.score);
@@ -311,6 +323,30 @@ export function DashboardSummaryCard({
     if (fieldBriefTimer.current !== null) window.clearTimeout(fieldBriefTimer.current);
     fieldBriefTimer.current = window.setTimeout(() => setFieldBriefSaved(false), 2200);
   };
+  const handleEmailReport = async () => {
+    if (emailState === 'sending' || !reportSnapshot) return;
+    if (!onRequestReportEmailAccess()) return;
+    if (!account.user?.emailVerified) {
+      setEmailState('error');
+      setEmailMessage('Verify your account email before sending reports.');
+      return;
+    }
+    setEmailState('sending');
+    setEmailMessage('');
+    try {
+      const message = await sendReportEmail(reportSnapshot);
+      setEmailState('sent');
+      setEmailMessage(message);
+      if (emailStatusTimer.current !== null) window.clearTimeout(emailStatusTimer.current);
+      emailStatusTimer.current = window.setTimeout(() => {
+        setEmailState('idle');
+        setEmailMessage('');
+      }, 5000);
+    } catch (error) {
+      setEmailState('error');
+      setEmailMessage(error instanceof Error ? error.message : 'Could not send this report by email.');
+    }
+  };
 
   return (
     <div className="ssr-dash">
@@ -375,10 +411,26 @@ export function DashboardSummaryCard({
           <button type="button" onClick={saveFieldBrief}>
             <Download size={15} aria-hidden /> {fieldBriefSaved ? 'Field brief saved' : 'Save offline field brief'}
           </button>
+          <button type="button" onClick={handleEmailReport} disabled={!reportSnapshot || emailState === 'sending'}>
+            {emailState === 'sending'
+              ? <LoaderCircle size={15} className="spin" aria-hidden />
+              : <Mail size={15} aria-hidden />}
+            {emailState === 'sending'
+              ? 'Sending report…'
+              : emailState === 'sent'
+                ? 'Report sent'
+                : 'Send this report to my email'}
+          </button>
           <button type="button" onClick={() => window.print()}>
             <Printer size={15} aria-hidden /> Print report
           </button>
-          <span role="status" aria-live="polite">{fieldBriefSaved ? 'Standalone field brief downloaded for offline use.' : ''}</span>
+          <span
+            role={emailState === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+            className={emailState === 'error' ? 'is-error' : undefined}
+          >
+            {emailMessage || (fieldBriefSaved ? 'Standalone field brief downloaded for offline use.' : '')}
+          </span>
         </div>
 
         {travelWindowRows.length > 0 && (

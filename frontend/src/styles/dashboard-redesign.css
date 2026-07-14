@@ -184,7 +184,9 @@
 }
 .ssr-dash-field-actions button:first-child { border-color: var(--d-pine); background: var(--d-pine); color: #fff; }
 .ssr-dash-field-actions button:hover { transform: translateY(-1px); box-shadow: var(--ui-shadow-sm); }
+.ssr-dash-field-actions button:disabled { cursor: wait; opacity: .62; transform: none; box-shadow: none; }
 .ssr-dash-field-actions > span { color: var(--d-go-deep); font-size: 11px; }
+.ssr-dash-field-actions > span.is-error { color: var(--d-nogo-deep); }
 
 .ssr-dash-window {
   padding: 24px 0 22px;

@@ -76,6 +76,7 @@ const makeApp = ({
   user = { id: USER_ID },
   reportUsageService,
   tierService,
+  emailService,
   ensureReportHistoryEnabled,
   ensureReportSharingEnabled,
 } = {}) => {
@@ -88,6 +89,10 @@ const makeApp = ({
       reportUsage: REPORT_USAGE,
     })),
   };
+  const resolvedEmailService = emailService || {
+    available: true,
+    sendReportEmail: jest.fn().mockResolvedValue({ id: 'email-123' }),
+  };
   registerSavedReportRoutes({
     app,
     database: { configured: true, query },
@@ -96,6 +101,7 @@ const makeApp = ({
       getUserForSession: jest.fn().mockResolvedValue(user),
     },
     reportUsageService: resolvedReportUsageService,
+    emailService: resolvedEmailService,
     tierService,
     ...(ensureReportHistoryEnabled ? { ensureReportHistoryEnabled } : {}),
     ...(ensureReportSharingEnabled ? { ensureReportSharingEnabled } : {}),
@@ -120,6 +126,52 @@ test('creates cryptographically random URL-safe share tokens', () => {
   expect(first).toMatch(SHARE_TOKEN_PATTERN);
   expect(second).toMatch(SHARE_TOKEN_PATTERN);
   expect(second).not.toBe(first);
+});
+
+test('emails a validated report only to the verified signed-in account address', async () => {
+  const sendReportEmail = jest.fn().mockResolvedValue({ id: 'email-123' });
+  const user = {
+    id: USER_ID,
+    email: 'climber@example.com',
+    displayName: 'Avery',
+    emailVerified: true,
+  };
+  const response = await request(makeApp({
+    user,
+    emailService: { available: true, sendReportEmail },
+  }))
+    .post('/api/account/reports/email')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ message: 'Report sent to climber@example.com.' });
+  expect(sendReportEmail).toHaveBeenCalledWith(expect.objectContaining({
+    report: SNAPSHOT,
+    to: 'climber@example.com',
+    displayName: 'Avery',
+    deliveryKey: expect.stringMatching(new RegExp(`^${USER_ID}/[a-f0-9]{24}/\\d+$`, 'u')),
+  }));
+});
+
+test('requires a verified account email before sending a report', async () => {
+  const sendReportEmail = jest.fn();
+  const response = await request(makeApp({
+    user: {
+      id: USER_ID,
+      email: 'unverified@example.com',
+      displayName: 'Avery',
+      emailVerified: false,
+    },
+    emailService: { available: true, sendReportEmail },
+  }))
+    .post('/api/account/reports/email')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
+  expect(response.status).toBe(403);
+  expect(response.body.code).toBe('EMAIL_NOT_VERIFIED');
+  expect(sendReportEmail).not.toHaveBeenCalled();
 });
 
 test('disabled report history blocks browsing before account or database access', async () => {

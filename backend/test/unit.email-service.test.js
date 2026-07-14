@@ -50,6 +50,43 @@ describe('transactional email service', () => {
     expect(normalizeBaseUrl('javascript:alert(1)')).toBeNull();
   });
 
+  test('sends an escaped report brief only to the supplied account address', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'report-email-123' }, error: null });
+    const service = createEmailService({
+      apiKey: 're_test',
+      fromAddress: 'accounts@mail.example.com',
+      appBaseUrl: 'https://conditions.example.com',
+      client: { emails: { send } },
+    });
+
+    await service.sendReportEmail({
+      deliveryKey: 'user-1/report-1/12345',
+      to: 'climber@example.com',
+      displayName: '<Avery>',
+      report: {
+        plan: { objectiveName: 'Mount Rainier & Friends', forecastDate: '2026-07-15', alpineStartTime: '05:30' },
+        preferences: { temperatureUnit: 'c', windSpeedUnit: 'kph' },
+        safetyData: {
+          safety: { score: 72, tier: 'Caution', explanations: ['Check wind & <script>alert(1)</script>'] },
+          weather: { temp: 35, windSpeed: 12, windGust: 28, precipChance: 20, description: 'Cloudy' },
+          avalanche: { risk: 'Moderate', dangerUnknown: false },
+          alerts: { activeCount: 1 },
+        },
+      },
+    });
+
+    const [message, options] = send.mock.calls[0];
+    expect(message.to).toBe('climber@example.com');
+    expect(message.subject).toBe('Mount Rainier & Friends report · 2026-07-15');
+    expect(message.html).toContain('Mount Rainier &amp; Friends report');
+    expect(message.html).toContain('Check wind &amp;');
+    expect(message.html).not.toContain('<script>');
+    expect(message.text).toContain('72/100 · Caution');
+    expect(message.text).toContain('2°C, wind 19 kph, gusts 45 kph');
+    expect(message.html).toContain('https://conditions.example.com/');
+    expect(options).toEqual({ idempotencyKey: 'report-email/user-1/report-1/12345' });
+  });
+
   test('sends escaped, idempotent Objective Watch change alerts to the watches dashboard', async () => {
     const send = jest.fn().mockResolvedValue({ data: { id: 'watch-email-123' }, error: null });
     const service = createEmailService({

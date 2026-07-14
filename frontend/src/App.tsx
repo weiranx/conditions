@@ -722,6 +722,11 @@ function App() {
     setAccountAccessReason('ai');
     return false;
   }, [accountUser]);
+  const requestReportEmailAccess = useCallback(() => {
+    if (accountUser) return true;
+    setAccountAccessReason('report-email');
+    return false;
+  }, [accountUser]);
   const requestNewReportAccess = useCallback(() => {
     if (accountUser) {
       if (!accountReportUsage?.exhausted) return true;
@@ -2487,6 +2492,7 @@ function App() {
       restoredReportSource={restoredReportSource}
       reportSnapshot={reportSnapshot}
       activeSavedReportId={activeSavedReportId}
+      requestReportEmailAccess={requestReportEmailAccess}
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}

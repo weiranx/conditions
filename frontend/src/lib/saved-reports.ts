@@ -90,6 +90,17 @@ export async function updateSavedReport(reportId: string, report: PersistedRepor
   requireReportIdentity(payload);
 }
 
+export async function sendReportEmail(report: PersistedReport): Promise<string> {
+  const { response, payload } = await fetchApi('/api/account/reports/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report }),
+  });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not send this report by email.'));
+  const message = (payload as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message.trim() ? message : 'Report sent to your account email.';
+}
+
 export async function listSavedReports(signal?: AbortSignal): Promise<SavedReportSummary[]> {
   const { response, payload } = await fetchApi('/api/account/reports', { signal });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not load report history.'));

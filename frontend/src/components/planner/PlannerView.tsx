@@ -62,6 +62,7 @@ export interface PlannerViewProps {
   restoredReportSource: 'saved' | 'shared' | null;
   reportSnapshot: PersistedReport | null;
   activeSavedReportId: string | null;
+  requestReportEmailAccess: () => boolean;
 
   // Navigation
   navigateToView: (view: AppView) => void;

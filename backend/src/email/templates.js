@@ -83,6 +83,90 @@ const buildPasswordResetEmail = ({ displayName, actionUrl }) => {
   };
 };
 
+const compactText = (value, fallback = '', maxLength = 280) => {
+  const text = String(value || '')
+    .replace(/<[^>]*>/gu, ' ')
+    .replace(/[\r\n]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (!text) return fallback;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+};
+
+const finiteNumber = (value) => {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const buildReportEmail = ({ displayName, report, actionUrl }) => {
+  const plan = report?.plan && typeof report.plan === 'object' ? report.plan : {};
+  const safetyData = report?.safetyData && typeof report.safetyData === 'object' ? report.safetyData : {};
+  const preferences = report?.preferences && typeof report.preferences === 'object' ? report.preferences : {};
+  const safety = safetyData?.safety && typeof safetyData.safety === 'object' ? safetyData.safety : {};
+  const weather = safetyData?.weather && typeof safetyData.weather === 'object' ? safetyData.weather : {};
+  const avalanche = safetyData?.avalanche && typeof safetyData.avalanche === 'object' ? safetyData.avalanche : {};
+  const alerts = safetyData?.alerts && typeof safetyData.alerts === 'object' ? safetyData.alerts : {};
+  const objectiveName = compactText(plan.objectiveName, 'Backcountry objective', 160);
+  const forecastDate = compactText(plan.forecastDate, 'Date not available', 32);
+  const startTime = compactText(plan.alpineStartTime, 'Time not available', 32);
+  const score = finiteNumber(safety.score);
+  const tier = compactText(safety.tier, 'Conditions review', 40);
+  const condition = compactText(weather.description || weather.condition, 'Weather details are in the full report.', 180);
+  const temperature = finiteNumber(weather.temp);
+  const windSpeed = finiteNumber(weather.windSpeed);
+  const windGust = finiteNumber(weather.windGust);
+  const precipitation = finiteNumber(weather.precipChance);
+  const avalancheRisk = compactText(
+    avalanche.dangerUnknown ? 'Danger unknown — verify the current bulletin.' : avalanche.risk,
+    avalanche.relevant === false ? 'Not applicable to this objective.' : 'Review the current official bulletin.',
+    180,
+  );
+  const activeAlerts = finiteNumber(alerts.activeCount);
+  const temperatureUnit = preferences.temperatureUnit === 'c' ? 'c' : 'f';
+  const windUnit = preferences.windSpeedUnit === 'kph' ? 'kph' : 'mph';
+  const displayTemperature = temperature === null
+    ? null
+    : temperatureUnit === 'c' ? (temperature - 32) * (5 / 9) : temperature;
+  const displayWindSpeed = windSpeed === null ? null : windUnit === 'kph' ? windSpeed * 1.609344 : windSpeed;
+  const displayWindGust = windGust === null ? null : windUnit === 'kph' ? windGust * 1.609344 : windGust;
+  const explanations = Array.isArray(safety.explanations)
+    ? safety.explanations.map((item) => compactText(item, '', 240)).filter(Boolean).slice(0, 3)
+    : [];
+  const greeting = displayName ? `Hi ${escapeHtml(compactText(displayName, '', 80))},` : 'Hello,';
+  const scoreLine = score === null ? tier : `${Math.round(score)}/100 · ${tier}`;
+  const weatherParts = [
+    displayTemperature === null ? null : `${Math.round(displayTemperature)}°${temperatureUnit.toUpperCase()}`,
+    displayWindSpeed === null ? null : `wind ${Math.round(displayWindSpeed)} ${windUnit}`,
+    displayWindGust === null ? null : `gusts ${Math.round(displayWindGust)} ${windUnit}`,
+    precipitation === null ? null : `${Math.round(precipitation)}% precipitation`,
+  ].filter(Boolean);
+  const alertLine = activeAlerts && activeAlerts > 0
+    ? `${Math.round(activeAlerts)} active weather alert${Math.round(activeAlerts) === 1 ? '' : 's'} require review.`
+    : 'No active weather alerts were included in this report snapshot.';
+  const textHighlights = explanations.length
+    ? explanations.map((item) => `- ${item}`).join('\n')
+    : '- Recheck official forecasts, access, and field observations before departure.';
+  const htmlHighlights = (explanations.length
+    ? explanations
+    : ['Recheck official forecasts, access, and field observations before departure.'])
+    .map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`)
+    .join('');
+
+  return {
+    subject: `${objectiveName} report · ${forecastDate}`,
+    text: `${displayName ? `Hi ${compactText(displayName, '', 80)},\n\n` : ''}${objectiveName}\n${forecastDate} at ${startTime}\n${scoreLine}\n\nWeather: ${condition}${weatherParts.length ? ` (${weatherParts.join(', ')})` : ''}\nAvalanche: ${avalancheRisk}\nAlerts: ${alertLine}\n\nKey report notes:\n${textHighlights}\n\nOpen Backcountry Conditions:\n${actionUrl}\n\nThis is a point-in-time planning snapshot, not a safety guarantee. Recheck official sources and current field conditions before departure.`,
+    html: emailShell({
+      preview: `${objectiveName} report for ${forecastDate}`,
+      heading: `${objectiveName} report`,
+      body: `<p style="margin:0 0 14px;">${greeting}</p><p style="margin:0 0 18px;">Here is the report you asked to send to your account email.</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 18px;border-collapse:collapse;background:#f6f8f4;border-radius:10px;"><tr><td style="padding:14px 16px;"><strong style="color:#172019;">${escapeHtml(forecastDate)} at ${escapeHtml(startTime)}</strong><br><span style="color:#48705a;">${escapeHtml(scoreLine)}</span></td></tr></table><p style="margin:0 0 8px;"><strong style="color:#172019;">Weather:</strong> ${escapeHtml(condition)}${weatherParts.length ? ` (${escapeHtml(weatherParts.join(', '))})` : ''}</p><p style="margin:0 0 8px;"><strong style="color:#172019;">Avalanche:</strong> ${escapeHtml(avalancheRisk)}</p><p style="margin:0 0 18px;"><strong style="color:#172019;">Alerts:</strong> ${escapeHtml(alertLine)}</p><p style="margin:0 0 8px;"><strong style="color:#172019;">Key report notes</strong></p><ul style="margin:0;padding-left:20px;">${htmlHighlights}</ul>`,
+      actionLabel: 'Open Backcountry Conditions',
+      actionUrl,
+      footer: 'This is a point-in-time planning snapshot, not a safety guarantee. Recheck official sources and current field conditions before departure.',
+    }),
+  };
+};
+
 const buildObjectiveWatchChangeEmail = ({ displayName, title, reasons, actionUrl }) => {
   const safeTitle = String(title || 'Watched objective').replace(/[\r\n]+/gu, ' ').trim().slice(0, 160) || 'Watched objective';
   const safeReasons = Array.isArray(reasons) ? reasons.map((reason) => String(reason || '').trim()).filter(Boolean) : [];
@@ -134,6 +218,7 @@ module.exports = {
   buildHealthStatusEmail,
   buildObjectiveWatchChangeEmail,
   buildPasswordResetEmail,
+  buildReportEmail,
   buildVerificationEmail,
   escapeHtml,
 };

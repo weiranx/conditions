@@ -835,6 +835,7 @@ registerSavedReportRoutes({
   accountService,
   tierService: accountTierService,
   reportUsageService: reportUsageLimitService,
+  emailService,
 });
 const objectiveWatchChecker = createObjectiveWatchChecker({
   database,

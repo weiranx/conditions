@@ -5,6 +5,7 @@ const {
   buildHealthStatusEmail,
   buildObjectiveWatchChangeEmail,
   buildPasswordResetEmail,
+  buildReportEmail,
   buildVerificationEmail,
 } = require('./templates');
 
@@ -93,6 +94,20 @@ const createEmailService = ({
     });
   };
 
+  const sendReportEmail = ({ deliveryKey, report, to, displayName }) => {
+    if (!normalizedBaseUrl) {
+      const error = new Error('Email links are not configured.');
+      error.code = 'EMAIL_SERVICE_UNAVAILABLE';
+      throw error;
+    }
+    const actionUrl = normalizedBaseUrl.toString();
+    return send({
+      to,
+      template: buildReportEmail({ displayName, report, actionUrl }),
+      idempotencyKey: `report-email/${deliveryKey}`,
+    });
+  };
+
   const sendObjectiveWatchChangeEmail = ({ eventId, changeKey, watchId, title, change, to, displayName }) => {
     if (!normalizedBaseUrl) {
       const error = new Error('Email links are not configured.');
@@ -132,6 +147,7 @@ const createEmailService = ({
     sendHealthStatusEmail,
     sendObjectiveWatchChangeEmail,
     sendPasswordResetEmail,
+    sendReportEmail,
     sendVerificationEmail,
   };
 };
