@@ -15,6 +15,10 @@ const FEATURE_FLAG_KEYS = [
   'elevationForecast',
   'heatRiskDetails',
   'fireRiskDetails',
+  'snowpackDetails',
+  'fieldObservations',
+  'airQualityDetails',
+  'gearRecommendations',
 ];
 const FEATURE_FLAG_KEY_SET = new Set(FEATURE_FLAG_KEYS);
 const DEFAULT_FEATURE_FLAGS = Object.freeze(Object.fromEntries(

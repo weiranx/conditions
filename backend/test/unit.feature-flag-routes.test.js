@@ -26,6 +26,10 @@ test('public feature flag endpoint returns current safe values without caching',
     elevationForecast: true,
     heatRiskDetails: true,
     fireRiskDetails: true,
+    snowpackDetails: true,
+    fieldObservations: true,
+    airQualityDetails: true,
+    gearRecommendations: true,
   });
 });
 

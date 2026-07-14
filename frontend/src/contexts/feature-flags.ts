@@ -14,6 +14,10 @@ export const PRODUCT_FEATURE_KEYS = [
   'elevationForecast',
   'heatRiskDetails',
   'fireRiskDetails',
+  'snowpackDetails',
+  'fieldObservations',
+  'airQualityDetails',
+  'gearRecommendations',
 ] as const;
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
@@ -32,6 +36,10 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   elevationForecast: true,
   heatRiskDetails: true,
   fireRiskDetails: true,
+  snowpackDetails: true,
+  fieldObservations: true,
+  airQualityDetails: true,
+  gearRecommendations: true,
 };
 export const FEATURE_FLAGS_EVENT = 'summitsafe:product-feature-flags-change';
 

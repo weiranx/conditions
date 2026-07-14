@@ -927,11 +927,11 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     { id: 'planner-section-weather', label: 'Weather', present: true },
     { id: 'planner-section-wind', label: 'Wind', present: Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
     { id: 'planner-section-avalanche', label: 'Avalanche', present: true },
-    { id: 'planner-section-snowpack', label: 'Snowpack', present: Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
-    { id: 'planner-section-observations', label: 'Observations', present: hasLocalObservations },
+    { id: 'planner-section-snowpack', label: 'Snowpack', present: featureFlags.snowpackDetails && Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
+    { id: 'planner-section-observations', label: 'Observations', present: featureFlags.fieldObservations && hasLocalObservations },
     { id: 'planner-section-alerts', label: 'Alerts', present: true },
     { id: 'planner-section-score', label: 'Score', present: Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
-    { id: 'planner-section-gear', label: 'Gear', present: Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
+    { id: 'planner-section-gear', label: 'Gear', present: featureFlags.gearRecommendations && Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
   ].filter((s) => s.present);
   const jumpToSection = (id: string, moveFocus: boolean) => {
     const target = document.getElementById(id);
@@ -1737,7 +1737,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         </section>
 
         {/* SNOWPACK */}
-        {safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (
+        {featureFlags.snowpackDetails && safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (
           <section className="ssr-card" id="planner-section-snowpack">
             <div className="ssr-card-h">
               <h2>
@@ -1868,7 +1868,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* LIVE OBSERVATIONS & ACCESS */}
-        {hasLocalObservations && (() => {
+        {featureFlags.fieldObservations && hasLocalObservations && (() => {
           const forestRoadCount = Number(accessObservation?.closedRoadCount || 0);
           const stateRoadCount = Number(accessObservation?.caltransClosureCount || 0);
           const parkAlertCount = Number(parkAccessObservation?.alertCount || parkAccessObservation?.alerts?.length || 0);
@@ -2272,7 +2272,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* AIR QUALITY */}
-        {shouldRenderRankedCard('airQuality') && (
+        {featureFlags.airQualityDetails && shouldRenderRankedCard('airQuality') && (
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
@@ -2676,7 +2676,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* GEAR */}
-        {shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
+        {featureFlags.gearRecommendations && shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
           const GEAR_TONE_LABEL: Record<string, string> = {
             nogo: 'Essential',
             caution: 'Recommended',

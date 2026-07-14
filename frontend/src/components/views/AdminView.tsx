@@ -366,6 +366,30 @@ const PRODUCT_FEATURE_CONTROLS = [
     description: 'Shows the detailed fire-weather, wildfire, and smoke guidance module.',
     icon: AlertTriangle,
   },
+  {
+    key: 'snowpackDetails',
+    label: 'Snowpack details',
+    description: 'Shows observed snow depth, water equivalent, and historical snowpack context.',
+    icon: Layers,
+  },
+  {
+    key: 'fieldObservations',
+    label: 'Field observations',
+    description: 'Shows nearby stations, radar, access, streamflow, and wildfire observations.',
+    icon: Activity,
+  },
+  {
+    key: 'airQualityDetails',
+    label: 'Air-quality details',
+    description: 'Shows AQI, pollutant readings, and observation or model context.',
+    icon: Gauge,
+  },
+  {
+    key: 'gearRecommendations',
+    label: 'Gear recommendations',
+    description: 'Shows the conditions-matched packing and equipment guidance module.',
+    icon: ShieldCheck,
+  },
 ] as const satisfies ReadonlyArray<{
   key: ProductFeatureKey;
   label: string;

@@ -27,6 +27,10 @@ test('product feature flags default to enabled and update independently', async 
       elevationForecast: true,
       heatRiskDetails: true,
       fireRiskDetails: true,
+      snowpackDetails: true,
+      fieldObservations: true,
+      airQualityDetails: true,
+      gearRecommendations: true,
     },
   });
 
@@ -59,6 +63,10 @@ test('product feature flags can be restored to enabled defaults', async () => {
     elevationForecast: false,
     heatRiskDetails: false,
     fireRiskDetails: false,
+    snowpackDetails: false,
+    fieldObservations: false,
+    airQualityDetails: false,
+    gearRecommendations: false,
   });
   const status = await resetFeatureFlags();
 
@@ -76,6 +84,10 @@ test('product feature flags can be restored to enabled defaults', async () => {
     elevationForecast: true,
     heatRiskDetails: true,
     fireRiskDetails: true,
+    snowpackDetails: true,
+    fieldObservations: true,
+    airQualityDetails: true,
+    gearRecommendations: true,
   });
   expect(getFeatureFlags()).toEqual(status.flags);
 });
@@ -95,6 +107,10 @@ test('product feature flags load from PostgreSQL', async () => {
     elevationForecast: true,
     heatRiskDetails: false,
     fireRiskDetails: true,
+    snowpackDetails: false,
+    fieldObservations: true,
+    airQualityDetails: false,
+    gearRecommendations: true,
   });
   jest.doMock('../src/db/app-data-store', () => ({
     appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
@@ -118,6 +134,10 @@ test('product feature flags load from PostgreSQL', async () => {
       elevationForecast: true,
       heatRiskDetails: false,
       fireRiskDetails: true,
+      snowpackDetails: false,
+      fieldObservations: true,
+      airQualityDetails: false,
+      gearRecommendations: true,
   });
   expect(featureFlagStore.getFeatureFlagStatus().persistent).toBe(true);
 });
@@ -138,4 +158,8 @@ test('disabled product features fail closed', async () => {
   expect(() => assertFeatureEnabled('elevationForecast')).not.toThrow();
   expect(() => assertFeatureEnabled('heatRiskDetails')).not.toThrow();
   expect(() => assertFeatureEnabled('fireRiskDetails')).not.toThrow();
+  expect(() => assertFeatureEnabled('snowpackDetails')).not.toThrow();
+  expect(() => assertFeatureEnabled('fieldObservations')).not.toThrow();
+  expect(() => assertFeatureEnabled('airQualityDetails')).not.toThrow();
+  expect(() => assertFeatureEnabled('gearRecommendations')).not.toThrow();
 });
