@@ -194,6 +194,10 @@ function renderMetricDelta(delta: number | null | undefined, unit = '') {
   );
 }
 
+function roundToTenth(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 function formatTemperatureRange(
   highF: number | null,
   lowF: number | null,
@@ -365,8 +369,10 @@ export function TripView({
   const bestIndex = best ? tripForecastRows.findIndex((row) => row.date === best.date) : -1;
   const watchDayIndex = watchDay ? tripForecastRows.findIndex((row) => row.date === watchDay.date) : -1;
   const scoredValues = tripForecastRows.flatMap((row) => (typeof row.score === 'number' ? [row.score] : []));
+  const minimumScore = scoredValues.length > 0 ? Math.min(...scoredValues) : null;
+  const maximumScore = scoredValues.length > 0 ? Math.max(...scoredValues) : null;
   const scoreRange = scoredValues.length > 1
-    ? `${Math.min(...scoredValues)}–${Math.max(...scoredValues)} / 100 · ${Math.max(...scoredValues) - Math.min(...scoredValues)} point swing`
+    ? `${minimumScore}–${maximumScore} / 100 · ${roundToTenth((maximumScore ?? 0) - (minimumScore ?? 0))} point swing`
     : scoredValues.length === 1
       ? `${scoredValues[0]} / 100`
       : 'Scores unavailable';
@@ -388,7 +394,7 @@ export function TripView({
   const firstScoredDay = tripForecastRows.find((day) => day.score !== null) ?? null;
   const lastScoredDay = [...tripForecastRows].reverse().find((day) => day.score !== null) ?? null;
   const tripScoreChange = typeof firstScoredDay?.score === 'number' && typeof lastScoredDay?.score === 'number'
-    ? lastScoredDay.score - firstScoredDay.score
+    ? roundToTenth(lastScoredDay.score - firstScoredDay.score)
     : null;
   const tripTrend = tripScoreChange === null || Math.abs(tripScoreChange) < 3
     ? 'steady'
@@ -397,7 +403,7 @@ export function TripView({
       : 'declining';
   const partialDayCount = tripForecastRows.filter((day) => day.partialData).length;
   const averageScore = scoredValues.length > 0
-    ? Math.round(scoredValues.reduce((sum, score) => sum + score, 0) / scoredValues.length)
+    ? roundToTenth(scoredValues.reduce((sum, score) => sum + score, 0) / scoredValues.length)
     : null;
   const tripChatPayload = JSON.stringify({
     contextType: 'multi-day-trip-plan',
@@ -1015,7 +1021,7 @@ export function TripView({
                     <h3><Eye /> Decision context</h3>
                     <p>
                       {selected.score !== null && averageScore !== null
-                        ? `${selected.score - averageScore >= 0 ? '+' : ''}${selected.score - averageScore} points versus the trip average.`
+                        ? `${selected.score - averageScore >= 0 ? '+' : ''}${roundToTenth(selected.score - averageScore)} points versus the trip average.`
                         : 'No trip-average score comparison.'}
                     </p>
                     <small className={selected.partialData ? 'warn' : ''}>

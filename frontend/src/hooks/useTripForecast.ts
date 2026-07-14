@@ -4,9 +4,10 @@ import type { SafetyData, UserPreferences, DecisionLevel, WeatherTrendPoint } fr
 import { DATE_FMT, MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS } from '../app/constants';
 import { addDaysToIsoDate, normalizeForecastDate } from '../app/core';
 import { parseTimeInputMinutes } from '../app/core';
-import { evaluateBackcountryDecision, normalizedDecisionScore } from '../app/decision';
+import { evaluateBackcountryDecision } from '../app/decision';
 import { buildTravelWindowRows, buildTravelWindowInsights, buildTrendWindowFromStart } from '../app/travel-window';
 import { parseMultiDayUsage, type MultiDayUsage } from '../app/multi-day-usage';
+import { calculateTripWeatherWindowScore } from '../app/trip-weather-score';
 
 export type MultiDayTripForecastDay = {
   date: string;
@@ -217,10 +218,12 @@ export function useTripForecast({
               ? 'No travel hour meets every threshold — re-time the start, shorten the objective, or choose another day.'
               : dayDecision.headline;
 
-            const rawSafetyScore = Number(dayData?.safety?.score);
-            const scoreRaw = Number.isFinite(rawSafetyScore)
-              ? normalizedDecisionScore(dayData, decisionOptions)
-              : Number.NaN;
+            const score = calculateTripWeatherWindowScore({
+              data: dayData,
+              trendWindow,
+              travelPassHours: travelInsights.passHours,
+              travelTotalHours: travelRows.length,
+            });
             const tempHighRaw = finiteNumberOrNull(
               dayData?.weather?.dailyTempHighF ?? dayData?.weather?.temperatureContext24h?.maxTempF,
             );
@@ -244,7 +247,7 @@ export function useTripForecast({
               safetyData: dayData,
               decisionLevel,
               decisionHeadline,
-              score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
+              score,
               weatherDescription: String(dayData?.weather?.description || 'Unknown'),
               tempHighF: tempHighRaw,
               tempLowF: tempLowRaw,
