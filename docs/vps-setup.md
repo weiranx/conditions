@@ -348,6 +348,12 @@ cd /opt/summitsafe
 ./scripts/deploy.sh --no-build
 ```
 
+Deploys are serialized with a checkout-local lock, so a manual release cannot
+overlap the GitHub Actions release. Normal deploys must run from a clean `main`
+checkout and update it with a fast-forward-only pull that exactly matches
+`origin/main`. If tracked hotfix changes are intentionally present, use
+`--no-pull` to deploy that exact working tree.
+
 **Enable avalanche debug logging temporarily:**
 ```bash
 # Edit /opt/summitsafe/.env: set DEBUG_AVY=true

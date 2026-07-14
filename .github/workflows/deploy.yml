@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   # Run backend tests as a deploy gate. The deploy job only runs if these pass.
   # Tests are run inline (rather than depending on ci.yml) because GitHub Actions
@@ -47,10 +51,7 @@ jobs:
 
             cd /opt/summitsafe
 
-            # Pull latest changes.
-            git pull origin main
-
-            # Build, migrate, recreate, and verify through the same deployment
-            # path used for manual VPS releases. The CI user does not manage
-            # host nginx, so that privileged step is skipped.
-            ./scripts/deploy.sh --no-pull --no-nginx
+            # Pull, build, migrate, recreate, and verify through the same
+            # locked deployment path used for manual VPS releases. The CI user
+            # does not manage host nginx, so that privileged step is skipped.
+            ./scripts/deploy.sh --no-nginx
