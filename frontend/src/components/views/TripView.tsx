@@ -34,6 +34,7 @@ import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
 import { TripHourlyWeatherChart } from './TripHourlyWeatherChart';
 import type { AppView } from '../../hooks/useUrlState';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 export interface TripViewProps {
   appShellClassName: string;
@@ -313,6 +314,7 @@ export function TripView({
   openPlannerView,
   onUseDayInPlanner,
 }: TripViewProps) {
+  const featureFlags = useProductFeatureFlags();
   const aiAvailability = useAiAvailability();
   const [sel, setSel] = React.useState(0);
   const [briefCopied, setBriefCopied] = React.useState(false);
@@ -1005,7 +1007,7 @@ export function TripView({
               </div>
             </section>
 
-            {selected && (
+            {featureFlags.hourlyWeatherCharts && selected && (
               <TripHourlyWeatherChart
                 points={selected.hourlyWeather}
                 dayLabel={`${weekdayLabel(selected.date)}, ${monthDayLabel(selected.date)}`}

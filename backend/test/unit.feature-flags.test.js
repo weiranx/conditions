@@ -23,6 +23,10 @@ test('product feature flags default to enabled and update independently', async 
       gpxImport: true,
       reportHistory: true,
       reportSharing: true,
+      hourlyWeatherCharts: true,
+      elevationForecast: true,
+      heatRiskDetails: true,
+      fireRiskDetails: true,
     },
   });
 
@@ -51,6 +55,10 @@ test('product feature flags can be restored to enabled defaults', async () => {
     gpxImport: false,
     reportHistory: false,
     reportSharing: false,
+    hourlyWeatherCharts: false,
+    elevationForecast: false,
+    heatRiskDetails: false,
+    fireRiskDetails: false,
   });
   const status = await resetFeatureFlags();
 
@@ -64,6 +72,10 @@ test('product feature flags can be restored to enabled defaults', async () => {
     gpxImport: true,
     reportHistory: true,
     reportSharing: true,
+    hourlyWeatherCharts: true,
+    elevationForecast: true,
+    heatRiskDetails: true,
+    fireRiskDetails: true,
   });
   expect(getFeatureFlags()).toEqual(status.flags);
 });
@@ -79,6 +91,10 @@ test('product feature flags load from PostgreSQL', async () => {
     gpxImport: false,
     reportHistory: true,
     reportSharing: false,
+    hourlyWeatherCharts: false,
+    elevationForecast: true,
+    heatRiskDetails: false,
+    fireRiskDetails: true,
   });
   jest.doMock('../src/db/app-data-store', () => ({
     appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
@@ -98,6 +114,10 @@ test('product feature flags load from PostgreSQL', async () => {
       gpxImport: false,
       reportHistory: true,
       reportSharing: false,
+      hourlyWeatherCharts: false,
+      elevationForecast: true,
+      heatRiskDetails: false,
+      fireRiskDetails: true,
   });
   expect(featureFlagStore.getFeatureFlagStatus().persistent).toBe(true);
 });
@@ -114,4 +134,8 @@ test('disabled product features fail closed', async () => {
   expect(() => assertFeatureEnabled('gpxImport')).not.toThrow();
   expect(() => assertFeatureEnabled('reportHistory')).not.toThrow();
   expect(() => assertFeatureEnabled('reportSharing')).not.toThrow();
+  expect(() => assertFeatureEnabled('hourlyWeatherCharts')).not.toThrow();
+  expect(() => assertFeatureEnabled('elevationForecast')).not.toThrow();
+  expect(() => assertFeatureEnabled('heatRiskDetails')).not.toThrow();
+  expect(() => assertFeatureEnabled('fireRiskDetails')).not.toThrow();
 });

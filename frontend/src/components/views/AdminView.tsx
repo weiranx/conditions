@@ -342,6 +342,30 @@ const PRODUCT_FEATURE_CONTROLS = [
     description: 'Shows share-link controls and allows public read-only report links to open.',
     icon: Share2,
   },
+  {
+    key: 'hourlyWeatherCharts',
+    label: 'Hourly weather charts',
+    description: 'Shows interactive hourly trend charts in Planner and multi-day trip reports.',
+    icon: BarChart3,
+  },
+  {
+    key: 'elevationForecast',
+    label: 'Elevation forecasts',
+    description: 'Shows modeled weather differences across forecast elevation bands.',
+    icon: MapPinned,
+  },
+  {
+    key: 'heatRiskDetails',
+    label: 'Heat-risk details',
+    description: 'Shows the detailed heat-risk assessment and terrain guidance module.',
+    icon: Gauge,
+  },
+  {
+    key: 'fireRiskDetails',
+    label: 'Fire-risk details',
+    description: 'Shows the detailed fire-weather, wildfire, and smoke guidance module.',
+    icon: AlertTriangle,
+  },
 ] as const satisfies ReadonlyArray<{
   key: ProductFeatureKey;
   label: string;

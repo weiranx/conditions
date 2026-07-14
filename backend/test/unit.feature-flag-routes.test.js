@@ -22,6 +22,10 @@ test('public feature flag endpoint returns current safe values without caching',
     gpxImport: true,
     reportHistory: true,
     reportSharing: true,
+    hourlyWeatherCharts: true,
+    elevationForecast: true,
+    heatRiskDetails: true,
+    fireRiskDetails: true,
   });
 });
 

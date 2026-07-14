@@ -1478,7 +1478,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 />
               </div>
             )}
-            {weatherTrendHasData && (
+            {featureFlags.hourlyWeatherCharts && weatherTrendHasData && (
               <WeatherTrendMiniChart
                 data={weatherTrendChartData}
                 metric={weatherTrendMetric}
@@ -1531,7 +1531,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         </section>
 
         {/* ELEVATION */}
-        {bands.length >= 2 && (
+        {featureFlags.elevationForecast && bands.length >= 2 && (
           <ElevationProfileSection
             bands={bands}
             maxGustMph={maxGustMph}
@@ -2238,7 +2238,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* HEAT RISK */}
-        {shouldRenderRankedCard('heatRisk') && (
+        {featureFlags.heatRiskDetails && shouldRenderRankedCard('heatRisk') && (
           <HeatRiskSection
             level={safetyData.heatRisk?.level}
             label={heatRiskLabel}
@@ -2253,7 +2253,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* FIRE RISK */}
-        {shouldRenderRankedCard('fireRisk') && (
+        {featureFlags.fireRiskDetails && shouldRenderRankedCard('fireRisk') && (
           <FireRiskSection
             level={safetyData.fireRisk?.level}
             label={fireRiskLabel}
