@@ -288,6 +288,8 @@ crontab -l | grep summitsafe-objective-watch
 
 The hourly trigger checks objectives every three hours normally and every hour during the final 48 hours. Expired objectives stop automatically, duplicate plans share one upstream refresh, and each run limits provider concurrency.
 
+After deployment, Admin → Operations → Objective Watch scheduler reports the hourly heartbeat and latest run. It also controls the standard objective check interval (three hours by default; checks remain hourly in the final 48 hours). Start and Stop control automatic processing without removing the host cron; retaining the heartbeat lets Admin detect a missing or stalled cron after 90 minutes. The raw cron secret is never shown in the browser.
+
 ---
 
 ## 9. First Deploy

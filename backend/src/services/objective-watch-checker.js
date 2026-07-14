@@ -4,7 +4,7 @@ const { createHash } = require('crypto');
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_BATCH_SIZE = 100;
-const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+const DEFAULT_CHECK_INTERVAL_MINUTES = 180;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const FORTY_EIGHT_HOURS_MS = 48 * ONE_HOUR_MS;
 const PLAN_DATE_EXPIRY_GRACE_MS = 14 * ONE_HOUR_MS;
@@ -74,12 +74,17 @@ const planDateHasEnded = (plan, now) => {
   return Number.isNaN(end.getTime()) || now.getTime() > end.getTime() + PLAN_DATE_EXPIRY_GRACE_MS;
 };
 
-const calculateNextCheckAt = (plan, checkedAt) => {
+const calculateNextCheckAt = (plan, checkedAt, standardIntervalMinutes = DEFAULT_CHECK_INTERVAL_MINUTES) => {
   const now = new Date(checkedAt);
   if (Number.isNaN(now.getTime()) || planDateHasEnded(plan, now)) return null;
   const plannedStart = parsePlannedStart(plan);
   const untilStartMs = plannedStart ? plannedStart.getTime() - now.getTime() : 0;
-  const cadenceMs = untilStartMs > FORTY_EIGHT_HOURS_MS ? THREE_HOURS_MS : ONE_HOUR_MS;
+  const parsedIntervalMinutes = Number(standardIntervalMinutes);
+  const cadenceMs = untilStartMs > FORTY_EIGHT_HOURS_MS
+    ? (Number.isFinite(parsedIntervalMinutes) && parsedIntervalMinutes >= 60
+        ? parsedIntervalMinutes
+        : DEFAULT_CHECK_INTERVAL_MINUTES) * 60 * 1000
+    : ONE_HOUR_MS;
   return new Date(now.getTime() + cadenceMs);
 };
 
@@ -194,6 +199,7 @@ const createObjectiveWatchChecker = ({
   emailService,
   log = console,
   now = () => new Date(),
+  getCheckIntervalMinutes = async () => DEFAULT_CHECK_INTERVAL_MINUTES,
   concurrency = Number(process.env.OBJECTIVE_WATCH_CONCURRENCY) || DEFAULT_CONCURRENCY,
   batchSize = Number(process.env.OBJECTIVE_WATCH_BATCH_SIZE) || DEFAULT_BATCH_SIZE,
 } = {}) => {
@@ -258,6 +264,7 @@ const createObjectiveWatchChecker = ({
     }
 
     const checkedAt = now();
+    const standardIntervalMinutes = await getCheckIntervalMinutes();
     await database.query(`
       UPDATE objective_watches
       SET next_check_at = NULL
@@ -335,7 +342,7 @@ const createObjectiveWatchChecker = ({
           const previousPayload = watch.last_snapshot || watch.baseline_report?.safetyData || null;
           const change = buildMeaningfulChange(previousPayload, result.payload, checkedAt);
           const premium = watch.tier_key === 'premium';
-          const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt) : null;
+          const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt, standardIntervalMinutes) : null;
           const checkStatus = result.payload.partialData === true ? 'partial' : change ? 'changed' : 'unchanged';
           const checkSummary = extractWatchSignals(result.payload);
           await database.query(`

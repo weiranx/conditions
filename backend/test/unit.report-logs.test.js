@@ -106,6 +106,35 @@ test('authorized AI admin routes read and update runtime settings', async () => 
       scheduledAt: '2026-07-14T19:00:00.000Z',
     })),
   };
+  const objectiveWatchSchedulerStatus = {
+    enabled: true,
+    configured: true,
+    running: false,
+    health: 'healthy',
+    message: 'The hourly scheduler heartbeat is current.',
+    lastHeartbeatAt: '2026-07-14T19:07:00.000Z',
+    lastStartedAt: '2026-07-14T19:07:01.000Z',
+    lastCompletedAt: '2026-07-14T19:07:15.000Z',
+    lastStatus: 'succeeded',
+    lastError: null,
+    lastSummary: { checked: 2, failed: 0 },
+    checkIntervalMinutes: 180,
+    expectedIntervalMinutes: 60,
+    staleAfterMinutes: 90,
+    updatedAt: '2026-07-14T19:07:15.000Z',
+  };
+  const objectiveWatchScheduler = {
+    getStatus: jest.fn(async () => objectiveWatchSchedulerStatus),
+    setEnabled: jest.fn(async (enabled) => ({
+      ...objectiveWatchSchedulerStatus,
+      enabled,
+      health: enabled ? 'waiting' : 'stopped',
+    })),
+    setCheckInterval: jest.fn(async (checkIntervalMinutes) => ({
+      ...objectiveWatchSchedulerStatus,
+      checkIntervalMinutes,
+    })),
+  };
   let usageSettings = {
     persistent: true,
     freeMonthlyAITokenLimit: 250_000,
@@ -234,6 +263,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     readSystemResources,
     runtimeEnvService,
     backendRestartController,
+    objectiveWatchScheduler,
   });
 
   const createResponse = () => ({
@@ -269,6 +299,49 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     action: 'runtime.environment.updated',
     details: { changed: ['REQUEST_TIMEOUT_MS'], restartRequired: true },
   }));
+
+  const schedulerStatusResponse = createResponse();
+  await routes.get.get('/api/admin/objective-watch-scheduler')({ headers }, schedulerStatusResponse);
+  expect(objectiveWatchScheduler.getStatus).toHaveBeenCalledTimes(1);
+  expect(schedulerStatusResponse.payload).toEqual(objectiveWatchSchedulerStatus);
+
+  const stopSchedulerResponse = createResponse();
+  await routes.patch.get('/api/admin/objective-watch-scheduler')({
+    headers,
+    body: { enabled: false },
+  }, stopSchedulerResponse);
+  expect(objectiveWatchScheduler.setEnabled).toHaveBeenCalledWith(false);
+  expect(stopSchedulerResponse.payload).toMatchObject({ enabled: false, health: 'stopped' });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'objective-watch.scheduler.stopped',
+    category: 'maintenance',
+  }));
+
+  const schedulerIntervalResponse = createResponse();
+  await routes.patch.get('/api/admin/objective-watch-scheduler')({
+    headers,
+    body: { checkIntervalMinutes: 360 },
+  }, schedulerIntervalResponse);
+  expect(objectiveWatchScheduler.setCheckInterval).toHaveBeenCalledWith(360);
+  expect(schedulerIntervalResponse.payload).toMatchObject({ checkIntervalMinutes: 360 });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'objective-watch.scheduler.interval-updated',
+    category: 'configuration',
+  }));
+
+  const invalidSchedulerResponse = createResponse();
+  await routes.patch.get('/api/admin/objective-watch-scheduler')({
+    headers,
+    body: { enabled: 'yes' },
+  }, invalidSchedulerResponse);
+  expect(invalidSchedulerResponse.statusCode).toBe(400);
+
+  const invalidIntervalResponse = createResponse();
+  await routes.patch.get('/api/admin/objective-watch-scheduler')({
+    headers,
+    body: { checkIntervalMinutes: 90 },
+  }, invalidIntervalResponse);
+  expect(invalidIntervalResponse.statusCode).toBe(400);
 
   const backendRestartStatusResponse = createResponse();
   await routes.get.get('/api/admin/maintenance/backend-restart')({ headers }, backendRestartStatusResponse);
@@ -577,6 +650,14 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, hiddenRuntimeEnvironmentResponse);
   expect(hiddenRuntimeEnvironmentResponse.statusCode).toBe(404);
   expect(runtimeEnvService.getStatus).toHaveBeenCalledTimes(1);
+
+  const hiddenSchedulerResponse = createResponse();
+  await routes.patch.get('/api/admin/objective-watch-scheduler')({
+    headers: { cookie: 'bc_session=other-session-token' },
+    body: { enabled: false },
+  }, hiddenSchedulerResponse);
+  expect(hiddenSchedulerResponse.statusCode).toBe(404);
+  expect(objectiveWatchScheduler.setEnabled).toHaveBeenCalledTimes(1);
 
   const hiddenBackendRestartResponse = createResponse();
   await routes.post.get('/api/admin/maintenance/backend-restart')({

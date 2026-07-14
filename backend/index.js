@@ -54,6 +54,7 @@ const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
 const { registerObjectiveWatchRoutes } = require('./src/routes/objective-watches');
 const { registerObjectiveWatchCheckRoute } = require('./src/routes/objective-watch-checks');
 const { createObjectiveWatchChecker } = require('./src/services/objective-watch-checker');
+const { createObjectiveWatchScheduler } = require('./src/services/objective-watch-scheduler');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { createReportUsageLimitService } = require('./src/auth/report-usage-limit');
@@ -862,11 +863,13 @@ registerSavedReportRoutes({
   reportUsageService: reportUsageLimitService,
   emailService,
 });
+const objectiveWatchScheduler = createObjectiveWatchScheduler({ database });
 const objectiveWatchChecker = createObjectiveWatchChecker({
   database,
   invokeSafetyHandler,
   emailService,
   log: logger,
+  getCheckIntervalMinutes: objectiveWatchScheduler.getCheckIntervalMinutes,
 });
 registerObjectiveWatchRoutes({
   app,
@@ -878,6 +881,7 @@ registerObjectiveWatchRoutes({
 registerObjectiveWatchCheckRoute({
   app,
   checker: objectiveWatchChecker,
+  scheduler: objectiveWatchScheduler,
   log: logger,
 });
 const ensureAccountAccess = createAccountAccessGuard({
@@ -906,6 +910,7 @@ registerReportLogsRoute(app, {
   caches: observableCaches,
   runDiagnostics: () => runExternalDiagnostics({ fetchWithTimeout }),
   loadModelCatalog: (options) => aiModelCatalog.load(options),
+  objectiveWatchScheduler,
 });
 registerRouteAnalysisRoutes({
   app,

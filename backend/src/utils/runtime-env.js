@@ -30,6 +30,7 @@ const RUNTIME_ENV_DEFINITIONS = Object.freeze([
 
   { key: 'OBJECTIVE_WATCH_CONCURRENCY', label: 'Objective Watch concurrency', category: 'Objective Watch', description: 'Maximum watches evaluated at the same time.', type: 'integer', min: 1, max: 50 },
   { key: 'OBJECTIVE_WATCH_BATCH_SIZE', label: 'Objective Watch batch size', category: 'Objective Watch', description: 'Maximum watches selected by one checker run.', type: 'integer', min: 1, max: 10000 },
+  { key: 'OBJECTIVE_WATCH_CRON_SECRET', label: 'Scheduler credential', category: 'Objective Watch', description: 'Protected credential used by the host cron to trigger automatic checks. Configure it in /opt/summitsafe/.env, then deploy to install the cron.', type: 'secret', editable: false },
 
   { key: 'NPS_API_KEY', label: 'National Park Service API key', category: 'Credentials', description: 'Enables nearby park alerts and closures.', type: 'secret' },
   { key: 'AIRNOW_API_KEY', label: 'AirNow API key', category: 'Credentials', description: 'Enables EPA AirNow observations.', type: 'secret' },
@@ -110,7 +111,7 @@ const readOverridesSync = (filePath) => {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     return Object.fromEntries(Object.entries(parsed).flatMap(([key, rawValue]) => {
       const definition = DEFINITION_BY_KEY.get(key);
-      if (!definition) return [];
+      if (!definition || definition.editable === false) return [];
       try {
         const value = normalizeRuntimeEnvValue(definition, rawValue);
         return value === null ? [] : [[key, value]];
@@ -145,7 +146,10 @@ const createRuntimeEnvService = ({
   initialOverrides = startupState?.overrides || readOverridesSync(filePath),
   fileSystem = fsPromises,
 } = {}) => {
-  let overrides = { ...initialOverrides };
+  let overrides = Object.fromEntries(Object.entries(initialOverrides).filter(([key]) => {
+    const definition = DEFINITION_BY_KEY.get(key);
+    return Boolean(definition && definition.editable !== false);
+  }));
 
   const getStatus = () => ({
     persistent: true,
@@ -163,6 +167,7 @@ const createRuntimeEnvService = ({
         min: definition.min ?? null,
         max: definition.max ?? null,
         secret: definition.type === 'secret',
+        editable: definition.editable !== false,
         configured: Boolean(effectiveValue),
         value: definition.type === 'secret' ? null : effectiveValue,
         source: overridden ? 'admin override' : effectiveValue ? 'deployment environment' : 'not configured',
@@ -191,6 +196,7 @@ const createRuntimeEnvService = ({
     const normalized = entries.map(([key, rawValue]) => {
       const definition = DEFINITION_BY_KEY.get(key);
       if (!definition) throw createValidationError(`Environment variable is not editable: ${key}.`);
+      if (definition.editable === false) throw createValidationError(`Environment variable is deployment-managed: ${key}.`);
       return [key, normalizeRuntimeEnvValue(definition, rawValue)];
     });
     const nextOverrides = { ...overrides };

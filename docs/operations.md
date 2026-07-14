@@ -103,6 +103,8 @@ health URL to include nginx, DNS, and TLS in the same check.
 - `5xx` responses are logged in all environments.
 - Set `DEBUG_AVY=true` to enable verbose avalanche pipeline debug logs (useful when diagnosing zone-matching or bulletin parsing issues).
 - The host runs `scripts/objective-watch-cron.sh` at minute 7 hourly. Successful runs log an `Objective Watch cron completed` summary from the backend; failures cause the trigger script to exit non-zero.
+- Admin → Operations → Objective Watch scheduler shows credential presence, the last heartbeat, the last completed run, its summary, and the standard check interval. A heartbeat older than 90 minutes is reported as unhealthy.
+- The Admin Start/Stop action persists in PostgreSQL. Stop leaves the host cron installed as a health heartbeat but skips automatic watch processing; a run already in progress is allowed to finish.
 - The `health-monitor` container logs every check and email transition independently of backend logs.
 
 ### Objective Watch scheduling
@@ -110,13 +112,14 @@ health URL to include nginx, DNS, and TLS in the same check.
 - Only current Premium accounts are selected by the hourly worker. Free watches remain available in-app and can be refreshed manually from the Watch dashboard.
 - Free accounts can keep one active watch and see 14 days of manual check history. Premium accounts can keep ten active watches and see 90 days of automatic and manual check history.
 - Manual refreshes use the same deterministic safety pipeline, do not consume report quota, and have a short anti-abuse cooldown.
-- Watches more than 48 hours from their planned start are checked every three hours.
+- Watches more than 48 hours from their planned start use the Admin-configured standard check interval (three hours by default).
 - Watches inside the final 48 hours are checked hourly; expired plan dates are disabled.
 - Each attempted run is recorded as unchanged, changed, partial, or failed. Check records are retained for at most 90 days; the account tier controls how much of that window the API returns.
 - Identical coordinate/date/start/window plans share one upstream safety refresh.
 - `OBJECTIVE_WATCH_CONCURRENCY` defaults to `4` and `OBJECTIVE_WATCH_BATCH_SIZE` defaults to `100`.
 - Full snapshots overwrite the previous snapshot; meaningful risk-increase events are retained for up to 90 days, with only the most recent 14 days exposed to Free accounts.
 - Email alerts are Premium-only, opt-in, and only deliver to verified account email addresses.
+- Scheduler state, the configurable standard check interval, and the latest run summary live in `objective_watch_scheduler_state`; the secret itself is never stored there or returned to the browser.
 
 ---
 

@@ -121,6 +121,7 @@ const registerReportLogsRoute = (
     readHealthMonitorHistory = () => healthHistoryStore.list(),
     runtimeEnvService = defaultRuntimeEnvService,
     backendRestartController = defaultBackendRestartController,
+    objectiveWatchScheduler = null,
   } = {},
 ) => {
   let diagnosticsInFlight = null;
@@ -182,6 +183,67 @@ const registerReportLogsRoute = (
       return;
     }
     res.json(runtimeEnvService.getStatus());
+  });
+
+  app.get('/api/admin/objective-watch-scheduler', async (req, res) => {
+    if (!await authorize(req, res)) return;
+    if (typeof objectiveWatchScheduler?.getStatus !== 'function') {
+      res.status(503).json({ error: 'Objective Watch scheduler status is unavailable.' });
+      return;
+    }
+    try {
+      res.json(await objectiveWatchScheduler.getStatus());
+    } catch (error) {
+      req.log?.error?.({ err: error }, 'Objective Watch scheduler status could not be loaded');
+      res.status(503).json({ error: 'Objective Watch scheduler status is unavailable.' });
+    }
+  });
+
+  app.patch('/api/admin/objective-watch-scheduler', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    const hasEnabled = Object.prototype.hasOwnProperty.call(req.body || {}, 'enabled');
+    const hasCheckInterval = Object.prototype.hasOwnProperty.call(req.body || {}, 'checkIntervalMinutes');
+    if (!hasEnabled && !hasCheckInterval) {
+      res.status(400).json({ error: 'Provide enabled or checkIntervalMinutes.' });
+      return;
+    }
+    if ((hasEnabled && typeof objectiveWatchScheduler?.setEnabled !== 'function')
+      || (hasCheckInterval && typeof objectiveWatchScheduler?.setCheckInterval !== 'function')) {
+      res.status(503).json({ error: 'Objective Watch scheduler controls are unavailable.' });
+      return;
+    }
+    if (hasEnabled && typeof req.body.enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be true or false.' });
+      return;
+    }
+    if (hasCheckInterval && (!Number.isInteger(req.body.checkIntervalMinutes)
+      || req.body.checkIntervalMinutes < 60
+      || req.body.checkIntervalMinutes > 1440
+      || req.body.checkIntervalMinutes % 60 !== 0)) {
+      res.status(400).json({ error: 'checkIntervalMinutes must be a whole number of hours from 60 to 1440 minutes.' });
+      return;
+    }
+    try {
+      let status;
+      if (hasCheckInterval) status = await objectiveWatchScheduler.setCheckInterval(req.body.checkIntervalMinutes);
+      if (hasEnabled) status = await objectiveWatchScheduler.setEnabled(req.body.enabled);
+      const intervalOnly = hasCheckInterval && !hasEnabled;
+      await audit(req, {
+        action: intervalOnly
+          ? 'objective-watch.scheduler.interval-updated'
+          : req.body.enabled ? 'objective-watch.scheduler.started' : 'objective-watch.scheduler.stopped',
+        category: intervalOnly ? 'configuration' : 'maintenance',
+        summary: intervalOnly
+          ? `Set the standard Objective Watch check interval to ${status.checkIntervalMinutes} minutes`
+          : `${req.body.enabled ? 'Started' : 'Stopped'} automatic Objective Watch checks`,
+        details: { enabled: status.enabled, running: status.running, checkIntervalMinutes: status.checkIntervalMinutes },
+      });
+      res.json(status);
+    } catch (error) {
+      req.log?.error?.({ err: error }, 'Objective Watch scheduler state could not be updated');
+      res.status(500).json({ error: 'Objective Watch scheduler state could not be updated.' });
+    }
   });
 
   app.patch('/api/admin/runtime-environment', async (req, res) => {

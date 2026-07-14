@@ -25,7 +25,9 @@ const safetyPayload = ({ score = 80, danger = 1, gust = 15, precip = 20, closure
 
 test('uses three-hour checks normally, hourly checks inside 48 hours, and stops expired plans', () => {
   expect(calculateNextCheckAt(PLAN, new Date('2026-07-14T00:00:00.000Z')).toISOString()).toBe('2026-07-14T03:00:00.000Z');
+  expect(calculateNextCheckAt(PLAN, new Date('2026-07-14T00:00:00.000Z'), 360).toISOString()).toBe('2026-07-14T06:00:00.000Z');
   expect(calculateNextCheckAt(PLAN, new Date('2026-07-16T00:00:00.000Z')).toISOString()).toBe('2026-07-16T01:00:00.000Z');
+  expect(calculateNextCheckAt(PLAN, new Date('2026-07-16T00:00:00.000Z'), 360).toISOString()).toBe('2026-07-16T01:00:00.000Z');
   expect(calculateNextCheckAt(PLAN, new Date('2026-07-18T15:00:00.000Z'))).toBeNull();
 });
 

@@ -1429,6 +1429,47 @@ input {
 .admin-health-history-detail strong { overflow: hidden; color: var(--ui-text-2); font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .admin-health-history-action { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; color: var(--ui-text-3); font-size: 9.5px; text-align: right; }
 
+.admin-objective-scheduler { display: grid; gap: 12px; }
+.admin-objective-scheduler-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.admin-objective-scheduler-status { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 0 9px; border-radius: 999px; background: var(--ui-surface-subtle); color: var(--ui-text-3); font-size: 9.5px; font-weight: 750; }
+.admin-objective-scheduler-status > span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.admin-objective-scheduler-status.is-healthy,
+.admin-objective-scheduler-status.is-running { background: var(--ui-brand-soft); color: var(--ui-go-ink); }
+.admin-objective-scheduler-status.is-stopped { background: var(--ui-surface-subtle); color: var(--ui-text-3); }
+.admin-objective-scheduler-status.is-not_configured,
+.admin-objective-scheduler-status.is-unhealthy,
+.admin-objective-scheduler-status.is-failed { background: color-mix(in oklch, var(--ui-risk-4) 11%, var(--ui-surface)); color: var(--ui-nogo-ink); }
+.admin-objective-scheduler-stop { border-color: color-mix(in oklch, var(--ui-risk-4) 38%, var(--ui-line)); color: var(--ui-nogo-ink); }
+.admin-objective-scheduler-hero { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--ui-line); border-radius: 9px; background: var(--ui-surface-subtle); }
+.admin-objective-scheduler-hero > span { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 9px; background: var(--ui-surface); color: var(--ui-text-3); }
+.admin-objective-scheduler-hero > div { min-width: 0; }
+.admin-objective-scheduler-hero strong { color: var(--ui-text); font-size: 12px; }
+.admin-objective-scheduler-hero p { margin: 3px 0 0; color: var(--ui-text-3); font-size: 10px; line-height: 1.45; }
+.admin-objective-scheduler-hero.is-healthy,
+.admin-objective-scheduler-hero.is-running { border-color: color-mix(in oklch, var(--ui-go-ink) 25%, var(--ui-line)); }
+.admin-objective-scheduler-hero.is-healthy > span,
+.admin-objective-scheduler-hero.is-running > span { color: var(--ui-go-ink); }
+.admin-objective-scheduler-hero.is-not_configured,
+.admin-objective-scheduler-hero.is-unhealthy,
+.admin-objective-scheduler-hero.is-failed { border-color: color-mix(in oklch, var(--ui-risk-4) 30%, var(--ui-line)); }
+.admin-objective-scheduler-hero.is-not_configured > span,
+.admin-objective-scheduler-hero.is-unhealthy > span,
+.admin-objective-scheduler-hero.is-failed > span { color: var(--ui-nogo-ink); }
+.admin-objective-scheduler-interval { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) auto; align-items: end; gap: 10px; padding: 11px 12px; border: 1px solid var(--ui-line); border-radius: 9px; background: var(--ui-surface); }
+.admin-objective-scheduler-interval > div { display: grid; gap: 3px; min-width: 0; }
+.admin-objective-scheduler-interval label { color: var(--ui-text); font-size: 11px; font-weight: 750; }
+.admin-objective-scheduler-interval small { color: var(--ui-text-4); font-size: 8.5px; line-height: 1.45; }
+.admin-objective-scheduler-interval select { width: 100%; min-height: 34px; border: 1px solid var(--ui-line); border-radius: 7px; background: var(--ui-surface); color: var(--ui-text); padding: 0 9px; font: inherit; font-size: 10px; }
+.admin-objective-scheduler-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--ui-line); border-radius: 9px; overflow: hidden; }
+.admin-objective-scheduler-grid > div { display: grid; gap: 4px; min-width: 0; padding: 11px 12px; background: var(--ui-surface); }
+.admin-objective-scheduler-grid > div + div { border-left: 1px solid var(--ui-line); }
+.admin-objective-scheduler-grid span { display: inline-flex; align-items: center; gap: 5px; color: var(--ui-text-4); font-size: 9px; font-weight: 700; }
+.admin-objective-scheduler-grid strong { overflow: hidden; color: var(--ui-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-objective-scheduler-grid strong.is-healthy { color: var(--ui-go-ink); }
+.admin-objective-scheduler-grid strong.is-unavailable { color: var(--ui-nogo-ink); }
+.admin-objective-scheduler-grid small { color: var(--ui-text-4); font-size: 8.5px; }
+.admin-objective-scheduler-note { margin: 0; color: var(--ui-text-4); font-size: 9px; line-height: 1.5; }
+
 .admin-audit-heading {
   display: flex;
   align-items: center;
@@ -1691,6 +1732,12 @@ input {
 .admin-runtime-field select:focus { border-color: var(--ui-brand); outline: 2px solid var(--ui-brand-soft); }
 .admin-runtime-actions { display: flex; gap: 5px; flex: none; }
 .admin-runtime-actions .logs-btn { min-height: 34px; padding-inline: 9px; }
+.admin-runtime-readonly { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 7px 9px; border: 1px solid var(--ui-line-strong); border-radius: 7px; background: var(--ui-surface); }
+.admin-runtime-readonly > span { display: grid; gap: 1px; }
+.admin-runtime-readonly strong { color: var(--ui-text-2); font-size: 10px; }
+.admin-runtime-readonly small { color: var(--ui-text-4); font-size: 8.5px; line-height: 1.35; }
+.admin-runtime-readonly.is-configured { border-color: color-mix(in oklch, var(--ui-go-ink) 30%, var(--ui-line)); color: var(--ui-go-ink); }
+.admin-runtime-readonly.is-missing { border-color: color-mix(in oklch, var(--ui-risk-4) 35%, var(--ui-line)); color: var(--ui-nogo-ink); }
 
 .logs-metric-card {
   display: flex;
@@ -12285,6 +12332,9 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-health-history-list li { grid-template-columns: 8px 82px 70px minmax(180px, 1fr); }
   .admin-health-history-action { grid-column: 4; justify-content: flex-start; text-align: left; }
+  .admin-objective-scheduler-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-objective-scheduler-grid > div:nth-child(3) { border-left: 0; }
+  .admin-objective-scheduler-grid > div:nth-child(n + 3) { border-top: 1px solid var(--ui-line); }
   .admin-system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ai-control-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-runtime-groups { grid-template-columns: minmax(0, 1fr); }
@@ -12613,6 +12663,14 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-health-history-detail { grid-column: 2 / -1; }
   .admin-health-history-detail strong { white-space: normal; }
   .admin-health-history-action { grid-column: 2 / -1; }
+  .admin-objective-scheduler .logs-chart-head { align-items: flex-start; flex-direction: column; }
+  .admin-objective-scheduler-actions { align-items: stretch; width: 100%; flex-direction: column; }
+  .admin-objective-scheduler-actions .logs-btn { justify-content: center; }
+  .admin-objective-scheduler-status { justify-content: center; }
+  .admin-objective-scheduler-interval { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .admin-objective-scheduler-interval .logs-btn { justify-content: center; }
+  .admin-objective-scheduler-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-objective-scheduler-grid > div + div { border-top: 1px solid var(--ui-line); border-left: 0; }
   .admin-model-card-head { grid-template-columns: 36px minmax(0, 1fr); }
   .admin-model-card-head > span:last-child { grid-column: 1 / -1; }
   .admin-model-fields { grid-template-columns: minmax(0, 1fr); }

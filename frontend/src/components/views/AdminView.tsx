@@ -154,6 +154,30 @@ interface AdminHealthHistoryPayload {
   };
 }
 
+interface ObjectiveWatchSchedulerStatus {
+  enabled: boolean;
+  configured: boolean;
+  running: boolean;
+  health: 'healthy' | 'running' | 'waiting' | 'stopped' | 'not_configured' | 'unhealthy' | 'failed';
+  message: string;
+  lastHeartbeatAt: string | null;
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  lastStatus: string;
+  lastError: string | null;
+  lastSummary: {
+    due?: number;
+    checked?: number;
+    changed?: number;
+    failed?: number;
+    notificationsSent?: number;
+  } | null;
+  checkIntervalMinutes: number;
+  expectedIntervalMinutes: number;
+  staleAfterMinutes: number;
+  updatedAt: string | null;
+}
+
 interface ResourceUsageSnapshot {
   totalBytes: number;
   usedBytes: number;
@@ -228,6 +252,7 @@ interface RuntimeEnvironmentEntry {
   min: number | null;
   max: number | null;
   secret: boolean;
+  editable: boolean;
   configured: boolean;
   value: string | null;
   source: 'admin override' | 'deployment environment' | 'not configured';
@@ -635,6 +660,24 @@ function formatLogTime(timestamp: string): { primary: string; secondary: string 
   };
 }
 
+const formatSchedulerTimestamp = (value: string | null) => {
+  if (!value) return 'Not recorded yet';
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime())
+    ? parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'Invalid timestamp';
+};
+
+const schedulerHealthLabel = (health: ObjectiveWatchSchedulerStatus['health']) => ({
+  healthy: 'Healthy',
+  running: 'Check running',
+  waiting: 'Waiting for heartbeat',
+  stopped: 'Stopped',
+  not_configured: 'Not configured',
+  unhealthy: 'Heartbeat overdue',
+  failed: 'Latest run failed',
+}[health]);
+
 function formatAccountDate(timestamp: string | null): string {
   if (!timestamp) return 'No activity yet';
   const date = new Date(timestamp);
@@ -1000,6 +1043,8 @@ function AdminDashboard() {
   const [usageSettings, setUsageSettings] = useState<AdminUsageSettings | null>(null);
   const [runtimeEnvironment, setRuntimeEnvironment] = useState<RuntimeEnvironmentStatus | null>(null);
   const [backendRestartStatus, setBackendRestartStatus] = useState<BackendRestartStatus | null>(null);
+  const [objectiveWatchScheduler, setObjectiveWatchScheduler] = useState<ObjectiveWatchSchedulerStatus | null>(null);
+  const [objectiveWatchCheckIntervalDraft, setObjectiveWatchCheckIntervalDraft] = useState('180');
   const [runtimeEnvironmentDrafts, setRuntimeEnvironmentDrafts] = useState<Record<string, string>>({});
   const [usageLimitDraft, setUsageLimitDraft] = useState('');
   const [reportLimitDraft, setReportLimitDraft] = useState('');
@@ -1031,6 +1076,9 @@ function AdminDashboard() {
   const [runtimeEnvironmentNotice, setRuntimeEnvironmentNotice] = useState<string | null>(null);
   const [runtimeEnvironmentPendingKey, setRuntimeEnvironmentPendingKey] = useState<string | null>(null);
   const [backendRestartPending, setBackendRestartPending] = useState(false);
+  const [objectiveWatchSchedulerError, setObjectiveWatchSchedulerError] = useState<string | null>(null);
+  const [objectiveWatchSchedulerNotice, setObjectiveWatchSchedulerNotice] = useState<string | null>(null);
+  const [objectiveWatchSchedulerPending, setObjectiveWatchSchedulerPending] = useState(false);
   const [userActionPending, setUserActionPending] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ExternalDiagnosticsResult | null>(null);
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
@@ -1107,6 +1155,16 @@ function AdminDashboard() {
     return true;
   }, []);
 
+  const applyObjectiveWatchScheduler = useCallback((payload: unknown) => {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+    if (!('enabled' in payload) || !('health' in payload) || !('configured' in payload)) return false;
+    const status = payload as ObjectiveWatchSchedulerStatus;
+    setObjectiveWatchScheduler(status);
+    setObjectiveWatchCheckIntervalDraft(String(status.checkIntervalMinutes || 180));
+    setObjectiveWatchSchedulerError(null);
+    return true;
+  }, []);
+
   const fetchAuditTrail = useCallback(async () => {
     try {
       const result = await fetchApi('/api/admin/audit-log');
@@ -1135,7 +1193,7 @@ function AdminDashboard() {
   const fetchAdminData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult, runtimeEnvironmentResult, backendRestartResult] = await Promise.all([
+      const [logsResult, aiUsageResult, healthResult, systemResourcesResult, healthHistoryResult, aiSettingsResult, featureFlagsResult, aiModelsResult, auditResult, usersResult, usageSettingsResult, runtimeEnvironmentResult, backendRestartResult, objectiveWatchSchedulerResult] = await Promise.all([
         fetchApi('/api/report-logs'),
         fetchApi('/api/ai-usage'),
         fetchHealthSnapshot(),
@@ -1149,6 +1207,7 @@ function AdminDashboard() {
         fetchApi('/api/admin/usage-settings'),
         fetchApi('/api/admin/runtime-environment'),
         fetchApi('/api/admin/maintenance/backend-restart'),
+        fetchApi('/api/admin/objective-watch-scheduler'),
       ]);
       if (logsResult.response.ok && Array.isArray(logsResult.payload)) {
         setLogs(logsResult.payload as ReportLogEntry[]);
@@ -1226,6 +1285,9 @@ function AdminDashboard() {
       } else {
         setBackendRestartStatus(null);
       }
+      if (!objectiveWatchSchedulerResult.response.ok || !applyObjectiveWatchScheduler(objectiveWatchSchedulerResult.payload)) {
+        setObjectiveWatchSchedulerError('Objective Watch scheduler status is temporarily unavailable.');
+      }
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setAIUsageError('AI usage data is temporarily unavailable.');
@@ -1240,11 +1302,12 @@ function AdminDashboard() {
       setUsageSettingsError('Usage limits are temporarily unavailable.');
       setRuntimeEnvironmentError('Runtime environment settings are temporarily unavailable.');
       setBackendRestartStatus(null);
+      setObjectiveWatchSchedulerError('Objective Watch scheduler status is temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [applyHealthSnapshot, applyRuntimeEnvironment, applyUserDirectory, fetchHealthSnapshot]);
+  }, [applyHealthSnapshot, applyObjectiveWatchScheduler, applyRuntimeEnvironment, applyUserDirectory, fetchHealthSnapshot]);
 
   const refreshModelCatalog = useCallback(async () => {
     setAIModelCatalogPending(true);
@@ -1719,6 +1782,68 @@ function AdminDashboard() {
     setBackendRestartPending(false);
   };
 
+  const setObjectiveWatchSchedulerEnabled = async (enabled: boolean) => {
+    if (objectiveWatchSchedulerPending) return;
+    if (!enabled && !window.confirm('Stop automatic Objective Watch checks? The host heartbeat will continue so Admin can still report scheduler health.')) return;
+    setObjectiveWatchSchedulerPending(true);
+    setObjectiveWatchSchedulerError(null);
+    setObjectiveWatchSchedulerNotice(null);
+    try {
+      const result = await fetchApi('/api/admin/objective-watch-scheduler', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (result.response.ok && applyObjectiveWatchScheduler(result.payload)) {
+        setObjectiveWatchSchedulerNotice(enabled
+          ? 'Automatic Objective Watch checks started. Health will become current after the next hourly heartbeat.'
+          : 'Automatic Objective Watch checks stopped.');
+        void fetchAuditTrail();
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : `Automatic Objective Watch checks could not be ${enabled ? 'started' : 'stopped'}.`;
+      setObjectiveWatchSchedulerError(message);
+    } catch {
+      setObjectiveWatchSchedulerError(`Could not reach the backend to ${enabled ? 'start' : 'stop'} automatic checks.`);
+    } finally {
+      setObjectiveWatchSchedulerPending(false);
+    }
+  };
+
+  const saveObjectiveWatchCheckInterval = async () => {
+    if (objectiveWatchSchedulerPending) return;
+    const checkIntervalMinutes = Number(objectiveWatchCheckIntervalDraft);
+    if (!Number.isInteger(checkIntervalMinutes) || checkIntervalMinutes < 60 || checkIntervalMinutes > 1440 || checkIntervalMinutes % 60 !== 0) {
+      setObjectiveWatchSchedulerError('Choose a whole-hour interval from 1 to 24 hours.');
+      return;
+    }
+    setObjectiveWatchSchedulerPending(true);
+    setObjectiveWatchSchedulerError(null);
+    setObjectiveWatchSchedulerNotice(null);
+    try {
+      const result = await fetchApi('/api/admin/objective-watch-scheduler', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkIntervalMinutes }),
+      });
+      if (result.response.ok && applyObjectiveWatchScheduler(result.payload)) {
+        setObjectiveWatchSchedulerNotice(`Standard Objective Watch checks will run every ${checkIntervalMinutes / 60} ${checkIntervalMinutes === 60 ? 'hour' : 'hours'}.`);
+        void fetchAuditTrail();
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+        ? String(result.payload.error)
+        : 'The Objective Watch check interval could not be updated.';
+      setObjectiveWatchSchedulerError(message);
+    } catch {
+      setObjectiveWatchSchedulerError('Could not reach the backend to update the check interval.');
+    } finally {
+      setObjectiveWatchSchedulerPending(false);
+    }
+  };
+
   const toggleProductFeature = async (feature: ProductFeatureKey) => {
     const current = featureFlagStatus?.flags[feature];
     if (typeof current !== 'boolean') return;
@@ -1960,11 +2085,14 @@ function AdminDashboard() {
     () => hourlyDistribution.reduce((busiest, current) => current.requests > busiest.requests ? current : busiest, hourlyDistribution[0]),
     [hourlyDistribution],
   );
-  const dashboardAttentionCount = metrics.issues + slowReports + aiMetrics.failures + diagnosticSummary.failed + userSummary.suspended;
+  const objectiveWatchSchedulerNeedsAttention = objectiveWatchScheduler
+    ? ['not_configured', 'unhealthy', 'failed'].includes(objectiveWatchScheduler.health)
+    : false;
+  const dashboardAttentionCount = metrics.issues + slowReports + aiMetrics.failures + diagnosticSummary.failed + userSummary.suspended + (objectiveWatchSchedulerNeedsAttention ? 1 : 0);
   const sectionCounts: Record<AdminSection, number> = {
     overview: dashboardAttentionCount,
     users: usersTotal,
-    operations: diagnosticSummary.failed,
+    operations: diagnosticSummary.failed + (objectiveWatchSchedulerNeedsAttention ? 1 : 0),
     analytics: rangeLogs.length,
     activity: auditEntries.length,
   };
@@ -2046,6 +2174,7 @@ function AdminDashboard() {
       system: health,
       systemResources,
       automatedHealthChecks: healthHistory,
+      objectiveWatchScheduler,
       reportMetrics: metrics,
       planningInsights,
       reliabilityHotspots,
@@ -2796,6 +2925,96 @@ function AdminDashboard() {
         )}
       </section>
 
+      <section className="logs-chart-card admin-objective-scheduler" aria-labelledby="admin-objective-scheduler-title" hidden={activeSection !== 'operations'}>
+        <div className="logs-chart-head">
+          <div>
+            <h2 id="admin-objective-scheduler-title">Objective Watch scheduler</h2>
+            <p>Hourly host heartbeat, automatic-check health, and persistent start or stop control</p>
+          </div>
+          <div className="admin-objective-scheduler-actions">
+            {objectiveWatchScheduler && (
+              <span className={`admin-objective-scheduler-status is-${objectiveWatchScheduler.health}`}>
+                <span aria-hidden /> {schedulerHealthLabel(objectiveWatchScheduler.health)}
+              </span>
+            )}
+            <button
+              type="button"
+              className={`logs-btn ${objectiveWatchScheduler?.enabled ? 'admin-objective-scheduler-stop' : 'logs-btn-primary'}`}
+              onClick={() => void setObjectiveWatchSchedulerEnabled(!objectiveWatchScheduler?.enabled)}
+              disabled={objectiveWatchSchedulerPending || !objectiveWatchScheduler || (!objectiveWatchScheduler.enabled && !objectiveWatchScheduler.configured)}
+              title={!objectiveWatchScheduler?.configured ? 'Configure OBJECTIVE_WATCH_CRON_SECRET in the production .env first' : undefined}
+            >
+              {objectiveWatchSchedulerPending
+                ? <LoaderCircle className="logs-spin" size={14} aria-hidden />
+                : objectiveWatchScheduler?.enabled
+                  ? <Pause size={14} aria-hidden />
+                  : <Play size={14} aria-hidden />}
+              {objectiveWatchSchedulerPending ? 'Saving…' : objectiveWatchScheduler?.enabled ? 'Stop scheduler' : 'Start scheduler'}
+            </button>
+          </div>
+        </div>
+
+        {objectiveWatchSchedulerError && <div className="logs-inline-note" role="alert"><AlertTriangle size={15} aria-hidden /> {objectiveWatchSchedulerError}</div>}
+        {objectiveWatchSchedulerNotice && <div className="logs-inline-note is-success" role="status"><CheckCircle2 size={15} aria-hidden /> {objectiveWatchSchedulerNotice}</div>}
+
+        {objectiveWatchScheduler ? (
+          <>
+            <div className={`admin-objective-scheduler-hero is-${objectiveWatchScheduler.health}`}>
+              <span>{['healthy', 'running'].includes(objectiveWatchScheduler.health) ? <CheckCircle2 size={20} aria-hidden /> : objectiveWatchScheduler.health === 'stopped' ? <Pause size={20} aria-hidden /> : <AlertTriangle size={20} aria-hidden />}</span>
+              <div><strong>{schedulerHealthLabel(objectiveWatchScheduler.health)}</strong><p>{objectiveWatchScheduler.message}</p></div>
+            </div>
+            <div className="admin-objective-scheduler-interval">
+              <div>
+                <label htmlFor="objective-watch-check-interval">Standard check interval</label>
+                <small>Applies until the final 48 hours, when checks remain hourly.</small>
+              </div>
+              <select
+                id="objective-watch-check-interval"
+                value={objectiveWatchCheckIntervalDraft}
+                onChange={(event) => setObjectiveWatchCheckIntervalDraft(event.target.value)}
+                disabled={objectiveWatchSchedulerPending}
+              >
+                {Array.from({ length: 24 }, (_, index) => index + 1).map((hours) => <option key={hours} value={hours * 60}>Every {hours} {hours === 1 ? 'hour' : 'hours'}</option>)}
+              </select>
+              <button
+                type="button"
+                className="logs-btn logs-btn-primary"
+                onClick={() => void saveObjectiveWatchCheckInterval()}
+                disabled={objectiveWatchSchedulerPending || Number(objectiveWatchCheckIntervalDraft) === objectiveWatchScheduler.checkIntervalMinutes}
+              >
+                {objectiveWatchSchedulerPending ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <Clock3 size={14} aria-hidden />}
+                Save interval
+              </button>
+            </div>
+            <div className="admin-objective-scheduler-grid">
+              <div>
+                <span><KeyRound size={14} aria-hidden /> Credential</span>
+                <strong className={objectiveWatchScheduler.configured ? 'is-healthy' : 'is-unavailable'}>{objectiveWatchScheduler.configured ? 'Configured' : 'Missing'}</strong>
+                <small>Raw value is never returned</small>
+              </div>
+              <div>
+                <span><Activity size={14} aria-hidden /> Last heartbeat</span>
+                <strong>{formatSchedulerTimestamp(objectiveWatchScheduler.lastHeartbeatAt)}</strong>
+                <small>Expected every {objectiveWatchScheduler.expectedIntervalMinutes} minutes</small>
+              </div>
+              <div>
+                <span><Clock3 size={14} aria-hidden /> Last completed</span>
+                <strong>{formatSchedulerTimestamp(objectiveWatchScheduler.lastCompletedAt)}</strong>
+                <small>{objectiveWatchScheduler.lastStatus.replaceAll('_', ' ')}</small>
+              </div>
+              <div>
+                <span><BellRing size={14} aria-hidden /> Latest run</span>
+                <strong>{objectiveWatchScheduler.lastSummary ? `${objectiveWatchScheduler.lastSummary.checked ?? 0} checked` : 'No run summary'}</strong>
+                <small>{objectiveWatchScheduler.lastSummary ? `${objectiveWatchScheduler.lastSummary.changed ?? 0} changed · ${objectiveWatchScheduler.lastSummary.failed ?? 0} failed` : 'Appears after a completed run'}</small>
+              </div>
+            </div>
+            <p className="admin-objective-scheduler-note">Stopping disables automatic processing while leaving the hourly host heartbeat installed, so this page can detect whether cron is still alive. A check already in progress is allowed to finish.</p>
+          </>
+        ) : !objectiveWatchSchedulerError ? (
+          <div className="logs-empty"><Activity size={26} aria-hidden /><h3>Loading scheduler status</h3><p>Waiting for the protected backend health endpoint.</p></div>
+        ) : null}
+      </section>
+
       <section className="logs-panel admin-health-history-panel" aria-labelledby="admin-health-history-title" hidden={activeSection !== 'operations'}>
         <div className="logs-panel-head">
           <div className="admin-audit-heading">
@@ -3142,7 +3361,15 @@ function AdminDashboard() {
                           <span className={entry.overridden ? 'is-override' : ''}>{entry.source}</span>
                         </div>
                         <div className="admin-runtime-field">
-                          {entry.type === 'boolean' || entry.type === 'enum' ? (
+                          {entry.editable === false ? (
+                            <div className={`admin-runtime-readonly ${entry.configured ? 'is-configured' : 'is-missing'}`} role="status">
+                              {entry.configured ? <CheckCircle2 size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}
+                              <span>
+                                <strong>{entry.configured ? 'Configured' : 'Not configured'}</strong>
+                                <small>Managed in the production .env file; the value is never returned to the browser.</small>
+                              </span>
+                            </div>
+                          ) : entry.type === 'boolean' || entry.type === 'enum' ? (
                             <select
                               id={inputId}
                               value={draft}
@@ -3169,7 +3396,7 @@ function AdminDashboard() {
                               disabled={runtimeEnvironmentPendingKey !== null}
                             />
                           )}
-                          <div className="admin-runtime-actions">
+                          {entry.editable !== false && <div className="admin-runtime-actions">
                             <button
                               type="button"
                               className="logs-btn logs-btn-primary"
@@ -3188,7 +3415,7 @@ function AdminDashboard() {
                                 Reset
                               </button>
                             )}
-                          </div>
+                          </div>}
                         </div>
                       </article>
                     );

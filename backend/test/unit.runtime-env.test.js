@@ -13,6 +13,7 @@ test('exposes allowlisted values while redacting credentials', () => {
     baseValues: {
       REQUEST_TIMEOUT_MS: '9000',
       OPENAI_API_KEY: 'deployment-secret',
+      OBJECTIVE_WATCH_CRON_SECRET: 'cron-secret',
     },
     initialOverrides: {},
   });
@@ -30,7 +31,15 @@ test('exposes allowlisted values while redacting credentials', () => {
     configured: true,
     secret: true,
   });
+  expect(status.entries.find((entry) => entry.key === 'OBJECTIVE_WATCH_CRON_SECRET')).toMatchObject({
+    value: null,
+    configured: true,
+    secret: true,
+    editable: false,
+    source: 'deployment environment',
+  });
   expect(JSON.stringify(status)).not.toContain('deployment-secret');
+  expect(JSON.stringify(status)).not.toContain('cron-secret');
 });
 
 test('persists validated overrides and resets them to deployment values', async () => {
@@ -73,5 +82,24 @@ test('rejects invalid and non-allowlisted values', async () => {
   });
   await expect(service.update({ DATABASE_URL: 'postgres://secret' })).rejects.toMatchObject({
     code: 'INVALID_RUNTIME_ENV',
+  });
+  await expect(service.update({ OBJECTIVE_WATCH_CRON_SECRET: 'replacement' })).rejects.toThrow(
+    'Environment variable is deployment-managed: OBJECTIVE_WATCH_CRON_SECRET.',
+  );
+});
+
+test('ignores deployment-managed credentials in persisted overrides', () => {
+  const service = createRuntimeEnvService({
+    env: {},
+    filePath: '/tmp/runtime-env-test.json',
+    baseValues: { OBJECTIVE_WATCH_CRON_SECRET: null },
+    initialOverrides: { OBJECTIVE_WATCH_CRON_SECRET: 'stale-override' },
+  });
+
+  const status = service.getStatus();
+  expect(status.entries.find((entry) => entry.key === 'OBJECTIVE_WATCH_CRON_SECRET')).toMatchObject({
+    configured: false,
+    overridden: false,
+    editable: false,
   });
 });
