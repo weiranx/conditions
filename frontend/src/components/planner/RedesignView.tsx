@@ -925,12 +925,12 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     { id: 'planner-section-travel', label: 'Travel', present: travelWindowRows.length > 0 },
     { id: 'planner-section-checks', label: 'Checks', present: Boolean(shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0) },
     { id: 'planner-section-weather', label: 'Weather', present: true },
-    { id: 'planner-section-wind', label: 'Wind', present: Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
+    { id: 'planner-section-wind', label: 'Wind', present: featureFlags.windLoadingDetails && Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
     { id: 'planner-section-avalanche', label: 'Avalanche', present: true },
     { id: 'planner-section-snowpack', label: 'Snowpack', present: featureFlags.snowpackDetails && Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
     { id: 'planner-section-observations', label: 'Observations', present: featureFlags.fieldObservations && hasLocalObservations },
     { id: 'planner-section-alerts', label: 'Alerts', present: true },
-    { id: 'planner-section-score', label: 'Score', present: Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
+    { id: 'planner-section-score', label: 'Score', present: featureFlags.scoreBreakdown && Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
     { id: 'planner-section-gear', label: 'Gear', present: featureFlags.gearRecommendations && Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
   ].filter((s) => s.present);
   const jumpToSection = (id: string, moveFocus: boolean) => {
@@ -1491,33 +1491,35 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 onMetricChange={onTrendMetricChange}
               />
             )}
-            <div className="ssr-wx-section-label">Supporting readings</div>
-            <div className="ssr-wx-grid">
-              <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Dew point</span><span className="ssr-v">{formatTempDisplay(weatherCardDewPoint)}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Pressure</span><span className="ssr-v">{weatherCardPressureLabel || '—'}</span></div>
-              <div className="ssr-wx-cell"><span className="ssr-k">Cloud cover</span><span className="ssr-v">{weatherCardCloudCoverLabel || '—'}</span></div>
-            </div>
-            <div className="ssr-wx-context" aria-label="Forecast context">
-              <div className="ssr-wx-context-item">
-                <span className="ssr-wx-context-icon"><Thermometer size={14} /></span>
-                <span>
-                  <strong>Pressure context</strong>
-                  <small>{localizeUnitText(weatherPressureTrendSummary || weatherPressureContextLine)}</small>
-                </span>
+            {featureFlags.weatherContextDetails && <>
+              <div className="ssr-wx-section-label">Supporting readings</div>
+              <div className="ssr-wx-grid">
+                <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
+                <div className="ssr-wx-cell"><span className="ssr-k">Dew point</span><span className="ssr-v">{formatTempDisplay(weatherCardDewPoint)}</span></div>
+                <div className="ssr-wx-cell"><span className="ssr-k">Pressure</span><span className="ssr-v">{weatherCardPressureLabel || '—'}</span></div>
+                <div className="ssr-wx-cell"><span className="ssr-k">Cloud cover</span><span className="ssr-v">{weatherCardCloudCoverLabel || '—'}</span></div>
               </div>
-              <div className={`ssr-wx-context-item ${visibilityTone}`}>
-                <span className="ssr-wx-context-icon"><Eye size={14} /></span>
-                <span>
-                  <strong>
-                    Visibility · {weatherVisibilityRisk.level || 'Unknown'}
-                    {weatherVisibilityScoreLabel && weatherVisibilityScoreLabel !== 'N/A' ? ` · ${weatherVisibilityScoreLabel}` : ''}
-                  </strong>
-                  <small>{weatherVisibilityContextLine || weatherVisibilityScoreMeaning}</small>
-                  {weatherVisibilityActiveWindowText && <em>{weatherVisibilityActiveWindowText}</em>}
-                </span>
+              <div className="ssr-wx-context" aria-label="Forecast context">
+                <div className="ssr-wx-context-item">
+                  <span className="ssr-wx-context-icon"><Thermometer size={14} /></span>
+                  <span>
+                    <strong>Pressure context</strong>
+                    <small>{localizeUnitText(weatherPressureTrendSummary || weatherPressureContextLine)}</small>
+                  </span>
+                </div>
+                <div className={`ssr-wx-context-item ${visibilityTone}`}>
+                  <span className="ssr-wx-context-icon"><Eye size={14} /></span>
+                  <span>
+                    <strong>
+                      Visibility · {weatherVisibilityRisk.level || 'Unknown'}
+                      {weatherVisibilityScoreLabel && weatherVisibilityScoreLabel !== 'N/A' ? ` · ${weatherVisibilityScoreLabel}` : ''}
+                    </strong>
+                    <small>{weatherVisibilityContextLine || weatherVisibilityScoreMeaning}</small>
+                    {weatherVisibilityActiveWindowText && <em>{weatherVisibilityActiveWindowText}</em>}
+                  </span>
+                </div>
               </div>
-            </div>
+            </>}
             <div className="ssr-wx-source">
               <span>Forecast source · <strong>{weatherSourceDisplay}</strong></span>
               <a href={weatherGovLink} target="_blank" rel="noreferrer">
@@ -1553,7 +1555,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* WIND LOADING */}
-        {(shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
+        {featureFlags.windLoadingDetails && (shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
           <section className={`ssr-card ssr-wl-card ssr-wl-${windLoadingPillClass}`} id="planner-section-wind">
             <div className="ssr-card-h">
               <h2>
@@ -2133,7 +2135,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* DAYLIGHT */}
-        {shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
+        {featureFlags.daylightTimeline && shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
           const dayLen = sunsetMinutesForPlan - sunriseMinutesForPlan;
           const timelinePaddingMinutes = Math.max(45, Math.min(90, Math.round(dayLen * 0.08)));
           const timelineStart = sunriseMinutesForPlan - timelinePaddingMinutes;
@@ -2525,7 +2527,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       {/* Continue the primary column while the independent right rail spans alongside it. */}
       <div className="ssr-report-footer">
         {/* SCORE BREAKDOWN */}
-        {shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
+        {featureFlags.scoreBreakdown && shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
           const factors = safetyData.safety.factors
             .slice()
             .sort((a: any, b: any) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));

@@ -30,6 +30,10 @@ test('public feature flag endpoint returns current safe values without caching',
     fieldObservations: true,
     airQualityDetails: true,
     gearRecommendations: true,
+    windLoadingDetails: true,
+    daylightTimeline: true,
+    scoreBreakdown: true,
+    weatherContextDetails: true,
   });
 });
 

@@ -18,6 +18,10 @@ export const PRODUCT_FEATURE_KEYS = [
   'fieldObservations',
   'airQualityDetails',
   'gearRecommendations',
+  'windLoadingDetails',
+  'daylightTimeline',
+  'scoreBreakdown',
+  'weatherContextDetails',
 ] as const;
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
@@ -40,6 +44,10 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   fieldObservations: true,
   airQualityDetails: true,
   gearRecommendations: true,
+  windLoadingDetails: true,
+  daylightTimeline: true,
+  scoreBreakdown: true,
+  weatherContextDetails: true,
 };
 export const FEATURE_FLAGS_EVENT = 'summitsafe:product-feature-flags-change';
 

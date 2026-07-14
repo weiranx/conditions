@@ -443,6 +443,30 @@ const PRODUCT_FEATURE_CONTROLS = [
     description: 'Shows the conditions-matched packing and equipment guidance module.',
     icon: ShieldCheck,
   },
+  {
+    key: 'windLoadingDetails',
+    label: 'Wind-loading details',
+    description: 'Shows transport timing, leeward aspects, and terrain-loading evidence.',
+    icon: Route,
+  },
+  {
+    key: 'daylightTimeline',
+    label: 'Daylight timeline',
+    description: 'Shows planned start and return timing against sunrise and sunset.',
+    icon: Clock3,
+  },
+  {
+    key: 'scoreBreakdown',
+    label: 'Score breakdown',
+    description: 'Shows factor impacts, confidence, and grouped deductions behind the planning score.',
+    icon: Gauge,
+  },
+  {
+    key: 'weatherContextDetails',
+    label: 'Weather context details',
+    description: 'Shows supporting readings, pressure trends, and visibility context.',
+    icon: Activity,
+  },
 ] as const satisfies ReadonlyArray<{
   key: ProductFeatureKey;
   label: string;

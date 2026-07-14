@@ -31,6 +31,10 @@ test('product feature flags default to enabled and update independently', async 
       fieldObservations: true,
       airQualityDetails: true,
       gearRecommendations: true,
+      windLoadingDetails: true,
+      daylightTimeline: true,
+      scoreBreakdown: true,
+      weatherContextDetails: true,
     },
   });
 
@@ -67,6 +71,10 @@ test('product feature flags can be restored to enabled defaults', async () => {
     fieldObservations: false,
     airQualityDetails: false,
     gearRecommendations: false,
+    windLoadingDetails: false,
+    daylightTimeline: false,
+    scoreBreakdown: false,
+    weatherContextDetails: false,
   });
   const status = await resetFeatureFlags();
 
@@ -88,6 +96,10 @@ test('product feature flags can be restored to enabled defaults', async () => {
     fieldObservations: true,
     airQualityDetails: true,
     gearRecommendations: true,
+    windLoadingDetails: true,
+    daylightTimeline: true,
+    scoreBreakdown: true,
+    weatherContextDetails: true,
   });
   expect(getFeatureFlags()).toEqual(status.flags);
 });
@@ -111,6 +123,10 @@ test('product feature flags load from PostgreSQL', async () => {
     fieldObservations: true,
     airQualityDetails: false,
     gearRecommendations: true,
+    windLoadingDetails: false,
+    daylightTimeline: true,
+    scoreBreakdown: false,
+    weatherContextDetails: true,
   });
   jest.doMock('../src/db/app-data-store', () => ({
     appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
@@ -138,6 +154,10 @@ test('product feature flags load from PostgreSQL', async () => {
       fieldObservations: true,
       airQualityDetails: false,
       gearRecommendations: true,
+      windLoadingDetails: false,
+      daylightTimeline: true,
+      scoreBreakdown: false,
+      weatherContextDetails: true,
   });
   expect(featureFlagStore.getFeatureFlagStatus().persistent).toBe(true);
 });
@@ -162,4 +182,8 @@ test('disabled product features fail closed', async () => {
   expect(() => assertFeatureEnabled('fieldObservations')).not.toThrow();
   expect(() => assertFeatureEnabled('airQualityDetails')).not.toThrow();
   expect(() => assertFeatureEnabled('gearRecommendations')).not.toThrow();
+  expect(() => assertFeatureEnabled('windLoadingDetails')).not.toThrow();
+  expect(() => assertFeatureEnabled('daylightTimeline')).not.toThrow();
+  expect(() => assertFeatureEnabled('scoreBreakdown')).not.toThrow();
+  expect(() => assertFeatureEnabled('weatherContextDetails')).not.toThrow();
 });
