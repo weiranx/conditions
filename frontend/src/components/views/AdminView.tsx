@@ -469,8 +469,8 @@ const PRODUCT_FEATURE_CONTROLS = [
   },
   {
     key: 'avalancheDetails',
-    label: 'Avalanche details',
-    description: 'Shows the dedicated avalanche forecast, problem terrain, and official-center detail module.',
+    label: 'Avalanche',
+    description: 'Controls avalanche scoring and the dedicated forecast, problem-terrain, and official-center detail module.',
     icon: AlertTriangle,
   },
 ] as const satisfies ReadonlyArray<{

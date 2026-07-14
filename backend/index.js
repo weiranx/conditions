@@ -69,7 +69,7 @@ const { registerReportChatRoute } = require('./src/routes/report-chat');
 const { registerSatelliteTileRoute } = require('./src/routes/satellite-tile');
 const { registerSnowVisionRoute } = require('./src/routes/snow-vision');
 const { askAI, askAIVision, getAIFeatureAvailability, getAIStatus, initializeAISettings, isAIAvailable } = require('./src/utils/ai-client');
-const { initializeFeatureFlags } = require('./src/utils/feature-flags');
+const { initializeFeatureFlags, isFeatureEnabled } = require('./src/utils/feature-flags');
 const { createCache, normalizeCoordKey } = require('./src/utils/cache');
 const { runExternalDiagnostics } = require('./src/utils/external-diagnostics');
 const { createAIModelCatalog } = require('./src/utils/ai-model-catalog');
@@ -607,6 +607,7 @@ const safetyHandler = async (req, res) => {
       solarData,
       selectedStartClock: requestedStartClock,
       selectedTravelWindowHours: requestedTravelWindowHours,
+      includeAvalanche: isFeatureEnabled('avalancheDetails'),
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData,
@@ -708,6 +709,7 @@ const safetyHandler = async (req, res) => {
       solarData,
       selectedStartClock: requestedStartClock,
       selectedTravelWindowHours: requestedTravelWindowHours,
+      includeAvalanche: isFeatureEnabled('avalancheDetails'),
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData: safeWeatherData,

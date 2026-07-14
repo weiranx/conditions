@@ -255,6 +255,7 @@ const calculateSafetyScore = ({
   solarData,
   selectedStartClock,
   selectedTravelWindowHours = null,
+  includeAvalanche = true,
 }) => {
   const T = SCORING_CONFIG.thresholds;
   const explanations = [];
@@ -299,7 +300,7 @@ const calculateSafetyScore = ({
   const observedStation = localConditionsData?.weatherObservation || null;
 
   const normalizedRisk = String(avalancheData?.risk || '').toLowerCase();
-  const avalancheRelevant = avalancheData?.relevant !== false;
+  const avalancheRelevant = includeAvalanche && avalancheData?.relevant !== false;
   const avalancheUnknown = avalancheRelevant
     && Boolean(avalancheData?.dangerUnknown || normalizedRisk.includes('unknown') || normalizedRisk.includes('no forecast'));
   const avalancheDangerLevel = Number(avalancheData?.dangerLevel);

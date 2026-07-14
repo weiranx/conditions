@@ -65,6 +65,26 @@ test.each([
   expect(result.groupImpacts.avalanche.floor).toBeGreaterThan(0);
 });
 
+test('disabled avalanche scoring excludes avalanche factors, floors, and confidence penalties', () => {
+  const avalancheData = {
+    relevant: true,
+    dangerUnknown: false,
+    dangerLevel: 5,
+    risk: 'Extreme',
+    problems: [{ name: 'Deep Persistent Slab' }],
+    publishedTime: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+  };
+  const enabled = calculateSafetyScore({ ...baseSafetyInput(), avalancheData });
+  const disabled = calculateSafetyScore({ ...baseSafetyInput(), avalancheData, includeAvalanche: false });
+
+  expect(enabled.groupImpacts.avalanche).toBeDefined();
+  expect(disabled.groupImpacts.avalanche).toBeUndefined();
+  expect(disabled.factors.some((factor) => factor.group === 'avalanche')).toBe(false);
+  expect(disabled.sourcesUsed).not.toContain('Avalanche center forecast');
+  expect(disabled.confidenceReasons.some((reason) => /avalanche/iu.test(reason))).toBe(false);
+  expect(disabled.score).toBeGreaterThan(enabled.score);
+});
+
 test('a blizzard cannot remain below the High-risk tier', () => {
   const result = calculateSafetyScore({
     ...baseSafetyInput(),
