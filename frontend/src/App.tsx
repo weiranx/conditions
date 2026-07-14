@@ -335,7 +335,6 @@ function App() {
   const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
   const [objectiveName, setObjectiveName] = useState(initialLinkState.objectiveName);
-  const [importedGpxRoute, setImportedGpxRoute] = useState<ParsedGpxRoute | null>(null);
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
   useEffect(() => { objectiveNameRef.current = objectiveName; }, [objectiveName]);
 
@@ -370,6 +369,9 @@ function App() {
       ? initialPersistedReport
       : null;
   }, [initialPersistedReport, initialLinkState, initialPreferences.travelWindowHours]);
+  const [importedGpxRoute, setImportedGpxRoute] = useState<ParsedGpxRoute | null>(
+    initialRestoredReport?.route.gpxRoute ?? null,
+  );
 
   // --- Extracted hooks ---
   const {
@@ -901,6 +903,7 @@ function App() {
         routeSuggestions,
         routeAnalysis,
         customRouteName,
+        gpxRoute: importedGpxRoute,
       },
     })
     : null, [
@@ -914,6 +917,7 @@ function App() {
     routeSuggestions,
     routeAnalysis,
     customRouteName,
+    importedGpxRoute,
   ]);
 
   useEffect(() => {
@@ -1302,7 +1306,7 @@ function App() {
     setAlpineStartTime(report.plan.alpineStartTime);
     setTargetElevationInput(report.plan.targetElevationInput);
     setTargetElevationManual(Boolean(report.plan.targetElevationInput));
-    setImportedGpxRoute(null);
+    setImportedGpxRoute(report.route.gpxRoute);
     setPastStartPrompt(null);
     setPreviousSafetyData(null);
     setError(null);

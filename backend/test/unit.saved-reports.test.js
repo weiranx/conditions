@@ -26,7 +26,7 @@ const REPORT_USAGE = {
   exhausted: false,
 };
 const SNAPSHOT = {
-  version: 2,
+  version: 3,
   savedAt: '2026-07-13T08:00:00.000Z',
   plan: {
     lat: 46.8523,
@@ -50,6 +50,24 @@ const SNAPSHOT = {
     routeSuggestions: [],
     routeAnalysis: { analysis: 'AI route analysis', summaries: [], waypoints: [] },
     customRouteName: 'Disappointment Cleaver',
+    gpxRoute: {
+      name: 'Disappointment Cleaver',
+      fileName: 'dc.gpx',
+      pointCount: 2,
+      distanceMiles: 1.2,
+      elevationGainFt: 800,
+      minElevationFt: 5400,
+      maxElevationFt: 6200,
+      checkpoints: [
+        { name: 'Route start', lat: 46.85, lon: -121.76, distance_miles: 0, progress_percent: 0 },
+        { name: 'Route finish', lat: 46.86, lon: -121.75, distance_miles: 1.2, progress_percent: 100 },
+      ],
+      displayTrack: [
+        { lat: 46.85, lon: -121.76, progress_percent: 0 },
+        { lat: 46.86, lon: -121.75, progress_percent: 100 },
+      ],
+      routeShape: 'point-to-point',
+    },
   },
 };
 
@@ -166,7 +184,7 @@ test('saves a new report with every AI section under the signed-in user', async 
   expect(params[2]).toBe('Mount Rainier');
   const stored = JSON.parse(params[3]);
   expect(stored.ai).toEqual(SNAPSHOT.ai);
-  expect(stored.route.routeAnalysis.analysis).toBe('AI route analysis');
+  expect(stored.route).toEqual(SNAPSHOT.route);
   expect(query.mock.calls[1][0]).toContain('COUNT(*)::bigint AS report_count');
   expect(query.mock.calls[1][1]).toEqual([USER_ID]);
 });
@@ -311,13 +329,24 @@ test('retrieves and updates only reports owned by the signed-in user', async () 
   expect(detail.body.report.snapshot.ai.aiBriefNarrative).toBe('AI-generated field briefing');
   expect(query.mock.calls[0][1]).toEqual([REPORT_ID, USER_ID]);
 
+  const updatedRoute = {
+    ...SNAPSHOT.route,
+    routeAnalysis: { analysis: 'Updated route analysis', summaries: [], waypoints: [] },
+  };
   const update = await request(app)
     .put(`/api/account/reports/${REPORT_ID}`)
     .set('Cookie', 'bc_session=test-session')
-    .send({ report: { ...SNAPSHOT, ai: { ...SNAPSHOT.ai, aiBriefNarrative: 'Updated AI briefing' } } });
+    .send({
+      report: {
+        ...SNAPSHOT,
+        ai: { ...SNAPSHOT.ai, aiBriefNarrative: 'Updated AI briefing' },
+        route: updatedRoute,
+      },
+    });
   expect(update.status).toBe(200);
   expect(query.mock.calls[1][1].slice(0, 2)).toEqual([REPORT_ID, USER_ID]);
   expect(JSON.parse(query.mock.calls[1][1][2]).ai.aiBriefNarrative).toBe('Updated AI briefing');
+  expect(JSON.parse(query.mock.calls[1][1][2]).route).toEqual(updatedRoute);
   expect(query.mock.calls[1][0]).toContain("jsonb_set(report, '{ai}'");
   expect(query.mock.calls[1][0]).not.toContain('SET title');
 });
