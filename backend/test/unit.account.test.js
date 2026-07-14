@@ -359,6 +359,8 @@ describe('password accounts', () => {
         suspended_count: '0',
         free_count: '0',
         premium_count: '1',
+        verified_count: '0',
+        unverified_count: '1',
         total_active_sessions: '2',
       }],
     });
@@ -368,6 +370,7 @@ describe('password accounts', () => {
       users: [{
         id: USER_ROW.id,
         email: USER_ROW.email,
+        emailVerified: false,
         displayName: USER_ROW.display_name,
         authProvider: 'password',
         authMethods: ['google', 'password'],
@@ -384,7 +387,7 @@ describe('password accounts', () => {
         reportUsageLimitOverride: 60,
       }],
       total: 1,
-      summary: { active: 1, suspended: 0, free: 0, premium: 1, activeSessions: 2 },
+      summary: { active: 1, suspended: 0, free: 0, premium: 1, verified: 0, unverified: 1, activeSessions: 2 },
       limit: 500,
     });
     expect(query.mock.calls[0][0]).toContain('COUNT(*) FILTER (WHERE expires_at > NOW())');
@@ -393,6 +396,35 @@ describe('password accounts', () => {
     expect(query.mock.calls[0][0]).toContain("feature_key = 'report_usage'");
     expect(query.mock.calls[0][0]).toContain("DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')");
     expect(query.mock.calls[0][1]).toEqual([500]);
+  });
+
+  test('creates a fresh verification link for an active managed account', async () => {
+    const actorUserId = 'f39db25c-3498-41f9-9448-7c8004b8f688';
+    const account = {
+      ...USER_ROW,
+      auth_provider: 'password',
+      status: 'active',
+      updated_at: new Date('2026-07-13T08:00:00.000Z'),
+      email_verified_at: null,
+    };
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [account] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ id: '4df4041e-5ff1-441d-b62f-81283f372489' }] });
+    const transaction = jest.fn((callback) => callback(query));
+    const service = createAccountService({
+      database: { configured: true, query, transaction },
+      now: () => Date.parse('2026-07-13T08:00:00.000Z'),
+    });
+
+    const result = await service.createAdminEmailVerification({ userId: USER_ROW.id, actorUserId });
+
+    expect(result.user).toMatchObject({ id: USER_ROW.id, emailVerified: false });
+    expect(result.alreadyVerified).toBe(false);
+    expect(result.verification.tokenId).toBe('4df4041e-5ff1-441d-b62f-81283f372489');
+    expect(result.verification.expiresAt.toISOString()).toBe('2026-07-14T08:00:00.000Z');
+    expect(query.mock.calls[1][0]).toContain("purpose = 'verify_email'");
+    expect(query.mock.calls[2][1][1]).toBe(hashSessionToken(result.verification.token));
   });
 
   test('assigns a managed account tier through an administrator override', async () => {

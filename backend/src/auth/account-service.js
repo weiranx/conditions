@@ -184,6 +184,7 @@ const asOptionalPositiveNumber = (value) => {
 const serializeAdminUser = (row) => ({
   id: row.id,
   email: row.email || null,
+  emailVerified: Boolean(row.email_verified_at),
   displayName: row.display_name || row.email || 'Unnamed account',
   authProvider: row.auth_provider,
   authMethods: Array.isArray(row.auth_methods) && row.auth_methods.length
@@ -434,6 +435,7 @@ const createAccountService = ({
       `WITH user_directory AS (
          SELECT users.id,
                 users.email,
+                users.email_verified_at,
                 users.display_name,
                 users.auth_provider,
                 ARRAY(
@@ -553,6 +555,8 @@ const createAccountService = ({
               COUNT(*) FILTER (WHERE status = 'suspended') OVER() AS suspended_count,
               COUNT(*) FILTER (WHERE account_tier = 'free') OVER() AS free_count,
               COUNT(*) FILTER (WHERE account_tier = 'premium') OVER() AS premium_count,
+              COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL) OVER() AS verified_count,
+              COUNT(*) FILTER (WHERE email_verified_at IS NULL) OVER() AS unverified_count,
               COALESCE(SUM(active_sessions) OVER(), 0) AS total_active_sessions
        FROM user_directory
        ORDER BY created_at DESC, id
@@ -567,10 +571,67 @@ const createAccountService = ({
         suspended: result.rows.length ? asNonNegativeNumber(result.rows[0].suspended_count) : 0,
         free: result.rows.length ? asNonNegativeNumber(result.rows[0].free_count) : 0,
         premium: result.rows.length ? asNonNegativeNumber(result.rows[0].premium_count) : 0,
+        verified: result.rows.length ? asNonNegativeNumber(result.rows[0].verified_count) : 0,
+        unverified: result.rows.length ? asNonNegativeNumber(result.rows[0].unverified_count) : 0,
         activeSessions: result.rows.length ? asNonNegativeNumber(result.rows[0].total_active_sessions) : 0,
       },
       limit,
     };
+  };
+
+  const createAdminEmailVerification = async ({
+    userId: rawUserId,
+    actorUserId: rawActorUserId,
+  } = {}) => {
+    ensureAvailable();
+    const userId = validateAdminUserId(rawUserId);
+    validateAdminUserId(rawActorUserId);
+    const verificationToken = createSessionToken();
+    const verificationExpiresAt = new Date(now() + EMAIL_VERIFICATION_TTL_MS);
+
+    return runInTransaction(async (query) => {
+      const account = await query(
+        `SELECT id, email, display_name, auth_provider, status, created_at, updated_at, email_verified_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId],
+      );
+      const row = account.rows[0];
+      if (!row) {
+        throw createAdminAccountError('Account not found.', 'ACCOUNT_NOT_FOUND');
+      }
+      if (row.status !== 'active') {
+        throw createAdminAccountError('Reactivate the account before sending a verification email.', 'ACCOUNT_DISABLED');
+      }
+      if (row.email_verified_at) {
+        return { user: serializeAdminUser(row), alreadyVerified: true, verification: null };
+      }
+
+      await query(
+        `UPDATE account_action_tokens
+         SET consumed_at = NOW()
+         WHERE user_id = $1
+           AND purpose = 'verify_email'
+           AND consumed_at IS NULL`,
+        [userId],
+      );
+      const token = await query(
+        `INSERT INTO account_action_tokens (user_id, purpose, token_hash, expires_at)
+         VALUES ($1, 'verify_email', $2, $3)
+         RETURNING id`,
+        [userId, hashSessionToken(verificationToken), verificationExpiresAt],
+      );
+      return {
+        user: serializeAdminUser(row),
+        alreadyVerified: false,
+        verification: {
+          tokenId: token.rows[0].id,
+          token: verificationToken,
+          expiresAt: verificationExpiresAt,
+        },
+      };
+    });
   };
 
   const updateUserStatus = async ({ userId: rawUserId, status: rawStatus, actorUserId: rawActorUserId } = {}) => {
@@ -1223,6 +1284,7 @@ const createAccountService = ({
   return {
     available,
     sessionTtlMs,
+    createAdminEmailVerification,
     createEmailVerification,
     createPasswordReset,
     getUserForSession,

@@ -327,6 +327,7 @@ test.each([
   '/api/admin/maintenance/caches',
   '/api/admin/maintenance/feature-flags',
   '/api/admin/diagnostics',
+  '/api/admin/users/8c696be4-e175-4b6a-965b-82bdf3758e0c/send-verification',
 ])('POST %s returns 404 without the administrator account', async (path) => {
   const response = await request(app).post(path);
   expect(response.status).toBe(404);

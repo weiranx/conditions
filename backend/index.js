@@ -55,6 +55,7 @@ const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { createReportUsageLimitService } = require('./src/auth/report-usage-limit');
 const { createAccountTierService } = require('./src/auth/account-tier');
+const { createEmailService } = require('./src/email/email-service');
 const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safety');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
@@ -801,6 +802,7 @@ registerFeatureFlagRoutes(app);
 const accountTierService = createAccountTierService({ database });
 const aiUsageLimitService = createAIUsageLimitService({ database, settingsStore: appDataStore });
 const reportUsageLimitService = createReportUsageLimitService({ database, settingsStore: appDataStore });
+const emailService = createEmailService();
 const accountService = registerAccountRoutes({
   app,
   database,
@@ -808,6 +810,7 @@ const accountService = registerAccountRoutes({
   tierService: accountTierService,
   usageService: aiUsageLimitService,
   reportUsageService: reportUsageLimitService,
+  emailService,
 });
 registerSavedReportRoutes({
   app,
@@ -836,6 +839,7 @@ registerHealthRoutes(app, {
 });
 registerReportLogsRoute(app, {
   accountService,
+  emailService,
   usageService: aiUsageLimitService,
   reportUsageService: reportUsageLimitService,
   caches: observableCaches,

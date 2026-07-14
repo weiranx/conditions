@@ -82,7 +82,9 @@ const isAdminAccount = (user) => (
 
 const getUserManagementError = (error, fallback) => {
   if (error?.code === 'ACCOUNT_NOT_FOUND') return { status: 404, message: error.message };
-  if (error?.code === 'ADMIN_SELF_MODIFICATION') return { status: 409, message: error.message };
+  if (error?.code === 'ADMIN_SELF_MODIFICATION' || error?.code === 'ACCOUNT_DISABLED') {
+    return { status: 409, message: error.message };
+  }
   if (
     error?.code === 'INVALID_ACCOUNT_ID'
     || error?.code === 'INVALID_ACCOUNT_STATUS'
@@ -95,6 +97,9 @@ const getUserManagementError = (error, fallback) => {
   if (error?.code === 'ACCOUNT_DATABASE_UNAVAILABLE') {
     return { status: 503, message: 'Account management is temporarily unavailable.' };
   }
+  if (error?.code === 'EMAIL_SERVICE_UNAVAILABLE' || error?.code === 'EMAIL_DELIVERY_FAILED') {
+    return { status: 503, message: 'Email delivery is temporarily unavailable.' };
+  }
   return { status: 500, message: fallback };
 };
 
@@ -102,6 +107,7 @@ const registerReportLogsRoute = (
   app,
   {
     accountService = null,
+    emailService = null,
     usageService = null,
     reportUsageService = null,
     caches = [],
@@ -295,6 +301,66 @@ const registerReportLogsRoute = (
       if (failure.status === 500) req.log?.error({ err: error }, 'Admin account status update failed');
       await audit(req, {
         action: 'account.user.status-update-failed',
+        category: 'accounts',
+        status: 'error',
+        summary: failure.message,
+        details: { targetUserId: req.params?.userId ?? null },
+      });
+      res.status(failure.status).json({ error: failure.message });
+    }
+  });
+
+  app.post('/api/admin/users/:userId/send-verification', async (req, res) => {
+    const adminUser = await authorize(req, res);
+    if (!adminUser) return;
+    if (
+      typeof accountService?.createAdminEmailVerification !== 'function'
+      || !emailService?.available
+      || typeof emailService.sendVerificationEmail !== 'function'
+    ) {
+      res.status(503).json({ error: 'Email delivery is not configured for this deployment.' });
+      return;
+    }
+    try {
+      const result = await accountService.createAdminEmailVerification({
+        userId: req.params?.userId,
+        actorUserId: adminUser.id,
+      });
+      if (result.alreadyVerified) {
+        res.json({
+          ok: true,
+          verified: true,
+          message: 'This email address is already verified.',
+          user: result.user,
+        });
+        return;
+      }
+      await emailService.sendVerificationEmail({
+        ...result.verification,
+        to: result.user.email,
+        displayName: result.user.displayName,
+      });
+      const targetName = result.user.displayName || result.user.email || 'account';
+      await audit(req, {
+        action: 'account.email-verification.sent',
+        category: 'accounts',
+        summary: `Sent a verification email to ${targetName}`,
+        details: {
+          targetUserId: result.user.id,
+          targetEmail: result.user.email,
+        },
+      });
+      res.json({
+        ok: true,
+        verified: false,
+        message: 'Verification email sent.',
+        user: result.user,
+      });
+    } catch (error) {
+      const failure = getUserManagementError(error, 'Verification email could not be sent.');
+      if (failure.status === 500) req.log?.error({ err: error }, 'Admin verification email failed');
+      await audit(req, {
+        action: 'account.email-verification.send-failed',
         category: 'accounts',
         status: 'error',
         summary: failure.message,

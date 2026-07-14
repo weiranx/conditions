@@ -97,18 +97,20 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     id: 'f39db25c-3498-41f9-9448-7c8004b8f688',
     email: 'weiranxiong@gmail.com',
     displayName: 'Weiran Xiong',
+    emailVerified: true,
   };
   const managedUser = {
     id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
     email: 'climber@example.com',
     displayName: 'Avery Stone',
+    emailVerified: false,
     tier: 'free',
     status: 'active',
   };
   const listUsers = jest.fn(async () => ({
     users: [adminUser, managedUser],
     total: 2,
-    summary: { active: 2, suspended: 0, free: 2, premium: 0, activeSessions: 3 },
+    summary: { active: 2, suspended: 0, free: 2, premium: 0, verified: 1, unverified: 1, activeSessions: 3 },
     limit: 500,
   }));
   const updateUserStatus = jest.fn(async ({ status }) => ({
@@ -147,8 +149,22 @@ test('authorized AI admin routes read and update runtime settings', async () => 
     resetReportAccounts: 1,
   }));
   const revokeUserSessions = jest.fn(async () => ({ user: managedUser, revokedSessions: 1 }));
+  const createAdminEmailVerification = jest.fn(async () => ({
+    user: managedUser,
+    alreadyVerified: false,
+    verification: {
+      tokenId: '4df4041e-5ff1-441d-b62f-81283f372489',
+      token: 'verification-token',
+      expiresAt: new Date('2026-07-14T08:00:00.000Z'),
+    },
+  }));
+  const emailService = {
+    available: true,
+    sendVerificationEmail: jest.fn(async () => ({ id: 'email-123' })),
+  };
   const accountService = {
     available: true,
+    createAdminEmailVerification,
     listUsers,
     resetAllUserUsage,
     resetAllUserUsageLimits,
@@ -169,6 +185,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   const { registerReportLogsRoute } = require('../src/routes/report-logs');
   registerReportLogsRoute(app, {
     accountService,
+    emailService,
     reportUsageService,
     usageService,
     caches: [firstCache, null, secondCache],
@@ -203,9 +220,30 @@ test('authorized AI admin routes read and update runtime settings', async () => 
       { ...managedUser, isOwner: false },
     ],
     total: 2,
-    summary: { active: 2, suspended: 0, free: 2, premium: 0, activeSessions: 3 },
+    summary: { active: 2, suspended: 0, free: 2, premium: 0, verified: 1, unverified: 1, activeSessions: 3 },
     limit: 500,
   });
+
+  const verificationResponse = createResponse();
+  await routes.post.get('/api/admin/users/:userId/send-verification')({
+    headers,
+    params: { userId: managedUser.id },
+  }, verificationResponse);
+  expect(createAdminEmailVerification).toHaveBeenCalledWith({
+    userId: managedUser.id,
+    actorUserId: adminUser.id,
+  });
+  expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(expect.objectContaining({
+    tokenId: '4df4041e-5ff1-441d-b62f-81283f372489',
+    token: 'verification-token',
+    to: managedUser.email,
+    displayName: managedUser.displayName,
+  }));
+  expect(verificationResponse.payload).toMatchObject({ ok: true, verified: false, user: managedUser });
+  expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
+    action: 'account.email-verification.sent',
+    category: 'accounts',
+  }));
 
   const suspendResponse = createResponse();
   await routes.patch.get('/api/admin/users/:userId')({

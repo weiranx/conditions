@@ -24,6 +24,7 @@ import {
   LoaderCircle,
   Layers,
   LogOut,
+  MailCheck,
   MessageCircleQuestion,
   MemoryStick,
   Pause,
@@ -34,6 +35,7 @@ import {
   Route,
   Satellite,
   Search,
+  Send,
   Server,
   ShieldCheck,
   Sparkles,
@@ -147,6 +149,7 @@ interface AdminAuditEntry {
 interface AdminUserRecord {
   id: string;
   email: string | null;
+  emailVerified: boolean;
   displayName: string;
   authProvider: string;
   authMethods: string[];
@@ -172,6 +175,8 @@ interface AdminUserDirectory {
     suspended: number;
     free: number;
     premium: number;
+    verified: number;
+    unverified: number;
     activeSessions: number;
   };
   limit: number;
@@ -343,7 +348,7 @@ type LogSortKey = 'timestamp' | 'name' | 'date' | 'statusCode' | 'safetyScore' |
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'errors' | 'partial' | 'slow';
 type AnalyticsRange = '6h' | '24h' | '7d';
 type AuditFilter = 'all' | 'accounts' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
-type UserStatusFilter = 'all' | 'active' | 'suspended' | 'free' | 'premium';
+type UserStatusFilter = 'all' | 'active' | 'suspended' | 'free' | 'premium' | 'verified' | 'unverified';
 type AdminSection = 'overview' | 'users' | 'operations' | 'analytics' | 'activity';
 
 const ADMIN_SECTIONS = [
@@ -406,6 +411,8 @@ const USER_STATUS_FILTERS: Array<{ value: UserStatusFilter; label: string }> = [
   { value: 'suspended', label: 'Suspended' },
   { value: 'free', label: 'Free' },
   { value: 'premium', label: 'Premium' },
+  { value: 'verified', label: 'Verified' },
+  { value: 'unverified', label: 'Unverified' },
 ];
 
 function getAnalyticsRange(range: AnalyticsRange) {
@@ -815,7 +822,7 @@ function AdminDashboard() {
   const [auditEntries, setAuditEntries] = useState<AdminAuditEntry[]>([]);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
-  const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, activeSessions: 0 });
+  const [userSummary, setUserSummary] = useState({ active: 0, suspended: 0, free: 0, premium: 0, verified: 0, unverified: 0, activeSessions: 0 });
   const [usageSettings, setUsageSettings] = useState<AdminUsageSettings | null>(null);
   const [usageLimitDraft, setUsageLimitDraft] = useState('');
   const [reportLimitDraft, setReportLimitDraft] = useState('');
@@ -839,6 +846,7 @@ function AdminDashboard() {
   const [systemResourcesError, setSystemResourcesError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [usersNotice, setUsersNotice] = useState<string | null>(null);
   const [usageSettingsError, setUsageSettingsError] = useState<string | null>(null);
   const [usageSettingsPending, setUsageSettingsPending] = useState(false);
   const [userActionPending, setUserActionPending] = useState<string | null>(null);
@@ -896,6 +904,8 @@ function AdminDashboard() {
       suspended: Number.isFinite(directory.summary.suspended) ? Number(directory.summary.suspended) : 0,
       free: Number.isFinite(directory.summary.free) ? Number(directory.summary.free) : 0,
       premium: Number.isFinite(directory.summary.premium) ? Number(directory.summary.premium) : 0,
+      verified: Number.isFinite(directory.summary.verified) ? Number(directory.summary.verified) : 0,
+      unverified: Number.isFinite(directory.summary.unverified) ? Number(directory.summary.unverified) : 0,
       activeSessions: Number.isFinite(directory.summary.activeSessions) ? Number(directory.summary.activeSessions) : 0,
     });
     setUsersError(null);
@@ -1375,6 +1385,36 @@ function AdminDashboard() {
     }
   };
 
+  const sendManagedUserVerification = async (user: AdminUserRecord) => {
+    if (user.emailVerified || user.status !== 'active' || !user.email) return;
+    if (!window.confirm(`Send a new verification link to ${user.email}? Any older verification link will stop working.`)) return;
+    setUserActionPending(`${user.id}:verification`);
+    setUsersError(null);
+    setUsersNotice(null);
+    try {
+      const result = await fetchApi(`/api/admin/users/${encodeURIComponent(user.id)}/send-verification`, {
+        method: 'POST',
+      });
+      if (!result.response.ok) {
+        const message = result.payload && typeof result.payload === 'object' && 'error' in result.payload
+          ? String(result.payload.error)
+          : 'The verification email could not be sent.';
+        setUsersError(message);
+        return;
+      }
+      const message = result.payload && typeof result.payload === 'object' && 'message' in result.payload
+        ? String(result.payload.message)
+        : `Verification email sent to ${user.email}.`;
+      setUsersNotice(message);
+      await fetchUserDirectory();
+      void fetchAuditTrail();
+    } catch {
+      setUsersError('Could not reach the server to send a verification email.');
+    } finally {
+      setUserActionPending(null);
+    }
+  };
+
   const toggleProductFeature = async (feature: ProductFeatureKey) => {
     const current = featureFlagStatus?.flags[feature];
     if (typeof current !== 'boolean') return;
@@ -1664,13 +1704,25 @@ function AdminDashboard() {
   const filteredUsers = useMemo(() => {
     const normalizedQuery = userQuery.trim().toLowerCase();
     return users.filter((user) => {
+      if (userStatusFilter === 'verified' && !user.emailVerified) return false;
+      if (userStatusFilter === 'unverified' && user.emailVerified) return false;
       if (
         userStatusFilter !== 'all'
+        && userStatusFilter !== 'verified'
+        && userStatusFilter !== 'unverified'
         && user.status !== userStatusFilter
         && user.tier !== userStatusFilter
       ) return false;
       if (!normalizedQuery) return true;
-      return [user.displayName, user.email, user.authProvider, ...user.authMethods, user.status, user.tier]
+      return [
+        user.displayName,
+        user.email,
+        user.authProvider,
+        ...user.authMethods,
+        user.status,
+        user.tier,
+        user.emailVerified ? 'verified' : 'unverified',
+      ]
         .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery));
     });
   }, [userQuery, users, userStatusFilter]);
@@ -1943,7 +1995,7 @@ function AdminDashboard() {
             <span className="logs-section-icon"><Users size={17} aria-hidden /></span>
             <div>
               <h2 id="admin-users-title">User management</h2>
-              <p>Manage tiers, monthly allowances, access, and active sessions</p>
+              <p>Manage identity verification, tiers, monthly allowances, access, and active sessions</p>
             </div>
           </div>
           <span className="admin-users-total">{usersTotal.toLocaleString()} {usersTotal === 1 ? 'account' : 'accounts'}</span>
@@ -1969,6 +2021,14 @@ function AdminDashboard() {
           <article>
             <span><Crown size={15} aria-hidden /> Premium</span>
             <strong>{userSummary.premium.toLocaleString()}</strong>
+          </article>
+          <article>
+            <span><MailCheck size={15} aria-hidden /> Verified</span>
+            <strong>{userSummary.verified.toLocaleString()}</strong>
+          </article>
+          <article className={userSummary.unverified > 0 ? 'is-attention' : undefined}>
+            <span><AlertTriangle size={15} aria-hidden /> Needs verification</span>
+            <strong>{userSummary.unverified.toLocaleString()}</strong>
           </article>
           <article>
             <span><KeyRound size={15} aria-hidden /> Active sessions</span>
@@ -2099,6 +2159,13 @@ function AdminDashboard() {
             <button type="button" onClick={() => void fetchUserDirectory()}>Try again</button>
           </div>
         )}
+        {usersNotice && (
+          <div className="admin-users-notice" role="status">
+            <MailCheck size={15} aria-hidden />
+            <span>{usersNotice}</span>
+            <button type="button" onClick={() => setUsersNotice(null)} aria-label="Dismiss account notice"><X size={14} aria-hidden /></button>
+          </div>
+        )}
         {users.length === 0 && usersError ? null : users.length === 0 ? (
           <div className="logs-empty"><Users size={26} aria-hidden /><h3>No accounts yet</h3><p>New registered accounts will appear here.</p></div>
         ) : filteredUsers.length === 0 ? (
@@ -2109,7 +2176,7 @@ function AdminDashboard() {
               <thead>
                 <tr>
                   <th>Account</th>
-                  <th>Access</th>
+                  <th>Identity</th>
                   <th>Tier</th>
                   <th>Monthly usage</th>
                   <th>Recent activity</th>
@@ -2121,6 +2188,7 @@ function AdminDashboard() {
                 {filteredUsers.map((user) => {
                   const statusPending = userActionPending === `${user.id}:status`;
                   const sessionsPending = userActionPending === `${user.id}:sessions`;
+                  const verificationPending = userActionPending === `${user.id}:verification`;
                   const tierPending = userActionPending === `${user.id}:tier`;
                   const usageLimitPending = userActionPending === `${user.id}:usage-limit`;
                   const reportUsageLimitPending = userActionPending === `${user.id}:report-usage-limit`;
@@ -2148,8 +2216,12 @@ function AdminDashboard() {
                           </div>
                         </div>
                       </td>
-                      <td data-label="Access">
+                      <td data-label="Identity">
                         <span className="admin-user-primary">{(user.authMethods?.length ? user.authMethods : [user.authProvider]).map((method) => method === 'password' ? 'Email & password' : method.replaceAll('-', ' ')).join(' + ')}</span>
+                        <small className={`admin-user-verification is-${user.emailVerified ? 'verified' : 'unverified'}`}>
+                          {user.emailVerified ? <MailCheck size={11} aria-hidden /> : <AlertTriangle size={11} aria-hidden />}
+                          {user.emailVerified ? 'Verified email' : 'Email not verified'}
+                        </small>
                         <small>{user.activeSessions.toLocaleString()} active {user.activeSessions === 1 ? 'session' : 'sessions'}</small>
                       </td>
                       <td data-label="Tier">
@@ -2272,10 +2344,23 @@ function AdminDashboard() {
                         <span className={`admin-user-status is-${isActive ? 'active' : 'suspended'}`}><span aria-hidden />{isActive ? 'Active' : 'Suspended'}</span>
                       </td>
                       <td data-label="Actions">
-                        {user.isOwner ? (
-                          <span className="admin-user-protected"><ShieldCheck size={14} aria-hidden /> Protected</span>
-                        ) : (
-                          <div className="admin-user-actions">
+                        <div className="admin-user-actions">
+                          {!user.emailVerified && (
+                            <button
+                              type="button"
+                              className="logs-icon-btn admin-user-verify"
+                              onClick={() => void sendManagedUserVerification(user)}
+                              disabled={Boolean(userActionPending) || user.status !== 'active' || !user.email}
+                              title={user.status !== 'active' ? 'Reactivate this account before sending email' : 'Send a new verification email'}
+                              aria-label={`Send ${user.displayName} a verification email`}
+                            >
+                              {verificationPending ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <Send size={14} aria-hidden />}
+                            </button>
+                          )}
+                          {user.isOwner ? (
+                            <span className="admin-user-protected"><ShieldCheck size={14} aria-hidden /> Protected</span>
+                          ) : (
+                            <>
                             <button
                               type="button"
                               className={isActive ? 'logs-btn admin-user-suspend' : 'logs-btn admin-user-reactivate'}
@@ -2295,8 +2380,9 @@ function AdminDashboard() {
                             >
                               {sessionsPending ? <LoaderCircle className="logs-spin" size={14} aria-hidden /> : <LogOut size={14} aria-hidden />}
                             </button>
-                          </div>
-                        )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2307,7 +2393,7 @@ function AdminDashboard() {
         )}
         <footer className="logs-panel-foot">
           <span>Showing {filteredUsers.length.toLocaleString()} of {users.length.toLocaleString()} loaded accounts</span>
-          <span>Tier and usage-limit changes apply immediately · resets affect the current month</span>
+          <span>Verification emails expire after 24 hours · tier and limit changes apply immediately</span>
         </footer>
       </section>
 

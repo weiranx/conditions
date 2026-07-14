@@ -987,7 +987,7 @@ input {
 
 .admin-user-summary {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
   gap: 8px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--ui-line);
@@ -1016,6 +1016,9 @@ input {
 
 .admin-user-summary article span svg { flex: none; }
 .admin-user-summary article strong { color: var(--ui-text); font: 700 15px var(--font-data); }
+.admin-user-summary article.is-attention { border-color: color-mix(in oklch, var(--ui-risk-3) 34%, var(--ui-line)); }
+.admin-user-summary article.is-attention span,
+.admin-user-summary article.is-attention strong { color: var(--ui-caution-ink); }
 
 .admin-usage-policy {
   display: grid;
@@ -1092,6 +1095,20 @@ input {
 .admin-users-error span { flex: 1; }
 .admin-users-error button { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
 
+.admin-users-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--ui-line);
+  background: var(--ui-brand-soft);
+  color: var(--ui-go-ink);
+  font-size: 11.5px;
+}
+
+.admin-users-notice span { flex: 1; }
+.admin-users-notice button { display: grid; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
+
 .admin-users-table-scroll { max-width: 100%; overflow-x: auto; }
 
 .admin-users-table {
@@ -1164,6 +1181,17 @@ input {
 }
 
 .admin-user-primary { display: block; color: var(--ui-text); font-size: 11px; font-weight: 600; text-transform: capitalize; }
+
+.admin-users-table td > small.admin-user-verification {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-weight: 650;
+}
+
+.admin-user-verification.is-verified { color: var(--ui-go-ink); }
+.admin-user-verification.is-unverified { color: var(--ui-caution-ink); }
 
 .admin-user-usage { display: grid; gap: 6px; min-width: 285px; }
 .admin-user-usage > small { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--ui-caution-ink); font-size: 9.5px; }
@@ -1289,6 +1317,8 @@ input {
 .admin-user-actions .logs-icon-btn { min-height: 31px; }
 .admin-user-actions .logs-icon-btn { width: 31px; }
 .admin-user-actions .logs-btn { padding-inline: 9px; font-size: 10.5px; }
+.admin-user-actions .admin-user-verify { color: var(--ui-brand-strong); }
+.admin-user-actions .admin-user-protected { width: auto; }
 .admin-user-suspend { color: var(--ui-nogo-ink); }
 .admin-user-reactivate { border-color: var(--ui-brand); color: var(--ui-go-ink); }
 
