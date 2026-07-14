@@ -632,6 +632,9 @@ function PlannerViewComponent(props: PlannerViewProps) {
   // and returns the planner to its explicit pre-generation state.
   const reportLocked = Boolean(safetyData);
   const objectiveReady = hasObjective && !objectiveDraftDirty;
+  const showMultiDaySwitcher = !restoredFromHistory
+    && featureFlags.tripPlanning
+    && multiDayForecastRows.length >= 2;
   const reportGeneratedAtLabel = formatGeneratedAt(reportGeneratedAt);
   const reportResumeHandledRef = React.useRef(false);
 
@@ -663,7 +666,11 @@ function PlannerViewComponent(props: PlannerViewProps) {
   }, [loading, safetyData]);
 
   return (
-    <div key="view-planner" className={`${appShellClassName} ssr-shell`} aria-busy={isViewPending}>
+    <div
+      key="view-planner"
+      className={`${appShellClassName} ssr-shell${showMultiDaySwitcher ? ' has-planner-day-switcher' : ''}`}
+      aria-busy={isViewPending}
+    >
       <a href="#planner-main-content" className="skip-nav">Skip to main content</a>
       <ProductNav
         active="planner"
@@ -708,7 +715,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         handleCopyLink={handleCopyLink}
       />
 
-      {!restoredFromHistory && featureFlags.tripPlanning && (
+      {showMultiDaySwitcher && (
         <PlannerDaySwitcher
           days={multiDayForecastRows}
           activeDate={forecastDate}
