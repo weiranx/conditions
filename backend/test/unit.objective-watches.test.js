@@ -327,6 +327,35 @@ test('returns tier-aware Objective Watch change history', async () => {
   expect(query.mock.calls[0][1]).toEqual([WATCH_ID, USER_ID, 14]);
 });
 
+test('returns tier-aware history for every Objective Watch check', async () => {
+  const query = jest.fn().mockResolvedValue({
+    rows: [{
+      id: '43',
+      check_type: 'automatic',
+      status: 'unchanged',
+      summary: { score: 72, tier: 'Low' },
+      change: null,
+      error: null,
+      checked_at: CREATED_AT,
+    }],
+  });
+  const response = await request(makeApp({ query, tierKey: 'premium' }))
+    .get(`/api/account/objective-watches/${WATCH_ID}/checks`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body.checks[0]).toMatchObject({
+    id: '43',
+    checkType: 'automatic',
+    status: 'unchanged',
+    summary: { score: 72, tier: 'Low' },
+    checkedAt: CREATED_AT.toISOString(),
+  });
+  expect(response.body.policy.historyDays).toBe(90);
+  expect(query.mock.calls[0][0]).toContain('FROM objective_watch_checks checks');
+  expect(query.mock.calls[0][1]).toEqual([WATCH_ID, USER_ID, 90]);
+});
+
 test('requires an account before reading objective watches', async () => {
   const query = jest.fn();
   const response = await request(makeApp({ query, user: null })).get('/api/account/objective-watches');

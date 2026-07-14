@@ -18,12 +18,12 @@ import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
 import {
   deleteObjectiveWatch,
-  getObjectiveWatchEvents,
+  getObjectiveWatchChecks,
   listObjectiveWatches,
   refreshObjectiveWatch,
   setObjectiveWatchNotifications,
   type ObjectiveWatch,
-  type ObjectiveWatchEvent,
+  type ObjectiveWatchCheck,
   type ObjectiveWatchPolicy,
 } from '../../lib/objective-watches';
 import { ProductNav } from './ProductNav';
@@ -78,6 +78,23 @@ const monitoringLabel = (watch: ObjectiveWatch, automaticChecks: boolean) => {
   return Number.isFinite(hoursUntilStart) && hoursUntilStart > 48 ? 'Every 3 hours' : 'Hourly checks';
 };
 
+const checkStatusLabel = (status: ObjectiveWatchCheck['status']) => ({
+  changed: 'Meaningful change',
+  unchanged: 'No meaningful change',
+  partial: 'Partial data',
+  failed: 'Check failed',
+}[status]);
+
+const formatCheckSummary = (check: ObjectiveWatchCheck) => {
+  if (!check.summary) return '';
+  const parts: string[] = [];
+  if (typeof check.summary.score === 'number') parts.push(`Score ${Math.round(check.summary.score)}`);
+  if (check.summary.tier) parts.push(`${check.summary.tier} risk tier`);
+  if (typeof check.summary.maxWindGust === 'number') parts.push(`Peak gust ${Math.round(check.summary.maxWindGust)} mph`);
+  if (typeof check.summary.maxPrecipChance === 'number') parts.push(`Precipitation ${Math.round(check.summary.maxPrecipChance)}%`);
+  return parts.join(' · ');
+};
+
 export function WatchesView({
   appShellClassName,
   isViewPending,
@@ -91,7 +108,7 @@ export function WatchesView({
   const emailVerified = account.user?.emailVerified === true;
   const [watches, setWatches] = useState<ObjectiveWatch[]>([]);
   const [policy, setPolicy] = useState<ObjectiveWatchPolicy | null>(null);
-  const [eventsByWatch, setEventsByWatch] = useState<Record<string, ObjectiveWatchEvent[]>>({});
+  const [checksByWatch, setChecksByWatch] = useState<Record<string, ObjectiveWatchCheck[]>>({});
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingAlertsId, setUpdatingAlertsId] = useState<string | null>(null);
@@ -105,12 +122,12 @@ export function WatchesView({
     if (!accountUserId) {
       setWatches([]);
       setPolicy(null);
-      setEventsByWatch({});
+      setChecksByWatch({});
       setLoading(false);
       return;
     }
     const controller = new AbortController();
-    setEventsByWatch({});
+    setChecksByWatch({});
     setExpandedHistoryId(null);
     setLoading(true);
     setError(null);
@@ -139,7 +156,7 @@ export function WatchesView({
     try {
       await deleteObjectiveWatch(watch.id);
       setWatches((current) => current.filter((item) => item.id !== watch.id));
-      setEventsByWatch((current) => {
+      setChecksByWatch((current) => {
         const next = { ...current };
         delete next[watch.id];
         return next;
@@ -180,7 +197,7 @@ export function WatchesView({
       const result = await refreshObjectiveWatch(watch.id);
       setWatches((current) => current.map((item) => item.id === result.watch.id ? result.watch : item));
       setPolicy(result.policy);
-      setEventsByWatch((current) => {
+      setChecksByWatch((current) => {
         const next = { ...current };
         delete next[watch.id];
         return next;
@@ -199,12 +216,12 @@ export function WatchesView({
       return;
     }
     setExpandedHistoryId(watch.id);
-    if (eventsByWatch[watch.id] || historyLoadingId) return;
+    if (checksByWatch[watch.id] || historyLoadingId) return;
     setHistoryLoadingId(watch.id);
     setError(null);
     try {
-      const result = await getObjectiveWatchEvents(watch.id);
-      setEventsByWatch((current) => ({ ...current, [watch.id]: result.events }));
+      const result = await getObjectiveWatchChecks(watch.id);
+      setChecksByWatch((current) => ({ ...current, [watch.id]: result.checks }));
       setPolicy(result.policy);
     } catch (historyError) {
       setError(historyError instanceof Error ? historyError.message : 'Could not load Objective Watch history.');
@@ -229,7 +246,7 @@ export function WatchesView({
           <div className="watches-head-icon" aria-hidden><BellRing /></div>
           <p>Objective monitoring</p>
           <h1>Your watched objectives</h1>
-          <span>See watch status, refresh conditions, and review meaningful changes for every saved plan.</span>
+          <span>See watch status, refresh conditions, and review every automatic or manual check for each saved plan.</span>
         </header>
 
         <aside className="watches-explainer" aria-label="How Objective Watch works">
@@ -238,8 +255,8 @@ export function WatchesView({
             {policy === null
               ? 'Loading your Objective Watch access…'
               : automaticChecks
-              ? `Premium checks up to ${policy?.activeWatchLimit || 10} active watches every three hours, then hourly during the final 48 hours. Email alerts cover meaningful risk increases.`
-              : `Free includes ${policy?.activeWatchLimit || 1} active watch with manual refresh, in-app updates, and ${policy?.historyDays || 14} days of change history. Current reports and official safety information remain available.`}
+              ? `Premium checks up to ${policy?.activeWatchLimit || 10} active watches every three hours, then hourly during the final 48 hours. Every run appears in ${policy?.historyDays || 90}-day check history; email alerts cover meaningful risk increases.`
+              : `Free includes ${policy?.activeWatchLimit || 1} active watch with manual refresh, in-app updates, and ${policy?.historyDays || 14} days of check history. Current reports and official safety information remain available.`}
           </span>
         </aside>
 
@@ -306,24 +323,36 @@ export function WatchesView({
                         <p className="watch-retry">The latest check failed. {automaticChecks ? 'A retry is scheduled automatically.' : 'Try a manual refresh again later.'}</p>
                       )}
                       {expandedHistoryId === watch.id && (
-                        <section className="watch-history" id={`watch-history-${watch.id}`} aria-label={`${watch.title} change history`}>
-                          <strong>Change history · last {policy?.historyDays || 14} days</strong>
+                        <section className="watch-history" id={`watch-history-${watch.id}`} aria-label={`${watch.title} check history`}>
+                          <strong>Check history · last {policy?.historyDays || 14} days</strong>
                           {historyLoadingId === watch.id ? (
                             <p><LoaderCircle className="watches-spinner" aria-hidden /> Loading history…</p>
-                          ) : (eventsByWatch[watch.id] || []).length === 0 ? (
-                            <p>No meaningful risk increases recorded in this period.</p>
+                          ) : (checksByWatch[watch.id] || []).length === 0 ? (
+                            <p>No checks recorded in this period yet.</p>
                           ) : (
                             <ol>
-                              {(eventsByWatch[watch.id] || []).map((event) => (
-                                <li key={event.id}>
-                                  <time dateTime={event.checkedAt || undefined}>{event.checkedAt ? formatTimestamp(event.checkedAt) : 'Date unavailable'}</time>
-                                  <ul>
-                                    {(event.change?.reasons || []).map((reason) => (
-                                      <li key={`${event.id}:${reason.key || reason.label}`}>{reason.label || 'Conditions changed.'}</li>
-                                    ))}
-                                  </ul>
-                                </li>
-                              ))}
+                              {(checksByWatch[watch.id] || []).map((check) => {
+                                const summary = formatCheckSummary(check);
+                                return (
+                                  <li key={check.id} className={`watch-check is-${check.status}`}>
+                                    <div className="watch-check-head">
+                                      <time dateTime={check.checkedAt || undefined}>{check.checkedAt ? formatTimestamp(check.checkedAt) : 'Date unavailable'}</time>
+                                      <span>{checkStatusLabel(check.status)}</span>
+                                    </div>
+                                    <p>{check.checkType === 'manual' ? 'Manual refresh' : 'Automatic check'}{summary ? ` · ${summary}` : ''}</p>
+                                    {check.status === 'unchanged' && <p>No meaningful risk increase was detected.</p>}
+                                    {check.status === 'partial' && <p>The check completed with incomplete source data, so no change alert was generated.</p>}
+                                    {check.status === 'failed' && <p>{check.error || 'Conditions data was unavailable for this check.'}</p>}
+                                    {(check.change?.reasons || []).length > 0 && (
+                                      <ul>
+                                        {(check.change?.reasons || []).map((reason) => (
+                                          <li key={`${check.id}:${reason.key || reason.label}`}>{reason.label || 'Conditions changed.'}</li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ol>
                           )}
                         </section>
@@ -356,7 +385,7 @@ export function WatchesView({
                         aria-controls={`watch-history-${watch.id}`}
                       >
                         {historyLoadingId === watch.id ? <LoaderCircle className="watches-spinner" aria-hidden /> : <History aria-hidden />}
-                        {expandedHistoryId === watch.id ? 'Hide history' : 'Change history'}
+                        {expandedHistoryId === watch.id ? 'Hide history' : 'Check history'}
                       </button>
                       <button
                         type="button"

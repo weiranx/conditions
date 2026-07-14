@@ -108,10 +108,11 @@ health URL to include nginx, DNS, and TLS in the same check.
 ### Objective Watch scheduling
 
 - Only current Premium accounts are selected by the hourly worker. Free watches remain available in-app and can be refreshed manually from the Watch dashboard.
-- Free accounts can keep one active watch and see 14 days of meaningful-change history. Premium accounts can keep ten active watches and see 90 days.
+- Free accounts can keep one active watch and see 14 days of manual check history. Premium accounts can keep ten active watches and see 90 days of automatic and manual check history.
 - Manual refreshes use the same deterministic safety pipeline, do not consume report quota, and have a short anti-abuse cooldown.
 - Watches more than 48 hours from their planned start are checked every three hours.
 - Watches inside the final 48 hours are checked hourly; expired plan dates are disabled.
+- Each attempted run is recorded as unchanged, changed, partial, or failed. Check records are retained for at most 90 days; the account tier controls how much of that window the API returns.
 - Identical coordinate/date/start/window plans share one upstream safety refresh.
 - `OBJECTIVE_WATCH_CONCURRENCY` defaults to `4` and `OBJECTIVE_WATCH_BATCH_SIZE` defaults to `100`.
 - Full snapshots overwrite the previous snapshot; meaningful risk-increase events are retained for up to 90 days, with only the most recent 14 days exposed to Free accounts.

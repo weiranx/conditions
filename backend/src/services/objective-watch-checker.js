@@ -9,6 +9,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 const FORTY_EIGHT_HOURS_MS = 48 * ONE_HOUR_MS;
 const PLAN_DATE_EXPIRY_GRACE_MS = 14 * ONE_HOUR_MS;
 const CHANGE_RETENTION_DAYS = 90;
+const CHECK_RETENTION_DAYS = 90;
 
 const ACCOUNT_TIER_JOIN = `
   LEFT JOIN LATERAL (
@@ -268,6 +269,10 @@ const createObjectiveWatchChecker = ({
       DELETE FROM objective_watch_events
       WHERE checked_at < NOW() - INTERVAL '${CHANGE_RETENTION_DAYS} days'
     `);
+    await database.query(`
+      DELETE FROM objective_watch_checks
+      WHERE checked_at < NOW() - INTERVAL '${CHECK_RETENTION_DAYS} days'
+    `);
 
     const dueResult = await database.query(`
       SELECT watches.id, watches.user_id, watches.title, watches.plan,
@@ -331,6 +336,8 @@ const createObjectiveWatchChecker = ({
           const change = buildMeaningfulChange(previousPayload, result.payload, checkedAt);
           const premium = watch.tier_key === 'premium';
           const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt) : null;
+          const checkStatus = result.payload.partialData === true ? 'partial' : change ? 'changed' : 'unchanged';
+          const checkSummary = extractWatchSignals(result.payload);
           await database.query(`
             UPDATE objective_watches
             SET last_checked_at = $2, next_check_at = $3,
@@ -343,6 +350,17 @@ const createObjectiveWatchChecker = ({
             nextCheckAt?.toISOString() || null,
             result.payload.partialData === true ? null : JSON.stringify(result.payload),
             change ? JSON.stringify(change) : null,
+          ]);
+          await database.query(`
+            INSERT INTO objective_watch_checks (watch_id, check_type, status, summary, change, checked_at)
+            VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)
+          `, [
+            watch.id,
+            manual ? 'manual' : 'automatic',
+            checkStatus,
+            JSON.stringify(checkSummary),
+            change ? JSON.stringify(change) : null,
+            checkedAt.toISOString(),
           ]);
           checked += 1;
 
@@ -372,6 +390,15 @@ const createObjectiveWatchChecker = ({
             SET consecutive_failures = $2, next_check_at = $3
             WHERE id = $1
           `, [watch.id, failureCount, retryAt?.toISOString() || null]);
+          await database.query(`
+            INSERT INTO objective_watch_checks (watch_id, check_type, status, error, checked_at)
+            VALUES ($1, $2, 'failed', $3, $4)
+          `, [
+            watch.id,
+            manual ? 'manual' : 'automatic',
+            String(error?.message || 'Conditions check failed.').slice(0, 500),
+            checkedAt.toISOString(),
+          ]);
         }
       }
     });

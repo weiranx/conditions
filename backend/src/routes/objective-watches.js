@@ -99,6 +99,16 @@ const mapObjectiveWatchEvent = (row) => ({
   checkedAt: normalizeTimestamp(row.checked_at),
 });
 
+const mapObjectiveWatchCheck = (row) => ({
+  id: String(row.id),
+  checkType: row.check_type,
+  status: row.status,
+  summary: row.summary || null,
+  change: row.change || null,
+  error: row.error ? 'Conditions data was unavailable for this check.' : null,
+  checkedAt: normalizeTimestamp(row.checked_at),
+});
+
 const registerObjectiveWatchRoutes = ({
   app,
   database,
@@ -386,6 +396,33 @@ const registerObjectiveWatchRoutes = ({
         LIMIT 100
       `, [watchId, user.id, policy.historyDays]);
       return res.json({ events: result.rows.map(mapObjectiveWatchEvent), policy });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.get('/api/account/objective-watches/:watchId/checks', async (req, res) => {
+    if (!requireFeature(res)) return;
+    const user = await requireUser(req, res);
+    if (!user || !ensureDatabase(res)) return;
+    const watchId = String(req.params.watchId || '');
+    if (!UUID_PATTERN.test(watchId)) {
+      return res.status(400).json({ error: 'Invalid objective watch ID.' });
+    }
+    try {
+      const policy = await getPolicy(req, user);
+      const result = await database.query(`
+        SELECT checks.id, checks.check_type, checks.status, checks.summary,
+               checks.change, checks.error, checks.checked_at
+        FROM objective_watch_checks checks
+        JOIN objective_watches watches ON watches.id = checks.watch_id
+        WHERE watches.id = $1
+          AND watches.user_id = $2
+          AND checks.checked_at >= NOW() - ($3::integer * INTERVAL '1 day')
+        ORDER BY checks.checked_at DESC, checks.id DESC
+        LIMIT 1000
+      `, [watchId, user.id, policy.historyDays]);
+      return res.json({ checks: result.rows.map(mapObjectiveWatchCheck), policy });
     } catch (error) {
       return handleError(req, res, error);
     }

@@ -31,6 +31,7 @@ Express API for the SummitSafe backcountry planning app.
 | POST | `/api/account/objective-watches` | Create a private watch from a live, saved, or shared report snapshot |
 | PATCH | `/api/account/objective-watches/:watchId` | Opt a watch into or out of meaningful-change email alerts |
 | POST | `/api/account/objective-watches/:watchId/refresh` | Manually refresh an account-owned watch without consuming report quota |
+| GET | `/api/account/objective-watches/:watchId/checks` | Read tier-limited history for every automatic or manual check |
 | GET | `/api/account/objective-watches/:watchId/events` | Read tier-limited meaningful-change history for an account-owned watch |
 | POST | `/api/internal/objective-watch-checks` | Secret-protected hourly Objective Watch worker trigger |
 | GET | `/api/reports/shared/:shareToken` | Retrieve a read-only generated report by its random public token |
@@ -40,7 +41,7 @@ Express API for the SummitSafe backcountry planning app.
 | POST | `/api/report-logs` | Log a report entry |
 | GET | `/healthz` | Health check (also `/health`, `/api/healthz`, `/api/health`) |
 
-Objective Watch entitlements are enforced by the backend: Free includes one active watch, manual refresh, in-app updates, and 14 days of change history; Premium includes up to ten active watches, automatic three-hour/hourly checks, verified-email alerts, and 90 days of history. Current safety reports and their official source data are not gated by Objective Watch tier checks.
+Objective Watch entitlements are enforced by the backend: Free includes one active watch, manual refresh, in-app updates, and 14 days of check history; Premium includes up to ten active watches, automatic three-hour/hourly checks, verified-email alerts, and 90 days of check history. Every attempted check records whether conditions were unchanged, meaningfully changed, partially available, or unavailable. Current safety reports and their official source data are not gated by Objective Watch tier checks.
 
 AI features require an account. Free accounts default to 250,000 AI tokens, 50 generated reports, and 10 multi-day forecast comparisons per UTC month, configurable with `AI_FREE_MONTHLY_TOKEN_LIMIT`, `FREE_MONTHLY_USAGE_LIMIT`, and `FREE_MONTHLY_MULTI_DAY_LIMIT`; Premium accounts have unlimited usage while their totals remain visible. Guest browsers receive 3 multi-day comparisons by default through `GUEST_MULTI_DAY_LIMIT`. Authenticated account responses include all three meters and their shared UTC-month reset date. The legacy `REPORT_FREE_MONTHLY_LIMIT` remains a fallback for the generated-report allowance.
 

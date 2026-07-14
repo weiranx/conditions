@@ -89,6 +89,9 @@ test('deduplicates identical plans while updating every due watch', async () => 
   expect(summary).toMatchObject({ due: 2, checked: 2, changed: 2, failed: 0, uniquePlans: 1 });
   expect(query.mock.calls.filter(([sql]) => sql.includes('SET last_checked_at'))).toHaveLength(2);
   expect(query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO objective_watch_events'))).toHaveLength(2);
+  const checkCalls = query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO objective_watch_checks'));
+  expect(checkCalls).toHaveLength(2);
+  expect(checkCalls[0][1].slice(1, 3)).toEqual(['automatic', 'changed']);
   const dueCall = query.mock.calls.find(([sql]) => sql.includes('COALESCE(account_tier.tier_key'));
   expect(dueCall[0]).toContain("COALESCE(account_tier.tier_key, 'free') = 'premium'");
   expect(dueCall[1]).toEqual([100, null, null]);
@@ -139,4 +142,67 @@ test('manual Free refreshes update in-app state without scheduling or email', as
   expect(updateCall[1][2]).toBeNull();
   const eventCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO objective_watch_events'));
   expect(eventCall[1][3]).toBe('not_requested');
+  const checkCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO objective_watch_checks'));
+  expect(checkCall[1].slice(1, 3)).toEqual(['manual', 'changed']);
+});
+
+test.each([
+  ['unchanged', safetyPayload({ score: 75 })],
+  ['partial', { ...safetyPayload({ score: 55 }), partialData: true }],
+])('records a %s check even when no change event is created', async (expectedStatus, payload) => {
+  const dueRows = [{
+    id: 'watch-1',
+    title: 'Mount Rainier',
+    plan: PLAN,
+    baseline_report: { safetyData: safetyPayload() },
+    last_snapshot: null,
+    consecutive_failures: 0,
+    notifications_enabled: false,
+    tier_key: 'premium',
+  }];
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('FROM objective_watches watches')) return { rows: dueRows };
+    return { rows: [] };
+  });
+  const checker = createObjectiveWatchChecker({
+    database: { configured: true, query },
+    invokeSafetyHandler: jest.fn().mockResolvedValue({ statusCode: 200, payload }),
+    emailService: { available: false },
+    now: () => new Date('2026-07-14T00:00:00.000Z'),
+  });
+
+  const summary = await checker.run();
+  expect(summary).toMatchObject({ checked: 1, changed: 0, failed: 0 });
+  expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO objective_watch_events'))).toBe(false);
+  const checkCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO objective_watch_checks'));
+  expect(checkCall[1].slice(1, 3)).toEqual(['automatic', expectedStatus]);
+});
+
+test('records failed automatic checks with their retry attempt', async () => {
+  const dueRows = [{
+    id: 'watch-1',
+    title: 'Mount Rainier',
+    plan: PLAN,
+    baseline_report: { safetyData: safetyPayload() },
+    last_snapshot: null,
+    consecutive_failures: 0,
+    notifications_enabled: false,
+    tier_key: 'premium',
+  }];
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('FROM objective_watches watches')) return { rows: dueRows };
+    return { rows: [] };
+  });
+  const checker = createObjectiveWatchChecker({
+    database: { configured: true, query },
+    invokeSafetyHandler: jest.fn().mockRejectedValue(new Error('Provider timed out')),
+    emailService: { available: false },
+    log: { warn: jest.fn() },
+    now: () => new Date('2026-07-14T00:00:00.000Z'),
+  });
+
+  const summary = await checker.run();
+  expect(summary).toMatchObject({ checked: 0, changed: 0, failed: 1 });
+  const checkCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO objective_watch_checks'));
+  expect(checkCall[1]).toEqual(['watch-1', 'automatic', 'Provider timed out', '2026-07-14T00:00:00.000Z']);
 });

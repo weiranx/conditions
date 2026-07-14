@@ -412,8 +412,8 @@ export function AccountView({
                   <li>
                     <Check aria-hidden />
                     {isPremium
-                      ? '10 Objective Watches with automatic checks, email alerts, and 90-day history'
-                      : '1 Objective Watch with manual refresh and 14-day history'}
+                      ? '10 Objective Watches with automatic checks, email alerts, and 90-day check history'
+                      : '1 Objective Watch with manual refresh and 14-day check history'}
                   </li>
                 </ul>
                 {isPremium && planPeriodEnd && (

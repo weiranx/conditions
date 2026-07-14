@@ -36,6 +36,23 @@ export interface ObjectiveWatchEvent {
   checkedAt: string | null;
 }
 
+export interface ObjectiveWatchCheck {
+  id: string;
+  checkType: 'automatic' | 'manual';
+  status: 'unchanged' | 'changed' | 'partial' | 'failed';
+  summary: {
+    score?: number | null;
+    tier?: string;
+    avalancheDanger?: number | null;
+    maxWindGust?: number | null;
+    maxPrecipChance?: number | null;
+    terrainImpact?: string;
+  } | null;
+  change: ObjectiveWatchEvent['change'];
+  error: string | null;
+  checkedAt: string | null;
+}
+
 export interface ObjectiveWatchResult {
   watch: ObjectiveWatch;
   policy: ObjectiveWatchPolicy;
@@ -164,6 +181,30 @@ export async function getObjectiveWatchEvents(
   });
   if (events.some((event) => event === null)) throw new Error('Objective Watch history returned an unexpected response.');
   return { events: events as ObjectiveWatchEvent[], policy: requirePolicy(payload) };
+}
+
+export async function getObjectiveWatchChecks(
+  watchId: string,
+  signal?: AbortSignal,
+): Promise<{ checks: ObjectiveWatchCheck[]; policy: ObjectiveWatchPolicy }> {
+  const { response, payload } = await fetchApi(`/api/account/objective-watches/${encodeURIComponent(watchId)}/checks`, { signal });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not load Objective Watch check history.'));
+  const values = (payload as { checks?: unknown } | null)?.checks;
+  if (!Array.isArray(values)) throw new Error('Objective Watch check history returned an unexpected response.');
+  const checks = values.map((value): ObjectiveWatchCheck | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const check = value as Partial<ObjectiveWatchCheck>;
+    if (
+      typeof check.id !== 'string'
+      || (check.checkType !== 'automatic' && check.checkType !== 'manual')
+      || !['unchanged', 'changed', 'partial', 'failed'].includes(String(check.status))
+      || (check.checkedAt !== null && typeof check.checkedAt !== 'string')
+      || (check.error !== null && typeof check.error !== 'string')
+    ) return null;
+    return check as ObjectiveWatchCheck;
+  });
+  if (checks.some((check) => check === null)) throw new Error('Objective Watch check history returned an unexpected response.');
+  return { checks: checks as ObjectiveWatchCheck[], policy: requirePolicy(payload) };
 }
 
 export async function deleteObjectiveWatch(watchId: string): Promise<void> {
