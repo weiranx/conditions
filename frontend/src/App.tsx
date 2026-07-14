@@ -1401,6 +1401,65 @@ function App() {
     startViewChange(() => setView('trip'));
   };
 
+  const handleUseTripDayInPlanner = useCallback((date: string, startTime: string) => {
+    const selectedDay = tripForecastRows.find((day) => day.date === date);
+    if (selectedDay && forecastDate === date && safetyData === selectedDay.safetyData) {
+      startViewChange(() => setView('planner'));
+      return;
+    }
+
+    clearWakeRetry();
+    clearLastLoadedKey();
+    clearPersistedReport();
+    sharedReportResolvedTokenRef.current = null;
+    setSharedReportToken(null);
+    setSharedReportLoading(false);
+    setSharedReportError(null);
+    resetSavedReportTracking();
+    setPendingAutoGenerate(false);
+    setViewingHistoryReport(false);
+    setReportChatMessages([]);
+    setReportChatSessionKey((value) => value + 1);
+    setForecastDate(date);
+    setAlpineStartTime(startTime);
+    setSafetyData(selectedDay?.safetyData ?? null);
+    setPreviousSafetyData(null);
+    setPastStartPrompt(null);
+    setError(null);
+    setAiBriefNarrative(null);
+    setAiBriefLoading(false);
+    setAiBriefError(null);
+    setSnowVisionAnalysis(null);
+    setSnowVisionImage(null);
+    setSnowVisionLoading(false);
+    setSnowVisionError(null);
+    resetRouteState();
+    startViewChange(() => setView('planner'));
+  }, [
+    clearLastLoadedKey,
+    clearWakeRetry,
+    forecastDate,
+    resetRouteState,
+    resetSavedReportTracking,
+    safetyData,
+    setAiBriefError,
+    setAiBriefLoading,
+    setAiBriefNarrative,
+    setError,
+    setSafetyData,
+    setSnowVisionAnalysis,
+    setSnowVisionError,
+    setSnowVisionImage,
+    setSnowVisionLoading,
+    setView,
+    startViewChange,
+    tripForecastRows,
+  ]);
+
+  const handleSelectMultiDayForecastDay = useCallback((date: string) => {
+    handleUseTripDayInPlanner(date, tripStartTime);
+  }, [handleUseTripDayInPlanner, tripStartTime]);
+
   const handleOpenObjectiveWatch = useCallback((plan: PersistedReportPlan) => {
     sharedReportResolvedTokenRef.current = null;
     setSharedReportToken(null);
@@ -2318,12 +2377,7 @@ function App() {
         runTripForecast={runTripForecast}
         navigateToView={navigateToView}
         openPlannerView={openPlannerView}
-        onUseDayInPlanner={(date, startTime) => {
-          setForecastDate(date);
-          setAlpineStartTime(startTime);
-          setError(null);
-          startViewChange(() => setView('planner'));
-        }}
+        onUseDayInPlanner={handleUseTripDayInPlanner}
       />
       </React.Activity>
 
@@ -2424,6 +2478,9 @@ function App() {
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}
+      multiDayForecastRows={tripForecastRows}
+      multiDayStartTimeLabel={formatClockForStyle(tripStartTime, preferences.timeStyle)}
+      onSelectMultiDayForecastDay={handleSelectMultiDayForecastDay}
       // Search box
       searchWrapperRef={searchWrapperRef}
       searchInputRef={searchInputRef}

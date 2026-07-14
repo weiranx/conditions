@@ -354,6 +354,174 @@ html[data-theme="dark"] .ssr-shell .map-actions {
   .ssr-shell .header-nav:empty { display: none; }
 }
 
+/* ============ MULTI-DAY REPORT SWITCHER ============ */
+.planner-day-switcher {
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--d-line-2) 78%, transparent);
+  border-radius: var(--ui-radius-shell);
+  background: var(--d-surface);
+  box-shadow: 0 2px 3px rgba(20, 42, 27, .05), 0 24px 60px -42px rgba(18, 48, 29, .5);
+}
+.planner-day-switcher-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--d-line);
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--d-sage-1) 44%, transparent), transparent 38%),
+    var(--d-surface);
+}
+.planner-day-switcher-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.planner-day-switcher-icon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--d-sage-1);
+  color: var(--d-pine);
+}
+.planner-day-switcher-icon svg { width: 17px; height: 17px; }
+.planner-day-switcher-heading p {
+  margin: 0 0 2px;
+  color: var(--d-ink-4);
+  font-family: var(--d-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.planner-day-switcher-heading h2 {
+  margin: 0;
+  color: var(--d-ink);
+  font-family: var(--ssr-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+}
+.planner-day-switcher-status {
+  margin: 0;
+  color: var(--d-ink-3);
+  font-family: var(--d-mono);
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.planner-day-switcher-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  padding: 12px;
+  background: color-mix(in oklch, var(--d-surface-2) 72%, var(--d-surface));
+}
+.planner-day-switcher-day {
+  position: relative;
+  min-width: 0;
+  min-height: 104px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 1fr;
+  gap: 7px 8px;
+  overflow: hidden;
+  padding: 12px 11px 10px 14px;
+  border: 1px solid var(--d-line);
+  border-radius: 12px;
+  background: var(--d-surface);
+  color: var(--d-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.planner-day-switcher-day:hover {
+  border-color: color-mix(in oklch, var(--d-pine) 60%, var(--d-line));
+  transform: translateY(-1px);
+}
+.planner-day-switcher-day:focus-visible {
+  outline: 3px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+.planner-day-switcher-day.is-active {
+  border-color: var(--d-pine);
+  background: color-mix(in oklch, var(--d-sage-1) 32%, var(--d-surface));
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--d-pine) 15%, transparent);
+}
+.planner-day-switcher-band {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+}
+.planner-day-switcher-band.go { background: var(--ssr-go); }
+.planner-day-switcher-band.caution { background: var(--ssr-caution); }
+.planner-day-switcher-band.nogo { background: var(--ssr-nogo); }
+.planner-day-switcher-date { min-width: 0; display: grid; }
+.planner-day-switcher-date strong { font-size: 14px; line-height: 1.1; }
+.planner-day-switcher-date span { margin-top: 2px; color: var(--d-ink-3); font-size: 10.5px; }
+.planner-day-switcher-decision {
+  align-self: start;
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-family: var(--d-mono);
+  font-size: 8.5px;
+  font-weight: 750;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.planner-day-switcher-decision.go { background: color-mix(in oklch, var(--ssr-go) 18%, transparent); color: var(--ssr-go-ink); }
+.planner-day-switcher-decision.caution { background: color-mix(in oklch, var(--ssr-caution) 22%, transparent); color: var(--ssr-caution-ink); }
+.planner-day-switcher-decision.nogo { background: color-mix(in oklch, var(--ssr-nogo) 18%, transparent); color: var(--ssr-nogo-ink); }
+.planner-day-switcher-weather {
+  grid-column: 1 / -1;
+  color: var(--d-ink-3);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.planner-day-switcher-score {
+  grid-column: 1 / -1;
+  align-self: end;
+  color: var(--d-ink-2);
+  font-family: var(--d-mono);
+  font-size: 17px;
+  font-weight: 760;
+}
+.planner-day-switcher-score small {
+  margin-left: 2px;
+  color: var(--d-ink-4);
+  font-size: 8.5px;
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  .planner-day-switcher { margin: 14px 8px 0; border-radius: 14px; }
+  .planner-day-switcher-header { align-items: flex-start; flex-direction: column; gap: 8px; padding: 13px 14px; }
+  .planner-day-switcher-days {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(126px, 42vw);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .planner-day-switcher-day { scroll-snap-align: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planner-day-switcher-day { transition: none; }
+}
+
+@media print {
+  .planner-day-switcher { display: none !important; }
+}
+
 /* ============ MAP → rounded card + frosted chips ============ */
 .ssr-shell .map-shell {
   margin-top: 22px;

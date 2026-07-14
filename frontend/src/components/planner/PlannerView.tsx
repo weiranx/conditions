@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ForecastLoading } from './ForecastLoading';
 import { PlannerHeader } from './PlannerHeader';
+import { PlannerDaySwitcher } from './PlannerDaySwitcher';
 import { ProductNav } from '../views/ProductNav';
 import { PlannerMapSection } from './PlannerMapSection';
 import { AppDisclaimer } from '../../app/map-components';
@@ -42,6 +43,7 @@ import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecas
 import type { FreshnessRow as SourceFreshnessRow } from '../../app/source-freshness-display';
 import type { StartTimeScenarioComparison } from '../../app/start-time-scenarios';
 import type { PersistedReport, PersistedReportChatMessage } from '../../app/report-storage';
+import type { MultiDayTripForecastDay } from '../../hooks/useTripForecast';
 
 const RouteAnalysisSection = React.lazy(() =>
   import('./RouteAnalysisSection').then((module) => ({ default: module.RouteAnalysisSection })),
@@ -63,6 +65,9 @@ export interface PlannerViewProps {
   // Navigation
   navigateToView: (view: AppView) => void;
   openTripToolView: () => void;
+  multiDayForecastRows: MultiDayTripForecastDay[];
+  multiDayStartTimeLabel: string;
+  onSelectMultiDayForecastDay: (date: string) => void;
 
   // Search box
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
@@ -476,6 +481,9 @@ function PlannerViewComponent(props: PlannerViewProps) {
     // Navigation
     navigateToView,
     openTripToolView,
+    multiDayForecastRows,
+    multiDayStartTimeLabel,
+    onSelectMultiDayForecastDay,
 
     // Search
     searchWrapperRef,
@@ -699,6 +707,16 @@ function PlannerViewComponent(props: PlannerViewProps) {
         copiedLink={copiedLink}
         handleCopyLink={handleCopyLink}
       />
+
+      {!restoredFromHistory && featureFlags.tripPlanning && (
+        <PlannerDaySwitcher
+          days={multiDayForecastRows}
+          activeDate={forecastDate}
+          startTimeLabel={multiDayStartTimeLabel}
+          formatTempDisplay={formatTempDisplay}
+          onSelectDay={onSelectMultiDayForecastDay}
+        />
+      )}
 
       <PlannerMapSection
         position={position}

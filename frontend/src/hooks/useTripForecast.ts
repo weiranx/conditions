@@ -10,6 +10,7 @@ import { parseMultiDayUsage, type MultiDayUsage } from '../app/multi-day-usage';
 
 export type MultiDayTripForecastDay = {
   date: string;
+  safetyData: SafetyData;
   decisionLevel: DecisionLevel;
   decisionHeadline: string;
   score: number | null;
@@ -240,6 +241,7 @@ export function useTripForecast({
 
             return {
               date: dayData?.forecast?.selectedDate && DATE_FMT.test(dayData.forecast.selectedDate) ? dayData.forecast.selectedDate : fallbackDate,
+              safetyData: dayData,
               decisionLevel,
               decisionHeadline,
               score: Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null,
