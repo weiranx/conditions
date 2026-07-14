@@ -8,9 +8,15 @@
 .watches-head > span { display: block; max-width: 580px; margin-top: 18px; color: var(--ui-text-2); font-size: 14px; line-height: 1.65; }
 .watches-explainer { margin: -12px 0 28px; padding: 14px 16px; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 12px; border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-surface-subtle); color: var(--ui-text-2); font-size: 11px; line-height: 1.55; }
 .watches-explainer strong { color: var(--ui-brand-strong); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
-.watches-summary { width: fit-content; display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px; padding: 7px 10px; border: 1px solid var(--ui-line); border-radius: 999px; background: var(--ui-surface-subtle); color: var(--ui-text-2); font-size: 10px; letter-spacing: .03em; }
-.watches-summary svg { width: 13px; height: 13px; color: var(--ui-brand); }
-.watches-summary strong { color: var(--ui-text); font-family: var(--ssr-mono); }
+.watches-overview { margin-bottom: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.watches-overview > div { min-width: 0; padding: 13px 14px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-surface-subtle); }
+.watches-overview-icon { width: 31px; height: 31px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+.watches-overview-icon svg { width: 15px; height: 15px; }
+.watches-overview small { display: block; margin-bottom: 3px; color: var(--ui-text-3); font-size: 8.5px; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
+.watches-overview strong { display: block; overflow: hidden; color: var(--ui-text); font-family: var(--ssr-mono); font-size: 12px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.watches-overview em { color: var(--ui-text-2); font-family: inherit; font-size: 9.5px; font-style: normal; font-weight: 520; }
+.watches-overview > div.has-attention .watches-overview-icon { background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface)); color: var(--ui-caution-ink); }
+.watches-overview > div.has-error .watches-overview-icon { background: color-mix(in oklch, var(--ui-risk-4) 10%, var(--ui-surface)); color: var(--ui-nogo-ink); }
 .watches-list { display: grid; gap: 12px; }
 .watch-card { min-width: 0; padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-surface); box-shadow: 0 16px 44px -42px color-mix(in oklch, var(--ui-text) 62%, transparent); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
 .watch-card:hover { border-color: color-mix(in oklch, var(--ui-brand) 55%, var(--ui-line)); transform: translateY(-1px); box-shadow: 0 22px 52px -40px color-mix(in oklch, var(--ui-brand-strong) 46%, transparent); }
@@ -25,11 +31,12 @@
 .watch-card-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--ui-text-2); font-size: 11px; }
 .watch-card-meta > span { display: inline-flex; align-items: center; gap: 6px; }
 .watch-card-meta svg { width: 14px; height: 14px; color: var(--ui-brand); }
+.watch-monitoring-detail { margin: -4px 0 0; color: var(--ui-text-3); font-family: var(--ssr-mono); font-size: 9.5px; line-height: 1.5; }
+.watch-monitoring-detail.has-error { color: var(--ui-nogo-ink); }
 .watch-change { padding: 12px 14px; border: 1px solid color-mix(in oklch, var(--ui-risk-3) 36%, var(--ui-line)); border-radius: 10px; background: color-mix(in oklch, var(--ui-risk-3) 8%, var(--ui-surface)); color: var(--ui-text-2); font-size: 10.5px; line-height: 1.5; }
 .watch-change strong { color: var(--ui-caution-ink); font-size: 10px; }
 .watch-change ul { margin: 7px 0 0; padding-left: 17px; }
 .watch-change li + li { margin-top: 4px; }
-.watch-retry { margin: -4px 0 0; color: var(--ui-nogo-ink); font-size: 10px; }
 .watch-history { padding: 13px 14px; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--ui-surface-subtle); color: var(--ui-text-2); font-size: 10.5px; line-height: 1.5; }
 .watch-history > strong { color: var(--ui-text); font-size: 10px; }
 .watch-history > p { display: flex; align-items: center; gap: 7px; margin: 9px 0 0; }
@@ -71,6 +78,7 @@
   .watches-page { width: calc(100% - 28px); padding: 38px 0 60px; }
   .watches-head { margin-bottom: 28px; }
   .watches-explainer { margin-top: -8px; grid-template-columns: 1fr; gap: 5px; }
+  .watches-overview { grid-template-columns: 1fr; }
   .watch-card { padding: 19px 18px; grid-template-columns: 1fr; gap: 18px; }
   .watch-card-heading { display: grid; }
   .watch-status { width: fit-content; }

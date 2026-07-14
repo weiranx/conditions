@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BellRing,
@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Timer,
   Trash2,
+  TriangleAlert,
 } from 'lucide-react';
 import type { PersistedReportPlan } from '../../app/report-storage';
 import type { AppView } from '../../hooks/useUrlState';
@@ -76,6 +77,23 @@ const monitoringLabel = (watch: ObjectiveWatch, automaticChecks: boolean) => {
   const plannedStart = new Date(`${watch.plan.forecastDate}T${watch.plan.alpineStartTime || '12:00'}:00Z`);
   const hoursUntilStart = (plannedStart.getTime() - Date.now()) / (60 * 60 * 1000);
   return Number.isFinite(hoursUntilStart) && hoursUntilStart > 48 ? 'Every 3 hours' : 'Hourly checks';
+};
+
+const monitoringDetail = (watch: ObjectiveWatch, automaticChecks: boolean) => {
+  if (planHasEnded(watch)) return 'Monitoring complete · check history remains available';
+  if (watch.consecutiveFailures > 0) {
+    return automaticChecks
+      ? 'Latest check failed · an automatic retry is scheduled'
+      : 'Latest refresh failed · try again when source data is available';
+  }
+  if (!automaticChecks) {
+    return watch.lastCheckedAt
+      ? `Last refreshed ${formatTimestamp(watch.lastCheckedAt)} · refresh when you want a new comparison`
+      : 'Ready for the first manual refresh';
+  }
+  return watch.nextCheckAt
+    ? `Next automatic check ${formatTimestamp(watch.nextCheckAt)}`
+    : 'Automatic check queued';
 };
 
 const checkStatusLabel = (status: ObjectiveWatchCheck['status']) => ({
@@ -232,6 +250,24 @@ export function WatchesView({
 
   const activeWatchCount = watches.filter((watch) => !planHasEnded(watch)).length;
   const automaticChecks = policy?.automaticChecks === true;
+  const watchesWithChanges = watches.filter((watch) => !planHasEnded(watch) && (watch.lastChange?.reasons?.length || 0) > 0).length;
+  const watchesWithFailures = watches.filter((watch) => !planHasEnded(watch) && watch.consecutiveFailures > 0).length;
+  const nextScheduledWatch = automaticChecks
+    ? watches
+      .filter((watch) => !planHasEnded(watch) && watch.nextCheckAt)
+      .sort((left, right) => new Date(left.nextCheckAt || 0).getTime() - new Date(right.nextCheckAt || 0).getTime())[0]
+    : null;
+  const orderedWatches = useMemo(() => [...watches].sort((left, right) => {
+    const leftEnded = planHasEnded(left) ? 1 : 0;
+    const rightEnded = planHasEnded(right) ? 1 : 0;
+    if (leftEnded !== rightEnded) return leftEnded - rightEnded;
+    const leftAttention = left.consecutiveFailures > 0 || (left.lastChange?.reasons?.length || 0) > 0 ? 0 : 1;
+    const rightAttention = right.consecutiveFailures > 0 || (right.lastChange?.reasons?.length || 0) > 0 ? 0 : 1;
+    if (leftAttention !== rightAttention) return leftAttention - rightAttention;
+    return left.plan.forecastDate.localeCompare(right.plan.forecastDate)
+      || left.plan.alpineStartTime.localeCompare(right.plan.alpineStartTime)
+      || left.title.localeCompare(right.title);
+  }), [watches]);
 
   return (
     <div className={`${appShellClassName} watches-page-shell`} aria-busy={isViewPending || loading || Boolean(deletingId) || Boolean(updatingAlertsId) || Boolean(refreshingId) || Boolean(historyLoadingId)}>
@@ -281,12 +317,36 @@ export function WatchesView({
           </section>
         ) : (
           <>
-            <div className="watches-summary" role="status">
-              <BellRing aria-hidden />
-              <strong>{activeWatchCount}/{policy?.activeWatchLimit || 1}</strong> active {activeWatchCount === 1 ? 'watch' : 'watches'} · {automaticChecks ? 'Premium automatic checks' : 'Free manual checks'}
-            </div>
+            <section className="watches-overview" aria-label="Objective monitoring overview">
+              <div>
+                <span className="watches-overview-icon"><BellRing aria-hidden /></span>
+                <span>
+                  <small>Active watches</small>
+                  <strong>{activeWatchCount} <em>of {policy?.activeWatchLimit || 1}</em></strong>
+                </span>
+              </div>
+              <div className={watchesWithChanges > 0 ? 'has-attention' : ''}>
+                <span className="watches-overview-icon"><TriangleAlert aria-hidden /></span>
+                <span>
+                  <small>Changes recorded</small>
+                  <strong>{watchesWithChanges} <em>{watchesWithChanges === 1 ? 'objective' : 'objectives'}</em></strong>
+                </span>
+              </div>
+              <div className={watchesWithFailures > 0 ? 'has-error' : ''}>
+                <span className="watches-overview-icon">{automaticChecks ? <Clock3 aria-hidden /> : <RefreshCw aria-hidden />}</span>
+                <span>
+                  <small>{automaticChecks ? 'Next automatic check' : 'Monitoring cadence'}</small>
+                  <strong>
+                    {automaticChecks
+                      ? nextScheduledWatch?.nextCheckAt ? formatTimestamp(nextScheduledWatch.nextCheckAt) : 'Queued'
+                      : 'Manual refresh'}
+                  </strong>
+                  {watchesWithFailures > 0 && <em>{watchesWithFailures} {watchesWithFailures === 1 ? 'check needs' : 'checks need'} retry</em>}
+                </span>
+              </div>
+            </section>
             <section className="watches-list" aria-label="Watched objectives">
-              {watches.map((watch) => {
+              {orderedWatches.map((watch) => {
                 const isConfirming = confirmingId === watch.id;
                 const isDeleting = deletingId === watch.id;
                 return (
@@ -309,18 +369,18 @@ export function WatchesView({
                         <span><Timer aria-hidden /> {watch.plan.travelWindowHours}h window</span>
                         <span><MapPinned aria-hidden /> {watch.plan.lat.toFixed(4)}, {watch.plan.lon.toFixed(4)}</span>
                       </div>
+                      <p className={`watch-monitoring-detail ${watch.consecutiveFailures > 0 ? 'has-error' : ''}`}>
+                        {monitoringDetail(watch, automaticChecks)}
+                      </p>
                       {watch.lastChange?.reasons && watch.lastChange.reasons.length > 0 && (
                         <div className="watch-change" role="status">
-                          <strong>Important change detected {watch.lastChange.checkedAt ? formatTimestamp(watch.lastChange.checkedAt) : ''}</strong>
+                          <strong>Latest meaningful risk increase {watch.lastChange.checkedAt ? `· ${formatTimestamp(watch.lastChange.checkedAt)}` : ''}</strong>
                           <ul>
                             {watch.lastChange.reasons.map((reason) => (
                               <li key={`${reason.key || 'change'}:${reason.label || ''}`}>{reason.label || 'Conditions changed.'}</li>
                             ))}
                           </ul>
                         </div>
-                      )}
-                      {watch.consecutiveFailures > 0 && (
-                        <p className="watch-retry">The latest check failed. {automaticChecks ? 'A retry is scheduled automatically.' : 'Try a manual refresh again later.'}</p>
                       )}
                       {expandedHistoryId === watch.id && (
                         <section className="watch-history" id={`watch-history-${watch.id}`} aria-label={`${watch.title} check history`}>
