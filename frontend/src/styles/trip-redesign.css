@@ -468,6 +468,40 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   padding-top: 10px;
 }
 
+/* ---------- SELECTED DAY HOURLY WEATHER ---------- */
+.ssr-trip-hourly-head { align-items: flex-start; }
+.ssr-trip-hourly-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.ssr-trip-hourly-tabs button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--ssr-line-strong);
+  border-radius: 999px;
+  background: var(--ssr-surface);
+  color: var(--ssr-text-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ssr-trip-hourly-tabs button:hover { border-color: var(--ssr-brand); color: var(--ssr-brand-dark); }
+.ssr-trip-hourly-tabs button.is-active {
+  border-color: var(--ssr-brand-dark);
+  background: var(--ssr-brand-dark);
+  color: var(--ui-on-strong);
+}
+.ssr-trip-hourly-tabs svg { width: 13px; height: 13px; }
+.ssr-trip-hourly-chart { height: 280px; padding: 8px 16px 14px 8px; }
+.ssr-trip-hourly-chart .recharts-surface { overflow: visible; }
+.ssr-trip-hourly-chart .recharts-tooltip-wrapper { outline: none; }
+
 /* ---------- SELECTED DAY DETAIL ---------- */
 .ssr-trip-detail {
   margin-top: 0;
@@ -592,6 +626,10 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   .ssr-trip-section-head { padding-inline: 16px; }
   .ssr-trip-matrix { margin-inline: -1px; }
   .ssr-trip-section-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .ssr-trip-hourly-head { align-items: stretch; }
+  .ssr-trip-hourly-tabs { justify-content: flex-start; }
+  .ssr-trip-hourly-tabs button { flex: 1; justify-content: center; min-width: 118px; }
+  .ssr-trip-hourly-chart { height: 250px; padding-inline: 4px 10px; }
   .ssr-trip-days { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 82vw); grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; padding: 16px 16px 18px; }
   .ssr-trip-day { scroll-snap-align: start; }
   .ssr-trip-trend-chart { padding-inline: 10px; }
@@ -621,6 +659,7 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   .ssr-trip-trend,
   .ssr-trip-matrix,
   .ssr-trip-days-panel,
+  .ssr-trip-hourly,
   .ssr-trip-detail { break-inside: avoid; box-shadow: none; }
   .ssr-trip-matrix-scroll { overflow: visible; }
   .ssr-trip-matrix table { min-width: 0; font-size: 9px; }

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { fetchApi } from '../lib/api-client';
-import type { SafetyData, UserPreferences, DecisionLevel } from '../app/types';
+import type { SafetyData, UserPreferences, DecisionLevel, WeatherTrendPoint } from '../app/types';
 import { DATE_FMT, MIN_TRAVEL_WINDOW_HOURS, MAX_TRAVEL_WINDOW_HOURS } from '../app/constants';
 import { addDaysToIsoDate, normalizeForecastDate } from '../app/core';
 import { parseTimeInputMinutes } from '../app/core';
@@ -37,6 +37,7 @@ export type MultiDayTripForecastDay = {
   partialData: boolean;
   apiWarning: string | null;
   sourceIssuedTime: string | null;
+  hourlyWeather: WeatherTrendPoint[];
   deltas?: {
     score: number | null;
     tempHighF: number | null;
@@ -229,6 +230,7 @@ export function useTripForecast({
               partialData: Boolean(dayData?.partialData),
               apiWarning: dayData?.apiWarning || null,
               sourceIssuedTime: dayData?.weather?.issuedTime || null,
+              hourlyWeather: trendWindow,
             } as MultiDayTripForecastDay;
           } catch {
             return null;

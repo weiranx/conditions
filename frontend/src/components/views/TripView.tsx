@@ -29,6 +29,7 @@ import type { Suggestion } from '../../lib/search';
 import { SearchBox } from '../planner/SearchBox';
 import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
+import { TripHourlyWeatherChart } from './TripHourlyWeatherChart';
 import type { AppView } from '../../hooks/useUrlState';
 
 export interface TripViewProps {
@@ -857,6 +858,17 @@ export function TripView({
                 })}
               </div>
             </section>
+
+            {selected && (
+              <TripHourlyWeatherChart
+                points={selected.hourlyWeather}
+                dayLabel={`${weekdayLabel(selected.date)}, ${monthDayLabel(selected.date)}`}
+                windowLabel={`${tripStartDisplay} start · ${travelWindowHoursLabel} travel window`}
+                timeStyle={timeStyle}
+                formatTempDisplay={formatTempDisplay}
+                formatWindDisplay={formatWindDisplay}
+              />
+            )}
 
             {/* SELECTED DAY DETAIL */}
             {selected && (
