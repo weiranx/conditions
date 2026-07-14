@@ -105,6 +105,18 @@ export const formatObjectiveWatchCadence = (minutes: number) => {
   return `every ${minutes / 60} hours`;
 };
 
+const OBJECTIVE_WATCH_SCHEDULER_GRACE_MS = 6 * 60 * 1000;
+
+export const isObjectiveWatchCheckOverdue = (
+  watch: ObjectiveWatch | null,
+  policy: ObjectiveWatchPolicy | null,
+  now = Date.now(),
+) => {
+  if (!watch?.nextCheckAt || !policy?.automaticChecks || !policy.schedulerEnabled) return false;
+  const nextCheckAt = new Date(watch.nextCheckAt).getTime();
+  return Number.isFinite(nextCheckAt) && nextCheckAt + OBJECTIVE_WATCH_SCHEDULER_GRACE_MS < now;
+};
+
 const requirePolicy = (payload: unknown): ObjectiveWatchPolicy => {
   const policy = parseObjectiveWatchPolicy((payload as { policy?: unknown } | null)?.policy);
   if (!policy) throw new Error('Objective Watch returned an unexpected entitlement policy.');

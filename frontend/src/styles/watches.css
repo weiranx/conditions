@@ -29,6 +29,7 @@
 .watch-status > span { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
 .watch-status.is-ended { background: var(--ui-surface-subtle); color: var(--ui-text-3); }
 .watch-status.is-paused { background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface)); color: var(--ui-caution-ink); }
+.watch-status.is-overdue { background: color-mix(in oklch, var(--ui-risk-4) 10%, var(--ui-surface)); color: var(--ui-nogo-ink); }
 .watch-card-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--ui-text-2); font-size: 11px; }
 .watch-card-meta > span { display: inline-flex; align-items: center; gap: 6px; }
 .watch-card-meta svg { width: 14px; height: 14px; color: var(--ui-brand); }

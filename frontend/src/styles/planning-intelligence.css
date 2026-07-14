@@ -18,6 +18,18 @@
   color: var(--ssr-go-ink);
 }
 
+.objective-watch-status.paused {
+  background: color-mix(in srgb, var(--ssr-risk-3) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ssr-risk-3) 42%, var(--ssr-line));
+  color: var(--ssr-caution-ink);
+}
+
+.objective-watch-status.overdue {
+  background: color-mix(in srgb, var(--ssr-nogo) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ssr-nogo) 38%, var(--ssr-line));
+  color: var(--ssr-nogo-ink);
+}
+
 .objective-monitor-body {
   display: grid;
   gap: 14px;

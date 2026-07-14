@@ -3,10 +3,12 @@ import { BellRing, CheckCircle2, History, LoaderCircle, RefreshCw, Trash2, Trend
 import type { PersistedReport } from '../../app/report-storage';
 import { compareReports } from '../../app/report-changes';
 import { useAccount } from '../../hooks/useAccount';
+import { useVisibleRevalidation } from '../../hooks/useVisibleRevalidation';
 import {
   deleteObjectiveWatch,
   formatObjectiveWatchCadence,
   getObjectiveWatch,
+  isObjectiveWatchCheckOverdue,
   saveObjectiveWatch,
   type ObjectiveWatch,
   type ObjectiveWatchPolicy,
@@ -68,6 +70,13 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSou
     return () => controller.abort();
   }, [activeSavedReportId, report, userId]);
 
+  useVisibleRevalidation(async (signal) => {
+    const result = await getObjectiveWatch(report.plan, signal);
+    if (signal.aborted) return;
+    setWatch(result.watch);
+    setPolicy(result.policy);
+  }, Boolean(userId) && !mutating);
+
   const baseline = watch?.baselineReport || historyBaseline?.snapshot || null;
   const comparison = useMemo(() => baseline ? compareReports(report, baseline) : null, [baseline, report]);
   const baselineLabel = watch?.baselineReport
@@ -90,13 +99,23 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSou
     : reportSource === 'saved'
       ? `Watch this saved plan without changing the historical report. ${monitoringDescription}`
       : `Save the current report as a baseline. ${monitoringDescription}`;
+  const checkOverdue = isObjectiveWatchCheckOverdue(watch, policy);
   const watchMonitoringStatus = !policy?.automaticChecks
     ? 'Manual refresh is available from the Watch dashboard'
     : !policy.schedulerEnabled
       ? `Automatic checks are paused; configured cadence is ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`
       : watch?.nextCheckAt
-        ? `Automatic checks are active · ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`
+        ? checkOverdue
+          ? `Automatic check overdue since ${formatBaselineTime(watch.nextCheckAt)} · configured ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`
+          : `Next automatic check ${formatBaselineTime(watch.nextCheckAt)} · configured ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`
         : 'Automatic checks have ended for this plan date';
+  const watchStatus = !watch
+    ? { label: 'Not watched', className: '' }
+    : checkOverdue
+      ? { label: 'Check overdue', className: 'overdue' }
+      : policy?.automaticChecks && !policy.schedulerEnabled
+        ? { label: 'Checks paused', className: 'paused' }
+        : { label: 'Watching', className: 'active' };
 
   const saveWatch = async () => {
     if (mutating) return;
@@ -131,7 +150,7 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSou
     <section className="ssr-card objective-monitor-card" id="planner-section-monitor">
       <div className="ssr-card-h">
         <h2><span className="ssr-h-icon icon-blue"><BellRing size={16} /></span>Objective Watch</h2>
-        <span className={`objective-watch-status ${watch ? 'active' : ''}`}>{watch ? 'Watching' : 'Not watched'}</span>
+        <span className={`objective-watch-status ${watchStatus.className}`}>{watchStatus.label}</span>
       </div>
       <div className="objective-monitor-body">
         <div className="objective-watch-pane">
@@ -139,7 +158,7 @@ export function ObjectiveMonitoringCard({ report, activeSavedReportId, reportSou
             <strong>{watch ? `${watch.title} has a saved baseline` : 'Track this exact plan'}</strong>
             <p>
               {watch
-                ? `${watchMonitoringStatus}${watch.lastCheckedAt ? `; last checked ${formatBaselineTime(watch.lastCheckedAt)}` : ''}. New reports still compare with your saved baseline.`
+                ? `${watchMonitoringStatus}.${watch.lastCheckedAt ? ` Last checked ${formatBaselineTime(watch.lastCheckedAt)}.` : ''} New reports still compare with your saved baseline.`
                 : createDescription}
             </p>
           </div>

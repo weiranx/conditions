@@ -18,10 +18,12 @@ import {
 import type { PersistedReportPlan } from '../../app/report-storage';
 import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
+import { useVisibleRevalidation } from '../../hooks/useVisibleRevalidation';
 import {
   deleteObjectiveWatch,
   formatObjectiveWatchCadence,
   getObjectiveWatchChecks,
+  isObjectiveWatchCheckOverdue,
   listObjectiveWatches,
   refreshObjectiveWatch,
   setObjectiveWatchNotifications,
@@ -85,6 +87,7 @@ const monitoringLabel = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy) =>
   if (!policy.automaticChecks) return 'Manual refresh';
   if (!policy.schedulerEnabled) return 'Checks paused';
   if (!watch.nextCheckAt) return 'Check queued';
+  if (isObjectiveWatchCheckOverdue(watch, policy)) return 'Check overdue';
   const cadence = formatObjectiveWatchCadence(effectiveWatchIntervalMinutes(watch, policy));
   return `${cadence.charAt(0).toUpperCase()}${cadence.slice(1)}`;
 };
@@ -103,6 +106,9 @@ const monitoringDetail = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy) =
     return watch.lastCheckedAt
       ? `Last refreshed ${formatTimestamp(watch.lastCheckedAt)} · refresh when you want a new comparison`
       : 'Ready for the first manual refresh';
+  }
+  if (isObjectiveWatchCheckOverdue(watch, policy)) {
+    return `Automatic check overdue since ${formatTimestamp(watch.nextCheckAt!)} · configured cadence is ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}`;
   }
   return watch.nextCheckAt
     ? `Next automatic check ${formatTimestamp(watch.nextCheckAt)}`
@@ -179,6 +185,13 @@ export function WatchesView({
       });
     return () => controller.abort();
   }, [accountUserId]);
+
+  useVisibleRevalidation(async (signal) => {
+    const result = await listObjectiveWatches(signal);
+    if (signal.aborted) return;
+    setWatches(result.watches);
+    setPolicy(result.policy);
+  }, Boolean(accountUserId) && !deletingId && !refreshingId && !updatingAlertsId);
 
   const removeWatch = async (watch: ObjectiveWatch) => {
     if (deletingId) return;
@@ -272,6 +285,7 @@ export function WatchesView({
       .filter((watch) => !planHasEnded(watch) && watch.nextCheckAt)
       .sort((left, right) => new Date(left.nextCheckAt || 0).getTime() - new Date(right.nextCheckAt || 0).getTime())[0]
     : null;
+  const automaticCheckOverdue = isObjectiveWatchCheckOverdue(nextScheduledWatch || null, policy);
   const orderedWatches = useMemo(() => [...watches].sort((left, right) => {
     const leftEnded = planHasEnded(left) ? 1 : 0;
     const rightEnded = planHasEnded(right) ? 1 : 0;
@@ -347,10 +361,10 @@ export function WatchesView({
                   <strong>{watchesWithChanges} <em>{watchesWithChanges === 1 ? 'objective' : 'objectives'}</em></strong>
                 </span>
               </div>
-              <div className={watchesWithFailures > 0 ? 'has-error' : !schedulerEnabled && automaticChecks ? 'has-attention' : ''}>
+              <div className={watchesWithFailures > 0 || automaticCheckOverdue ? 'has-error' : !schedulerEnabled && automaticChecks ? 'has-attention' : ''}>
                 <span className="watches-overview-icon">{automaticChecks ? schedulerEnabled ? <Clock3 aria-hidden /> : <Pause aria-hidden /> : <RefreshCw aria-hidden />}</span>
                 <span>
-                  <small>{automaticChecksActive ? 'Next automatic check' : automaticChecks ? 'Automatic checks' : 'Monitoring cadence'}</small>
+                  <small>{automaticCheckOverdue ? 'Automatic check overdue' : automaticChecksActive ? 'Next automatic check' : automaticChecks ? 'Automatic checks' : 'Monitoring cadence'}</small>
                   <strong>
                     {automaticChecksActive
                       ? nextScheduledWatch?.nextCheckAt ? formatTimestamp(nextScheduledWatch.nextCheckAt) : 'Queued'
@@ -366,6 +380,7 @@ export function WatchesView({
               {orderedWatches.map((watch) => {
                 const isConfirming = confirmingId === watch.id;
                 const isDeleting = deletingId === watch.id;
+                const checkOverdue = isObjectiveWatchCheckOverdue(watch, policy);
                 return (
                   <article key={watch.id} className="watch-card">
                     <div className="watch-card-main">
@@ -378,7 +393,7 @@ export function WatchesView({
                           </span>
                           <h2>{watch.title}</h2>
                         </div>
-                        <span className={`watch-status ${planHasEnded(watch) ? 'is-ended' : !schedulerEnabled && automaticChecks ? 'is-paused' : ''}`}><span aria-hidden /> {monitoringLabel(watch, policy!)}</span>
+                        <span className={`watch-status ${planHasEnded(watch) ? 'is-ended' : checkOverdue ? 'is-overdue' : !schedulerEnabled && automaticChecks ? 'is-paused' : ''}`}><span aria-hidden /> {monitoringLabel(watch, policy!)}</span>
                       </div>
                       <div className="watch-card-meta">
                         <span><CalendarDays aria-hidden /> {formatPlanDate(watch.plan.forecastDate)}</span>
@@ -386,7 +401,7 @@ export function WatchesView({
                         <span><Timer aria-hidden /> {watch.plan.travelWindowHours}h window</span>
                         <span><MapPinned aria-hidden /> {watch.plan.lat.toFixed(4)}, {watch.plan.lon.toFixed(4)}</span>
                       </div>
-                      <p className={`watch-monitoring-detail ${watch.consecutiveFailures > 0 ? 'has-error' : ''}`}>
+                      <p className={`watch-monitoring-detail ${watch.consecutiveFailures > 0 || checkOverdue ? 'has-error' : ''}`}>
                         {monitoringDetail(watch, policy!)}
                       </p>
                       {watch.lastChange?.reasons && watch.lastChange.reasons.length > 0 && (
