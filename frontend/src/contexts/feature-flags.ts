@@ -7,6 +7,9 @@ export const PRODUCT_FEATURE_KEYS = [
   'startTimeComparisons',
   'terrainWindow',
   'objectiveWatch',
+  'gpxImport',
+  'reportHistory',
+  'reportSharing',
 ] as const;
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
@@ -18,6 +21,9 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   startTimeComparisons: true,
   terrainWindow: true,
   objectiveWatch: true,
+  gpxImport: true,
+  reportHistory: true,
+  reportSharing: true,
 };
 export const FEATURE_FLAGS_EVENT = 'summitsafe:product-feature-flags-change';
 

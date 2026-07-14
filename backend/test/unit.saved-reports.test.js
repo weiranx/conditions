@@ -58,6 +58,8 @@ const makeApp = ({
   user = { id: USER_ID },
   reportUsageService,
   tierService,
+  ensureReportHistoryEnabled,
+  ensureReportSharingEnabled,
 } = {}) => {
   const app = express();
   app.use(express.json({ limit: '5mb' }));
@@ -77,6 +79,8 @@ const makeApp = ({
     },
     reportUsageService: resolvedReportUsageService,
     tierService,
+    ...(ensureReportHistoryEnabled ? { ensureReportHistoryEnabled } : {}),
+    ...(ensureReportSharingEnabled ? { ensureReportSharingEnabled } : {}),
   });
   return app;
 };
@@ -98,6 +102,40 @@ test('creates cryptographically random URL-safe share tokens', () => {
   expect(first).toMatch(SHARE_TOKEN_PATTERN);
   expect(second).toMatch(SHARE_TOKEN_PATTERN);
   expect(second).not.toBe(first);
+});
+
+test('disabled report history blocks browsing before account or database access', async () => {
+  const query = jest.fn();
+  const response = await request(makeApp({
+    query,
+    ensureReportHistoryEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.code = 'FEATURE_DISABLED';
+      error.statusCode = 503;
+      throw error;
+    },
+  })).get('/api/account/reports');
+
+  expect(response.status).toBe(503);
+  expect(response.body).toEqual({ error: 'This feature is unavailable', code: 'FEATURE_DISABLED' });
+  expect(query).not.toHaveBeenCalled();
+});
+
+test('disabled report sharing blocks public snapshots before database access', async () => {
+  const query = jest.fn();
+  const response = await request(makeApp({
+    query,
+    ensureReportSharingEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.code = 'FEATURE_DISABLED';
+      error.statusCode = 503;
+      throw error;
+    },
+  })).get(`/api/reports/shared/${SHARE_TOKEN}`);
+
+  expect(response.status).toBe(503);
+  expect(response.body).toEqual({ error: 'This feature is unavailable', code: 'FEATURE_DISABLED' });
+  expect(query).not.toHaveBeenCalled();
 });
 
 test('saves a new report with every AI section under the signed-in user', async () => {

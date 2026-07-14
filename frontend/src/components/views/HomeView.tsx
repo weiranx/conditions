@@ -200,11 +200,11 @@ export function HomeView({
                   onSelectSuggestion={selectSuggestion}
                   onHoverSuggestion={setActiveSuggestionIndex}
                 />
-                <GpxObjectiveInput
+                {featureFlags.gpxImport && <GpxObjectiveInput
                   selectedRoute={importedGpxRoute}
                   onImport={importGpxObjective}
                   estimatedDurationHours={gpxEstimatedDurationHours}
-                />
+                />}
               </div>
 
               <div className="ssr-h-params">
@@ -432,13 +432,13 @@ export function HomeView({
               <p>Run the same objective and travel assumptions across several days, then carry your choice directly into Planner.</p>
               <button type="button" onClick={openTripToolView}>Open Trip tool <ArrowRight size={14} aria-hidden /></button>
             </article>}
-            <article>
+            {featureFlags.gpxImport && <article>
               <div className="ssr-h-tool-icon"><MapPinned aria-hidden /></div>
               <span>Inspect the route</span>
               <h3>Put the forecast on your line.</h3>
               <p>Upload a GPX track to see elevation, slope, aspect, and condition changes along the route—not just at one point.</p>
               <button type="button" onClick={openPlannerView}>Explore route analysis <ArrowRight size={14} aria-hidden /></button>
-            </article>
+            </article>}
             {featureFlags.startTimeComparisons && <article>
               <div className="ssr-h-tool-icon"><BarChart3 aria-hidden /></div>
               <span>Compare start times</span>

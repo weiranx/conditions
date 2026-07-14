@@ -561,6 +561,7 @@ function App() {
     && normalizeSuggestionText(searchQuery) !== normalizeSuggestionText(committedSearchQuery);
 
   const handleImportGpxObjective = useCallback((route: ParsedGpxRoute) => {
+    if (!featureFlags.gpxImport) return;
     const anchor = route.checkpoints.reduce((closest, checkpoint) => (
       Math.abs(checkpoint.progress_percent - 50) < Math.abs(closest.progress_percent - 50)
         ? checkpoint
@@ -587,6 +588,7 @@ function App() {
       type: 'route',
     });
   }, [
+    featureFlags.gpxImport,
     preferences.elevationUnit,
     recordRecentSuggestion,
     setActiveSuggestionIndex,
@@ -712,7 +714,10 @@ function App() {
     if (!featureFlags.tripPlanning && view === 'trip') {
       startViewChange(() => setView('planner'));
     }
-  }, [featureFlags.tripPlanning, setView, startViewChange, view]);
+    if (!featureFlags.reportHistory && view === 'history') {
+      startViewChange(() => setView('planner'));
+    }
+  }, [featureFlags.reportHistory, featureFlags.tripPlanning, setView, startViewChange, view]);
 
   useEffect(() => {
     if (!hasObjective || !safetyData) {
@@ -1077,7 +1082,7 @@ function App() {
   };
 
   const handleCopyLink = async () => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !featureFlags.reportSharing) {
       return;
     }
 
@@ -1310,6 +1315,11 @@ function App() {
 
   useEffect(() => {
     if (!sharedReportToken || sharedReportResolvedTokenRef.current === sharedReportToken) return;
+    if (!featureFlags.reportSharing) {
+      setSharedReportLoading(false);
+      setSharedReportError('Report sharing is currently unavailable.');
+      return;
+    }
     const controller = new AbortController();
     setSharedReportLoading(true);
     setSharedReportError(null);
@@ -1326,7 +1336,7 @@ function App() {
         setSharedReportError(loadError instanceof Error ? loadError.message : 'Could not retrieve this shared report.');
       });
     return () => controller.abort();
-  }, [handleOpenSavedReport, sharedReportLoadAttempt, sharedReportToken]);
+  }, [featureFlags.reportSharing, handleOpenSavedReport, sharedReportLoadAttempt, sharedReportToken]);
 
   const retrySharedReport = useCallback(() => {
     sharedReportResolvedTokenRef.current = null;
@@ -2173,7 +2183,7 @@ function App() {
       />
       </React.Activity>
 
-      <React.Activity name="history-page" mode={view === 'history' ? 'visible' : 'hidden'}>
+      <React.Activity name="history-page" mode={featureFlags.reportHistory && view === 'history' ? 'visible' : 'hidden'}>
       <HistoryView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}

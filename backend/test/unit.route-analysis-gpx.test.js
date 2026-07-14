@@ -90,6 +90,47 @@ test('disabled product route analysis blocks suggestions before checking AI', as
   expect(ensureAIEnabled).not.toHaveBeenCalled();
 });
 
+test('disabled GPX import rejects supplied checkpoints before account or provider access', async () => {
+  const app = express();
+  app.use(express.json());
+  const ensureAccountAccess = jest.fn();
+  const invokeSafetyHandler = jest.fn();
+  const askAI = jest.fn();
+  registerRouteAnalysisRoutes({
+    app,
+    askAI,
+    invokeSafetyHandler,
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    ensureAccountAccess,
+    ensureGpxImportEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.statusCode = 503;
+      throw error;
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Mount Rainier',
+      route: 'Imported track',
+      lat: 46.85,
+      lon: -121.76,
+      date: '2026-07-14',
+      waypoints: [
+        { name: 'Start', lat: 46.8, lon: -121.7 },
+        { name: 'Finish', lat: 46.85, lon: -121.76 },
+      ],
+    });
+
+  expect(response.status).toBe(503);
+  expect(response.body.error).toBe('This feature is unavailable');
+  expect(ensureAccountAccess).not.toHaveBeenCalled();
+  expect(invokeSafetyHandler).not.toHaveBeenCalled();
+  expect(askAI).not.toHaveBeenCalled();
+});
+
 test('disabled AI route assistance blocks suggestions without disabling route analysis', async () => {
   const app = express();
   const askAI = jest.fn();

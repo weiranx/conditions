@@ -4,6 +4,7 @@ const { randomBytes } = require('crypto');
 const { readSessionToken } = require('../auth/account-access');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const { createReportUsageLimitService } = require('../auth/report-usage-limit');
+const { assertFeatureEnabled } = require('../utils/feature-flags');
 
 const MAX_SAVED_REPORT_BYTES = 4 * 1024 * 1024;
 const SAVED_REPORT_LIST_LIMIT = 100;
@@ -75,8 +76,23 @@ const registerSavedReportRoutes = ({
   accountService,
   tierService,
   reportUsageService = createReportUsageLimitService({ database }),
+  ensureReportHistoryEnabled = () => assertFeatureEnabled('reportHistory'),
+  ensureReportSharingEnabled = () => assertFeatureEnabled('reportSharing'),
 } = {}) => {
   const setNoStore = (res) => res.setHeader('Cache-Control', 'no-store');
+
+  const requireFeature = (res, ensureEnabled, fallbackMessage) => {
+    try {
+      ensureEnabled();
+      return true;
+    } catch (error) {
+      res.status(error?.statusCode || 503).json({
+        error: error?.message || fallbackMessage,
+        ...(error?.code ? { code: error.code } : {}),
+      });
+      return false;
+    }
+  };
 
   const requireUser = async (req, res) => {
     setNoStore(res);
@@ -134,6 +150,7 @@ const registerSavedReportRoutes = ({
 
   app.get('/api/reports/shared/:shareToken', async (req, res) => {
     setNoStore(res);
+    if (!requireFeature(res, ensureReportSharingEnabled, 'Report sharing is unavailable.')) return;
     if (!ensureDatabase(res)) return;
     const shareToken = String(req.params.shareToken || '');
     if (!SHARE_TOKEN_PATTERN.test(shareToken)) {
@@ -162,6 +179,7 @@ const registerSavedReportRoutes = ({
   });
 
   app.get('/api/account/reports', async (req, res) => {
+    if (!requireFeature(res, ensureReportHistoryEnabled, 'Report history is unavailable.')) return;
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
     try {
@@ -237,6 +255,7 @@ const registerSavedReportRoutes = ({
   });
 
   app.get('/api/account/reports/:reportId', async (req, res) => {
+    if (!requireFeature(res, ensureReportHistoryEnabled, 'Report history is unavailable.')) return;
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
     if (!UUID_PATTERN.test(String(req.params.reportId || ''))) {

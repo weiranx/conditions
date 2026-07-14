@@ -13,6 +13,7 @@ import { SearchBox } from './SearchBox';
 import { GpxObjectiveInput } from './GpxObjectiveInput';
 import type { Suggestion } from '../../lib/search';
 import type { ParsedGpxRoute } from '../../lib/gpx';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 
 export interface PlannerHeaderProps {
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
@@ -61,7 +62,8 @@ export function PlannerHeader({
   gpxEstimatedDurationHours,
   activityLabel,
 }: PlannerHeaderProps) {
-  const plannerControls = hasObjective ? (
+  const featureFlags = useProductFeatureFlags();
+  const plannerControls = hasObjective && featureFlags.reportSharing ? (
     <nav className="header-nav" aria-label="Planner controls">
       <button type="button" className="secondary-btn header-nav-btn" onClick={handleCopyLink}>
         {copiedLink ? <Check size={14} /> : <Link2 size={14} />} <span className="nav-btn-label">{copiedLink ? 'Copied' : 'Share'}</span>
@@ -107,7 +109,7 @@ export function PlannerHeader({
           <>
             <div className="planner-search-heading">
               <span><MapPin size={14} aria-hidden /> Choose a location or route</span>
-              <small>Search a route by name or upload its GPX track</small>
+              <small>{featureFlags.gpxImport ? 'Search a route by name or upload its GPX track' : 'Search for a location or named route'}</small>
             </div>
             <SearchBox
               searchWrapperRef={searchWrapperRef}
@@ -127,17 +129,19 @@ export function PlannerHeader({
               onSelectSuggestion={selectSuggestion}
               onHoverSuggestion={setActiveSuggestionIndex}
             />
-            <GpxObjectiveInput
+            {featureFlags.gpxImport && <GpxObjectiveInput
               selectedRoute={importedGpxRoute}
               onImport={handleImportGpxObjective}
               estimatedDurationHours={gpxEstimatedDurationHours}
-            />
+            />}
 
             <div className="planner-search-footer">
               <p>
                 {importedGpxRoute
                   ? 'Base conditions use the route midpoint; the generated brief keeps the full track ready for checkpoint analysis.'
-                  : 'Search a place or named route, or upload a GPX track. You’ll review timing before generating the brief.'}
+                  : featureFlags.gpxImport
+                    ? 'Search a place or named route, or upload a GPX track. You’ll review timing before generating the brief.'
+                    : 'Search a place or named route. You’ll review timing before generating the brief.'}
               </p>
               {plannerControls}
             </div>

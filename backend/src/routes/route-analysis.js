@@ -246,6 +246,7 @@ const registerRouteAnalysisRoutes = ({
   fetchHeaders,
   ensureAccountAccess = denyUnconfiguredAccountAccess,
   ensureRouteAnalysisEnabled = () => assertFeatureEnabled('routeAnalysis'),
+  ensureGpxImportEnabled = () => assertFeatureEnabled('gpxImport'),
   ensureAIEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
 }) => {
   const routeDataService = createRouteDataService({
@@ -326,6 +327,13 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       ensureRouteAnalysisEnabled();
     } catch (error) {
       return res.status(error.statusCode || 503).json({ error: error.message || 'Route analysis is unavailable' });
+    }
+    if (suppliedWaypoints) {
+      try {
+        ensureGpxImportEnabled();
+      } catch (error) {
+        return res.status(error.statusCode || 503).json({ error: error.message || 'GPX import is unavailable' });
+      }
     }
     if (!(await ensureAccountAccess(req, res))) return;
     let aiFeatureEnabled = true;

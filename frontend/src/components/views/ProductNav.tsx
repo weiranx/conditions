@@ -25,7 +25,7 @@ export function ProductNav({
     ...(featureFlags.tripPlanning
       ? [{ id: 'trip' as const, label: 'Compare', icon: CalendarRange, action: openTripToolView || (() => navigateToView('trip')) }]
       : []),
-    ...(user
+    ...(user && featureFlags.reportHistory
       ? [{ id: 'history' as const, label: 'History', icon: FileClock, action: () => navigateToView('history') }]
       : []),
     {

@@ -14,6 +14,7 @@ import { copyTextToClipboard } from '../../app/clipboard';
 import { parsePersistedReport, type PersistedReport } from '../../app/report-storage';
 import type { AppView } from '../../hooks/useUrlState';
 import { useAccount } from '../../hooks/useAccount';
+import { useProductFeatureFlags } from '../../contexts/feature-flags';
 import {
   buildSavedReportShareUrl,
   getSavedReport,
@@ -56,6 +57,7 @@ export function HistoryView({
   onOpenReport,
 }: HistoryViewProps) {
   const account = useAccount();
+  const featureFlags = useProductFeatureFlags();
   const accountUserId = account.user?.id;
   const [reports, setReports] = useState<SavedReportSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -186,7 +188,7 @@ export function HistoryView({
                       : <ArrowRight className="history-arrow" aria-hidden />}
                   </span>
                 </button>
-                <button
+                {featureFlags.reportSharing && <button
                   type="button"
                   className="history-share"
                   onClick={() => void shareReport(report)}
@@ -194,7 +196,7 @@ export function HistoryView({
                 >
                   {copiedId === report.id ? <Check aria-hidden /> : <Share2 aria-hidden />}
                   <span>{copiedId === report.id ? 'Copied' : 'Share'}</span>
-                </button>
+                </button>}
               </article>
             ))}
           </section>

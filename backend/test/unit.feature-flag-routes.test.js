@@ -19,6 +19,9 @@ test('public feature flag endpoint returns current safe values without caching',
     startTimeComparisons: true,
     terrainWindow: true,
     objectiveWatch: true,
+    gpxImport: true,
+    reportHistory: true,
+    reportSharing: true,
   });
 });
 

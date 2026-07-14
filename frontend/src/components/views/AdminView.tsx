@@ -17,6 +17,7 @@ import {
   Download,
   ExternalLink,
   FileJson,
+  FileUp,
   Gauge,
   Grid3X3,
   HardDrive,
@@ -39,6 +40,7 @@ import {
   Search,
   Send,
   Server,
+  Share2,
   ShieldCheck,
   Sparkles,
   UserCheck,
@@ -321,6 +323,24 @@ const PRODUCT_FEATURE_CONTROLS = [
     label: 'Objective Watch',
     description: 'Lets signed-in users save a baseline and compare later reports for the same objective.',
     icon: BellRing,
+  },
+  {
+    key: 'gpxImport',
+    label: 'GPX import',
+    description: 'Lets users upload GPX tracks and analyze supplied route checkpoints.',
+    icon: FileUp,
+  },
+  {
+    key: 'reportHistory',
+    label: 'Report history',
+    description: 'Shows signed-in users their previously generated report snapshots.',
+    icon: History,
+  },
+  {
+    key: 'reportSharing',
+    label: 'Report sharing',
+    description: 'Shows share-link controls and allows public read-only report links to open.',
+    icon: Share2,
   },
 ] as const satisfies ReadonlyArray<{
   key: ProductFeatureKey;

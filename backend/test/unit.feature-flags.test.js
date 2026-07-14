@@ -20,6 +20,9 @@ test('product feature flags default to enabled and update independently', async 
       startTimeComparisons: true,
       terrainWindow: true,
       objectiveWatch: true,
+      gpxImport: true,
+      reportHistory: true,
+      reportSharing: true,
     },
   });
 
@@ -45,6 +48,9 @@ test('product feature flags can be restored to enabled defaults', async () => {
     startTimeComparisons: false,
     terrainWindow: false,
     objectiveWatch: false,
+    gpxImport: false,
+    reportHistory: false,
+    reportSharing: false,
   });
   const status = await resetFeatureFlags();
 
@@ -55,6 +61,9 @@ test('product feature flags can be restored to enabled defaults', async () => {
     startTimeComparisons: true,
     terrainWindow: true,
     objectiveWatch: true,
+    gpxImport: true,
+    reportHistory: true,
+    reportSharing: true,
   });
   expect(getFeatureFlags()).toEqual(status.flags);
 });
@@ -67,6 +76,9 @@ test('product feature flags load from PostgreSQL', async () => {
     startTimeComparisons: false,
     terrainWindow: false,
     objectiveWatch: true,
+    gpxImport: false,
+    reportHistory: true,
+    reportSharing: false,
   });
   jest.doMock('../src/db/app-data-store', () => ({
     appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
@@ -83,6 +95,9 @@ test('product feature flags load from PostgreSQL', async () => {
       startTimeComparisons: false,
       terrainWindow: false,
       objectiveWatch: true,
+      gpxImport: false,
+      reportHistory: true,
+      reportSharing: false,
   });
   expect(featureFlagStore.getFeatureFlagStatus().persistent).toBe(true);
 });
@@ -96,4 +111,7 @@ test('disabled product features fail closed', async () => {
   expect(() => assertFeatureEnabled('satelliteImagery')).not.toThrow();
   expect(() => assertFeatureEnabled('terrainWindow')).not.toThrow();
   expect(() => assertFeatureEnabled('objectiveWatch')).not.toThrow();
+  expect(() => assertFeatureEnabled('gpxImport')).not.toThrow();
+  expect(() => assertFeatureEnabled('reportHistory')).not.toThrow();
+  expect(() => assertFeatureEnabled('reportSharing')).not.toThrow();
 });
