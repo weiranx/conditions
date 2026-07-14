@@ -467,6 +467,12 @@ const PRODUCT_FEATURE_CONTROLS = [
     description: 'Shows supporting readings, pressure trends, and visibility context.',
     icon: Activity,
   },
+  {
+    key: 'avalancheDetails',
+    label: 'Avalanche details',
+    description: 'Shows the dedicated avalanche forecast, problem terrain, and official-center detail module.',
+    icon: AlertTriangle,
+  },
 ] as const satisfies ReadonlyArray<{
   key: ProductFeatureKey;
   label: string;

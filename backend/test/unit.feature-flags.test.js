@@ -35,6 +35,7 @@ test('product feature flags default to enabled and update independently', async 
       daylightTimeline: true,
       scoreBreakdown: true,
       weatherContextDetails: true,
+      avalancheDetails: true,
     },
   });
 
@@ -75,6 +76,7 @@ test('product feature flags can be restored to enabled defaults', async () => {
     daylightTimeline: false,
     scoreBreakdown: false,
     weatherContextDetails: false,
+    avalancheDetails: false,
   });
   const status = await resetFeatureFlags();
 
@@ -100,6 +102,7 @@ test('product feature flags can be restored to enabled defaults', async () => {
     daylightTimeline: true,
     scoreBreakdown: true,
     weatherContextDetails: true,
+    avalancheDetails: true,
   });
   expect(getFeatureFlags()).toEqual(status.flags);
 });
@@ -127,6 +130,7 @@ test('product feature flags load from PostgreSQL', async () => {
     daylightTimeline: true,
     scoreBreakdown: false,
     weatherContextDetails: true,
+    avalancheDetails: false,
   });
   jest.doMock('../src/db/app-data-store', () => ({
     appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
@@ -158,6 +162,7 @@ test('product feature flags load from PostgreSQL', async () => {
       daylightTimeline: true,
       scoreBreakdown: false,
       weatherContextDetails: true,
+      avalancheDetails: false,
   });
   expect(featureFlagStore.getFeatureFlagStatus().persistent).toBe(true);
 });
@@ -186,4 +191,5 @@ test('disabled product features fail closed', async () => {
   expect(() => assertFeatureEnabled('daylightTimeline')).not.toThrow();
   expect(() => assertFeatureEnabled('scoreBreakdown')).not.toThrow();
   expect(() => assertFeatureEnabled('weatherContextDetails')).not.toThrow();
+  expect(() => assertFeatureEnabled('avalancheDetails')).not.toThrow();
 });

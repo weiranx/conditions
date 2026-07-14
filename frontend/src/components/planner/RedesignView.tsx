@@ -926,7 +926,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     { id: 'planner-section-checks', label: 'Checks', present: Boolean(shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0) },
     { id: 'planner-section-weather', label: 'Weather', present: true },
     { id: 'planner-section-wind', label: 'Wind', present: featureFlags.windLoadingDetails && Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
-    { id: 'planner-section-avalanche', label: 'Avalanche', present: true },
+    { id: 'planner-section-avalanche', label: 'Avalanche', present: featureFlags.avalancheDetails },
     { id: 'planner-section-snowpack', label: 'Snowpack', present: featureFlags.snowpackDetails && Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
     { id: 'planner-section-observations', label: 'Observations', present: featureFlags.fieldObservations && hasLocalObservations },
     { id: 'planner-section-alerts', label: 'Alerts', present: true },
@@ -1643,7 +1643,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       {/* SIDEBAR */}
       <aside className="ssr-side">
         {/* AVALANCHE */}
-        <section className="ssr-card" id="planner-section-avalanche">
+        {featureFlags.avalancheDetails && <section className="ssr-card" id="planner-section-avalanche">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-orange"><AlertTriangle size={16} /></span>
@@ -1736,7 +1736,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               </a>
             )}
           </div>
-        </section>
+        </section>}
 
         {/* SNOWPACK */}
         {featureFlags.snowpackDetails && safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (

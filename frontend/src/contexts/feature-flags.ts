@@ -22,6 +22,7 @@ export const PRODUCT_FEATURE_KEYS = [
   'daylightTimeline',
   'scoreBreakdown',
   'weatherContextDetails',
+  'avalancheDetails',
 ] as const;
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
@@ -48,6 +49,7 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   daylightTimeline: true,
   scoreBreakdown: true,
   weatherContextDetails: true,
+  avalancheDetails: true,
 };
 export const FEATURE_FLAGS_EVENT = 'summitsafe:product-feature-flags-change';
 

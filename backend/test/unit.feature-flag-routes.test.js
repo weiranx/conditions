@@ -34,6 +34,7 @@ test('public feature flag endpoint returns current safe values without caching',
     daylightTimeline: true,
     scoreBreakdown: true,
     weatherContextDetails: true,
+    avalancheDetails: true,
   });
 });
 
