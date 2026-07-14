@@ -76,4 +76,30 @@ describe('transactional email service', () => {
     expect(message.html).toContain('https://conditions.example.com/watches');
     expect(options).toEqual({ idempotencyKey: 'objective-watch/watch-7/event-4/abc123' });
   });
+
+  test('sends owner health alerts with incident-scoped idempotency', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'health-email-123' }, error: null });
+    const service = createEmailService({
+      apiKey: 're_test',
+      fromAddress: 'accounts@mail.example.com',
+      appBaseUrl: 'https://conditions.example.com',
+      client: { emails: { send } },
+    });
+
+    await service.sendHealthStatusEmail({
+      incidentId: 'incident-42-opened',
+      status: 'unhealthy',
+      summary: 'PostgreSQL is unavailable (<connection failed>).',
+      checkedAt: '2026-07-14T12:00:00.000Z',
+      incidentStartedAt: '2026-07-14T12:00:00.000Z',
+      to: 'owner@example.com',
+    });
+
+    const [message, options] = send.mock.calls[0];
+    expect(message.to).toBe('owner@example.com');
+    expect(message.subject).toContain('unhealthy');
+    expect(message.html).toContain('&lt;connection failed&gt;');
+    expect(message.html).not.toContain('<connection failed>');
+    expect(options).toEqual({ idempotencyKey: 'health-monitor/incident-42-opened/unhealthy' });
+  });
 });

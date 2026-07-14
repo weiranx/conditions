@@ -8,8 +8,7 @@ const { getSystemResources } = require('../utils/system-resources');
 const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
 const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
-
-const ADMIN_ACCOUNT_EMAIL = 'weiranxiong@gmail.com';
+const { isAdminAccount } = require('../auth/admin-account');
 
 const isRouteWaypointEntry = (entry) =>
   typeof entry?.name === 'string' && entry.name.startsWith('Route waypoint:');
@@ -74,11 +73,6 @@ const clearReportLogs = async () => {
   memoryReportLogs.splice(0);
   return cleared;
 };
-
-const isAdminAccount = (user) => (
-  typeof user?.email === 'string'
-  && user.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL
-);
 
 const getUserManagementError = (error, fallback) => {
   if (error?.code === 'ACCOUNT_NOT_FOUND') return { status: 404, message: error.message };

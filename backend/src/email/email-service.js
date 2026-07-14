@@ -1,7 +1,12 @@
 'use strict';
 
 const { Resend } = require('resend');
-const { buildObjectiveWatchChangeEmail, buildPasswordResetEmail, buildVerificationEmail } = require('./templates');
+const {
+  buildHealthStatusEmail,
+  buildObjectiveWatchChangeEmail,
+  buildPasswordResetEmail,
+  buildVerificationEmail,
+} = require('./templates');
 
 const normalizeBaseUrl = (value) => {
   const raw = String(value || '').trim();
@@ -103,8 +108,28 @@ const createEmailService = ({
     });
   };
 
+  const sendHealthStatusEmail = ({ incidentId, status, summary, checkedAt, incidentStartedAt, to }) => {
+    if (!normalizedBaseUrl) {
+      const error = new Error('Email links are not configured.');
+      error.code = 'EMAIL_SERVICE_UNAVAILABLE';
+      throw error;
+    }
+    return send({
+      to,
+      template: buildHealthStatusEmail({
+        status,
+        summary,
+        checkedAt,
+        incidentStartedAt,
+        actionUrl: normalizedBaseUrl.toString(),
+      }),
+      idempotencyKey: `health-monitor/${incidentId}/${status}`,
+    });
+  };
+
   return {
     available,
+    sendHealthStatusEmail,
     sendObjectiveWatchChangeEmail,
     sendPasswordResetEmail,
     sendVerificationEmail,

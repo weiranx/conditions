@@ -70,6 +70,28 @@ Monitor for:
 - `ok: true` in the body
 - Timestamp within the last 30 seconds (confirm liveness, not just connectivity)
 
+The `health-monitor` Compose worker checks the internal readiness endpoint every
+five minutes by default. It runs independently of the backend, so it can alert
+when the backend is unreachable as well as when PostgreSQL or an enabled AI
+provider is unavailable. It emails `HEALTH_ALERT_EMAIL` immediately when an
+incident opens, sends a reminder every six hours while the service remains
+unhealthy, and sends a recovery notice. Incident state is retained in the
+`health-monitor-data` volume so ordinary container recreations do not duplicate
+alerts.
+
+Configure the schedule in `/opt/summitsafe/.env`:
+
+```dotenv
+HEALTH_ALERT_EMAIL=weiranxiong@gmail.com
+HEALTH_MONITOR_INTERVAL_SECONDS=300
+HEALTH_ALERT_REMINDER_SECONDS=21600
+```
+
+`RESEND_API_KEY`, `EMAIL_FROM`, and `APP_BASE_URL` must also be configured. The
+default `HEALTH_MONITOR_URL=http://backend:3001/healthz` checks the application
+and its database from the private Compose network. Set it to the public API
+health URL to include nginx, DNS, and TLS in the same check.
+
 ---
 
 ## Logging and Debugging
@@ -79,6 +101,7 @@ Monitor for:
 - `5xx` responses are logged in all environments.
 - Set `DEBUG_AVY=true` to enable verbose avalanche pipeline debug logs (useful when diagnosing zone-matching or bulletin parsing issues).
 - The host runs `scripts/objective-watch-cron.sh` at minute 7 hourly. Successful runs log an `Objective Watch cron completed` summary from the backend; failures cause the trigger script to exit non-zero.
+- The `health-monitor` container logs every check and email transition independently of backend logs.
 
 ### Objective Watch scheduling
 

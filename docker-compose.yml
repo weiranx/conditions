@@ -31,6 +31,27 @@ services:
       start_period: 15s
       retries: 3
 
+  health-monitor:
+    image: summitsafe-backend:latest
+    container_name: summitsafe-health-monitor
+    restart: unless-stopped
+    command: ["node", "scripts/run-health-monitor.js"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HEALTH_MONITOR_URL: ${HEALTH_MONITOR_URL:-http://backend:3001/healthz}
+      HEALTH_ALERT_EMAIL: ${HEALTH_ALERT_EMAIL:-weiranxiong@gmail.com}
+      HEALTH_MONITOR_INTERVAL_SECONDS: ${HEALTH_MONITOR_INTERVAL_SECONDS:-300}
+      HEALTH_ALERT_REMINDER_SECONDS: ${HEALTH_ALERT_REMINDER_SECONDS:-21600}
+    volumes:
+      - health-monitor-data:/app/data
+    # The image healthcheck targets the backend HTTP server. This worker has no
+    # listening port; its failures are logged and restart: unless-stopped keeps
+    # the monitoring loop alive independently of the backend container.
+    healthcheck:
+      disable: true
+
   postgres:
     image: postgres:17-alpine
     container_name: summitsafe-postgres
@@ -54,5 +75,6 @@ services:
       start_period: 20s
 
 volumes:
+  health-monitor-data:
   report-logs-data:
   postgres-data:

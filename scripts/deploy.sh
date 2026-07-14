@@ -156,6 +156,16 @@ if [ "$backend_ready" != true ]; then
   exit 1
 fi
 
+if grep -Eq '^RESEND_API_KEY=.+$' .env \
+  && grep -Eq '^EMAIL_FROM=.+$' .env \
+  && grep -Eq '^APP_BASE_URL=.+$' .env; then
+  echo "==> Starting production health monitor..."
+  docker compose up -d --force-recreate --no-deps health-monitor
+else
+  echo "==> Health alerting disabled (RESEND_API_KEY, EMAIL_FROM, and APP_BASE_URL are required)."
+  docker compose stop health-monitor >/dev/null 2>&1 || true
+fi
+
 if grep -Eq '^OBJECTIVE_WATCH_CRON_SECRET=.+$' .env; then
   if command -v crontab >/dev/null 2>&1; then
     echo "==> Installing Objective Watch hourly cron..."

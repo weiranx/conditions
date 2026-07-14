@@ -165,6 +165,14 @@ if [ "$backend_ready" != true ]; then
 fi
 
 echo "==> Backend health confirms the PostgreSQL connection."
+if grep -Eq '^RESEND_API_KEY=.+$' "$ENV_FILE" \
+  && grep -Eq '^EMAIL_FROM=.+$' "$ENV_FILE" \
+  && grep -Eq '^APP_BASE_URL=.+$' "$ENV_FILE"; then
+  echo "==> Starting production health monitor..."
+  docker compose up -d --force-recreate --no-deps health-monitor
+else
+  echo "==> Health alerting disabled until RESEND_API_KEY, EMAIL_FROM, and APP_BASE_URL are configured."
+fi
 echo "==> Data volume: $VOLUME_NAME"
 echo "==> DATABASE_URL is stored in $ENV_FILE (the password was not printed)."
 echo "==> PostgreSQL has no public host port; only Compose services can connect."

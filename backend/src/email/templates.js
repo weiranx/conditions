@@ -103,7 +103,35 @@ const buildObjectiveWatchChangeEmail = ({ displayName, title, reasons, actionUrl
   };
 };
 
+const buildHealthStatusEmail = ({ status, summary, checkedAt, incidentStartedAt, actionUrl }) => {
+  const recovered = status === 'recovered';
+  const safeSummary = String(summary || (recovered ? 'All monitored services are healthy.' : 'The health check failed.'))
+    .replace(/[\r\n]+/gu, ' ')
+    .trim()
+    .slice(0, 500);
+  const heading = recovered ? 'Service health recovered' : 'Service health alert';
+  const subject = recovered
+    ? `${APP_NAME} service health recovered`
+    : `${APP_NAME} service is unhealthy`;
+  const incidentLine = incidentStartedAt ? `Incident started: ${incidentStartedAt}\n` : '';
+  return {
+    subject,
+    text: `${heading}\n\n${safeSummary}\n\n${incidentLine}Checked at: ${checkedAt}\n\n${actionUrl}`,
+    html: emailShell({
+      preview: subject,
+      heading,
+      body: `<p style="margin:0 0 14px;">${escapeHtml(safeSummary)}</p><p style="margin:0;color:#6d786f;font-size:13px;">${incidentStartedAt ? `Incident started: ${escapeHtml(incidentStartedAt)}<br>` : ''}Checked at: ${escapeHtml(checkedAt)}</p>`,
+      actionLabel: 'Open Backcountry Conditions',
+      actionUrl,
+      footer: recovered
+        ? 'This recovery was detected automatically by the production health monitor.'
+        : 'The monitor will keep checking automatically and send a recovery notice when service returns.',
+    }),
+  };
+};
+
 module.exports = {
+  buildHealthStatusEmail,
   buildObjectiveWatchChangeEmail,
   buildPasswordResetEmail,
   buildVerificationEmail,

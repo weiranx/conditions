@@ -309,6 +309,17 @@ curl https://api.example.com/healthz
 # {"ok":true,"service":"summitsafe-backend","timestamp":"..."}
 ```
 
+When account email delivery is configured, the deploy also starts the
+independent `health-monitor` worker. It checks every five minutes and sends
+incident, reminder, and recovery emails to `weiranxiong@gmail.com` by default.
+Override `HEALTH_ALERT_EMAIL` or the interval settings in `/opt/summitsafe/.env`,
+then run `./scripts/backend-reload-env.sh` to apply them. Verify the worker with:
+
+```bash
+docker compose ps health-monitor
+docker compose logs --tail 50 health-monitor
+```
+
 ---
 
 ## 10. Wire Up GitHub Actions CI/CD
@@ -350,7 +361,7 @@ Compose environment file.
 
 **View live logs:**
 ```bash
-docker compose -f /opt/summitsafe/docker-compose.yml logs -f backend
+docker compose -f /opt/summitsafe/docker-compose.yml logs -f backend health-monitor
 ```
 
 **Health check:**
