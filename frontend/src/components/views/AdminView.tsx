@@ -540,6 +540,17 @@ type AnalyticsRange = '6h' | '24h' | '7d';
 type AuditFilter = 'all' | 'accounts' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
 type UserStatusFilter = 'all' | 'active' | 'suspended' | 'free' | 'premium' | 'verified' | 'unverified';
 type AdminSection = 'overview' | 'users' | 'operations' | 'analytics' | 'activity';
+type AdminAttentionKey = 'reports' | 'slow' | 'ai' | 'diagnostics' | 'scheduler' | 'resources' | 'suspended';
+
+interface AdminAttentionSignal {
+  key: AdminAttentionKey;
+  label: string;
+  detail: string;
+  count: number;
+  section: AdminSection;
+  icon: typeof AlertTriangle;
+  tone: 'warning' | 'critical';
+}
 
 const ADMIN_SECTIONS = [
   { value: 'overview', label: 'Overview', description: 'Platform status', icon: LayoutDashboard },
@@ -553,6 +564,29 @@ const ADMIN_SECTIONS = [
   description: string;
   icon: typeof LayoutDashboard;
 }>;
+
+const ADMIN_SECTION_STORAGE_KEY = 'summitsafe:admin-section:v1';
+const ADMIN_RANGE_STORAGE_KEY = 'summitsafe:admin-range:v1';
+
+const readStoredAdminSection = (): AdminSection => {
+  if (typeof window === 'undefined') return 'overview';
+  try {
+    const stored = window.sessionStorage.getItem(ADMIN_SECTION_STORAGE_KEY);
+    return ADMIN_SECTIONS.some((section) => section.value === stored) ? stored as AdminSection : 'overview';
+  } catch {
+    return 'overview';
+  }
+};
+
+const readStoredAnalyticsRange = (): AnalyticsRange => {
+  if (typeof window === 'undefined') return '7d';
+  try {
+    const stored = window.sessionStorage.getItem(ADMIN_RANGE_STORAGE_KEY);
+    return stored === '6h' || stored === '24h' || stored === '7d' ? stored : '7d';
+  } catch {
+    return '7d';
+  }
+};
 
 const ANALYTICS_RANGES: Array<{
   value: AnalyticsRange;
@@ -677,6 +711,11 @@ const schedulerHealthLabel = (health: ObjectiveWatchSchedulerStatus['health']) =
   unhealthy: 'Heartbeat overdue',
   failed: 'Latest run failed',
 }[health]);
+
+const formatCheckInterval = (minutes: number) => {
+  const hours = minutes / 60;
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h cadence`;
+};
 
 function formatAccountDate(timestamp: string | null): string {
   if (!timestamp) return 'No activity yet';
@@ -1092,14 +1131,23 @@ function AdminDashboard() {
   const [auditQuery, setAuditQuery] = useState('');
   const [userQuery, setUserQuery] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all');
-  const [activeSection, setActiveSection] = useState<AdminSection>('overview');
-  const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('7d');
+  const [activeSection, setActiveSection] = useState<AdminSection>(readStoredAdminSection);
+  const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>(readStoredAnalyticsRange);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [visibleLogCount, setVisibleLogCount] = useState(LOG_PAGE_SIZE);
   const hasLoadedRef = useRef(false);
   const dashboardContentRef = useRef<HTMLDivElement>(null);
   const requestActivityRef = useRef<HTMLElement>(null);
   const aiUsageRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(ADMIN_SECTION_STORAGE_KEY, activeSection);
+      window.sessionStorage.setItem(ADMIN_RANGE_STORAGE_KEY, analyticsRange);
+    } catch {
+      // Admin navigation remains usable when browser storage is unavailable.
+    }
+  }, [activeSection, analyticsRange]);
 
   const fetchHealthSnapshot = useCallback(async () => {
     const startedAt = performance.now();
@@ -2088,11 +2136,81 @@ function AdminDashboard() {
   const objectiveWatchSchedulerNeedsAttention = objectiveWatchScheduler
     ? ['not_configured', 'unhealthy', 'failed'].includes(objectiveWatchScheduler.health)
     : false;
-  const dashboardAttentionCount = metrics.issues + slowReports + aiMetrics.failures + diagnosticSummary.failed + userSummary.suspended + (objectiveWatchSchedulerNeedsAttention ? 1 : 0);
+  const resourceWarningDetails = [
+    systemResources && systemResources.memory.usagePercent >= 85 ? `RAM ${systemResources.memory.usagePercent}% used` : null,
+    systemResources?.disk && systemResources.disk.usagePercent >= 85 ? `Disk ${systemResources.disk.usagePercent}% used` : null,
+  ].filter((value): value is string => Boolean(value));
+  const allAttentionSignals: AdminAttentionSignal[] = [
+    {
+      key: 'reports',
+      label: 'Report issues',
+      detail: 'Failed or partial responses',
+      count: metrics.issues,
+      section: 'analytics',
+      icon: AlertTriangle,
+      tone: 'warning',
+    },
+    {
+      key: 'slow',
+      label: 'Slow reports',
+      detail: 'Responses taking 10 seconds or longer',
+      count: slowReports,
+      section: 'analytics',
+      icon: Clock3,
+      tone: 'warning',
+    },
+    {
+      key: 'ai',
+      label: 'AI failures',
+      detail: 'Unsuccessful model calls',
+      count: aiMetrics.failures,
+      section: 'analytics',
+      icon: Bot,
+      tone: 'warning',
+    },
+    {
+      key: 'diagnostics',
+      label: 'Service failures',
+      detail: 'Infrastructure or provider diagnostics failed',
+      count: diagnosticSummary.failed,
+      section: 'operations',
+      icon: Server,
+      tone: 'critical',
+    },
+    {
+      key: 'scheduler',
+      label: 'Objective Watch scheduler',
+      detail: objectiveWatchScheduler?.message || 'Scheduler health is unavailable',
+      count: objectiveWatchSchedulerNeedsAttention ? 1 : 0,
+      section: 'operations',
+      icon: BellRing,
+      tone: objectiveWatchScheduler?.health === 'failed' || objectiveWatchScheduler?.health === 'unhealthy' ? 'critical' : 'warning',
+    },
+    {
+      key: 'resources',
+      label: 'Resource pressure',
+      detail: resourceWarningDetails.join(' · ') || 'RAM and disk usage are below warning levels',
+      count: resourceWarningDetails.length,
+      section: 'operations',
+      icon: Gauge,
+      tone: 'critical',
+    },
+    {
+      key: 'suspended',
+      label: 'Suspended accounts',
+      detail: 'Users without platform access',
+      count: userSummary.suspended,
+      section: 'users',
+      icon: Ban,
+      tone: 'warning',
+    },
+  ];
+  const attentionSignals = allAttentionSignals.filter((signal) => signal.count > 0);
+  const dashboardAttentionCount = attentionSignals.length;
   const sectionCounts: Record<AdminSection, number> = {
     overview: dashboardAttentionCount,
     users: usersTotal,
-    operations: diagnosticSummary.failed + (objectiveWatchSchedulerNeedsAttention ? 1 : 0),
+    operations: attentionSignals.filter((signal) => signal.section === 'operations').length,
     analytics: rangeLogs.length,
     activity: auditEntries.length,
   };
@@ -2212,6 +2330,22 @@ function AdminDashboard() {
     window.setTimeout(() => dashboardContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
+  const reviewAttentionSignal = (key: AdminAttentionKey) => {
+    if (key === 'reports') return showRequestFilter('issues');
+    if (key === 'slow') return showRequestFilter('slow');
+    if (key === 'ai') return showAIUsage();
+    if (key === 'suspended') return selectAdminSection('users');
+    return selectAdminSection('operations');
+  };
+
+  const sectionCountTitle = (section: AdminSection, count: number) => ({
+    overview: `${count} active signal ${count === 1 ? 'category' : 'categories'}`,
+    users: `${count} ${count === 1 ? 'account' : 'accounts'}`,
+    operations: `${count} operational ${count === 1 ? 'signal' : 'signals'}`,
+    analytics: `${count} ${count === 1 ? 'report' : 'reports'} in range`,
+    activity: `${count} audit ${count === 1 ? 'event' : 'events'}`,
+  }[section]);
+
   if (loading) {
     return <div className="logs-state-card"><LoaderCircle className="logs-spin" size={20} aria-hidden /><span>Loading report activity…</span></div>;
   }
@@ -2241,7 +2375,7 @@ function AdminDashboard() {
             >
               <span className="admin-dashboard-nav-icon"><Icon size={17} aria-hidden /></span>
               <span><strong>{section.label}</strong><small>{section.description}</small></span>
-              <b className={section.value === 'overview' && count === 0 ? 'is-clear' : ''}>
+              <b className={section.value === 'overview' && count === 0 ? 'is-clear' : ''} title={sectionCountTitle(section.value, count)}>
                 {section.value === 'overview' && count === 0 ? <CheckCircle2 size={14} aria-label="All clear" /> : count.toLocaleString()}
               </b>
             </button>
@@ -2382,6 +2516,13 @@ function AdminDashboard() {
               <strong>{aiSettings?.enabled === false ? 'Stopped' : aiSettings?.provider ?? '—'}</strong>
               <small>{aiSettings ? `${aiSettings.primaryModel} · ${aiSettings.configured ? 'configured' : 'key missing'}` : 'Provider unavailable'}</small>
             </div>
+            <div>
+              <span><BellRing size={14} aria-hidden /> Objective Watch</span>
+              <strong className={objectiveWatchScheduler && ['healthy', 'running'].includes(objectiveWatchScheduler.health) ? 'is-healthy' : objectiveWatchSchedulerNeedsAttention ? 'is-unavailable' : undefined}>
+                {objectiveWatchScheduler ? schedulerHealthLabel(objectiveWatchScheduler.health) : 'Unavailable'}
+              </strong>
+              <small>{objectiveWatchScheduler ? `${formatCheckInterval(objectiveWatchScheduler.checkIntervalMinutes)} · heartbeat ${formatSchedulerTimestamp(objectiveWatchScheduler.lastHeartbeatAt)}` : 'Scheduler status unavailable'}</small>
+            </div>
           </div>
         </article>
 
@@ -2394,32 +2535,18 @@ function AdminDashboard() {
             <AlertTriangle size={18} aria-hidden />
           </div>
           <div className="admin-action-list">
-            <button type="button" onClick={() => showRequestFilter('issues')} disabled={metrics.issues === 0}>
-              <span className="is-amber"><AlertTriangle size={15} aria-hidden /></span>
-              <span><strong>Report issues</strong><small>Failed or partial responses</small></span>
-              <b>{metrics.issues}</b>
-            </button>
-            <button type="button" onClick={() => showRequestFilter('slow')} disabled={slowReports === 0}>
-              <span><Clock3 size={15} aria-hidden /></span>
-              <span><strong>Slow reports</strong><small>Responses taking 10 seconds or longer</small></span>
-              <b>{slowReports}</b>
-            </button>
-            <button
-              type="button"
-              onClick={showAIUsage}
-              disabled={aiMetrics.failures === 0}
-            >
-              <span className="is-amber"><Bot size={15} aria-hidden /></span>
-              <span><strong>AI failures</strong><small>Unsuccessful model calls</small></span>
-              <b>{aiMetrics.failures}</b>
-            </button>
-            <button type="button" onClick={() => selectAdminSection('users')} disabled={userSummary.suspended === 0}>
-              <span className="is-amber"><Ban size={15} aria-hidden /></span>
-              <span><strong>Suspended accounts</strong><small>Users without platform access</small></span>
-              <b>{userSummary.suspended}</b>
-            </button>
+            {attentionSignals.map((signal) => {
+              const SignalIcon = signal.icon;
+              return (
+                <button type="button" key={signal.key} onClick={() => reviewAttentionSignal(signal.key)}>
+                  <span className={signal.tone === 'critical' ? 'is-red' : 'is-amber'}><SignalIcon size={15} aria-hidden /></span>
+                  <span><strong>{signal.label}</strong><small>{signal.detail}</small></span>
+                  <b>{signal.count}</b>
+                </button>
+              );
+            })}
           </div>
-          {metrics.issues === 0 && slowReports === 0 && aiMetrics.failures === 0 && userSummary.suspended === 0 && (
+          {attentionSignals.length === 0 && (
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
         </article>
