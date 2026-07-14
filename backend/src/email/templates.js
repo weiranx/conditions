@@ -190,6 +190,15 @@ const omitReportFields = (source, keys) => Object.fromEntries(
 
 const buildCompleteReport = (report) => {
   const safetyData = isRecord(report?.safetyData) ? report.safetyData : {};
+  const avalancheEnabled = safetyData.featureFlags?.avalancheDetails !== false;
+  const snowpackEnabled = safetyData.featureFlags?.snowpackDetails !== false;
+  const snowSectionTitle = avalancheEnabled && snowpackEnabled
+    ? 'Avalanche and snowpack'
+    : avalancheEnabled ? 'Avalanche' : 'Snowpack';
+  const snowSectionKeys = [
+    ...(avalancheEnabled ? ['avalanche'] : []),
+    ...(snowpackEnabled ? ['snowpack'] : []),
+  ];
   const groupedSafetyKeys = [
     'safety', 'pleasantness', 'terrainCondition', 'trail', 'gear',
     'forecast', 'weather', 'solar', 'atmosphere', 'heatRisk', 'airQuality', 'rainfall',
@@ -202,7 +211,7 @@ const buildCompleteReport = (report) => {
     ['Plan details', report?.plan],
     ['Decision, scoring, terrain, and gear', pickReportFields(safetyData, ['safety', 'pleasantness', 'terrainCondition', 'trail', 'gear'])],
     ['Weather, travel window, and atmosphere', pickReportFields(safetyData, ['forecast', 'weather', 'solar', 'atmosphere', 'heatRisk', 'airQuality', 'rainfall'])],
-    ['Avalanche and snowpack', pickReportFields(safetyData, ['avalanche', 'snowpack'])],
+    [snowSectionTitle, pickReportFields(safetyData, snowSectionKeys)],
     ['Alerts, fire, access, and field observations', pickReportFields(safetyData, ['alerts', 'fireRisk', 'localConditions'])],
     ['Route plan and analysis', report?.route],
     ['AI analysis and report conversation', report?.ai],
@@ -386,7 +395,9 @@ const buildReadableReportHtml = (report, { temperatureUnit, windUnit }) => {
     ]),
     reportNarrativeHtml('Snow image analysis', ai.snowVisionAnalysis),
   ].join('');
-  sections.push(reportSectionHtml({ eyebrow: 'Snowpack', title: 'Snowpack and snow surface', intro: 'Station, modeled, historical, and image-derived snow context.', body: snowBody }));
+  if (data.featureFlags?.snowpackDetails !== false) {
+    sections.push(reportSectionHtml({ eyebrow: 'Snowpack', title: 'Snowpack and snow surface', intro: 'Station, modeled, historical, and image-derived snow context.', body: snowBody }));
+  }
 
   const alertItems = Array.isArray(alerts.alerts) ? alerts.alerts : [];
   const closures = isRecord(local.closures) && Array.isArray(local.closures.alerts) ? local.closures.alerts : [];

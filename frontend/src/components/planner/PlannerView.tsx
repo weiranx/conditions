@@ -820,7 +820,10 @@ function PlannerViewComponent(props: PlannerViewProps) {
       {hasObjective && safetyData && (position.lat < 24.5 || position.lat > 49.5 || position.lng < -125 || position.lng > -66.5) && (
         <section className="top-freshness-alert coverage-warning" role="status" aria-live="polite">
           <strong>Limited coverage</strong>
-          <span>Primary data sources (NOAA, NWS, SNOTEL, avalanche centers) are US-focused. Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.</span>
+          <span>
+            Primary data sources (NOAA, NWS, SNOTEL{reportFeatureFlags.avalancheDetails ? ', avalanche centers' : ''}) are US-focused.
+            Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.
+          </span>
         </section>
       )}
 

@@ -176,6 +176,10 @@ describe('transactional email service', () => {
           },
           weather: { description: 'Mild' },
           avalanche: { risk: 'Considerable', problems: [{ name: 'Deep Persistent Slab' }] },
+          snowpack: {
+            summary: 'Snowpack observations remain available.',
+            snotel: { stationName: 'Paradise', snowDepthIn: 42, sweIn: 19, observedDate: '2026-07-14' },
+          },
           alerts: { activeCount: 0 },
         },
       },
@@ -185,6 +189,8 @@ describe('transactional email service', () => {
     expect(message.html).not.toMatch(/Avalanche|Considerable|Deep Persistent Slab/i);
     expect(message.text).not.toMatch(/Avalanche|Considerable|Deep Persistent Slab/i);
     expect(message.html).toContain('Weather is mild.');
+    expect(message.html).toContain('Snowpack observations remain available.');
+    expect(message.text).toContain('Snowpack observations remain available.');
   });
 
   test('sends escaped, idempotent Objective Watch change alerts to the watches dashboard', async () => {

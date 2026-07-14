@@ -44,10 +44,14 @@ struct SafetyScoreCard: View {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let json = (try? encoder.encode(data)).flatMap { String(data: $0, encoding: .utf8) } ?? "{\"error\":\"Unable to serialize raw payload\"}"
+        var domains = ["weather"]
+        if data.isFeatureEnabled("avalancheDetails") { domains.append("avalanche") }
+        if data.isFeatureEnabled("snowpackDetails") { domains.append("snowpack") }
+        domains.append(contentsOf: ["alerts", "terrain", "timing"])
         return [
             "I have questions about the following Backcountry Conditions planner report.",
             "",
-            "Help me understand what the report says and how its weather, avalanche, snowpack, alerts, terrain, and timing signals relate to my plan. Base your answers on the supplied report data. Clearly separate reported facts from your interpretation, call out stale, unavailable, unknown, or conflicting data, and do not invent missing conditions. This is planning support, not a substitute for current official forecasts, field observations, or my own go/no-go decision.",
+            "Help me understand what the report says and how its \(domains.joined(separator: ", ")) signals relate to my plan. Base your answers on the supplied report data. Clearly separate reported facts from your interpretation, call out stale, unavailable, unknown, or conflicting data, and do not invent missing conditions. This is planning support, not a substitute for current official forecasts, field observations, or my own go/no-go decision.",
             "",
             "Planner report data (JSON):",
             json,

@@ -26,6 +26,11 @@ describe('report feature filtering', () => {
       localConditions: {
         closures: { alerts: [{ title: 'Road closed for avalanche control' }, { title: 'Trailhead gate closed' }] },
       },
+      snowpack: {
+        summary: 'Snowpack observations remain available.',
+        snotel: { stationName: 'Paradise', snowDepthIn: 40, sweIn: 18 },
+        snotelStations: [{ stationName: 'Avalanche Lake', snowDepthIn: 38, sweIn: 17 }],
+      },
       gear: [
         { id: 'avalanche-kit', title: 'Avalanche rescue kit' },
         { id: 'layering-core', title: 'Layering system' },
@@ -34,12 +39,13 @@ describe('report feature filtering', () => {
         primaryHazard: 'Avalanche',
         factors: [
           { group: 'avalanche', hazard: 'Avalanche', impact: -25 },
+          { group: 'snowpack', hazard: 'Snowpack', impact: -6 },
           { group: 'weather', hazard: 'Wind', impact: -5 },
         ],
-        explanations: ['Avalanche danger is Considerable.', 'Strong wind is expected.'],
+        explanations: ['Avalanche danger is Considerable.', 'Snowpack depth is 40 in.', 'Strong wind is expected.'],
         confidenceReasons: ['Avalanche bulletin is current.', 'Weather forecast is current.'],
-        sourcesUsed: ['Avalanche center', 'NOAA forecast'],
-        groupImpacts: { avalanche: -25, weather: -5 },
+        sourcesUsed: ['Avalanche center', 'NRCS SNOTEL', 'NOAA forecast'],
+        groupImpacts: { avalanche: -25, snowpack: -6, weather: -5 },
       },
     };
 
@@ -47,15 +53,21 @@ describe('report feature filtering', () => {
 
     expect(filtered.avalanche).toBeUndefined();
     expect(filtered.gear).toEqual([{ id: 'layering-core', title: 'Layering system' }]);
-    expect(filtered.safety.factors).toEqual([{ group: 'weather', hazard: 'Wind', impact: -5 }]);
-    expect(filtered.safety.explanations).toEqual(['Strong wind is expected.']);
+    expect(filtered.safety.factors).toEqual([
+      { group: 'snowpack', hazard: 'Snowpack', impact: -6 },
+      { group: 'weather', hazard: 'Wind', impact: -5 },
+    ]);
+    expect(filtered.safety.explanations).toEqual(['Snowpack depth is 40 in.', 'Strong wind is expected.']);
     expect(filtered.safety.confidenceReasons).toEqual(['Weather forecast is current.']);
-    expect(filtered.safety.sourcesUsed).toEqual(['NOAA forecast']);
-    expect(filtered.safety.groupImpacts).toEqual({ weather: -5 });
-    expect(filtered.safety.primaryHazard).toBe('Wind');
+    expect(filtered.safety.sourcesUsed).toEqual(['NRCS SNOTEL', 'NOAA forecast']);
+    expect(filtered.safety.groupImpacts).toEqual({ snowpack: -6, weather: -5 });
+    expect(filtered.safety.primaryHazard).toBe('Snowpack');
     expect(filtered.alerts.alerts).toEqual([{ event: 'High Wind Warning', severity: 'Moderate' }]);
     expect(filtered.alerts.activeCount).toBe(1);
     expect(filtered.localConditions.closures.alerts).toEqual([{ title: 'Trailhead gate closed' }]);
+    expect(filtered.snowpack.summary).toBe('Snowpack observations remain available.');
+    expect(filtered.snowpack.snotel).toEqual({ stationName: 'Paradise', snowDepthIn: 40, sweIn: 18 });
+    expect(filtered.snowpack.snotelStations).toEqual([{ snowDepthIn: 38, sweIn: 17 }]);
     const { featureFlags, ...reportWithoutFlagMetadata } = filtered;
     expect(JSON.stringify(reportWithoutFlagMetadata)).not.toMatch(/avalanche|Considerable|Deep Persistent Slab/i);
     expect(report.avalanche.risk).toBe('Considerable');

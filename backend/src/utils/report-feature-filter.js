@@ -106,8 +106,7 @@ const scrubDisabledReferences = (value, patterns, preserveKeys = false) => {
   }
   if (Array.isArray(value)) {
     return value
-      .filter((item) => !containsDisabledReference(item, patterns))
-      .map((item) => scrubDisabledReferences(item, patterns))
+      .map((item) => scrubDisabledReferences(item, patterns, preserveKeys))
       .filter((item) => item !== undefined);
   }
   if (!value || typeof value !== 'object') return value;
@@ -258,6 +257,12 @@ const removeDisabledFeatureReferences = (report, flags) => {
 const sanitizeReportForFeatureFlags = (report, flags) => {
   const filtered = cloneReport(report);
   filtered.featureFlags = { ...flags };
+  const disabledReferencePatterns = getDisabledReferencePatterns(flags);
+  const withoutDisabledReferenceItems = (items) => (
+    Array.isArray(items)
+      ? items.filter((item) => !containsDisabledReference(item, disabledReferencePatterns))
+      : items
+  );
 
   if (!isFeatureEnabled(flags, 'avalancheDetails')) delete filtered.avalanche;
   if (!isFeatureEnabled(flags, 'airQualityDetails')) delete filtered.airQuality;
@@ -302,7 +307,16 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
       disabledGearIds.add('electrolytes-heat');
     }
     if (!isFeatureEnabled(flags, 'weatherContextDetails')) disabledGearIds.add('navigation-low-vis');
-    filtered.gear = filtered.gear.filter((item) => !disabledGearIds.has(String(item?.id || '')));
+    filtered.gear = withoutDisabledReferenceItems(
+      filtered.gear.filter((item) => !disabledGearIds.has(String(item?.id || ''))),
+    );
+  }
+  if (filtered.alerts && typeof filtered.alerts === 'object' && Array.isArray(filtered.alerts.alerts)) {
+    filtered.alerts.alerts = withoutDisabledReferenceItems(filtered.alerts.alerts);
+  }
+  const closureAlerts = filtered.localConditions?.closures?.alerts;
+  if (Array.isArray(closureAlerts)) {
+    filtered.localConditions.closures.alerts = withoutDisabledReferenceItems(closureAlerts);
   }
 
   filtered.safety = removeDisabledAnalysisDetails(filtered.safety, flags);
