@@ -22,6 +22,18 @@ const FEATURE_LABELS = Object.freeze({
   weatherContextDetails: 'weather visibility context',
 });
 
+const FEATURE_REFERENCE_PATTERNS = Object.freeze({
+  avalancheDetails: /avalanche/iu,
+  airQualityDetails: /air quality|\baqi\b|pm2\.5|pm10/iu,
+  fireRiskDetails: /fire risk|fire danger|wildfire|red flag warning/iu,
+  heatRiskDetails: /heat risk|heat stress|heat index/iu,
+  snowpackDetails: /snowpack|snow depth|snow water equivalent|\bswe\b|snotel|nohrsc|\bcdec\b/iu,
+  fieldObservations: /field observation|nearby station|weather station|radar|streamflow|stream crossing|\bqpe\b|\bnwps\b/iu,
+  windLoadingDetails: /wind load(?:ing|ed)?|wind slab|snow transport/iu,
+  daylightTimeline: /daylight|darkness|sunrise|sunset/iu,
+  weatherContextDetails: /visibility risk|pressure trend|atmospheric context/iu,
+});
+
 const isFeatureEnabled = (flags, key) => flags?.[key] !== false;
 
 const getScoreFeatureSnapshot = (flags) => Object.fromEntries(
@@ -44,7 +56,12 @@ const reportMatchesScoreFeatures = (report, flags) => {
 };
 
 const cloneReport = (report) => JSON.parse(JSON.stringify(report));
-const AVALANCHE_REFERENCE_PATTERN = /avalanche/iu;
+const AVALANCHE_REFERENCE_PATTERN = FEATURE_REFERENCE_PATTERNS.avalancheDetails;
+
+const getDisabledReferencePatterns = (flags) => SCORE_FEATURE_KEYS
+  .filter((key) => !isFeatureEnabled(flags, key))
+  .map((key) => FEATURE_REFERENCE_PATTERNS[key])
+  .filter(Boolean);
 
 const containsAvalancheReference = (value) => {
   try {
@@ -74,6 +91,35 @@ const scrubAvalancheReferences = (value, preserveKeys = false) => {
   }));
 };
 
+const containsDisabledReference = (value, patterns) => {
+  try {
+    const serialized = JSON.stringify(value);
+    return patterns.some((pattern) => pattern.test(serialized));
+  } catch {
+    return false;
+  }
+};
+
+const scrubDisabledReferences = (value, patterns, preserveKeys = false) => {
+  if (typeof value === 'string') {
+    return patterns.some((pattern) => pattern.test(value)) ? undefined : value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => !containsDisabledReference(item, patterns))
+      .map((item) => scrubDisabledReferences(item, patterns))
+      .filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(Object.entries(value).flatMap(([key, item]) => {
+    if (key === 'featureFlags') return [[key, scrubDisabledReferences(item, patterns, true)]];
+    if (!preserveKeys && patterns.some((pattern) => pattern.test(key))) return [];
+    const scrubbed = scrubDisabledReferences(item, patterns, preserveKeys);
+    return scrubbed === undefined ? [] : [[key, scrubbed]];
+  }));
+};
+
 const removeAvalancheNarrativeReferences = (value) => String(value || '')
   .split('\n')
   .map((line) => {
@@ -89,6 +135,26 @@ const removeAvalancheNarrativeReferences = (value) => String(value || '')
   })
   .filter(Boolean)
   .join('\n');
+
+const removeDisabledNarrativeReferences = (value, flags) => {
+  const patterns = getDisabledReferencePatterns(flags);
+  if (patterns.length === 0) return String(value || '');
+  return String(value || '')
+    .split('\n')
+    .map((line) => {
+      const labelMatch = /^([A-Z][A-Z ]+:)\s*(.*)$/u.exec(line.trim());
+      const label = labelMatch?.[1] || '';
+      const body = labelMatch?.[2] ?? line;
+      const keptSentences = body
+        .match(/[^.!?]+[.!?]?/gu)
+        ?.map((sentence) => sentence.trim())
+        .filter((sentence) => sentence && !patterns.some((pattern) => pattern.test(sentence))) || [];
+      if (keptSentences.length > 0) return `${label}${label ? ' ' : ''}${keptSentences.join(' ')}`;
+      return label ? `${label} No enabled-domain concern is available for this section.` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+};
 
 const factorBelongsToDisabledFeature = (factor, flags) => {
   const hazard = String(factor?.hazard || '').toLowerCase();
@@ -169,9 +235,29 @@ const removeAvalancheReferences = (report) => {
   return scrubAvalancheReferences(filtered);
 };
 
+const removeDisabledFeatureReferences = (report, flags) => {
+  const patterns = getDisabledReferencePatterns(flags);
+  if (patterns.length === 0) return cloneReport(report);
+  const filtered = scrubDisabledReferences(report, patterns);
+  if (filtered?.alerts && typeof filtered.alerts === 'object' && Array.isArray(filtered.alerts.alerts)) {
+    filtered.alerts.activeCount = filtered.alerts.alerts.length;
+    filtered.alerts.totalActiveCount = filtered.alerts.alerts.length;
+    if (filtered.alerts.alerts.length === 0) {
+      filtered.alerts.status = 'none';
+      delete filtered.alerts.highestSeverity;
+    } else {
+      const severityRank = { Unknown: 0, Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
+      filtered.alerts.highestSeverity = filtered.alerts.alerts.reduce((highest, alert) => (
+        (severityRank[alert?.severity] || 0) > (severityRank[highest] || 0) ? alert.severity : highest
+      ), 'Unknown');
+    }
+  }
+  return filtered;
+};
+
 const sanitizeReportForFeatureFlags = (report, flags) => {
   const filtered = cloneReport(report);
-  filtered.featureFlags = getScoreFeatureSnapshot(flags);
+  filtered.featureFlags = { ...flags };
 
   if (!isFeatureEnabled(flags, 'avalancheDetails')) delete filtered.avalanche;
   if (!isFeatureEnabled(flags, 'airQualityDetails')) delete filtered.airQuality;
@@ -197,6 +283,11 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
       }
     }
   }
+  if (!isFeatureEnabled(flags, 'elevationForecast') && filtered.weather && typeof filtered.weather === 'object') {
+    delete filtered.weather.elevationForecast;
+    delete filtered.weather.elevationForecastNote;
+  }
+  if (!isFeatureEnabled(flags, 'gearRecommendations')) delete filtered.gear;
 
   if (Array.isArray(filtered.gear)) {
     const disabledGearIds = new Set();
@@ -215,15 +306,22 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
   }
 
   filtered.safety = removeDisabledAnalysisDetails(filtered.safety, flags);
-  return !isFeatureEnabled(flags, 'avalancheDetails')
-    ? removeAvalancheReferences(filtered)
-    : filtered;
+  if (!isFeatureEnabled(flags, 'scoreBreakdown') && filtered.safety && typeof filtered.safety === 'object') {
+    delete filtered.safety.factors;
+    delete filtered.safety.explanations;
+    delete filtered.safety.confidenceReasons;
+    delete filtered.safety.sourcesUsed;
+    delete filtered.safety.groupImpacts;
+  }
+  return removeDisabledFeatureReferences(filtered, flags);
 };
 
 module.exports = {
   SCORE_FEATURE_KEYS,
   getDisabledScoreFeatureLabels,
   getScoreFeatureSnapshot,
+  removeDisabledFeatureReferences,
+  removeDisabledNarrativeReferences,
   removeAvalancheReferences,
   removeAvalancheNarrativeReferences,
   reportMatchesScoreFeatures,

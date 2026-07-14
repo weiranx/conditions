@@ -36,7 +36,7 @@ import type { AppView } from '../../hooks/useUrlState';
 import { parseReportSectionHash } from '../../app/report-sections';
 import { ACTIVITY_PROFILES } from '../../app/activity-profiles';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
-import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import { resolveReportFeatureFlags, useProductFeatureFlags } from '../../contexts/feature-flags';
 import type { Suggestion } from '../../lib/search';
 import type { ParsedGpxRoute } from '../../lib/gpx';
 import type { VisibilityRiskEstimate } from '../../app/visibility';
@@ -475,6 +475,7 @@ export interface PlannerViewProps {
 function PlannerViewComponent(props: PlannerViewProps) {
   const aiAvailability = useAiAvailability(props.safetyData?.capabilities);
   const featureFlags = useProductFeatureFlags();
+  const reportFeatureFlags = resolveReportFeatureFlags(props.safetyData?.featureFlags);
   const {
     // Shell
     appShellClassName,
@@ -837,7 +838,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         <section className="data-grid" aria-label="Conditions report">
           <h2 className="sr-only">Conditions Report</h2>
 
-          {(weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
+          {reportFeatureFlags.weatherContextDetails && (weatherVisibilityRisk.level === 'Moderate' || weatherVisibilityRisk.level === 'High' || weatherVisibilityRisk.level === 'Extreme') && (
             <div className={`visibility-banner visibility-banner-${weatherVisibilityPill}`} style={{ order: reportCardOrder.reportColumns }}>
               <Eye size={14} /> Visibility risk: <strong>{weatherVisibilityRisk.level}</strong>{weatherVisibilityDetail ? ` — ${weatherVisibilityDetail}` : ''}
             </div>
@@ -854,7 +855,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
               <RedesignView
                 {...props}
                 aiAvailability={aiAvailability}
-                routeAnalysisSlot={objectiveName && (routeAnalysis || (!restoredFromHistory && featureFlags.routeAnalysis)) ? (
+                routeAnalysisSlot={objectiveName && reportFeatureFlags.routeAnalysis && (routeAnalysis || routeSuggestions || (!restoredFromHistory && featureFlags.routeAnalysis)) ? (
                   <React.Suspense
                     fallback={<div className="route-analysis-section loading-state inline-loading-state" role="status" aria-live="polite" aria-busy="true">Loading route analysis tools…</div>}
                   >

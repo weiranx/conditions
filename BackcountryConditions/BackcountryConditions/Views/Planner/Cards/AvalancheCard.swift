@@ -4,20 +4,21 @@ struct AvalancheCard: View {
     let data: SafetyData
 
     var body: some View {
+        if let avalanche = data.avalanche {
         CollapsibleSection(title: "Avalanche", systemImage: "snow", headerColor: dangerColor) {
             VStack(alignment: .leading, spacing: 12) {
-                if data.avalanche.relevant == false {
+                if avalanche.relevant == false {
                     // Relevance check — not relevant
                     HStack {
                         Image(systemName: "checkmark.circle")
                             .foregroundStyle(.green)
-                        Text(data.avalanche.relevanceReason ?? "Avalanche terrain not relevant for this objective")
+                        Text(avalanche.relevanceReason ?? "Avalanche terrain not relevant for this objective")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 } else {
                 // Coverage status
-                if let status = data.avalanche.coverageStatus, status != "reported" {
+                if let status = avalanche.coverageStatus, status != "reported" {
                     HStack {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.orange)
@@ -29,9 +30,9 @@ struct AvalancheCard: View {
 
                 // Danger level
                 HStack {
-                    DangerLevelBadge(level: data.avalanche.dangerLevel, label: data.avalanche.risk)
+                    DangerLevelBadge(level: avalanche.dangerLevel, label: avalanche.risk)
                     Spacer()
-                    if let center = data.avalanche.center {
+                    if let center = avalanche.center {
                         Text(center)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -39,7 +40,7 @@ struct AvalancheCard: View {
                 }
 
                 // Bottom line — most important field, shown first
-                if let bottomLine = data.avalanche.bottomLine {
+                if let bottomLine = avalanche.bottomLine {
                     Text(bottomLine.strippingHTML)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -50,7 +51,7 @@ struct AvalancheCard: View {
                 }
 
                 // Elevation bands
-                if let elevations = data.avalanche.elevations {
+                if let elevations = avalanche.elevations {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("By Elevation")
                             .font(.caption.bold())
@@ -63,7 +64,7 @@ struct AvalancheCard: View {
                 }
 
                 // Problems
-                if let problems = data.avalanche.problems, !problems.isEmpty {
+                if let problems = avalanche.problems, !problems.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Problems")
                             .font(.caption.bold())
@@ -107,7 +108,7 @@ struct AvalancheCard: View {
                 }
 
                 // Stale warning
-                if let staleWarning = data.avalanche.staleWarning {
+                if let staleWarning = avalanche.staleWarning {
                     HStack {
                         Image(systemName: "clock.badge.exclamationmark")
                             .foregroundStyle(.orange)
@@ -118,7 +119,7 @@ struct AvalancheCard: View {
                 }
 
                 // Link
-                if let link = data.avalanche.link, let url = URL(string: link) {
+                if let link = avalanche.link, let url = URL(string: link) {
                     Link(destination: url) {
                         Label("View Full Forecast", systemImage: "arrow.up.right.square")
                             .font(.subheadline)
@@ -126,6 +127,7 @@ struct AvalancheCard: View {
                 }
                 } // end else (relevant)
             }
+        }
         }
     }
 
@@ -188,7 +190,7 @@ struct AvalancheCard: View {
     }
 
     private var dangerColor: Color {
-        switch data.avalanche.dangerLevel {
+        switch data.avalanche?.dangerLevel ?? 0 {
         case 0: return .gray
         case 1: return .green
         case 2: return .yellow

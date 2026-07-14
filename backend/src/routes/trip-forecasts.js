@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const { parseCookies, readSessionToken } = require('../auth/account-access');
+const { assertFeatureEnabled } = require('../utils/feature-flags');
 
 const GUEST_MULTI_DAY_COOKIE_NAME = 'bc_trip_guest';
 const MIN_TRIP_DAYS = 2;
@@ -23,10 +24,19 @@ const registerTripForecastRoutes = ({
   tierService,
   usageService,
   invokeSafetyHandler,
+  ensureFeatureEnabled = () => assertFeatureEnabled('tripPlanning'),
   isProduction = process.env.NODE_ENV === 'production',
 } = {}) => {
   app.post('/api/trip-forecasts', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    try {
+      ensureFeatureEnabled();
+    } catch (error) {
+      return res.status(error?.statusCode || 503).json({
+        error: error?.message || 'Multi-day trip planning is unavailable.',
+        ...(error?.code ? { code: error.code } : {}),
+      });
+    }
     const lat = Number(req.body?.lat);
     const lon = Number(req.body?.lon);
     const startDate = String(req.body?.startDate || '').trim();

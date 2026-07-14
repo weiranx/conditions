@@ -43,7 +43,8 @@ describe('report chat request handling', () => {
   test('keeps multi-day chat focused on weather-window tradeoffs and current-source checks', () => {
     expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/compare the forecast days/i);
     expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/WEATHER CLEAR label is not a trip GO/i);
-    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/does not account for projected avalanche danger/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/hazards that are absent from the comparison/i);
+    expect(TRIP_CHAT_SYSTEM_PROMPT).not.toMatch(/avalanche/i);
     expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/Compare the whole window/i);
     expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/specific dates and supplied values/i);
     expect(TRIP_CHAT_SYSTEM_PROMPT).toMatch(/clearly unrelated/i);
@@ -223,6 +224,33 @@ describe('report chat request handling', () => {
     expect(response.body.contextType).toBe('trip');
     expect(response.body.reportJson).toContain('weatherWindowScore');
     expect(createStream).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses a saved report snapshot instead of current flags for historical chat', async () => {
+    const app = express();
+    app.use(express.json());
+    const createStream = jest.fn(async ({ reportJson, disabledDomains }) => ({ reportJson, disabledDomains }));
+    const pipeStream = jest.fn(({ response, stream }) => response.status(200).json(stream));
+    registerReportChatRoute({
+      app,
+      createStream,
+      pipeStream,
+    });
+
+    const response = await request(app)
+      .post('/api/report-chat')
+      .send({
+        report: {
+          featureFlags: { avalancheDetails: true },
+          avalanche: { risk: 'Moderate' },
+          safety: { score: 72 },
+        },
+        messages: [{ id: 'question', role: 'user', parts: [{ type: 'text', text: 'What drove this report?' }] }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.reportJson).toMatch(/Moderate/);
+    expect(response.body.disabledDomains).not.toContain('avalanche');
   });
 
   test('rejects requests without report context or a final user message', async () => {

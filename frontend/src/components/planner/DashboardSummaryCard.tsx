@@ -27,6 +27,7 @@ import {
 } from '../../app/core';
 import { formatAiBriefSections } from '../../app/text-utils';
 import { buildFieldBrief, downloadFieldBrief } from '../../app/field-brief';
+import { resolveReportFeatureFlags } from '../../contexts/feature-flags';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { ReportChat } from './ReportChat';
 import '../../styles/dashboard-redesign.css';
@@ -140,6 +141,7 @@ export function DashboardSummaryCard({
   reportChatSessionKey,
   onReportChatMessagesChange,
 }: DashboardSummaryCardProps) {
+  const reportFeatureFlags = resolveReportFeatureFlags(safetyData.featureFlags);
   const account = useAccount();
   const [fieldBriefSaved, setFieldBriefSaved] = useState(false);
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -191,7 +193,9 @@ export function DashboardSummaryCard({
     && row.gust > travelWindowRows[index - 1].gust
   )) || travelWindowRows.reduce<TravelWindowRow | null>((peak, row) => (!peak || row.gust > peak.gust ? row : peak), null);
   const gustMarkerPosition = timelinePosition(gustMarkerRow?.time, travelWindowRows);
-  const sunrisePosition = timelinePosition(safetyData.solar.sunrise, travelWindowRows);
+  const sunrisePosition = reportFeatureFlags.daylightTimeline && safetyData.solar
+    ? timelinePosition(safetyData.solar.sunrise, travelWindowRows)
+    : null;
   const timelineLabelIndices = Array.from(new Set([
     0,
     Math.round((travelWindowRows.length - 1) / 3),
@@ -248,7 +252,7 @@ export function DashboardSummaryCard({
 
   const avalanche = safetyData.avalanche;
   const avalancheProblem = avalanche?.problems?.[0];
-  const avalancheRelevant = Boolean(avalanche && avalanche.relevant !== false);
+  const avalancheRelevant = Boolean(reportFeatureFlags.avalancheDetails && avalanche && avalanche.relevant !== false);
   const avalancheSignal: BriefSignal = avalancheRelevant
     ? {
         title: avalancheProblem?.name ? `Avalanche: ${avalancheProblem.name}` : 'Avalanche problem',
@@ -462,7 +466,7 @@ export function DashboardSummaryCard({
               {gustMarkerPosition !== null && <i className="wind-marker" style={{ left: `${gustMarkerPosition}%` }} />}
             </div>
             <div className="ssr-dash-window-markers">
-              <span><Sunrise size={14} aria-hidden /> Sunrise {formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}</span>
+              {reportFeatureFlags.daylightTimeline && safetyData.solar && <span><Sunrise size={14} aria-hidden /> Sunrise {formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}</span>}
               {gustMarkerRow && <span><Wind size={14} aria-hidden /> Gusts build {formatClockForStyle(gustMarkerRow.time, preferences.timeStyle)}</span>}
             </div>
           </div>
@@ -487,7 +491,7 @@ export function DashboardSummaryCard({
 
         {(confidence !== null || pleasantnessScore !== null) && (
           <div className="ssr-dash-context-grid">
-            {confidence !== null && (
+            {reportFeatureFlags.scoreBreakdown && confidence !== null && (
               <details className="ssr-dash-context-card confidence">
                 <summary>
                   <span><Database size={16} aria-hidden /> Evidence confidence</span>

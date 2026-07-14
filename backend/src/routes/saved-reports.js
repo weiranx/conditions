@@ -164,7 +164,6 @@ const registerSavedReportRoutes = ({
 
   app.get('/api/reports/shared/:shareToken', async (req, res) => {
     setNoStore(res);
-    if (!requireFeature(res, ensureReportSharingEnabled, 'Report sharing is unavailable.')) return;
     if (!ensureDatabase(res)) return;
     const shareToken = String(req.params.shareToken || '');
     if (!SHARE_TOKEN_PATTERN.test(shareToken)) {
@@ -193,7 +192,6 @@ const registerSavedReportRoutes = ({
   });
 
   app.post('/api/account/reports/email', reportEmailLimiter, async (req, res) => {
-    if (!requireFeature(res, ensureReportHistoryEnabled, 'Report email is unavailable.')) return;
     const user = await requireUser(req, res);
     if (!user) return;
     if (!user.emailVerified) {
@@ -223,7 +221,6 @@ const registerSavedReportRoutes = ({
   });
 
   app.get('/api/account/reports', async (req, res) => {
-    if (!requireFeature(res, ensureReportHistoryEnabled, 'Report history is unavailable.')) return;
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
     try {
@@ -299,7 +296,6 @@ const registerSavedReportRoutes = ({
   });
 
   app.get('/api/account/reports/:reportId', async (req, res) => {
-    if (!requireFeature(res, ensureReportHistoryEnabled, 'Report history is unavailable.')) return;
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
     if (!UUID_PATTERN.test(String(req.params.reportId || ''))) {
@@ -330,6 +326,7 @@ const registerSavedReportRoutes = ({
   });
 
   app.post('/api/account/reports', async (req, res) => {
+    if (!requireFeature(res, ensureReportHistoryEnabled, 'Saving new reports is unavailable.')) return;
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
     try {

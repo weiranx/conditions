@@ -43,7 +43,7 @@ import { FireRiskSection } from './FireRiskSection';
 import { CautionsAlertsSection } from './CautionsAlertsSection';
 import { ObjectiveMonitoringCard } from './ObjectiveMonitoringCard';
 import { TerrainWindowCard } from './TerrainWindowCard';
-import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import { resolveReportFeatureFlags, useProductFeatureFlags } from '../../contexts/feature-flags';
 import { buildReportSectionHash } from '../../app/report-sections';
 import '../../styles/planning-intelligence.css';
 
@@ -700,8 +700,9 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     // Gear
     gearRecommendations,
   } = props;
-
   if (!safetyData || !decision) return null;
+  const reportFeatureFlags = resolveReportFeatureFlags(safetyData.featureFlags);
+  const reportSolar = safetyData.solar;
 
   const maxGustMph = preferences.maxWindGustMph || 35;
   const weatherLinkLat = safetyData.location?.lat ?? position.lat;
@@ -871,7 +872,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   }
 
   // Pick terrain away from wind-loaded aspects.
-  if (windLoadingHintsRelevant && leewardAspectHints.length > 0) {
+  if (reportFeatureFlags.windLoadingDetails && windLoadingHintsRelevant && leewardAspectHints.length > 0) {
     planActions.push({
       tone: 'pick',
       icon: <Wind size={15} />,
@@ -884,6 +885,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             : undefined,
     });
   } else if (
+    reportFeatureFlags.windLoadingDetails &&
     windLoadingHintsRelevant &&
     windLoadingActionLine &&
     String(windLoadingLevel || '').toLowerCase() !== 'low'
@@ -892,7 +894,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   }
 
   // Prep for finishing in the dark.
-  if (returnExtendsPastMidnight) {
+  if (reportFeatureFlags.daylightTimeline && returnExtendsPastMidnight) {
     planActions.push({
       tone: 'prep',
       icon: <Sun size={15} />,
@@ -903,7 +905,9 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
   // Non-negotiable gear (safety-critical only). Situational entries like "Avalanche
   // coverage gap" are advice, not packable items — the caution list already covers them.
-  const mustGear = gearRecommendations.filter((g) => g.tone === 'nogo' && !/coverage gap/i.test(g.title));
+  const mustGear = reportFeatureFlags.gearRecommendations
+    ? gearRecommendations.filter((g) => g.tone === 'nogo' && !/coverage gap/i.test(g.title))
+    : [];
   if (mustGear.length > 0) {
     planActions.push({
       tone: 'prep',
@@ -926,17 +930,17 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     { id: 'planner-section-monitor', label: 'Watch', present: featureFlags.objectiveWatch && Boolean(props.reportSnapshot) },
     { id: 'planner-section-route', label: 'Route', present: Boolean(props.routeAnalysisSlot) },
     { id: 'planner-section-actions', label: 'Plan', present: true },
-    { id: 'planner-section-terrain-window', label: 'Terrain window', present: featureFlags.terrainWindow && travelWindowRows.length > 0 && bands.length > 0 },
+    { id: 'planner-section-terrain-window', label: 'Terrain window', present: reportFeatureFlags.terrainWindow && travelWindowRows.length > 0 && bands.length > 0 },
     { id: 'planner-section-travel', label: 'Travel', present: travelWindowRows.length > 0 },
     { id: 'planner-section-checks', label: 'Checks', present: Boolean(shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0) },
     { id: 'planner-section-weather', label: 'Weather', present: true },
-    { id: 'planner-section-wind', label: 'Wind', present: featureFlags.windLoadingDetails && Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
-    { id: 'planner-section-avalanche', label: 'Avalanche', present: featureFlags.avalancheDetails },
-    { id: 'planner-section-snowpack', label: 'Snowpack', present: featureFlags.snowpackDetails && Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
-    { id: 'planner-section-observations', label: 'Observations', present: featureFlags.fieldObservations && hasLocalObservations },
+    { id: 'planner-section-wind', label: 'Wind', present: reportFeatureFlags.windLoadingDetails && Boolean((shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant) },
+    { id: 'planner-section-avalanche', label: 'Avalanche', present: reportFeatureFlags.avalancheDetails },
+    { id: 'planner-section-snowpack', label: 'Snowpack', present: reportFeatureFlags.snowpackDetails && Boolean(safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec)) },
+    { id: 'planner-section-observations', label: 'Observations', present: reportFeatureFlags.fieldObservations && hasLocalObservations },
     { id: 'planner-section-alerts', label: 'Alerts', present: true },
-    { id: 'planner-section-score', label: 'Score', present: featureFlags.scoreBreakdown && Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
-    { id: 'planner-section-gear', label: 'Gear', present: featureFlags.gearRecommendations && Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
+    { id: 'planner-section-score', label: 'Score', present: reportFeatureFlags.scoreBreakdown && Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
+    { id: 'planner-section-gear', label: 'Gear', present: reportFeatureFlags.gearRecommendations && Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
   ].filter((s) => s.present);
   const jumpToSection = (id: string, moveFocus: boolean) => {
     const target = document.getElementById(id);
@@ -1084,7 +1088,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           onGenerateMore={generateMoreStartTimeScenarios}
         />}
 
-        {featureFlags.terrainWindow && <TerrainWindowCard
+        {reportFeatureFlags.terrainWindow && <TerrainWindowCard
           travelRows={travelWindowRows}
           elevationBands={bands}
           avalancheProblems={safetyData.avalanche?.problems || []}
@@ -1504,7 +1508,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 />
               </div>
             )}
-            {featureFlags.hourlyWeatherCharts && weatherTrendHasData && (
+            {reportFeatureFlags.hourlyWeatherCharts && weatherTrendHasData && (
               <WeatherTrendMiniChart
                 data={weatherTrendChartData}
                 metric={weatherTrendMetric}
@@ -1517,7 +1521,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                 onMetricChange={onTrendMetricChange}
               />
             )}
-            {featureFlags.weatherContextDetails && <>
+            {reportFeatureFlags.weatherContextDetails && <>
               <div className="ssr-wx-section-label">Supporting readings</div>
               <div className="ssr-wx-grid">
                 <div className="ssr-wx-cell"><span className="ssr-k">Humidity</span><span className="ssr-v">{Number.isFinite(weatherCardHumidity) ? `${Math.round(weatherCardHumidity)}%` : 'N/A'}</span></div>
@@ -1559,7 +1563,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         </section>
 
         {/* ELEVATION */}
-        {featureFlags.elevationForecast && bands.length >= 2 && (
+        {reportFeatureFlags.elevationForecast && bands.length >= 2 && (
           <ElevationProfileSection
             bands={bands}
             maxGustMph={maxGustMph}
@@ -1581,7 +1585,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* WIND LOADING */}
-        {featureFlags.windLoadingDetails && (shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
+        {reportFeatureFlags.windLoadingDetails && (shouldRenderRankedCard('windLoading') || shouldRenderRankedCard('windLoadingHints')) && windLoadingHintsRelevant && (
           <section className={`ssr-card ssr-wl-card ssr-wl-${windLoadingPillClass}`} id="planner-section-wind">
             <div className="ssr-card-h">
               <h2>
@@ -1669,7 +1673,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       {/* SIDEBAR */}
       <aside className="ssr-side">
         {/* AVALANCHE */}
-        {featureFlags.avalancheDetails && <section className="ssr-card" id="planner-section-avalanche">
+        {reportFeatureFlags.avalancheDetails && <section className="ssr-card" id="planner-section-avalanche">
           <div className="ssr-card-h">
             <h2>
               <span className="ssr-h-icon icon-orange"><AlertTriangle size={16} /></span>
@@ -1765,7 +1769,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         </section>}
 
         {/* SNOWPACK */}
-        {featureFlags.snowpackDetails && safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (
+        {reportFeatureFlags.snowpackDetails && safetyData.snowpack && (safetyData.snowpack.snotel || safetyData.snowpack.nohrsc || safetyData.snowpack.cdec) && (
           <section className="ssr-card" id="planner-section-snowpack">
             <div className="ssr-card-h">
               <h2>
@@ -1848,7 +1852,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
               {safetyData.snowpack.viirs?.observedTime && (
                 <p className="ssr-muted">Latest NASA VIIRS 375 m snow-cover granule: {formatPubTime(safetyData.snowpack.viirs.observedTime)}. Used as freshness/corroboration metadata; pixel-level NDSI is not treated as a depth measurement.</p>
               )}
-              {(snowVisionAnalysis || (!props.restoredFromHistory && featureFlags.satelliteImagery && aiAvailability.snowVision)) && (
+              {(snowVisionAnalysis || (!props.restoredFromHistory && reportFeatureFlags.satelliteImagery && featureFlags.satelliteImagery && aiAvailability.snowVision)) && (
                 <div style={{ marginTop: '14px' }}>
                   {snowVisionAnalysis ? (
                     <AiInsightBriefing
@@ -1896,7 +1900,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* LIVE OBSERVATIONS & ACCESS */}
-        {featureFlags.fieldObservations && hasLocalObservations && (() => {
+        {reportFeatureFlags.fieldObservations && hasLocalObservations && (() => {
           const forestRoadCount = Number(accessObservation?.closedRoadCount || 0);
           const stateRoadCount = Number(accessObservation?.caltransClosureCount || 0);
           const parkAlertCount = Number(parkAccessObservation?.alertCount || parkAccessObservation?.alerts?.length || 0);
@@ -2161,7 +2165,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* DAYLIGHT */}
-        {featureFlags.daylightTimeline && shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
+        {reportFeatureFlags.daylightTimeline && reportSolar && shouldRenderRankedCard('planSnapshot') && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null && (() => {
           const dayLen = sunsetMinutesForPlan - sunriseMinutesForPlan;
           const timelinePaddingMinutes = Math.max(45, Math.min(90, Math.round(dayLen * 0.08)));
           const timelineStart = sunriseMinutesForPlan - timelinePaddingMinutes;
@@ -2206,7 +2210,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           const returnTimeLabel = returnTimeFormatted
             ? `${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}${returnExtendsPastMidnight ? ' +1' : ''}`
             : 'Not set';
-          const timelineLabel = `Sunrise ${formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}, start ${startTimeLabel}, estimated return ${returnTimeLabel}, sunset ${formatClockForStyle(safetyData.solar.sunset, preferences.timeStyle)}.`;
+          const timelineLabel = `Sunrise ${formatClockForStyle(reportSolar.sunrise, preferences.timeStyle)}, start ${startTimeLabel}, estimated return ${returnTimeLabel}, sunset ${formatClockForStyle(reportSolar.sunset, preferences.timeStyle)}.`;
           return (
             <section className={`ssr-card ssr-daylight-card ${daylightStatus.tone}`}>
               <div className="ssr-card-h">
@@ -2245,8 +2249,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                     {returnPct !== null && <span className={`ssr-day-mark end ${returnsInDark ? 'after-dark' : ''}`} style={{ left: `${returnPct}%` }} />}
                   </div>
                   <div className="ssr-day-ends">
-                    <span><Sunrise size={14} /> Sunrise <strong>{formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}</strong></span>
-                    <span>Sunset <strong>{formatClockForStyle(safetyData.solar.sunset, preferences.timeStyle)}</strong> <Sunset size={14} /></span>
+                    <span><Sunrise size={14} /> Sunrise <strong>{formatClockForStyle(reportSolar.sunrise, preferences.timeStyle)}</strong></span>
+                    <span>Sunset <strong>{formatClockForStyle(reportSolar.sunset, preferences.timeStyle)}</strong> <Sunset size={14} /></span>
                   </div>
                 </div>
 
@@ -2266,7 +2270,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* HEAT RISK */}
-        {featureFlags.heatRiskDetails && shouldRenderRankedCard('heatRisk') && (
+        {reportFeatureFlags.heatRiskDetails && shouldRenderRankedCard('heatRisk') && (
           <HeatRiskSection
             level={safetyData.heatRisk?.level}
             label={heatRiskLabel}
@@ -2281,7 +2285,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* FIRE RISK */}
-        {featureFlags.fireRiskDetails && shouldRenderRankedCard('fireRisk') && (
+        {reportFeatureFlags.fireRiskDetails && shouldRenderRankedCard('fireRisk') && (
           <FireRiskSection
             level={safetyData.fireRisk?.level}
             label={fireRiskLabel}
@@ -2300,7 +2304,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         )}
 
         {/* AIR QUALITY */}
-        {featureFlags.airQualityDetails && shouldRenderRankedCard('airQuality') && (
+        {reportFeatureFlags.airQualityDetails && shouldRenderRankedCard('airQuality') && (
           <section className="ssr-card">
             <div className="ssr-card-h">
               <h2>
@@ -2553,7 +2557,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       {/* Continue the primary column while the independent right rail spans alongside it. */}
       <div className="ssr-report-footer">
         {/* SCORE BREAKDOWN */}
-        {featureFlags.scoreBreakdown && shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
+        {reportFeatureFlags.scoreBreakdown && shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0 && (() => {
           const factors = safetyData.safety.factors
             .slice()
             .sort((a: any, b: any) => Math.abs(Number(b.impact || 0)) - Math.abs(Number(a.impact || 0)));
@@ -2704,7 +2708,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         })()}
 
         {/* GEAR */}
-        {featureFlags.gearRecommendations && shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
+        {reportFeatureFlags.gearRecommendations && shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0 && (() => {
           const GEAR_TONE_LABEL: Record<string, string> = {
             nogo: 'Essential',
             caution: 'Recommended',

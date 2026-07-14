@@ -7,20 +7,22 @@ enum DecisionEngine {
         var checks: [SummitDecision.Check] = []
 
         // Avalanche danger
-        let avyLevel = data.avalanche.dangerLevel
-        let avyRelevant = data.avalanche.relevant ?? true
-        if avyRelevant && !ignoreAvalanche {
-            let avalancheUnknown = data.avalanche.dangerUnknown == true || (data.avalanche.coverageStatus != nil && data.avalanche.coverageStatus != "reported")
+        if let avalanche = data.avalanche,
+           data.isFeatureEnabled("avalancheDetails"),
+           avalanche.relevant != false,
+           !ignoreAvalanche {
+            let avyLevel = avalanche.dangerLevel
+            let avalancheUnknown = avalanche.dangerUnknown == true || (avalanche.coverageStatus != nil && avalanche.coverageStatus != "reported")
             if avalancheUnknown {
                 cautions.append("No current avalanche bulletin covers this objective. Use low-angle, low-consequence terrain, avoid terrain traps, and increase spacing.")
             } else if avyLevel >= 3 {
-                blockers.append("Avalanche danger is \(data.avalanche.risk). Choose non-avalanche terrain or another day.")
+                blockers.append("Avalanche danger is \(avalanche.risk). Choose non-avalanche terrain or another day.")
             }
             checks.append(.init(
                 key: "avalanche",
                 label: "Avalanche Danger",
                 ok: !avalancheUnknown && avyLevel < 3,
-                detail: data.avalanche.risk,
+                detail: avalanche.risk,
                 action: avalancheUnknown
                     ? "Treat terrain as unrated until a current bulletin is available."
                     : avyLevel >= 3 ? "Choose non-avalanche terrain or another day." : nil
@@ -129,7 +131,7 @@ enum DecisionEngine {
         ))
 
         // Fire risk
-        if let fireLevel = data.fireRisk?.level {
+        if data.isFeatureEnabled("fireRiskDetails"), let fireLevel = data.fireRisk?.level {
             if fireLevel >= 4 {
                 blockers.append("Fire risk is \(data.fireRisk?.label ?? "Extreme"). Choose another area or time, verify closures, and do not enter fire-affected terrain.")
             } else if fireLevel >= 3 {
@@ -145,7 +147,7 @@ enum DecisionEngine {
         }
 
         // Heat risk
-        if let heatLevel = data.heatRisk?.level {
+        if data.isFeatureEnabled("heatRiskDetails"), let heatLevel = data.heatRisk?.level {
             if heatLevel >= 4 {
                 blockers.append("Heat risk is \(data.heatRisk?.label ?? "Extreme"). Choose a cooler time or objective and avoid long exposed travel.")
             } else if heatLevel >= 3 {
@@ -161,7 +163,7 @@ enum DecisionEngine {
         }
 
         // Air quality
-        if let aqi = data.airQuality?.usAqi {
+        if data.isFeatureEnabled("airQualityDetails"), let aqi = data.airQuality?.usAqi {
             if aqi > 200 {
                 blockers.append("Air quality is very unhealthy (AQI \(aqi)). Choose a cleaner-air objective or postpone strenuous travel.")
             } else if aqi > 150 {

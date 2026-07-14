@@ -7,11 +7,12 @@ struct SafetyData: Codable, Sendable {
     var partialData: Bool?
     var apiWarning: String?
     var capabilities: Capabilities?
+    var featureFlags: [String: Bool]?
     var location: Location
     var forecast: Forecast?
     var weather: Weather
-    var solar: Solar
-    var avalanche: Avalanche
+    var solar: Solar?
+    var avalanche: Avalanche?
     var alerts: AlertsContainer?
     var airQuality: AirQuality?
     var rainfall: Rainfall?
@@ -23,6 +24,12 @@ struct SafetyData: Codable, Sendable {
     var terrainCondition: TerrainCondition?
     var pleasantness: Pleasantness?
     var safety: Safety
+}
+
+extension SafetyData {
+    func isFeatureEnabled(_ key: String) -> Bool {
+        featureFlags?[key] != false
+    }
 }
 
 struct Capabilities: Codable, Sendable {
@@ -682,8 +689,8 @@ struct TerrainSignals: Codable, Sendable {
 struct Safety: Codable, Sendable {
     var score: Double
     var confidence: Double?
-    var primaryHazard: String
-    var explanations: [String]
+    var primaryHazard: String?
+    var explanations: [String]?
     var sourcesUsed: [String]?
     var factors: [SafetyFactor]?
     var groupImpacts: [String: GroupImpact]?

@@ -72,6 +72,62 @@ describe('report feature filtering', () => {
     expect(reportMatchesScoreFeatures({}, disabledFlags)).toBe(false);
   });
 
+  test('removes every disabled risk domain while retaining the complete report-time flag snapshot', () => {
+    const flags = {
+      tripPlanning: false,
+      routeAnalysis: false,
+      elevationForecast: false,
+      gearRecommendations: false,
+      scoreBreakdown: false,
+      avalancheDetails: false,
+      airQualityDetails: false,
+      fireRiskDetails: false,
+      heatRiskDetails: false,
+      snowpackDetails: false,
+      fieldObservations: false,
+      windLoadingDetails: false,
+      daylightTimeline: false,
+      weatherContextDetails: false,
+    };
+    const filtered = sanitizeReportForFeatureFlags({
+      weather: {
+        description: 'Cloudy and windy',
+        visibilityRisk: { level: 'High' },
+        elevationForecast: [{ elevationFt: 9000 }],
+      },
+      solar: { sunrise: '05:30', sunset: '20:45' },
+      avalanche: { risk: 'High' },
+      airQuality: { aqi: 180 },
+      fireRisk: { level: 'High' },
+      heatRisk: { level: 'Extreme' },
+      snowpack: { snotel: { snowDepthIn: 40 } },
+      localConditions: { stations: [{ name: 'Nearby weather station' }] },
+      gear: [{ id: 'navigation-low-vis', title: 'Navigation backup' }],
+      safety: {
+        score: 68,
+        primaryHazard: 'Wind',
+        factors: [{ hazard: 'Darkness', impact: -8 }],
+        explanations: ['Daylight is limited.'],
+        confidenceReasons: ['Nearby station is current.'],
+        sourcesUsed: ['SNOTEL'],
+      },
+    }, flags);
+
+    expect(filtered.featureFlags).toEqual(flags);
+    expect(filtered.weather).toEqual({ description: 'Cloudy and windy' });
+    expect(filtered.safety).toEqual({ score: 68, primaryHazard: 'Wind' });
+    expect(filtered).not.toHaveProperty('solar');
+    expect(filtered).not.toHaveProperty('avalanche');
+    expect(filtered).not.toHaveProperty('airQuality');
+    expect(filtered).not.toHaveProperty('fireRisk');
+    expect(filtered).not.toHaveProperty('heatRisk');
+    expect(filtered).not.toHaveProperty('snowpack');
+    expect(filtered).not.toHaveProperty('localConditions');
+    expect(filtered).not.toHaveProperty('gear');
+    const { featureFlags, ...reportContent } = filtered;
+    expect(JSON.stringify(reportContent)).not.toMatch(/avalanche|air quality|AQI|fire risk|heat risk|snowpack|SNOTEL|nearby station|daylight|visibility risk/i);
+  });
+
   test('removes avalanche sentences while preserving brief section labels and enabled content', () => {
     expect(removeAvalancheNarrativeReferences(
       'BIG PICTURE: Avalanche danger is high. Wind gusts reach 45 mph.\nBEST MOVE: Check the avalanche bulletin. Use sheltered terrain.',

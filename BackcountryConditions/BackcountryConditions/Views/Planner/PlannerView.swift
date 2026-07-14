@@ -86,7 +86,9 @@ struct PlannerView: View {
                             .frame(width: 36, height: 36)
                             .background(Color.webSurfaceSubtle, in: RoundedRectangle(cornerRadius: 9))
                     }
-                    if let data = plannerVM.safetyData, let decision = plannerVM.decision {
+                    if let data = plannerVM.safetyData,
+                       let decision = plannerVM.decision,
+                       data.isFeatureEnabled("reportSharing") {
                         ShareLink(item: shareSummary(data: data, decision: decision)) {
                             Image(systemName: "square.and.arrow.up")
                                 .frame(width: 36, height: 36)
@@ -607,30 +609,31 @@ enum PlannerCardType: Int, CaseIterable, Identifiable {
         case .usefulLinks:
             return false
         case .windLoading:
-            return true // always show — relevance handled inline
+            return data.isFeatureEnabled("windLoadingDetails")
         case .visibilityRisk:
+            guard data.isFeatureEnabled("weatherContextDetails") else { return false }
             let level = data.weather.visibilityRisk?.level?.lowercased() ?? "none"
             return level != "none" && level != "minimal" && level != "low"
         case .avalanche:
-            return true // always show — relevance is displayed inline
+            return data.isFeatureEnabled("avalancheDetails") && data.avalanche != nil
         case .alerts:
             return true // shows "no active alerts" which is reassuring
         case .terrain:
             return data.terrainCondition != nil
         case .snowpack:
-            return data.snowpack != nil
+            return data.isFeatureEnabled("snowpackDetails") && data.snowpack != nil
         case .gear:
-            return data.gear != nil && !(data.gear?.isEmpty ?? true)
+            return data.isFeatureEnabled("gearRecommendations") && data.gear != nil && !(data.gear?.isEmpty ?? true)
         case .fireRisk:
-            return data.fireRisk != nil
+            return data.isFeatureEnabled("fireRiskDetails") && data.fireRisk != nil
         case .heatRisk:
-            return data.heatRisk != nil
+            return data.isFeatureEnabled("heatRiskDetails") && data.heatRisk != nil
         case .airQuality:
-            return data.airQuality != nil
+            return data.isFeatureEnabled("airQualityDetails") && data.airQuality != nil
         case .rainfall:
             return data.rainfall != nil
         case .routeAnalysis:
-            return true
+            return data.isFeatureEnabled("routeAnalysis")
         }
     }
 

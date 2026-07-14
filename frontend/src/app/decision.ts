@@ -58,6 +58,13 @@ export function evaluateBackcountryDecision(
 ): SummitDecision {
   const blockers: string[] = [];
   const cautions: string[] = [];
+  const featureEnabled = (key: string): boolean => data.featureFlags?.[key] !== false;
+  const avalancheEnabled = featureEnabled('avalancheDetails');
+  const airQualityEnabled = featureEnabled('airQualityDetails');
+  const fireRiskEnabled = featureEnabled('fireRiskDetails');
+  const heatRiskEnabled = featureEnabled('heatRiskDetails');
+  const snowpackEnabled = featureEnabled('snowpackDetails');
+  const daylightEnabled = featureEnabled('daylightTimeline');
   const addBlocker = (message: string) => {
     if (!blockers.includes(message)) {
       blockers.push(message);
@@ -104,7 +111,7 @@ export function evaluateBackcountryDecision(
     }
   }
   const ignoreAvalancheForDecision = Boolean(options.ignoreAvalancheForDecision);
-  const avalancheRelevant = Boolean(avalanche && !ignoreAvalancheForDecision && avalanche.relevant !== false);
+  const avalancheRelevant = Boolean(avalancheEnabled && avalanche && !ignoreAvalancheForDecision && avalanche.relevant !== false);
   const avalancheExpired = avalancheRelevant && avalanche?.coverageStatus === 'expired_for_selected_start';
   const avalancheUnknown = avalancheRelevant && !avalancheExpired &&
     Boolean(avalanche?.dangerUnknown || avalanche?.coverageStatus !== 'reported');
@@ -145,15 +152,15 @@ export function evaluateBackcountryDecision(
   const airQualityStatus = String(data.airQuality?.status || '').toLowerCase();
   const airQualityFutureNotApplicable = airQualityStatus === 'not_applicable_future_date';
   const aqi = Number(data.airQuality?.usAqi);
-  const hasAqi = Number.isFinite(aqi) && airQualityStatus !== 'unavailable' && !airQualityFutureNotApplicable;
+  const hasAqi = airQualityEnabled && Number.isFinite(aqi) && airQualityStatus !== 'unavailable' && !airQualityFutureNotApplicable;
 
   const fireRiskStatus = String(data.fireRisk?.status || '').toLowerCase();
   const fireRiskLevel = Number(data.fireRisk?.level);
-  const hasFireRisk = Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
+  const hasFireRisk = fireRiskEnabled && Number.isFinite(fireRiskLevel) && fireRiskStatus !== 'unavailable';
 
   const heatRiskStatus = String(data.heatRisk?.status || '').toLowerCase();
   const heatRiskLevel = Number(data.heatRisk?.level);
-  const hasHeatRisk = Number.isFinite(heatRiskLevel) && heatRiskStatus !== 'unavailable';
+  const hasHeatRisk = heatRiskEnabled && Number.isFinite(heatRiskLevel) && heatRiskStatus !== 'unavailable';
 
   const terrainCode = String(data.terrainCondition?.code || '').toLowerCase();
   const terrainLabel = data.terrainCondition?.label || data.trail || 'Unknown';
@@ -188,7 +195,7 @@ export function evaluateBackcountryDecision(
       : null;
   const precipitationFreshnessState = freshnessClass(pickOldestIsoTimestamp([data.rainfall?.anchorTime || null]), 8);
   const snowpackStatus = String(data.snowpack?.status || '').toLowerCase();
-  const snowpackAvailable = snowpackStatus === 'ok' || snowpackStatus === 'partial';
+  const snowpackAvailable = snowpackEnabled && (snowpackStatus === 'ok' || snowpackStatus === 'partial');
   const snowpackFreshness = classifySnowpackFreshness(data.snowpack?.snotel?.observedDate || null, data.snowpack?.nohrsc?.sampledTime || null);
   const snowpackFreshnessState = snowpackAvailable
     ? snowpackFreshness.state
@@ -199,9 +206,9 @@ export function evaluateBackcountryDecision(
     // check, so don't double-count it as a stale/missing source-freshness feed.
     !ignoreAvalancheForDecision && !avalancheUnknown && (avalancheFreshnessState === 'stale' || avalancheFreshnessState === 'missing') ? 'avalanche' : null,
     alertsFreshnessState === 'stale' || alertsFreshnessState === 'missing' ? 'alerts' : null,
-    airQualityFreshnessState === 'stale' || airQualityFreshnessState === 'missing' ? 'air quality' : null,
+    airQualityEnabled && (airQualityFreshnessState === 'stale' || airQualityFreshnessState === 'missing') ? 'air quality' : null,
     precipitationFreshnessState === 'stale' || precipitationFreshnessState === 'missing' ? 'precipitation' : null,
-    snowpackFreshnessState === 'stale' || snowpackFreshnessState === 'missing' ? 'snowpack' : null,
+    snowpackEnabled && (snowpackFreshnessState === 'stale' || snowpackFreshnessState === 'missing') ? 'snowpack' : null,
   ].filter(Boolean) as string[];
 
   if (unknownSnowpackMode) {
@@ -289,7 +296,7 @@ export function evaluateBackcountryDecision(
   }
 
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
-  const sunsetMinutes = data.solar?.sunset ? parseSolarClockMinutes(data.solar.sunset) : null;
+  const sunsetMinutes = daylightEnabled && data.solar?.sunset ? parseSolarClockMinutes(data.solar.sunset) : null;
   const daylightBuffer = 30;
   const turnaroundMinutes = options.turnaroundTime
     ? parseTimeInputMinutes(options.turnaroundTime)
@@ -302,24 +309,24 @@ export function evaluateBackcountryDecision(
   const daylightMarginMinutes = hasDaylightInputs && effectiveReturnMinutes !== null
     ? sunsetMinutes - effectiveReturnMinutes
     : null;
-  if (!hasDaylightInputs) {
+  if (daylightEnabled && !hasDaylightInputs) {
     addCaution('Daylight timing is unavailable. Confirm sunset from an official source, set a return time with at least 30 minutes of margin, and carry a headlamp.');
-  } else if (!daylightOkay && turnaroundMinutes === null) {
+  } else if (daylightEnabled && !daylightOkay && turnaroundMinutes === null) {
     // When a turnaround time is known, the block below reports the same thin-margin
     // condition with exact minutes — keep only the more specific message.
     addCaution(`Daylight margin is too thin. Start earlier or shorten the route to finish at least ${daylightBuffer} minutes before sunset, and carry a headlamp.`);
   }
-  if (turnaroundMinutes !== null && sunsetMinutes !== null) {
+  if (daylightEnabled && turnaroundMinutes !== null && sunsetMinutes !== null) {
     const margin = sunsetMinutes - turnaroundMinutes;
     if (margin < 0) {
-      addCaution(`Turnaround time is ${Math.abs(margin)} minutes after sunset (${data.solar.sunset}). Move the start earlier or shorten the route; do not make darkness the default plan.`);
+      addCaution(`Turnaround time is ${Math.abs(margin)} minutes after sunset (${data.solar?.sunset || 'time unavailable'}). Move the start earlier or shorten the route; do not make darkness the default plan.`);
     } else if (margin < 30) {
       addCaution(`Turnaround margin is only ${margin} minutes before sunset. Move the turnaround earlier and preserve at least 30 minutes for delays.`);
     }
   }
 
   const checks: SummitDecision['checks'] = [
-    ...(avalanche ? [{
+    ...(avalancheEnabled && avalanche ? [{
       key: 'avalanche',
       label: avalancheGateRequired ? 'Avalanche danger is Moderate or lower' : avalancheCheckLabel('Moderate or lower'),
       ok: avalancheGateRequired ? (!avalancheUnknown && danger <= 2) : true,
@@ -360,12 +367,12 @@ export function evaluateBackcountryDecision(
       detail: peakGustHour ? `Peak ${formatWind(gust)} at ${peakGustHour} in window (limit ${displayMaxGustThreshold}).` : `Now ${formatWind(gust)} (limit ${displayMaxGustThreshold}).`,
       action: gust > maxGustThreshold ? 'Use sheltered terrain, secure loose gear, and turn around if balance or communication becomes difficult.' : undefined,
     },
-    {
+    ...(daylightEnabled ? [{
       key: 'daylight',
       label: 'Plan finishes at least 30 min before sunset',
       ok: daylightOkay,
       detail: hasDaylightInputs
-        ? `${cutoffTime} start${turnaroundMinutes !== null && options.turnaroundTime ? ` \u2022 back by ${options.turnaroundTime}` : ''} \u2022 ${data.solar.sunset} sunset \u2022 ${
+        ? `${cutoffTime} start${turnaroundMinutes !== null && options.turnaroundTime ? ` \u2022 back by ${options.turnaroundTime}` : ''} \u2022 ${data.solar?.sunset || 'unknown'} sunset \u2022 ${
             daylightMarginMinutes === null
               ? 'margin unavailable'
               : daylightMarginMinutes < 0
@@ -377,7 +384,7 @@ export function evaluateBackcountryDecision(
         hasDaylightInputs && !daylightOkay
           ? 'Move start earlier or shorten the plan to preserve at least 30 minutes of daylight margin.'
           : undefined,
-    },
+    }] : []),
     {
       key: 'feels-like',
       label: `Apparent temperature is at or above ${displayMinFeelsLikeThreshold}`,

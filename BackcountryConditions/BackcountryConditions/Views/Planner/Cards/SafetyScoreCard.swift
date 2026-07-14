@@ -68,7 +68,7 @@ struct SafetyScoreCard: View {
                     Text("Primary Hazard")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                    Text(data.safety.primaryHazard)
+                    Text(data.safety.primaryHazard ?? "None")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
@@ -201,9 +201,9 @@ struct SafetyScoreCard: View {
 
     @ViewBuilder
     private var explanationsList: some View {
-        if !data.safety.explanations.isEmpty {
+        if let explanations = data.safety.explanations, !explanations.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(data.safety.explanations, id: \.self) { explanation in
+                ForEach(explanations, id: \.self) { explanation in
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle.fill")
                             .font(.system(size: 10))

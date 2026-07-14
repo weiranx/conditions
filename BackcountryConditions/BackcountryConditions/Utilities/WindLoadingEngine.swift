@@ -204,7 +204,7 @@ enum WindLoadingEngine {
 
         // Wind slab overlap
         let primarySet = Set(primary)
-        let overlapNames = (data.avalanche.problems ?? []).compactMap { problem -> String? in
+        let overlapNames = (data.avalanche?.problems ?? []).compactMap { problem -> String? in
             guard let name = problem.name, name.lowercased().contains("wind slab") else { return nil }
             let problemAspects = parseAspectsFromLocation(problem.location)
             guard !problemAspects.isEmpty else { return nil }

@@ -16,7 +16,7 @@ const USAGE = {
   exhausted: false,
 };
 
-const makeApp = ({ accountService, tierService, usageService, invokeSafetyHandler } = {}) => {
+const makeApp = ({ accountService, tierService, usageService, invokeSafetyHandler, ensureFeatureEnabled } = {}) => {
   const app = express();
   app.use(express.json());
   registerTripForecastRoutes({
@@ -32,6 +32,7 @@ const makeApp = ({ accountService, tierService, usageService, invokeSafetyHandle
       statusCode: 200,
       payload: { forecast: { selectedDate: '2026-07-14' } },
     }),
+    ...(ensureFeatureEnabled ? { ensureFeatureEnabled } : {}),
     isProduction: false,
   });
   return app;
@@ -124,4 +125,25 @@ test('rejects a duration outside the supported 2–7 day range', async () => {
       travelWindowHours: 12,
     });
   expect(response.status).toBe(400);
+});
+
+test('rejects new multi-day forecasts when trip planning is disabled', async () => {
+  const usageService = {
+    available: true,
+    reserve: jest.fn(),
+    finish: jest.fn(),
+  };
+  const response = await validRequest(request(makeApp({
+    usageService,
+    ensureFeatureEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.code = 'FEATURE_DISABLED';
+      error.statusCode = 503;
+      throw error;
+    },
+  })));
+
+  expect(response.status).toBe(503);
+  expect(response.body.code).toBe('FEATURE_DISABLED');
+  expect(usageService.reserve).not.toHaveBeenCalled();
 });

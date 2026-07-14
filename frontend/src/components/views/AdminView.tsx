@@ -411,7 +411,7 @@ const PRODUCT_FEATURE_CONTROLS = [
   {
     key: 'reportHistory',
     label: 'Report history',
-    description: 'Shows signed-in users their previously generated report snapshots.',
+    description: 'Controls saving new report snapshots. Previously generated reports remain available.',
     icon: History,
   },
   {

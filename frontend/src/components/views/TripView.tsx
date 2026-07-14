@@ -33,7 +33,7 @@ import '../../styles/trip-redesign.css';
 import { ProductNav } from './ProductNav';
 import { TripHourlyWeatherChart } from './TripHourlyWeatherChart';
 import type { AppView } from '../../hooks/useUrlState';
-import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import { resolveReportFeatureFlags } from '../../contexts/feature-flags';
 
 export interface TripViewProps {
   appShellClassName: string;
@@ -313,7 +313,6 @@ export function TripView({
   openPlannerView,
   onUseDayInPlanner,
 }: TripViewProps) {
-  const featureFlags = useProductFeatureFlags();
   const aiAvailability = useAiAvailability();
   const [sel, setSel] = React.useState(0);
   const [briefCopied, setBriefCopied] = React.useState(false);
@@ -353,6 +352,7 @@ export function TripView({
     ? objectiveName || `${position.lat.toFixed(4)}°, ${position.lng.toFixed(4)}°`
     : 'No objective selected';
   const objectiveReady = hasObjective && !objectiveDraftDirty;
+  const tripFeatureFlags = resolveReportFeatureFlags(tripForecastRows[0]?.safetyData.featureFlags);
 
   const best = tripForecastRows.reduce<MultiDayTripForecastDay | null>((acc, row) => {
     if (!acc) return row;
@@ -400,6 +400,7 @@ export function TripView({
     ? Math.round(scoredValues.reduce((sum, score) => sum + score, 0) / scoredValues.length)
     : null;
   const tripChatPayload = JSON.stringify({
+    featureFlags: tripFeatureFlags,
     contextType: 'multi-day-trip-plan',
     objective: {
       name: objectiveSummary,
@@ -411,7 +412,7 @@ export function TripView({
       dailyStartTime: tripStartTime,
       durationDays: tripDurationDays,
       travelWindow: travelWindowHoursLabel,
-      scope: 'Weather-window comparison only; avalanche danger is not projected here.',
+      scope: 'Enabled weather and travel-window domains only; omitted domains are not projected here.',
     },
     summary: {
       bestWeatherWindowDate: best?.date ?? null,
@@ -441,14 +442,20 @@ export function TripView({
       expectedSnowIn: day.expectedSnowIn,
       travelHoursPassingThresholds: day.travelPassHours,
       travelHoursEvaluated: day.travelTotalHours,
-      sunrise: day.sunrise,
-      sunset: day.sunset,
-      daylightLength: day.dayLength,
-      visibilityRisk: day.visibilityLevel,
-      visibilitySummary: day.visibilitySummary,
+      ...(tripFeatureFlags.daylightTimeline ? {
+        sunrise: day.sunrise,
+        sunset: day.sunset,
+        daylightLength: day.dayLength,
+      } : {}),
+      ...(tripFeatureFlags.weatherContextDetails ? {
+        visibilityRisk: day.visibilityLevel,
+        visibilitySummary: day.visibilitySummary,
+      } : {}),
       activeWeatherAlerts: day.alertCount,
-      airQualityAqi: day.airQualityAqi,
-      airQualityCategory: day.airQualityCategory,
+      ...(tripFeatureFlags.airQualityDetails ? {
+        airQualityAqi: day.airQualityAqi,
+        airQualityCategory: day.airQualityCategory,
+      } : {}),
       partialData: day.partialData,
       dataWarning: day.apiWarning,
       forecastIssuedTime: day.sourceIssuedTime,
@@ -511,7 +518,9 @@ export function TripView({
         day.decisionHeadline,
       ].join('\n')),
       '',
-      'Weather and travel-window comparison only. Check the current official avalanche bulletin within 24h of departure.',
+      tripFeatureFlags.avalancheDetails
+        ? 'Weather and travel-window comparison only. Check the current official avalanche bulletin within 24h of departure.'
+        : 'Enabled weather and travel-window domains only. Verify current official sources before departure.',
     ];
     return lines.filter((line, index) => line !== '' || lines[index - 1] !== '').join('\n');
   };
@@ -617,8 +626,8 @@ export function TripView({
         <div className="ssr-trip-disclaimer" role="note">
           <Info />
           <span>
-            <strong>Weather-window comparison only.</strong> Avalanche danger is not projected here, so “weather clear” is not a trip GO.
-            Review the selected day in Planner and check the current official avalanche bulletin within 24h of departure.
+            <strong>Enabled weather and travel-window domains only.</strong> “Weather clear” is not a trip GO.
+            Review the selected day in Planner and check current official sources before departure.
           </span>
         </div>
 
@@ -811,8 +820,8 @@ export function TripView({
                       <th scope="col">High / low</th>
                       <th scope="col">Peak gust</th>
                       <th scope="col">Precip</th>
-                      <th scope="col">Daylight</th>
-                      <th scope="col">Visibility</th>
+                      {tripFeatureFlags.daylightTimeline && <th scope="col">Daylight</th>}
+                      {tripFeatureFlags.weatherContextDetails && <th scope="col">Visibility</th>}
                       <th scope="col">Alerts</th>
                     </tr>
                   </thead>
@@ -831,12 +840,14 @@ export function TripView({
                         <td>{formatTemperatureRange(day.tempHighF, day.tempLowF, formatTempDisplay)}</td>
                         <td>{formatWindDisplay(day.windGustMph)}</td>
                         <td>{day.precipChance !== null ? `${day.precipChance}%` : '—'}</td>
-                        <td>
-                          {day.sunrise && day.sunset
-                            ? `${formatClockForStyle(day.sunrise, timeStyle)}–${formatClockForStyle(day.sunset, timeStyle)}`
-                            : '—'}
-                        </td>
-                        <td>{day.visibilityLevel || '—'}</td>
+                        {tripFeatureFlags.daylightTimeline && (
+                          <td>
+                            {day.sunrise && day.sunset
+                              ? `${formatClockForStyle(day.sunrise, timeStyle)}–${formatClockForStyle(day.sunset, timeStyle)}`
+                              : '—'}
+                          </td>
+                        )}
+                        {tripFeatureFlags.weatherContextDetails && <td>{day.visibilityLevel || '—'}</td>}
                         <td className={day.alertCount > 0 ? 'warn' : ''}>{day.alertCount}</td>
                       </tr>
                     ))}
@@ -937,7 +948,7 @@ export function TripView({
               </div>
             </section>
 
-            {featureFlags.hourlyWeatherCharts && selected && (
+            {tripFeatureFlags.hourlyWeatherCharts && selected && (
               <TripHourlyWeatherChart
                 points={selected.hourlyWeather}
                 dayLabel={`${weekdayLabel(selected.date)}, ${monthDayLabel(selected.date)}`}
@@ -976,9 +987,11 @@ export function TripView({
                     <small>{selected.humidityPct !== null ? `${selected.humidityPct}% humidity` : 'Humidity unavailable'} · {selected.cloudCoverPct !== null ? `${selected.cloudCoverPct}% cloud cover` : 'Cloud cover unavailable'}</small>
                   </div>
                   <div className="ssr-trip-detail-cell">
-                    <h3><Wind /> Wind & visibility</h3>
+                    <h3><Wind /> Wind{tripFeatureFlags.weatherContextDetails ? ' & visibility' : ''}</h3>
                     <p>Peak gust {formatWindDisplay(selected.windGustMph)}{selected.windDirection ? ` from ${selected.windDirection}` : ''}.</p>
-                    <small>{selected.visibilitySummary ? localizeUnitText(selected.visibilitySummary) : selected.visibilityLevel ? `${selected.visibilityLevel} visibility risk` : 'Visibility risk unavailable'}</small>
+                    {tripFeatureFlags.weatherContextDetails && (
+                      <small>{selected.visibilitySummary ? localizeUnitText(selected.visibilitySummary) : selected.visibilityLevel ? `${selected.visibilityLevel} visibility risk` : 'Visibility risk unavailable'}</small>
+                    )}
                   </div>
                   <div className="ssr-trip-detail-cell">
                     <h3><Route /> Travel window</h3>
@@ -993,23 +1006,27 @@ export function TripView({
                         : 'No accumulation estimate'}
                     </small>
                   </div>
+                  {tripFeatureFlags.daylightTimeline && (
+                    <div className="ssr-trip-detail-cell">
+                      <h3><Sunrise /> Daylight</h3>
+                      <p>
+                        {selected.sunrise && selected.sunset
+                          ? `${formatClockForStyle(selected.sunrise, timeStyle)} sunrise · ${formatClockForStyle(selected.sunset, timeStyle)} sunset`
+                          : 'Daylight times unavailable'}
+                      </p>
+                      <small>{dayLengthLabel(selected.dayLength) ? `${dayLengthLabel(selected.dayLength)} total daylight` : `Daily start ${tripStartDisplay}`}</small>
+                    </div>
+                  )}
                   <div className="ssr-trip-detail-cell">
-                    <h3><Sunrise /> Daylight</h3>
-                    <p>
-                      {selected.sunrise && selected.sunset
-                        ? `${formatClockForStyle(selected.sunrise, timeStyle)} sunrise · ${formatClockForStyle(selected.sunset, timeStyle)} sunset`
-                        : 'Daylight times unavailable'}
-                    </p>
-                    <small>{dayLengthLabel(selected.dayLength) ? `${dayLengthLabel(selected.dayLength)} total daylight` : `Daily start ${tripStartDisplay}`}</small>
-                  </div>
-                  <div className="ssr-trip-detail-cell">
-                    <h3><ShieldAlert /> Alerts & air</h3>
+                    <h3><ShieldAlert /> Alerts{tripFeatureFlags.airQualityDetails ? ' & air' : ''}</h3>
                     <p>{selected.alertCount > 0 ? `${selected.alertCount} active weather alert${selected.alertCount === 1 ? '' : 's'}` : 'No active weather alerts'}</p>
-                    <small>
-                      {selected.airQualityAqi !== null
-                        ? `AQI ${selected.airQualityAqi}${selected.airQualityCategory ? ` · ${selected.airQualityCategory}` : ''}`
-                        : selected.airQualityCategory || 'Air quality unavailable'}
-                    </small>
+                    {tripFeatureFlags.airQualityDetails && (
+                      <small>
+                        {selected.airQualityAqi !== null
+                          ? `AQI ${selected.airQualityAqi}${selected.airQualityCategory ? ` · ${selected.airQualityCategory}` : ''}`
+                          : selected.airQualityCategory || 'Air quality unavailable'}
+                      </small>
+                    )}
                   </div>
                   <div className="ssr-trip-detail-cell">
                     <h3><Eye /> Decision context</h3>

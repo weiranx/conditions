@@ -1,12 +1,11 @@
 const { createCache } = require('../utils/cache');
 const { assertAIFeatureEnabled } = require('../utils/ai-client');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
-const { getFeatureFlags } = require('../utils/feature-flags');
+const { getDefaultFeatureFlags } = require('../utils/feature-flags');
 const {
   getDisabledScoreFeatureLabels,
   getScoreFeatureSnapshot,
-  removeAvalancheNarrativeReferences,
-  reportMatchesScoreFeatures,
+  removeDisabledNarrativeReferences,
   sanitizeReportForFeatureFlags,
 } = require('../utils/report-feature-filter');
 const { logger } = require('../utils/logger');
@@ -29,7 +28,6 @@ const registerAiBriefRoute = ({
   askAI,
   ensureAccountAccess = denyUnconfiguredAccountAccess,
   ensureFeatureEnabled = () => assertAIFeatureEnabled('aiBrief'),
-  getProductFeatureFlags = getFeatureFlags,
 }) => {
   app.post('/api/ai-brief', async (req, res) => {
     const { report, decisionLevel, units } = req.body || {};
@@ -41,13 +39,11 @@ const registerAiBriefRoute = ({
 
     try {
       ensureFeatureEnabled();
-      const featureFlags = getProductFeatureFlags();
-      if (!reportMatchesScoreFeatures(report, featureFlags)) {
-        return res.status(409).json({
-          error: 'Risk feature settings changed. Generate a new report before creating an AI brief.',
-          code: 'REPORT_REGENERATION_REQUIRED',
-        });
-      }
+      const hasFeatureSnapshot = report.featureFlags && typeof report.featureFlags === 'object' && !Array.isArray(report.featureFlags);
+      const featureFlags = {
+        ...getDefaultFeatureFlags(),
+        ...(hasFeatureSnapshot ? report.featureFlags : {}),
+      };
       const filteredReport = sanitizeReportForFeatureFlags(report, featureFlags);
       const disabledDomains = getDisabledScoreFeatureLabels(featureFlags);
       const featureSnapshot = getScoreFeatureSnapshot(featureFlags);
@@ -65,9 +61,7 @@ const registerAiBriefRoute = ({
           feature: 'report-brief',
           userId: req.accountUser.id,
         });
-        return featureFlags.avalancheDetails === false
-          ? removeAvalancheNarrativeReferences(generatedNarrative)
-          : generatedNarrative;
+        return removeDisabledNarrativeReferences(generatedNarrative, featureFlags);
       });
 
       return res.json({ narrative });

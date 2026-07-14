@@ -345,7 +345,7 @@ test('route analysis removes avalanche data and narrative when the product domai
   expect(response.body.analysis).toBe('OTHER CONCERNS: Wind gusts reach 40 mph.');
   expect(JSON.stringify(response.body)).not.toMatch(/Considerable/);
   const routePrompt = askAI.mock.calls[0][0];
-  expect(routePrompt).toMatch(/Do not mention it/i);
+  expect(routePrompt).toMatch(/Do not mention them/i);
   expect(routePrompt).not.toMatch(/such as avalanche conditions/i);
 });
 

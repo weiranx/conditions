@@ -142,9 +142,7 @@ import { useStartTimeScenarios } from './hooks/useStartTimeScenarios';
 import { usePreferenceHandlers, TRAVEL_THRESHOLD_PRESETS } from './hooks/usePreferenceHandlers';
 import type { TravelThresholdPresetKey } from './hooks/usePreferenceHandlers';
 import {
-  reportMatchesScoreFeatures,
   useProductFeatureFlags,
-  useProductFeatureFlagsReady,
 } from './contexts/feature-flags';
 import { useAccount } from './hooks/useAccount';
 import { AiAccessContext } from './contexts/ai-access';
@@ -215,7 +213,6 @@ function formatIsoDateLabel(isoDate: string): string {
 
 function App() {
   const featureFlags = useProductFeatureFlags();
-  const featureFlagsReady = useProductFeatureFlagsReady();
   const {
     loading: accountLoading,
     refreshAccount,
@@ -449,40 +446,6 @@ function App() {
       reportSyncTimeoutRef.current = null;
     }
   }, []);
-
-  useEffect(() => {
-    if (!featureFlagsReady || !safetyData || reportMatchesScoreFeatures(featureFlags, safetyData.featureFlags)) return;
-    clearWakeRetry();
-    resetSavedReportTracking();
-    setViewingHistoryReport(false);
-    setRestoredReportSource(null);
-    setSafetyData(null);
-    setPreviousSafetyData(null);
-    setAiBriefNarrative(null);
-    setAiBriefLoading(false);
-    setAiBriefError(null);
-    setReportChatMessages([]);
-    setReportChatSessionKey((current) => current + 1);
-    resetRouteState();
-    clearLastLoadedKey();
-    if (!viewingHistoryReport && restoredReportSource !== 'shared') clearPersistedReport();
-    setError('Risk feature settings changed. Generate a new report to recalculate the score.');
-  }, [
-    clearLastLoadedKey,
-    clearWakeRetry,
-    featureFlags,
-    featureFlagsReady,
-    resetSavedReportTracking,
-    resetRouteState,
-    restoredReportSource,
-    safetyData,
-    setAiBriefError,
-    setAiBriefLoading,
-    setAiBriefNarrative,
-    setError,
-    setSafetyData,
-    viewingHistoryReport,
-  ]);
 
   const beginReportGeneration = useCallback(() => {
     const priorSafetyData = safetyData;
@@ -784,13 +747,10 @@ function App() {
     if (!featureFlags.tripPlanning && view === 'trip') {
       startViewChange(() => setView('planner'));
     }
-    if (!featureFlags.reportHistory && view === 'history') {
-      startViewChange(() => setView('planner'));
-    }
     if (!featureFlags.objectiveWatch && view === 'watches') {
       startViewChange(() => setView('planner'));
     }
-  }, [featureFlags.objectiveWatch, featureFlags.reportHistory, featureFlags.tripPlanning, setView, startViewChange, view]);
+  }, [featureFlags.objectiveWatch, featureFlags.tripPlanning, setView, startViewChange, view]);
 
   useEffect(() => {
     if (!hasObjective || !safetyData) {
@@ -1001,7 +961,7 @@ function App() {
       if (accountLoading) return;
       reportSaveIntentRef.current = accountUserId ? 'save' : 'browser-only';
     }
-    if (reportSaveIntentRef.current !== 'save' || !accountUserId) return;
+    if (reportSaveIntentRef.current !== 'save' || !accountUserId || !featureFlags.reportHistory) return;
 
     reportSaveIntentRef.current = 'saving';
     const generation = reportGenerationRef.current;
@@ -1020,7 +980,7 @@ function App() {
         if (generation !== reportGenerationRef.current) return;
         reportSaveIntentRef.current = 'browser-only';
       });
-  }, [accountLoading, accountUserId, reportGenerationPending, reportSnapshot, syncGeneratedReportUsage, viewingHistoryReport]);
+  }, [accountLoading, accountUserId, featureFlags.reportHistory, reportGenerationPending, reportSnapshot, syncGeneratedReportUsage, viewingHistoryReport]);
 
   useEffect(() => {
     if (!activeSavedReportId || !accountUserId || !reportSnapshot || viewingHistoryReport) return;
@@ -1404,11 +1364,6 @@ function App() {
 
   useEffect(() => {
     if (!sharedReportToken || sharedReportResolvedTokenRef.current === sharedReportToken) return;
-    if (!featureFlags.reportSharing) {
-      setSharedReportLoading(false);
-      setSharedReportError('Report sharing is currently unavailable.');
-      return;
-    }
     const controller = new AbortController();
     setSharedReportLoading(true);
     setSharedReportError(null);
@@ -1425,7 +1380,7 @@ function App() {
         setSharedReportError(loadError instanceof Error ? loadError.message : 'Could not retrieve this shared report.');
       });
     return () => controller.abort();
-  }, [featureFlags.reportSharing, handleOpenSavedReport, sharedReportLoadAttempt, sharedReportToken]);
+  }, [handleOpenSavedReport, sharedReportLoadAttempt, sharedReportToken]);
 
   const retrySharedReport = useCallback(() => {
     sharedReportResolvedTokenRef.current = null;
@@ -1935,15 +1890,16 @@ function App() {
               targetElevationFt: hasTargetElevation ? Math.round(targetElevationFt) : null,
             },
             forecast: safetyData.forecast || null,
+            featureFlags: safetyData.featureFlags || null,
             weather: safetyData.weather,
-            solar: safetyData.solar,
+            ...(safetyData.solar ? { solar: safetyData.solar } : {}),
             ...(safetyData.avalanche ? { avalanche: safetyData.avalanche } : {}),
             alerts: safetyData.alerts || null,
-            airQuality: safetyData.airQuality || null,
+            ...(safetyData.airQuality ? { airQuality: safetyData.airQuality } : {}),
             rainfall: rainfallPayload || null,
-            snowpack: safetyData.snowpack || null,
-            fireRisk: safetyData.fireRisk || null,
-            heatRisk: safetyData.heatRisk || null,
+            ...(safetyData.snowpack ? { snowpack: safetyData.snowpack } : {}),
+            ...(safetyData.fireRisk ? { fireRisk: safetyData.fireRisk } : {}),
+            ...(safetyData.heatRisk ? { heatRisk: safetyData.heatRisk } : {}),
             pleasantness: safetyData.pleasantness || null,
             safety: safetyData.safety,
             decision,
@@ -2123,8 +2079,8 @@ function App() {
     return `${rounded}h forecast`;
   })();
   const startMinutesForPlan = parseTimeInputMinutes(alpineStartTime);
-  const sunriseMinutesForPlan = safetyData ? parseSolarClockMinutes(safetyData.solar.sunrise) : null;
-  const sunsetMinutesForPlan = safetyData ? parseSolarClockMinutes(safetyData.solar.sunset) : null;
+  const sunriseMinutesForPlan = safetyData?.solar ? parseSolarClockMinutes(safetyData.solar.sunrise) : null;
+  const sunsetMinutesForPlan = safetyData?.solar ? parseSolarClockMinutes(safetyData.solar.sunset) : null;
   const daylightRemainingFromStartMinutes =
     startMinutesForPlan !== null && sunriseMinutesForPlan !== null && sunsetMinutesForPlan !== null
       ? Math.max(0, sunsetMinutesForPlan - Math.max(startMinutesForPlan, sunriseMinutesForPlan))
@@ -2375,7 +2331,7 @@ function App() {
       />
       </React.Activity>
 
-      <React.Activity name="history-page" mode={featureFlags.reportHistory && view === 'history' ? 'visible' : 'hidden'}>
+      <React.Activity name="history-page" mode={view === 'history' ? 'visible' : 'hidden'}>
       <HistoryView
         appShellClassName={appShellClassName}
         isViewPending={isViewPending}

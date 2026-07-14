@@ -7,14 +7,20 @@ struct SourceFreshnessCard: View {
         CollapsibleSection(title: "Source Freshness", systemImage: "clock.arrow.circlepath", initiallyExpanded: false) {
             VStack(alignment: .leading, spacing: 0) {
                 freshnessRow("Weather", timestamp: data.weather.issuedTime ?? data.weather.generatedTime, source: data.weather.sourceDetails?.primary)
-                Divider().padding(.horizontal, 10)
-                freshnessRow("Avalanche", timestamp: data.avalanche.publishedTime ?? data.avalanche.generatedTime, source: data.avalanche.center)
+                if data.isFeatureEnabled("avalancheDetails"), let avalanche = data.avalanche {
+                    Divider().padding(.horizontal, 10)
+                    freshnessRow("Avalanche", timestamp: avalanche.publishedTime ?? avalanche.generatedTime, source: avalanche.center)
+                }
                 Divider().padding(.horizontal, 10)
                 freshnessRow("Alerts", timestamp: data.alerts?.generatedTime, source: nil)
-                Divider().padding(.horizontal, 10)
-                freshnessRow("Air Quality", timestamp: data.airQuality?.measuredTime ?? data.airQuality?.generatedTime, source: data.airQuality?.source)
-                Divider().padding(.horizontal, 10)
-                freshnessRow("Snowpack", timestamp: data.snowpack?.generatedTime, source: nil)
+                if data.isFeatureEnabled("airQualityDetails") {
+                    Divider().padding(.horizontal, 10)
+                    freshnessRow("Air Quality", timestamp: data.airQuality?.measuredTime ?? data.airQuality?.generatedTime, source: data.airQuality?.source)
+                }
+                if data.isFeatureEnabled("snowpackDetails") {
+                    Divider().padding(.horizontal, 10)
+                    freshnessRow("Snowpack", timestamp: data.snowpack?.generatedTime, source: nil)
+                }
 
                 if let genAt = data.generatedAt {
                     Divider().padding(.horizontal, 10)

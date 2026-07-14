@@ -159,7 +159,7 @@ export interface SafetyData {
       fieldSources?: Record<string, string>;
     };
   };
-  solar: { sunrise: string; sunset: string; dayLength: string };
+  solar?: { sunrise: string; sunset: string; dayLength: string };
   avalanche?: {
     risk: string;
     dangerLevel: number;
@@ -651,8 +651,8 @@ export interface SafetyData {
     confidence?: number;
     tier?: string;
     tierClass?: string;
-    primaryHazard: string;
-    explanations: string[];
+    primaryHazard?: string;
+    explanations?: string[];
     sourcesUsed?: string[];
     factors?: Array<{ hazard?: string; impact?: number; source?: string; message?: string; group?: string }>;
     groupImpacts?: Record<string, { raw?: number; effective?: number; scale?: number; /** @deprecated alias of effective */ capped?: number; /** @deprecated alias of scale */ cap?: number }>;

@@ -77,6 +77,7 @@ const initializeFeatureFlags = async () => {
 };
 
 const getFeatureFlags = () => ({ ...featureFlags });
+const getDefaultFeatureFlags = () => ({ ...DEFAULT_FEATURE_FLAGS });
 
 const getFeatureFlagStatus = () => ({
   persistent: appDataStore.configured,
@@ -119,6 +120,7 @@ const resetFeatureFlags = () => updateFeatureFlags(DEFAULT_FEATURE_FLAGS);
 
 module.exports = {
   assertFeatureEnabled,
+  getDefaultFeatureFlags,
   getFeatureFlags,
   getFeatureFlagStatus,
   initializeFeatureFlags,

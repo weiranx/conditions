@@ -80,6 +80,15 @@ export function reportMatchesScoreFeatures(
   ));
 }
 
+export function resolveReportFeatureFlags(reportFlags: Record<string, boolean> | null | undefined): ProductFeatureFlags {
+  const resolved = { ...DEFAULT_FEATURE_FLAGS };
+  if (!reportFlags) return resolved;
+  PRODUCT_FEATURE_KEYS.forEach((key) => {
+    if (typeof reportFlags[key] === 'boolean') resolved[key] = reportFlags[key];
+  });
+  return resolved;
+}
+
 export function readFeatureFlags(payload: unknown): ProductFeatureFlags | null {
   if (!payload || typeof payload !== 'object') return null;
   const record = payload as Record<string, unknown>;

@@ -174,8 +174,8 @@ test('requires a verified account email before sending a report', async () => {
   expect(sendReportEmail).not.toHaveBeenCalled();
 });
 
-test('disabled report history blocks browsing before account or database access', async () => {
-  const query = jest.fn();
+test('disabled report history keeps previously generated reports available', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [] });
   const response = await request(makeApp({
     query,
     ensureReportHistoryEnabled: () => {
@@ -186,13 +186,35 @@ test('disabled report history blocks browsing before account or database access'
     },
   })).get('/api/account/reports');
 
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ reports: [] });
+  expect(query).toHaveBeenCalledTimes(1);
+});
+
+test('disabled report history blocks saving new report snapshots', async () => {
+  const query = jest.fn();
+  const response = await request(makeApp({
+    query,
+    ensureReportHistoryEnabled: () => {
+      const error = new Error('This feature is unavailable');
+      error.code = 'FEATURE_DISABLED';
+      error.statusCode = 503;
+      throw error;
+    },
+  }))
+    .post('/api/account/reports')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
   expect(response.status).toBe(503);
   expect(response.body).toEqual({ error: 'This feature is unavailable', code: 'FEATURE_DISABLED' });
   expect(query).not.toHaveBeenCalled();
 });
 
-test('disabled report sharing blocks public snapshots before database access', async () => {
-  const query = jest.fn();
+test('disabled report sharing keeps previously shared snapshots available', async () => {
+  const query = jest.fn().mockResolvedValue({
+    rows: [{ title: 'Mount Rainier', report: SNAPSHOT, created_at: CREATED_AT, updated_at: CREATED_AT }],
+  });
   const response = await request(makeApp({
     query,
     ensureReportSharingEnabled: () => {
@@ -203,9 +225,9 @@ test('disabled report sharing blocks public snapshots before database access', a
     },
   })).get(`/api/reports/shared/${SHARE_TOKEN}`);
 
-  expect(response.status).toBe(503);
-  expect(response.body).toEqual({ error: 'This feature is unavailable', code: 'FEATURE_DISABLED' });
-  expect(query).not.toHaveBeenCalled();
+  expect(response.status).toBe(200);
+  expect(response.body.report.snapshot.plan.objectiveName).toBe('Mount Rainier');
+  expect(query).toHaveBeenCalledTimes(1);
 });
 
 test('saves a new report with every AI section under the signed-in user', async () => {

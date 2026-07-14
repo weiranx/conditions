@@ -90,7 +90,7 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
   app.use(express.json());
   const flags = { avalancheDetails: false };
   const askAI = jest.fn().mockResolvedValue('BIG PICTURE: Avalanche danger is Considerable. Weather is the enabled concern.');
-  registerAiBriefRoute({ app, askAI, getProductFeatureFlags: () => flags });
+  registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
     .post('/api/ai-brief')
@@ -121,17 +121,25 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
   expect(prompt).not.toMatch(/Considerable|Deep Persistent Slab|Avalanche rescue kit/);
 });
 
-test('AI brief rejects a report generated under different score feature settings', async () => {
+test('AI brief preserves the feature snapshot of a previously generated report', async () => {
   const app = express();
   app.use(express.json());
-  const askAI = jest.fn();
-  registerAiBriefRoute({ app, askAI, getProductFeatureFlags: () => ({ avalancheDetails: false }) });
+  const askAI = jest.fn().mockResolvedValue('BIG PICTURE: Avalanche conditions remain part of this saved report.');
+  registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)
     .post('/api/ai-brief')
-    .send({ report: { safety: { score: 80 } }, decisionLevel: 'GO' });
+    .send({
+      report: {
+        featureFlags: { avalancheDetails: true },
+        avalanche: { risk: 'Moderate' },
+        safety: { score: 80 },
+      },
+      decisionLevel: 'GO',
+    });
 
-  expect(response.status).toBe(409);
-  expect(response.body.code).toBe('REPORT_REGENERATION_REQUIRED');
-  expect(askAI).not.toHaveBeenCalled();
+  expect(response.status).toBe(200);
+  expect(response.body.narrative).toMatch(/Avalanche conditions/i);
+  expect(askAI).toHaveBeenCalledTimes(1);
+  expect(askAI.mock.calls[0][0]).toMatch(/Moderate/);
 });

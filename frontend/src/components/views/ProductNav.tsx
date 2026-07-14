@@ -28,7 +28,7 @@ export function ProductNav({
     ...(user && featureFlags.objectiveWatch
       ? [{ id: 'watches' as const, label: 'Watches', icon: BellRing, action: () => navigateToView('watches') }]
       : []),
-    ...(user && featureFlags.reportHistory
+    ...(user
       ? [{ id: 'history' as const, label: 'History', icon: FileClock, action: () => navigateToView('history') }]
       : []),
     {

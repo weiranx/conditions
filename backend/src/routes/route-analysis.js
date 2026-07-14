@@ -4,8 +4,9 @@ const { assertFeatureEnabled, getFeatureFlags } = require('../utils/feature-flag
 const { logger } = require('../utils/logger');
 const { describeUnitsInstruction } = require('../utils/units-instruction');
 const {
-  removeAvalancheNarrativeReferences,
-  removeAvalancheReferences,
+  getDisabledScoreFeatureLabels,
+  removeDisabledNarrativeReferences,
+  sanitizeReportForFeatureFlags,
 } = require('../utils/report-feature-filter');
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
@@ -446,12 +447,13 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       // Step 3: Build a compact per-waypoint summary for the UI (waypoint list,
       // elevation/score chart) — this is a display concern, separate from what
       // gets fed to the AI below.
-      const avalancheEnabled = getProductFeatureFlags().avalancheDetails;
+      const featureFlags = getProductFeatureFlags();
+      const avalancheEnabled = featureFlags.avalancheDetails !== false;
       const summaries = waypointsCopy.map((wp, i) => {
         const settled = safetySettled[i];
         const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
         const rawPayload = dataAvailable ? settled.value.payload : {};
-        const p = avalancheEnabled ? rawPayload : removeAvalancheReferences(rawPayload);
+        const p = sanitizeReportForFeatureFlags(rawPayload, featureFlags);
         const resolvedElevationFt = Number.isFinite(Number(wp.elev_ft))
           ? Number(wp.elev_ft)
           : Number.isFinite(Number(p.weather?.elevation))
@@ -494,17 +496,16 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,
           dataAvailable,
-          report: dataAvailable
-            ? avalancheEnabled ? settled.value.payload : removeAvalancheReferences(settled.value.payload)
-            : null,
+          report: dataAvailable ? sanitizeReportForFeatureFlags(settled.value.payload, featureFlags) : null,
         };
       });
       const failedWaypointNames = rawWaypointReports.filter((r) => !r.dataAvailable).map((r) => r.name).filter(Boolean);
       const partialData = failedWaypointNames.length > 0;
       const reportsJson = JSON.stringify(rawWaypointReports).slice(0, MAX_WAYPOINT_REPORTS_LENGTH);
-      const disabledDomainInstruction = avalancheEnabled
+      const disabledDomains = getDisabledScoreFeatureLabels(featureFlags);
+      const disabledDomainInstruction = disabledDomains.length === 0
         ? ''
-        : '\nAvalanche is disabled for this product report. Do not mention it, infer it, recommend avalanche-specific checks or gear, or refer the user to avalanche sources.\n';
+        : `\nDisabled product domains: ${disabledDomains.join(', ')}. Do not mention them, infer them, recommend domain-specific checks or gear, or refer the user to their sources.\n`;
 
       const generatedAnalysis = aiFeatureEnabled ? await withTimeout(askAI(
         `${describeUnitsInstruction(units)}
@@ -542,15 +543,14 @@ Aim for a substantive 300-550 word briefing when the route evidence supports it.
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
         { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis', userId: req.accountUser.id }
       ), 60000, 'Route synthesis') : buildDeterministicRouteBriefing(summaries, failedWaypointNames);
-      const analysis = avalancheEnabled
-        ? generatedAnalysis
-        : removeAvalancheNarrativeReferences(generatedAnalysis);
+      const analysis = removeDisabledNarrativeReferences(generatedAnalysis, featureFlags);
 
       return res.json({
         waypoints: waypointsCopy,
         summaries,
         analysis,
         analysisSource: aiFeatureEnabled ? 'ai' : 'deterministic',
+        featureFlags,
         partialData,
         routeSource,
         ...(routeSourceDetails ? { routeSourceDetails } : {}),

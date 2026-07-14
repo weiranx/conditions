@@ -24,13 +24,21 @@ struct WeatherCard: View {
     var body: some View {
         CollapsibleSection(title: "Weather", systemImage: "cloud.sun.fill", headerColor: .blue) {
             VStack(alignment: .leading, spacing: 16) {
-                sunriseSunsetBar
+                if data.isFeatureEnabled("daylightTimeline"), data.solar != nil {
+                    sunriseSunsetBar
+                }
                 currentConditions
-                hourSelector
-                hourlyChart
-                atmosphericDetails
-                elevationForecast
-                temperatureContext
+                if data.isFeatureEnabled("hourlyWeatherCharts") {
+                    hourSelector
+                    hourlyChart
+                }
+                if data.isFeatureEnabled("weatherContextDetails") {
+                    atmosphericDetails
+                    temperatureContext
+                }
+                if data.isFeatureEnabled("elevationForecast") {
+                    elevationForecast
+                }
             }
         }
     }
@@ -45,7 +53,7 @@ struct WeatherCard: View {
                     .foregroundStyle(
                         LinearGradient(colors: [.orange, .yellow], startPoint: .bottom, endPoint: .top)
                     )
-                Text(stripSeconds(data.solar.sunrise))
+                Text(stripSeconds(data.solar?.sunrise ?? "—"))
                     .font(.subheadline.weight(.medium).monospacedDigit())
             }
             .frame(maxWidth: .infinity)
@@ -60,7 +68,7 @@ struct WeatherCard: View {
                     .foregroundStyle(
                         LinearGradient(colors: [.orange, .red.opacity(0.7)], startPoint: .top, endPoint: .bottom)
                     )
-                Text(stripSeconds(data.solar.sunset))
+                Text(stripSeconds(data.solar?.sunset ?? "—"))
                     .font(.subheadline.weight(.medium).monospacedDigit())
             }
             .frame(maxWidth: .infinity)
@@ -127,9 +135,11 @@ struct WeatherCard: View {
                     .font(.subheadline)
                     .foregroundStyle(precip > 40 ? .blue : .secondary)
 
-                Label("\(Int(humidity))%", systemImage: "humidity.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if data.isFeatureEnabled("weatherContextDetails") {
+                    Label("\(Int(humidity))%", systemImage: "humidity.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
