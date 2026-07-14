@@ -1,6 +1,13 @@
 import { createContext, useContext } from 'react';
 
-export const PRODUCT_FEATURE_KEYS = ['tripPlanning', 'routeAnalysis', 'satelliteImagery', 'startTimeComparisons'] as const;
+export const PRODUCT_FEATURE_KEYS = [
+  'tripPlanning',
+  'routeAnalysis',
+  'satelliteImagery',
+  'startTimeComparisons',
+  'terrainWindow',
+  'objectiveWatch',
+] as const;
 export type ProductFeatureKey = (typeof PRODUCT_FEATURE_KEYS)[number];
 export type ProductFeatureFlags = Record<ProductFeatureKey, boolean>;
 
@@ -9,6 +16,8 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   routeAnalysis: true,
   satelliteImagery: true,
   startTimeComparisons: true,
+  terrainWindow: true,
+  objectiveWatch: true,
 };
 export const FEATURE_FLAGS_EVENT = 'summitsafe:product-feature-flags-change';
 

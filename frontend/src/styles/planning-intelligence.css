@@ -1,0 +1,266 @@
+.objective-monitor-body,
+.terrain-window-body {
+  padding: 18px;
+}
+
+.objective-watch-status {
+  border: 1px solid var(--ssr-line);
+  border-radius: 999px;
+  color: var(--ssr-text-3);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 9px;
+}
+
+.objective-watch-status.active {
+  background: color-mix(in srgb, var(--ssr-risk-1) 15%, transparent);
+  border-color: color-mix(in srgb, var(--ssr-risk-1) 45%, var(--ssr-line));
+  color: var(--ssr-go-ink);
+}
+
+.objective-monitor-body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+.objective-watch-pane,
+.report-change-pane {
+  background: var(--ssr-surface-2);
+  border: 1px solid var(--ssr-line);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.objective-watch-pane strong,
+.report-change-head strong {
+  color: var(--ssr-text-1);
+  display: block;
+  font-size: 0.93rem;
+}
+
+.objective-watch-pane p,
+.report-change-head small,
+.report-change-empty {
+  color: var(--ssr-text-3);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 5px 0 0;
+}
+
+.objective-watch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.objective-watch-actions button {
+  align-items: center;
+  background: var(--ssr-brand);
+  border: 0;
+  border-radius: 9px;
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 6px;
+  padding: 8px 11px;
+}
+
+.objective-watch-actions button.quiet {
+  background: transparent;
+  border: 1px solid var(--ssr-line);
+  color: var(--ssr-text-2);
+}
+
+.objective-watch-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.objective-spin {
+  animation: objective-spin 0.9s linear infinite;
+}
+
+@keyframes objective-spin { to { transform: rotate(360deg); } }
+
+.objective-account-note {
+  border-left: 2px solid var(--ssr-brand);
+  padding-left: 9px;
+}
+
+.report-change-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.report-change-head > div > span {
+  color: var(--ssr-text-3);
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+
+.report-change-icon {
+  align-items: center;
+  background: var(--ssr-surface-3);
+  border-radius: 9px;
+  color: var(--ssr-text-2);
+  display: inline-flex;
+  padding: 7px;
+}
+
+.report-change-pane.worse .report-change-icon { color: var(--ssr-nogo-ink); }
+.report-change-pane.better .report-change-icon { color: var(--ssr-go-ink); }
+
+.report-change-list {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 13px 0 0;
+  padding: 0;
+}
+
+.report-change-list li {
+  align-items: flex-start;
+  color: var(--ssr-text-2);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 7px;
+  line-height: 1.4;
+}
+
+.report-change-list li.worse svg { color: var(--ssr-nogo-ink); }
+.report-change-list li.better svg { color: var(--ssr-go-ink); }
+
+.objective-monitor-error {
+  color: var(--ssr-nogo-ink);
+  font-size: 0.78rem;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.terrain-window-summary {
+  align-items: flex-start;
+  background: var(--ssr-surface-2);
+  border: 1px solid var(--ssr-line);
+  border-radius: 14px;
+  display: flex;
+  gap: 11px;
+  padding: 14px;
+}
+
+.terrain-window-summary-icon {
+  color: var(--ssr-brand);
+  display: inline-flex;
+  padding-top: 2px;
+}
+
+.terrain-window-summary span,
+.terrain-window-summary p {
+  color: var(--ssr-text-3);
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.terrain-window-summary strong {
+  color: var(--ssr-text-1);
+  display: block;
+  font-size: 0.94rem;
+  margin: 2px 0 4px;
+}
+
+.terrain-window-scroll {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.terrain-window-matrix {
+  border-collapse: separate;
+  border-spacing: 4px;
+  min-width: 760px;
+  width: 100%;
+}
+
+.terrain-window-matrix th {
+  color: var(--ssr-text-3);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 4px;
+  text-align: center;
+}
+
+.terrain-window-matrix tbody th {
+  min-width: 170px;
+  text-align: left;
+}
+
+.terrain-window-matrix tbody th strong,
+.terrain-window-matrix tbody th span {
+  display: block;
+}
+
+.terrain-window-matrix tbody th strong { color: var(--ssr-text-1); font-size: 0.76rem; }
+.terrain-window-matrix tbody th span { font-size: 0.66rem; font-weight: 500; margin-top: 2px; }
+
+.terrain-window-cell {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+  height: 30px;
+  justify-content: center;
+  width: 100%;
+}
+
+.terrain-window-cell.lower { background: color-mix(in srgb, var(--ssr-risk-1) 19%, var(--ssr-surface)); border-color: color-mix(in srgb, var(--ssr-risk-1) 42%, transparent); color: var(--ssr-go-ink); }
+.terrain-window-cell.caution { background: color-mix(in srgb, var(--ssr-risk-3) 20%, var(--ssr-surface)); border-color: color-mix(in srgb, var(--ssr-risk-3) 48%, transparent); color: var(--ssr-caution-ink); }
+.terrain-window-cell.avoid { background: color-mix(in srgb, var(--ssr-risk-4) 17%, var(--ssr-surface)); border-color: color-mix(in srgb, var(--ssr-risk-4) 45%, transparent); color: var(--ssr-nogo-ink); }
+.terrain-window-cell.unknown { background: var(--ssr-surface-3); border-color: var(--ssr-line); color: var(--ssr-text-3); }
+
+.terrain-window-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+}
+
+.terrain-window-legend > span {
+  align-items: center;
+  color: var(--ssr-text-3);
+  display: inline-flex;
+  font-size: 0.68rem;
+  gap: 6px;
+}
+
+.terrain-window-legend .terrain-window-cell {
+  height: 12px;
+  width: 12px;
+}
+
+.terrain-window-caveat {
+  align-items: flex-start;
+  border-top: 1px solid var(--ssr-line);
+  color: var(--ssr-text-3);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 7px;
+  line-height: 1.45;
+  margin: 14px 0 0;
+  padding-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .objective-monitor-body { grid-template-columns: 1fr; }
+  .terrain-window-body, .objective-monitor-body { padding: 13px; }
+}

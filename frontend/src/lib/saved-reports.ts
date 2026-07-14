@@ -33,6 +33,13 @@ export interface SavedReportIdentity {
   shareToken: string;
 }
 
+export interface ReportComparisonBaseline {
+  reportId: string;
+  snapshot: PersistedReport;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreatedSavedReport extends SavedReportIdentity {
   reportCount: number;
   reportUsage: AccountReportUsage;
@@ -109,6 +116,35 @@ export async function getSavedReport(reportId: string, signal?: AbortSignal): Pr
     throw new Error('The generated report is incomplete.');
   }
   return snapshot as PersistedReport;
+}
+
+export async function getReportComparisonBaseline(
+  report: PersistedReport,
+  excludeReportId: string,
+  signal?: AbortSignal,
+): Promise<ReportComparisonBaseline | null> {
+  const params = new URLSearchParams({
+    lat: String(report.plan.lat),
+    lon: String(report.plan.lon),
+    forecastDate: report.plan.forecastDate,
+    alpineStartTime: report.plan.alpineStartTime,
+    excludeReportId,
+  });
+  const { response, payload } = await fetchApi(`/api/account/reports/comparison-baseline?${params.toString()}`, { signal });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not load the previous matching report.'));
+  const baseline = (payload as { baseline?: unknown } | null)?.baseline;
+  if (baseline === null) return null;
+  if (!baseline || typeof baseline !== 'object' || Array.isArray(baseline)) {
+    throw new Error('Report history returned an unexpected comparison baseline.');
+  }
+  const parsed = baseline as Partial<ReportComparisonBaseline>;
+  if (
+    typeof parsed.reportId !== 'string'
+    || !parsed.snapshot
+    || typeof parsed.createdAt !== 'string'
+    || typeof parsed.updatedAt !== 'string'
+  ) throw new Error('Report history returned an unexpected comparison baseline.');
+  return parsed as ReportComparisonBaseline;
 }
 
 export async function getSharedReport(shareToken: string, signal?: AbortSignal): Promise<PersistedReport> {

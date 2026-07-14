@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Ban,
   BarChart3,
+  BellRing,
   Bot,
   CalendarRange,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
   ExternalLink,
   FileJson,
   Gauge,
+  Grid3X3,
   HardDrive,
   History,
   KeyRound,
@@ -307,6 +309,18 @@ const PRODUCT_FEATURE_CONTROLS = [
     label: 'Start-time comparisons',
     description: 'Runs and displays earlier and later departure scenarios in planner reports.',
     icon: Clock3,
+  },
+  {
+    key: 'terrainWindow',
+    label: 'Terrain Window',
+    description: 'Shows relative planning conditions across time, elevation, and aspect.',
+    icon: Grid3X3,
+  },
+  {
+    key: 'objectiveWatch',
+    label: 'Objective Watch',
+    description: 'Lets signed-in users save a baseline and compare later reports for the same objective.',
+    icon: BellRing,
   },
 ] as const satisfies ReadonlyArray<{
   key: ProductFeatureKey;

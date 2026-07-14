@@ -1,7 +1,14 @@
 const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('./logger');
 
-const FEATURE_FLAG_KEYS = ['tripPlanning', 'routeAnalysis', 'satelliteImagery', 'startTimeComparisons'];
+const FEATURE_FLAG_KEYS = [
+  'tripPlanning',
+  'routeAnalysis',
+  'satelliteImagery',
+  'startTimeComparisons',
+  'terrainWindow',
+  'objectiveWatch',
+];
 const FEATURE_FLAG_KEY_SET = new Set(FEATURE_FLAG_KEYS);
 const DEFAULT_FEATURE_FLAGS = Object.freeze(Object.fromEntries(
   FEATURE_FLAG_KEYS.map((flag) => [flag, true]),

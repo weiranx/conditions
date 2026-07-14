@@ -2335,6 +2335,8 @@ function App() {
       appShellClassName={appShellClassName}
       isViewPending={isViewPending}
       restoredFromHistory={viewingHistoryReport}
+      reportSnapshot={reportSnapshot}
+      activeSavedReportId={activeSavedReportId}
       // Navigation
       navigateToView={navigateToView}
       openTripToolView={openTripToolView}

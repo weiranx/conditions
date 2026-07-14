@@ -192,6 +192,50 @@ const registerSavedReportRoutes = ({
     }
   });
 
+  app.get('/api/account/reports/comparison-baseline', async (req, res) => {
+    const user = await requireUser(req, res);
+    if (!user || !ensureDatabase(res)) return;
+    const lat = Number(req.query.lat);
+    const lon = Number(req.query.lon);
+    const forecastDate = String(req.query.forecastDate || '');
+    const alpineStartTime = String(req.query.alpineStartTime || '');
+    const excludeReportId = req.query.excludeReportId ? String(req.query.excludeReportId) : null;
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+      return res.status(400).json({ error: 'Provide valid objective coordinates.' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(forecastDate) || !/^\d{2}:\d{2}$/u.test(alpineStartTime)) {
+      return res.status(400).json({ error: 'Provide a valid forecast date and start time.' });
+    }
+    if (excludeReportId && !UUID_PATTERN.test(excludeReportId)) {
+      return res.status(400).json({ error: 'Invalid report ID.' });
+    }
+    try {
+      const result = await database.query(`
+        SELECT id, report, created_at, updated_at
+        FROM saved_reports
+        WHERE user_id = $1
+          AND ABS((report #>> '{plan,lat}')::double precision - $2) <= 0.001
+          AND ABS((report #>> '{plan,lon}')::double precision - $3) <= 0.001
+          AND report #>> '{plan,forecastDate}' = $4
+          AND report #>> '{plan,alpineStartTime}' = $5
+          AND ($6::uuid IS NULL OR id <> $6::uuid)
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      `, [user.id, lat, lon, forecastDate, alpineStartTime, excludeReportId]);
+      const row = result.rows[0];
+      return res.json({
+        baseline: row ? {
+          reportId: row.id,
+          snapshot: row.report,
+          createdAt: normalizeTimestamp(row.created_at),
+          updatedAt: normalizeTimestamp(row.updated_at),
+        } : null,
+      });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
   app.get('/api/account/reports/:reportId', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;

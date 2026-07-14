@@ -41,7 +41,10 @@ import { StartTimeScenarioCard } from './StartTimeScenarioCard';
 import { HeatRiskSection } from './HeatRiskSection';
 import { FireRiskSection } from './FireRiskSection';
 import { CautionsAlertsSection } from './CautionsAlertsSection';
+import { ObjectiveMonitoringCard } from './ObjectiveMonitoringCard';
+import { TerrainWindowCard } from './TerrainWindowCard';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import '../../styles/planning-intelligence.css';
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -913,8 +916,10 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   // list mirrors the `id` attributes on the sections below.
   const jumpSections = [
     { id: 'planner-section-decision', label: 'Verdict', present: true },
+    { id: 'planner-section-monitor', label: 'Watch', present: featureFlags.objectiveWatch && Boolean(props.reportSnapshot) },
     { id: 'planner-section-route', label: 'Route', present: Boolean(props.routeAnalysisSlot) },
     { id: 'planner-section-actions', label: 'Plan', present: true },
+    { id: 'planner-section-terrain-window', label: 'Terrain window', present: featureFlags.terrainWindow && travelWindowRows.length > 0 && bands.length > 0 },
     { id: 'planner-section-travel', label: 'Travel', present: travelWindowRows.length > 0 },
     { id: 'planner-section-checks', label: 'Checks', present: Boolean(shouldRenderRankedCard('criticalChecks') && orderedCriticalChecks.length > 0) },
     { id: 'planner-section-weather', label: 'Weather', present: true },
@@ -1027,6 +1032,14 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         />
         </div>
 
+        {featureFlags.objectiveWatch && props.reportSnapshot && (
+          <ObjectiveMonitoringCard
+            report={props.reportSnapshot}
+            activeSavedReportId={props.activeSavedReportId}
+            readOnly={props.restoredFromHistory}
+          />
+        )}
+
         {props.routeAnalysisSlot}
 
         {featureFlags.startTimeComparisons && <StartTimeScenarioCard
@@ -1041,6 +1054,20 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           onUseForNewReport={useStartTimeForNewReport}
           canGenerateMore={canGenerateMoreStartTimeScenarios}
           onGenerateMore={generateMoreStartTimeScenarios}
+        />}
+
+        {featureFlags.terrainWindow && <TerrainWindowCard
+          travelRows={travelWindowRows}
+          elevationBands={bands}
+          avalancheProblems={safetyData.avalanche?.problems || []}
+          avalancheRelevant={avalancheRelevant}
+          avalancheUnknown={avalancheUnknown}
+          avalancheDanger={overallAvalancheLevel}
+          leewardAspects={leewardAspectHints}
+          secondaryAspects={secondaryWindAspects}
+          preferences={preferences}
+          formatClock={formatClockForStyle}
+          formatElevation={formatElevationDisplay}
         />}
 
         {/* ACTION PLAN */}

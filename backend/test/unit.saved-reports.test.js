@@ -238,6 +238,23 @@ test('does not turn a missing score into zero in report history', async () => {
   expect(response.body.reports[0].score).toBeNull();
 });
 
+test('loads the previous report only for the same objective plan', async () => {
+  const query = jest.fn().mockResolvedValue({
+    rows: [{ id: REPORT_ID, report: SNAPSHOT, created_at: CREATED_AT, updated_at: CREATED_AT }],
+  });
+  const response = await request(makeApp({ query }))
+    .get(`/api/account/reports/comparison-baseline?lat=46.8523&lon=-121.7603&forecastDate=2026-07-15&alpineStartTime=05%3A30&excludeReportId=${REPORT_ID}`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body.baseline.reportId).toBe(REPORT_ID);
+  expect(response.body.baseline.snapshot.plan.objectiveName).toBe('Mount Rainier');
+  const [sql, params] = query.mock.calls[0];
+  expect(sql).toContain("report #>> '{plan,forecastDate}' = $4");
+  expect(sql).toContain('id <> $6::uuid');
+  expect(params).toEqual([USER_ID, 46.8523, -121.7603, '2026-07-15', '05:30', REPORT_ID]);
+});
+
 test('retrieves and updates only reports owned by the signed-in user', async () => {
   const query = jest.fn()
     .mockResolvedValueOnce({

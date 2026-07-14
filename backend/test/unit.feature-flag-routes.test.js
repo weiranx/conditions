@@ -17,6 +17,8 @@ test('public feature flag endpoint returns current safe values without caching',
     routeAnalysis: true,
     satelliteImagery: true,
     startTimeComparisons: true,
+    terrainWindow: true,
+    objectiveWatch: true,
   });
 });
 

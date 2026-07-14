@@ -51,6 +51,7 @@ const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
 const { registerAccountRoutes } = require('./src/routes/account');
 const { registerSavedReportRoutes } = require('./src/routes/saved-reports');
+const { registerObjectiveWatchRoutes } = require('./src/routes/objective-watches');
 const { createAccountAccessGuard } = require('./src/auth/account-access');
 const { createAIUsageLimitService } = require('./src/auth/ai-usage-limit');
 const { createReportUsageLimitService } = require('./src/auth/report-usage-limit');
@@ -818,6 +819,11 @@ registerSavedReportRoutes({
   accountService,
   tierService: accountTierService,
   reportUsageService: reportUsageLimitService,
+});
+registerObjectiveWatchRoutes({
+  app,
+  database,
+  accountService,
 });
 const ensureAccountAccess = createAccountAccessGuard({
   service: accountService,

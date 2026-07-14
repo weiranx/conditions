@@ -18,6 +18,8 @@ test('product feature flags default to enabled and update independently', async 
       routeAnalysis: true,
       satelliteImagery: true,
       startTimeComparisons: true,
+      terrainWindow: true,
+      objectiveWatch: true,
     },
   });
 
@@ -36,7 +38,14 @@ test('product feature flags reject unknown or non-boolean values', () => {
 test('product feature flags can be restored to enabled defaults', async () => {
   const { getFeatureFlags, resetFeatureFlags, updateFeatureFlags } = loadFeatureFlags();
 
-  await updateFeatureFlags({ tripPlanning: false, routeAnalysis: false, satelliteImagery: false, startTimeComparisons: false });
+  await updateFeatureFlags({
+    tripPlanning: false,
+    routeAnalysis: false,
+    satelliteImagery: false,
+    startTimeComparisons: false,
+    terrainWindow: false,
+    objectiveWatch: false,
+  });
   const status = await resetFeatureFlags();
 
   expect(status.flags).toEqual({
@@ -44,6 +53,8 @@ test('product feature flags can be restored to enabled defaults', async () => {
     routeAnalysis: true,
     satelliteImagery: true,
     startTimeComparisons: true,
+    terrainWindow: true,
+    objectiveWatch: true,
   });
   expect(getFeatureFlags()).toEqual(status.flags);
 });
@@ -54,6 +65,8 @@ test('product feature flags load from PostgreSQL', async () => {
     routeAnalysis: true,
     satelliteImagery: true,
     startTimeComparisons: false,
+    terrainWindow: false,
+    objectiveWatch: true,
   });
   jest.doMock('../src/db/app-data-store', () => ({
     appDataStore: { configured: true, getAdminSetting, setAdminSetting: jest.fn() },
@@ -68,6 +81,8 @@ test('product feature flags load from PostgreSQL', async () => {
       routeAnalysis: true,
       satelliteImagery: true,
       startTimeComparisons: false,
+      terrainWindow: false,
+      objectiveWatch: true,
   });
   expect(featureFlagStore.getFeatureFlagStatus().persistent).toBe(true);
 });
@@ -79,4 +94,6 @@ test('disabled product features fail closed', async () => {
   expect(() => assertFeatureEnabled('tripPlanning')).toThrow('This feature is unavailable');
   expect(() => assertFeatureEnabled('routeAnalysis')).not.toThrow();
   expect(() => assertFeatureEnabled('satelliteImagery')).not.toThrow();
+  expect(() => assertFeatureEnabled('terrainWindow')).not.toThrow();
+  expect(() => assertFeatureEnabled('objectiveWatch')).not.toThrow();
 });

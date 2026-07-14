@@ -41,7 +41,7 @@ import type { VisibilityRiskEstimate } from '../../app/visibility';
 import type { CriticalWindowRow, TerrainConditionDetails, TargetElevationForecast } from '../../app/types';
 import type { FreshnessRow as SourceFreshnessRow } from '../../app/source-freshness-display';
 import type { StartTimeScenarioComparison } from '../../app/start-time-scenarios';
-import type { PersistedReportChatMessage } from '../../app/report-storage';
+import type { PersistedReport, PersistedReportChatMessage } from '../../app/report-storage';
 
 const RouteAnalysisSection = React.lazy(() =>
   import('./RouteAnalysisSection').then((module) => ({ default: module.RouteAnalysisSection })),
@@ -57,6 +57,8 @@ export interface PlannerViewProps {
   appShellClassName: string;
   isViewPending: boolean;
   restoredFromHistory: boolean;
+  reportSnapshot: PersistedReport | null;
+  activeSavedReportId: string | null;
 
   // Navigation
   navigateToView: (view: AppView) => void;
