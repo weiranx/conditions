@@ -125,10 +125,10 @@ export function PlannerMapSection({
     workflowDetail = 'Fetching the latest conditions for this plan.';
     WorkflowStateIcon = RefreshCw;
   } else if (locked) {
-    workflowTitle = readOnly ? 'Generated report' : 'Report ready';
+    workflowTitle = 'Read-only report';
     workflowDetail = readOnly
-      ? 'This shared snapshot is read-only.'
-      : 'These inputs match the current results.';
+      ? 'This saved snapshot cannot be edited.'
+      : 'Plan inputs cannot be edited after generation.';
     WorkflowStateIcon = FileCheck2;
   } else if (objectiveReady) {
     workflowTitle = 'Ready to generate';
@@ -240,7 +240,13 @@ export function PlannerMapSection({
                     <PencilLine size={14} /> New report
                   </button>
                   {!readOnly && (
-                    <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={handleRetryFetch}
+                      disabled={loading}
+                      title="Refresh conditions without changing the report plan"
+                    >
                       <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating…' : 'Update report'}
                     </button>
                   )}

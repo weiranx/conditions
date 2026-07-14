@@ -76,7 +76,7 @@ export function PlannerHeader({
       <div className="planner-header-intro">
         <div className="planner-header-eyebrow">
           <p className="planner-header-kicker"><Compass size={12} aria-hidden /> Decision workspace</p>
-          <span className="planner-source-status"><i aria-hidden /> {readOnly ? 'Saved snapshot' : 'Live source synthesis'}</span>
+          <span className="planner-source-status"><i aria-hidden /> {disabled ? 'Read-only snapshot' : 'Live source synthesis'}</span>
         </div>
         <h1>Plan with the <em>whole picture.</em></h1>
         <p className="planner-header-lede">Set an objective and timing. We’ll organize the signals that shape the call.</p>
@@ -90,7 +90,7 @@ export function PlannerHeader({
       <div className="header-controls">
         {disabled ? (
           <div className="planner-locked-summary">
-            <span className="planner-locked-label"><LockKeyhole size={13} aria-hidden /> {readOnly ? 'Read-only report' : 'Report generated'}</span>
+            <span className="planner-locked-label"><LockKeyhole size={13} aria-hidden /> Read-only generated report</span>
             <div className="planner-locked-objective">
               <span className="planner-locked-icon"><MapPin size={18} aria-hidden /></span>
               <span>
@@ -102,7 +102,7 @@ export function PlannerHeader({
                 </small>
               </span>
             </div>
-            <p>{readOnly ? 'This saved snapshot cannot be changed.' : 'Inputs are locked so this report stays consistent.'} Choose <strong>New report</strong> below to edit the objective or timing.</p>
+            <p>{readOnly ? 'This saved report is a read-only snapshot and cannot be changed.' : 'This generated report is read-only. Its objective and timing cannot be changed.'} Choose <strong>New report</strong> below to edit the objective or timing.</p>
             {plannerControls}
           </div>
         ) : (
