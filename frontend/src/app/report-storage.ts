@@ -71,8 +71,6 @@ function isSafetyData(value: unknown): value is SafetyData {
     isRecord(value.location) &&
     isValidLatLon(Number(value.location.lat), Number(value.location.lon)) &&
     isRecord(value.weather) &&
-    isRecord(value.solar) &&
-    isRecord(value.avalanche) &&
     isRecord(value.safety)
   );
 }
