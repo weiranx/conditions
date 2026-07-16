@@ -1,4 +1,10 @@
-const { assertAIEnabled, assertAIFeatureEnabled, getAIStatus } = require('../utils/ai-client');
+const {
+  KIMI_MAX_OUTPUT_TOKENS,
+  assertAIEnabled,
+  assertAIFeatureEnabled,
+  getAIStatus,
+  getKimiRequestOverrides,
+} = require('../utils/ai-client');
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
@@ -132,6 +138,17 @@ const sanitizeFollowUpSuggestions = (value, askedQuestions = []) => {
   return result;
 };
 
+const createKimiStreamingModel = ({ createOpenAICompatible, apiKey, baseURL, modelId }) => {
+  const kimi = createOpenAICompatible({
+    name: 'kimi',
+    apiKey,
+    baseURL,
+    includeUsage: true,
+    transformRequestBody: (body) => ({ ...body, ...getKimiRequestOverrides() }),
+  });
+  return kimi.chatModel(modelId);
+};
+
 const resolveStreamingModel = async () => {
   assertAIEnabled();
   const status = getAIStatus();
@@ -147,16 +164,17 @@ const resolveStreamingModel = async () => {
     const { createAnthropic } = await import('@ai-sdk/anthropic');
     return { model: createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId), modelId, provider };
   }
-  const { createOpenAI } = await import('@ai-sdk/openai');
   if (provider === 'kimi') {
+    const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
     return {
-      model: createOpenAI({ apiKey, baseURL, name: 'kimi' }).chat(modelId),
+      model: createKimiStreamingModel({ createOpenAICompatible, apiKey, baseURL, modelId }),
       modelId,
       provider,
     };
   }
+  const { createOpenAI } = await import('@ai-sdk/openai');
   return { model: createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(modelId), modelId, provider };
 };
 
@@ -299,7 +317,7 @@ const createReportChatStream = async ({
         model,
         system: `${systemPrompt}\n\n<${contextTag}>\n${reportJson}\n</${contextTag}>`,
         messages: modelMessages,
-        maxOutputTokens: REPORT_CHAT_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: provider === 'kimi' ? KIMI_MAX_OUTPUT_TOKENS : REPORT_CHAT_MAX_OUTPUT_TOKENS,
         abortSignal,
         async onFinish({ text, finishReason, totalUsage }) {
           await persistAIUsage({
@@ -446,6 +464,7 @@ module.exports = {
   FOLLOW_UP_SYSTEM_PROMPT,
   REPORT_CHAT_SYSTEM_PROMPT,
   TRIP_CHAT_SYSTEM_PROMPT,
+  createKimiStreamingModel,
   createContextualFollowUps,
   normalizeReport,
   sanitizeFollowUpSuggestions,

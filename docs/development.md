@@ -65,8 +65,9 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `ANTHROPIC_FAST_MODEL` | `claude-haiku-4-5-20251001` | Claude model for route suggestions and waypoint extraction. |
 | `KIMI_API_KEY` | — | Enables Kimi. `MOONSHOT_API_KEY` is accepted as an alias. |
 | `KIMI_BASE_URL` | `https://api.moonshot.ai/v1` | Kimi API endpoint; change only when using another Kimi region. |
-| `KIMI_MODEL` | `kimi-k3` | Kimi model for route synthesis, field briefs, chat, and snow-image analysis. |
+| `KIMI_MODEL` | `kimi-k2.6` | Kimi model for route synthesis, field briefs, chat, and snow-image analysis. |
 | `KIMI_FAST_MODEL` | `kimi-k2.6` | Kimi model for route suggestions and waypoint extraction. |
+| `KIMI_THINKING_ENABLED` | `false` | Set to `true` to allow Kimi reasoning; disabled by default to keep interactive requests within their latency budgets. |
 
 The safety response exposes `capabilities.ai`. Web and iOS clients hide AI-powered planner controls when no provider key is configured.
 

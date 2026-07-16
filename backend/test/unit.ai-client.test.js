@@ -29,6 +29,7 @@ const ENV_KEYS = [
   'KIMI_MODEL',
   'KIMI_FAST_MODEL',
   'KIMI_MODEL_OPTIONS',
+  'KIMI_THINKING_ENABLED',
   'AI_PRIMARY_TIMEOUT_MS',
   'AI_FAST_TIMEOUT_MS',
 ];
@@ -59,6 +60,7 @@ describe('AI provider client wrapper', () => {
     delete process.env.KIMI_MODEL;
     delete process.env.KIMI_FAST_MODEL;
     delete process.env.KIMI_MODEL_OPTIONS;
+    delete process.env.KIMI_THINKING_ENABLED;
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
     delete process.env.AI_ENABLED;
@@ -169,8 +171,9 @@ describe('AI provider client wrapper', () => {
 
     await expect(askAI('conditions', { maxTokens: 700, system: 'Be concise.' })).resolves.toBe('Kimi field brief');
     expect(mockKimiCreate).toHaveBeenCalledWith({
-      model: 'kimi-k3',
+      model: 'kimi-k2.6',
       max_tokens: 700,
+      thinking: { type: 'disabled' },
       messages: [
         { role: 'system', content: 'Be concise.' },
         { role: 'user', content: 'conditions' },
@@ -187,7 +190,9 @@ describe('AI provider client wrapper', () => {
 
     await expect(askAIVision('YWJj', 'analyze', { mediaType: 'image/jpeg' })).resolves.toBe('snow coverage');
     expect(mockKimiCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'kimi-k3',
+      model: 'kimi-k2.6',
+      max_tokens: 2048,
+      thinking: { type: 'disabled' },
       messages: [{
         role: 'user',
         content: [
@@ -229,9 +234,9 @@ describe('AI provider client wrapper', () => {
           configured: true,
         },
         kimi: {
-          primary: 'kimi-k3',
+          primary: 'kimi-k2.6',
           fast: 'kimi-k2.6',
-          options: ['kimi-k3', 'kimi-k2.6'],
+          options: ['kimi-k2.6'],
           configured: false,
         },
       },
@@ -529,7 +534,27 @@ describe('AI provider client wrapper', () => {
     expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
     expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
     expect(mockKimiCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'kimi-k3' }),
+      expect.objectContaining({
+        model: 'kimi-k2.6',
+        max_tokens: 2048,
+        thinking: { type: 'disabled' },
+      }),
+      { timeout: 28000, maxRetries: 0 },
+    );
+  });
+
+  test('allows Kimi thinking only when explicitly enabled', async () => {
+    process.env.KIMI_API_KEY = 'kimi-test-key';
+    process.env.KIMI_THINKING_ENABLED = 'true';
+    mockKimiCreate.mockResolvedValue({
+      choices: [{ message: { content: 'reasoned answer' }, finish_reason: 'stop' }],
+    });
+    const { askAI, getKimiRequestOverrides } = loadClient('kimi');
+
+    expect(getKimiRequestOverrides()).toEqual({});
+    await askAI('conditions');
+    expect(mockKimiCreate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ thinking: expect.anything() }),
       { timeout: 28000, maxRetries: 0 },
     );
   });

@@ -17,6 +17,8 @@ if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
 }
 const DEFAULT_AI_ENABLED = String(process.env.AI_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
 const DEFAULT_AI_FAILOVER_ENABLED = String(process.env.AI_FAILOVER_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
+const KIMI_THINKING_ENABLED = String(process.env.KIMI_THINKING_ENABLED ?? 'false').trim().toLowerCase() === 'true';
+const KIMI_MAX_OUTPUT_TOKENS = 2048;
 
 const parseModelOptions = (value, defaults) => [...new Set([
   ...defaults,
@@ -27,7 +29,7 @@ const openAIPrimaryModel = process.env.OPENAI_MODEL || 'gpt-5.6-terra';
 const openAIFastModel = process.env.OPENAI_FAST_MODEL || 'gpt-5.6-luna';
 const anthropicPrimaryModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const anthropicFastModel = process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001';
-const kimiPrimaryModel = process.env.KIMI_MODEL || 'kimi-k3';
+const kimiPrimaryModel = process.env.KIMI_MODEL || 'kimi-k2.6';
 const kimiFastModel = process.env.KIMI_FAST_MODEL || 'kimi-k2.6';
 const kimiApiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || '';
 const kimiBaseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
@@ -189,6 +191,10 @@ const requestOptions = (tier) => ({
   maxRetries: 0,
 });
 
+const getKimiRequestOverrides = () => KIMI_THINKING_ENABLED
+  ? {}
+  : { thinking: { type: 'disabled' } };
+
 const readOpenAIText = (response, { maxTokens, model, operation }) => {
   const text = response.output_text?.trim();
   if (!text) {
@@ -273,15 +279,17 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
     }
 
     if (provider === 'kimi') {
+      const kimiMaxTokens = Math.min(maxTokens, KIMI_MAX_OUTPUT_TOKENS);
       const messages = [];
       if (system) messages.push({ role: 'system', content: system });
       messages.push({ role: 'user', content: prompt });
       response = await getKimiClient().chat.completions.create({
         model: resolvedModel,
-        max_tokens: maxTokens,
+        max_tokens: kimiMaxTokens,
+        ...getKimiRequestOverrides(),
         messages,
       }, requestOptions(tier));
-      const text = readKimiText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
+      const text = readKimiText(response, { maxTokens: kimiMaxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
     }
@@ -343,6 +351,7 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
     }
 
     if (provider === 'kimi') {
+      const kimiMaxTokens = Math.min(maxTokens, KIMI_MAX_OUTPUT_TOKENS);
       const messages = [];
       if (system) messages.push({ role: 'system', content: system });
       messages.push({
@@ -354,10 +363,11 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
       });
       response = await getKimiClient().chat.completions.create({
         model: resolvedModel,
-        max_tokens: maxTokens,
+        max_tokens: kimiMaxTokens,
+        ...getKimiRequestOverrides(),
         messages,
       }, requestOptions(tier));
-      const text = readKimiText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
+      const text = readKimiText(response, { maxTokens: kimiMaxTokens, model: resolvedModel, operation: 'askAIVision' });
       await finish('success');
       return text;
     }
@@ -633,12 +643,14 @@ const getAIFeatureAvailability = () => Object.fromEntries(
 );
 
 module.exports = {
+  KIMI_MAX_OUTPUT_TOKENS,
   askAI,
   askAIVision,
   assertAIEnabled,
   assertAIFeatureEnabled,
   getAIFeatureAvailability,
   getAIStatus,
+  getKimiRequestOverrides,
   initializeAISettings,
   isAIAvailable,
   isAIFeatureAvailable,

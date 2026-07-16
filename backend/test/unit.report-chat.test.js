@@ -7,6 +7,7 @@ const {
   REPORT_CHAT_MAX_OUTPUT_TOKENS,
   REPORT_CHAT_SYSTEM_PROMPT,
   TRIP_CHAT_SYSTEM_PROMPT,
+  createKimiStreamingModel,
   createContextualFollowUps,
   normalizeReport,
   registerReportChatRoute: registerReportChatRouteWithoutAccount,
@@ -24,6 +25,31 @@ const registerReportChatRoute = (options) => registerReportChatRouteWithoutAccou
 });
 
 describe('report chat request handling', () => {
+  test('uses the compatible Kimi adapter with thinking disabled', () => {
+    const model = { provider: 'kimi', modelId: 'kimi-k2.6' };
+    const chatModel = jest.fn(() => model);
+    const createOpenAICompatible = jest.fn(() => ({ chatModel }));
+
+    expect(createKimiStreamingModel({
+      createOpenAICompatible,
+      apiKey: 'kimi-test-key',
+      baseURL: 'https://api.moonshot.ai/v1',
+      modelId: 'kimi-k2.6',
+    })).toBe(model);
+    expect(chatModel).toHaveBeenCalledWith('kimi-k2.6');
+    const settings = createOpenAICompatible.mock.calls[0][0];
+    expect(settings).toMatchObject({
+      name: 'kimi',
+      apiKey: 'kimi-test-key',
+      baseURL: 'https://api.moonshot.ai/v1',
+      includeUsage: true,
+    });
+    expect(settings.transformRequestBody({ model: 'kimi-k2.6' })).toEqual({
+      model: 'kimi-k2.6',
+      thinking: { type: 'disabled' },
+    });
+  });
+
   test('allows useful outside-report route guidance without weakening live-condition guardrails', () => {
     expect(REPORT_CHAT_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(4096);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/supplement the report with well-established general backcountry knowledge/i);
