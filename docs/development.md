@@ -54,6 +54,7 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `APP_BASE_URL` | — | Public web origin used in verification and reset links |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
 | `AI_PROVIDER` | `openai` | Preferred AI provider: `openai`, `anthropic`, or `kimi`; a failed request retries through the other configured providers. |
+| `AI_FAILOVER_ENABLED` | `true` | Startup default for automatic provider failover; administrators can change it at runtime. |
 | `AI_PRIMARY_TIMEOUT_MS` | `28000` | Per-provider timeout for synthesis, briefs, and vision before failover. |
 | `AI_FAST_TIMEOUT_MS` | `8000` | Per-provider timeout for route suggestions and extraction before failover. |
 | `OPENAI_API_KEY` | — | Enables OpenAI as preferred provider or fallback. |

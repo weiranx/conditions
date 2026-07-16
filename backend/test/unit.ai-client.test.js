@@ -13,6 +13,7 @@ jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
 const ENV_KEYS = [
   'AI_PROVIDER',
   'AI_ENABLED',
+  'AI_FAILOVER_ENABLED',
   'AI_SETTINGS_FILE',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
@@ -61,6 +62,7 @@ describe('AI provider client wrapper', () => {
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
     delete process.env.AI_ENABLED;
+    delete process.env.AI_FAILOVER_ENABLED;
     delete process.env.AI_SETTINGS_FILE;
   });
 
@@ -201,6 +203,7 @@ describe('AI provider client wrapper', () => {
 
     expect(getAIStatus()).toEqual({
       enabled: true,
+      failoverEnabled: true,
       available: true,
       persistent: false,
       provider: 'anthropic',
@@ -275,6 +278,7 @@ describe('AI provider client wrapper', () => {
   test('loads runtime settings from PostgreSQL', async () => {
     const getAdminSetting = jest.fn().mockResolvedValue({
       enabled: false,
+      failoverEnabled: false,
       provider: 'anthropic',
       features: {
         aiBrief: false,
@@ -296,6 +300,7 @@ describe('AI provider client wrapper', () => {
       expect(getAdminSetting).toHaveBeenCalledWith('ai_settings');
       expect(client.getAIStatus()).toEqual(expect.objectContaining({
         enabled: false,
+        failoverEnabled: false,
         provider: 'anthropic',
         defaultProvider: 'openai',
         persistent: true,
@@ -460,6 +465,43 @@ describe('AI provider client wrapper', () => {
       expect.objectContaining({ model: 'claude-haiku-4-5-20251001' }),
       { timeout: 8000, maxRetries: 0 },
     );
+  });
+
+  test('does not retry another provider when failover is disabled', async () => {
+    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
+    mockAnthropicCreate.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'fallback routes' }] });
+    const { askAI, getAIStatus, updateAISettings } = loadClient('openai');
+
+    await updateAISettings({ failoverEnabled: false });
+
+    expect(getAIStatus()).toEqual(expect.objectContaining({
+      failoverEnabled: false,
+      fallbackConfigured: false,
+    }));
+    await expect(askAI('routes')).rejects.toThrow('OpenAI unavailable');
+    expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+  });
+
+  test('does not substitute a configured provider when failover is disabled', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const { askAI, getAIStatus, updateAISettings } = loadClient('anthropic');
+
+    await updateAISettings({ failoverEnabled: false });
+
+    expect(getAIStatus()).toEqual(expect.objectContaining({
+      available: false,
+      failoverEnabled: false,
+    }));
+    await expect(askAI('conditions')).rejects.toMatchObject({ code: 'AI_PROVIDER_NOT_CONFIGURED' });
+    expect(mockOpenAICreate).not.toHaveBeenCalled();
+  });
+
+  test('rejects a non-boolean failover setting', () => {
+    const { updateAISettings } = loadClient('openai');
+
+    expect(() => updateAISettings({ failoverEnabled: 'yes' }))
+      .toThrow('failoverEnabled must be a boolean');
   });
 
   test('fails over from Anthropic to OpenAI', async () => {

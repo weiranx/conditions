@@ -137,7 +137,9 @@ const resolveStreamingModel = async () => {
   const status = getAIStatus();
   const provider = status.providers?.[status.provider]?.configured
     ? status.provider
-    : Object.entries(status.providers || {}).find(([, config]) => config?.configured)?.[0] || null;
+    : status.failoverEnabled
+      ? Object.entries(status.providers || {}).find(([, config]) => config?.configured)?.[0] || null
+      : null;
   if (!provider) throw new Error('AI provider is not configured');
 
   const modelId = status.providers[provider].primary;

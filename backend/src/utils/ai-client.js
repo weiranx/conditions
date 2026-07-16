@@ -16,6 +16,7 @@ if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
   throw new Error(`AI_PROVIDER must be one of: ${[...SUPPORTED_PROVIDERS].join(', ')}`);
 }
 const DEFAULT_AI_ENABLED = String(process.env.AI_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
+const DEFAULT_AI_FAILOVER_ENABLED = String(process.env.AI_FAILOVER_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
 
 const parseModelOptions = (value, defaults) => [...new Set([
   ...defaults,
@@ -65,6 +66,7 @@ let anthropicClient;
 let kimiClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
 let aiEnabled = DEFAULT_AI_ENABLED;
+let aiFailoverEnabled = DEFAULT_AI_FAILOVER_ENABLED;
 let aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, DEFAULT_AI_ENABLED]));
 
 const providerOrderFor = (provider) => [provider, ...PROVIDER_IDS.filter((candidate) => candidate !== provider)];
@@ -76,6 +78,7 @@ const fallbackProviderFor = (provider) => {
 
 const snapshotAISettings = () => ({
   enabled: aiEnabled,
+  failoverEnabled: aiFailoverEnabled,
   provider: activeProvider,
   features: { ...aiFeatures },
   models: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, {
@@ -93,6 +96,11 @@ const applyPersistedAISettings = (persisted) => {
       aiEnabled = persisted.enabled;
     } else if (persisted.enabled !== undefined) {
       logger.warn('Ignoring invalid PostgreSQL AI enabled value');
+    }
+    if (typeof persisted.failoverEnabled === 'boolean') {
+      aiFailoverEnabled = persisted.failoverEnabled;
+    } else if (persisted.failoverEnabled !== undefined) {
+      logger.warn('Ignoring invalid PostgreSQL AI failover value');
     }
     if (SUPPORTED_PROVIDERS.has(persisted.provider) && MODEL_CONFIG[persisted.provider].configured) {
       activeProvider = persisted.provider;
@@ -134,7 +142,7 @@ const applyPersistedAISettings = (persisted) => {
       aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, false]));
     }
     logger.info(
-      { enabled: aiEnabled, provider: activeProvider, features: aiFeatures },
+      { enabled: aiEnabled, failoverEnabled: aiFailoverEnabled, provider: activeProvider, features: aiFeatures },
       'Loaded AI runtime settings from PostgreSQL',
     );
   } catch (error) {
@@ -402,7 +410,9 @@ const runWithFailover = async (operation, tier, invoke) => {
   // Snapshot provider selection for the full request so an admin change made while a
   // request is in flight cannot alter its fallback path midway through the operation.
   const primaryProvider = activeProvider;
-  const providers = providerOrderFor(primaryProvider).filter((provider) => MODEL_CONFIG[provider].configured);
+  const failoverEnabled = aiFailoverEnabled;
+  const providerOrder = failoverEnabled ? providerOrderFor(primaryProvider) : [primaryProvider];
+  const providers = providerOrder.filter((provider) => MODEL_CONFIG[provider].configured);
   if (providers.length === 0) {
     const error = new Error('AI provider is not configured');
     error.code = 'AI_PROVIDER_NOT_CONFIGURED';
@@ -454,9 +464,12 @@ const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, syste
 
 const getAIStatus = () => {
   const fallbackProvider = fallbackProviderFor(activeProvider);
-  const available = aiEnabled && PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured);
+  const available = aiEnabled && (aiFailoverEnabled
+    ? PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured)
+    : MODEL_CONFIG[activeProvider].configured);
   return {
     enabled: aiEnabled,
+    failoverEnabled: aiFailoverEnabled,
     available,
     persistent: appDataStore.configured,
     provider: activeProvider,
@@ -467,7 +480,7 @@ const getAIStatus = () => {
     fallbackProvider,
     fallbackPrimaryModel: MODEL_CONFIG[fallbackProvider].primary,
     fallbackFastModel: MODEL_CONFIG[fallbackProvider].fast,
-    fallbackConfigured: MODEL_CONFIG[fallbackProvider].configured,
+    fallbackConfigured: aiFailoverEnabled && MODEL_CONFIG[fallbackProvider].configured,
     providers: Object.fromEntries([...SUPPORTED_PROVIDERS].map((provider) => [provider, {
       ...MODEL_CONFIG[provider],
       options: [...new Set([
@@ -485,9 +498,14 @@ const getAIStatus = () => {
   };
 };
 
-const updateAISettings = ({ enabled, provider, features, models } = {}) => {
+const updateAISettings = ({ enabled, failoverEnabled, provider, features, models } = {}) => {
   if (enabled !== undefined && typeof enabled !== 'boolean') {
     const error = new TypeError('enabled must be a boolean');
+    error.code = 'INVALID_AI_SETTINGS';
+    throw error;
+  }
+  if (failoverEnabled !== undefined && typeof failoverEnabled !== 'boolean') {
+    const error = new TypeError('failoverEnabled must be a boolean');
     error.code = 'INVALID_AI_SETTINGS';
     throw error;
   }
@@ -572,6 +590,7 @@ const updateAISettings = ({ enabled, provider, features, models } = {}) => {
   const previous = snapshotAISettings();
   const next = {
     enabled: enabled ?? previous.enabled,
+    failoverEnabled: failoverEnabled ?? previous.failoverEnabled,
     provider: provider ?? previous.provider,
     features: enabled === undefined
       ? { ...previous.features }
@@ -588,6 +607,7 @@ const updateAISettings = ({ enabled, provider, features, models } = {}) => {
 
   return appDataStore.setAdminSetting('ai_settings', next).then(() => {
     aiEnabled = next.enabled;
+    aiFailoverEnabled = next.failoverEnabled;
     activeProvider = next.provider;
     aiFeatures = next.features;
     Object.entries(next.models).forEach(([modelProvider, tiers]) => {
@@ -604,7 +624,9 @@ const updateAISettings = ({ enabled, provider, features, models } = {}) => {
   });
 };
 
-const isAIAvailable = () => aiEnabled && PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured);
+const isAIAvailable = () => aiEnabled && (aiFailoverEnabled
+  ? PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured)
+  : MODEL_CONFIG[activeProvider].configured);
 const isAIFeatureAvailable = (feature) => AI_FEATURE_KEY_SET.has(feature) && isAIAvailable() && aiFeatures[feature];
 const getAIFeatureAvailability = () => Object.fromEntries(
   AI_FEATURE_KEYS.map((feature) => [feature, isAIFeatureAvailable(feature)]),

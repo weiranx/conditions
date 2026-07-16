@@ -840,23 +840,29 @@ const registerReportLogsRoute = (
   app.patch('/api/admin/ai-settings', async (req, res) => {
     if (!await authorize(req, res)) return;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    if (body.enabled === undefined && body.provider === undefined && body.features === undefined && body.models === undefined) {
-      res.status(400).json({ error: 'Provide enabled, provider, features, or models' });
+    if (body.enabled === undefined && body.failoverEnabled === undefined && body.provider === undefined && body.features === undefined && body.models === undefined) {
+      res.status(400).json({ error: 'Provide enabled, failoverEnabled, provider, features, or models' });
       return;
     }
     try {
       const updated = await updateAISettings({
         enabled: body.enabled,
+        failoverEnabled: body.failoverEnabled,
         provider: body.provider,
         features: body.features,
         models: body.models,
       });
-      const changed = ['enabled', 'provider', 'features', 'models'].filter((key) => body[key] !== undefined);
+      const changed = ['enabled', 'failoverEnabled', 'provider', 'features', 'models'].filter((key) => body[key] !== undefined);
       await audit(req, {
         action: 'ai.settings.updated',
         category: 'configuration',
         summary: `Updated AI ${changed.join(', ')}`,
-        details: { changed, enabled: updated.enabled, provider: updated.provider },
+        details: {
+          changed,
+          enabled: updated.enabled,
+          failoverEnabled: updated.failoverEnabled,
+          provider: updated.provider,
+        },
       });
       res.json(updated);
     } catch (error) {

@@ -307,6 +307,7 @@ const aiProviderLabel = (provider: AIProvider) => ({
 
 interface AIAdminSettings {
   enabled: boolean;
+  failoverEnabled: boolean;
   available: boolean;
   persistent: boolean;
   provider: AIProvider;
@@ -1400,6 +1401,7 @@ function AdminDashboard() {
 
   const updateAIControl = useCallback(async (settings: {
     enabled?: boolean;
+    failoverEnabled?: boolean;
     provider?: AIProvider;
     features?: Partial<Record<AIFeatureKey, boolean>>;
     models?: Partial<Record<AIProvider, { primary?: string; fast?: string }>>;
@@ -1456,6 +1458,11 @@ function AdminDashboard() {
     if (!aiSettings) return;
     if (aiSettings.enabled && !window.confirm('Stop all AI features and switch every individual AI feature off?')) return;
     void updateAIControl({ enabled: !aiSettings.enabled });
+  };
+
+  const toggleAIFailover = () => {
+    if (!aiSettings) return;
+    void updateAIControl({ failoverEnabled: !aiSettings.failoverEnabled });
   };
 
   const toggleAIFeature = (feature: AIFeatureKey) => {
@@ -3383,7 +3390,9 @@ function AdminDashboard() {
             <span className="admin-ai-setting-icon"><Bot size={18} aria-hidden /></span>
             <div>
               <strong>Preferred provider</strong>
-              <p>New requests use this provider first and retry through other configured providers when needed.</p>
+              <p>{aiSettings?.failoverEnabled === false
+                ? 'New requests use only this provider. Provider errors are returned without retrying another provider.'
+                : 'New requests use this provider first and retry through other configured providers when needed.'}</p>
             </div>
             <div className="admin-provider-options" role="radiogroup" aria-label="Preferred AI provider">
               {AI_PROVIDERS.map((provider) => {
@@ -3406,6 +3415,26 @@ function AdminDashboard() {
                 );
               })}
             </div>
+          </div>
+
+          <div className="admin-ai-setting">
+            <span className="admin-ai-setting-icon"><RefreshCw size={18} aria-hidden /></span>
+            <div>
+              <strong>Automatic provider failover</strong>
+              <p>{aiSettings?.failoverEnabled === false
+                ? 'Requests stay on the preferred provider, even when it is unavailable or returns an error.'
+                : 'Failed requests retry through the other configured AI providers.'}</p>
+            </div>
+            <button
+              type="button"
+              className={aiSettings?.failoverEnabled ? 'admin-kill-switch is-enabled' : 'admin-kill-switch is-stopped'}
+              onClick={toggleAIFailover}
+              disabled={!aiSettings || aiSettingsPending}
+              role="switch"
+              aria-checked={aiSettings?.failoverEnabled ?? false}
+            >
+              {aiSettingsPending ? 'Saving…' : aiSettings?.failoverEnabled ? 'Disable failover' : 'Enable failover'}
+            </button>
           </div>
 
           {AI_PROVIDERS.map((provider) => {

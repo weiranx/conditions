@@ -34,8 +34,12 @@ test('calculates resource usage without allowing invalid capacity values', () =>
 test('authorized AI admin routes read and update runtime settings', async () => {
   jest.resetModules();
 
-  const getAIStatus = jest.fn(() => ({ enabled: true, provider: 'openai' }));
-  const updateAISettings = jest.fn((settings) => ({ enabled: settings.enabled, provider: 'openai' }));
+  const getAIStatus = jest.fn(() => ({ enabled: true, failoverEnabled: true, provider: 'openai' }));
+  const updateAISettings = jest.fn((settings) => ({
+    enabled: settings.enabled ?? true,
+    failoverEnabled: settings.failoverEnabled ?? true,
+    provider: 'openai',
+  }));
   const getAIUsageEntries = jest.fn(() => []);
   const clearAIUsageEntries = jest.fn(() => 7);
   const getFeatureFlagStatus = jest.fn(() => ({ persistent: true, flags: { tripPlanning: true } }));
@@ -570,20 +574,21 @@ test('authorized AI admin routes read and update runtime settings', async () => 
 
   const getResponse = createResponse();
   await routes.get.get('/api/admin/ai-settings')({ headers }, getResponse);
-  expect(getResponse.payload).toEqual({ enabled: true, provider: 'openai' });
+  expect(getResponse.payload).toEqual({ enabled: true, failoverEnabled: true, provider: 'openai' });
 
   const patchResponse = createResponse();
   await routes.patch.get('/api/admin/ai-settings')({
     headers,
-    body: { enabled: false, features: { aiBrief: false } },
+    body: { enabled: false, failoverEnabled: false, features: { aiBrief: false } },
   }, patchResponse);
   expect(updateAISettings).toHaveBeenCalledWith({
     enabled: false,
+    failoverEnabled: false,
     provider: undefined,
     features: { aiBrief: false },
     models: undefined,
   });
-  expect(patchResponse.payload).toEqual({ enabled: false, provider: 'openai' });
+  expect(patchResponse.payload).toEqual({ enabled: false, failoverEnabled: false, provider: 'openai' });
   expect(recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'ai.settings.updated',
     category: 'configuration',
@@ -597,6 +602,7 @@ test('authorized AI admin routes read and update runtime settings', async () => 
   }, patchModelsResponse);
   expect(updateAISettings).toHaveBeenLastCalledWith({
     enabled: undefined,
+    failoverEnabled: undefined,
     provider: undefined,
     features: undefined,
     models: { anthropic: { primary: 'claude-model', fast: 'claude-fast' } },
