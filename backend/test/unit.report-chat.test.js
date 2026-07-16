@@ -50,6 +50,18 @@ describe('report chat request handling', () => {
     });
   });
 
+  test('creates a Kimi model version supported by the current AI SDK runtime', () => {
+    const { createOpenAICompatible } = require('@ai-sdk/openai-compatible');
+    const model = createKimiStreamingModel({
+      createOpenAICompatible,
+      apiKey: 'kimi-test-key',
+      baseURL: 'https://api.moonshot.ai/v1',
+      modelId: 'kimi-k2.6',
+    });
+
+    expect(model.specificationVersion).toBe('v3');
+  });
+
   test('allows useful outside-report route guidance without weakening live-condition guardrails', () => {
     expect(REPORT_CHAT_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(4096);
     expect(REPORT_CHAT_SYSTEM_PROMPT).toMatch(/supplement the report with well-established general backcountry knowledge/i);
