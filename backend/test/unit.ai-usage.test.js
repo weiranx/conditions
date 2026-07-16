@@ -26,6 +26,18 @@ describe('AI usage token normalization', () => {
     });
   });
 
+  test('normalizes OpenAI-compatible chat completion token usage', () => {
+    expect(normalizeTokenUsage({
+      prompt_tokens: 90,
+      completion_tokens: 25,
+      total_tokens: 115,
+    })).toEqual({
+      inputTokens: 90,
+      outputTokens: 25,
+      totalTokens: 115,
+    });
+  });
+
   test('clamps invalid values and never undercounts the token total', () => {
     expect(normalizeTokenUsage({ inputTokens: 10, outputTokens: 5, totalTokens: 2 })).toEqual({
       inputTokens: 10,

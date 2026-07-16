@@ -17,6 +17,11 @@ const aiStatus = () => ({
       fast: 'claude-fast',
       options: ['claude-configured'],
     },
+    kimi: {
+      primary: 'kimi-current',
+      fast: 'kimi-fast',
+      options: ['kimi-configured'],
+    },
   },
 });
 
@@ -31,6 +36,10 @@ test('loads complete provider catalogs, follows Claude pagination, and caches re
       expect(options.headers.Authorization).toBe('Bearer openai-secret');
       return jsonResponse({ data: [{ id: 'gpt-z' }, { id: 'gpt-a' }] });
     }
+    if (url === 'https://api.moonshot.ai/v1/models') {
+      expect(options.headers.Authorization).toBe('Bearer kimi-secret');
+      return jsonResponse({ data: [{ id: 'kimi-z' }, { id: 'kimi-a' }] });
+    }
     expect(options.headers['x-api-key']).toBe('anthropic-secret');
     expect(options.headers['anthropic-version']).toBe('2023-06-01');
     if (!url.includes('after_id=')) {
@@ -43,7 +52,11 @@ test('loads complete provider catalogs, follows Claude pagination, and caches re
   const catalog = createAIModelCatalog({
     fetchWithTimeout,
     getAIStatus: aiStatus,
-    env: { OPENAI_API_KEY: 'openai-secret', ANTHROPIC_API_KEY: 'anthropic-secret' },
+    env: {
+      OPENAI_API_KEY: 'openai-secret',
+      ANTHROPIC_API_KEY: 'anthropic-secret',
+      KIMI_API_KEY: 'kimi-secret',
+    },
     now: () => currentTime,
   });
 
@@ -61,16 +74,21 @@ test('loads complete provider catalogs, follows Claude pagination, and caches re
         source: 'provider',
         error: null,
       },
+      kimi: {
+        models: ['kimi-a', 'kimi-configured', 'kimi-current', 'kimi-fast', 'kimi-z'],
+        source: 'provider',
+        error: null,
+      },
     },
   });
-  expect(fetchWithTimeout).toHaveBeenCalledTimes(3);
+  expect(fetchWithTimeout).toHaveBeenCalledTimes(4);
 
   currentTime += 1000;
   expect(await catalog.load()).toBe(first);
-  expect(fetchWithTimeout).toHaveBeenCalledTimes(3);
+  expect(fetchWithTimeout).toHaveBeenCalledTimes(4);
 
   await catalog.load({ force: true });
-  expect(fetchWithTimeout).toHaveBeenCalledTimes(6);
+  expect(fetchWithTimeout).toHaveBeenCalledTimes(8);
 });
 
 test('falls back to configured models without exposing provider failures or missing keys', async () => {
@@ -93,6 +111,11 @@ test('falls back to configured models without exposing provider failures or miss
   });
   expect(result.providers.anthropic).toEqual({
     models: ['claude-configured', 'claude-current', 'claude-fast'],
+    source: 'configured',
+    error: 'API key not configured',
+  });
+  expect(result.providers.kimi).toEqual({
+    models: ['kimi-configured', 'kimi-current', 'kimi-fast'],
     source: 'configured',
     error: 'API key not configured',
   });

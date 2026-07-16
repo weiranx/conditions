@@ -619,7 +619,7 @@ export function HomeView({
           </div>
           <div className="ssr-h-source-ai">
             <Sparkles size={16} aria-hidden />
-            <p><strong>Optional AI synthesis</strong> OpenAI or Anthropic turns the structured source data into briefings and follow-up answers when AI is enabled. Official provider data remains visible and authoritative.</p>
+            <p><strong>Optional AI synthesis</strong> Models from OpenAI, Anthropic, or Kimi turn the structured source data into briefings and follow-up answers when AI is enabled. Official provider data remains visible and authoritative.</p>
           </div>
           <div className="ssr-h-source-standards">
             <span><Check size={14} aria-hidden /> Source timestamps on every brief</span>

@@ -4,7 +4,8 @@ const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
 
-const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic']);
+const PROVIDER_IDS = ['openai', 'anthropic', 'kimi'];
+const SUPPORTED_PROVIDERS = new Set(PROVIDER_IDS);
 const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision'];
 const AI_FEATURE_KEY_SET = new Set(AI_FEATURE_KEYS);
 const MODEL_TIER_KEYS = ['primary', 'fast'];
@@ -25,6 +26,10 @@ const openAIPrimaryModel = process.env.OPENAI_MODEL || 'gpt-5.6-terra';
 const openAIFastModel = process.env.OPENAI_FAST_MODEL || 'gpt-5.6-luna';
 const anthropicPrimaryModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const anthropicFastModel = process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001';
+const kimiPrimaryModel = process.env.KIMI_MODEL || 'kimi-k3';
+const kimiFastModel = process.env.KIMI_FAST_MODEL || 'kimi-k2.6';
+const kimiApiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || '';
+const kimiBaseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
 
 const MODEL_CONFIG = {
   openai: {
@@ -39,6 +44,12 @@ const MODEL_CONFIG = {
     options: parseModelOptions(process.env.ANTHROPIC_MODEL_OPTIONS, [anthropicPrimaryModel, anthropicFastModel]),
     configured: Boolean(process.env.ANTHROPIC_API_KEY),
   },
+  kimi: {
+    primary: kimiPrimaryModel,
+    fast: kimiFastModel,
+    options: parseModelOptions(process.env.KIMI_MODEL_OPTIONS, [kimiPrimaryModel, kimiFastModel]),
+    configured: Boolean(kimiApiKey),
+  },
 };
 
 const parseTimeout = (value, fallback) => {
@@ -51,11 +62,17 @@ const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
 
 let openAIClient;
 let anthropicClient;
+let kimiClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
 let aiEnabled = DEFAULT_AI_ENABLED;
 let aiFeatures = Object.fromEntries(AI_FEATURE_KEYS.map((feature) => [feature, DEFAULT_AI_ENABLED]));
 
-const fallbackProviderFor = (provider) => provider === 'openai' ? 'anthropic' : 'openai';
+const providerOrderFor = (provider) => [provider, ...PROVIDER_IDS.filter((candidate) => candidate !== provider)];
+
+const fallbackProviderFor = (provider) => {
+  const alternatives = providerOrderFor(provider).slice(1);
+  return alternatives.find((candidate) => MODEL_CONFIG[candidate].configured) || alternatives[0];
+};
 
 const snapshotAISettings = () => ({
   enabled: aiEnabled,
@@ -146,6 +163,14 @@ const getAnthropicClient = () => {
   return anthropicClient;
 };
 
+const getKimiClient = () => {
+  if (!kimiClient) {
+    if (!kimiApiKey) throw new Error('KIMI_API_KEY or MOONSHOT_API_KEY is not set');
+    kimiClient = new OpenAI({ apiKey: kimiApiKey, baseURL: kimiBaseURL });
+  }
+  return kimiClient;
+};
+
 const resolveModel = (provider, { model, tier = 'primary' } = {}, allowExplicitModel = true) => {
   if (allowExplicitModel && model) return model;
   return tier === 'fast' ? MODEL_CONFIG[provider].fast : MODEL_CONFIG[provider].primary;
@@ -190,6 +215,21 @@ const readAnthropicText = (message, { maxTokens, model, operation }) => {
   return text;
 };
 
+const readKimiText = (completion, { maxTokens, model, operation }) => {
+  const text = completion.choices?.[0]?.message?.content?.trim();
+  if (!text) {
+    logger.error(
+      { finishReason: completion.choices?.[0]?.finish_reason },
+      `${operation}: no text in Kimi response`,
+    );
+    throw new Error(`Unexpected response format from Kimi API (finish_reason: ${completion.choices?.[0]?.finish_reason || 'unknown'})`);
+  }
+  if (completion.choices?.[0]?.finish_reason === 'length') {
+    logger.warn({ maxTokens, model }, `${operation}: Kimi response truncated by max_tokens limit`);
+  }
+  return text;
+};
+
 const callTextProvider = async (provider, prompt, options, allowExplicitModel) => {
   const { maxTokens, model, system, tier, feature, userId } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
@@ -220,6 +260,20 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
       if (system) params.system = system;
       response = await getAnthropicClient().messages.create(params, requestOptions(tier));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
+      await finish('success');
+      return text;
+    }
+
+    if (provider === 'kimi') {
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({ role: 'user', content: prompt });
+      response = await getKimiClient().chat.completions.create({
+        model: resolvedModel,
+        max_tokens: maxTokens,
+        messages,
+      }, requestOptions(tier));
+      const text = readKimiText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
     }
@@ -280,6 +334,26 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
       return text;
     }
 
+    if (provider === 'kimi') {
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
+          { type: 'text', text: prompt },
+        ],
+      });
+      response = await getKimiClient().chat.completions.create({
+        model: resolvedModel,
+        max_tokens: maxTokens,
+        messages,
+      }, requestOptions(tier));
+      const text = readKimiText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
+      await finish('success');
+      return text;
+    }
+
     const params = {
       model: resolvedModel,
       max_output_tokens: maxTokens,
@@ -328,29 +402,40 @@ const runWithFailover = async (operation, tier, invoke) => {
   // Snapshot provider selection for the full request so an admin change made while a
   // request is in flight cannot alter its fallback path midway through the operation.
   const primaryProvider = activeProvider;
-  const fallbackProvider = fallbackProviderFor(primaryProvider);
-  try {
-    return await invoke(primaryProvider, true);
-  } catch (primaryError) {
-    if (!MODEL_CONFIG[fallbackProvider].configured) throw primaryError;
+  const providers = providerOrderFor(primaryProvider).filter((provider) => MODEL_CONFIG[provider].configured);
+  if (providers.length === 0) {
+    const error = new Error('AI provider is not configured');
+    error.code = 'AI_PROVIDER_NOT_CONFIGURED';
+    throw error;
+  }
 
-    logger.warn(
-      { err: primaryError, primaryProvider, fallbackProvider, tier },
-      `${operation}: preferred AI provider failed; retrying with fallback`,
-    );
+  const failures = [];
+  for (const [index, provider] of providers.entries()) {
     try {
-      return await invoke(fallbackProvider, false);
-    } catch (fallbackError) {
-      logger.error(
-        { err: fallbackError, primaryProvider, fallbackProvider, tier },
-        `${operation}: fallback AI provider also failed`,
-      );
-      throw new Error(
-        `Both AI providers failed (${primaryProvider}: ${errorMessage(primaryError)}; ${fallbackProvider}: ${errorMessage(fallbackError)})`,
-        { cause: fallbackError },
-      );
+      return await invoke(provider, provider === primaryProvider);
+    } catch (error) {
+      failures.push({ provider, error });
+      const nextProvider = providers[index + 1];
+      if (nextProvider) {
+        logger.warn(
+          { err: error, primaryProvider, failedProvider: provider, fallbackProvider: nextProvider, tier },
+          `${operation}: AI provider failed; retrying with fallback`,
+        );
+      }
     }
   }
+
+  if (failures.length === 1) throw failures[0].error;
+  const lastFailure = failures[failures.length - 1];
+  logger.error(
+    { err: lastFailure.error, primaryProvider, failedProviders: failures.map(({ provider }) => provider), tier },
+    `${operation}: all configured AI providers failed`,
+  );
+  const prefix = failures.length === 2 ? 'Both AI providers failed' : 'All configured AI providers failed';
+  throw new Error(
+    `${prefix} (${failures.map(({ provider, error }) => `${provider}: ${errorMessage(error)}`).join('; ')})`,
+    { cause: lastFailure.error },
+  );
 };
 
 const askAI = async (prompt, { maxTokens = 4096, model, system, tier = 'primary', feature = 'text-generation', userId } = {}) => {
@@ -369,7 +454,7 @@ const askAIVision = async (imageBase64, prompt, { maxTokens = 4096, model, syste
 
 const getAIStatus = () => {
   const fallbackProvider = fallbackProviderFor(activeProvider);
-  const available = aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured);
+  const available = aiEnabled && PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured);
   return {
     enabled: aiEnabled,
     available,
@@ -519,7 +604,7 @@ const updateAISettings = ({ enabled, provider, features, models } = {}) => {
   });
 };
 
-const isAIAvailable = () => aiEnabled && (MODEL_CONFIG.openai.configured || MODEL_CONFIG.anthropic.configured);
+const isAIAvailable = () => aiEnabled && PROVIDER_IDS.some((provider) => MODEL_CONFIG[provider].configured);
 const isAIFeatureAvailable = (feature) => AI_FEATURE_KEY_SET.has(feature) && isAIAvailable() && aiFeatures[feature];
 const getAIFeatureAvailability = () => Object.fromEntries(
   AI_FEATURE_KEYS.map((feature) => [feature, isAIFeatureAvailable(feature)]),

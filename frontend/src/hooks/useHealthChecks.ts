@@ -12,6 +12,12 @@ export interface UseHealthChecksReturn {
   runHealthChecks: () => Promise<void>;
 }
 
+const aiProviderLabel = (provider: string) => ({
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  kimi: 'Kimi',
+})[provider] || provider;
+
 export function useHealthChecks(): UseHealthChecksReturn {
   const [healthChecks, setHealthChecks] = useState<HealthCheckResult[]>([]);
   const [healthLoading, setHealthLoading] = useState(false);
@@ -147,10 +153,10 @@ export function useHealthChecks(): UseHealthChecksReturn {
           label: 'AI Provider',
           status: ai.configured || ai.fallbackConfigured ? 'ok' as const : 'warn' as const,
           detail: ai.configured
-            ? `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is preferred; ${ai.fallbackConfigured ? 'automatic failover is ready' : 'the fallback key is not configured'}.`
+            ? `${aiProviderLabel(ai.provider)} is preferred; ${ai.fallbackConfigured ? 'automatic failover is ready' : 'no fallback provider is configured'}.`
             : ai.fallbackConfigured
-              ? `${ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} is preferred but unavailable; requests will use ${ai.fallbackProvider === 'anthropic' ? 'Anthropic' : 'OpenAI'}.`
-              : 'Neither AI provider has an API key configured.',
+              ? `${aiProviderLabel(ai.provider)} is preferred but unavailable; requests will use ${aiProviderLabel(ai.fallbackProvider)}.`
+              : 'No AI provider has an API key configured.',
           meta: `Preferred: ${ai.primaryModel} · Fallback: ${ai.fallbackPrimaryModel}`,
         }] : []),
         {

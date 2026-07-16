@@ -129,8 +129,8 @@ APP_BASE_URL=https://your-frontend-domain.example.com
 
 DEBUG_AVY=false
 
-# Choose the preferred provider. Configure both keys for automatic per-request
-# failover when the preferred provider errors or times out.
+# Choose the preferred provider. Configure multiple keys for automatic
+# per-request failover when the preferred provider errors or times out.
 AI_PROVIDER=openai
 # Used only when no PostgreSQL admin setting exists.
 AI_ENABLED=true
@@ -146,6 +146,11 @@ OPENAI_FAST_MODEL=gpt-5.6-luna
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5
 ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
+
+KIMI_API_KEY=
+KIMI_BASE_URL=https://api.moonshot.ai/v1
+KIMI_MODEL=kimi-k3
+KIMI_FAST_MODEL=kimi-k2.6
 ```
 
 ### Deploy PostgreSQL

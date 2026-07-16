@@ -297,7 +297,13 @@ interface ExternalDiagnosticsResult {
 
 type DiagnosticService = ExternalDiagnosticsResult['services'][number];
 
-type AIProvider = 'openai' | 'anthropic';
+type AIProvider = 'openai' | 'anthropic' | 'kimi';
+const AI_PROVIDERS: AIProvider[] = ['openai', 'anthropic', 'kimi'];
+const aiProviderLabel = (provider: AIProvider) => ({
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  kimi: 'Kimi',
+})[provider];
 
 interface AIAdminSettings {
   enabled: boolean;
@@ -1113,6 +1119,7 @@ function AdminDashboard() {
   const [modelDrafts, setModelDrafts] = useState<Record<AIProvider, { primary: string; fast: string }>>({
     openai: { primary: '', fast: '' },
     anthropic: { primary: '', fast: '' },
+    kimi: { primary: '', fast: '' },
   });
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
@@ -1437,6 +1444,10 @@ function AdminDashboard() {
       anthropic: {
         primary: aiSettings.providers.anthropic.primary,
         fast: aiSettings.providers.anthropic.fast,
+      },
+      kimi: {
+        primary: aiSettings.providers.kimi.primary,
+        fast: aiSettings.providers.kimi.fast,
       },
     });
   }, [aiSettings]);
@@ -3372,10 +3383,10 @@ function AdminDashboard() {
             <span className="admin-ai-setting-icon"><Bot size={18} aria-hidden /></span>
             <div>
               <strong>Preferred provider</strong>
-              <p>New requests use this provider first and retain the other configured provider as fallback.</p>
+              <p>New requests use this provider first and retry through other configured providers when needed.</p>
             </div>
             <div className="admin-provider-options" role="radiogroup" aria-label="Preferred AI provider">
-              {(['openai', 'anthropic'] as const).map((provider) => {
+              {AI_PROVIDERS.map((provider) => {
                 const providerConfig = aiSettings?.providers[provider];
                 const selected = aiSettings?.provider === provider;
                 return (
@@ -3389,7 +3400,7 @@ function AdminDashboard() {
                     onClick={() => void updateAIControl({ provider })}
                     title={providerConfig?.configured ? `Use ${provider}` : `${provider} key is not configured`}
                   >
-                    <span>{provider === 'openai' ? 'OpenAI' : 'Anthropic'}</span>
+                    <span>{aiProviderLabel(provider)}</span>
                     <small>{providerConfig?.configured ? providerConfig.primary : 'Key not configured'}</small>
                   </button>
                 );
@@ -3397,12 +3408,12 @@ function AdminDashboard() {
             </div>
           </div>
 
-          {(['openai', 'anthropic'] as const).map((provider) => {
+          {AI_PROVIDERS.map((provider) => {
             const providerConfig = aiSettings?.providers[provider];
             const draft = modelDrafts[provider];
             const changed = Boolean(providerConfig)
               && (draft.primary.trim() !== providerConfig?.primary || draft.fast.trim() !== providerConfig?.fast);
-            const providerLabel = provider === 'openai' ? 'OpenAI models' : 'Claude models';
+            const providerLabel = provider === 'anthropic' ? 'Claude models' : `${aiProviderLabel(provider)} models`;
             const catalogProvider = aiModelCatalog?.providers?.[provider];
             const modelOptions = Array.from(new Set([
               ...(catalogProvider?.models ?? []),

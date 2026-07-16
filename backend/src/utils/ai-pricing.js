@@ -73,8 +73,8 @@ const resolveAIModelPricing = ({ provider, model, timestamp = new Date().toISOSt
 };
 
 const normalizeBillableTokens = (usage = {}) => {
-  const rawInputTokens = asTokenCount(usage.inputTokens ?? usage.input_tokens);
-  const outputTokens = asTokenCount(usage.outputTokens ?? usage.output_tokens);
+  const rawInputTokens = asTokenCount(usage.inputTokens ?? usage.input_tokens ?? usage.prompt_tokens);
+  const outputTokens = asTokenCount(usage.outputTokens ?? usage.output_tokens ?? usage.completion_tokens);
   const inputDetails = usage.inputTokenDetails ?? usage.input_tokens_details ?? usage.inputTokensDetails ?? {};
   const topLevelCacheRead = asTokenCount(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens);
   const nestedCacheRead = asTokenCount(

@@ -40,6 +40,15 @@ const fetchOpenAIModels = async ({ fetchWithTimeout, apiKey }) => {
   return normalizeModelIds(Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : []);
 };
 
+const fetchKimiModels = async ({ fetchWithTimeout, apiKey, baseURL }) => {
+  const normalizedBaseURL = String(baseURL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
+  const response = await fetchWithTimeout(`${normalizedBaseURL}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  }, PROVIDER_TIMEOUT_MS);
+  const payload = await readJsonResponse(response, 'Kimi');
+  return normalizeModelIds(Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : []);
+};
+
 const fetchAnthropicModels = async ({ fetchWithTimeout, apiKey }) => {
   const models = [];
   const seenCursors = new Set();
@@ -107,7 +116,9 @@ const createAIModelCatalog = ({ fetchWithTimeout, getAIStatus, env = process.env
     const status = getAIStatus();
     const openAIFallback = configuredModels(status?.providers?.openai);
     const anthropicFallback = configuredModels(status?.providers?.anthropic);
-    const [openai, anthropic] = await Promise.all([
+    const kimiFallback = configuredModels(status?.providers?.kimi);
+    const kimiApiKey = env.KIMI_API_KEY || env.MOONSHOT_API_KEY || '';
+    const [openai, anthropic, kimi] = await Promise.all([
       loadProvider({
         provider: 'OpenAI',
         apiKey: env.OPENAI_API_KEY || '',
@@ -120,10 +131,19 @@ const createAIModelCatalog = ({ fetchWithTimeout, getAIStatus, env = process.env
         fetchModels: fetchAnthropicModels,
         fallback: anthropicFallback,
       }),
+      loadProvider({
+        provider: 'Kimi',
+        apiKey: kimiApiKey,
+        fetchModels: (options) => fetchKimiModels({
+          ...options,
+          baseURL: env.KIMI_BASE_URL,
+        }),
+        fallback: kimiFallback,
+      }),
     ]);
     const result = {
       fetchedAt: new Date(now()).toISOString(),
-      providers: { openai, anthropic },
+      providers: { openai, anthropic, kimi },
     };
     cached = { value: result, expiresAt: now() + MODEL_CATALOG_TTL_MS };
     return result;

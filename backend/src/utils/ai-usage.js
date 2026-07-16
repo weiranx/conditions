@@ -13,8 +13,8 @@ const asNonNegativeInteger = (value) => {
 };
 
 const normalizeTokenUsage = (usage = {}) => {
-  const inputTokens = asNonNegativeInteger(usage.inputTokens ?? usage.input_tokens);
-  const outputTokens = asNonNegativeInteger(usage.outputTokens ?? usage.output_tokens);
+  const inputTokens = asNonNegativeInteger(usage.inputTokens ?? usage.input_tokens ?? usage.prompt_tokens);
+  const outputTokens = asNonNegativeInteger(usage.outputTokens ?? usage.output_tokens ?? usage.completion_tokens);
   const reportedTotal = asNonNegativeInteger(usage.totalTokens ?? usage.total_tokens);
   return {
     inputTokens,

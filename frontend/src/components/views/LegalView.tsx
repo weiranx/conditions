@@ -82,7 +82,7 @@ function PrivacyPolicy() {
         </p>
         <p>
           If you use an AI feature, the report content, your prompt, and related plan context are sent to the
-          configured AI provider (OpenAI or Anthropic) to produce the response. Their handling of that information
+          configured AI provider (OpenAI, Anthropic, or Kimi) to produce the response. Their handling of that information
           is governed by their own terms and privacy policies.
         </p>
         <p>

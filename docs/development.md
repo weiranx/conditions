@@ -53,7 +53,7 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `EMAIL_FROM` | — | Verified sender used for account emails |
 | `APP_BASE_URL` | — | Public web origin used in verification and reset links |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
-| `AI_PROVIDER` | `openai` | Preferred AI provider: `openai` or `anthropic`; a failed request retries through the other configured provider. |
+| `AI_PROVIDER` | `openai` | Preferred AI provider: `openai`, `anthropic`, or `kimi`; a failed request retries through the other configured providers. |
 | `AI_PRIMARY_TIMEOUT_MS` | `28000` | Per-provider timeout for synthesis, briefs, and vision before failover. |
 | `AI_FAST_TIMEOUT_MS` | `8000` | Per-provider timeout for route suggestions and extraction before failover. |
 | `OPENAI_API_KEY` | — | Enables OpenAI as preferred provider or fallback. |
@@ -62,8 +62,12 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `ANTHROPIC_API_KEY` | — | Enables Anthropic as preferred provider or fallback. |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5` | Claude model for route synthesis, field briefs, and snow-image analysis. |
 | `ANTHROPIC_FAST_MODEL` | `claude-haiku-4-5-20251001` | Claude model for route suggestions and waypoint extraction. |
+| `KIMI_API_KEY` | — | Enables Kimi. `MOONSHOT_API_KEY` is accepted as an alias. |
+| `KIMI_BASE_URL` | `https://api.moonshot.ai/v1` | Kimi API endpoint; change only when using another Kimi region. |
+| `KIMI_MODEL` | `kimi-k3` | Kimi model for route synthesis, field briefs, chat, and snow-image analysis. |
+| `KIMI_FAST_MODEL` | `kimi-k2.6` | Kimi model for route suggestions and waypoint extraction. |
 
-The safety response exposes `capabilities.ai`. Web and iOS clients hide AI-powered planner controls when neither provider key is configured.
+The safety response exposes `capabilities.ai`. Web and iOS clients hide AI-powered planner controls when no provider key is configured.
 
 ### Frontend (`frontend/.env`)
 
@@ -117,7 +121,7 @@ Do not mix module systems within each tier.
 
 - New backend domain logic goes in `backend/index.js` or a new utility in `backend/src/utils/`.
 - New backend routes go in `backend/src/routes/`.
-- OpenAI and Anthropic integrations use `backend/src/utils/ai-client.js` as the shared provider-switching client.
+- OpenAI, Anthropic, and Kimi integrations use `backend/src/utils/ai-client.js` as the shared provider-switching client.
 - Caching logic uses `backend/src/utils/cache.js` for tiered in-memory caches.
 - New frontend utilities go in `frontend/src/app/` or `frontend/src/lib/`.
 - New frontend UI components go in `frontend/src/components/`. Domain-specific cards go in `frontend/src/components/planner/cards/`.

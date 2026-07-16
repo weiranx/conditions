@@ -109,7 +109,7 @@ Browser
 - NWS alert filtering by travel window
 - Air quality, precipitation, snowpack, fire-risk, and heat-risk enrichment
 - Safety score synthesis with temporal weighting, combined hazard detection, and confidence-weighted explanation generation
-- Provider-selectable OpenAI or Claude route suggestions and multi-waypoint route analysis
+- Provider-selectable OpenAI, Claude, or Kimi route suggestions and multi-waypoint route analysis
 - On-demand AI field brief generation
 - Report logging with access-controlled retrieval
 - Tiered in-memory caching across all upstream API calls
@@ -150,7 +150,7 @@ Browser
 | `gear-suggestions.js` | Gear focus recommendation logic |
 | `time.js` | Time zone and date utilities |
 | `cache.js` | Tiered in-memory caching with TTL and stale-while-revalidate |
-| `ai-client.js` | OpenAI/Anthropic provider switch and shared AI client wrapper |
+| `ai-client.js` | OpenAI/Anthropic/Kimi provider switch, ordered failover, and shared AI client wrapper |
 | `weather-data.js` | Weather data fetching and assembly |
 | `weather-normalizers.js` | Weather field normalization and unit conversion |
 | `precipitation.js` | Precipitation data fetching and rolling totals |

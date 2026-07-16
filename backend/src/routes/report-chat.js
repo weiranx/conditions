@@ -135,19 +135,26 @@ const sanitizeFollowUpSuggestions = (value, askedQuestions = []) => {
 const resolveStreamingModel = async () => {
   assertAIEnabled();
   const status = getAIStatus();
-  const provider = status.configured
+  const provider = status.providers?.[status.provider]?.configured
     ? status.provider
-    : status.fallbackConfigured
-      ? status.fallbackProvider
-      : null;
+    : Object.entries(status.providers || {}).find(([, config]) => config?.configured)?.[0] || null;
   if (!provider) throw new Error('AI provider is not configured');
 
-  const modelId = provider === status.provider ? status.primaryModel : status.fallbackPrimaryModel;
+  const modelId = status.providers[provider].primary;
   if (provider === 'anthropic') {
     const { createAnthropic } = await import('@ai-sdk/anthropic');
     return { model: createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId), modelId, provider };
   }
   const { createOpenAI } = await import('@ai-sdk/openai');
+  if (provider === 'kimi') {
+    const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
+    const baseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
+    return {
+      model: createOpenAI({ apiKey, baseURL, name: 'kimi' }).chat(modelId),
+      modelId,
+      provider,
+    };
+  }
   return { model: createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(modelId), modelId, provider };
 };
 

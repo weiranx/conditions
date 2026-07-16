@@ -1,8 +1,10 @@
 const mockOpenAICreate = jest.fn();
 const mockAnthropicCreate = jest.fn();
+const mockKimiCreate = jest.fn();
 
-jest.mock('openai', () => jest.fn().mockImplementation(() => ({
+jest.mock('openai', () => jest.fn().mockImplementation((options = {}) => ({
   responses: { create: mockOpenAICreate },
+  chat: { completions: { create: options.baseURL ? mockKimiCreate : jest.fn() } },
 })));
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockAnthropicCreate },
@@ -20,6 +22,12 @@ const ENV_KEYS = [
   'ANTHROPIC_MODEL',
   'ANTHROPIC_FAST_MODEL',
   'ANTHROPIC_MODEL_OPTIONS',
+  'KIMI_API_KEY',
+  'MOONSHOT_API_KEY',
+  'KIMI_BASE_URL',
+  'KIMI_MODEL',
+  'KIMI_FAST_MODEL',
+  'KIMI_MODEL_OPTIONS',
   'AI_PRIMARY_TIMEOUT_MS',
   'AI_FAST_TIMEOUT_MS',
 ];
@@ -35,6 +43,7 @@ describe('AI provider client wrapper', () => {
   beforeEach(() => {
     mockOpenAICreate.mockReset();
     mockAnthropicCreate.mockReset();
+    mockKimiCreate.mockReset();
     process.env.OPENAI_API_KEY = 'openai-test-key';
     process.env.ANTHROPIC_API_KEY = 'anthropic-test-key';
     delete process.env.OPENAI_MODEL;
@@ -43,6 +52,12 @@ describe('AI provider client wrapper', () => {
     delete process.env.ANTHROPIC_MODEL;
     delete process.env.ANTHROPIC_FAST_MODEL;
     delete process.env.ANTHROPIC_MODEL_OPTIONS;
+    delete process.env.KIMI_API_KEY;
+    delete process.env.MOONSHOT_API_KEY;
+    delete process.env.KIMI_BASE_URL;
+    delete process.env.KIMI_MODEL;
+    delete process.env.KIMI_FAST_MODEL;
+    delete process.env.KIMI_MODEL_OPTIONS;
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
     delete process.env.AI_ENABLED;
@@ -141,6 +156,46 @@ describe('AI provider client wrapper', () => {
     }), { timeout: 28000, maxRetries: 0 });
   });
 
+  test('sends text and system prompts through the Kimi chat completions API', async () => {
+    process.env.KIMI_API_KEY = 'kimi-test-key';
+    process.env.KIMI_BASE_URL = 'https://api.moonshot.ai/v1/';
+    mockKimiCreate.mockResolvedValue({
+      choices: [{ message: { content: '  Kimi field brief  ' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 20, completion_tokens: 8, total_tokens: 28 },
+    });
+    const { askAI } = loadClient('kimi');
+
+    await expect(askAI('conditions', { maxTokens: 700, system: 'Be concise.' })).resolves.toBe('Kimi field brief');
+    expect(mockKimiCreate).toHaveBeenCalledWith({
+      model: 'kimi-k3',
+      max_tokens: 700,
+      messages: [
+        { role: 'system', content: 'Be concise.' },
+        { role: 'user', content: 'conditions' },
+      ],
+    }, { timeout: 28000, maxRetries: 0 });
+  });
+
+  test('sends base64 images through Kimi multimodal chat input', async () => {
+    process.env.MOONSHOT_API_KEY = 'kimi-test-key';
+    mockKimiCreate.mockResolvedValue({
+      choices: [{ message: { content: 'snow coverage' }, finish_reason: 'stop' }],
+    });
+    const { askAIVision } = loadClient('kimi');
+
+    await expect(askAIVision('YWJj', 'analyze', { mediaType: 'image/jpeg' })).resolves.toBe('snow coverage');
+    expect(mockKimiCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'kimi-k3',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,YWJj' } },
+          { type: 'text', text: 'analyze' },
+        ],
+      }],
+    }), { timeout: 28000, maxRetries: 0 });
+  });
+
   test('reports the selected provider and models without exposing keys', () => {
     const { getAIStatus, isAIAvailable } = loadClient('anthropic');
 
@@ -170,6 +225,12 @@ describe('AI provider client wrapper', () => {
           options: ['claude-sonnet-5', 'claude-haiku-4-5-20251001'],
           configured: true,
         },
+        kimi: {
+          primary: 'kimi-k3',
+          fast: 'kimi-k2.6',
+          options: ['kimi-k3', 'kimi-k2.6'],
+          configured: false,
+        },
       },
       features: {
         aiBrief: { enabled: true, available: true },
@@ -184,9 +245,11 @@ describe('AI provider client wrapper', () => {
     expect(isAIAvailable()).toBe(true);
   });
 
-  test('reports AI unavailable when neither provider key is configured', () => {
+  test('reports AI unavailable when no provider key is configured', () => {
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.KIMI_API_KEY;
+    delete process.env.MOONSHOT_API_KEY;
     const { isAIAvailable } = loadClient('openai');
 
     expect(isAIAvailable()).toBe(false);
@@ -411,6 +474,24 @@ describe('AI provider client wrapper', () => {
     );
   });
 
+  test('fails over through all configured providers to Kimi', async () => {
+    process.env.KIMI_API_KEY = 'kimi-test-key';
+    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
+    mockAnthropicCreate.mockRejectedValue(new Error('Anthropic unavailable'));
+    mockKimiCreate.mockResolvedValue({
+      choices: [{ message: { content: 'Kimi fallback brief' }, finish_reason: 'stop' }],
+    });
+    const { askAI } = loadClient('openai');
+
+    await expect(askAI('conditions')).resolves.toBe('Kimi fallback brief');
+    expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
+    expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
+    expect(mockKimiCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'kimi-k3' }),
+      { timeout: 28000, maxRetries: 0 },
+    );
+  });
+
   test('preserves the original error when no fallback key is configured', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
@@ -418,6 +499,7 @@ describe('AI provider client wrapper', () => {
 
     await expect(askAI('conditions')).rejects.toThrow('OpenAI unavailable');
     expect(mockAnthropicCreate).not.toHaveBeenCalled();
+    expect(mockKimiCreate).not.toHaveBeenCalled();
   });
 
   test('reports both provider failures', async () => {
