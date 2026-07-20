@@ -933,7 +933,7 @@ input {
 
 .admin-system-grid strong.is-healthy { color: var(--ui-go-ink); }
 .admin-system-grid strong.is-unavailable { color: var(--ui-nogo-ink); }
-.admin-system-grid small { overflow: hidden; margin-top: 3px; color: var(--ui-text-4); font-size: 9.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.admin-system-grid small { overflow: hidden; margin-top: 3px; color: var(--ui-text-4); font-size: 9.5px; line-height: 1.35; }
 
 .admin-action-list {
   display: grid;

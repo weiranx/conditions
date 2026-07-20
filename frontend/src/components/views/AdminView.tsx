@@ -127,6 +127,19 @@ interface AdminHealthSnapshot {
 }
 
 interface AdminSystemResources {
+  app?: {
+    memory: {
+      rssBytes: number;
+      heapUsedBytes: number;
+      heapTotalBytes: number;
+      externalBytes: number;
+    };
+    storage: {
+      usedBytes: number | null;
+      filesBytes: number | null;
+      databaseBytes: number | null;
+    };
+  };
   memory: ResourceUsageSnapshot;
   disk: ResourceUsageSnapshot | null;
   timestamp: string;
@@ -2554,16 +2567,24 @@ function AdminDashboard() {
               <small>{health ? `${health.memory.rssMb} MB RSS · ${health.memory.heapUsedMb} MB heap` : 'Memory unavailable'}</small>
             </div>
             <div>
-              <span><MemoryStick size={14} aria-hidden /> RAM</span>
-              <strong>{systemResources ? `${systemResources.memory.usagePercent}% used` : '—'}</strong>
-              <small>{systemResources ? `${formatBytes(systemResources.memory.usedBytes)} of ${formatBytes(systemResources.memory.totalBytes)}` : 'Usage unavailable'}</small>
+              <span><MemoryStick size={14} aria-hidden /> App RAM</span>
+              <strong>{systemResources?.app ? formatBytes(systemResources.app.memory.rssBytes) : health ? `${health.memory.rssMb} MB` : '—'}</strong>
+              <small>
+                {systemResources?.app
+                  ? `Heap ${formatBytes(systemResources.app.memory.heapUsedBytes)} · ${systemResources.memory.totalBytes > 0 ? `${((systemResources.app.memory.rssBytes / systemResources.memory.totalBytes) * 100).toFixed(1)}% of host` : 'host total unavailable'}`
+                  : 'Backend process memory'}
+              </small>
             </div>
             <div>
-              <span><HardDrive size={14} aria-hidden /> Disk</span>
-              <strong className={systemResources && !systemResources.disk ? 'is-unavailable' : undefined}>
-                {systemResources?.disk ? `${systemResources.disk.usagePercent}% used` : '—'}
+              <span><HardDrive size={14} aria-hidden /> App storage</span>
+              <strong className={systemResources && (!systemResources.app || systemResources.app.storage.usedBytes == null) ? 'is-unavailable' : undefined}>
+                {systemResources?.app ? formatBytes(systemResources.app.storage.usedBytes) : '—'}
               </strong>
-              <small>{systemResources?.disk ? `${formatBytes(systemResources.disk.usedBytes)} of ${formatBytes(systemResources.disk.totalBytes)}` : 'Usage unavailable'}</small>
+              <small>
+                {systemResources?.app && systemResources.app.storage.usedBytes != null
+                  ? `Database ${formatBytes(systemResources.app.storage.databaseBytes)} · files ${formatBytes(systemResources.app.storage.filesBytes)}${systemResources.disk ? ` · host ${systemResources.disk.usagePercent}% full` : ''}`
+                  : 'Persistent storage unavailable'}
+              </small>
             </div>
             <div>
               <span><Database size={14} aria-hidden /> Database</span>
