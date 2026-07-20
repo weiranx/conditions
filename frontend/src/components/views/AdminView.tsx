@@ -560,6 +560,7 @@ type AnalyticsRange = '6h' | '24h' | '7d';
 type AuditFilter = 'all' | 'accounts' | 'configuration' | 'maintenance' | 'diagnostics' | 'errors';
 type UserStatusFilter = 'all' | 'active' | 'suspended' | 'free' | 'premium' | 'verified' | 'unverified';
 type AdminSection = 'overview' | 'users' | 'operations' | 'analytics' | 'activity';
+type AdminOperationsPanel = 'health' | 'monitoring' | 'ai' | 'environment' | 'features';
 type AdminAttentionKey = 'reports' | 'slow' | 'ai' | 'diagnostics' | 'scheduler' | 'resources' | 'suspended';
 
 interface AdminAttentionSignal {
@@ -585,8 +586,22 @@ const ADMIN_SECTIONS = [
   icon: typeof LayoutDashboard;
 }>;
 
+const ADMIN_OPERATIONS_PANELS = [
+  { value: 'health', label: 'Service health', description: 'Diagnostics and uptime', icon: Server },
+  { value: 'monitoring', label: 'Monitoring', description: 'Objective Watch scheduler', icon: BellRing },
+  { value: 'ai', label: 'AI controls', description: 'Providers and models', icon: Bot },
+  { value: 'environment', label: 'Environment', description: 'Runtime configuration', icon: KeyRound },
+  { value: 'features', label: 'Features', description: 'Product availability', icon: Grid3X3 },
+] as const satisfies ReadonlyArray<{
+  value: AdminOperationsPanel;
+  label: string;
+  description: string;
+  icon: typeof Server;
+}>;
+
 const ADMIN_SECTION_STORAGE_KEY = 'summitsafe:admin-section:v1';
 const ADMIN_RANGE_STORAGE_KEY = 'summitsafe:admin-range:v1';
+const ADMIN_OPERATIONS_PANEL_STORAGE_KEY = 'summitsafe:admin-operations-panel:v1';
 
 const readStoredAdminSection = (): AdminSection => {
   if (typeof window === 'undefined') return 'overview';
@@ -605,6 +620,16 @@ const readStoredAnalyticsRange = (): AnalyticsRange => {
     return stored === '6h' || stored === '24h' || stored === '7d' ? stored : '7d';
   } catch {
     return '7d';
+  }
+};
+
+const readStoredOperationsPanel = (): AdminOperationsPanel => {
+  if (typeof window === 'undefined') return 'health';
+  try {
+    const stored = window.sessionStorage.getItem(ADMIN_OPERATIONS_PANEL_STORAGE_KEY);
+    return ADMIN_OPERATIONS_PANELS.some((panel) => panel.value === stored) ? stored as AdminOperationsPanel : 'health';
+  } catch {
+    return 'health';
   }
 };
 
@@ -1167,6 +1192,7 @@ function AdminDashboard() {
   const [userQuery, setUserQuery] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all');
   const [activeSection, setActiveSection] = useState<AdminSection>(readStoredAdminSection);
+  const [activeOperationsPanel, setActiveOperationsPanel] = useState<AdminOperationsPanel>(readStoredOperationsPanel);
   const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>(readStoredAnalyticsRange);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [visibleLogCount, setVisibleLogCount] = useState(LOG_PAGE_SIZE);
@@ -1179,10 +1205,11 @@ function AdminDashboard() {
     try {
       window.sessionStorage.setItem(ADMIN_SECTION_STORAGE_KEY, activeSection);
       window.sessionStorage.setItem(ADMIN_RANGE_STORAGE_KEY, analyticsRange);
+      window.sessionStorage.setItem(ADMIN_OPERATIONS_PANEL_STORAGE_KEY, activeOperationsPanel);
     } catch {
       // Admin navigation remains usable when browser storage is unavailable.
     }
-  }, [activeSection, analyticsRange]);
+  }, [activeOperationsPanel, activeSection, analyticsRange]);
 
   const fetchHealthSnapshot = useCallback(async () => {
     const startedAt = performance.now();
@@ -2286,10 +2313,11 @@ function AdminDashboard() {
   ];
   const attentionSignals = allAttentionSignals.filter((signal) => signal.count > 0);
   const dashboardAttentionCount = attentionSignals.length;
+  const operationsAttentionCount = attentionSignals.filter((signal) => signal.section === 'operations').length;
   const sectionCounts: Record<AdminSection, number> = {
     overview: dashboardAttentionCount,
     users: usersTotal,
-    operations: attentionSignals.filter((signal) => signal.section === 'operations').length,
+    operations: operationsAttentionCount,
     analytics: rangeLogs.length,
     activity: auditEntries.length,
   };
@@ -2363,6 +2391,38 @@ function AdminDashboard() {
     });
     return [...groups.entries()];
   }, [runtimeEnvironment]);
+  const runtimeOverrideCount = runtimeEnvironment?.entries.filter((entry) => entry.overridden).length ?? 0;
+  const enabledFeatureCount = featureFlagStatus
+    ? Object.values(featureFlagStatus.flags).filter(Boolean).length
+    : 0;
+
+  const operationsPanelStatus = (panel: AdminOperationsPanel): { label: string; tone: 'clear' | 'attention' | 'neutral' } => {
+    if (panel === 'health') {
+      return diagnosticSummary.failed > 0
+        ? { label: `${diagnosticSummary.failed} failed`, tone: 'attention' }
+        : { label: `${diagnosticSummary.operational}/${diagnosticSummary.total} ready`, tone: 'clear' };
+    }
+    if (panel === 'monitoring') {
+      if (!objectiveWatchScheduler) return { label: 'Unavailable', tone: 'neutral' };
+      return {
+        label: schedulerHealthLabel(objectiveWatchScheduler.health),
+        tone: objectiveWatchSchedulerNeedsAttention ? 'attention' : objectiveWatchScheduler.health === 'healthy' || objectiveWatchScheduler.health === 'running' ? 'clear' : 'neutral',
+      };
+    }
+    if (panel === 'ai') {
+      if (!aiSettings) return { label: 'Unavailable', tone: 'neutral' };
+      return aiSettings.enabled
+        ? { label: aiProviderLabel(aiSettings.provider), tone: 'clear' }
+        : { label: 'Stopped', tone: 'neutral' };
+    }
+    if (panel === 'environment') {
+      return { label: runtimeOverrideCount ? `${runtimeOverrideCount} overridden` : 'Defaults', tone: 'neutral' };
+    }
+    return {
+      label: featureFlagStatus ? `${enabledFeatureCount}/${Object.keys(featureFlagStatus.flags).length} enabled` : 'Unavailable',
+      tone: 'neutral',
+    };
+  };
 
   const downloadOperationsSnapshot = () => {
     triggerJsonDownload(`admin-snapshot-${new Date().toISOString().replaceAll(':', '-').slice(0, 19)}.json`, {
@@ -2409,12 +2469,24 @@ function AdminDashboard() {
     window.setTimeout(() => dashboardContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
+  const selectOperationsPanel = (panel: AdminOperationsPanel) => {
+    setActiveOperationsPanel(panel);
+    setActiveSection('operations');
+    window.setTimeout(() => dashboardContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
+
   const reviewAttentionSignal = (key: AdminAttentionKey) => {
     if (key === 'reports') return showRequestFilter('issues');
     if (key === 'slow') return showRequestFilter('slow');
     if (key === 'ai') return showAIUsage();
     if (key === 'suspended') return selectAdminSection('users');
-    return selectAdminSection('operations');
+    if (key === 'scheduler') return selectOperationsPanel('monitoring');
+    return selectOperationsPanel('health');
+  };
+
+  const runDiagnosticsFromOverview = () => {
+    selectOperationsPanel('health');
+    void runServiceDiagnostics();
   };
 
   const sectionCountTitle = (section: AdminSection, count: number) => ({
@@ -2636,6 +2708,24 @@ function AdminDashboard() {
           {attentionSignals.length === 0 && (
             <p className="admin-all-clear"><CheckCircle2 size={15} aria-hidden /> No active signals in this period.</p>
           )}
+          <div className="admin-quick-actions">
+            <div><strong>Quick actions</strong><small>Common operator tasks</small></div>
+            <div>
+              <button type="button" onClick={runDiagnosticsFromOverview} disabled={diagnosticsPending}>
+                <RefreshCw className={diagnosticsPending ? 'logs-spin' : ''} size={14} aria-hidden />
+                {diagnosticsPending ? 'Running…' : 'Run diagnostics'}
+              </button>
+              <button type="button" onClick={() => selectAdminSection('users')}>
+                <Users size={14} aria-hidden /> Manage users
+              </button>
+              <button type="button" onClick={() => selectAdminSection('analytics')}>
+                <BarChart3 size={14} aria-hidden /> View analytics
+              </button>
+              <button type="button" onClick={() => selectAdminSection('activity')}>
+                <History size={14} aria-hidden /> Audit trail
+              </button>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -3057,14 +3147,35 @@ function AdminDashboard() {
       {activeSection === 'operations' && (
         <header className="admin-workspace-heading">
           <div><span>Operations</span><h2>Services and product controls</h2><p>Diagnose providers, configure AI, and manage feature availability.</p></div>
-          <span className={diagnosticSummary.failed === 0 ? 'is-clear' : 'is-attention'}>
-            {diagnosticSummary.failed === 0 ? <CheckCircle2 size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
-            {diagnosticSummary.failed === 0 ? 'Core services ready' : `${diagnosticSummary.failed} failed`}
+          <span className={operationsAttentionCount === 0 ? 'is-clear' : 'is-attention'}>
+            {operationsAttentionCount === 0 ? <CheckCircle2 size={16} aria-hidden /> : <AlertTriangle size={16} aria-hidden />}
+            {operationsAttentionCount === 0 ? 'Operations ready' : `${operationsAttentionCount} need attention`}
           </span>
         </header>
       )}
 
-      <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title" hidden={activeSection !== 'operations'}>
+      <nav className="admin-operations-nav" aria-label="Operations workspaces" hidden={activeSection !== 'operations'}>
+        {ADMIN_OPERATIONS_PANELS.map((panel) => {
+          const Icon = panel.icon;
+          const selected = activeOperationsPanel === panel.value;
+          const status = operationsPanelStatus(panel.value);
+          return (
+            <button
+              type="button"
+              key={panel.value}
+              className={selected ? 'is-active' : ''}
+              onClick={() => selectOperationsPanel(panel.value)}
+              aria-pressed={selected}
+            >
+              <span><Icon size={16} aria-hidden /></span>
+              <span><strong>{panel.label}</strong><small>{panel.description}</small></span>
+              <b className={`is-${status.tone}`}>{status.label}</b>
+            </button>
+          );
+        })}
+      </nav>
+
+      <section className="logs-chart-card admin-diagnostics-card" aria-labelledby="admin-diagnostics-title" hidden={activeSection !== 'operations' || activeOperationsPanel !== 'health'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-diagnostics-title">Service diagnostics</h2>
@@ -3139,7 +3250,7 @@ function AdminDashboard() {
         )}
       </section>
 
-      <section className="logs-chart-card admin-objective-scheduler" aria-labelledby="admin-objective-scheduler-title" hidden={activeSection !== 'operations'}>
+      <section className="logs-chart-card admin-objective-scheduler" aria-labelledby="admin-objective-scheduler-title" hidden={activeSection !== 'operations' || activeOperationsPanel !== 'monitoring'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-objective-scheduler-title">Objective Watch scheduler</h2>
@@ -3239,7 +3350,7 @@ function AdminDashboard() {
         ) : null}
       </section>
 
-      <section className="logs-panel admin-health-history-panel" aria-labelledby="admin-health-history-title" hidden={activeSection !== 'operations'}>
+      <section className="logs-panel admin-health-history-panel" aria-labelledby="admin-health-history-title" hidden={activeSection !== 'operations' || activeOperationsPanel !== 'health'}>
         <div className="logs-panel-head">
           <div className="admin-audit-heading">
             <span className="logs-section-icon"><History size={17} aria-hidden /></span>
@@ -3360,7 +3471,7 @@ function AdminDashboard() {
         </footer>
       </section>
 
-      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title" hidden={activeSection !== 'operations'}>
+      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-ai-controls-title" hidden={activeSection !== 'operations' || activeOperationsPanel !== 'ai'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-ai-controls-title">AI controls</h2>
@@ -3558,7 +3669,7 @@ function AdminDashboard() {
         </div>
       </section>
 
-      <section className="logs-chart-card admin-runtime-environment" aria-labelledby="admin-runtime-environment-title" hidden={activeSection !== 'operations'}>
+      <section className="logs-chart-card admin-runtime-environment" aria-labelledby="admin-runtime-environment-title" hidden={activeSection !== 'operations' || activeOperationsPanel !== 'environment'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-runtime-environment-title">Runtime environment</h2>
@@ -3673,7 +3784,7 @@ function AdminDashboard() {
         )}
       </section>
 
-      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-feature-flags-title" hidden={activeSection !== 'operations'}>
+      <section className="logs-chart-card admin-ai-controls" aria-labelledby="admin-feature-flags-title" hidden={activeSection !== 'operations' || activeOperationsPanel !== 'features'}>
         <div className="logs-chart-head">
           <div>
             <h2 id="admin-feature-flags-title">Product feature flags</h2>

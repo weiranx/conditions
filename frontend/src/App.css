@@ -969,6 +969,84 @@ input {
 
 .admin-all-clear { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--ui-go-ink); font-size: 10.5px; }
 
+.admin-quick-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.admin-quick-actions > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.admin-quick-actions > div:first-child strong { color: var(--ui-text); font-size: 11px; }
+.admin-quick-actions > div:first-child small { color: var(--ui-text-4); font-size: 9px; }
+.admin-quick-actions > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.admin-quick-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  font: 650 9.5px var(--font-sans);
+  cursor: pointer;
+}
+.admin-quick-actions button:hover:not(:disabled) { border-color: var(--ui-brand); background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+.admin-quick-actions button:disabled { cursor: wait; opacity: 0.55; }
+
+.admin-operations-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface-subtle);
+}
+
+.admin-operations-nav button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-text-3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-operations-nav button:hover { border-color: var(--ui-line); background: var(--ui-surface); color: var(--ui-text); }
+.admin-operations-nav button.is-active { border-color: var(--ui-brand); background: var(--ui-surface); box-shadow: var(--ui-shadow-xs); color: var(--ui-brand-strong); }
+.admin-operations-nav button > span:first-child { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; background: var(--ui-surface); color: currentColor; }
+.admin-operations-nav button.is-active > span:first-child { background: var(--ui-brand-soft); }
+.admin-operations-nav button > span:nth-child(2) { display: grid; min-width: 0; }
+.admin-operations-nav strong { overflow: hidden; color: currentColor; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-operations-nav small { overflow: hidden; margin-top: 2px; color: var(--ui-text-4); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-operations-nav b {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--ui-surface);
+  color: var(--ui-text-4);
+  font: 700 8.5px var(--font-data);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-operations-nav b.is-clear { background: var(--ui-brand-soft); color: var(--ui-go-ink); }
+.admin-operations-nav b.is-attention { background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface)); color: var(--ui-caution-ink); }
+
 .admin-users-heading {
   display: flex;
   align-items: center;
@@ -12275,6 +12353,7 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-dashboard-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-dashboard-nav small { display: none; }
   .admin-dashboard-nav button { min-height: 50px; }
+  .admin-operations-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-dashboard-content { gap: 14px; }
   .admin-workspace-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
   .admin-dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -12638,12 +12717,16 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .admin-dashboard-nav-icon { width: 30px; height: 30px; }
   .admin-dashboard-nav strong { font-size: 10.5px; }
   .admin-dashboard-nav b { min-width: 21px; height: 21px; padding-inline: 5px; font-size: 9px; }
+  .admin-operations-nav { grid-template-columns: minmax(0, 1fr); }
+  .admin-operations-nav button { grid-template-columns: 30px minmax(0, 1fr) auto; min-height: 46px; }
+  .admin-operations-nav b { grid-column: auto; min-width: 72px; }
   .admin-workspace-heading h2 { font-size: 19px; }
   .admin-dashboard-kpis { gap: 8px; }
   .admin-dashboard-kpis button { grid-template-columns: 32px minmax(0, 1fr); gap: 8px; padding: 11px; }
   .admin-kpi-icon { width: 32px; height: 32px; }
   .admin-dashboard-kpis strong { font-size: 15px; }
   .admin-dashboard-kpis em { white-space: normal; }
+  .admin-quick-actions > div:last-child { grid-template-columns: minmax(0, 1fr); }
   .admin-system-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-system-grid > div {
     grid-template-columns: minmax(0, 1fr) auto;
