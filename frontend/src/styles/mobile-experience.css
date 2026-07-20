@@ -154,6 +154,7 @@
   }
 
   .ssr-shell .planner-flowbar .map-report-actions .plan-view-report,
+  .ssr-shell .planner-flowbar .map-report-actions .plan-refresh-report,
   .ssr-shell .planner-flowbar .map-report-actions .plan-action-primary:last-child {
     grid-column: 1 / -1;
   }

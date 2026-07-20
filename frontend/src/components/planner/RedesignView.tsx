@@ -514,6 +514,7 @@ function ReportJumpNav({
   onJump: (id: string, moveFocus: boolean) => void;
 }) {
   const [activeId, setActiveId] = React.useState(sections[0]?.id || '');
+  const [hasMoreSections, setHasMoreSections] = React.useState(false);
   const sectionsRef = React.useRef(sections);
   const navRef = React.useRef<HTMLElement>(null);
   const buttonRefs = React.useRef(new Map<string, HTMLAnchorElement>());
@@ -522,6 +523,18 @@ function ReportJumpNav({
   React.useEffect(() => {
     sectionsRef.current = sections;
   }, [sections]);
+
+  const updateScrollCue = React.useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    setHasMoreSections(nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4);
+  }, []);
+
+  React.useEffect(() => {
+    updateScrollCue();
+    window.addEventListener('resize', updateScrollCue);
+    return () => window.removeEventListener('resize', updateScrollCue);
+  }, [sectionKey, updateScrollCue]);
 
   React.useEffect(() => {
     let frame = 0;
@@ -577,27 +590,34 @@ function ReportJumpNav({
   }, [activeId]);
 
   return (
-    <nav ref={navRef} className="ssr-jump-nav" aria-label="Jump to report section">
-      {sections.map((section) => (
-        <a
-          key={section.id}
-          ref={(node) => {
-            if (node) buttonRefs.current.set(section.id, node);
-            else buttonRefs.current.delete(section.id);
-          }}
-          href={buildReportSectionHash(section.id)}
-          className={`ssr-jump-chip ${activeId === section.id ? 'active' : ''}`}
-          aria-current={activeId === section.id ? 'location' : undefined}
-          onClick={(event) => {
-            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            event.preventDefault();
-            onJump(section.id, event.detail === 0);
-          }}
-        >
-          {section.label}
-        </a>
-      ))}
-    </nav>
+    <div className="ssr-jump-nav-shell">
+      <nav ref={navRef} className="ssr-jump-nav" aria-label="Jump to report section" onScroll={updateScrollCue}>
+        {sections.map((section) => (
+          <a
+            key={section.id}
+            ref={(node) => {
+              if (node) buttonRefs.current.set(section.id, node);
+              else buttonRefs.current.delete(section.id);
+            }}
+            href={buildReportSectionHash(section.id)}
+            className={`ssr-jump-chip ${activeId === section.id ? 'active' : ''}`}
+            aria-current={activeId === section.id ? 'location' : undefined}
+            onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              onJump(section.id, event.detail === 0);
+            }}
+          >
+            {section.label}
+          </a>
+        ))}
+      </nav>
+      {hasMoreSections && (
+        <span className="ssr-jump-nav-cue" aria-hidden="true">
+          <ArrowRight size={14} />
+        </span>
+      )}
+    </div>
   );
 }
 

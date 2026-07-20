@@ -80,6 +80,7 @@ export interface PlannerMapSectionProps {
   deviceTimezone: string | null;
   locked: boolean;
   readOnly: boolean;
+  hasFreshnessWarning: boolean;
   onEditPlan: () => void;
   onGenerateReport: () => void;
   importedGpxRoute: ParsedGpxRoute | null;
@@ -100,10 +101,11 @@ export function PlannerMapSection({
   objectiveTimezone, handleUseNowConditions,
   loading, handleRetryFetch, openTripToolView,
   timezoneMismatch, deviceTimezone,
-  locked, readOnly, onEditPlan, onGenerateReport,
+  locked, readOnly, hasFreshnessWarning, onEditPlan, onGenerateReport,
   importedGpxRoute, routeAnalysis,
 }: PlannerMapSectionProps) {
   const featureFlags = useProductFeatureFlags();
+  const refreshRecommended = locked && !readOnly && hasFreshnessWarning;
   React.useEffect(() => {
     if (!featureFlags.satelliteImagery && mapStyle === 'satellite') {
       setMapStyle('topo');
@@ -125,11 +127,17 @@ export function PlannerMapSection({
     workflowDetail = 'Fetching the latest conditions for this plan.';
     WorkflowStateIcon = RefreshCw;
   } else if (locked) {
-    workflowTitle = 'Read-only report';
-    workflowDetail = readOnly
-      ? 'This saved snapshot cannot be edited.'
-      : 'Plan inputs cannot be edited after generation.';
-    WorkflowStateIcon = FileCheck2;
+    if (refreshRecommended) {
+      workflowTitle = 'Refresh recommended';
+      workflowDetail = 'Some source data is old. Update before relying on this report.';
+      WorkflowStateIcon = RefreshCw;
+    } else {
+      workflowTitle = 'Read-only report';
+      workflowDetail = readOnly
+        ? 'This saved snapshot cannot be edited.'
+        : 'Plan inputs cannot be edited after generation.';
+      WorkflowStateIcon = FileCheck2;
+    }
   } else if (objectiveReady) {
     workflowTitle = 'Ready to generate';
     workflowDetail = 'Review the timing, then build your conditions brief.';
@@ -222,13 +230,23 @@ export function PlannerMapSection({
             <div className="map-report-actions">
               {locked ? (
                 <>
+                  {refreshRecommended && (
+                    <button
+                      type="button"
+                      className="action-btn plan-action-primary plan-refresh-report"
+                      onClick={handleRetryFetch}
+                      disabled={loading}
+                    >
+                      <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing…' : 'Refresh report'}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="action-btn plan-action-primary plan-view-report"
+                    className={`action-btn ${refreshRecommended ? 'plan-saved-report' : 'plan-view-report plan-action-primary'}`}
                     onClick={handleViewReport}
                     title="Jump to the report verdict and conditions"
                   >
-                    <ArrowDown size={14} /> View report
+                    <ArrowDown size={14} /> {refreshRecommended ? 'View saved report' : 'View report'}
                   </button>
                   <button
                     type="button"
@@ -239,7 +257,7 @@ export function PlannerMapSection({
                   >
                     <PencilLine size={14} /> New report
                   </button>
-                  {!readOnly && (
+                  {!readOnly && !refreshRecommended && (
                     <button
                       type="button"
                       className="action-btn"

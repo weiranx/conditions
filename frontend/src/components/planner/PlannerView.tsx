@@ -781,6 +781,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
         deviceTimezone={deviceTimezone}
         locked={reportLocked}
         readOnly={restoredFromHistory}
+        hasFreshnessWarning={hasFreshnessWarning}
         onEditPlan={onEditPlan}
         onGenerateReport={onGenerateReport}
         importedGpxRoute={importedGpxRoute}
