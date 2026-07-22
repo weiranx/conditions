@@ -60,12 +60,6 @@
 - `frontend/src/app/decision.ts` L368: `feelsLike >= minFeelsLikeThreshold` unguarded null
 - `backend/src/routes/ai-brief.js` L28-30: stale cache never revalidates
 
-## iOS App (BackcountryConditions/)
-- Full audit completed 2026-03-11. See [ios_app_patterns.md](ios_app_patterns.md) for patterns.
-- Key bugs: RouteAnalysisCard task lifecycle; TravelWindowEngine deriveSpans single-pass-row edge; SettingsView lazy init; formatAmPm unclamped; AQI scale indicator clipping; DecisionEngine precipitation never blocks; staleWarning display says "Forecast is X+ old" (confusing "+ old" wording).
-- `AvalancheProblem.problem_description` decoded but never rendered — dead field.
-- 2026-03-12 history persistence PR: `currentReportId` is set before `Task.detached { save }` completes — `updateRouteAnalysis`/`updateAiBrief` may fire before initial save, silently dropping the update since `load(id:)` returns nil. `recentReports` in PlannerView loaded once in `.task` — never refreshed after new report saved.
-
 ## Previously Reported Bugs — Now Fixed
 - NOAA hourly `.ok` check: now throws correctly in weather-pipeline.js L86
 - Scraper `pageRes.ok`: now checked in avalanche-pipeline.js L470

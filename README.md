@@ -61,14 +61,6 @@ summitsafe/
 │   │   ├── utils/                 # Domain helpers (weather, avalanche, cache, AI client, logger, etc.)
 │   │   └── data/                  # Static reference data (CDEC snow stations)
 │   └── test/                      # Jest test suites (unit, utils, integration)
-├── BackcountryConditions/   # Native iOS app (SwiftUI, iOS 17+)
-│   ├── BackcountryConditions/
-│   │   ├── ViewModels/            # PlannerViewModel, SearchViewModel, SettingsViewModel, StatusViewModel
-│   │   ├── Models/                # SafetyData, RouteAnalysis, AiBrief, SearchResult, UserPreferences
-│   │   ├── App/                   # App entry point, AppState, Configuration
-│   │   ├── Extensions/            # Color+Theme, View+Conditional
-│   │   └── Utilities/             # Constants, TravelWindowEngine, WindLoadingEngine
-│   └── BackcountryConditionsTests/
 ├── docs/                    # Project documentation
 ├── scripts/                 # Deployment scripts (deploy.sh, setup-nginx.sh)
 ├── docker-compose.yml
@@ -129,7 +121,7 @@ The backend runs against free public data sources out of the box. A couple of fe
 | `KIMI_MODEL` / `KIMI_FAST_MODEL` | Kimi primary and latency-sensitive models; defaults to `kimi-k3` and `kimi-k2.6`. | — |
 
 Set at least two AI provider keys to enable automatic failover. All API keys are optional to omit — features that do not depend on a missing key continue to work.
-When no AI provider key is configured, AI-powered controls are hidden in the web and iOS planners.
+When no AI provider key is configured, AI-powered controls are hidden in the web planner.
 
 ## API Endpoints
 
@@ -214,18 +206,6 @@ See [`docs/operations.md`](docs/operations.md) for full production guidance and 
 | [`docs/development.md`](docs/development.md) | Local workflow, conventions, and testing |
 | [`docs/operations.md`](docs/operations.md) | Deployment, health checks, and troubleshooting |
 | [`docs/vps-setup.md`](docs/vps-setup.md) | DigitalOcean droplet setup guide |
-
-## iOS App
-
-A native iOS companion app lives in `BackcountryConditions/`. Built with SwiftUI targeting iOS 17+, it consumes the same backend API and provides:
-
-- Objective search and planner with the same date/time/travel-window controls
-- Full safety report rendering with collapsible cards
-- Route analysis and AI field brief integration
-- User preferences (units, thresholds, theme)
-- App status and health checks
-
-The iOS app uses XcodeGen (`project.yml`) for project configuration. Open `BackcountryConditions.xcodeproj` in Xcode to build and run.
 
 ## Disclaimer
 

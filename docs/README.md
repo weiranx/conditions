@@ -1,6 +1,6 @@
 # SummitSafe Documentation
 
-This folder contains technical documentation for the web app's development and operations. For the iOS companion app, see `../BackcountryConditions/`.
+This folder contains technical documentation for the web app's development and operations.
 
 ## Documents
 

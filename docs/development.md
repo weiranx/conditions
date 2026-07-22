@@ -69,7 +69,7 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `KIMI_FAST_MODEL` | `kimi-k2.6` | Kimi model for route suggestions and waypoint extraction. |
 | `KIMI_THINKING_ENABLED` | `false` | Set to `true` to allow Kimi reasoning; disabled by default to keep interactive requests within their latency budgets. |
 
-The safety response exposes `capabilities.ai`. Web and iOS clients hide AI-powered planner controls when no provider key is configured.
+The safety response exposes `capabilities.ai`. The web client hides AI-powered planner controls when no provider key is configured.
 
 ### Frontend (`frontend/.env`)
 
