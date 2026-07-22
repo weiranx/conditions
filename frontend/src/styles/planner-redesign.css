@@ -183,24 +183,31 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: 0 16px 34px -18px rgba(0, 
 .ssr-h-icon svg { width: 15px; height: 15px; }
 
 .ssr-h-icon.icon-blue,
-.ssr-h-icon.icon-cyan,
-.ssr-h-icon.icon-orange,
-.ssr-h-icon.icon-amber,
-.ssr-h-icon.icon-yellow,
-.ssr-h-icon.icon-purple,
-.ssr-h-icon.icon-neutral {
-  background: var(--ssr-brand-bg);
-  color: var(--ssr-brand-dark);
+.ssr-h-icon.icon-cyan {
+  border-color: color-mix(in oklch, var(--ui-temp-cold) 24%, var(--ssr-line));
+  background: color-mix(in oklch, var(--ui-temp-cold) 10%, var(--ssr-surface));
+  color: var(--ui-temp-cold);
 }
-html[data-theme="dark"] .ssr-h-icon.icon-blue,
-html[data-theme="dark"] .ssr-h-icon.icon-cyan,
-html[data-theme="dark"] .ssr-h-icon.icon-orange,
-html[data-theme="dark"] .ssr-h-icon.icon-amber,
-html[data-theme="dark"] .ssr-h-icon.icon-yellow,
-html[data-theme="dark"] .ssr-h-icon.icon-purple,
-html[data-theme="dark"] .ssr-h-icon.icon-neutral {
-  background: var(--ssr-brand-bg);
-  color: var(--ssr-brand-dark);
+.ssr-h-icon.icon-orange {
+  border-color: color-mix(in oklch, var(--ui-risk-3) 28%, var(--ssr-line));
+  background: color-mix(in oklch, var(--ui-risk-3) 10%, var(--ssr-surface));
+  color: var(--ssr-caution-ink);
+}
+.ssr-h-icon.icon-amber,
+.ssr-h-icon.icon-yellow {
+  border-color: color-mix(in oklch, var(--ui-risk-2) 30%, var(--ssr-line));
+  background: color-mix(in oklch, var(--ui-risk-2) 11%, var(--ssr-surface));
+  color: var(--ssr-watch-ink);
+}
+.ssr-h-icon.icon-purple {
+  border-color: color-mix(in oklch, var(--ui-temp-freezing) 24%, var(--ssr-line));
+  background: color-mix(in oklch, var(--ui-temp-freezing) 9%, var(--ssr-surface));
+  color: var(--ui-temp-freezing);
+}
+.ssr-h-icon.icon-neutral {
+  border-color: var(--ssr-line);
+  background: var(--ssr-surface-2);
+  color: var(--ssr-text-2);
 }
 .ssr-h-meta {
   font-size: var(--ui-meta-size);

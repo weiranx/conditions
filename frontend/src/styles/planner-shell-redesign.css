@@ -174,8 +174,8 @@ body:has(.page-shell-planner) {
 }
 .ssr-shell .planner-search-heading > span svg { color: var(--d-pine); }
 .ssr-shell .planner-search-heading small {
-  color: var(--d-ink-4);
-  font-size: var(--ui-meta-size);
+  color: var(--d-ink-3);
+  font-size: 12px;
   font-weight: 560;
 }
 .ssr-shell .planner-search-footer {
@@ -189,8 +189,8 @@ body:has(.page-shell-planner) {
 .ssr-shell .planner-search-footer > p {
   max-width: 310px;
   margin: 0;
-  color: var(--d-ink-4);
-  font-size: var(--ui-meta-size);
+  color: var(--d-ink-3);
+  font-size: 12px;
   line-height: 1.45;
 }
 .ssr-shell .brand-mark {

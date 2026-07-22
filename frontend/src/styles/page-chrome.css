@@ -83,7 +83,7 @@
 .ssr-product-brand-copy small {
   color: var(--ui-text-3);
   font-family: var(--ssr-mono);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 650;
   letter-spacing: .075em;
   line-height: 1.1;
@@ -151,6 +151,47 @@
   line-height: 1.15;
 }
 
+/* Keep the full wordmark while giving denser authenticated navigation room
+   before the phone layout takes over. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .ssr-product-nav-inner {
+    width: min(var(--ui-content-width), calc(100% - 32px));
+    gap: 14px;
+  }
+
+  .ssr-product-brand { gap: 9px; }
+  .ssr-product-brand-copy small { display: none; }
+
+  .ssr-product-links {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .ssr-product-links button {
+    gap: 5px;
+    padding-inline: 9px;
+    font-size: 12px;
+  }
+
+  /* Signed-in navigation can add Watches, History, and Admin. At tablet
+     widths, trade the wordmark for an evenly distributed labeled nav so the
+     final actions never disappear behind the shell's overflow clipping. */
+  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-brand {
+    display: none;
+  }
+
+  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-links {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+
+  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-links button {
+    min-width: 0;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 640px) {
   /* On phones, keep navigation in the normal page flow. It remains visible at
      the top on arrival, then scrolls away instead of permanently consuming
@@ -158,9 +199,9 @@
   .ssr-product-nav {
     position: static;
     inset: auto;
-    width: 100%;
+    width: 100vw;
     min-height: 60px;
-    margin-left: 0;
+    margin-left: calc(50% - 50vw);
     padding-bottom: 0;
     border-top: 0;
     border-bottom: 1px solid var(--ui-line);

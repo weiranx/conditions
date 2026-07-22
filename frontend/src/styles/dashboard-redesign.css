@@ -158,13 +158,13 @@
 .ssr-dash-decision-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 22px 0 0; overflow: hidden; border: 1px solid var(--d-line); border-radius: 8px; background: var(--d-line); }
 .ssr-dash-decision-strip > div { min-width: 0; padding: 12px 14px; background: var(--d-surface-2); }
 .ssr-dash-decision-strip > div.is-warning { background: color-mix(in oklch, var(--d-warn) 9%, var(--d-surface)); }
-.ssr-dash-decision-strip dt { color: var(--d-ink-3); font-family: var(--d-mono); font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.ssr-dash-decision-strip dt { color: var(--d-ink-3); font-family: var(--d-mono); font-size: 10px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
 .ssr-dash-decision-strip dd { margin: 5px 0 0; color: var(--d-ink); font-size: 11.5px; font-weight: 680; line-height: 1.35; }
 .ssr-dash-recheck.changed { border-color: color-mix(in oklch, var(--d-warn) 48%, var(--d-line)); background: color-mix(in oklch, var(--d-warn) 8%, var(--d-surface)); }
 .ssr-dash-recheck > div { display: grid; gap: 3px; }
 .ssr-dash-recheck strong { color: var(--d-ink); font-size: 12px; }
-.ssr-dash-recheck span { color: var(--d-ink-3); font-size: 10.5px; line-height: 1.45; }
-.ssr-dash-recheck ul { display: grid; gap: 4px; margin: 0; padding-left: 17px; color: var(--d-ink-2); font-size: 10.5px; line-height: 1.45; }
+.ssr-dash-recheck span { color: var(--d-ink-3); font-size: 11.5px; line-height: 1.5; }
+.ssr-dash-recheck ul { display: grid; gap: 4px; margin: 0; padding-left: 17px; color: var(--d-ink-2); font-size: 11.5px; line-height: 1.5; }
 
 .ssr-dash-field-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .ssr-dash-field-actions button {
@@ -550,6 +550,7 @@
   .ssr-dash-verdict h3 { margin-top: 22px; font-size: 28px; }
   .ssr-dash-recheck { grid-template-columns: 1fr; gap: 10px; }
   .ssr-dash-decision-strip { grid-template-columns: 1fr; }
+  .ssr-dash-field-actions button { min-height: 44px; }
   .ssr-dash-window-labels { grid-template-columns: 1fr; gap: 9px; }
   .ssr-dash-window-band { height: 49px; }
   .ssr-dash-context-grid { grid-template-columns: 1fr; }
