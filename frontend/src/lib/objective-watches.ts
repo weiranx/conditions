@@ -6,6 +6,7 @@ export interface ObjectiveWatch {
   title: string;
   plan: PersistedReportPlan;
   baselineReport?: PersistedReport;
+  lastAttemptedAt: string | null;
   lastCheckedAt: string | null;
   nextCheckAt: string | null;
   lastChange: {

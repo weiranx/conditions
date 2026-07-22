@@ -35,6 +35,7 @@ const makeApp = ({
   transaction = (callback) => callback(query),
   user = { id: USER_ID },
   tierKey = 'free',
+  tierService,
   checker,
   scheduler,
   now,
@@ -49,7 +50,9 @@ const makeApp = ({
       available: true,
       getUserForSession: jest.fn().mockResolvedValue(user),
     },
-    tierService: { getAccountTier: jest.fn().mockResolvedValue({ key: tierKey }) },
+    tierService: tierService === undefined
+      ? { getAccountTier: jest.fn().mockResolvedValue({ key: tierKey }) }
+      : tierService,
     ...(checker ? { checker } : {}),
     ...(scheduler ? { scheduler } : {}),
     ...(now ? { now } : {}),
@@ -68,6 +71,10 @@ test('normalizes an objective watch and produces a stable exact-plan fingerprint
   expect(createWatchFingerprint({ ...SNAPSHOT.plan, travelWindowHours: 8 })).not.toBe(watch.fingerprint);
   expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, lat: 100 } })).toThrow('valid latitude');
   expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, forecastDate: '' } })).toThrow('valid forecast date');
+  expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, forecastDate: '2026-02-29' } })).toThrow('valid forecast date');
+  expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, forecastDate: '2026-99-99' } })).toThrow('valid forecast date');
+  expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, forecastDate: '0000-01-01' } })).toThrow('valid forecast date');
+  expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, forecastDate: '2024-02-29' } })).not.toThrow();
   expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, alpineStartTime: '25:00' } })).toThrow('valid alpine start time');
   expect(() => normalizeObjectiveWatch({ ...SNAPSHOT, plan: { ...SNAPSHOT.plan, travelWindowHours: 25 } })).toThrow('1 to 24 hours');
 });
@@ -113,6 +120,7 @@ test('lists watched objectives for the signed-in account without returning basel
         id: WATCH_ID,
         title: 'Mount Rainier',
         plan: SNAPSHOT.plan,
+        last_attempted_at: CREATED_AT,
         created_at: CREATED_AT,
         updated_at: CREATED_AT,
       },
@@ -131,7 +139,11 @@ test('lists watched objectives for the signed-in account without returning basel
 
   expect(response.status).toBe(200);
   expect(response.body.watches).toHaveLength(2);
-  expect(response.body.watches[0]).toMatchObject({ id: WATCH_ID, title: 'Mount Rainier' });
+  expect(response.body.watches[0]).toMatchObject({
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    lastAttemptedAt: CREATED_AT.toISOString(),
+  });
   expect(response.body.watches[0]).not.toHaveProperty('baselineReport');
   expect(query.mock.calls[0][0]).toContain('ORDER BY updated_at DESC, id DESC');
   expect(query.mock.calls[0][1]).toEqual([USER_ID]);
@@ -177,11 +189,59 @@ test('creates or explicitly updates a watch baseline for the signed-in account',
   expect(response.body.watch.nextCheckAt).toBeNull();
   const [sql, params] = query.mock.calls.find(([statement]) => statement.includes('INSERT INTO objective_watches'));
   expect(sql).toContain('ON CONFLICT (user_id, fingerprint) DO UPDATE');
+  expect(sql).not.toContain('last_attempted_at = NULL');
   expect(params.slice(0, 3)).toEqual([USER_ID, '46.8523:-121.7603:2026-07-15:05:30:12', 'Mount Rainier']);
   expect(JSON.parse(params[3])).toEqual(SNAPSHOT.plan);
   expect(JSON.parse(params[4]).savedAt).toBe(SNAPSHOT.savedAt);
   expect(params[5]).toBe(false);
   expect(query.mock.calls.some(([statement]) => statement.includes('COUNT(*)'))).toBe(false);
+});
+
+test('preserves the manual refresh cooldown when replacing a same-plan baseline', async () => {
+  let lastAttemptedAt = CREATED_AT;
+  const watchRow = () => ({
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    plan: SNAPSHOT.plan,
+    baseline_report: SNAPSHOT,
+    last_attempted_at: lastAttemptedAt,
+    last_checked_at: null,
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+  });
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('SELECT id FROM users')) return { rows: [{ id: USER_ID }] };
+    if (sql.includes('WHERE user_id = $1 AND fingerprint = $2')) return { rows: [{ id: WATCH_ID }] };
+    if (sql.includes('INSERT INTO objective_watches')) {
+      if (sql.includes('last_attempted_at = NULL')) lastAttemptedAt = null;
+      return { rows: [watchRow()] };
+    }
+    if (sql.includes('FROM objective_watches')) return { rows: [watchRow()] };
+    return { rows: [] };
+  });
+  const checker = { run: jest.fn() };
+  const app = makeApp({
+    query,
+    checker,
+    now: () => CREATED_AT.getTime() + 60 * 1000,
+  });
+
+  const baselineResponse = await request(app)
+    .post('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+  const immediateRefresh = await request(app)
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(baselineResponse.status).toBe(201);
+  expect(baselineResponse.body.watch.lastAttemptedAt).toBe(CREATED_AT.toISOString());
+  expect(immediateRefresh.status).toBe(429);
+  expect(immediateRefresh.body).toMatchObject({
+    code: 'OBJECTIVE_WATCH_REFRESH_COOLDOWN',
+    retryAt: new Date(CREATED_AT.getTime() + 5 * 60 * 1000).toISOString(),
+  });
+  expect(checker.run).not.toHaveBeenCalled();
 });
 
 test('enforces one active watch for Free accounts', async () => {
@@ -201,7 +261,38 @@ test('enforces one active watch for Free accounts', async () => {
     code: 'OBJECTIVE_WATCH_LIMIT_REACHED',
     policy: { tierKey: 'free', activeWatchLimit: 1 },
   });
+  const countCall = query.mock.calls.find(([sql]) => sql.includes('COUNT(*)'));
+  expect(countCall[0]).toContain("TO_CHAR((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD')");
+  expect(countCall[0]).not.toContain("(plan->>'forecastDate')::date");
   expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO objective_watches'))).toBe(false);
+});
+
+test('fails mutations closed when account tier benefits cannot be loaded', async () => {
+  const query = jest.fn();
+  const tierService = { getAccountTier: jest.fn().mockRejectedValue(new Error('database offline')) };
+  const response = await request(makeApp({ query, tierService }))
+    .post('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session')
+    .send({ report: SNAPSHOT });
+
+  expect(response.status).toBe(503);
+  expect(response.body).toEqual({
+    error: 'Objective Watch account benefits are temporarily unavailable. Please try again.',
+    code: 'OBJECTIVE_WATCH_POLICY_UNAVAILABLE',
+  });
+  expect(query).not.toHaveBeenCalled();
+});
+
+test('keeps read-only watch access available with Free policy when tier lookup fails', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [] });
+  const tierService = { getAccountTier: jest.fn().mockRejectedValue(new Error('database offline')) };
+  const response = await request(makeApp({ query, tierService }))
+    .get('/api/account/objective-watches')
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({ watches: [], policy: { tierKey: 'free' } });
+  expect(query).toHaveBeenCalledTimes(1);
 });
 
 test('allows Premium accounts to create up to ten active watches and queues automatic checks', async () => {
@@ -282,6 +373,43 @@ test('keeps email alerts Premium-only', async () => {
   expect(query).not.toHaveBeenCalled();
 });
 
+test('allows disabling email alerts when account tier lookup fails', async () => {
+  const query = jest.fn().mockResolvedValue({
+    rows: [{
+      id: WATCH_ID,
+      title: 'Mount Rainier',
+      plan: SNAPSHOT.plan,
+      baseline_report: SNAPSHOT,
+      notifications_enabled: false,
+      created_at: CREATED_AT,
+      updated_at: CREATED_AT,
+    }],
+  });
+  const tierService = { getAccountTier: jest.fn().mockRejectedValue(new Error('database offline')) };
+  const response = await request(makeApp({ query, tierService }))
+    .patch(`/api/account/objective-watches/${WATCH_ID}`)
+    .set('Cookie', 'bc_session=test-session')
+    .send({ notificationsEnabled: false });
+
+  expect(response.status).toBe(200);
+  expect(response.body.watch.notificationsEnabled).toBe(false);
+  expect(query).toHaveBeenCalledTimes(1);
+  expect(query.mock.calls[0][1]).toEqual([WATCH_ID, USER_ID, false]);
+});
+
+test('fails closed when enabling email alerts and account tier lookup fails', async () => {
+  const query = jest.fn();
+  const tierService = { getAccountTier: jest.fn().mockRejectedValue(new Error('database offline')) };
+  const response = await request(makeApp({ query, tierService }))
+    .patch(`/api/account/objective-watches/${WATCH_ID}`)
+    .set('Cookie', 'bc_session=test-session')
+    .send({ notificationsEnabled: true });
+
+  expect(response.status).toBe(503);
+  expect(response.body).toMatchObject({ code: 'OBJECTIVE_WATCH_POLICY_UNAVAILABLE' });
+  expect(query).not.toHaveBeenCalled();
+});
+
 test('manually refreshes a Free watch without enabling automatic scheduling', async () => {
   const rows = [{
     id: WATCH_ID,
@@ -301,7 +429,124 @@ test('manually refreshes a Free watch without enabling automatic scheduling', as
 
   expect(response.status).toBe(200);
   expect(response.body.watch.nextCheckAt).toBeNull();
-  expect(checker.run).toHaveBeenCalledWith({ watchId: WATCH_ID, userId: USER_ID, manual: true });
+  expect(checker.run).toHaveBeenCalledWith(expect.objectContaining({
+    watchId: WATCH_ID,
+    userId: USER_ID,
+    manual: true,
+    manualCooldownMinutes: 5,
+    claimToken: expect.any(String),
+  }));
+});
+
+test('returns not found when a watch is deleted after a successful manual check', async () => {
+  const row = {
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    plan: SNAPSHOT.plan,
+    baseline_report: SNAPSHOT,
+    last_checked_at: null,
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+  };
+  let fullSelectCount = 0;
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('SET last_attempted_at = $3')) return { rows: [{ id: WATCH_ID }] };
+    if (sql.includes('SELECT id, title, plan, baseline_report')) {
+      fullSelectCount += 1;
+      return { rows: fullSelectCount === 1 ? [row] : [] };
+    }
+    return { rows: [] };
+  });
+  const checker = { run: jest.fn().mockResolvedValue({ checked: 1, failed: 0, invalid: 0 }) };
+  const response = await request(makeApp({ query, checker, now: () => CREATED_AT.getTime() }))
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(404);
+  expect(response.body).toEqual({ error: 'Objective watch not found.' });
+  expect(checker.run).toHaveBeenCalledWith(expect.objectContaining({
+    watchId: WATCH_ID,
+    userId: USER_ID,
+    manual: true,
+    claimToken: expect.any(String),
+  }));
+});
+
+test('rejects a concurrent manual refresh before repeating policy or database work', async () => {
+  const rows = [{
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    plan: SNAPSHOT.plan,
+    baseline_report: SNAPSHOT,
+    last_checked_at: null,
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+  }];
+  const query = jest.fn().mockResolvedValue({ rows });
+  let signalStarted;
+  let releaseCheck;
+  const checkStarted = new Promise((resolve) => { signalStarted = resolve; });
+  const pendingCheck = new Promise((resolve) => { releaseCheck = resolve; });
+  const checker = {
+    run: jest.fn(() => {
+      signalStarted();
+      return pendingCheck;
+    }),
+  };
+  const app = makeApp({ query, checker });
+  const firstResponsePromise = request(app)
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session')
+    .then((response) => response);
+  await checkStarted;
+
+  const concurrentResponse = await request(app)
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+  releaseCheck({ checked: 1, failed: 0, invalid: 0 });
+  const firstResponse = await firstResponsePromise;
+
+  expect(firstResponse.status).toBe(200);
+  expect(concurrentResponse.status).toBe(409);
+  expect(concurrentResponse.body.code).toBe('OBJECTIVE_WATCH_REFRESH_IN_PROGRESS');
+  expect(checker.run).toHaveBeenCalledTimes(1);
+  expect(query).toHaveBeenCalledTimes(4);
+});
+
+test('rejects a manual refresh when the scheduler wins the database claim race', async () => {
+  const automaticClaimToken = '8ed9f6ea-a737-4cd1-bc02-3b3561591592';
+  let schedulerClaimed = false;
+  const row = () => ({
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    plan: SNAPSHOT.plan,
+    baseline_report: SNAPSHOT,
+    last_attempted_at: schedulerClaimed ? CREATED_AT : null,
+    last_checked_at: null,
+    check_claimed_at: schedulerClaimed ? CREATED_AT : null,
+    check_claim_token: schedulerClaimed ? automaticClaimToken : null,
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+  });
+  const query = jest.fn(async (sql) => {
+    if (sql.includes('SET last_attempted_at = $3')) {
+      schedulerClaimed = true;
+      return { rows: [] };
+    }
+    if (sql.includes('FROM objective_watches')) return { rows: [row()] };
+    return { rows: [] };
+  });
+  const checker = { run: jest.fn() };
+  const response = await request(makeApp({ query, checker, now: () => CREATED_AT.getTime() }))
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(409);
+  expect(response.body.code).toBe('OBJECTIVE_WATCH_REFRESH_IN_PROGRESS');
+  expect(checker.run).not.toHaveBeenCalled();
+  const routeClaim = query.mock.calls.find(([sql]) => sql.includes('SET last_attempted_at = $3'));
+  expect(routeClaim[0]).toContain('check_claimed_at IS NULL');
+  expect(routeClaim[0]).toContain('check_claimed_at <= $6');
 });
 
 test('rate limits repeated manual refreshes', async () => {
@@ -331,6 +576,93 @@ test('rate limits repeated manual refreshes', async () => {
     policy: { manualRefreshCooldownMinutes: 5 },
   });
   expect(checker.run).not.toHaveBeenCalled();
+});
+
+test('persists the manual refresh cooldown when the checker fails', async () => {
+  let currentTimeMs = CREATED_AT.getTime();
+  let lastAttemptedAt = null;
+  const row = () => ({
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    plan: SNAPSHOT.plan,
+    baseline_report: SNAPSHOT,
+    last_attempted_at: lastAttemptedAt,
+    last_checked_at: null,
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+  });
+  const query = jest.fn(async (sql, params) => {
+    if (sql.includes('SET last_attempted_at = $3')) {
+      const cooldownThreshold = new Date(params[3]).getTime();
+      if (lastAttemptedAt && lastAttemptedAt.getTime() > cooldownThreshold) return { rows: [] };
+      lastAttemptedAt = new Date(params[2]);
+      return { rows: [{ id: WATCH_ID }] };
+    }
+    if (sql.includes('FROM objective_watches')) return { rows: [row()] };
+    return { rows: [] };
+  });
+  const checker = { run: jest.fn().mockResolvedValue({ checked: 0, failed: 1, invalid: 0 }) };
+  const app = makeApp({ query, checker, now: () => currentTimeMs });
+
+  const failedResponse = await request(app)
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+  currentTimeMs += 60 * 1000;
+  const immediateRetry = await request(app)
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(failedResponse.status).toBe(502);
+  expect(lastAttemptedAt.toISOString()).toBe(CREATED_AT.toISOString());
+  expect(immediateRetry.status).toBe(429);
+  expect(immediateRetry.body).toMatchObject({
+    code: 'OBJECTIVE_WATCH_REFRESH_COOLDOWN',
+    retryAt: new Date(CREATED_AT.getTime() + 5 * 60 * 1000).toISOString(),
+  });
+  expect(checker.run).toHaveBeenCalledTimes(1);
+  const claimCall = query.mock.calls.find(([sql]) => sql.includes('SET last_attempted_at = $3'));
+  expect(claimCall[0]).toContain('COALESCE(last_attempted_at, last_checked_at) <= $4');
+});
+
+test('releases a route-owned database claim when the checker throws', async () => {
+  let activeClaimToken = null;
+  let lastAttemptedAt = null;
+  const row = () => ({
+    id: WATCH_ID,
+    title: 'Mount Rainier',
+    plan: SNAPSHOT.plan,
+    baseline_report: SNAPSHOT,
+    last_attempted_at: lastAttemptedAt,
+    last_checked_at: null,
+    check_claimed_at: activeClaimToken ? CREATED_AT : null,
+    check_claim_token: activeClaimToken,
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+  });
+  const query = jest.fn(async (sql, params) => {
+    if (sql.includes('SET last_attempted_at = $3')) {
+      lastAttemptedAt = new Date(params[2]);
+      activeClaimToken = params[4];
+      return { rows: [{ id: WATCH_ID }] };
+    }
+    if (sql.includes('SET check_claimed_at = NULL, check_claim_token = NULL')) {
+      if (activeClaimToken === params[2]) activeClaimToken = null;
+      return { rows: [], rowCount: 1 };
+    }
+    if (sql.includes('FROM objective_watches')) return { rows: [row()] };
+    return { rows: [] };
+  });
+  const checker = { run: jest.fn().mockRejectedValue(new Error('scheduler settings unavailable')) };
+  const response = await request(makeApp({ query, checker, now: () => CREATED_AT.getTime() }))
+    .post(`/api/account/objective-watches/${WATCH_ID}/refresh`)
+    .set('Cookie', 'bc_session=test-session');
+
+  expect(response.status).toBe(500);
+  expect(activeClaimToken).toBeNull();
+  expect(lastAttemptedAt.toISOString()).toBe(CREATED_AT.toISOString());
+  const releaseCall = query.mock.calls.find(([sql]) => sql.includes('SET check_claimed_at = NULL'));
+  expect(releaseCall[0]).not.toContain('last_attempted_at');
+  expect(releaseCall[1]).toEqual([WATCH_ID, USER_ID, expect.any(String)]);
 });
 
 test('returns tier-aware Objective Watch change history', async () => {

@@ -7,6 +7,7 @@ const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_REMINDER_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 10 * 1000;
 const DEFAULT_MAX_RESPONSE_AGE_MS = 2 * 60 * 1000;
+const MONITOR_ABORTED = Symbol('monitor-aborted');
 
 const parsePositiveMilliseconds = (seconds, fallback, { minimum = 1 } = {}) => {
   const parsed = Number(seconds);
@@ -206,12 +207,38 @@ const processHealthResult = async ({
 };
 
 const wait = (milliseconds, signal) => new Promise((resolve) => {
-  const timer = setTimeout(resolve, milliseconds);
-  signal?.addEventListener('abort', () => {
+  let settled = false;
+  let timer;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
     clearTimeout(timer);
+    signal?.removeEventListener('abort', finish);
     resolve();
-  }, { once: true });
+  };
+
+  timer = setTimeout(finish, milliseconds);
+  signal?.addEventListener('abort', finish, { once: true });
+  if (signal?.aborted) finish();
 });
+
+const runUntilAbort = async (operation, signal) => {
+  if (!signal) return operation();
+  if (signal.aborted) return MONITOR_ABORTED;
+
+  let handleAbort;
+  const aborted = new Promise((resolve) => {
+    handleAbort = () => resolve(MONITOR_ABORTED);
+    signal.addEventListener('abort', handleAbort, { once: true });
+    if (signal.aborted) handleAbort();
+  });
+
+  try {
+    return await Promise.race([Promise.resolve().then(operation), aborted]);
+  } finally {
+    signal.removeEventListener('abort', handleAbort);
+  }
+};
 
 const runHealthMonitor = async ({
   url,
@@ -223,7 +250,10 @@ const runHealthMonitor = async ({
 }) => {
   while (!signal?.aborted) {
     try {
-      await processResult(await check());
+      const result = await runUntilAbort(check, signal);
+      if (result === MONITOR_ABORTED) break;
+      const processed = await runUntilAbort(() => processResult(result), signal);
+      if (processed === MONITOR_ABORTED) break;
     } catch (error) {
       log.error?.({ err: error }, 'Production health monitor cycle failed');
     }

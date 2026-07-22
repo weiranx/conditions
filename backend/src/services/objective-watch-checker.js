@@ -1,6 +1,6 @@
 'use strict';
 
-const { createHash } = require('crypto');
+const { createHash, randomUUID } = require('crypto');
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_BATCH_SIZE = 100;
@@ -10,6 +10,7 @@ const FORTY_EIGHT_HOURS_MS = 48 * ONE_HOUR_MS;
 const PLAN_DATE_EXPIRY_GRACE_MS = 14 * ONE_HOUR_MS;
 const CHANGE_RETENTION_DAYS = 90;
 const CHECK_RETENTION_DAYS = 90;
+const OBJECTIVE_WATCH_CLAIM_LEASE_MS = 15 * 60 * 1000;
 
 const ACCOUNT_TIER_JOIN = `
   LEFT JOIN LATERAL (
@@ -202,6 +203,7 @@ const createObjectiveWatchChecker = ({
   log = console,
   now = () => new Date(),
   getCheckIntervalMinutes = async () => DEFAULT_CHECK_INTERVAL_MINUTES,
+  createClaimToken = randomUUID,
   concurrency = Number(process.env.OBJECTIVE_WATCH_CONCURRENCY) || DEFAULT_CONCURRENCY,
   batchSize = Number(process.env.OBJECTIVE_WATCH_BATCH_SIZE) || DEFAULT_BATCH_SIZE,
 } = {}) => {
@@ -255,7 +257,13 @@ const createObjectiveWatchChecker = ({
     return sent;
   };
 
-  const run = async ({ watchId = null, userId = null, manual = false } = {}) => {
+  const run = async ({
+    watchId = null,
+    userId = null,
+    manual = false,
+    manualCooldownMinutes = 5,
+    claimToken: providedClaimToken = null,
+  } = {}) => {
     if (!database?.configured || typeof database.query !== 'function') {
       const error = new Error('Objective Watch checks require PostgreSQL.');
       error.code = 'DATABASE_UNAVAILABLE';
@@ -267,12 +275,23 @@ const createObjectiveWatchChecker = ({
 
     const checkedAt = now();
     const standardIntervalMinutes = await getCheckIntervalMinutes();
+    const claimToken = providedClaimToken || createClaimToken();
+    const usesExistingClaim = manual && Boolean(providedClaimToken);
+    const parsedManualCooldownMinutes = Number(manualCooldownMinutes);
+    const manualCooldownMs = Number.isFinite(parsedManualCooldownMinutes) && parsedManualCooldownMinutes > 0
+      ? parsedManualCooldownMinutes * 60 * 1000
+      : 5 * 60 * 1000;
+    const leaseExpiredBefore = new Date(checkedAt.getTime() - OBJECTIVE_WATCH_CLAIM_LEASE_MS).toISOString();
+    const manualCooldownBefore = new Date(checkedAt.getTime() - manualCooldownMs).toISOString();
     await database.query(`
       UPDATE objective_watches
       SET next_check_at = NULL
       WHERE next_check_at IS NOT NULL
-        AND (plan->>'forecastDate') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-        AND (plan->>'forecastDate')::date < ((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC')::date
+        AND CASE
+          WHEN plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+            THEN plan->>'forecastDate'
+          ELSE NULL
+        END < TO_CHAR((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD')
     `);
     await database.query(`
       DELETE FROM objective_watch_events
@@ -284,30 +303,71 @@ const createObjectiveWatchChecker = ({
     `);
 
     const dueResult = await database.query(`
+      WITH candidate_watches AS (
+        SELECT watches.id
+        FROM objective_watches watches
+        JOIN users ON users.id = watches.user_id
+        ${ACCOUNT_TIER_JOIN}
+        WHERE users.status = 'active'
+          AND (
+            (
+              $8::boolean = TRUE
+              AND watches.id = $2::uuid
+              AND watches.user_id = $3::uuid
+              AND watches.check_claim_token = $4::uuid
+            )
+            OR (
+              $8::boolean = FALSE
+              AND (watches.check_claimed_at IS NULL OR watches.check_claimed_at <= $6::timestamptz)
+              AND (
+                COALESCE(watches.last_attempted_at, watches.last_checked_at) IS NULL
+                OR COALESCE(watches.last_attempted_at, watches.last_checked_at) <= $7::timestamptz
+              )
+              AND (
+                ($2::uuid IS NOT NULL AND watches.id = $2::uuid AND watches.user_id = $3::uuid)
+                OR (
+                  $2::uuid IS NULL
+                  AND COALESCE(account_tier.tier_key, 'free') = 'premium'
+                  AND (watches.next_check_at IS NULL OR watches.next_check_at <= NOW())
+                  AND CASE
+                    WHEN watches.plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                      THEN watches.plan->>'forecastDate'
+                    ELSE NULL
+                  END >= TO_CHAR((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+                )
+              )
+            )
+          )
+        ORDER BY watches.next_check_at ASC, watches.id ASC
+        LIMIT $1
+        FOR UPDATE OF watches SKIP LOCKED
+      ), claimed_watches AS (
+        UPDATE objective_watches watches
+        SET check_claimed_at = $5::timestamptz,
+            check_claim_token = $4::uuid,
+            last_attempted_at = $5::timestamptz
+        FROM candidate_watches candidates
+        WHERE watches.id = candidates.id
+        RETURNING watches.*
+      )
       SELECT watches.id, watches.user_id, watches.title, watches.plan,
              watches.baseline_report, watches.last_snapshot, watches.consecutive_failures,
              watches.notifications_enabled, users.email, users.display_name, users.email_verified_at,
              COALESCE(account_tier.tier_key, 'free') AS tier_key
-      FROM objective_watches watches
+      FROM claimed_watches watches
       JOIN users ON users.id = watches.user_id
       ${ACCOUNT_TIER_JOIN}
-      WHERE users.status = 'active'
-        AND (
-          ($2::uuid IS NOT NULL AND watches.id = $2::uuid AND watches.user_id = $3::uuid)
-          OR (
-            $2::uuid IS NULL
-            AND COALESCE(account_tier.tier_key, 'free') = 'premium'
-            AND (watches.next_check_at IS NULL OR watches.next_check_at <= NOW())
-            AND CASE
-              WHEN watches.plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                THEN (watches.plan->>'forecastDate')::date
-              ELSE NULL
-            END >= ((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC')::date
-          )
-        )
       ORDER BY watches.next_check_at ASC, watches.id ASC
-      LIMIT $1
-    `, [Math.min(Math.max(1, Math.round(batchSize)), 500), manual ? watchId : null, manual ? userId : null]);
+    `, [
+      Math.min(Math.max(1, Math.round(batchSize)), 500),
+      manual ? watchId : null,
+      manual ? userId : null,
+      claimToken,
+      checkedAt.toISOString(),
+      leaseExpiredBefore,
+      manualCooldownBefore,
+      usesExistingClaim,
+    ]);
 
     const groups = new Map();
     let invalid = 0;
@@ -315,7 +375,12 @@ const createObjectiveWatchChecker = ({
       const key = buildPlanKey(watch.plan);
       if (!key || planDateHasEnded(watch.plan, checkedAt)) {
         invalid += 1;
-        await database.query('UPDATE objective_watches SET next_check_at = NULL WHERE id = $1', [watch.id]);
+        await database.query(`
+          UPDATE objective_watches
+          SET last_attempted_at = $2, next_check_at = NULL,
+              check_claimed_at = NULL, check_claim_token = NULL
+          WHERE id = $1 AND check_claim_token = $3::uuid
+        `, [watch.id, checkedAt.toISOString(), claimToken]);
         continue;
       }
       if (!groups.has(key)) groups.set(key, []);
@@ -347,19 +412,23 @@ const createObjectiveWatchChecker = ({
           const nextCheckAt = premium ? calculateNextCheckAt(watch.plan, checkedAt, standardIntervalMinutes) : null;
           const checkStatus = result.payload.partialData === true ? 'partial' : change ? 'changed' : 'unchanged';
           const checkSummary = extractWatchSignals(result.payload);
-          await database.query(`
+          const updateResult = await database.query(`
             UPDATE objective_watches
-            SET last_checked_at = $2, next_check_at = $3,
+            SET last_attempted_at = $2, last_checked_at = $2, next_check_at = $3,
                 last_snapshot = COALESCE($4::jsonb, last_snapshot),
-                last_change = COALESCE($5::jsonb, last_change), consecutive_failures = 0
-            WHERE id = $1
+                last_change = COALESCE($5::jsonb, last_change), consecutive_failures = 0,
+                check_claimed_at = NULL, check_claim_token = NULL
+            WHERE id = $1 AND check_claim_token = $6::uuid
+            RETURNING id
           `, [
             watch.id,
             checkedAt.toISOString(),
             nextCheckAt?.toISOString() || null,
             result.payload.partialData === true ? null : JSON.stringify(result.payload),
             change ? JSON.stringify(change) : null,
+            claimToken,
           ]);
+          if (updateResult?.rowCount === 0) continue;
           await database.query(`
             INSERT INTO objective_watch_checks (watch_id, check_type, status, summary, change, checked_at)
             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)
@@ -394,11 +463,14 @@ const createObjectiveWatchChecker = ({
           const retryAt = watch.tier_key === 'premium'
             ? new Date(checkedAt.getTime() + retryHours * ONE_HOUR_MS)
             : null;
-          await database.query(`
+          const updateResult = await database.query(`
             UPDATE objective_watches
-            SET consecutive_failures = $2, next_check_at = $3
-            WHERE id = $1
-          `, [watch.id, failureCount, retryAt?.toISOString() || null]);
+            SET consecutive_failures = $2, next_check_at = $3, last_attempted_at = $4,
+                check_claimed_at = NULL, check_claim_token = NULL
+            WHERE id = $1 AND check_claim_token = $5::uuid
+            RETURNING id
+          `, [watch.id, failureCount, retryAt?.toISOString() || null, checkedAt.toISOString(), claimToken]);
+          if (updateResult?.rowCount === 0) continue;
           await database.query(`
             INSERT INTO objective_watch_checks (watch_id, check_type, status, error, checked_at)
             VALUES ($1, $2, 'failed', $3, $4)
@@ -429,6 +501,7 @@ const createObjectiveWatchChecker = ({
 };
 
 module.exports = {
+  OBJECTIVE_WATCH_CLAIM_LEASE_MS,
   buildChangeKey,
   buildMeaningfulChange,
   buildPlanKey,

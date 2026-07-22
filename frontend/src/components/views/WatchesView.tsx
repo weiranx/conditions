@@ -115,6 +115,22 @@ const monitoringDetail = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy) =
     : 'Automatic check queued';
 };
 
+const getRefreshRetryAtMs = (watch: ObjectiveWatch, policy: ObjectiveWatchPolicy | null) => {
+  const lastAttemptedAt = watch.lastAttemptedAt || watch.lastCheckedAt;
+  if (!policy || !lastAttemptedAt) return null;
+  const lastAttemptedAtMs = new Date(lastAttemptedAt).getTime();
+  if (!Number.isFinite(lastAttemptedAtMs)) return null;
+  return lastAttemptedAtMs + policy.manualRefreshCooldownMinutes * 60 * 1000;
+};
+
+const formatRefreshWait = (remainingMs: number) => {
+  const totalSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+};
+
 const checkStatusLabel = (status: ObjectiveWatchCheck['status']) => ({
   changed: 'Meaningful change',
   unchanged: 'No meaningful change',
@@ -146,6 +162,8 @@ export function WatchesView({
   const [watches, setWatches] = useState<ObjectiveWatch[]>([]);
   const [policy, setPolicy] = useState<ObjectiveWatchPolicy | null>(null);
   const [checksByWatch, setChecksByWatch] = useState<Record<string, ObjectiveWatchCheck[]>>({});
+  const [historyErrorsByWatch, setHistoryErrorsByWatch] = useState<Record<string, string>>({});
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingAlertsId, setUpdatingAlertsId] = useState<string | null>(null);
@@ -160,11 +178,13 @@ export function WatchesView({
       setWatches([]);
       setPolicy(null);
       setChecksByWatch({});
+      setHistoryErrorsByWatch({});
       setLoading(false);
       return;
     }
     const controller = new AbortController();
     setChecksByWatch({});
+    setHistoryErrorsByWatch({});
     setExpandedHistoryId(null);
     setLoading(true);
     setError(null);
@@ -193,14 +213,26 @@ export function WatchesView({
     setPolicy(result.policy);
   }, Boolean(accountUserId) && !deletingId && !refreshingId && !updatingAlertsId);
 
+  useEffect(() => {
+    setCurrentTimeMs(Date.now());
+    if (!policy || watches.length === 0) return;
+    const timer = window.setInterval(() => setCurrentTimeMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [policy, watches.length]);
+
   const removeWatch = async (watch: ObjectiveWatch) => {
-    if (deletingId) return;
+    if (deletingId || refreshingId === watch.id || updatingAlertsId === watch.id) return;
     setDeletingId(watch.id);
     setError(null);
     try {
       await deleteObjectiveWatch(watch.id);
       setWatches((current) => current.filter((item) => item.id !== watch.id));
       setChecksByWatch((current) => {
+        const next = { ...current };
+        delete next[watch.id];
+        return next;
+      });
+      setHistoryErrorsByWatch((current) => {
         const next = { ...current };
         delete next[watch.id];
         return next;
@@ -219,7 +251,7 @@ export function WatchesView({
       navigateToView('settings');
       return;
     }
-    if (updatingAlertsId) return;
+    if (updatingAlertsId || refreshingId === watch.id || deletingId === watch.id) return;
     setUpdatingAlertsId(watch.id);
     setError(null);
     try {
@@ -234,7 +266,15 @@ export function WatchesView({
   };
 
   const refreshWatch = async (watch: ObjectiveWatch) => {
-    if (refreshingId) return;
+    const retryAtMs = getRefreshRetryAtMs(watch, policy);
+    if (
+      !policy
+      || refreshingId
+      || deletingId === watch.id
+      || updatingAlertsId === watch.id
+      || planHasEnded(watch)
+      || (retryAtMs !== null && retryAtMs > Date.now())
+    ) return;
     setRefreshingId(watch.id);
     setError(null);
     try {
@@ -246,32 +286,55 @@ export function WatchesView({
         delete next[watch.id];
         return next;
       });
+      setHistoryErrorsByWatch((current) => {
+        const next = { ...current };
+        delete next[watch.id];
+        return next;
+      });
       setExpandedHistoryId((current) => current === watch.id ? null : current);
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Could not refresh this objective watch.');
+      try {
+        const latest = await listObjectiveWatches();
+        setWatches(latest.watches);
+        setPolicy(latest.policy);
+      } catch {
+        // Keep the original refresh error visible; the server still enforces the cooldown.
+      }
     } finally {
       setRefreshingId(null);
     }
   };
 
-  const toggleHistory = async (watch: ObjectiveWatch) => {
-    if (expandedHistoryId === watch.id) {
-      setExpandedHistoryId(null);
-      return;
-    }
-    setExpandedHistoryId(watch.id);
-    if (checksByWatch[watch.id] || historyLoadingId) return;
+  const loadWatchHistory = async (watch: ObjectiveWatch) => {
+    if (historyLoadingId) return;
     setHistoryLoadingId(watch.id);
+    setHistoryErrorsByWatch((current) => {
+      const next = { ...current };
+      delete next[watch.id];
+      return next;
+    });
     setError(null);
     try {
       const result = await getObjectiveWatchChecks(watch.id);
       setChecksByWatch((current) => ({ ...current, [watch.id]: result.checks }));
       setPolicy(result.policy);
     } catch (historyError) {
-      setError(historyError instanceof Error ? historyError.message : 'Could not load Objective Watch history.');
+      const message = historyError instanceof Error ? historyError.message : 'Could not load Objective Watch history.';
+      setHistoryErrorsByWatch((current) => ({ ...current, [watch.id]: message }));
     } finally {
       setHistoryLoadingId(null);
     }
+  };
+
+  const toggleHistory = (watch: ObjectiveWatch) => {
+    if (expandedHistoryId === watch.id) {
+      setExpandedHistoryId(null);
+      return;
+    }
+    setExpandedHistoryId(watch.id);
+    if (Object.prototype.hasOwnProperty.call(checksByWatch, watch.id) || historyLoadingId) return;
+    void loadWatchHistory(watch);
   };
 
   const activeWatchCount = watches.filter((watch) => !planHasEnded(watch)).length;
@@ -380,7 +443,15 @@ export function WatchesView({
               {orderedWatches.map((watch) => {
                 const isConfirming = confirmingId === watch.id;
                 const isDeleting = deletingId === watch.id;
+                const hasEnded = planHasEnded(watch);
                 const checkOverdue = isObjectiveWatchCheckOverdue(watch, policy);
+                const historyChecks = checksByWatch[watch.id];
+                const historyError = historyErrorsByWatch[watch.id];
+                const historyLoaded = Object.prototype.hasOwnProperty.call(checksByWatch, watch.id);
+                const refreshRetryAtMs = getRefreshRetryAtMs(watch, policy);
+                const refreshWaitMs = refreshRetryAtMs === null ? 0 : Math.max(0, refreshRetryAtMs - currentTimeMs);
+                const refreshOnCooldown = refreshWaitMs > 0;
+                const isRefreshing = refreshingId === watch.id;
                 return (
                   <article key={watch.id} className="watch-card">
                     <div className="watch-card-main">
@@ -393,7 +464,7 @@ export function WatchesView({
                           </span>
                           <h2>{watch.title}</h2>
                         </div>
-                        <span className={`watch-status ${planHasEnded(watch) ? 'is-ended' : checkOverdue ? 'is-overdue' : !schedulerEnabled && automaticChecks ? 'is-paused' : ''}`}><span aria-hidden /> {monitoringLabel(watch, policy!)}</span>
+                        <span className={`watch-status ${hasEnded ? 'is-ended' : checkOverdue ? 'is-overdue' : !schedulerEnabled && automaticChecks ? 'is-paused' : ''}`}><span aria-hidden /> {monitoringLabel(watch, policy!)}</span>
                       </div>
                       <div className="watch-card-meta">
                         <span><CalendarDays aria-hidden /> {formatPlanDate(watch.plan.forecastDate)}</span>
@@ -419,11 +490,33 @@ export function WatchesView({
                           <strong>Check history · last {policy?.historyDays || 14} days</strong>
                           {historyLoadingId === watch.id ? (
                             <p><LoaderCircle className="watches-spinner" aria-hidden /> Loading history…</p>
-                          ) : (checksByWatch[watch.id] || []).length === 0 ? (
+                          ) : historyError ? (
+                            <div className="watch-history-error" role="alert">
+                              <p>{historyError}</p>
+                              <button
+                                type="button"
+                                onClick={() => void loadWatchHistory(watch)}
+                                disabled={Boolean(historyLoadingId) || Boolean(deletingId)}
+                              >
+                                <RefreshCw aria-hidden /> Retry history
+                              </button>
+                            </div>
+                          ) : !historyLoaded ? (
+                            <div className="watch-history-error">
+                              <p>Check history has not loaded yet.</p>
+                              <button
+                                type="button"
+                                onClick={() => void loadWatchHistory(watch)}
+                                disabled={Boolean(historyLoadingId) || Boolean(deletingId)}
+                              >
+                                <RefreshCw aria-hidden /> Load history
+                              </button>
+                            </div>
+                          ) : historyChecks.length === 0 ? (
                             <p>No checks recorded in this period yet.</p>
                           ) : (
                             <ol>
-                              {(checksByWatch[watch.id] || []).map((check) => {
+                              {historyChecks.map((check) => {
                                 const summary = formatCheckSummary(check);
                                 return (
                                   <li key={check.id} className={`watch-check is-${check.status}`}>
@@ -461,17 +554,20 @@ export function WatchesView({
                       </button>
                       <button
                         type="button"
-                        className="watch-refresh"
+                        className={`watch-refresh ${refreshOnCooldown ? 'is-cooling-down' : ''}`}
                         onClick={() => void refreshWatch(watch)}
-                        disabled={Boolean(refreshingId) || Boolean(deletingId) || planHasEnded(watch)}
+                        disabled={!policy || Boolean(refreshingId) || Boolean(deletingId) || updatingAlertsId === watch.id || hasEnded || refreshOnCooldown}
+                        title={refreshOnCooldown && refreshRetryAtMs !== null
+                          ? `Refresh available ${formatTimestamp(new Date(refreshRetryAtMs).toISOString())}`
+                          : hasEnded ? 'This plan date has ended' : undefined}
                       >
-                        {refreshingId === watch.id ? <LoaderCircle className="watches-spinner" aria-hidden /> : <RefreshCw aria-hidden />}
-                        Refresh now
+                        {isRefreshing ? <LoaderCircle className="watches-spinner" aria-hidden /> : <RefreshCw aria-hidden />}
+                        {isRefreshing ? 'Refreshing…' : refreshOnCooldown ? `Refresh in ${formatRefreshWait(refreshWaitMs)}` : 'Refresh now'}
                       </button>
                       <button
                         type="button"
                         className="watch-history-toggle"
-                        onClick={() => void toggleHistory(watch)}
+                        onClick={() => toggleHistory(watch)}
                         disabled={Boolean(historyLoadingId) || Boolean(deletingId)}
                         aria-expanded={expandedHistoryId === watch.id}
                         aria-controls={`watch-history-${watch.id}`}
@@ -483,7 +579,7 @@ export function WatchesView({
                         type="button"
                         className={`watch-alerts ${watch.notificationsEnabled ? 'is-enabled' : ''}`}
                         onClick={() => policy?.emailAlerts ? void toggleAlerts(watch) : navigateToView('settings')}
-                        disabled={Boolean(updatingAlertsId) || Boolean(deletingId)}
+                        disabled={Boolean(updatingAlertsId) || Boolean(deletingId) || isRefreshing}
                         title={!policy?.emailAlerts ? 'Premium includes email alerts' : !emailVerified ? 'Verify your email to enable alerts' : undefined}
                       >
                         {updatingAlertsId === watch.id
@@ -499,7 +595,7 @@ export function WatchesView({
                         <div className="watch-delete-confirm" role="group" aria-label={`Stop watching ${watch.title}?`}>
                           <span>Stop watching?</span>
                           <button type="button" onClick={() => setConfirmingId(null)} disabled={isDeleting}>Keep</button>
-                          <button type="button" className="is-danger" onClick={() => void removeWatch(watch)} disabled={isDeleting}>
+                          <button type="button" className="is-danger" onClick={() => void removeWatch(watch)} disabled={isDeleting || isRefreshing || updatingAlertsId === watch.id}>
                             {isDeleting ? <LoaderCircle className="watches-spinner" aria-hidden /> : <Trash2 aria-hidden />}
                             Stop
                           </button>
@@ -509,7 +605,7 @@ export function WatchesView({
                           type="button"
                           className="watch-delete"
                           onClick={() => setConfirmingId(watch.id)}
-                          disabled={Boolean(deletingId)}
+                          disabled={Boolean(deletingId) || isRefreshing || updatingAlertsId === watch.id}
                         >
                           <Trash2 aria-hidden /> Stop watching
                         </button>

@@ -1,5 +1,6 @@
 'use strict';
 
+const { randomUUID } = require('crypto');
 const { readSessionToken } = require('../auth/account-access');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const {
@@ -8,6 +9,7 @@ const {
   resolveObjectiveWatchPolicy,
 } = require('../auth/objective-watch-entitlements');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
+const { OBJECTIVE_WATCH_CLAIM_LEASE_MS } = require('../services/objective-watch-checker');
 const { normalizeSavedReport } = require('./saved-reports');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -22,12 +24,30 @@ class ObjectiveWatchValidationError extends Error {
   }
 }
 
+class ObjectiveWatchPolicyUnavailableError extends Error {
+  constructor() {
+    super('Objective Watch account benefits are temporarily unavailable. Please try again.');
+    this.name = 'ObjectiveWatchPolicyUnavailableError';
+    this.code = 'OBJECTIVE_WATCH_POLICY_UNAVAILABLE';
+    this.statusCode = 503;
+  }
+}
+
 const normalizeCoordinate = (value, min, max, label) => {
   const coordinate = Number(value);
   if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) {
     throw new ObjectiveWatchValidationError(`Provide a valid ${label}.`);
   }
   return coordinate;
+};
+
+const isValidCalendarDate = (value) => {
+  if (typeof value !== 'string' || !DATE_PATTERN.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1];
 };
 
 const normalizeWatchPlan = (value) => {
@@ -39,7 +59,7 @@ const normalizeWatchPlan = (value) => {
   const forecastDate = String(value.forecastDate || '');
   const alpineStartTime = String(value.alpineStartTime || '');
   const travelWindowHours = Number(value.travelWindowHours);
-  if (!DATE_PATTERN.test(forecastDate)) {
+  if (!isValidCalendarDate(forecastDate)) {
     throw new ObjectiveWatchValidationError('Provide a valid forecast date.');
   }
   if (!TIME_PATTERN.test(alpineStartTime)) {
@@ -84,6 +104,7 @@ const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {})
   title: row.title,
   plan: row.plan,
   ...(includeBaseline ? { baselineReport: row.baseline_report } : {}),
+  lastAttemptedAt: normalizeTimestamp(row.last_attempted_at),
   lastCheckedAt: normalizeTimestamp(row.last_checked_at),
   nextCheckAt: policy?.automaticChecks === false ? null : normalizeTimestamp(row.next_check_at),
   lastChange: row.last_change || null,
@@ -161,13 +182,24 @@ const registerObjectiveWatchRoutes = ({
     return false;
   };
 
-  const getPolicy = async (req, user) => {
-    let tier = { ...FREE_ACCOUNT_TIER };
-    if (typeof tierService?.getAccountTier === 'function') {
+  const getPolicy = async (req, user, { allowFallback = true } = {}) => {
+    let tier;
+    if (typeof tierService?.getAccountTier !== 'function') {
+      if (!allowFallback) throw new ObjectiveWatchPolicyUnavailableError();
+      tier = { ...FREE_ACCOUNT_TIER };
+    } else {
       try {
         tier = await tierService.getAccountTier(user.id);
+        if (!['free', 'premium'].includes(tier?.key)) {
+          throw new ObjectiveWatchPolicyUnavailableError();
+        }
       } catch (error) {
         req.log?.warn({ err: error, userId: user.id }, 'Objective Watch tier lookup failed');
+        if (!allowFallback) {
+          if (error instanceof ObjectiveWatchPolicyUnavailableError) throw error;
+          throw new ObjectiveWatchPolicyUnavailableError();
+        }
+        tier = { ...FREE_ACCOUNT_TIER };
       }
     }
     const policy = resolveObjectiveWatchPolicy(tier?.key);
@@ -194,6 +226,9 @@ const registerObjectiveWatchRoutes = ({
         policy: error.policy,
       });
     }
+    if (error instanceof ObjectiveWatchPolicyUnavailableError) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code });
+    }
     if (error instanceof ObjectiveWatchValidationError || error?.name === 'SavedReportValidationError') {
       return res.status(error.statusCode || 400).json({ error: error.message });
     }
@@ -212,7 +247,7 @@ const registerObjectiveWatchRoutes = ({
       if (hasPlanLookup) {
         const plan = normalizeWatchPlan(req.query);
         const result = await database.query(`
-          SELECT id, title, plan, baseline_report, last_checked_at, next_check_at,
+          SELECT id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
                  last_change, consecutive_failures, notifications_enabled, created_at, updated_at
           FROM objective_watches
           WHERE user_id = $1 AND fingerprint = $2
@@ -224,7 +259,7 @@ const registerObjectiveWatchRoutes = ({
         });
       }
       const result = await database.query(`
-        SELECT id, title, plan, last_checked_at, next_check_at, last_change,
+        SELECT id, title, plan, last_attempted_at, last_checked_at, next_check_at, last_change,
                consecutive_failures, notifications_enabled, created_at, updated_at
         FROM objective_watches
         WHERE user_id = $1
@@ -245,7 +280,7 @@ const registerObjectiveWatchRoutes = ({
       if (typeof database.transaction !== 'function') {
         return res.status(503).json({ error: 'Objective watch limits are temporarily unavailable. Please try again.' });
       }
-      const policy = await getPolicy(req, user);
+      const policy = await getPolicy(req, user, { allowFallback: false });
       const watch = normalizeObjectiveWatch(req.body?.report);
       const result = await database.transaction(async (query) => {
         await query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [user.id]);
@@ -262,9 +297,9 @@ const registerObjectiveWatchRoutes = ({
             WHERE user_id = $1
               AND CASE
                 WHEN plan->>'forecastDate' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                  THEN (plan->>'forecastDate')::date
+                  THEN plan->>'forecastDate'
                 ELSE NULL
-              END >= ((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC')::date
+              END >= TO_CHAR((NOW() - INTERVAL '14 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD')
           `, [user.id]);
           if ((Number(countResult.rows[0]?.active_count) || 0) >= policy.activeWatchLimit) {
             throw new ObjectiveWatchLimitError(policy);
@@ -284,7 +319,7 @@ const registerObjectiveWatchRoutes = ({
               consecutive_failures = 0,
               notifications_enabled = CASE WHEN $6 THEN objective_watches.notifications_enabled ELSE FALSE END,
               updated_at = NOW()
-          RETURNING id, title, plan, baseline_report, last_checked_at, next_check_at,
+          RETURNING id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
                     last_change, consecutive_failures, notifications_enabled, created_at, updated_at
         `, [user.id, watch.fingerprint, watch.title, watch.serializedPlan, watch.serializedReport, policy.automaticChecks]);
       });
@@ -308,7 +343,7 @@ const registerObjectiveWatchRoutes = ({
       return res.status(400).json({ error: 'notificationsEnabled must be true or false.' });
     }
     try {
-      const policy = await getPolicy(req, user);
+      const policy = await getPolicy(req, user, { allowFallback: !req.body.notificationsEnabled });
       if (req.body.notificationsEnabled && !policy.emailAlerts) {
         throw new ObjectiveWatchPremiumRequiredError('Email alerts', policy);
       }
@@ -316,7 +351,7 @@ const registerObjectiveWatchRoutes = ({
         UPDATE objective_watches
         SET notifications_enabled = $3, updated_at = NOW()
         WHERE id = $1 AND user_id = $2
-        RETURNING id, title, plan, baseline_report, last_checked_at, next_check_at,
+        RETURNING id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
                   last_change, consecutive_failures, notifications_enabled, created_at, updated_at
       `, [req.params.watchId, user.id, req.body.notificationsEnabled]);
       if (!result.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
@@ -340,10 +375,13 @@ const registerObjectiveWatchRoutes = ({
     if (activeRefreshes.has(watchId)) {
       return res.status(409).json({ error: 'This objective watch is already refreshing.', code: 'OBJECTIVE_WATCH_REFRESH_IN_PROGRESS' });
     }
+    activeRefreshes.add(watchId);
+    let claimToken = null;
     try {
-      const policy = await getPolicy(req, user);
+      const policy = await getPolicy(req, user, { allowFallback: false });
       const current = await database.query(`
-        SELECT id, title, plan, baseline_report, last_checked_at, next_check_at,
+        SELECT id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
+               check_claimed_at, check_claim_token,
                last_change, consecutive_failures, notifications_enabled, created_at, updated_at
         FROM objective_watches
         WHERE id = $1 AND user_id = $2
@@ -351,10 +389,23 @@ const registerObjectiveWatchRoutes = ({
       `, [watchId, user.id]);
       if (!current.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
 
-      const lastCheckedAt = normalizeTimestamp(current.rows[0].last_checked_at);
+      const lastAttemptedAt = normalizeTimestamp(
+        current.rows[0].last_attempted_at || current.rows[0].last_checked_at,
+      );
       const cooldownMs = policy.manualRefreshCooldownMinutes * 60 * 1000;
-      const retryAtMs = lastCheckedAt ? new Date(lastCheckedAt).getTime() + cooldownMs : 0;
-      if (retryAtMs > now()) {
+      const attemptAtMs = now();
+      const claimedAt = normalizeTimestamp(current.rows[0].check_claimed_at);
+      const claimExpiresAtMs = current.rows[0].check_claim_token && claimedAt
+        ? new Date(claimedAt).getTime() + OBJECTIVE_WATCH_CLAIM_LEASE_MS
+        : 0;
+      if (claimExpiresAtMs > attemptAtMs) {
+        return res.status(409).json({
+          error: 'This objective watch is already refreshing.',
+          code: 'OBJECTIVE_WATCH_REFRESH_IN_PROGRESS',
+        });
+      }
+      const retryAtMs = lastAttemptedAt ? new Date(lastAttemptedAt).getTime() + cooldownMs : 0;
+      if (retryAtMs > attemptAtMs) {
         return res.status(429).json({
           error: `This watch was just refreshed. Try again after ${new Date(retryAtMs).toISOString()}.`,
           code: 'OBJECTIVE_WATCH_REFRESH_COOLDOWN',
@@ -362,9 +413,102 @@ const registerObjectiveWatchRoutes = ({
           policy,
         });
       }
-
-      activeRefreshes.add(watchId);
-      const summary = await checker.run({ watchId, userId: user.id, manual: true });
+      claimToken = randomUUID();
+      const attemptAt = new Date(attemptAtMs).toISOString();
+      const claim = await database.query(`
+        UPDATE objective_watches
+        SET last_attempted_at = $3,
+            check_claimed_at = $3,
+            check_claim_token = $5::uuid
+        WHERE id = $1 AND user_id = $2
+          AND (
+            COALESCE(last_attempted_at, last_checked_at) IS NULL
+            OR COALESCE(last_attempted_at, last_checked_at) <= $4
+          )
+          AND (
+            check_claimed_at IS NULL
+            OR check_claimed_at <= $6
+          )
+        RETURNING id
+      `, [
+        watchId,
+        user.id,
+        attemptAt,
+        new Date(attemptAtMs - cooldownMs).toISOString(),
+        claimToken,
+        new Date(attemptAtMs - OBJECTIVE_WATCH_CLAIM_LEASE_MS).toISOString(),
+      ]);
+      if (!claim.rows[0]) {
+        const latest = await database.query(`
+          SELECT last_attempted_at, last_checked_at, check_claimed_at, check_claim_token
+          FROM objective_watches
+          WHERE id = $1 AND user_id = $2
+          LIMIT 1
+        `, [watchId, user.id]);
+        if (!latest.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
+        const latestClaimedAt = normalizeTimestamp(latest.rows[0].check_claimed_at);
+        const latestClaimExpiresAtMs = latest.rows[0].check_claim_token && latestClaimedAt
+          ? new Date(latestClaimedAt).getTime() + OBJECTIVE_WATCH_CLAIM_LEASE_MS
+          : 0;
+        if (latestClaimExpiresAtMs > now()) {
+          return res.status(409).json({
+            error: 'This objective watch is already refreshing.',
+            code: 'OBJECTIVE_WATCH_REFRESH_IN_PROGRESS',
+          });
+        }
+        const latestAttemptAt = normalizeTimestamp(
+          latest.rows[0].last_attempted_at || latest.rows[0].last_checked_at,
+        );
+        const latestRetryAtMs = latestAttemptAt
+          ? new Date(latestAttemptAt).getTime() + cooldownMs
+          : attemptAtMs + cooldownMs;
+        return res.status(429).json({
+          error: `This watch was just refreshed. Try again after ${new Date(latestRetryAtMs).toISOString()}.`,
+          code: 'OBJECTIVE_WATCH_REFRESH_COOLDOWN',
+          retryAt: new Date(latestRetryAtMs).toISOString(),
+          policy,
+        });
+      }
+      const summary = await checker.run({
+        watchId,
+        userId: user.id,
+        manual: true,
+        manualCooldownMinutes: policy.manualRefreshCooldownMinutes,
+        claimToken,
+      });
+      if (summary.due === 0) {
+        const latest = await database.query(`
+          SELECT last_attempted_at, last_checked_at, check_claimed_at, check_claim_token
+          FROM objective_watches
+          WHERE id = $1 AND user_id = $2
+          LIMIT 1
+        `, [watchId, user.id]);
+        if (!latest.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
+        const latestClaimedAt = normalizeTimestamp(latest.rows[0].check_claimed_at);
+        const latestClaimExpiresAtMs = latest.rows[0].check_claim_token && latestClaimedAt
+          ? new Date(latestClaimedAt).getTime() + OBJECTIVE_WATCH_CLAIM_LEASE_MS
+          : 0;
+        if (latestClaimExpiresAtMs > now()) {
+          return res.status(409).json({
+            error: 'This objective watch is already refreshing.',
+            code: 'OBJECTIVE_WATCH_REFRESH_IN_PROGRESS',
+          });
+        }
+        const latestAttemptAt = normalizeTimestamp(
+          latest.rows[0].last_attempted_at || latest.rows[0].last_checked_at,
+        );
+        const latestRetryAtMs = latestAttemptAt
+          ? new Date(latestAttemptAt).getTime() + cooldownMs
+          : attemptAtMs + cooldownMs;
+        if (latestRetryAtMs > now()) {
+          return res.status(429).json({
+            error: `This watch was just refreshed. Try again after ${new Date(latestRetryAtMs).toISOString()}.`,
+            code: 'OBJECTIVE_WATCH_REFRESH_COOLDOWN',
+            retryAt: new Date(latestRetryAtMs).toISOString(),
+            policy,
+          });
+        }
+      }
       if (summary.invalid > 0) {
         return res.status(410).json({ error: 'This objective plan date has ended.', code: 'OBJECTIVE_WATCH_ENDED', policy });
       }
@@ -372,12 +516,13 @@ const registerObjectiveWatchRoutes = ({
         return res.status(502).json({ error: 'Could not refresh this objective watch. Please try again.', code: 'OBJECTIVE_WATCH_REFRESH_FAILED', policy });
       }
       const refreshed = await database.query(`
-        SELECT id, title, plan, baseline_report, last_checked_at, next_check_at,
+        SELECT id, title, plan, baseline_report, last_attempted_at, last_checked_at, next_check_at,
                last_change, consecutive_failures, notifications_enabled, created_at, updated_at
         FROM objective_watches
         WHERE id = $1 AND user_id = $2
         LIMIT 1
       `, [watchId, user.id]);
+      if (!refreshed.rows[0]) return res.status(404).json({ error: 'Objective watch not found.' });
       return res.json({
         watch: mapObjectiveWatch(refreshed.rows[0], { includeBaseline: true, policy }),
         policy,
@@ -386,6 +531,17 @@ const registerObjectiveWatchRoutes = ({
       return handleError(req, res, error);
     } finally {
       activeRefreshes.delete(watchId);
+      if (claimToken) {
+        try {
+          await database.query(`
+            UPDATE objective_watches
+            SET check_claimed_at = NULL, check_claim_token = NULL
+            WHERE id = $1 AND user_id = $2 AND check_claim_token = $3::uuid
+          `, [watchId, user.id, claimToken]);
+        } catch (error) {
+          req.log?.warn?.({ err: error, watchId }, 'Objective Watch manual claim release failed');
+        }
+      }
     }
   });
 
@@ -464,8 +620,10 @@ const registerObjectiveWatchRoutes = ({
 };
 
 module.exports = {
+  ObjectiveWatchPolicyUnavailableError,
   ObjectiveWatchValidationError,
   createWatchFingerprint,
+  isValidCalendarDate,
   mapObjectiveWatch,
   mapObjectiveWatchEvent,
   normalizeObjectiveWatch,

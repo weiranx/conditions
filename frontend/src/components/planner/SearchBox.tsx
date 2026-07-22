@@ -41,7 +41,21 @@ export function SearchBox({
   onSelectSuggestion,
   onHoverSuggestion,
 }: SearchBoxProps) {
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const suggestionsListRef = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    const input = inputRef.current;
+    searchWrapperRef.current = wrapper;
+    searchInputRef.current = input;
+
+    return () => {
+      if (searchWrapperRef.current === wrapper) searchWrapperRef.current = null;
+      if (searchInputRef.current === input) searchInputRef.current = null;
+    };
+  }, [searchInputRef, searchWrapperRef]);
 
   React.useEffect(() => {
     if (showSuggestions) {
@@ -68,11 +82,11 @@ export function SearchBox({
           : '';
 
   return (
-    <div className="search-wrapper" ref={searchWrapperRef}>
+    <div className="search-wrapper" ref={wrapperRef}>
       <div className="search-bar">
         <Search size={16} aria-hidden />
         <input
-          ref={searchInputRef}
+          ref={inputRef}
           type="text"
           placeholder="Search by peak, trail, route, town, or coordinates"
           value={searchQuery}
