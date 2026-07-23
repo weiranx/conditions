@@ -207,33 +207,6 @@ const createSnowpackService = ({
         : [];
     });
 
-  const findNearestSnotelStation = (lat, lon, stations, maxDistanceKm = 140) => {
-    if (!Array.isArray(stations) || !stations.length) {
-      return null;
-    }
-    let nearest = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const station of stations) {
-      const stationLat = Number(station.latitude);
-      const stationLon = Number(station.longitude);
-      if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) {
-        continue;
-      }
-      const distanceKm = haversineKm(lat, lon, stationLat, stationLon);
-      if (distanceKm < nearestDistance) {
-        nearestDistance = distanceKm;
-        nearest = station;
-      }
-    }
-    if (!nearest || !Number.isFinite(nearestDistance) || nearestDistance > maxDistanceKm) {
-      return null;
-    }
-    return {
-      station: nearest,
-      distanceKm: nearestDistance,
-    };
-  };
-
   const findNearestSnotelStations = (lat, lon, stations, maxDistanceKm = 140, limit = 3) => (
     (Array.isArray(stations) ? stations : [])
       .map((station) => {
@@ -497,10 +470,11 @@ const createSnowpackService = ({
     const targetDate = getSnotelTargetDate(selectedDate);
     const beginDate = shiftIsoDateUtc(targetDate || formatIsoDateUtc(new Date()), -HISTORICAL_FETCH_LOOKBACK_DAYS);
     const todayIso = formatIsoDateUtc(new Date());
+    const nearestSnotelStationsPromise = getSnotelStations(fetchOptions)
+      .then((stations) => findNearestSnotelStations(lat, lon, stations, 140, 3));
 
     const snotelTask = (async () => {
-      const stations = await getSnotelStations(fetchOptions);
-      const nearest = findNearestSnotelStation(lat, lon, stations);
+      const [nearest] = await nearestSnotelStationsPromise;
       if (!nearest) {
         return null;
       }
@@ -617,25 +591,40 @@ const createSnowpackService = ({
       };
     })();
 
-    const nearbySnotelTask = (async () => {
-      const stations = await getSnotelStations(fetchOptions);
-      const nearestStations = findNearestSnotelStations(lat, lon, stations, 140, 3);
-      const rows = await Promise.allSettled(nearestStations.map(async ({ station, distanceKm }) => {
-        const stationTriplet = String(station?.stationTriplet || '');
-        if (!stationTriplet) return null;
-        const url = `https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=${encodeURIComponent(stationTriplet)}`
-          + `&elements=WTEQ,SNWD,TOBS&duration=DAILY&beginDate=${encodeURIComponent(shiftIsoDateUtc(targetDate || todayIso, -3))}`
-          + `&endDate=${encodeURIComponent(targetDate || todayIso)}&periodRef=END`;
-        const response = await fetchWithTimeout(url, fetchOptions);
-        if (!response.ok) return null;
-        const json = await response.json();
-        const elementData = Array.isArray(json?.[0]?.data) ? json[0].data : [];
+    const fetchNearbySnotelStations = async (stationCandidates) => {
+      const validCandidates = stationCandidates.filter(({ station }) => String(station?.stationTriplet || ''));
+      if (!validCandidates.length) return [];
+      const stationTriplets = validCandidates.map(({ station }) => String(station.stationTriplet));
+      const url = `https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=${encodeURIComponent(stationTriplets.join(','))}`
+        + `&elements=WTEQ,SNWD,TOBS&duration=DAILY&beginDate=${encodeURIComponent(shiftIsoDateUtc(targetDate || todayIso, -3))}`
+        + `&endDate=${encodeURIComponent(targetDate || todayIso)}&periodRef=END`;
+      const response = await fetchWithTimeout(url, fetchOptions);
+      if (!response.ok) {
+        if (validCandidates.length === 1) return [];
+        const individualResults = await Promise.allSettled(
+          validCandidates.map((candidate) => fetchNearbySnotelStations([candidate])),
+        );
+        return individualResults.flatMap((result) => (
+          result.status === 'fulfilled' ? result.value : []
+        ));
+      }
+      const json = await response.json();
+      const dataByTriplet = new Map(
+        (Array.isArray(json) ? json : []).map((stationData) => [
+          String(stationData?.stationTriplet || ''),
+          Array.isArray(stationData?.data) ? stationData.data : [],
+        ]),
+      );
+      return validCandidates.flatMap(({ station, distanceKm }) => {
+        const stationTriplet = String(station.stationTriplet);
+        const elementData = dataByTriplet.get(stationTriplet);
+        if (!elementData) return [];
         const values = {};
         for (const entry of elementData) {
           const code = String(entry?.stationElement?.elementCode || '').toUpperCase();
           values[code] = extractLatestAwdbValue(entry?.values, targetDate || todayIso);
         }
-        return {
+        return [{
           stationTriplet,
           stationName: station?.name || stationTriplet,
           distanceKm: Number(distanceKm.toFixed(1)),
@@ -644,9 +633,40 @@ const createSnowpackService = ({
           snowDepthIn: Number.isFinite(Number(values.SNWD?.value)) ? Number(values.SNWD.value) : null,
           sweIn: Number.isFinite(Number(values.WTEQ?.value)) ? Number(values.WTEQ.value) : null,
           obsTempF: Number.isFinite(Number(values.TOBS?.value)) ? Number(values.TOBS.value) : null,
-        };
-      }));
-      return rows.filter((result) => result.status === 'fulfilled' && result.value).map((result) => result.value);
+        }];
+      });
+    };
+
+    const nearbySnotelTask = (async () => {
+      const nearestStations = await nearestSnotelStationsPromise;
+      if (!nearestStations.length) return [];
+
+      // The detailed request above already includes the current fields needed
+      // for the closest-station consensus row. Reuse it instead of issuing the
+      // same AWDB station request twice. If the long-history request fails,
+      // retain the previous resilience by retrying that station with the short
+      // nearby-station request.
+      const nearestRow = snotelTask.then(
+        (detailed) => detailed && ({
+          stationTriplet: detailed.stationTriplet,
+          stationName: detailed.stationName,
+          distanceKm: detailed.distanceKm,
+          elevationFt: detailed.elevationFt,
+          observedDate: detailed.observedDate,
+          snowDepthIn: detailed.snowDepthIn,
+          sweIn: detailed.sweIn,
+          obsTempF: detailed.obsTempF,
+        }),
+        () => fetchNearbySnotelStations([nearestStations[0]]).then((rows) => rows[0] || null),
+      );
+      const rows = await Promise.allSettled([
+        nearestRow,
+        fetchNearbySnotelStations(nearestStations.slice(1)),
+      ]);
+      return rows.flatMap((result) => {
+        if (result.status !== 'fulfilled' || !result.value) return [];
+        return Array.isArray(result.value) ? result.value : [result.value];
+      });
     })();
 
     const nohrscTask = sampleNohrscSnowAnalysis(lat, lon, fetchOptions);
