@@ -1,7 +1,6 @@
 import {
   CheckCircle2,
   CloudRain,
-  Compass,
   Database,
   Download,
   LoaderCircle,
@@ -406,12 +405,6 @@ export function DashboardSummaryCard({
           </div>
         </dl>
 
-        {decisionActionLine && (
-          <div className="ssr-dash-recco">
-            <Compass size={19} aria-hidden />
-            <p><b>Plan adjustment</b><span>{localizeUnitText(decisionActionLine)}</span></p>
-          </div>
-        )}
       </section>
 
       <section className="ssr-card ssr-dash-support" aria-label="Supporting report evidence and actions">

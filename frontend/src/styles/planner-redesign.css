@@ -1666,7 +1666,7 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
   font-variant-numeric: tabular-nums;
 }
 .ssr-snow-depth small { font-size: 14px; font-weight: 500; color: var(--ssr-text-3); margin-left: 2px; }
-.ssr-snow-depth.ssr-snow-depth-range { font-size: 24px; }
+.ssr-snow-depth.ssr-snow-depth-range { font-size: 20px; line-height: 1.25; white-space: nowrap; }
 .ssr-snow-delta {
   font-size: 12px;
   padding: 3px 8px;
@@ -1773,9 +1773,9 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
    SOURCES
    ========================================================= */
 .ssr-src-health { margin-bottom: 10px; padding: 12px; border-radius: 8px; background: var(--ssr-surface-2); }
-.ssr-src-health-copy { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-bottom: 10px; }
+.ssr-src-health-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-bottom: 10px; }
 .ssr-src-health-k { display: block; margin-bottom: 2px; color: var(--ssr-text-3); font-size: 9.5px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
-.ssr-src-health-copy strong { color: var(--ssr-text); font-size: 13px; }
+.ssr-src-health-copy strong { color: var(--ssr-text); font-size: 13px; white-space: nowrap; }
 .ssr-src-health-copy > span { color: var(--ssr-text-3); font-size: 10.5px; white-space: nowrap; }
 .ssr-src-meter { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; height: 6px; }
 .ssr-src-meter i { border-radius: 3px; background: var(--ssr-surface-3); }
@@ -2218,7 +2218,7 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
 .ssr-day-summary-copy { min-width: 0; display: grid; gap: 2px; }
 .ssr-day-summary-copy > span,
 .ssr-day-length span { color: var(--ssr-text-3); font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.ssr-day-summary-copy strong { color: var(--ssr-text); font-size: 16px; line-height: 1.3; }
+.ssr-day-summary-copy strong { color: var(--ssr-text); font-size: 16px; line-height: 1.3; text-wrap: balance; }
 .ssr-day-summary-copy p { margin: 1px 0 0; color: var(--ssr-text-2); font-size: 11.5px; line-height: 1.45; }
 .ssr-day-length { min-width: 92px; padding-left: 16px; border-left: 1px solid var(--ssr-line); text-align: right; }
 .ssr-day-length span { display: block; white-space: nowrap; }

@@ -26,6 +26,8 @@ import {
   Sparkles,
   LoaderCircle,
   ExternalLink,
+  LayoutGrid,
+  Rows3,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
@@ -47,6 +49,18 @@ import { TerrainWindowCard } from './TerrainWindowCard';
 import { resolveReportFeatureFlags, useProductFeatureFlags } from '../../contexts/feature-flags';
 import { buildReportSectionHash } from '../../app/report-sections';
 import '../../styles/planning-intelligence.css';
+import '../../styles/report-dashboard.css';
+
+const REPORT_LAYOUT_STORAGE_KEY = 'summitsafe:report-layout';
+type ReportLayout = 'classic' | 'dashboard';
+
+function readStoredReportLayout(): ReportLayout {
+  try {
+    return window.localStorage.getItem(REPORT_LAYOUT_STORAGE_KEY) === 'dashboard' ? 'dashboard' : 'classic';
+  } catch {
+    return 'classic';
+  }
+}
 
 const DANGER_COLORS = [
   'var(--ssr-surface-3)',
@@ -623,6 +637,11 @@ function ReportJumpNav({
 
 function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability; routeAnalysisSlot?: React.ReactNode }) {
   const featureFlags = useProductFeatureFlags();
+  const [reportLayout, setReportLayout] = React.useState<ReportLayout>(readStoredReportLayout);
+  const selectReportLayout = (layout: ReportLayout) => {
+    setReportLayout(layout);
+    try { window.localStorage.setItem(REPORT_LAYOUT_STORAGE_KEY, layout); } catch { /* ignore */ }
+  };
   const {
     safetyData,
     aiAvailability,
@@ -1105,7 +1124,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   };
 
   return (
-    <div className="ssr-report">
+    <div className={reportLayout === 'dashboard' ? 'ssr-report ssr-dashboard' : 'ssr-report'}>
       <div className="ssr-print-masthead" aria-hidden="true">
         <div className="ssr-print-title">
           <span>Backcountry Conditions · Field report</span>
@@ -1126,7 +1145,26 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             <span>{safetyData.weather.description || 'Backcountry'}</span>
           </p>
         </div>
-        <dl className="ssr-report-context-facts">
+        <div className="ssr-report-context-side">
+          <div className="ssr-view-toggle" role="group" aria-label="Report layout">
+            <button
+              type="button"
+              className={reportLayout === 'classic' ? 'active' : ''}
+              aria-pressed={reportLayout === 'classic'}
+              onClick={() => selectReportLayout('classic')}
+            >
+              <Rows3 size={14} aria-hidden /> Classic
+            </button>
+            <button
+              type="button"
+              className={reportLayout === 'dashboard' ? 'active' : ''}
+              aria-pressed={reportLayout === 'dashboard'}
+              onClick={() => selectReportLayout('dashboard')}
+            >
+              <LayoutGrid size={14} aria-hidden /> Dashboard
+            </button>
+          </div>
+          <dl className="ssr-report-context-facts">
           <div>
             <dt>Elevation</dt>
             <dd>{formatElevationDisplay(objectiveElevationFt)}</dd>
@@ -1147,6 +1185,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             </dd>
           </div>
         </dl>
+        </div>
       </header>
 
       {jumpSections.length > 1 && (
@@ -2449,7 +2488,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* AIR QUALITY */}
         {reportFeatureFlags.airQualityDetails && shouldRenderRankedCard('airQuality') && (
-          <section className="ssr-card">
+          <section className="ssr-card ssr-aqi-card">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-purple"><Wind size={16} /></span>
@@ -2614,7 +2653,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* PRECIPITATION */}
         {shouldRenderRankedCard('recentRainfall') && (
-          <section className="ssr-card">
+          <section className="ssr-card ssr-precip-card">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-blue"><CloudRain size={16} /></span>
@@ -2658,7 +2697,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {/* SOURCES */}
         {sourceFreshnessRows.length > 0 && (
-          <section className="ssr-card">
+          <section className="ssr-card ssr-sources-card">
             <div className="ssr-card-h">
               <h2>
                 <span className="ssr-h-icon icon-neutral"><Radio size={16} /></span>

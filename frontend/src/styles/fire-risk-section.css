@@ -90,12 +90,12 @@
 }
 
 .ssr-fire-metric strong {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--ssr-text);
   font-family: var(--ssr-mono);
-  font-size: 17px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .ssr-fire-metric.attention strong { color: var(--ssr-caution-ink); }

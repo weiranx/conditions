@@ -1,0 +1,156 @@
+/* =========================================================
+   DASHBOARD REPORT LAYOUT
+   Toggled via .ssr-dashboard on .ssr-report. Re-lays the same
+   report cards as a bento grid of tiles instead of the classic
+   two-column scroll. Screen-only: print always uses classic.
+   ========================================================= */
+
+/* Layout toggle (visible in both layouts, lives in the report header). */
+.ssr-report-context-side {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.ssr-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ssr-line);
+  border-radius: 999px;
+  background: var(--ssr-surface-2);
+}
+
+.ssr-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ssr-text-3);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ssr-view-toggle button:hover { color: var(--ssr-text); }
+
+.ssr-view-toggle button.active {
+  background: var(--ssr-surface);
+  color: var(--ssr-text);
+  box-shadow: 0 1px 4px rgba(20, 39, 28, 0.14);
+}
+
+.ssr-view-toggle button:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--ssr-brand));
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .ssr-report-context-side { justify-items: start; margin-top: 12px; }
+}
+
+@media screen and (min-width: 1081px) {
+  .ssr-report.ssr-dashboard {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: 20px;
+    row-gap: 20px;
+    align-items: stretch;
+    grid-auto-flow: dense;
+  }
+
+  /* Flatten the classic column stacks so every card becomes a grid tile. */
+  .ssr-report.ssr-dashboard .ssr-main,
+  .ssr-report.ssr-dashboard .ssr-side,
+  .ssr-report.ssr-dashboard .ssr-report-footer {
+    display: contents;
+  }
+
+  /* Undo the merged-rail surface so rail cards stand alone as tiles. */
+  .ssr-report.ssr-dashboard .ssr-side > .ssr-card {
+    border: 1px solid var(--ssr-line);
+    border-radius: var(--ssr-section-radius);
+    box-shadow: var(--ssr-section-shadow);
+  }
+  .ssr-report.ssr-dashboard .ssr-side > .ssr-card + .ssr-card {
+    border-top: 1px solid var(--ssr-line);
+  }
+
+  /* Default tile: a third of the row. */
+  .ssr-report.ssr-dashboard .ssr-main > *,
+  .ssr-report.ssr-dashboard .ssr-side > *,
+  .ssr-report.ssr-dashboard .ssr-report-footer > * {
+    grid-column: span 4;
+    min-width: 0;
+  }
+
+  /* Verdict band across the top. */
+  .ssr-report.ssr-dashboard #planner-section-decision {
+    order: 0;
+    grid-column: 1 / -1;
+  }
+
+  /* KPI strip: daylight, heat, fire, air quality — four across. */
+  .ssr-report.ssr-dashboard .ssr-daylight-card,
+  .ssr-report.ssr-dashboard .ssr-heat-card,
+  .ssr-report.ssr-dashboard .ssr-fire-card,
+  .ssr-report.ssr-dashboard .ssr-aqi-card {
+    order: 1;
+    grid-column: span 3;
+  }
+
+  /* Action levers sit right under the KPI strip. */
+  .ssr-report.ssr-dashboard #planner-section-actions {
+    order: 2;
+    grid-column: 1 / -1;
+  }
+
+  /* Wide time-series sections. */
+  .ssr-report.ssr-dashboard #planner-section-travel,
+  .ssr-report.ssr-dashboard #planner-section-terrain-window,
+  .ssr-report.ssr-dashboard #planner-section-weather,
+  .ssr-report.ssr-dashboard #planner-section-start-times,
+  .ssr-report.ssr-dashboard #planner-section-route {
+    order: 3;
+    grid-column: 1 / -1;
+  }
+
+  /* Half-row tiles. */
+  .ssr-report.ssr-dashboard #planner-section-monitor,
+  .ssr-report.ssr-dashboard #planner-section-checks,
+  .ssr-report.ssr-dashboard #planner-section-alerts,
+  .ssr-report.ssr-dashboard #planner-section-elevation,
+  .ssr-report.ssr-dashboard #planner-section-wind,
+  .ssr-report.ssr-dashboard #planner-section-score {
+    order: 4;
+    grid-column: span 6;
+  }
+
+  /* Remaining evidence tiles keep the default third-row span. */
+  .ssr-report.ssr-dashboard #planner-section-avalanche,
+  .ssr-report.ssr-dashboard #planner-section-snowpack,
+  .ssr-report.ssr-dashboard #planner-section-observations,
+  .ssr-report.ssr-dashboard .ssr-terrain-card,
+  .ssr-report.ssr-dashboard .ssr-precip-card,
+  .ssr-report.ssr-dashboard .ssr-sources-card {
+    order: 5;
+  }
+
+  /* Gear is a long list — give it a full-width band at the end so it
+     never pairs with (and stretches) a short evidence tile. */
+  .ssr-report.ssr-dashboard #planner-section-gear {
+    order: 6;
+    grid-column: 1 / -1;
+  }
+
+  /* Tiles stretch to equal height within a row; inner cards fill. */
+  .ssr-report.ssr-dashboard .ssr-jump-anchor > .ssr-dash,
+  .ssr-report.ssr-dashboard .ssr-jump-anchor > .ssr-card {
+    height: 100%;
+  }
+}

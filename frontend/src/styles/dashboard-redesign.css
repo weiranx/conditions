@@ -468,42 +468,6 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
   text-transform: uppercase;
 }
 
-.ssr-dash-recco {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 22px;
-  padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--brief-accent) 32%, var(--d-line));
-  border-radius: var(--ui-radius-card);
-  background: color-mix(in srgb, var(--brief-accent) 9%, var(--d-surface));
-  color: var(--d-ink-2);
-}
-
-.ssr-dash-recco > svg {
-  flex: none;
-  color: color-mix(in srgb, var(--brief-accent) 74%, var(--d-ink));
-}
-
-.ssr-dash-recco p { margin: 0; }
-
-.ssr-dash-recco b,
-.ssr-dash-recco span { display: block; }
-
-.ssr-dash-recco b {
-  margin-bottom: 4px;
-  color: var(--d-ink);
-  font-family: var(--ssr-sans);
-  font-size: 11.5px;
-  letter-spacing: .035em;
-  text-transform: uppercase;
-}
-
-.ssr-dash-recco span {
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-
 .ssr-dash-context-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -713,7 +677,6 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
   .ssr-dash-window-markers { align-items: flex-start; flex-direction: column; gap: 6px; }
   .ssr-dash-signal { grid-template-columns: 32px minmax(0, 1fr); gap: 11px; padding: 12px 0; }
   .ssr-dash-signal > b { grid-column: 2; justify-self: start; margin-top: -5px; }
-  .ssr-dash-recco { align-items: flex-start; padding: 16px; }
   .ssr-dash-context-card summary { align-items: flex-start; flex-direction: column; gap: 5px; }
   .ssr-dash-context-card summary strong { padding-left: 23px; text-align: left; }
 }

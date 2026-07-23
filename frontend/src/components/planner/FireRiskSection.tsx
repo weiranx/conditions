@@ -101,10 +101,12 @@ export const FireRiskSection = React.memo(function FireRiskSection({
   }
   if (windMph !== null || gustMph !== null) {
     const primaryWind = windMph ?? gustMph;
+    // Keep each number+unit pair unbreakable so the value can only wrap at the slash.
+    const unbreakableWind = (value: number | null) => formatWindDisplay(value).replace(/ /g, ' ');
     metricItems.push({
       key: 'wind',
       label: 'Wind / gust',
-      value: `${formatWindDisplay(primaryWind)}${gustMph !== null ? ` / ${formatWindDisplay(gustMph)}` : ''}`,
+      value: `${unbreakableWind(primaryWind)}${gustMph !== null ? ` / ${unbreakableWind(gustMph)}` : ''}`,
       detail: 'Stronger wind can accelerate fire spread',
       tone: (windMph ?? 0) >= 12 || (gustMph ?? 0) >= 20 ? 'attention' : undefined,
     });
