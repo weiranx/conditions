@@ -567,6 +567,7 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
 @keyframes ssr-dash-spin { to { transform: rotate(360deg); } }
 
 .ssr-dash-ai-text {
+  container-type: inline-size;
   padding: 20px;
   border: 1px solid var(--d-line);
   border-radius: var(--ui-radius-card);
@@ -652,6 +653,11 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
 }
 
 .ssr-snow-vision-map-btn:hover { text-decoration: underline; }
+
+@container (max-width: 620px) {
+  .ssr-dash-ai-grid { grid-template-columns: 1fr; }
+  .ssr-dash-ai-note.action:last-child:nth-child(odd) { grid-column: auto; }
+}
 
 @media (max-width: 700px) {
   .ssr-dash-risk { padding: 26px 22px; border-radius: var(--ui-radius-shell); box-shadow: none; }
