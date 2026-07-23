@@ -82,10 +82,10 @@
 
 .ssr-product-brand-copy small {
   color: var(--ui-text-3);
-  font-family: var(--ssr-mono);
+  font-family: var(--ssr-sans);
   font-size: 9.5px;
-  font-weight: 650;
-  letter-spacing: .075em;
+  font-weight: 600;
+  letter-spacing: .045em;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -167,47 +167,6 @@
   .ssr-product-links {
     gap: 2px;
     padding: 0;
-  }
-
-  .ssr-product-links button {
-    gap: 5px;
-    padding-inline: 9px;
-    font-size: 12px;
-  }
-
-  /* Signed-in navigation can add Watches, History, and Admin. At tablet
-     widths, trade the wordmark for an evenly distributed labeled nav so the
-     final actions never disappear behind the shell's overflow clipping. */
-  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-brand {
-    display: none;
-  }
-
-  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-links {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  }
-
-  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-links button {
-    min-width: 0;
-    justify-content: center;
-  }
-}
-
-/* Keep the full wordmark while giving denser authenticated navigation room
-   before the phone layout takes over. */
-@media (min-width: 641px) and (max-width: 900px) {
-  .ssr-product-nav-inner {
-    width: min(var(--ui-content-width), calc(100% - 32px));
-    gap: 14px;
-  }
-
-  .ssr-product-brand { gap: 9px; }
-  .ssr-product-brand-copy small { display: none; }
-
-  .ssr-product-links {
-    gap: 2px;
-    padding: 3px;
   }
 
   .ssr-product-links button {

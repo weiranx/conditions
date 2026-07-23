@@ -7,7 +7,7 @@
 .history-head h1 { margin: 0; font-family: var(--ssr-display); font-size: var(--ui-page-title-size); font-weight: var(--ui-page-title-weight); line-height: 1.02; letter-spacing: var(--ui-page-title-tracking); }
 .history-head > span { display: block; max-width: 620px; margin-top: 12px; color: var(--ui-text-2); font-size: 15px; line-height: 1.55; }
 .history-list { display: grid; gap: 12px; }
-.history-card { width: 100%; min-width: 0; display: flex; align-items: stretch; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-surface); color: inherit; box-shadow: 0 16px 44px -42px color-mix(in oklch, var(--ui-text) 62%, transparent); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.history-card { width: 100%; min-width: 0; display: flex; align-items: stretch; border: 1px solid var(--ui-line); border-radius: var(--ui-radius-card); background: var(--ui-surface); color: inherit; box-shadow: var(--ui-shadow-sm); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
 .history-card:hover { border-color: color-mix(in oklch, var(--ui-brand) 55%, var(--ui-line)); transform: translateY(-1px); box-shadow: 0 22px 52px -40px color-mix(in oklch, var(--ui-brand-strong) 46%, transparent); }
 .history-card-open { min-width: 0; flex: 1; padding: 22px 18px 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border: 0; border-radius: 14px 0 0 14px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .history-card-open:disabled { cursor: wait; opacity: .72; }
@@ -16,7 +16,7 @@
 .history-share svg { width: 16px; height: 16px; }
 .history-card-main { min-width: 0; display: grid; gap: 8px; }
 .history-card-kicker { color: var(--ui-text-3); font-family: var(--ssr-mono); font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; }
-.history-card-main > strong { overflow: hidden; font-family: var(--ssr-display); font-size: 23px; font-weight: 560; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.history-card-main > strong { overflow: hidden; font-family: var(--ssr-display); font-size: 23px; font-weight: 650; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .history-card-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--ui-text-2); font-size: 11px; }
 .history-card-meta > span { display: inline-flex; align-items: center; gap: 6px; }
 .history-card-meta svg { width: 14px; height: 14px; color: var(--ui-brand); }

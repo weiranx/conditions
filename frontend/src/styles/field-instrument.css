@@ -371,6 +371,17 @@ body {
   font-weight: 750;
 }
 
+.app-error-boundary-icon.is-recovering {
+  border-color: color-mix(in srgb, var(--fi-pine) 30%, var(--fi-line));
+  background: var(--fi-pine-soft);
+  color: var(--fi-pine);
+  animation: app-error-reconnect-spin 1.1s linear infinite;
+}
+
+@keyframes app-error-reconnect-spin {
+  to { transform: rotate(360deg); }
+}
+
 .app-error-boundary-eyebrow {
   margin: 0 0 10px;
   color: var(--fi-pine);
@@ -428,4 +439,8 @@ body {
   .app-error-boundary {
     padding: 18px;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-error-boundary-icon.is-recovering { animation: none; }
 }

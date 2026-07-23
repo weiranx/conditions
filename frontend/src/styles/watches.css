@@ -18,13 +18,13 @@
 .watches-overview > div.has-attention .watches-overview-icon { background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface)); color: var(--ui-caution-ink); }
 .watches-overview > div.has-error .watches-overview-icon { background: color-mix(in oklch, var(--ui-risk-4) 10%, var(--ui-surface)); color: var(--ui-nogo-ink); }
 .watches-list { display: grid; gap: 12px; }
-.watch-card { min-width: 0; padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-surface); box-shadow: 0 16px 44px -42px color-mix(in oklch, var(--ui-text) 62%, transparent); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.watch-card { min-width: 0; padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; border: 1px solid var(--ui-line); border-radius: var(--ui-radius-card); background: var(--ui-surface); box-shadow: var(--ui-shadow-sm); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
 .watch-card:hover { border-color: color-mix(in oklch, var(--ui-brand) 55%, var(--ui-line)); transform: translateY(-1px); box-shadow: 0 22px 52px -40px color-mix(in oklch, var(--ui-brand-strong) 46%, transparent); }
 .watch-card-main { min-width: 0; display: grid; gap: 14px; }
 .watch-card-heading { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .watch-card-heading > div { min-width: 0; }
 .watch-card-kicker { display: block; margin-bottom: 7px; color: var(--ui-text-3); font-family: var(--ssr-mono); font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; }
-.watch-card h2 { overflow: hidden; margin: 0; font-family: var(--ssr-display); font-size: 25px; font-weight: 560; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
+.watch-card h2 { overflow: hidden; margin: 0; font-family: var(--ssr-display); font-size: 25px; font-weight: 650; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
 .watch-status { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); font-size: 9px; font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
 .watch-status > span { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
 .watch-status.is-ended { background: var(--ui-surface-subtle); color: var(--ui-text-3); }

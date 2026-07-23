@@ -137,7 +137,9 @@ export class ErrorBoundary extends React.Component<
       return (
         <main className="app-error-boundary" role="alert" aria-live="assertive">
           <section className="app-error-boundary-card" aria-labelledby="app-error-boundary-title">
-            <span className="app-error-boundary-icon" aria-hidden>!</span>
+            <span className={`app-error-boundary-icon ${recovering && !this.state.recoveryExhausted ? 'is-recovering' : ''}`} aria-hidden>
+              {recovering && !this.state.recoveryExhausted ? '↻' : '!'}
+            </span>
             <p className="app-error-boundary-eyebrow">
               {recovering && !this.state.recoveryExhausted ? 'Connection interrupted' : 'Application error'}
             </p>
