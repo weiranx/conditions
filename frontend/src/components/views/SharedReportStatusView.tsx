@@ -29,7 +29,7 @@ export function SharedReportStatusView({
         openTripToolView={openTripToolView}
       />
       <main className="history-page">
-        <section className="history-empty" role={error ? 'alert' : 'status'}>
+        <section className={`history-empty${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>
           {error ? <FileWarning aria-hidden /> : <Link2 aria-hidden />}
           <h1>{error ? 'Shared report unavailable' : 'Opening shared report'}</h1>
           <p>{error || 'Loading the exact saved snapshot. No conditions or AI will be regenerated.'}</p>

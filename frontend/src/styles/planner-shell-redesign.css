@@ -151,7 +151,7 @@ body:has(.page-shell-planner) {
 .ssr-shell .planner-search-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   min-height: 30px;
   margin-top: 8px;
@@ -839,7 +839,7 @@ html[data-theme="dark"] .ssr-shell .map-actions {
 .ssr-shell .map-actions-flat .date-control:hover,
 .ssr-shell .map-actions-flat .date-control:focus-within { border-color: var(--d-pine); background: var(--d-surface); box-shadow: 0 0 0 3px color-mix(in oklch, var(--d-sage-1) 72%, transparent); }
 .ssr-shell .map-actions-flat .date-control > span {
-  font-family: var(--d-mono);
+  font-family: var(--ssr-sans);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: .055em;
@@ -850,7 +850,7 @@ html[data-theme="dark"] .ssr-shell .map-actions {
 .ssr-shell .map-actions-flat .date-control select {
   background: none;
   border: none;
-  font-family: var(--d-mono);
+  font-family: var(--ssr-sans);
   font-weight: 600;
   color: var(--d-ink);
 }
@@ -1100,6 +1100,15 @@ html[data-theme="dark"] .ssr-shell .top-freshness-alert::before { background: va
 
 @media (max-width: 640px) {
   .ssr-shell .map-shell { margin-inline: -8px; border-radius: 0; border-inline: 0; }
+  .ssr-shell .leaflet-control-attribution {
+    width: auto;
+    max-width: calc(100vw - 16px);
+    margin: 0 4px 4px 0;
+    padding: 2px 4px;
+    white-space: normal;
+    font: 9px/1.25 var(--ssr-sans);
+    text-align: right;
+  }
   .ssr-shell .empty-state { margin-inline: -4px; padding: 24px 18px 24px 74px; border-radius: 12px; }
   .ssr-shell .empty-state::before { left: 18px; top: 24px; }
 }

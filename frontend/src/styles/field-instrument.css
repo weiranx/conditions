@@ -1,0 +1,431 @@
+/*
+ * Backcountry Conditions application parity layer
+ *
+ * Shared visual language for every product surface. Feature styles consume the
+ * same canonical tokens directly; this compatibility layer handles the older
+ * shared selectors without depending on lazy stylesheet injection order.
+ */
+
+:root {
+  --fi-paper: var(--ui-bg);
+  --fi-panel: var(--ui-surface);
+  --fi-ink: var(--ui-text);
+  --fi-ink-2: var(--ui-text-2);
+  --fi-ink-3: var(--ui-text-3);
+  --fi-line: var(--ui-line);
+  --fi-line-strong: var(--ui-line-strong);
+  --fi-pine: var(--ui-brand);
+  --fi-pine-soft: var(--ui-brand-soft);
+  --fi-grid: rgb(41 55 47 / 7%);
+  --fi-radius: var(--ui-radius-control);
+  --fi-shadow-soft: var(--ui-shadow-sm);
+  --fi-shadow-card: var(--ui-shadow-md);
+}
+
+html[data-theme='dark'] {
+  --fi-grid: rgb(226 236 229 / 6%);
+}
+
+/* --------------------------------------------------------------------------
+   Whole-application parity
+
+   Feature styles own layout and information density. This final layer owns the
+   recurring product grammar for page titles, shells, cards, controls, empty
+   states, dialogs, and recovery surfaces.
+   -------------------------------------------------------------------------- */
+
+body {
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--fi-pine-soft) 54%, transparent), transparent 32rem),
+    var(--fi-paper);
+}
+
+.page-shell {
+  color: var(--fi-ink);
+  font-family: var(--ssr-sans);
+}
+
+/* The same typographic hierarchy leads every product and support view. */
+:is(
+  .ssr-trip-head,
+  .ssr-set-head,
+  .history-head,
+  .watches-head,
+  .settings-head,
+  .legal-hero,
+  .not-found-card,
+  .logs-page-head,
+  .admin-workspace-heading
+) :is(h1, h2) {
+  font-family: var(--ssr-display);
+  font-weight: var(--ui-page-title-weight);
+  letter-spacing: var(--ui-page-title-tracking);
+}
+
+:is(.ssr-trip-kicker, .ssr-set-kicker, .history-kicker, .watches-kicker, .status-panel-kicker, .logs-kicker) {
+  font-family: var(--ssr-sans);
+  font-weight: 700;
+  letter-spacing: .045em;
+}
+
+/* Compare: match Planner's shell/card/control geometry without flattening the
+   comparison matrix or semantic weather indicators. */
+.ssr-trip {
+  --ssr-trip-section-radius: var(--ui-radius-card);
+  --ssr-trip-section-shadow: var(--ui-shadow-sm);
+}
+
+.ssr-trip .ssr-trip-setup {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-shell);
+  background: var(--fi-panel);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.ssr-trip :is(.ssr-trip-panel, .ssr-trip-loading) {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-card);
+  background: var(--fi-panel);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.ssr-trip :is(.ssr-trip-panel-head, .ssr-trip-section-head, .ssr-trip-detail-h) {
+  background: var(--ui-surface-subtle);
+}
+
+.ssr-trip :is(
+  .ssr-trip-banner-action,
+  .ssr-trip-recommendation-action,
+  .ssr-trip-panel-actions button,
+  .ssr-trip-insight,
+  .ssr-trip-day,
+  .ssr-btn,
+  .ssr-trip-disclaimer,
+  .ssr-trip-day-picker-close,
+  .ssr-trip-day-picker-option
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.ssr-trip-day-picker {
+  border-radius: var(--ui-radius-shell);
+  box-shadow: var(--ui-shadow-md);
+}
+
+/* Settings/account: shared panels stay calm; all actionable controls use the
+   canonical control radius instead of a mixture of 6, 7, 8, and 9px. */
+.ssr-settings .ssr-set-card,
+.account-settings-card-shell {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-card);
+  background: var(--fi-panel);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.ssr-settings :is(
+  .ssr-set-rail a,
+  .ssr-set-rail button,
+  .ssr-set-activity-grid button,
+  .ssr-seg,
+  .ssr-set-time-input,
+  .ssr-set-thresh-val input,
+  .ssr-set-preview,
+  .ssr-set-actions button,
+  .settings-actions button
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+/* History and monitoring share the same archive language. */
+:is(.history-card, .watch-card) {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-card);
+  background: var(--fi-panel);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+:is(.history-head h1, .watches-head h1) {
+  font-weight: 680;
+}
+
+:is(.history-card-main > strong, .watch-card h2) {
+  font-weight: 650;
+}
+
+:is(.history-empty, .watches-empty) {
+  border-radius: var(--ui-radius-shell);
+  background: color-mix(in srgb, var(--fi-panel) 72%, var(--fi-paper));
+}
+
+:is(.history-empty, .watches-empty) :is(h1, h2) {
+  font-weight: 650;
+}
+
+:is(
+  .history-empty button,
+  .watches-empty button,
+  .watch-history-error button,
+  .watch-card-actions button,
+  .watch-delete-confirm,
+  .watches-error,
+  .history-error
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+/* Status keeps its operational density while using the same outer hierarchy. */
+.status-overview {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-shell);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.status-panel {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-card);
+  background: var(--fi-panel);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.status-card {
+  border-radius: var(--ui-radius-control);
+}
+
+.status-page-actions :is(button, a) {
+  border-radius: var(--ui-radius-control);
+}
+
+/* Support, legal, and not-found surfaces now land in the same product family. */
+.legal-icon,
+.legal-callout {
+  border-radius: var(--ui-radius-card);
+}
+
+.legal-hero h1,
+.legal-content h2,
+.not-found-card h1 {
+  font-weight: 680;
+}
+
+.not-found-card {
+  border-radius: var(--ui-radius-shell);
+  background: color-mix(in srgb, var(--fi-panel) 92%, transparent);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.not-found-actions button {
+  border-radius: var(--ui-radius-control);
+}
+
+/* Access prompts use the shell radius; controls use the control radius. */
+.ai-access-dialog {
+  border-radius: var(--ui-radius-shell);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.ai-access-dialog :is(
+  .ai-access-icon,
+  .ai-access-limit-summary,
+  .ai-access-limit-upgrade,
+  .ai-access-limit-actions button,
+  .ai-access-google-auth,
+  .ai-access-input-wrap,
+  .ai-access-form input,
+  .ai-access-form-actions button,
+  .ai-access-primary,
+  .ai-access-secondary,
+  .ai-access-unavailable
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+/* Shared loading, empty, and error feedback consumes tokens in both themes. */
+:is(.empty-state, .loading-state, .error-banner) {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-card);
+  background: color-mix(in srgb, var(--fi-panel) 94%, transparent);
+  color: var(--fi-ink-2);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.inline-loading-state {
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-subtle);
+  box-shadow: none;
+}
+
+.inline-loading-state strong,
+.forecast-loading-copy strong {
+  color: var(--fi-ink);
+}
+
+.inline-loading-state span,
+.forecast-loading-copy > span:last-child {
+  color: var(--fi-ink-2);
+}
+
+.forecast-loading {
+  border-color: var(--fi-line);
+  background:
+    radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--fi-pine-soft) 80%, transparent), transparent 62%),
+    var(--fi-panel);
+}
+
+.forecast-loading-sky {
+  border-color: var(--fi-line);
+  border-radius: var(--ui-radius-shell);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fi-pine-soft) 72%, var(--fi-panel)), var(--ui-surface-subtle));
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.forecast-loading-eyebrow {
+  color: var(--fi-pine);
+}
+
+.forecast-loading-step {
+  border-color: var(--fi-line-strong);
+  background: var(--ui-surface-subtle);
+  color: var(--fi-ink-2);
+}
+
+.forecast-loading-step-dot {
+  background: var(--fi-pine);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fi-pine) 12%, transparent);
+}
+
+.forecast-loading-wakeup {
+  border-color: color-mix(in srgb, var(--ui-risk-3) 32%, var(--fi-line));
+  border-radius: var(--ui-radius-control);
+  background: color-mix(in srgb, var(--ui-risk-3) 8%, var(--fi-panel));
+}
+
+.forecast-loading-wakeup strong {
+  color: var(--ui-caution-ink);
+}
+
+.forecast-loading-wakeup span {
+  color: var(--fi-ink-2);
+}
+
+.error-banner,
+.settings-card.error-banner {
+  border-color: color-mix(in srgb, var(--ui-risk-4) 34%, var(--fi-line));
+  background: color-mix(in srgb, var(--ui-risk-4) 8%, var(--fi-panel));
+  box-shadow: none;
+}
+
+.error-banner h3,
+.error-banner p {
+  color: var(--ui-nogo-ink);
+}
+
+.error-banner-actions .settings-btn {
+  border-color: color-mix(in srgb, var(--ui-risk-4) 34%, var(--fi-line));
+  border-radius: var(--ui-radius-control);
+  background: var(--fi-panel);
+}
+
+.history-empty.is-error {
+  border-color: color-mix(in srgb, var(--ui-risk-4) 38%, var(--fi-line));
+  background: color-mix(in srgb, var(--ui-risk-4) 7%, var(--fi-panel));
+}
+
+.history-empty.is-error > svg {
+  color: var(--ui-nogo-ink);
+}
+
+/* Crash recovery is a first-class product surface rather than unstyled inline
+   fallback markup. It intentionally has no dependency on the app router. */
+.app-error-boundary {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--fi-pine-soft) 78%, transparent), transparent 30rem),
+    var(--fi-paper);
+  color: var(--fi-ink);
+  font-family: var(--ssr-sans);
+}
+
+.app-error-boundary-card {
+  width: min(100%, 560px);
+  padding: clamp(28px, 6vw, 48px);
+  border: 1px solid var(--fi-line);
+  border-radius: var(--ui-radius-shell);
+  background: var(--fi-panel);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.app-error-boundary-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+  border: 1px solid color-mix(in srgb, var(--ui-risk-4) 28%, var(--fi-line));
+  border-radius: var(--ui-radius-control);
+  background: color-mix(in srgb, var(--ui-risk-4) 9%, var(--fi-panel));
+  color: var(--ui-nogo-ink);
+  font-size: 19px;
+  font-weight: 750;
+}
+
+.app-error-boundary-eyebrow {
+  margin: 0 0 10px;
+  color: var(--fi-pine);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.app-error-boundary-card h1 {
+  margin: 0;
+  color: var(--fi-ink);
+  font-size: clamp(30px, 7vw, 44px);
+  font-weight: 680;
+  letter-spacing: -.04em;
+  line-height: 1.05;
+}
+
+.app-error-boundary-copy {
+  max-width: 460px;
+  margin: 16px 0 0;
+  color: var(--fi-ink-2);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.app-error-boundary-card button {
+  min-height: 44px;
+  margin-top: 28px;
+  padding: 0 18px;
+  border: 1px solid var(--ui-brand-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-brand-strong);
+  color: var(--ui-on-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-error-boundary-card button:hover {
+  border-color: var(--ui-brand);
+  background: var(--ui-brand);
+}
+
+@media (max-width: 640px) {
+  .ssr-trip .ssr-trip-setup {
+    border-radius: var(--ui-radius-card);
+  }
+
+  .ssr-trip :is(.ssr-trip-panel, .ssr-trip-loading) {
+    border-radius: 12px;
+  }
+
+  .app-error-boundary {
+    padding: 18px;
+  }
+}

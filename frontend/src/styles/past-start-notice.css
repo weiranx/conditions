@@ -5,18 +5,18 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgb(13 24 22 / 58%);
-  backdrop-filter: blur(4px);
+  background: color-mix(in oklch, var(--ui-scrim) 58%, transparent);
+  backdrop-filter: blur(6px);
 }
 
 .past-start-dialog {
   width: min(100%, 470px);
   padding: 28px;
   border: 1px solid var(--ui-line-strong);
-  border-radius: 12px;
+  border-radius: var(--ui-radius-shell);
   background: var(--ui-surface);
   color: var(--ui-text);
-  box-shadow: 0 24px 70px rgb(0 0 0 / 28%);
+  box-shadow: var(--ui-shadow-md);
 }
 
 .past-start-eyebrow {
@@ -54,7 +54,7 @@
 .passed-report-actions button {
   min-height: 40px;
   padding: 0 14px;
-  border-radius: 7px;
+  border-radius: var(--ui-radius-control);
   font: 650 0.82rem/1 var(--font-sans);
   cursor: pointer;
 }
@@ -62,7 +62,7 @@
 .past-start-action-primary {
   border: 1px solid var(--ui-brand);
   background: var(--ui-brand);
-  color: white;
+  color: var(--ui-on-strong);
 }
 
 .past-start-action-secondary,
@@ -90,10 +90,10 @@
   gap: 18px;
   padding: 14px 16px;
   border: 1px solid color-mix(in oklch, var(--ui-risk-3) 55%, var(--ui-line));
-  border-radius: 10px;
+  border-radius: var(--ui-radius-card);
   background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface));
   color: var(--ui-text);
-  box-shadow: 0 14px 38px rgb(0 0 0 / 20%);
+  box-shadow: var(--ui-shadow-md);
 }
 
 .passed-report-notice strong,

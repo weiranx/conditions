@@ -1,11 +1,11 @@
-.history-page-shell { min-height: 100vh; background: var(--ui-bg); color: var(--ui-text); }
-.history-page { width: min(940px, calc(100% - 48px)); margin: 0 auto; padding: 64px 0 88px; }
-.history-head { max-width: 660px; margin-bottom: 40px; }
-.history-head-icon { width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: 20px; border: 1px solid color-mix(in oklch, var(--ui-brand) 38%, transparent); border-radius: 13px; background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
+.history-page-shell { min-height: 100vh; background: transparent; color: var(--ui-text); }
+.history-page { width: min(940px, calc(100% - 48px)); margin: 0 auto; padding: 34px 0 88px; }
+.history-head { max-width: 660px; margin-bottom: 34px; }
+.history-head-icon { width: 44px; height: 44px; display: grid; place-items: center; margin-bottom: 18px; border: 1px solid color-mix(in oklch, var(--ui-brand) 38%, transparent); border-radius: var(--ui-radius-card); background: var(--ui-brand-soft); color: var(--ui-brand-strong); }
 .history-head-icon svg { width: 22px; height: 22px; }
-.history-head > p { margin: 0 0 9px; color: var(--ui-brand-strong); font-size: 10px; font-weight: 760; letter-spacing: .13em; text-transform: uppercase; }
-.history-head h1 { margin: 0; font-family: var(--ssr-display); font-size: clamp(38px, 6vw, 58px); font-weight: 480; line-height: 1; letter-spacing: -.045em; }
-.history-head > span { display: block; max-width: 580px; margin-top: 18px; color: var(--ui-text-2); font-size: 14px; line-height: 1.65; }
+.history-head > p { margin: 0 0 8px; color: var(--ui-brand-strong); font-size: var(--ui-meta-size); font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
+.history-head h1 { margin: 0; font-family: var(--ssr-display); font-size: var(--ui-page-title-size); font-weight: var(--ui-page-title-weight); line-height: 1.02; letter-spacing: var(--ui-page-title-tracking); }
+.history-head > span { display: block; max-width: 620px; margin-top: 12px; color: var(--ui-text-2); font-size: 15px; line-height: 1.55; }
 .history-list { display: grid; gap: 12px; }
 .history-card { width: 100%; min-width: 0; display: flex; align-items: stretch; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-surface); color: inherit; box-shadow: 0 16px 44px -42px color-mix(in oklch, var(--ui-text) 62%, transparent); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
 .history-card:hover { border-color: color-mix(in oklch, var(--ui-brand) 55%, var(--ui-line)); transform: translateY(-1px); box-shadow: 0 22px 52px -40px color-mix(in oklch, var(--ui-brand-strong) 46%, transparent); }
@@ -27,24 +27,25 @@
 .history-score small { color: var(--ui-text-3); font-family: var(--ssr-sans); font-size: 8px; font-weight: 720; letter-spacing: .1em; text-transform: uppercase; }
 .history-arrow { width: 18px; height: 18px; color: var(--ui-text-3); }
 .history-loading { min-height: 220px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--ui-text-2); font-size: 12px; }
-.history-empty { min-height: 300px; padding: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed var(--ui-line-strong); border-radius: 16px; background: var(--ui-surface-subtle); text-align: center; }
+.history-empty { min-height: 300px; padding: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed var(--ui-line-strong); border-radius: var(--ui-radius-shell); background: var(--ui-surface-subtle); text-align: center; }
 .history-empty > svg { width: 32px; height: 32px; color: var(--ui-brand); }
 .history-empty h2 { margin: 18px 0 8px; font-family: var(--ssr-display); font-size: 27px; font-weight: 540; }
 .history-empty h1 { margin: 18px 0 8px; font-family: var(--ssr-display); font-size: 30px; font-weight: 540; }
 .history-empty p { max-width: 430px; margin: 0; color: var(--ui-text-2); font-size: 12px; line-height: 1.6; }
-.history-empty button { min-height: 42px; margin-top: 22px; padding: 0 18px; border: 1px solid var(--ui-brand-strong); border-radius: 9px; background: var(--ui-brand-strong); color: var(--ui-on-strong); font: inherit; font-size: 11px; font-weight: 720; cursor: pointer; }
+.history-empty button { min-height: 44px; margin-top: 22px; padding: 0 18px; border: 1px solid var(--ui-brand-strong); border-radius: var(--ui-radius-control); background: var(--ui-brand-strong); color: var(--ui-on-strong); font: inherit; font-size: 11px; font-weight: 720; cursor: pointer; }
 .history-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .history-empty-actions button { display: inline-flex; align-items: center; gap: 7px; }
 .history-empty-actions button svg { width: 14px; height: 14px; }
 .history-empty-actions .history-secondary-action { border-color: var(--ui-line-strong); background: var(--ui-surface); color: var(--ui-text); }
 .history-empty > .history-spinner { margin-top: 22px; color: var(--ui-brand); }
-.history-error { margin: 16px 0 0; padding: 12px 14px; border: 1px solid color-mix(in oklch, var(--ui-risk-4) 34%, transparent); border-radius: 9px; background: color-mix(in oklch, var(--ui-risk-4) 8%, var(--ui-surface)); color: var(--ui-nogo-ink); font-size: 11px; }
+.history-error { margin: 16px 0 0; padding: 12px 14px; border: 1px solid color-mix(in oklch, var(--ui-risk-4) 34%, transparent); border-radius: var(--ui-radius-control); background: color-mix(in oklch, var(--ui-risk-4) 8%, var(--ui-surface)); color: var(--ui-nogo-ink); font-size: 11px; }
 .history-spinner { width: 17px; height: 17px; animation: history-spin .8s linear infinite; }
 @keyframes history-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 640px) {
-  .history-page { width: calc(100% - 28px); padding: 38px 0 60px; }
+  .history-page { width: calc(100% - 28px); padding: 28px 0 60px; }
   .history-head { margin-bottom: 28px; }
+  .history-head h1 { font-size: var(--ui-page-title-mobile-size); }
   .history-card { align-items: stretch; }
   .history-card-open { padding: 18px 12px 18px 18px; align-items: flex-start; gap: 14px; }
   .history-share { min-width: 62px; padding: 10px 8px; }

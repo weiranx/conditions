@@ -38,7 +38,7 @@ export function ProductNav({
       action: () => navigateToView('settings'),
     },
   ];
-  if (active === 'admin') {
+  if (import.meta.env.DEV || active === 'admin') {
     items.push({ id: 'admin', label: 'Admin', icon: ShieldCheck, action: () => navigateToView('admin') });
   }
 

@@ -108,10 +108,14 @@ export function PlannerHeader({
         ) : (
           <>
             <div className="planner-search-heading">
-              <span><MapPin size={14} aria-hidden /> Choose a location or route</span>
+              <span>
+                <MapPin size={14} aria-hidden />
+                <label htmlFor="planner-objective-search-input">Choose a location or route</label>
+              </span>
               <small>{featureFlags.gpxImport ? 'Search a route by name or upload its GPX track' : 'Search for a location or named route'}</small>
             </div>
             <SearchBox
+              idPrefix="planner-objective-search"
               searchWrapperRef={searchWrapperRef}
               searchInputRef={searchInputRef}
               searchQuery={searchQuery}

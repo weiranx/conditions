@@ -1,5 +1,10 @@
-const CACHE_NAME = 'backcountry-conditions-shell-v2';
+const CACHE_NAME = 'backcountry-conditions-shell-v3';
 const APP_SHELL = ['/', '/index.html', '/summitsafe-icon.svg', '/manifest.webmanifest'];
+
+function isSafeAssetResponse(response) {
+  if (!response.ok) return false;
+  return !response.headers.get('content-type')?.includes('text/html');
+}
 
 async function cacheAppShell() {
   const cache = await caches.open(CACHE_NAME);
@@ -46,14 +51,20 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(request).then((cached) => {
+      let usableCached = cached;
+      if (usableCached && url.pathname.startsWith('/assets/') && !isSafeAssetResponse(usableCached)) {
+        void caches.open(CACHE_NAME).then((cache) => cache.delete(request));
+        usableCached = undefined;
+      }
+
       const network = fetch(request).then((response) => {
-        if (response.ok) {
+        if (isSafeAssetResponse(response)) {
           const copy = response.clone();
           void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
       });
-      return cached || network;
+      return usableCached || network;
     }),
   );
 });

@@ -1,9 +1,9 @@
 /* Multi-day trip planning view. */
 
 .ssr-trip {
-  --ssr-trip-section-radius: 16px;
+  --ssr-trip-section-radius: var(--ui-radius-card);
   --ssr-trip-section-gap: 24px;
-  --ssr-trip-section-shadow: 0 1px 2px rgba(20, 42, 27, .04), 0 18px 42px -34px rgba(18, 48, 29, .36);
+  --ssr-trip-section-shadow: var(--ui-shadow-sm);
   max-width: 1240px;
   margin: 0 auto;
   padding: 0 24px 80px;
@@ -51,14 +51,14 @@
   font-weight: 600;
   margin-bottom: 8px;
 }
-.ssr-trip-head h1 { font-family: var(--ssr-display); font-size: clamp(32px, 4vw, 48px); font-weight: 560; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; color: var(--ssr-text); }
+.ssr-trip-head h1 { font-family: var(--ssr-display); font-size: var(--ui-page-title-size); font-weight: var(--ui-page-title-weight); line-height: 1.02; letter-spacing: var(--ui-page-title-tracking); margin: 0 0 10px; color: var(--ssr-text); }
 .ssr-trip-head p { font-size: 15px; line-height: 1.55; color: var(--ssr-text-2); margin: 0; max-width: 680px; }
 
 .ssr-trip-setup {
   display: grid;
   grid-template-columns: minmax(300px, 1.6fr) repeat(3, minmax(130px, 0.7fr)) auto;
   border: 1px solid var(--ssr-line-strong);
-  border-radius: var(--ssr-trip-section-radius);
+  border-radius: var(--ui-radius-shell);
   overflow: visible;
   background: var(--ssr-surface);
   box-shadow: var(--ssr-trip-section-shadow);
@@ -92,18 +92,18 @@
 }
 .ssr-trip-setup-location .search-wrapper { width: 100%; min-width: 0; max-width: none; }
 .ssr-trip-setup-location .search-bar {
-  min-height: 34px;
-  padding: 4px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  min-height: var(--ui-control-height);
+  padding: 4px 8px;
+  border: 1px solid var(--ssr-line);
+  border-radius: var(--ui-radius-control);
+  background: var(--ssr-surface-2);
   box-shadow: none;
   backdrop-filter: none;
 }
 .ssr-trip-setup-location .search-wrapper:focus-within .search-bar {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  border-color: var(--ssr-brand);
+  background: var(--ssr-surface);
+  box-shadow: 0 0 0 3px var(--ssr-brand-bg);
 }
 .ssr-trip-setup-location .search-bar input { font-size: 14px; font-weight: 600; }
 .ssr-trip-setup-location .search-clear-btn { width: 28px; height: 28px; border: 0; }
@@ -140,6 +140,9 @@
   border: none;
   background: var(--ssr-brand-dark);
   color: var(--ui-on-strong);
+  align-self: center;
+  height: var(--ui-primary-control-height);
+  margin: 10px;
   padding: 0 18px;
   font-family: inherit;
   font-size: 13.5px;
@@ -150,14 +153,20 @@
   gap: 7px;
   box-shadow: var(--ui-shadow-xs);
   transition: background 0.15s ease;
-  min-height: 60px;
+  min-height: var(--ui-primary-control-height);
   justify-content: center;
-  border-radius: 0 calc(var(--ssr-trip-section-radius) - 1px) calc(var(--ssr-trip-section-radius) - 1px) 0;
+  border-radius: var(--ui-radius-control);
 }
 .ssr-trip-setup-run:hover:not(:disabled) {
   background: var(--ssr-brand);
 }
-.ssr-trip-setup-run:disabled { opacity: 0.6; cursor: default; }
+.ssr-trip-setup-run:disabled {
+  cursor: default;
+  opacity: 1;
+  background: var(--ssr-surface-3);
+  color: var(--ssr-text-3);
+  box-shadow: none;
+}
 .ssr-trip-setup-run svg { width: 15px; height: 15px; }
 
 /* ---------- OBJECTIVE REQUIRED / ERROR ---------- */
@@ -165,7 +174,7 @@
   border: 1px solid var(--ssr-line);
   border-left: 3px solid var(--ssr-caution);
   background: var(--ssr-surface);
-  border-radius: var(--ssr-trip-section-radius);
+  border-radius: var(--ui-radius-card);
   padding: 16px 18px 16px 20px;
   margin-bottom: 22px;
   display: flex;
@@ -177,14 +186,14 @@
 .ssr-trip-banner h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--ssr-text); }
 .ssr-trip-banner p { margin: 0; font-size: 13px; color: var(--ssr-text-2); }
 .ssr-trip-banner-action {
-  min-height: 36px;
+  min-height: var(--ui-control-height);
   display: inline-flex;
   align-items: center;
   gap: 7px;
   flex: none;
   padding: 0 12px;
   border: 1px solid var(--ssr-line-strong);
-  border-radius: 6px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface);
   color: var(--ssr-text);
   font: inherit;
@@ -193,6 +202,49 @@
   cursor: pointer;
 }
 .ssr-trip-banner-action:hover { border-color: var(--ssr-brand); color: var(--ssr-brand-dark); }
+.ssr-trip-banner-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.ssr-trip-empty {
+  display: grid;
+  grid-template-columns: minmax(260px, .75fr) minmax(420px, 1.25fr) auto;
+  gap: clamp(24px, 4vw, 48px);
+  align-items: center;
+  min-height: 220px;
+  padding: clamp(28px, 4vw, 42px);
+  border: 1px solid var(--ssr-line);
+  border-radius: var(--ui-radius-shell);
+  background: var(--ssr-surface);
+  box-shadow: var(--ui-shadow-sm);
+}
+.ssr-trip-empty-copy > span {
+  color: var(--ssr-brand-dark);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.ssr-trip-empty-copy h2 {
+  margin: 7px 0 9px;
+  color: var(--ssr-text);
+  font-family: var(--ssr-display);
+  font-size: clamp(25px, 2.8vw, 34px);
+  font-weight: 600;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+}
+.ssr-trip-empty-copy p { margin: 0; color: var(--ssr-text-2); font-size: 13px; line-height: 1.55; }
+.ssr-trip-empty-outputs { display: grid; gap: 0; border-left: 1px solid var(--ssr-line); }
+.ssr-trip-empty-outputs > div {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 10px 0 10px 20px;
+}
+.ssr-trip-empty-outputs svg { width: 17px; height: 17px; color: var(--ssr-brand-dark); }
+.ssr-trip-empty-outputs span { color: var(--ssr-text-3); font-size: 11.5px; line-height: 1.4; }
+.ssr-trip-empty-outputs b { display: block; margin-bottom: 1px; color: var(--ssr-text); font-size: 12.5px; font-weight: 650; }
+.ssr-trip-empty > .ssr-trip-setup-run { margin: 0; white-space: nowrap; }
 
 /* ---------- LOADING ---------- */
 .ssr-trip-loading {
@@ -235,7 +287,7 @@
 .ssr-trip-recommendation-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .ssr-trip-recommendation-facts span { color: var(--ssr-text-3); font-size: var(--ui-meta-size); text-transform: uppercase; line-height: 1.3; }
 .ssr-trip-recommendation-facts strong { display: block; color: var(--ssr-text); font-size: 18px; font-variant-numeric: tabular-nums; text-transform: none; }
-.ssr-trip-recommendation-action { min-height: 40px; padding: 0 14px; border: 1px solid var(--ssr-brand-dark); border-radius: 7px; background: var(--ssr-brand-dark); color: var(--ui-on-strong); font: inherit; font-size: 13px; font-weight: 650; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
+.ssr-trip-recommendation-action { min-height: var(--ui-control-height); padding: 0 14px; border: 1px solid var(--ssr-brand-dark); border-radius: var(--ui-radius-control); background: var(--ssr-brand-dark); color: var(--ui-on-strong); font: inherit; font-size: 13px; font-weight: 650; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
 .ssr-trip-recommendation-action:hover { background: var(--ssr-brand); }
 
 /* ---------- OVERVIEW BAND ---------- */
@@ -302,10 +354,10 @@
 .ssr-trip-panel-head.compact { margin: 0; padding: 14px 20px; }
 .ssr-trip-panel-actions { display: flex; gap: 8px; flex: none; }
 .ssr-trip-panel-actions button {
-  min-height: 36px;
+  min-height: var(--ui-control-height);
   padding: 0 12px;
   border: 1px solid var(--ssr-line-strong);
-  border-radius: 7px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface);
   color: var(--ssr-text);
   font: inherit;
@@ -325,7 +377,7 @@
   min-height: 126px;
   padding: 15px;
   border: 1px solid var(--ssr-line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface-2);
   color: var(--ssr-text);
   font: inherit;
@@ -488,7 +540,7 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   gap: 7px;
 }
 .ssr-trip-hourly-tabs button {
-  min-height: 34px;
+  min-height: var(--ui-control-height);
   padding: 0 11px;
   border: 1px solid var(--ssr-line-strong);
   border-radius: 999px;
@@ -557,10 +609,11 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   font-family: var(--ssr-mono);
 }
 
-.ssr-btn {
-  height: 36px;
+.ssr-trip .ssr-btn,
+.ssr-trip-day-picker .ssr-btn {
+  height: var(--ui-control-height);
   padding: 0 16px;
-  border-radius: 7px;
+  border-radius: var(--ui-radius-control);
   border: 1px solid var(--ssr-line-strong);
   background: var(--ssr-surface);
   color: var(--ssr-text);
@@ -572,14 +625,17 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   align-items: center;
   gap: 7px;
 }
-.ssr-btn:hover { background: var(--ssr-surface-2); }
-.ssr-btn.primary {
+.ssr-trip .ssr-btn:hover,
+.ssr-trip-day-picker .ssr-btn:hover { background: var(--ssr-surface-2); }
+.ssr-trip .ssr-btn.primary,
+.ssr-trip-day-picker .ssr-btn.primary {
   background: var(--ssr-brand-dark);
   border-color: var(--ssr-brand-dark);
   color: var(--ui-on-strong);
   box-shadow: none;
 }
-.ssr-btn.primary:hover { background: var(--ssr-brand); }
+.ssr-trip .ssr-btn.primary:hover,
+.ssr-trip-day-picker .ssr-btn.primary:hover { background: var(--ssr-brand); }
 
 /* disclaimer */
 .ssr-trip-disclaimer {
@@ -593,7 +649,7 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
   max-width: none;
   padding: 12px 14px;
   border: 1px solid color-mix(in oklch, var(--ssr-caution) 35%, var(--ssr-line));
-  border-radius: 8px;
+  border-radius: var(--ui-radius-control);
   background: color-mix(in oklch, var(--ssr-caution) 8%, var(--ssr-surface));
 }
 .ssr-trip-disclaimer svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; color: var(--ssr-caution-ink); }
@@ -601,10 +657,12 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width: 1000px) {
+  .ssr-trip-empty { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); }
+  .ssr-trip-empty > .ssr-trip-setup-run { grid-column: 1 / -1; width: 100%; margin: 0; }
   .ssr-trip-overview { grid-template-columns: 1fr 1fr; }
   .ssr-trip-ov { border-bottom: 1px solid var(--ssr-line); }
   .ssr-trip-setup { grid-template-columns: 1.3fr repeat(3, 1fr); }
-  .ssr-trip-setup-run { grid-column: 1 / -1; min-height: 46px; border-radius: 0 0 calc(var(--ssr-trip-section-radius) - 1px) calc(var(--ssr-trip-section-radius) - 1px); }
+  .ssr-trip-setup-run { grid-column: 1 / -1; }
   .ssr-trip-recommendation { grid-template-columns: auto 1fr auto; }
   .ssr-trip-recommendation-facts { grid-column: 2 / -1; grid-row: 2; }
   .ssr-trip-insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -612,17 +670,24 @@ button.ssr-trip-insight:hover:not(:disabled) { border-color: var(--ssr-brand); b
 }
 
 @media (max-width: 640px) {
-  .ssr-trip { --ssr-trip-section-radius: 12px; --ssr-trip-section-gap: 18px; padding-inline: 16px; }
+  .ssr-trip { --ssr-trip-section-radius: var(--ui-radius-card); --ssr-trip-section-gap: 18px; padding-inline: 16px; }
   .ssr-trip-head { padding-top: 28px; }
-  .ssr-trip-head h1 { font-size: 34px; }
+  .ssr-trip-head h1 { font-size: var(--ui-page-title-mobile-size); }
   .ssr-trip-setup { display: grid; grid-template-columns: 1fr 1fr; }
   .ssr-trip-setup-location { grid-column: 1 / -1; border-bottom: 1px solid var(--ssr-line); border-right: 0; }
   .ssr-trip-setup-field { min-width: 0; border-bottom: 1px solid var(--ssr-line); }
   .ssr-trip-setup-field:nth-child(3) { border-right: 0; }
   .ssr-trip-setup-field:nth-child(4) { grid-column: 1 / -1; border-right: 0; }
-  .ssr-trip-setup-run { min-height: 52px; justify-content: center; }
+  .ssr-trip-setup-run {
+    justify-content: center;
+  }
   .ssr-trip-banner { align-items: flex-start; flex-direction: column; gap: 14px; }
-  .ssr-trip-banner-action { width: 100%; justify-content: center; }
+  .ssr-trip-banner-actions { width: 100%; justify-content: stretch; }
+  .ssr-trip-banner-action { width: 100%; min-height: 44px; justify-content: center; }
+  .ssr-trip-empty { grid-template-columns: 1fr; }
+  .ssr-trip-empty-outputs { border-top: 1px solid var(--ssr-line); border-left: 0; }
+  .ssr-trip-empty-outputs > div { padding-left: 0; }
+  .ssr-trip-empty > .ssr-trip-setup-run { width: 100%; margin: 0; }
   .ssr-trip-overview { grid-template-columns: 1fr; }
   .ssr-trip-ov { border-right: 0; }
   .ssr-trip-recommendation { grid-template-columns: auto 1fr; padding: 18px; }

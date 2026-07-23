@@ -43,29 +43,27 @@ function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, delayMs));
 }
 
-function getChunkRecoveryProbe(error: Error): { url: string; expectsJavaScript: boolean } {
-  const message = `${error.name}: ${error.message}`;
-  const failedAsset = message.match(/(?:https?:\/\/[^\s)"']+|\/assets\/[^\s)"']+)/i)?.[0];
-  if (!failedAsset) return { url: window.location.href, expectsJavaScript: false };
-
-  return { url: new URL(failedAsset, window.location.href).href, expectsJavaScript: true };
+function getChunkRecoveryProbe(): string {
+  const url = new URL(window.location.href);
+  url.searchParams.set('__chunk_recovery', Date.now().toString());
+  return url.href;
 }
 
-async function reloadWhenAppIsAvailable(error: Error): Promise<boolean> {
+async function reloadWhenAppIsAvailable(): Promise<boolean> {
   const history = readChunkRecoveryHistory();
   if (!history || history.attemptedAt.length >= CHUNK_RECOVERY_MAX_RELOADS) return false;
-  const probe = getChunkRecoveryProbe(error);
+  const probeUrl = getChunkRecoveryProbe();
 
   for (const delayMs of CHUNK_RECOVERY_PROBE_DELAYS_MS) {
     await wait(delayMs);
 
     try {
-      const response = await window.fetch(probe.url, {
+      const response = await window.fetch(probeUrl, {
         cache: 'no-store',
         credentials: 'same-origin',
       });
       if (!response.ok) continue;
-      if (probe.expectsJavaScript && response.headers.get('content-type')?.includes('text/html')) continue;
+      if (!response.headers.get('content-type')?.includes('text/html')) continue;
 
       window.sessionStorage.setItem(CHUNK_RECOVERY_GUARD_KEY, JSON.stringify({
         ...history,
@@ -106,7 +104,7 @@ export class ErrorBoundary extends React.Component<
     console.error('Backcountry Conditions crashed:', error, info.componentStack);
     if (isRecoverableChunkLoadError(error) && !this.recoveryStarted) {
       this.recoveryStarted = true;
-      void reloadWhenAppIsAvailable(error).then((willReload) => {
+      void reloadWhenAppIsAvailable().then((willReload) => {
         if (!willReload) this.setState({ recoveryExhausted: true });
       });
     }
@@ -137,23 +135,23 @@ export class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       const recovering = Boolean(this.state.error && isRecoverableChunkLoadError(this.state.error));
       return (
-        <div style={{ padding: '2rem', maxWidth: '600px', margin: '4rem auto', fontFamily: 'system-ui, sans-serif' }}>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
-            {recovering && !this.state.recoveryExhausted ? 'Reconnecting…' : 'Something went wrong'}
-          </h1>
-          <p style={{ marginBottom: '1rem', color: '#666' }}>
-            {recovering && !this.state.recoveryExhausted
-              ? 'The app was briefly unavailable. It will reload automatically when the server is ready.'
-              : 'An unexpected error occurred. Refreshing the page usually resolves this.'}
-          </p>
-          <button
-            type="button"
-            onClick={this.handleReload}
-            style={{ marginTop: '1rem', padding: '0.5rem 1.25rem', background: '#222', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}
-          >
-            Reload now
-          </button>
-        </div>
+        <main className="app-error-boundary" role="alert" aria-live="assertive">
+          <section className="app-error-boundary-card" aria-labelledby="app-error-boundary-title">
+            <span className="app-error-boundary-icon" aria-hidden>!</span>
+            <p className="app-error-boundary-eyebrow">
+              {recovering && !this.state.recoveryExhausted ? 'Connection interrupted' : 'Application error'}
+            </p>
+            <h1 id="app-error-boundary-title">
+              {recovering && !this.state.recoveryExhausted ? 'Reconnecting…' : 'Something went wrong'}
+            </h1>
+            <p className="app-error-boundary-copy">
+              {recovering && !this.state.recoveryExhausted
+                ? 'The app was briefly unavailable. It will reload automatically when the server is ready.'
+                : 'An unexpected error occurred. Refreshing the page usually resolves this.'}
+            </p>
+            <button type="button" onClick={this.handleReload}>Reload now</button>
+          </section>
+        </main>
       );
     }
 

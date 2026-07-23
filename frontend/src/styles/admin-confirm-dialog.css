@@ -1,0 +1,176 @@
+.admin-confirm-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-shell);
+  background: transparent;
+  color: var(--ui-text);
+  overflow: visible;
+}
+
+.admin-confirm-dialog::backdrop {
+  background: color-mix(in oklch, var(--ui-scrim) 72%, transparent);
+  backdrop-filter: blur(5px);
+}
+
+.admin-confirm-card {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px 14px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: var(--ui-radius-shell);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.admin-confirm-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius-card);
+  background: color-mix(in oklch, var(--ui-risk-4) 11%, var(--ui-surface));
+  color: var(--ui-nogo-ink);
+}
+
+.admin-confirm-dialog.is-caution .admin-confirm-icon {
+  background: color-mix(in oklch, var(--ui-risk-3) 12%, var(--ui-surface));
+  color: var(--ui-caution-ink);
+}
+
+.admin-confirm-copy {
+  min-width: 0;
+}
+
+.admin-confirm-eyebrow {
+  display: block;
+  margin: 1px 0 7px;
+  color: var(--ui-nogo-ink);
+  font-size: 9.5px;
+  font-weight: 760;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.admin-confirm-dialog.is-caution .admin-confirm-eyebrow {
+  color: var(--ui-caution-ink);
+}
+
+.admin-confirm-copy h2 {
+  margin: 0;
+  color: var(--ui-text);
+  font-family: var(--ssr-display);
+  font-size: 21px;
+  font-weight: 680;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+}
+
+.admin-confirm-copy p {
+  margin: 9px 0 0;
+  color: var(--ui-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-confirm-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.admin-confirm-actions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: var(--ui-radius-control);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 720;
+  cursor: pointer;
+  transition: border-color var(--ui-motion-fast), background var(--ui-motion-fast), transform var(--ui-motion-fast);
+}
+
+.admin-confirm-actions button:hover {
+  transform: translateY(-1px);
+}
+
+.admin-confirm-actions button:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--ui-focus-ring);
+}
+
+.admin-confirm-cancel {
+  border: 1px solid var(--ui-line-strong);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+
+.admin-confirm-cancel:hover {
+  border-color: color-mix(in oklch, var(--ui-brand) 38%, var(--ui-line-strong));
+  background: var(--ui-surface-subtle);
+}
+
+.admin-confirm-submit {
+  border: 1px solid color-mix(in oklch, var(--ui-risk-4) 78%, var(--ui-line));
+  background: var(--ui-risk-4);
+  color: oklch(99% 0.004 28);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.admin-confirm-submit:hover {
+  border-color: var(--ui-nogo-ink);
+  background: color-mix(in oklch, var(--ui-risk-4) 84%, var(--ui-nogo-ink));
+}
+
+.admin-confirm-dialog.is-caution .admin-confirm-submit {
+  border-color: color-mix(in oklch, var(--ui-risk-3) 65%, var(--ui-line));
+  background: color-mix(in oklch, var(--ui-risk-3) 78%, var(--ui-surface));
+  color: var(--ui-caution-ink);
+}
+
+.admin-confirm-dialog.is-caution .admin-confirm-submit:hover {
+  border-color: var(--ui-caution-ink);
+  background: color-mix(in oklch, var(--ui-risk-3) 88%, var(--ui-surface));
+}
+
+@media (max-width: 520px) {
+  .admin-confirm-dialog {
+    width: calc(100vw - 24px);
+  }
+
+  .admin-confirm-card {
+    padding: 20px;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-confirm-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .admin-confirm-actions {
+    grid-column: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-confirm-actions button {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-confirm-actions button {
+    transition: none;
+  }
+
+  .admin-confirm-actions button:hover {
+    transform: none;
+  }
+}

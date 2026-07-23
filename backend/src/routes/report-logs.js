@@ -10,7 +10,7 @@ const { backendRestartController: defaultBackendRestartController } = require('.
 const { readSessionToken } = require('./account');
 const { validateFreeMonthlyUsageLimit } = require('../auth/monthly-usage-limit');
 const { validateMonthlyTokenLimit } = require('../auth/ai-usage-limit');
-const { isAdminAccount } = require('../auth/admin-account');
+const { isAdminAccount, resolveAdminAccount } = require('../auth/admin-account');
 const {
   buildHealthHistorySummary,
   createFileHealthHistoryStore,
@@ -145,11 +145,12 @@ const registerReportLogsRoute = (
     } catch (error) {
       req.log?.warn({ err: error }, 'Admin account authorization failed');
     }
-    if (!isAdminAccount(accountUser)) {
+    const adminAccount = resolveAdminAccount(accountUser);
+    if (!adminAccount) {
       res.status(404).json({ error: 'Not found' });
       return null;
     }
-    return accountUser;
+    return adminAccount;
   };
 
   app.get('/api/report-logs', async (req, res) => {

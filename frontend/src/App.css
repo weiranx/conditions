@@ -1,4 +1,4 @@
-/* Web fonts (Inter, IBM Plex Sans/Mono) are loaded via <link> in index.html
+/* Web fonts (Inter and IBM Plex Mono) are loaded via <link> in index.html
    so they preconnect and load in parallel with CSS instead of blocking on it. */
 @import './styles/search.css';
 @import './styles/loading.css';
@@ -28,21 +28,21 @@
   --accent-sky: var(--ui-brand);
   --focus-ring: var(--ui-brand);
 
-  --font-main: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-main: var(--ssr-sans);
   --font-data: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
 
   --shadow-soft: var(--ui-shadow-sm);
   --shadow-deep: var(--ui-shadow-md);
   --shadow-glow: none;
-  --radius-card: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 8px;
+  --radius-card: var(--ui-radius-card);
+  --radius-lg: var(--ui-radius-card);
+  --radius-xl: var(--ui-radius-shell);
   --radius-pill: 999px;
 }
 
 :root[data-theme='dark'] {
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.2);
-  --shadow-deep: 0 4px 16px rgb(0 0 0 / 0.3);
+  --shadow-soft: var(--ui-shadow-sm);
+  --shadow-deep: var(--ui-shadow-md);
   color-scheme: dark;
 }
 

@@ -130,7 +130,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 7px;
+  border-radius: var(--ui-radius-control);
   font: inherit;
   font-size: 11px;
   font-weight: 750;
@@ -174,7 +174,7 @@
   overflow: hidden;
   padding: 13px;
   border: 1px solid var(--ssr-line);
-  border-radius: 9px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface);
   scroll-snap-align: start;
 }
@@ -228,7 +228,7 @@
   align-items: center;
   gap: 4px;
   padding: 9px;
-  border-radius: 7px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface-2);
 }
 
@@ -348,7 +348,7 @@
 
 .start-scenario__use {
   width: 100%;
-  min-height: 36px;
+  min-height: var(--ui-control-height);
   margin-top: auto;
   padding: 8px 9px;
   border: 1px solid var(--ssr-line-strong);
@@ -361,7 +361,7 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 36px;
+  min-height: var(--ui-control-height);
   margin-top: auto;
   color: var(--ssr-text-3);
   font-size: 9.5px;
@@ -387,13 +387,13 @@
   gap: 9px;
   padding: 10px;
   border: 1px dashed var(--ssr-line-strong);
-  border-radius: 8px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface-2);
 }
 
 .start-scenarios__more button {
   flex: none;
-  min-height: 34px;
+  min-height: var(--ui-control-height);
   padding: 7px 9px;
   border: 1px solid var(--ssr-line-strong);
   background: var(--ssr-surface);

@@ -546,8 +546,9 @@ export function TripView({
           </div>
           <div className="ssr-trip-setup" aria-label="Multi-day forecast setup">
             <div className="ssr-trip-setup-location">
-              <span>Location</span>
+              <span><label htmlFor="trip-objective-search-input">Location</label></span>
               <SearchBox
+                idPrefix="trip-objective-search"
                 searchWrapperRef={searchWrapperRef}
                 searchInputRef={searchInputRef}
                 searchQuery={searchQuery}
@@ -649,11 +650,16 @@ export function TripView({
               <h3>Multi-day forecast unavailable</h3>
               <p>{tripForecastError}</p>
             </div>
-            {objectiveReady && (
-              <button type="button" className="ssr-trip-banner-action" onClick={() => void runTripForecast()}>
-                <RefreshCw size={15} aria-hidden /> Try again
+            <div className="ssr-trip-banner-actions">
+              {objectiveReady && (
+                <button type="button" className="ssr-trip-banner-action" onClick={() => void runTripForecast()}>
+                  <RefreshCw size={15} aria-hidden /> Try again
+                </button>
+              )}
+              <button type="button" className="ssr-trip-banner-action" onClick={openPlannerView}>
+                <Route size={15} aria-hidden /> Open planner
               </button>
-            )}
+            </div>
           </div>
         )}
 
@@ -665,6 +671,24 @@ export function TripView({
               <span>Checking weather and travel-hour thresholds for each day.</span>
             </div>
           </div>
+        )}
+
+        {objectiveReady && !tripForecastLoading && !tripForecastError && tripForecastRows.length === 0 && (
+          <section className="ssr-trip-empty" aria-labelledby="trip-empty-title">
+            <div className="ssr-trip-empty-copy">
+              <span>Ready to compare</span>
+              <h2 id="trip-empty-title">See which day gives you the cleanest window.</h2>
+              <p>Run the forecast to compare the same objective, start time, and travel thresholds across your selected dates.</p>
+            </div>
+            <div className="ssr-trip-empty-outputs" aria-label="Comparison outputs">
+              <div><CalendarDays aria-hidden /><span><b>Best day</b>Rank the clearest weather window.</span></div>
+              <div><Gauge aria-hidden /><span><b>Decision gates</b>See which thresholds pass each day.</span></div>
+              <div><Table2 aria-hidden /><span><b>Signal matrix</b>Compare wind, precipitation, and daylight.</span></div>
+            </div>
+            <button type="button" className="ssr-trip-setup-run" onClick={() => void runTripForecast()}>
+              <RefreshCw size={15} aria-hidden /> Compare dates
+            </button>
+          </section>
         )}
 
         {tripForecastRows.length > 0 && (

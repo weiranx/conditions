@@ -211,7 +211,14 @@ export function SettingsView({
 
   const goToSection = (id: SettingsSection) => {
     setActiveSection(id);
-    document.getElementById(`ssr-set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const section = document.getElementById(`ssr-set-${id}`);
+    if (!section) return;
+    if (window.matchMedia('(max-width: 520px)').matches) {
+      const top = section.getBoundingClientRect().top + window.scrollY - 174;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      return;
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   // Live gate check — uses committed canonical preference values (mph / % / °F).

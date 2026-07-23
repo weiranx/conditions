@@ -147,6 +147,7 @@ import {
 import { useAccount } from './hooks/useAccount';
 import { AiAccessContext } from './contexts/ai-access';
 import { AiAccessPrompt, type AccountAccessReason } from './components/AiAccessPrompt';
+import { PassedReportNotice, PastStartPrompt } from './components/planner/PastStartNotice';
 import {
   buildSavedReportShareUrl,
   createSavedReport,
@@ -159,12 +160,6 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const PlannerView = React.lazy(() =>
   import('./components/planner/PlannerView').then((module) => ({ default: module.PlannerView })),
-);
-const PastStartPrompt = React.lazy(() =>
-  import('./components/planner/PastStartNotice').then((module) => ({ default: module.PastStartPrompt })),
-);
-const PassedReportNotice = React.lazy(() =>
-  import('./components/planner/PastStartNotice').then((module) => ({ default: module.PassedReportNotice })),
 );
 const AdminView = React.lazy(() =>
   import('./components/views/AdminView').then((module) => ({ default: module.AdminView })),
@@ -692,7 +687,7 @@ function App() {
       setError(null);
     }, [clearWakeRetry, resetSavedReportTracking, setSafetyData, setAiBriefNarrative, setAiBriefLoading, setAiBriefError, setSnowVisionAnalysis, setSnowVisionImage, setSnowVisionLoading, setSnowVisionError, clearLastLoadedKey, setSearchInputValue, setCommittedSearchQuery, setError, initializeTripView, hasObjective, position, objectiveName, forecastDate, alpineStartTime, targetElevationInput, preferences.defaultActivity, preferences.travelWindowHours]),
   });
-  const { view, setView, isViewPending, startViewChange, navigateToView } = urlState;
+  const { view, isViewPending, navigateToView } = urlState;
 
   useEffect(() => {
     if (view === 'planner') return;
@@ -717,7 +712,8 @@ function App() {
     });
   }, [accountUserId, refreshAccount, view]);
 
-  const isAdminAccount = accountUser?.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL;
+  const isAdminAccount = import.meta.env.DEV
+    || accountUser?.email.trim().toLowerCase() === ADMIN_ACCOUNT_EMAIL;
   const showAdminNotFound = view === 'admin' && !accountLoading && !isAdminAccount;
 
   const requestAiAccess = useCallback(() => {
@@ -731,6 +727,7 @@ function App() {
     return false;
   }, [accountUser]);
   const requestNewReportAccess = useCallback(() => {
+    if (import.meta.env.DEV) return true;
     if (accountUser) {
       if (!accountReportUsage?.exhausted) return true;
       setAccountAccessReason('account-report-limit');
@@ -745,12 +742,12 @@ function App() {
 
   useEffect(() => {
     if (!featureFlags.tripPlanning && view === 'trip') {
-      startViewChange(() => setView('planner'));
+      navigateToView('planner');
     }
     if (!featureFlags.objectiveWatch && view === 'watches') {
-      startViewChange(() => setView('planner'));
+      navigateToView('planner');
     }
-  }, [featureFlags.objectiveWatch, featureFlags.tripPlanning, setView, startViewChange, view]);
+  }, [featureFlags.objectiveWatch, featureFlags.tripPlanning, navigateToView, view]);
 
   useEffect(() => {
     if (!hasObjective || !safetyData) {
@@ -1341,7 +1338,7 @@ function App() {
     setReportChatSessionKey((value) => value + 1);
     restoreRouteState(report.route);
 
-    startViewChange(() => setView('planner'));
+    navigateToView('planner');
   }, [
     clearLastLoadedKey,
     clearWakeRetry,
@@ -1358,8 +1355,7 @@ function App() {
     setSnowVisionError,
     setSnowVisionImage,
     setSnowVisionLoading,
-    setView,
-    startViewChange,
+    navigateToView,
   ]);
 
   useEffect(() => {
@@ -1393,7 +1389,7 @@ function App() {
     if (!hasObjective && !searchQuery.trim()) {
       setAlpineStartTime(preferences.defaultStartTime);
     }
-    startViewChange(() => setView('planner'));
+    navigateToView('planner');
   };
 
   const openBlankPlannerFromSharedReport = () => {
@@ -1412,13 +1408,13 @@ function App() {
       return;
     }
     initializeTripView(forecastDate, alpineStartTime);
-    startViewChange(() => setView('trip'));
+    navigateToView('trip');
   };
 
   const handleUseTripDayInPlanner = useCallback((date: string, startTime: string) => {
     const selectedDay = tripForecastRows.find((day) => day.date === date);
     if (selectedDay && forecastDate === date && safetyData === selectedDay.safetyData) {
-      startViewChange(() => setView('planner'));
+      navigateToView('planner');
       return;
     }
 
@@ -1448,7 +1444,7 @@ function App() {
     setSnowVisionLoading(false);
     setSnowVisionError(null);
     resetRouteState();
-    startViewChange(() => setView('planner'));
+    navigateToView('planner');
   }, [
     clearLastLoadedKey,
     clearWakeRetry,
@@ -1465,8 +1461,7 @@ function App() {
     setSnowVisionError,
     setSnowVisionImage,
     setSnowVisionLoading,
-    setView,
-    startViewChange,
+    navigateToView,
     tripForecastRows,
   ]);
 
@@ -1494,15 +1489,14 @@ function App() {
     setTargetElevationInput(plan.targetElevationInput);
     setTargetElevationManual(Boolean(plan.targetElevationInput));
     setPreferences((current) => ({ ...current, travelWindowHours: plan.travelWindowHours }));
-    startViewChange(() => setView('planner'));
+    navigateToView('planner');
   }, [
     clearLastLoadedKey,
     setActiveSuggestionIndex,
     setCommittedSearchQuery,
     setSearchInputValue,
     setShowSuggestions,
-    setView,
-    startViewChange,
+    navigateToView,
     updateObjectivePosition,
   ]);
   const appShellClassName = `app-container page-shell page-shell-${view}${isViewPending ? ' is-nav-pending' : ''}`;
@@ -1624,8 +1618,8 @@ function App() {
     setTargetElevationInput,
     onApplyToPlanner: useCallback(() => {
       setAlpineStartTime(preferences.defaultStartTime);
-      startViewChange(() => setView('planner'));
-    }, [preferences.defaultStartTime, startViewChange, setView]),
+      navigateToView('planner');
+    }, [navigateToView, preferences.defaultStartTime]),
     persistLocally: !accountUser,
     onPreferencesChange: accountUser ? scheduleAccountPreferenceSave : undefined,
   });
@@ -2232,7 +2226,7 @@ function App() {
   );
 
   const navigateHomeToPlanner = () => {
-    startViewChange(() => setView('planner'));
+    openPlannerView();
   };
 
   return (

@@ -237,10 +237,11 @@ export function HomeView({
               </div>
 
               <div className="ssr-h-search-block">
-                <label className="ssr-h-field-label" htmlFor="location-search-input">
+                <label className="ssr-h-field-label" htmlFor="home-objective-search-input">
                   <MapPin size={13} aria-hidden /> Location or route
                 </label>
                 <SearchBox
+                  idPrefix="home-objective-search"
                   searchWrapperRef={searchWrapperRef}
                   searchInputRef={searchInputRef}
                   searchQuery={searchQuery}

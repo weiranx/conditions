@@ -336,9 +336,9 @@ export function AccountView({
           ) : account.available === false ? (
             <div className="account-unavailable" role="status">
               <ShieldCheck aria-hidden />
-              <h2>Accounts are not available yet</h2>
-              <p>The database connection must be enabled before accounts can be created on this deployment.</p>
-              <button type="button" onClick={openPlannerView}>Continue without an account</button>
+              <h2>Accounts are not enabled here</h2>
+              <p>You can keep planning with preferences saved in this browser.</p>
+              <button type="button" onClick={openPlannerView}>Continue to planner</button>
             </div>
           ) : account.user && mode !== 'reset' ? (
             <div className="account-profile">

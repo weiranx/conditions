@@ -63,7 +63,8 @@
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(JSON.stringify\\(j.snowpack,null,2\\)\\);console.log\\('--- terrainCondition.signals ---'\\);console.log\\(JSON.stringify\\(j.terrainCondition?.signals,null,2\\)\\);}\\)\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.jest||'no jest key',null,2\\)\\); console.log\\('scripts:',JSON.stringify\\(p.scripts,null,2\\)\\)\")",
       "Bash(ps -p 25330 -o command=)",
-      "Bash(awk '$4==\"cwd\"')"
+      "Bash(awk '$4==\"cwd\"')",
+      "Bash(xargs ps -o pid,ppid,etime,command -p)"
     ]
   }
 }

@@ -3,6 +3,7 @@ import { History, Mountain, Search, Star, X } from 'lucide-react';
 import { isMountainSuggestion, type Suggestion } from '../../lib/search';
 
 interface SearchBoxProps {
+  idPrefix: string;
   searchWrapperRef: React.RefObject<HTMLDivElement | null>;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   searchQuery: string;
@@ -23,6 +24,7 @@ interface SearchBoxProps {
 }
 
 export function SearchBox({
+  idPrefix,
   searchWrapperRef,
   searchInputRef,
   searchQuery,
@@ -44,6 +46,22 @@ export function SearchBox({
   const wrapperRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const suggestionsListRef = React.useRef<HTMLDivElement>(null);
+  const inputId = `${idPrefix}-input`;
+  const listboxId = `${idPrefix}-listbox`;
+  const statusId = `${idPrefix}-status`;
+  const coordinateOptionId = `${idPrefix}-coordinate-option`;
+
+  React.useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    const input = inputRef.current;
+    searchWrapperRef.current = wrapper;
+    searchInputRef.current = input;
+
+    return () => {
+      if (searchWrapperRef.current === wrapper) searchWrapperRef.current = null;
+      if (searchInputRef.current === input) searchInputRef.current = null;
+    };
+  }, [searchInputRef, searchWrapperRef]);
 
   React.useLayoutEffect(() => {
     const wrapper = wrapperRef.current;
@@ -66,9 +84,9 @@ export function SearchBox({
   React.useEffect(() => {
     if (!showSuggestions || activeSuggestionIndex < 0) return;
     suggestionsListRef.current
-      ?.querySelector<HTMLElement>(`#suggestion-${activeSuggestionIndex}`)
+      ?.querySelector<HTMLElement>(`#${idPrefix}-suggestion-${activeSuggestionIndex}`)
       ?.scrollIntoView({ block: 'nearest' });
-  }, [activeSuggestionIndex, showSuggestions]);
+  }, [activeSuggestionIndex, idPrefix, showSuggestions]);
 
   const optionCount = suggestions.length + (canUseCoordinates ? 1 : 0);
   const searchStatus = disabled || !showSuggestions
@@ -86,9 +104,10 @@ export function SearchBox({
       <div className="search-bar">
         <Search size={16} aria-hidden />
         <input
+          id={inputId}
           ref={inputRef}
           type="text"
-          placeholder="Search by peak, trail, route, town, or coordinates"
+          placeholder="Peak, trail, town, or coordinates"
           value={searchQuery}
           inputMode="search"
           enterKeyHint="search"
@@ -101,13 +120,13 @@ export function SearchBox({
           onKeyDown={onKeyDown}
           disabled={disabled}
           role="combobox"
-          aria-label="Search location or route"
+          aria-label="Search for an objective by name or coordinates"
           aria-autocomplete="list"
           aria-haspopup="listbox"
           aria-expanded={!disabled && showSuggestions}
-          aria-controls="planner-suggestion-list"
-          aria-describedby="planner-search-status"
-          aria-activedescendant={!disabled && activeSuggestionIndex >= 0 ? `suggestion-${activeSuggestionIndex}` : undefined}
+          aria-controls={listboxId}
+          aria-describedby={statusId}
+          aria-activedescendant={!disabled && activeSuggestionIndex >= 0 ? `${idPrefix}-suggestion-${activeSuggestionIndex}` : undefined}
         />
         {trimmedSearchQuery.length > 0 && (
           <button type="button" className="search-clear-btn" onClick={onClear} aria-label="Clear search" disabled={disabled}>
@@ -115,7 +134,7 @@ export function SearchBox({
           </button>
         )}
       </div>
-      <span id="planner-search-status" className="sr-only" role="status" aria-live="polite">
+      <span id={statusId} className="sr-only" role="status" aria-live="polite">
         {searchStatus}
       </span>
 
@@ -123,7 +142,7 @@ export function SearchBox({
         <div
           ref={suggestionsListRef}
           className="suggestions-list"
-          id="planner-suggestion-list"
+          id={listboxId}
           role="listbox"
           aria-label="Location and route suggestions"
           aria-busy={searchLoading}
@@ -135,6 +154,7 @@ export function SearchBox({
           )}
           {!searchLoading && canUseCoordinates && (
             <button
+              id={coordinateOptionId}
               type="button"
               role="option"
               aria-selected={false}
@@ -152,7 +172,7 @@ export function SearchBox({
             suggestions.map((suggestion, index) => (
               <button
                 key={`${suggestion.name}-${suggestion.lat}-${suggestion.lon}`}
-                id={`suggestion-${index}`}
+                id={`${idPrefix}-suggestion-${index}`}
                 type="button"
                 role="option"
                 aria-selected={activeSuggestionIndex === index}

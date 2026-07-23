@@ -42,10 +42,10 @@
   margin: 0;
   color: var(--ui-text);
   font-family: var(--ssr-display);
-  font-size: clamp(2.6rem, 7vw, 4.8rem);
-  font-weight: 520;
-  letter-spacing: -.045em;
-  line-height: 1;
+  font-size: var(--ui-page-title-size);
+  font-weight: var(--ui-page-title-weight);
+  letter-spacing: var(--ui-page-title-tracking);
+  line-height: 1.02;
 }
 
 .legal-effective { margin: 14px 0 0; color: var(--ui-text-3); font-size: .78rem; }

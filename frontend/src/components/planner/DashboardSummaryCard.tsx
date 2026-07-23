@@ -370,7 +370,7 @@ export function DashboardSummaryCard({
             <p>Planned travel window · {travelWindowLabel}</p>
           </div>
           <div
-            className="ssr-dash-score"
+            className={`ssr-dash-score ${score >= 100 ? 'is-three-digit' : ''}`}
             role="meter"
             aria-label={`Safety score ${score} out of 100`}
             aria-valuemin={0}
@@ -405,6 +405,16 @@ export function DashboardSummaryCard({
             <dd>{returnLabel || 'Set a back-by time'}{returnExtendsPastMidnight ? ' +1 day' : ''}</dd>
           </div>
         </dl>
+
+        {decisionActionLine && (
+          <div className="ssr-dash-recco">
+            <Compass size={19} aria-hidden />
+            <p><b>Plan adjustment</b><span>{localizeUnitText(decisionActionLine)}</span></p>
+          </div>
+        )}
+      </section>
+
+      <section className="ssr-card ssr-dash-support" aria-label="Supporting report evidence and actions">
 
         <div className={`ssr-dash-recheck ${previousSafetyData && recheckChanges.length > 0 ? 'changed' : ''}`} role="status">
           <div>
@@ -447,16 +457,19 @@ export function DashboardSummaryCard({
 
         {travelWindowRows.length > 0 && (
           <div className="ssr-dash-window">
-            <div className="ssr-dash-window-labels" aria-hidden>
-              <span>Your travel window</span>
-              <div style={{ gridTemplateColumns: `repeat(${timelineLabelIndices.length}, 1fr)` }}>
+            <div className="ssr-dash-window-labels">
+              <span className={travelWindowInsights.passHours === 0 ? 'is-blocked' : travelWindowInsights.passHours === travelWindowRows.length ? 'is-clear' : 'is-mixed'}>
+                <strong>Your travel window</strong>
+                <small>{travelWindowInsights.passHours} of {travelWindowRows.length} hours within limits</small>
+              </span>
+              <div aria-hidden style={{ gridTemplateColumns: `repeat(${timelineLabelIndices.length}, 1fr)` }}>
                 {timelineLabelIndices.map((index) => (
                   <b key={`${travelWindowRows[index].time}-${index}`}>{formatClockForStyle(travelWindowRows[index].time, preferences.timeStyle)}</b>
                 ))}
               </div>
             </div>
             <div
-              className="ssr-dash-window-band"
+              className={`ssr-dash-window-band ${travelWindowInsights.passHours === 0 ? 'is-blocked' : ''}`}
               style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(4px, 1fr))` }}
               role="img"
               aria-label={`${travelWindowInsights.passHours} of ${travelWindowRows.length} forecast hours stay within your limits.`}
@@ -488,13 +501,6 @@ export function DashboardSummaryCard({
             </div>
           ))}
         </div>
-
-        {decisionActionLine && (
-          <div className="ssr-dash-recco">
-            <Compass size={19} aria-hidden />
-            <p><b>Plan adjustment</b><span>{localizeUnitText(decisionActionLine)}</span></p>
-          </div>
-        )}
 
         {(confidence !== null || pleasantnessScore !== null) && (
           <div className="ssr-dash-context-grid">

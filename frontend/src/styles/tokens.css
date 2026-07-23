@@ -3,30 +3,43 @@
 
 :root {
   /* Canonical neutral and semantic palette. */
-  --ui-bg:             oklch(97.6% 0.004 155);
-  --ui-surface:        oklch(99.8% 0.002 155);
-  --ui-surface-subtle: oklch(96.2% 0.005 155);
-  --ui-surface-muted:  oklch(92.8% 0.008 155);
-  --ui-line:           oklch(88.5% 0.007 155);
-  --ui-line-strong:    oklch(78% 0.012 155);
+  --ui-bg:             oklch(98.4% 0.002 155);
+  --ui-surface:        oklch(99.8% 0.001 155);
+  --ui-surface-subtle: oklch(97% 0.003 155);
+  --ui-surface-muted:  oklch(94% 0.005 155);
+  --ui-line:           oklch(89.5% 0.006 155);
+  --ui-line-strong:    oklch(81.5% 0.010 155);
   --ui-text:           oklch(20.5% 0.012 155);
   --ui-text-2:         oklch(38% 0.011 155);
   --ui-text-3:         oklch(54% 0.010 155);
-  --ui-text-4:         oklch(69% 0.008 155);
+  --ui-text-4:         var(--ui-text-3);
   --ui-on-strong:      oklch(99% 0.004 155);
-  --ui-brand:          oklch(47% 0.085 155);
-  --ui-brand-strong:   oklch(34% 0.075 155);
-  --ui-brand-soft:     oklch(94% 0.022 155);
+  --ui-scrim:          oklch(12% 0.015 155);
+  --ui-brand:          oklch(49% 0.105 155);
+  --ui-brand-strong:   oklch(38% 0.095 155);
+  --ui-brand-soft:     oklch(95% 0.026 155);
   --ui-content-width:  1180px;
   --ui-gutter:         clamp(16px, 4vw, 48px);
-  --ui-radius-control: 10px;
-  --ui-radius-card:    16px;
-  --ui-radius-shell:   22px;
+  --ui-page-title-size: clamp(34px, 4vw, 48px);
+  --ui-page-title-mobile-size: 34px;
+  --ui-page-title-weight: 680;
+  --ui-page-title-tracking: -.045em;
+  --ui-control-height: 44px;
+  --ui-primary-control-height: 52px;
+  --ui-radius-control: 9px;
+  --ui-radius-card:    12px;
+  --ui-radius-shell:   16px;
   --ui-meta-size:      11.5px;
   --ui-motion-fast:    160ms ease;
-  --ui-shadow-xs:      0 1px 2px oklch(24% 0.02 155 / 0.06);
-  --ui-shadow-sm:      0 1px 2px oklch(24% 0.02 155 / 0.05), 0 8px 24px -18px oklch(24% 0.02 155 / 0.28);
-  --ui-shadow-md:      0 2px 4px oklch(24% 0.02 155 / 0.06), 0 16px 36px -22px oklch(24% 0.02 155 / 0.32);
+  --ui-motion-medium:  280ms cubic-bezier(.22, 1, .36, 1);
+  --ui-motion-slow:    700ms cubic-bezier(.22, 1, .36, 1);
+  --ui-line-highlight: color-mix(in oklch, white 58%, transparent);
+  --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 90%, transparent);
+  --ui-shadow-xs:      0 1px 2px oklch(24% 0.02 155 / 0.05);
+  --ui-shadow-sm:      0 1px 3px oklch(24% 0.02 155 / 0.055), 0 8px 22px -20px oklch(24% 0.02 155 / 0.18);
+  --ui-shadow-md:      0 2px 5px oklch(24% 0.02 155 / 0.06), 0 18px 40px -30px oklch(24% 0.02 155 / 0.24);
+  --ui-shadow-lg:      0 3px 8px oklch(24% 0.02 155 / 0.065), 0 26px 56px -38px oklch(24% 0.02 155 / 0.28);
+  --ui-focus-ring:     var(--ui-brand);
   --ui-risk-1:         oklch(72% 0.170 145);
   --ui-risk-2:         oklch(78% 0.170 100);
   --ui-risk-3:         oklch(70% 0.180 55);
@@ -68,8 +81,20 @@
   --ssr-nogo-ink:    var(--ui-nogo-ink);
   --ssr-watch-ink:   var(--ui-watch-ink);
   --ssr-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --ssr-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --ssr-display: 'Inter', system-ui, -apple-system, sans-serif;
   --ssr-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  /* Compatibility aliases for remaining legacy and chart surfaces. Keep them
+     mapped here so unresolved custom properties cannot silently invalidate a
+     live declaration while those components migrate to canonical names. */
+  --surface-raised: var(--ui-surface);
+  --border-subtle: var(--ui-line);
+  --border-color: var(--ui-line);
+  --text-primary: var(--ui-text);
+  --card-bg: var(--ui-surface);
+  --ssr-accent: var(--ui-brand);
+  --ssr-font: var(--ssr-sans);
+  --ssr-text-1: var(--ui-text);
 
   /* Dashboard/shell aliases use the same values as every other view. */
   --d-surface:   var(--ui-surface);
@@ -111,7 +136,7 @@ html[data-theme="dark"] {
   --ui-text:           oklch(95% 0.008 155);
   --ui-text-2:         oklch(79% 0.010 155);
   --ui-text-3:         oklch(63% 0.011 155);
-  --ui-text-4:         oklch(49% 0.012 155);
+  --ui-text-4:         var(--ui-text-3);
   --ui-on-strong:      oklch(15.5% 0.008 155);
   --ui-brand:          oklch(70% 0.110 165);
   --ui-brand-strong:   oklch(80% 0.110 165);
@@ -124,7 +149,10 @@ html[data-theme="dark"] {
   --ui-temp-cold:      oklch(78% 0.105 230);
   --ui-temp-warm:      oklch(82% 0.125 75);
   --ui-temp-hot:       oklch(76% 0.160 35);
-  --ui-shadow-xs:      0 1px 2px oklch(4% 0.01 155 / 0.38);
-  --ui-shadow-sm:      0 1px 2px oklch(4% 0.01 155 / 0.32), 0 12px 28px -18px oklch(4% 0.01 155 / 0.8);
-  --ui-shadow-md:      0 2px 4px oklch(4% 0.01 155 / 0.38), 0 20px 40px -24px oklch(4% 0.01 155 / 0.9);
+  --ui-shadow-xs:      0 1px 2px oklch(4% 0.01 155 / 0.28);
+  --ui-shadow-sm:      0 1px 3px oklch(4% 0.01 155 / 0.24), 0 10px 24px -20px oklch(4% 0.01 155 / 0.44);
+  --ui-shadow-md:      0 2px 6px oklch(4% 0.01 155 / 0.28), 0 20px 44px -30px oklch(4% 0.01 155 / 0.56);
+  --ui-shadow-lg:      0 3px 9px oklch(4% 0.01 155 / 0.3), 0 30px 62px -38px oklch(4% 0.01 155 / 0.66);
+  --ui-line-highlight: color-mix(in oklch, white 12%, transparent);
+  --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 88%, transparent);
 }

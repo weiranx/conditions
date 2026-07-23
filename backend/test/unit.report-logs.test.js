@@ -1,4 +1,5 @@
 const { isAdminAccount, isRouteWaypointEntry } = require('../src/routes/report-logs');
+const { DEV_ADMIN_ACCOUNT, resolveAdminAccount } = require('../src/auth/admin-account');
 const { usageSnapshot } = require('../src/utils/system-resources');
 
 test('identifies internal route waypoint log entries', () => {
@@ -12,6 +13,30 @@ test('recognizes only the configured administrator account', () => {
   expect(isAdminAccount({ email: 'WEIRANXIONG@GMAIL.COM' })).toBe(true);
   expect(isAdminAccount({ email: 'climber@example.com' })).toBe(false);
   expect(isAdminAccount(null)).toBe(false);
+});
+
+test('development admin bypass is explicit and cannot enable production access', () => {
+  const developer = {
+    id: '8c696be4-e175-4b6a-965b-82bdf3758e0c',
+    email: 'developer@example.com',
+  };
+
+  expect(resolveAdminAccount(developer, {
+    developmentBypassEnabled: true,
+    nodeEnv: 'development',
+  })).toBe(developer);
+  expect(resolveAdminAccount(null, {
+    developmentBypassEnabled: true,
+    nodeEnv: 'development',
+  })).toBe(DEV_ADMIN_ACCOUNT);
+  expect(resolveAdminAccount(developer, {
+    developmentBypassEnabled: true,
+    nodeEnv: 'production',
+  })).toBeNull();
+  expect(resolveAdminAccount(developer, {
+    developmentBypassEnabled: false,
+    nodeEnv: 'development',
+  })).toBeNull();
 });
 
 test('calculates resource usage without allowing invalid capacity values', () => {

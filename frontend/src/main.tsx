@@ -4,6 +4,7 @@ import './index.css'
 import './styles/tokens.css'
 import App from './App.tsx'
 import './styles/mobile-experience.css'
+import './styles/field-instrument.css'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
 import { AccountProvider } from './contexts/AccountProvider.tsx'
@@ -30,6 +31,16 @@ createRoot(document.getElementById('root')!).render(
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js')
+    const hadController = Boolean(navigator.serviceWorker.controller)
+    let reloadingForWorkerUpdate = false
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloadingForWorkerUpdate) return
+      reloadingForWorkerUpdate = true
+      window.location.reload()
+    })
+
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+      .then((registration) => registration.update())
   })
 }

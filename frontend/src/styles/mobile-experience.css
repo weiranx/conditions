@@ -68,6 +68,23 @@
     padding-block: 12px;
   }
 
+  /* Modal and monitoring actions must remain comfortably tappable even when
+     their desktop presentation is intentionally compact. */
+  .ai-access-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ai-access-form-actions button,
+  .ai-access-unavailable button,
+  .past-start-actions button,
+  .passed-report-actions button,
+  .watch-card-actions button,
+  .watch-delete-confirm button,
+  .watches-empty button {
+    min-height: 44px;
+  }
+
   /* The compact top navigation stays dense and scrolls with the page. */
   .ssr-product-nav {
     padding-bottom: 0;
@@ -125,9 +142,10 @@
     align-items: center;
     flex: 0 0 auto;
     padding: 0 12px;
-    border: 1px solid rgba(72, 99, 82, .32);
+    border: 1px solid var(--ui-line-strong);
     border-radius: 999px;
-    background: rgba(255, 255, 255, .72);
+    background: color-mix(in oklch, var(--ui-surface-subtle) 92%, transparent);
+    color: var(--ui-text-2);
     font-size: 12px;
     scroll-snap-align: start;
   }
@@ -190,34 +208,8 @@
     height: 44px;
   }
 
-  /* Report cards: tighter rhythm, readable summaries, swipeable detail rails. */
-  .ssr-report.ssr-report,
-  .ssr-report .ssr-main,
-  .ssr-report .ssr-side,
-  .ssr-report .ssr-report-footer {
-    gap: 14px;
-  }
-
-  .ssr-report .ssr-hdr {
-    padding: 17px;
-  }
-
-  .ssr-report .ssr-hdr-title {
-    align-items: flex-start;
-  }
-
-  .ssr-report .ssr-hdr-stats {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0;
-  }
-
-  .ssr-report .ssr-hdr-stat {
-    min-width: 0;
-    padding: 9px 12px;
-  }
-
+  /* Preserve touch behavior while report presentation stays owned by
+     planner-redesign.css. */
   .ssr-report .ssr-jump-nav {
     scroll-padding-inline: 8px;
     scroll-snap-type: x proximity;

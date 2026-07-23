@@ -4,7 +4,7 @@
   "description": "Backcountry Conditions backend API",
   "main": "index.js",
   "scripts": {
-    "dev": "node index.js",
+    "dev": "DEV_ADMIN_BYPASS=true node index.js",
     "start": "node index.js",
     "db:migrate": "node scripts/migrate.js",
     "health-monitor": "node scripts/run-health-monitor.js",

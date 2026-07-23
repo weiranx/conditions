@@ -67,6 +67,10 @@ import {
   type ProductFeatureFlags,
   type ProductFeatureKey,
 } from '../../contexts/feature-flags';
+import {
+  AdminConfirmDialog,
+  type AdminConfirmRequest,
+} from '../ui/AdminConfirmDialog';
 import { ProductNav } from './ProductNav';
 
 interface ReportLogEntry {
@@ -1183,6 +1187,7 @@ function AdminDashboard() {
   const [diagnosticsPending, setDiagnosticsPending] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [confirmation, setConfirmation] = useState<AdminConfirmRequest | null>(null);
   const [sortKey, setSortKey] = useState<LogSortKey>('timestamp');
   const [sortAsc, setSortAsc] = useState(false);
   const [query, setQuery] = useState('');
@@ -1200,6 +1205,27 @@ function AdminDashboard() {
   const dashboardContentRef = useRef<HTMLDivElement>(null);
   const requestActivityRef = useRef<HTMLElement>(null);
   const aiUsageRef = useRef<HTMLElement>(null);
+  const confirmationResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+
+  const requestAdminConfirmation = useCallback((request: AdminConfirmRequest) => (
+    new Promise<boolean>((resolve) => {
+      confirmationResolverRef.current?.(false);
+      confirmationResolverRef.current = resolve;
+      setConfirmation(request);
+    })
+  ), []);
+
+  const resolveAdminConfirmation = useCallback((confirmed: boolean) => {
+    const resolve = confirmationResolverRef.current;
+    confirmationResolverRef.current = null;
+    setConfirmation(null);
+    resolve?.(confirmed);
+  }, []);
+
+  useEffect(() => () => {
+    confirmationResolverRef.current?.(false);
+    confirmationResolverRef.current = null;
+  }, []);
 
   useEffect(() => {
     try {
@@ -1494,9 +1520,13 @@ function AdminDashboard() {
     });
   }, [aiSettings]);
 
-  const toggleAIEnabled = () => {
+  const toggleAIEnabled = async () => {
     if (!aiSettings) return;
-    if (aiSettings.enabled && !window.confirm('Stop all AI features and switch every individual AI feature off?')) return;
+    if (aiSettings.enabled && !await requestAdminConfirmation({
+      title: 'Stop all AI features?',
+      description: 'Every individual AI feature will be switched off. You can re-enable them later.',
+      confirmLabel: 'Stop AI features',
+    })) return;
     void updateAIControl({ enabled: !aiSettings.enabled });
   };
 
@@ -1521,9 +1551,11 @@ function AdminDashboard() {
 
   const updateManagedUserStatus = async (user: AdminUserRecord, status: 'active' | 'suspended') => {
     if (user.isOwner) return;
-    if (status === 'suspended' && !window.confirm(
-      `Suspend ${user.displayName}? This immediately signs them out and blocks future sign-ins until the account is reactivated.`,
-    )) return;
+    if (status === 'suspended' && !await requestAdminConfirmation({
+      title: `Suspend ${user.displayName}?`,
+      description: 'This immediately signs them out and blocks future sign-ins until the account is reactivated.',
+      confirmLabel: 'Suspend account',
+    })) return;
     setUserActionPending(`${user.id}:status`);
     setUsersError(null);
     try {
@@ -1550,9 +1582,11 @@ function AdminDashboard() {
 
   const updateManagedUserTier = async (user: AdminUserRecord, tier: 'free' | 'premium') => {
     if (user.tier === tier) return;
-    if (tier === 'free' && !window.confirm(
-      `Move ${user.displayName} to Free? Premium limits and features will stop applying immediately.`,
-    )) return;
+    if (tier === 'free' && !await requestAdminConfirmation({
+      title: `Move ${user.displayName} to Free?`,
+      description: 'Premium limits and features will stop applying immediately.',
+      confirmLabel: 'Move to Free',
+    })) return;
     setUserActionPending(`${user.id}:tier`);
     setUsersError(null);
     try {
@@ -1695,7 +1729,11 @@ function AdminDashboard() {
   };
 
   const resetManagedUserUsage = async (user: AdminUserRecord) => {
-    if (!window.confirm(`Reset ${user.displayName}'s AI and report usage for the current month? Saved reports will not be deleted.`)) return;
+    if (!await requestAdminConfirmation({
+      title: `Reset ${user.displayName}'s monthly usage?`,
+      description: 'Their AI and report usage for the current month will return to zero. Saved reports will not be deleted.',
+      confirmLabel: 'Reset usage',
+    })) return;
     setUserActionPending(`${user.id}:usage-reset`);
     setUsersError(null);
     try {
@@ -1719,7 +1757,11 @@ function AdminDashboard() {
   };
 
   const resetAllManagedUserUsage = async () => {
-    if (!window.confirm('Reset current-month AI and report usage for every account? Saved reports will not be deleted.')) return;
+    if (!await requestAdminConfirmation({
+      title: 'Reset usage for every account?',
+      description: 'Current-month AI and report usage will return to zero for every account. Saved reports will not be deleted.',
+      confirmLabel: 'Reset all usage',
+    })) return;
     setUserActionPending('all:usage-reset');
     setUsersError(null);
     try {
@@ -1741,7 +1783,11 @@ function AdminDashboard() {
   };
 
   const resetAllManagedUserUsageLimits = async () => {
-    if (!window.confirm('Restore the default AI and generated report limits for every account? Current usage will not be reset.')) return;
+    if (!await requestAdminConfirmation({
+      title: 'Restore default limits for every account?',
+      description: 'All custom AI and generated report limits will be removed. Current usage will not be reset.',
+      confirmLabel: 'Restore defaults',
+    })) return;
     setUserActionPending('all:usage-limit-reset');
     setUsersError(null);
     try {
@@ -1766,7 +1812,11 @@ function AdminDashboard() {
 
   const revokeManagedUserSessions = async (user: AdminUserRecord) => {
     if (user.isOwner || user.activeSessions === 0) return;
-    if (!window.confirm(`Sign ${user.displayName} out of all active sessions?`)) return;
+    if (!await requestAdminConfirmation({
+      title: `Sign ${user.displayName} out everywhere?`,
+      description: 'All of their active sessions will end immediately. They can sign in again afterward.',
+      confirmLabel: 'Sign out all sessions',
+    })) return;
     setUserActionPending(`${user.id}:sessions`);
     setUsersError(null);
     try {
@@ -1791,7 +1841,12 @@ function AdminDashboard() {
 
   const sendManagedUserVerification = async (user: AdminUserRecord) => {
     if (user.emailVerified || user.status !== 'active' || !user.email) return;
-    if (!window.confirm(`Send a new verification link to ${user.email}? Any older verification link will stop working.`)) return;
+    if (!await requestAdminConfirmation({
+      title: 'Send a new verification link?',
+      description: `A new link will be sent to ${user.email}. Any older verification link will stop working.`,
+      confirmLabel: 'Send link',
+      tone: 'caution',
+    })) return;
     setUserActionPending(`${user.id}:verification`);
     setUsersError(null);
     setUsersNotice(null);
@@ -2503,6 +2558,11 @@ function AdminDashboard() {
 
   return (
     <div className="logs-dashboard">
+      <AdminConfirmDialog
+        request={confirmation}
+        onCancel={() => resolveAdminConfirmation(false)}
+        onConfirm={() => resolveAdminConfirmation(true)}
+      />
       {error && (
         <div className="logs-alert" role="alert">
           <AlertTriangle size={17} aria-hidden />
@@ -3509,7 +3569,7 @@ function AdminDashboard() {
             <button
               type="button"
               className={aiSettings?.enabled ? 'admin-kill-switch is-enabled' : 'admin-kill-switch is-stopped'}
-              onClick={toggleAIEnabled}
+              onClick={() => void toggleAIEnabled()}
               disabled={!aiSettings || aiSettingsPending}
               role="switch"
               aria-checked={aiSettings?.enabled ?? false}

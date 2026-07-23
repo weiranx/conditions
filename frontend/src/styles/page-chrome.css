@@ -5,18 +5,18 @@
   width: 100vw;
   margin-left: calc(50% - 50vw);
   box-sizing: border-box;
-  min-height: 72px;
+  min-height: 68px;
   border-bottom: 1px solid color-mix(in oklch, var(--ui-line-strong) 38%, transparent);
-  background: color-mix(in oklch, var(--ui-bg) 94%, transparent);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, .5) inset, 0 16px 34px -32px rgba(19, 44, 28, .58);
-  -webkit-backdrop-filter: blur(20px) saturate(130%);
-  backdrop-filter: blur(20px) saturate(130%);
+  background: color-mix(in oklch, var(--ui-surface) 97%, var(--ui-bg));
+  box-shadow: inset 0 -1px color-mix(in oklch, var(--ui-line) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   font-family: var(--ssr-sans);
 }
 
 .ssr-product-nav-inner {
   width: min(var(--ui-content-width), calc(100% - 48px));
-  min-height: 72px;
+  min-height: 68px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -42,16 +42,16 @@
 
 .ssr-product-mark {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   flex: none;
   border: 1px solid color-mix(in oklch, var(--ui-brand) 44%, transparent);
-  border-radius: 11px;
-  background: linear-gradient(145deg, color-mix(in oklch, var(--ui-brand) 88%, white), var(--ui-brand-strong));
+  border-radius: 9px;
+  background: var(--ui-brand-strong);
   color: var(--ui-on-strong);
-  box-shadow: 0 9px 18px -11px var(--ui-brand-strong), inset 0 1px rgba(255, 255, 255, .24);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .18);
 }
 
 .ssr-product-mark::after {
@@ -93,21 +93,21 @@
 .ssr-product-links {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px;
-  border: 1px solid color-mix(in oklch, var(--ui-line) 78%, transparent);
-  border-radius: 13px;
-  background: color-mix(in oklch, var(--ui-surface) 68%, transparent);
-  box-shadow: 0 1px 0 color-mix(in oklch, white 62%, transparent) inset;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .ssr-product-links button {
   position: relative;
-  min-height: 39px;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 0 12px;
+  padding: 0 13px;
   border: 0;
   border-radius: var(--ui-radius-control);
   background: transparent;
@@ -127,9 +127,9 @@
 }
 
 .ssr-product-links button.is-active {
-  background: color-mix(in oklch, var(--ui-brand-soft) 88%, var(--ui-surface));
+  background: color-mix(in oklch, var(--ui-brand-soft) 72%, var(--ui-surface));
   color: var(--ui-brand-strong);
-  box-shadow: 0 1px 2px color-mix(in oklch, var(--ui-brand-strong) 10%, transparent), inset 0 0 0 1px color-mix(in oklch, var(--ui-brand) 15%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--ui-brand) 13%, transparent);
   cursor: default;
 }
 
@@ -147,8 +147,51 @@
 .status-shell > .settings-head h1,
 .page-shell-logs .settings-shell > .settings-head h2 {
   margin-top: 0;
-  font-size: 30px;
-  line-height: 1.15;
+  font-size: var(--ui-page-title-size);
+  font-weight: var(--ui-page-title-weight);
+  letter-spacing: var(--ui-page-title-tracking);
+  line-height: 1.02;
+}
+
+/* Keep the full wordmark while giving denser authenticated navigation room
+   before the phone layout takes over. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .ssr-product-nav-inner {
+    width: min(var(--ui-content-width), calc(100% - 32px));
+    gap: 14px;
+  }
+
+  .ssr-product-brand { gap: 9px; }
+  .ssr-product-brand-copy small { display: none; }
+
+  .ssr-product-links {
+    gap: 2px;
+    padding: 0;
+  }
+
+  .ssr-product-links button {
+    gap: 5px;
+    padding-inline: 9px;
+    font-size: 12px;
+  }
+
+  /* Signed-in navigation can add Watches, History, and Admin. At tablet
+     widths, trade the wordmark for an evenly distributed labeled nav so the
+     final actions never disappear behind the shell's overflow clipping. */
+  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-brand {
+    display: none;
+  }
+
+  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-links {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+
+  .ssr-product-nav:has(.ssr-product-links button:nth-child(5)) .ssr-product-links button {
+    min-width: 0;
+    justify-content: center;
+  }
 }
 
 /* Keep the full wordmark while giving denser authenticated navigation room
@@ -269,6 +312,8 @@
   .page-shell-logs .settings-shell { padding-top: 0; }
   .status-shell > .settings-head,
   .page-shell-logs .settings-shell > .settings-head { padding-top: 28px; }
+  .status-shell > .settings-head h1,
+  .page-shell-logs .settings-shell > .settings-head h2 { font-size: var(--ui-page-title-mobile-size); }
 }
 
 @media (max-width: 640px) and (prefers-reduced-motion: reduce) {

@@ -61,7 +61,7 @@
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--ssr-line);
-  border-radius: 7px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-line);
 }
 
@@ -106,7 +106,7 @@
   align-items: start;
   padding: 12px 14px;
   border: 1px solid var(--ssr-line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius-control);
   background: var(--ssr-surface-2);
 }
 
