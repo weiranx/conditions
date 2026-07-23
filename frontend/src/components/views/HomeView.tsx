@@ -35,6 +35,7 @@ import '../../styles/home-redesign.css';
 import { ProductNav } from './ProductNav';
 import { LegalLinks } from '../../app/legal-links';
 import { useProductFeatureFlags } from '../../contexts/feature-flags';
+import { useScrollReveal } from '../../hooks/useScrollReveal';
 import type { AppView } from '../../hooks/useUrlState';
 
 const FEATURED_PEAKS: Suggestion[] = [
@@ -179,6 +180,7 @@ export function HomeView({
   gpxEstimatedDurationHours,
 }: HomeViewProps) {
   const featureFlags = useProductFeatureFlags();
+  const revealRef = useScrollReveal<HTMLElement>();
   const submitSearch = async () => {
     const didSelectObjective = await handleSearchSubmit();
     if (didSelectObjective) navigateToPlanner();
@@ -198,7 +200,7 @@ export function HomeView({
         openTripToolView={openTripToolView}
       />
 
-      <main className="ssr-home">
+      <main className="ssr-home" ref={revealRef}>
         <section className="ssr-h-hero" aria-labelledby="home-hero-title">
           <div className="ssr-h-hero-contours" aria-hidden="true"><i /><i /><i /></div>
           <div className="ssr-h-hero-coordinates" aria-hidden="true">46.8523° N&nbsp;&nbsp; 121.7603° W</div>
@@ -341,7 +343,7 @@ export function HomeView({
           </a>
         </section>
 
-        <section className="ssr-h-signal-rail" aria-label="Conditions synthesized in every brief">
+        <section className="ssr-h-signal-rail" aria-label="Conditions synthesized in every brief" data-reveal>
           <div className="ssr-h-signal-rail-inner">
             <div className="ssr-h-signal-rail-intro">
               <span>One connected picture</span>
@@ -357,7 +359,7 @@ export function HomeView({
         </section>
 
         <section className="ssr-h-story" id="how-it-works" aria-labelledby="home-story-title">
-          <div className="ssr-h-story-head">
+          <div className="ssr-h-story-head" data-reveal>
             <div>
               <span className="ssr-h-eyebrow">Signal → window → decision</span>
               <h2 id="home-story-title">The mountain doesn’t change<br />one variable at a time.</h2>
@@ -368,7 +370,7 @@ export function HomeView({
             </p>
           </div>
 
-          <div className="ssr-h-story-grid">
+          <div className="ssr-h-story-grid" data-reveal>
             <article className="ssr-h-story-card ssr-h-signals-card">
               <div className="ssr-h-card-number">01 / Gather</div>
               <div className="ssr-h-card-icon"><Layers3 aria-hidden /></div>
@@ -412,7 +414,7 @@ export function HomeView({
         </section>
 
         <section className="ssr-h-report" aria-labelledby="home-report-title">
-          <div className="ssr-h-report-copy">
+          <div className="ssr-h-report-copy" data-reveal>
             <span className="ssr-h-eyebrow">A brief you can use</span>
             <h2 id="home-report-title">The answer first.<br />The evidence close behind.</h2>
             <p>
@@ -440,7 +442,7 @@ export function HomeView({
             </button>
           </div>
 
-          <div className="ssr-h-report-preview" aria-label="Example conditions brief for Mount Rainier">
+          <div className="ssr-h-report-preview" aria-label="Example conditions brief for Mount Rainier" data-reveal>
             <div className="ssr-h-preview-head">
               <div>
                 <span>Conditions brief</span>
@@ -477,7 +479,7 @@ export function HomeView({
         </section>
 
         <section className="ssr-h-new" aria-labelledby="home-new-title">
-          <div className="ssr-h-new-head">
+          <div className="ssr-h-new-head" data-reveal>
             <div>
               <span className="ssr-h-new-badge"><Sparkles size={12} aria-hidden /> New on the mountain</span>
               <h2 id="home-new-title">More ways to find—and keep—the better window.</h2>
@@ -488,7 +490,7 @@ export function HomeView({
             </p>
           </div>
 
-          <div className="ssr-h-new-grid">
+          <div className="ssr-h-new-grid" data-reveal>
             {featureFlags.objectiveWatch && <article className="ssr-h-new-card ssr-h-new-card-featured">
               <div className="ssr-h-new-card-top">
                 <span className="ssr-h-new-card-icon"><BellRing aria-hidden /></span>
@@ -553,13 +555,13 @@ export function HomeView({
         </section>
 
         <section className="ssr-h-tools" aria-labelledby="home-tools-title">
-          <div className="ssr-h-tools-head">
+          <div className="ssr-h-tools-head" data-reveal>
             <span className="ssr-h-eyebrow">Beyond the first brief</span>
             <h2 id="home-tools-title">Keep planning as the questions get sharper.</h2>
             <p>Move from “Is Saturday viable?” to the route, start time, and fallback that make the most sense.</p>
           </div>
 
-          <div className="ssr-h-tools-grid">
+          <div className="ssr-h-tools-grid" data-reveal>
             {featureFlags.tripPlanning && <article>
               <div className="ssr-h-tool-icon"><CalendarRange aria-hidden /></div>
               <span>Compare days</span>
@@ -592,7 +594,7 @@ export function HomeView({
         </section>
 
         <section className="ssr-h-sources" aria-labelledby="home-sources-title">
-          <div className="ssr-h-sources-title">
+          <div className="ssr-h-sources-title" data-reveal>
             <div className="ssr-h-sources-icon"><Database aria-hidden /></div>
             <div>
               <span className="ssr-h-eyebrow">Transparent by design</span>
@@ -600,7 +602,7 @@ export function HomeView({
               <p>Every brief keeps source age, coverage, and limitations visible so you know what the result is—and what it isn’t.</p>
             </div>
           </div>
-          <div className="ssr-h-source-groups" aria-label="Data providers used by Backcountry Conditions">
+          <div className="ssr-h-source-groups" aria-label="Data providers used by Backcountry Conditions" data-reveal>
             {DATA_SOURCE_GROUPS.map((group, index) => (
               <article className="ssr-h-source-group" key={group.label}>
                 <div className="ssr-h-source-group-head">
@@ -618,7 +620,7 @@ export function HomeView({
               </article>
             ))}
           </div>
-          <div className="ssr-h-source-ai">
+          <div className="ssr-h-source-ai" data-reveal>
             <Sparkles size={16} aria-hidden />
             <p><strong>Optional AI synthesis</strong> Models from OpenAI, Anthropic, or Kimi turn the structured source data into briefings and follow-up answers when AI is enabled. Official provider data remains visible and authoritative.</p>
           </div>
@@ -629,7 +631,7 @@ export function HomeView({
           </div>
         </section>
 
-        <section className="ssr-h-cta" aria-labelledby="home-cta-title">
+        <section className="ssr-h-cta" aria-labelledby="home-cta-title" data-reveal>
           <div className="ssr-h-cta-mark" aria-hidden><Mountain /></div>
           <div>
             <span className="ssr-h-eyebrow">Your plan starts here</span>

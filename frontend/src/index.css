@@ -22,11 +22,19 @@ html {
   scrollbar-color: var(--ssr-line-strong) transparent;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-optical-sizing: auto;
+  /* Soften light/dark theme switches. */
+  transition: background-color 240ms ease, color 240ms ease;
 }
 
 h1,

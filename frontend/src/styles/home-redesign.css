@@ -471,11 +471,76 @@
 .ssr-h-disclaimer { max-width: 650px; display: flex; align-items: flex-start; gap: 9px; font-size: 11px; line-height: 1.55; }
 .ssr-h-disclaimer svg { flex: 0 0 auto; margin-top: 1px; color: var(--ssr-caution-ink); }
 
+/* ---------- MOTION ---------- */
+@keyframes ssr-h-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ssr-h-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ssr-h-builder-in {
+  from { opacity: 0; transform: translateY(26px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ssr-h-contours-in {
+  from { opacity: 0; }
+  to { opacity: .11; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ssr-h-hero-contours { animation: ssr-h-contours-in 1400ms ease 250ms both; }
+  .ssr-h-hero-coordinates { animation: ssr-h-fade 900ms ease 650ms both; }
+  .ssr-h-kicker { animation: ssr-h-rise 620ms cubic-bezier(.22, 1, .36, 1) 60ms both; }
+  .ssr-h-hero h1 { animation: ssr-h-rise 680ms cubic-bezier(.22, 1, .36, 1) 140ms both; }
+  .ssr-h-hero-copy > p { animation: ssr-h-rise 680ms cubic-bezier(.22, 1, .36, 1) 230ms both; }
+  .ssr-h-proof { animation: ssr-h-rise 680ms cubic-bezier(.22, 1, .36, 1) 320ms both; }
+  .ssr-h-hero-actions { animation: ssr-h-rise 680ms cubic-bezier(.22, 1, .36, 1) 400ms both; }
+  .ssr-h-builder { animation: ssr-h-builder-in 760ms cubic-bezier(.22, 1, .36, 1) 260ms both; }
+  .ssr-h-scroll { animation: ssr-h-fade 800ms ease 900ms both; }
+}
+
+/* Arrow nudge on interactive CTAs. */
+.ssr-h-hero-actions button svg,
+.ssr-h-go svg:not(.spin),
+.ssr-h-inline-cta svg,
+.ssr-h-new-card-copy button svg,
+.ssr-h-tools-grid button svg,
+.ssr-h-cta-actions button svg { transition: transform var(--ui-motion-fast); }
+.ssr-h-hero-actions button:hover svg,
+.ssr-h-go:hover:not(:disabled) svg:not(.spin),
+.ssr-h-inline-cta:hover svg,
+.ssr-h-new-card-copy button:hover svg,
+.ssr-h-tools-grid button:hover svg,
+.ssr-h-cta-actions button:hover svg { transform: translateX(3px); }
+
+/* Gentle lift on the "what's new" cards. */
+.ssr-h-new-card { transition: transform var(--ui-motion-medium), box-shadow var(--ui-motion-medium), border-color var(--ui-motion-fast); }
+.ssr-h-new-card:hover { transform: translateY(-3px); border-color: var(--ssr-line-strong); box-shadow: var(--ui-shadow-md); }
+.ssr-h-new-card-featured:hover { border-color: rgba(221, 239, 225, .3); box-shadow: 0 40px 78px -44px rgba(6, 31, 16, .95); }
+
+/* Scroll reveal — only active once the useScrollReveal hook arms the page,
+   and never armed for reduced-motion users. */
+.ssr-home[data-reveal-armed] [data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 640ms ease, transform 640ms cubic-bezier(.22, 1, .36, 1);
+}
+.ssr-home[data-reveal-armed] [data-reveal].is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ssr-h-hero::before { animation: none; }
   .ssr-h-scroll svg { animation: none; }
   .ssr-h-go { transition: none; }
   .ssr-h-hero-actions button, .ssr-h-inline-cta { transition: none; }
+  .ssr-h-new-card { transition: none; }
+  .ssr-h-new-card:hover { transform: none; }
+  .ssr-home[data-reveal-armed] [data-reveal] { opacity: 1; transform: none; transition: none; }
 }
 
 @media (max-width: 980px) {
