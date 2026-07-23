@@ -18,7 +18,6 @@ import {
   PencilLine,
   Send,
   FileCheck2,
-  ArrowDown,
 } from 'lucide-react';
 import { LocationMarker, MapUpdater, CtrlScrollZoom, RouteMapOverlay } from '../../app/map-components';
 import {
@@ -132,10 +131,10 @@ export function PlannerMapSection({
       workflowDetail = 'Some source data is old. Update before relying on this report.';
       WorkflowStateIcon = RefreshCw;
     } else {
-      workflowTitle = 'Read-only report';
+      workflowTitle = readOnly ? 'Generated report' : 'Report ready';
       workflowDetail = readOnly
-        ? 'This saved snapshot cannot be edited.'
-        : 'Plan inputs cannot be edited after generation.';
+        ? 'This saved snapshot is read-only. Choose New report to check current data.'
+        : 'Inputs are locked. Choose New report to edit the plan.';
       WorkflowStateIcon = FileCheck2;
     }
   } else if (objectiveReady) {
@@ -151,20 +150,6 @@ export function PlannerMapSection({
     onEditPlan();
     setMobileMapControlsExpanded(() => true);
     try { window.localStorage.setItem('summitsafe:mobile-controls-expanded', 'true'); } catch { /* ignore */ }
-  };
-
-  const handleViewReport = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const report = document.getElementById('planner-section-decision');
-    if (!report) return;
-    if (event.detail === 0) {
-      const heading = report.querySelector<HTMLElement>('h2');
-      if (heading) {
-        heading.tabIndex = -1;
-        heading.focus({ preventScroll: true });
-      }
-    }
-    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-    report.scrollIntoView({ behavior, block: 'start' });
   };
 
   const handleReviewTiming = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -185,7 +170,7 @@ export function PlannerMapSection({
     <section className={`map-shell ${locked ? 'has-report' : ''}`}>
       <div
         id="planner-plan-workflow"
-        className={`planner-flowbar ${locked ? 'is-current' : objectiveReady ? 'is-ready' : 'is-awaiting'}`}
+        className={`planner-flowbar ${locked ? 'is-current' : objectiveReady ? 'is-ready' : 'is-awaiting'} ${loading ? 'is-loading' : ''} ${refreshRecommended ? 'is-refresh-needed' : ''} ${readOnly ? 'is-read-only' : ''}`}
       >
         <ol className="planner-flow-steps" aria-label="Planning progress">
           {workflowSteps.map((step, index) => {
@@ -230,24 +215,6 @@ export function PlannerMapSection({
             <div className="map-report-actions">
               {locked ? (
                 <>
-                  {refreshRecommended && (
-                    <button
-                      type="button"
-                      className="action-btn plan-action-primary plan-refresh-report"
-                      onClick={handleRetryFetch}
-                      disabled={loading}
-                    >
-                      <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Refreshing…' : 'Refresh report'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={`action-btn ${refreshRecommended ? 'plan-saved-report' : 'plan-view-report plan-action-primary'}`}
-                    onClick={handleViewReport}
-                    title="Jump to the report verdict and conditions"
-                  >
-                    <ArrowDown size={14} /> {refreshRecommended ? 'View saved report' : 'View report'}
-                  </button>
                   <button
                     type="button"
                     className="action-btn"
@@ -258,13 +225,7 @@ export function PlannerMapSection({
                     <PencilLine size={14} /> New report
                   </button>
                   {!readOnly && !refreshRecommended && (
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={handleRetryFetch}
-                      disabled={loading}
-                      title="Refresh conditions without changing the report plan"
-                    >
+                    <button type="button" className="action-btn" onClick={handleRetryFetch} disabled={loading}>
                       <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Updating…' : 'Update report'}
                     </button>
                   )}
@@ -374,7 +335,7 @@ export function PlannerMapSection({
         )}
       </div>
 
-      <div id="planner-timing-controls" className={`map-actions ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
+      <div id="planner-timing-controls" className={`map-actions ${locked ? 'is-locked' : ''} ${mobileMapControlsExpanded ? '' : 'is-collapsed'}`}>
         <button
           type="button"
           className="mobile-map-controls-btn"

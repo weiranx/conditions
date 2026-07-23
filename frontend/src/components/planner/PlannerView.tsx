@@ -563,6 +563,8 @@ function PlannerViewComponent(props: PlannerViewProps) {
 
     // Decision / safety
     decision,
+    decisionActionLine,
+    localizeUnitText,
 
     // Freshness warning
     hasFreshnessWarning,
@@ -642,6 +644,37 @@ function PlannerViewComponent(props: PlannerViewProps) {
     && multiDayForecastRows.length >= 2;
   const reportGeneratedAtLabel = formatGeneratedAt(reportGeneratedAt);
   const reportResumeHandledRef = React.useRef(false);
+  const reportScore = safetyData ? Math.round(safetyData.safety.score) : null;
+  const reportConfidence = typeof safetyData?.safety.confidence === 'number'
+    ? Math.round(safetyData.safety.confidence)
+    : null;
+  const decisionTone = decision?.level.toLowerCase().replace('-', '') || 'go';
+
+  const scrollToFullReport = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const shouldMoveFocus = event.detail === 0;
+    const revealReport = () => {
+      const report = document.getElementById('planner-section-decision');
+      if (!report) return false;
+      if (shouldMoveFocus) {
+        const heading = report.querySelector<HTMLElement>('h2');
+        if (heading) {
+          heading.tabIndex = -1;
+          heading.focus({ preventScroll: true });
+        }
+      }
+      const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      report.scrollIntoView({ behavior, block: 'start' });
+      return true;
+    };
+    if (revealReport()) return;
+    const root = document.getElementById('planner-main-content');
+    if (!root) return;
+    const observer = new MutationObserver(() => {
+      if (revealReport()) observer.disconnect();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    window.setTimeout(() => observer.disconnect(), 4000);
+  };
 
   React.useEffect(() => {
     if (!safetyData) {
@@ -650,7 +683,7 @@ function PlannerViewComponent(props: PlannerViewProps) {
     }
     if (loading || reportResumeHandledRef.current) return;
     const requestedSectionId = parseReportSectionHash(window.location.hash);
-    const defaultSectionId = 'planner-section-decision';
+    const defaultSectionId = 'planner-decision-overview';
     const scrollToSection = (sectionId: string) => {
       const report = document.getElementById(sectionId);
       if (!report) return false;
@@ -735,6 +768,94 @@ function PlannerViewComponent(props: PlannerViewProps) {
         />
       )}
 
+      {loading && !safetyData && <ForecastLoading showAvalanche={featureFlags.avalancheDetails} />}
+
+      {loading && safetyData && (
+        <div className="loading-state inline-loading-state" role="status" aria-live="polite">
+          <strong>Refreshing conditions…</strong>
+          <span>Existing report remains visible until fresh data arrives.</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="error-banner" role="alert" aria-live="assertive">
+          <h3>System Alert</h3>
+          <p>{error}</p>
+          {hasObjective && (
+            <div className="error-banner-actions">
+              <button type="button" className="settings-btn" onClick={handleRetryFetch}>
+                Retry Data Fetch
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasObjective && safetyData && decision && reportScore !== null && (
+        <section
+          id="planner-decision-overview"
+          className={`planner-decision-overview ${decisionTone}`}
+          aria-labelledby="planner-decision-overview-title"
+          style={{ '--planner-score-color': getScoreColor(reportScore, safetyData.safety.tier) } as React.CSSProperties}
+        >
+          <div className="planner-decision-primary">
+            <div className="planner-decision-status-row">
+              <span className="planner-decision-label">Current decision</span>
+              <strong>{decision.level.replace('-', ' ')}</strong>
+            </div>
+            <h2 id="planner-decision-overview-title">{decision.headline}</h2>
+            {decisionActionLine && <p><b>Required adjustment:</b> {localizeUnitText(decisionActionLine)}</p>}
+          </div>
+          <dl className="planner-decision-facts">
+            <div>
+              <dt>Safety score</dt>
+              <dd><b>{reportScore}</b><span>/ 100</span></dd>
+            </div>
+            <div>
+              <dt>Evidence</dt>
+              <dd>{reportConfidence === null ? 'Confidence unavailable' : `${reportConfidence}% confidence`}</dd>
+            </div>
+            <div className={hasFreshnessWarning ? 'is-warning' : ''}>
+              <dt>Freshness</dt>
+              <dd>{hasFreshnessWarning ? freshnessWarningSummary : `Generated ${reportGeneratedAtLabel}`}</dd>
+            </div>
+          </dl>
+          <div className="planner-decision-actions">
+            {hasFreshnessWarning && !restoredFromHistory && (
+              <button type="button" className="secondary-btn" onClick={handleRetryFetch}>Refresh data</button>
+            )}
+            <button
+              type="button"
+              className="primary-btn"
+              aria-controls="planner-section-decision"
+              onClick={scrollToFullReport}
+            >
+              View full report
+            </button>
+          </div>
+        </section>
+      )}
+
+      {hasObjective && safetyData && (position.lat < 24.5 || position.lat > 49.5 || position.lng < -125 || position.lng > -66.5) && (
+        <section className="top-freshness-alert coverage-warning" role="status" aria-live="polite">
+          <strong>Limited coverage</strong>
+          <span>
+            Primary data sources (NOAA, NWS, SNOTEL{reportFeatureFlags.avalancheDetails ? ', avalanche centers' : ''}) are US-focused.
+            Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.
+          </span>
+        </section>
+      )}
+
+      {hasObjective && safetyData && safetyData.partialData && (
+        <section className="top-freshness-alert data-integrity-alert" role="alert" aria-live="assertive">
+          <strong>Incomplete data</strong>
+          <span>
+            {safetyData.apiWarning || 'One or more upstream data providers failed. Some report sections may be missing or degraded.'}
+            {' '}Treat the safety score and recommendations as lower-confidence until data recovers.
+          </span>
+        </section>
+      )}
+
       <PlannerMapSection
         position={position}
         activeBasemap={activeBasemap}
@@ -787,57 +908,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
         importedGpxRoute={importedGpxRoute}
         routeAnalysis={routeAnalysis}
       />
-
-      {loading && !safetyData && <ForecastLoading showAvalanche={featureFlags.avalancheDetails} />}
-
-      {loading && safetyData && (
-        <div className="loading-state inline-loading-state" role="status" aria-live="polite">
-          <strong>Refreshing conditions…</strong>
-          <span>Existing report remains visible until fresh data arrives.</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="error-banner" role="alert" aria-live="assertive">
-          <h3>System Alert</h3>
-          <p>{error}</p>
-          {hasObjective && (
-            <div className="error-banner-actions">
-              <button type="button" className="settings-btn" onClick={handleRetryFetch}>
-                Retry Data Fetch
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-
-      {hasObjective && safetyData && decision && hasFreshnessWarning && (
-        <section className="top-freshness-alert" role="status" aria-live="polite">
-          <strong>Data freshness warning</strong>
-          <span>{freshnessWarningSummary}</span>
-        </section>
-      )}
-
-      {hasObjective && safetyData && (position.lat < 24.5 || position.lat > 49.5 || position.lng < -125 || position.lng > -66.5) && (
-        <section className="top-freshness-alert coverage-warning" role="status" aria-live="polite">
-          <strong>Limited coverage</strong>
-          <span>
-            Primary data sources (NOAA, NWS, SNOTEL{reportFeatureFlags.avalancheDetails ? ', avalanche centers' : ''}) are US-focused.
-            Forecasts, alerts, and snowpack data outside the US may be degraded or unavailable.
-          </span>
-        </section>
-      )}
-
-      {hasObjective && safetyData && safetyData.partialData && (
-        <section className="top-freshness-alert data-integrity-alert" role="alert" aria-live="assertive">
-          <strong>Incomplete data</strong>
-          <span>
-            {safetyData.apiWarning || 'One or more upstream data providers failed. Some report sections may be missing or degraded.'}
-            {' '}Treat the safety score and recommendations as lower-confidence until data recovers.
-          </span>
-        </section>
-      )}
 
       {hasObjective && safetyData && decision && (
         <section className="data-grid" aria-label="Conditions report">

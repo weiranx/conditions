@@ -1086,40 +1086,36 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           <span>{safetyData.safety.tier || 'Conditions'} · out of 100</span>
         </div>
       </div>
-      {/* OBJECTIVE HEADER */}
-      <header className="ssr-hdr">
-        <div className="ssr-hdr-title">
-          <span className="ssr-hdr-icon">
-            <Mountain size={24} />
-          </span>
-          <h1>
-            {objectiveName || 'Objective'}
-            <span className="ssr-sub">
-              {props.formatIsoDateLabel(props.forecastDate)} · {region} · {safetyData.weather.description || 'Backcountry'}
-            </span>
-          </h1>
+      <header className="ssr-report-context" aria-label="Report context">
+        <div className="ssr-report-context-copy">
+          <p className="ssr-report-context-kicker">Conditions report</p>
+          <p className="ssr-report-context-meta">
+            <span>{props.formatIsoDateLabel(props.forecastDate)}</span>
+            <span>{region}</span>
+            <span>{safetyData.weather.description || 'Backcountry'}</span>
+          </p>
         </div>
-        <div className="ssr-hdr-stats">
-          <div className="ssr-hdr-stat">
-            <div className="ssr-k">Elevation</div>
-            <div className="ssr-v">{formatElevationDisplay(objectiveElevationFt)}</div>
+        <dl className="ssr-report-context-facts">
+          <div>
+            <dt>Elevation</dt>
+            <dd>{formatElevationDisplay(objectiveElevationFt)}</dd>
           </div>
-          <div className="ssr-hdr-stat">
-            <div className="ssr-k">Start</div>
-            <div className="ssr-v">{displayStartTime}</div>
+          <div>
+            <dt>Start</dt>
+            <dd>{displayStartTime}</dd>
           </div>
-          <div className="ssr-hdr-stat">
-            <div className="ssr-k">Window</div>
-            <div className="ssr-v">{travelWindowHoursLabel}</div>
+          <div>
+            <dt>Window</dt>
+            <dd>{travelWindowHoursLabel}</dd>
           </div>
-          <div className="ssr-hdr-stat">
-            <div className="ssr-k">Return</div>
-            <div className="ssr-v">
+          <div>
+            <dt>Return</dt>
+            <dd>
               {returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : '—'}
               {returnExtendsPastMidnight ? <small>+1</small> : null}
-            </div>
+            </dd>
           </div>
-        </div>
+        </dl>
       </header>
 
       {jumpSections.length > 1 && (
