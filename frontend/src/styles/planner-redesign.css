@@ -497,15 +497,18 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
 }
 .ssr-jump-nav {
   display: flex;
-  gap: 20px;
+  align-items: center;
+  gap: 3px;
   overflow-x: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  padding: 5px;
+  border: 1px solid var(--ssr-line);
+  border-radius: 14px;
+  background: var(--ui-surface-glass);
+  box-shadow: var(--ui-shadow-sm);
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 .ssr-jump-nav-cue { display: none; }
 .ssr-jump-nav::-webkit-scrollbar { display: none; }
@@ -513,11 +516,10 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  min-height: 40px;
-  padding: 1px 0 0;
+  min-height: 34px;
+  padding: 0 12px;
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: 9px;
   background: transparent;
   color: var(--ssr-text-2);
   font-size: 11.5px;
@@ -526,16 +528,15 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--ui-motion-fast), color var(--ui-motion-fast);
 }
 .ssr-jump-chip:hover {
-  border-bottom-color: var(--ssr-line-strong);
-  background: transparent;
+  background: var(--ssr-surface-2);
   color: var(--ssr-text);
 }
 .ssr-jump-chip.active,
 .ssr-jump-chip[aria-current='location'] {
-  border-bottom-color: var(--ssr-brand-dark);
-  background: transparent;
+  background: var(--ssr-brand-bg);
   color: var(--ssr-brand-dark);
 }
 .ssr-report section[id], .ssr-jump-anchor { scroll-margin-top: 126px; }
@@ -2319,7 +2320,6 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
     border-left: 0;
   }
   .ssr-jump-nav-shell { top: 0; }
-  .ssr-jump-nav { gap: 18px; }
   .ssr-jump-chip { min-height: 42px; }
   .ssr-card-h {
     min-height: 54px;
@@ -2800,6 +2800,26 @@ html[data-theme="dark"] .ssr-card:hover { box-shadow: var(--ssr-section-shadow);
   background: var(--ssr-surface-3);
   color: var(--ssr-text-3);
 }
+.ssr-action-side { display: flex; flex-direction: column; align-items: flex-end; align-self: center; gap: 6px; }
+.ssr-action-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in oklch, var(--ssr-brand) 30%, var(--ssr-line));
+  border-radius: 999px;
+  background: var(--ssr-surface);
+  color: var(--ssr-brand-dark);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--ui-motion-fast), border-color var(--ui-motion-fast);
+}
+.ssr-action-jump:hover { border-color: var(--ssr-brand); background: var(--ssr-brand-bg); }
+.ssr-action-jump svg { transition: transform var(--ui-motion-fast); }
+.ssr-action-jump:hover svg { transform: translateX(2px); }
 .ssr-action.stop {
   border-color: color-mix(in oklch, var(--ssr-nogo) 35%, transparent);
   background: color-mix(in oklch, var(--ssr-nogo) 7%, transparent);

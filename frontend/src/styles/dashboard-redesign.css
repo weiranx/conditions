@@ -117,14 +117,17 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 1px solid color-mix(in oklch, var(--brief-accent) 32%, var(--d-line));
+  border: 0;
   border-radius: 50%;
-  background: color-mix(in oklch, var(--brief-accent) 8%, var(--d-surface));
+  /* Radial progress dial: the inner disc masks the conic track down to a ring. */
+  background:
+    radial-gradient(circle closest-side, color-mix(in oklch, var(--brief-accent) 6%, var(--d-surface)) calc(100% - 8.5px), transparent calc(100% - 7.5px)),
+    conic-gradient(var(--brief-accent) calc(var(--brief-score-pct, 0) * 1%), color-mix(in oklch, var(--brief-accent) 14%, var(--d-surface-3)) 0);
   color: var(--d-ink-3);
   font-family: var(--ssr-sans);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 1px var(--ui-line-highlight);
+  box-shadow: var(--ui-shadow-xs), inset 0 0 0 1px color-mix(in oklch, var(--brief-accent) 10%, transparent);
 }
 
 .ssr-dash-score b {
@@ -335,29 +338,30 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
 .ssr-dash-window-band {
   position: relative;
   display: grid;
-  gap: 2px;
+  gap: 3px;
   height: 54px;
   margin-top: 12px;
-  overflow: hidden;
+  overflow: visible;
   border-radius: var(--ui-radius-control);
-  background: var(--d-surface-3);
 }
 
 .ssr-dash-window-band span {
   min-width: 0;
-  background: color-mix(in oklch, var(--d-go) 38%, var(--d-surface));
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--d-go) 42%, var(--d-surface));
+  box-shadow: inset 0 1px color-mix(in oklch, white 30%, transparent);
 }
 
 .ssr-dash-window-band span.fair {
-  background: color-mix(in oklch, var(--d-warn) 39%, var(--d-surface));
+  background: color-mix(in oklch, var(--d-warn) 46%, var(--d-surface));
 }
 
 .ssr-dash-window-band span.poor {
-  background: color-mix(in oklch, var(--d-nogo) 26%, var(--d-surface));
+  background: color-mix(in oklch, var(--d-nogo) 34%, var(--d-surface));
 }
 
 .ssr-dash-window-band.is-blocked span:not(.good) {
-  background: color-mix(in srgb, var(--d-nogo) 28%, var(--d-surface));
+  background: color-mix(in srgb, var(--d-nogo) 34%, var(--d-surface));
 }
 
 .ssr-dash-window-band i {
@@ -367,6 +371,23 @@ html[data-theme="dark"] .ssr-dash-risk:hover {
   width: 1px;
   border-left: 1px dashed color-mix(in oklch, var(--d-ink) 48%, transparent);
   pointer-events: none;
+}
+
+.ssr-dash-window-hours {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.ssr-dash-window-hours span {
+  overflow: hidden;
+  color: var(--d-ink-3);
+  font-family: var(--ssr-mono);
+  font-size: 8.5px;
+  letter-spacing: -.02em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .ssr-dash-window-markers {

@@ -376,7 +376,7 @@ export function DashboardSummaryCard({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={score}
-            style={{ '--brief-score-color': scoreColor } as CSSProperties}
+            style={{ '--brief-score-color': scoreColor, '--brief-score-pct': score } as CSSProperties}
           >
             <b>{score}</b><span>/ 100</span>
           </div>
@@ -484,6 +484,15 @@ export function DashboardSummaryCard({
               })}
               {sunrisePosition !== null && <i className="sunrise-marker" style={{ left: `${sunrisePosition}%` }} />}
               {gustMarkerPosition !== null && <i className="wind-marker" style={{ left: `${gustMarkerPosition}%` }} />}
+            </div>
+            <div
+              className="ssr-dash-window-hours"
+              aria-hidden
+              style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(4px, 1fr))` }}
+            >
+              {travelWindowRows.map((row, index) => (
+                <span key={`${row.time}-hour-${index}`}>{formatClockForStyle(row.time, preferences.timeStyle).replace(':00', '')}</span>
+              ))}
             </div>
             <div className="ssr-dash-window-markers">
               {reportFeatureFlags.daylightTimeline && safetyData.solar && <span><Sunrise size={14} aria-hidden /> Sunrise {formatClockForStyle(safetyData.solar.sunrise, preferences.timeStyle)}</span>}

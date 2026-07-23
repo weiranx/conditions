@@ -937,7 +937,16 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     `${formatClockForStyle(s.start, preferences.timeStyle)}–${formatClockForStyle(s.end, preferences.timeStyle)}`;
 
   type PlanTone = 'stop' | 'shift' | 'pick' | 'prep';
-  const planActions: Array<{ tone: PlanTone; icon: React.ReactNode; title: string; detail?: string }> = [];
+  interface PlanAction {
+    tone: PlanTone;
+    icon: React.ReactNode;
+    title: string;
+    detail?: string;
+    /** Report section the user can act on this lever in. */
+    targetId?: string;
+    targetLabel?: string;
+  }
+  const planActions: PlanAction[] = [];
 
   // Hard stops — surface no-go blockers at the very top of the to-do list.
   (decision.blockers || []).forEach((b) =>
@@ -946,6 +955,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       icon: <ShieldAlert size={15} />,
       title: localizeUnitText(b),
       detail: 'No-go: change the objective, timing, or day; do not try to solve this hazard with gear alone.',
+      targetId: 'planner-section-alerts',
+      targetLabel: 'Open alerts',
     }),
   );
 
@@ -962,6 +973,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         detail: twi.nextCleanWindow
           ? `Next clean break is ${fmtSpan(twi.nextCleanWindow)} — re-time your start or pick another day.`
           : `Every hour trips a threshold${topFails ? ` (${topFails})` : ''}. Choose another day or a lower-consequence objective.`,
+        targetId: 'planner-section-start-times',
+        targetLabel: 'Compare start times',
       });
     } else if (twi.passHours < totalWindowHrs && twi.bestWindow) {
       planActions.push({
@@ -969,6 +982,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         icon: <Clock size={15} />,
         title: `Center your push on ${fmtSpan(twi.bestWindow)}`,
         detail: `${twi.passHours} of ${totalWindowHrs} hrs stay clean${topFails ? `; ${topFails} gate the rest` : ''}.`,
+        targetId: 'planner-section-travel',
+        targetLabel: 'See travel window',
       });
     }
   }
@@ -985,6 +1000,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           : windLoadingElevationFocus
             ? localizeUnitText(windLoadingElevationFocus)
             : undefined,
+      targetId: 'planner-section-wind',
+      targetLabel: 'See wind loading',
     });
   } else if (
     reportFeatureFlags.windLoadingDetails &&
@@ -992,7 +1009,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     windLoadingActionLine &&
     String(windLoadingLevel || '').toLowerCase() !== 'low'
   ) {
-    planActions.push({ tone: 'pick', icon: <Wind size={15} />, title: localizeUnitText(windLoadingActionLine) });
+    planActions.push({
+      tone: 'pick',
+      icon: <Wind size={15} />,
+      title: localizeUnitText(windLoadingActionLine),
+      targetId: 'planner-section-wind',
+      targetLabel: 'See wind loading',
+    });
   }
 
   // Prep for finishing in the dark.
@@ -1002,6 +1025,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       icon: <Sun size={15} />,
       title: 'Your plan runs past midnight',
       detail: 'Pack a headlamp and night layers, or move your start earlier.',
+      targetId: 'planner-section-start-times',
+      targetLabel: 'Compare start times',
     });
   }
 
@@ -1015,6 +1040,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       tone: 'prep',
       icon: <Package size={15} />,
       title: `Don't leave without: ${mustGear.map((g) => g.title).join(', ')}`,
+      targetId: 'planner-section-gear',
+      targetLabel: 'See gear list',
     });
   }
 
@@ -1044,6 +1071,10 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     { id: 'planner-section-score', label: 'Score', present: reportFeatureFlags.scoreBreakdown && Boolean(shouldRenderRankedCard('scoreTrace') && Array.isArray(safetyData.safety.factors) && safetyData.safety.factors.length > 0) },
     { id: 'planner-section-gear', label: 'Gear', present: reportFeatureFlags.gearRecommendations && Boolean(shouldRenderRankedCard('recommendedGear') && gearRecommendations.length > 0) },
   ].filter((s) => s.present);
+  const presentSectionIds = new Set(jumpSections.map((s) => s.id));
+  // Start-time comparison renders without a jump-nav chip; it is a valid lever
+  // target whenever the feature is on.
+  if (featureFlags.startTimeComparisons) presentSectionIds.add('planner-section-start-times');
   const jumpToSection = (id: string, moveFocus: boolean) => {
     const target = document.getElementById(id);
     if (!target) return;
@@ -1173,7 +1204,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
 
         {props.routeAnalysisSlot}
 
-        {featureFlags.startTimeComparisons && <StartTimeScenarioCard
+        {featureFlags.startTimeComparisons && <div id="planner-section-start-times" className="ssr-jump-anchor">
+        <StartTimeScenarioCard
           comparison={startTimeScenarioComparison}
           loading={startTimeScenariosLoading}
           error={startTimeScenariosError}
@@ -1185,7 +1217,8 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           onUseForNewReport={useStartTimeForNewReport}
           canGenerateMore={canGenerateMoreStartTimeScenarios}
           onGenerateMore={generateMoreStartTimeScenarios}
-        />}
+        />
+        </div>}
 
         {reportFeatureFlags.terrainWindow && <TerrainWindowCard
           travelRows={travelWindowRows}
@@ -1228,7 +1261,18 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
                       <span className="ssr-action-title">{a.title}</span>
                       {a.detail && <span className="ssr-action-detail">{a.detail}</span>}
                     </div>
-                    <span className="ssr-action-tag">{TONE_TAG[a.tone]}</span>
+                    <div className="ssr-action-side">
+                      <span className="ssr-action-tag">{TONE_TAG[a.tone]}</span>
+                      {a.targetId && a.targetLabel && presentSectionIds.has(a.targetId) && (
+                        <button
+                          type="button"
+                          className="ssr-action-jump"
+                          onClick={() => a.targetId && jumpToSection(a.targetId, true)}
+                        >
+                          {a.targetLabel} <ArrowRight size={12} aria-hidden />
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ol>

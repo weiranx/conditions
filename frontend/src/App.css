@@ -3331,6 +3331,70 @@ input {
   height: 100%;
 }
 
+/* Theme the stock Leaflet chrome to match the glass overlay controls. */
+.leaflet-bar {
+  border: 1px solid rgba(215, 210, 194, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(36, 44, 40, 0.12);
+  overflow: hidden;
+}
+
+.leaflet-bar a {
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #3a4a40;
+  border-bottom: 1px solid rgba(215, 210, 194, 0.4);
+  transition: background 0.15s ease;
+}
+
+.leaflet-bar a:last-child {
+  border-bottom: none;
+}
+
+.leaflet-bar a:hover {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.leaflet-bar a.leaflet-disabled {
+  background: rgba(255, 255, 255, 0.6);
+  color: rgba(58, 74, 64, 0.4);
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  border-radius: 999px;
+  box-shadow: 0 1px 6px rgba(36, 44, 40, 0.1);
+  padding: 3px 10px;
+  margin: 0 10px 10px 0;
+  font-size: 0.68rem;
+  color: #4a5a50;
+}
+
+.leaflet-control-attribution a {
+  color: #3a4a40;
+}
+
+.leaflet-control-scale-line {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(215, 210, 194, 0.35);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 1px 6px rgba(36, 44, 40, 0.1);
+  color: #4a5a50;
+  font-family: var(--font-data);
+  font-size: 0.68rem;
+  padding: 2px 6px;
+}
+
 /* ── Map overlay controls ─────────────────────────────────────── */
 
 .map-overlay {
