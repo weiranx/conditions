@@ -10,8 +10,9 @@ const { deriveTerrainCondition } = require('./terrain-condition');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.6.0',
+  scoreVersion: '2.7.0',
   maxScore: 100,
+  scorePrecision: 1,
 
   // Group scales intentionally sum to well over maxScore. Avalanche and
   // weather are kept at full strength because either alone can legitimately
@@ -92,6 +93,8 @@ const SCORING_CONFIG = {
       elevationBandSpread: 4,
     },
     wind: {
+      calmEffective: 20,
+      calmSustained: 10,
       severeImpact: 20,
       strongImpact: 12,
       moderateImpact: 6,
@@ -113,6 +116,7 @@ const SCORING_CONFIG = {
       gustGuardImpact: 6,
     },
     storm: {
+      peakNone: 20,
       peakHigh: 80,
       peakMid: 60,
       peakLow: 40,
@@ -230,10 +234,33 @@ const diminishingReturn = (raw, scale) => {
   return scale * (1 - Math.exp(-raw / scale));
 };
 
-// Shared lookup for the declarative threshold ladders below. 'min' ladders are
-// sorted descending and match the first tier where value >= tier.min (e.g.
-// visibility, airQuality). 'max' ladders are sorted ascending and match the
-// first tier where value <= tier.max (e.g. cold).
+const roundTo = (value, precision = SCORING_CONFIG.scorePrecision) => {
+  const multiplier = 10 ** precision;
+  return Math.round(value * multiplier) / multiplier;
+};
+
+// Linearly interpolate between calibrated anchors so small input changes
+// produce proportionate score changes instead of waiting for the next hard
+// threshold. The first/last anchors remain caps, and decisive hazard floors
+// below still enforce conservative tier ceilings.
+const interpolateImpact = (value, anchors) => {
+  if (!Number.isFinite(value) || !Array.isArray(anchors) || anchors.length === 0) {
+    return 0;
+  }
+  const sorted = [...anchors].sort((a, b) => a.value - b.value);
+  if (value <= sorted[0].value) return sorted[0].impact;
+  if (value >= sorted[sorted.length - 1].value) return sorted[sorted.length - 1].impact;
+
+  const upperIndex = sorted.findIndex((anchor) => value <= anchor.value);
+  const lower = sorted[upperIndex - 1];
+  const upper = sorted[upperIndex];
+  const position = (value - lower.value) / (upper.value - lower.value);
+  return roundTo(lower.impact + position * (upper.impact - lower.impact));
+};
+
+// Shared lookup for categorical threshold ladders. 'min' ladders are sorted
+// descending and match the first tier where value >= tier.min; 'max' ladders
+// are sorted ascending and match the first tier where value <= tier.max.
 const findTier = (value, ladder, mode) => {
   if (mode === 'max') {
     return ladder.find((tier) => value <= tier.max) || null;
@@ -557,48 +584,80 @@ const calculateSafetyScore = ({
     Number.isFinite(gust) ? gust : 0,
     weightedTrendPeakGust,
   );
-  if (effectiveWind >= T.wind.severeEffective || (Number.isFinite(wind) && wind >= T.wind.severeStart)) {
+  const sustainedWindImpact = interpolateImpact(wind, [
+    { value: T.wind.calmSustained, impact: 0 },
+    { value: T.wind.moderateStart, impact: T.wind.moderateImpact },
+    { value: T.wind.strongStart, impact: T.wind.strongImpact },
+    { value: T.wind.severeStart, impact: T.wind.severeImpact },
+  ]);
+  const effectiveWindImpact = interpolateImpact(effectiveWind, [
+    { value: T.wind.calmEffective, impact: 0 },
+    { value: T.wind.moderateEffective, impact: T.wind.moderateImpact },
+    { value: T.wind.strongEffective, impact: T.wind.strongImpact },
+    { value: T.wind.severeEffective, impact: T.wind.severeImpact },
+  ]);
+  const windImpact = Math.max(sustainedWindImpact, effectiveWindImpact);
+  if (windImpact >= T.wind.severeImpact) {
     applyFactor(
       'Wind',
-      T.wind.severeImpact,
+      windImpact,
       `Severe wind exposure expected (start wind ${Math.round(Number.isFinite(wind) ? wind : 0)} mph, gust ${Math.round(Number.isFinite(gust) ? gust : effectiveWind)} mph, trend peak ${Math.round(effectiveWind)} mph).`,
       'NOAA hourly forecast',
     );
-  } else if (effectiveWind >= T.wind.strongEffective || (Number.isFinite(wind) && wind >= T.wind.strongStart)) {
+  } else if (windImpact >= T.wind.strongImpact) {
     applyFactor(
       'Wind',
-      T.wind.strongImpact,
+      windImpact,
       `Strong winds expected (start wind ${Math.round(Number.isFinite(wind) ? wind : 0)} mph, gust ${Math.round(Number.isFinite(gust) ? gust : effectiveWind)} mph, trend peak ${Math.round(effectiveWind)} mph).`,
       'NOAA hourly forecast',
     );
-  } else if (effectiveWind >= T.wind.moderateEffective || (Number.isFinite(wind) && wind >= T.wind.moderateStart)) {
-    applyFactor('Wind', T.wind.moderateImpact, `Moderate wind signal (trend peak ${Math.round(effectiveWind)} mph) may affect exposed movement.`, 'NOAA hourly forecast');
+  } else if (windImpact > 0) {
+    applyFactor('Wind', windImpact, `Wind exposure (trend peak ${Math.round(effectiveWind)} mph) may affect exposed movement.`, 'NOAA hourly forecast');
   }
 
-  if (weightedSevereWindHours >= T.wind.durSevereHigh) {
-    applyFactor('Wind', T.wind.durSevereHighImpact, `${severeWindHours}/${trend.length} trend hours are severe wind windows (>=30 mph sustained or >=45 mph gust).`, 'NOAA hourly trend');
-  } else if (weightedSevereWindHours >= T.wind.durSevereLow) {
-    applyFactor('Wind', T.wind.durSevereLowImpact, `${severeWindHours}/${trend.length} trend hours show severe wind windows.`, 'NOAA hourly trend');
-  } else if (weightedStrongWindHours >= T.wind.durStrongHigh) {
-    applyFactor('Wind', T.wind.durStrongHighImpact, `${strongWindHours}/${trend.length} trend hours are windy (>=20 mph sustained or >=30 mph gust).`, 'NOAA hourly trend');
-  } else if (weightedStrongWindHours >= T.wind.durStrongLow) {
-    applyFactor('Wind', T.wind.durStrongLowImpact, `${strongWindHours}/${trend.length} trend hours are windy and may reduce margin on exposed terrain.`, 'NOAA hourly trend');
+  const severeWindDurationImpact = interpolateImpact(weightedSevereWindHours, [
+    { value: 0.5, impact: 0 },
+    { value: T.wind.durSevereLow, impact: T.wind.durSevereLowImpact },
+    { value: T.wind.durSevereHigh, impact: T.wind.durSevereHighImpact },
+  ]);
+  const strongWindDurationImpact = interpolateImpact(weightedStrongWindHours, [
+    { value: 1, impact: 0 },
+    { value: T.wind.durStrongLow, impact: T.wind.durStrongLowImpact },
+    { value: T.wind.durStrongHigh, impact: T.wind.durStrongHighImpact },
+  ]);
+  const windDurationImpact = Math.max(severeWindDurationImpact, strongWindDurationImpact);
+  if (windDurationImpact > 0) {
+    const durationMessage = severeWindDurationImpact >= strongWindDurationImpact
+      ? `${severeWindHours}/${trend.length} trend hours are severe wind windows.`
+      : `${strongWindHours}/${trend.length} trend hours are windy and may reduce margin on exposed terrain.`;
+    applyFactor('Wind', windDurationImpact, durationMessage, 'NOAA hourly trend');
   }
 
-  if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= T.storm.peakHigh) {
-    applyFactor('Storm', T.storm.peakHighImpact, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= T.storm.peakMid) {
-    applyFactor('Storm', T.storm.peakMidImpact, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
-  } else if (Number.isFinite(trendPeakPrecip) && trendPeakPrecip >= T.storm.peakLow) {
-    applyFactor('Storm', T.storm.peakLowImpact, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
+  const peakPrecipImpact = interpolateImpact(trendPeakPrecip, [
+    { value: T.storm.peakNone, impact: 0 },
+    { value: T.storm.peakLow, impact: T.storm.peakLowImpact },
+    { value: T.storm.peakMid, impact: T.storm.peakMidImpact },
+    { value: T.storm.peakHigh, impact: T.storm.peakHighImpact },
+  ]);
+  if (peakPrecipImpact > 0) {
+    applyFactor('Storm', peakPrecipImpact, `Peak precipitation chance in the window reaches ${Math.round(trendPeakPrecip)}%.`, 'NOAA hourly forecast');
   }
 
-  if (weightedHighPrecipHours >= T.storm.durHighHours) {
-    applyFactor('Storm', T.storm.durHighImpact, `${highPrecipHours}/${trend.length} trend hours are high precip windows (>=60%).`, 'NOAA hourly trend');
-  } else if (weightedHighPrecipHours >= T.storm.durMidHours) {
-    applyFactor('Storm', T.storm.durMidImpact, `${highPrecipHours}/${trend.length} trend hours are high precip windows.`, 'NOAA hourly trend');
-  } else if (weightedModeratePrecipHours >= T.storm.durModHours) {
-    applyFactor('Storm', T.storm.durModImpact, `${moderatePrecipHours}/${trend.length} trend hours are moderate precip windows (>=40%).`, 'NOAA hourly trend');
+  const highPrecipDurationImpact = interpolateImpact(weightedHighPrecipHours, [
+    { value: 0.5, impact: 0 },
+    { value: T.storm.durMidHours, impact: T.storm.durMidImpact },
+    { value: T.storm.durHighHours, impact: T.storm.durHighImpact },
+  ]);
+  const moderatePrecipDurationImpact = interpolateImpact(weightedModeratePrecipHours, [
+    { value: 2, impact: 0 },
+    { value: T.storm.durModHours, impact: T.storm.durModImpact },
+  ]);
+  const precipDurationImpact = Math.max(highPrecipDurationImpact, moderatePrecipDurationImpact);
+  if (precipDurationImpact > 0) {
+    const durationMessage = highPrecipDurationImpact >= moderatePrecipDurationImpact
+      ? `${highPrecipHours}/${trend.length} trend hours are high precipitation windows.`
+      : `${moderatePrecipHours}/${trend.length} trend hours are moderate precipitation windows.`;
+    applyFactor('Storm', precipDurationImpact, durationMessage, 'NOAA hourly trend');
   }
 
   // Convective signal: fire on either the summary description or multiple
@@ -619,8 +678,10 @@ const calculateSafetyScore = ({
   }
 
   if (visibilityRiskScore !== null) {
-    const visibilityTier = findTier(visibilityRiskScore, T.visibility, 'min');
-    const visibilityImpact = visibilityTier ? visibilityTier.impact : 0;
+    const visibilityImpact = interpolateImpact(visibilityRiskScore, [
+      { value: 10, impact: 0 },
+      ...T.visibility.map((tier) => ({ value: tier.min, impact: tier.impact })),
+    ]);
     if (visibilityImpact > 0) {
       const activeHoursNote =
         visibilityActiveHours !== null && trend.length > 0
@@ -638,15 +699,18 @@ const calculateSafetyScore = ({
   }
 
   if (Number.isFinite(trendMinFeelsLike)) {
-    const coldTier = findTier(trendMinFeelsLike, T.cold, 'max');
-    if (coldTier === T.cold[0]) {
-      applyFactor('Cold', coldTier.impact, `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`, 'NOAA temp + windchill');
-    } else if (coldTier === T.cold[1]) {
-      applyFactor('Cold', coldTier.impact, `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
-    } else if (coldTier === T.cold[2]) {
-      applyFactor('Cold', coldTier.impact, `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`, 'NOAA temp + windchill');
-    } else if (coldTier === T.cold[3]) {
-      applyFactor('Cold', coldTier.impact, `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`, 'NOAA temp + windchill');
+    const coldImpact = trendMinFeelsLike <= T.cold[T.cold.length - 1].max
+      ? interpolateImpact(trendMinFeelsLike, T.cold.map((tier) => ({ value: tier.max, impact: tier.impact })))
+      : 0;
+    if (coldImpact > 0) {
+      const coldMessage = trendMinFeelsLike <= T.cold[0].max
+        ? `Minimum apparent temperature in the window is ${Math.round(trendMinFeelsLike)}F.`
+        : trendMinFeelsLike <= T.cold[1].max
+          ? `Very cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`
+          : trendMinFeelsLike <= T.cold[2].max
+            ? `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`
+            : `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`;
+      applyFactor('Cold', coldImpact, coldMessage, 'NOAA temp + windchill');
     }
   }
 
@@ -654,7 +718,7 @@ const calculateSafetyScore = ({
   const weightedColdOnlyHours = weightedColdExposureHours - weightedExtremeColdHours;
   const coldDurationImpact = Math.min(
     T.coldDuration.cap,
-    Math.round(weightedExtremeColdHours * T.coldDuration.extremeWeight + weightedColdOnlyHours * T.coldDuration.coldWeight),
+    roundTo(weightedExtremeColdHours * T.coldDuration.extremeWeight + weightedColdOnlyHours * T.coldDuration.coldWeight),
   );
   if (coldDurationImpact > 0) {
     const coldLabel = extremeColdHours > 0
@@ -835,13 +899,20 @@ const calculateSafetyScore = ({
 
   if (airQualityRelevantForScoring && Number.isFinite(usAqi)) {
     const aqiTier = findTier(usAqi, T.airQuality, 'min');
-    if (aqiTier) {
+    const aqiImpact = interpolateImpact(usAqi, [
+      { value: 50, impact: 0 },
+      { value: 100, impact: T.airQuality[T.airQuality.length - 1].impact },
+      { value: 150, impact: T.airQuality[T.airQuality.length - 2].impact },
+      { value: 200, impact: T.airQuality[T.airQuality.length - 3].impact },
+      { value: 300, impact: T.airQuality[0].impact },
+    ]);
+    if (aqiTier && aqiImpact > 0) {
       const aqiMessage =
         aqiTier.min >= 201 ? `Air quality is hazardous (US AQI ${Math.round(usAqi)}).`
         : aqiTier.min >= 151 ? `Air quality is unhealthy (US AQI ${Math.round(usAqi)}).`
         : aqiTier.min >= 101 ? `Air quality is unhealthy for sensitive groups (US AQI ${Math.round(usAqi)}).`
         : `Air quality is moderate (US AQI ${Math.round(usAqi)}). Consider reducing intensity for sustained exertion.`;
-      applyFactor('Air Quality', aqiTier.impact, aqiMessage, airQualityData?.source || 'Open-Meteo Air Quality');
+      applyFactor('Air Quality', aqiImpact, aqiMessage, airQualityData?.source || 'Open-Meteo Air Quality');
     }
   }
 
@@ -945,9 +1016,9 @@ const calculateSafetyScore = ({
   const groupImpacts = groupsToAggregate.reduce((acc, group) => {
     const rawImpact = rawGroupImpacts[group] || 0;
     const configuredScale = Number(SCORING_CONFIG.groupScales[group] || 100);
-    const raw = Number.isFinite(rawImpact) ? Math.round(rawImpact) : 0;
+    const raw = Number.isFinite(rawImpact) ? roundTo(rawImpact) : 0;
     const floor = groupImpactFloors[group] || null;
-    const effective = Math.max(Math.round(diminishingReturn(raw, configuredScale)), Number(floor?.effective || 0));
+    const effective = Math.max(roundTo(diminishingReturn(raw, configuredScale)), Number(floor?.effective || 0));
     const scale = Math.max(configuredScale, effective);
     // Keep capped/cap as aliases for backward compatibility
     acc[group] = {
@@ -961,7 +1032,7 @@ const calculateSafetyScore = ({
     return acc;
   }, {});
   const totalEffectiveImpact = Object.values(groupImpacts).reduce((sum, entry) => sum + Number(entry.effective || 0), 0);
-  const score = Math.max(0, Math.round(SCORING_CONFIG.maxScore - totalEffectiveImpact));
+  const score = Math.max(0, roundTo(SCORING_CONFIG.maxScore - totalEffectiveImpact));
 
   let confidence = 100;
   const confidenceReasons = [];

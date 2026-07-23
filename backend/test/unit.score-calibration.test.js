@@ -278,6 +278,64 @@ test('severe official alerts and very unhealthy air quality enforce decisive flo
   expect(unhealthyAir.tier).toBe('High');
 });
 
+test.each([
+  {
+    label: 'sustained wind',
+    safer: { weatherData: calmWeather({ windSpeed: 20 }) },
+    riskier: { weatherData: calmWeather({ windSpeed: 22 }) },
+  },
+  {
+    label: 'precipitation chance',
+    safer: {
+      weatherData: calmWeather({
+        trend: [
+          { temp: 58, wind: 5, gust: 9, precipChance: 45, condition: 'Chance Rain' },
+          ...calmWeather().trend.slice(1),
+        ],
+      }),
+    },
+    riskier: {
+      weatherData: calmWeather({
+        trend: [
+          { temp: 58, wind: 5, gust: 9, precipChance: 55, condition: 'Chance Rain' },
+          ...calmWeather().trend.slice(1),
+        ],
+      }),
+    },
+  },
+  {
+    label: 'visibility risk',
+    safer: { weatherData: calmWeather({ visibilityRisk: { score: 45, level: 'Elevated' } }) },
+    riskier: { weatherData: calmWeather({ visibilityRisk: { score: 55, level: 'High' } }) },
+  },
+  {
+    label: 'apparent temperature',
+    safer: { weatherData: calmWeather({ temp: 20, feelsLike: 20, trend: calmWeather().trend.map((row) => ({ ...row, temp: 20 })) }) },
+    riskier: { weatherData: calmWeather({ temp: 18, feelsLike: 18, trend: calmWeather().trend.map((row) => ({ ...row, temp: 18 })) }) },
+  },
+  {
+    label: 'air quality',
+    safer: { airQualityData: { status: 'ok', usAqi: 70, category: 'Moderate' } },
+    riskier: { airQualityData: { status: 'ok', usAqi: 90, category: 'Moderate' } },
+  },
+])('nearby $label inputs produce distinct, monotonic scores', ({ safer, riskier }) => {
+  const saferResult = calculateSafetyScore({ ...baseSafetyInput(), ...safer });
+  const riskierResult = calculateSafetyScore({ ...baseSafetyInput(), ...riskier });
+
+  expect(saferResult.score).toBeGreaterThan(riskierResult.score);
+  expect(saferResult.score - riskierResult.score).toBeLessThan(10);
+});
+
+test('the model retains fractional precision between display-level integer boundaries', () => {
+  const result = calculateSafetyScore({
+    ...baseSafetyInput(),
+    weatherData: calmWeather({ windSpeed: 21 }),
+  });
+
+  expect(Number.isInteger(result.score)).toBe(false);
+  expect(result.score).toBe(Number(result.score.toFixed(1)));
+});
+
 test('comfort remains Excellent for a complete ideal forecast', () => {
   const result = calculatePleasantnessScore({
     weatherData: calmWeather(),
