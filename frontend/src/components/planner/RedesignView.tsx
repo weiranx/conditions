@@ -37,6 +37,7 @@ import { getTemperatureBand } from '../../app/weather-display';
 import { computeFeelsLikeF } from '../../app/planner-helpers';
 import { AiInsightBriefing } from './AiInsightBriefing';
 import { DashboardSummaryCard } from './DashboardSummaryCard';
+import { ReportConsole } from './ReportConsole';
 import { WeatherHourPillStrip } from './WeatherHourPillStrip';
 import { WeatherTrendMiniChart } from './WeatherTrendMiniChart';
 import { WindDirectionArrow } from './WindDirectionArrow';
@@ -1123,6 +1124,50 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     });
   };
 
+  const reportLayoutToggle = (
+    <div className="ssr-view-toggle" role="group" aria-label="Report layout">
+      <button
+        type="button"
+        className={reportLayout === 'classic' ? 'active' : ''}
+        aria-pressed={reportLayout === 'classic'}
+        onClick={() => selectReportLayout('classic')}
+      >
+        <Rows3 size={14} aria-hidden /> Classic
+      </button>
+      <button
+        type="button"
+        className={reportLayout === 'dashboard' ? 'active' : ''}
+        aria-pressed={reportLayout === 'dashboard'}
+        onClick={() => selectReportLayout('dashboard')}
+      >
+        <LayoutGrid size={14} aria-hidden /> Dashboard
+      </button>
+    </div>
+  );
+  const reportContextFacts = (
+    <dl className="ssr-report-context-facts">
+      <div>
+        <dt>Elevation</dt>
+        <dd>{formatElevationDisplay(objectiveElevationFt)}</dd>
+      </div>
+      <div>
+        <dt>Start</dt>
+        <dd>{displayStartTime}</dd>
+      </div>
+      <div>
+        <dt>Window</dt>
+        <dd>{travelWindowHoursLabel}</dd>
+      </div>
+      <div>
+        <dt>Return</dt>
+        <dd>
+          {returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : '—'}
+          {returnExtendsPastMidnight ? <small>+1</small> : null}
+        </dd>
+      </div>
+    </dl>
+  );
+
   return (
     <div className={reportLayout === 'dashboard' ? 'ssr-report ssr-dashboard' : 'ssr-report'}>
       <div className="ssr-print-masthead" aria-hidden="true">
@@ -1136,58 +1181,73 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           <span>{safetyData.safety.tier || 'Conditions'} · out of 100</span>
         </div>
       </div>
-      <header className="ssr-report-context" aria-label="Report context">
-        <div className="ssr-report-context-copy">
-          <p className="ssr-report-context-kicker">Conditions report</p>
-          <p className="ssr-report-context-meta">
-            <span>{props.formatIsoDateLabel(props.forecastDate)}</span>
-            <span>{region}</span>
-            <span>{safetyData.weather.description || 'Backcountry'}</span>
-          </p>
-        </div>
-        <div className="ssr-report-context-side">
-          <div className="ssr-view-toggle" role="group" aria-label="Report layout">
-            <button
-              type="button"
-              className={reportLayout === 'classic' ? 'active' : ''}
-              aria-pressed={reportLayout === 'classic'}
-              onClick={() => selectReportLayout('classic')}
-            >
-              <Rows3 size={14} aria-hidden /> Classic
-            </button>
-            <button
-              type="button"
-              className={reportLayout === 'dashboard' ? 'active' : ''}
-              aria-pressed={reportLayout === 'dashboard'}
-              onClick={() => selectReportLayout('dashboard')}
-            >
-              <LayoutGrid size={14} aria-hidden /> Dashboard
-            </button>
+      {reportLayout === 'dashboard' ? (
+        <header className="ssr-console-bar" aria-label="Report console">
+          <div className="ssr-console-id">
+            <span className="ssr-console-led" aria-hidden="true" />
+            <div className="ssr-console-id-copy">
+              <p className="ssr-console-kicker">Field ops console</p>
+              <h2 className="ssr-console-name">{objectiveName || 'Backcountry objective'}</h2>
+              <p className="ssr-console-meta">
+                <span>{props.formatIsoDateLabel(props.forecastDate)}</span>
+                <span>{region}</span>
+                <span>{safetyData.weather.description || 'Backcountry'}</span>
+              </p>
+            </div>
           </div>
-          <dl className="ssr-report-context-facts">
-          <div>
-            <dt>Elevation</dt>
-            <dd>{formatElevationDisplay(objectiveElevationFt)}</dd>
+          <div className="ssr-console-side">
+            {reportContextFacts}
+            {reportLayoutToggle}
           </div>
-          <div>
-            <dt>Start</dt>
-            <dd>{displayStartTime}</dd>
+        </header>
+      ) : (
+        <header className="ssr-report-context" aria-label="Report context">
+          <div className="ssr-report-context-copy">
+            <p className="ssr-report-context-kicker">Conditions report</p>
+            <p className="ssr-report-context-meta">
+              <span>{props.formatIsoDateLabel(props.forecastDate)}</span>
+              <span>{region}</span>
+              <span>{safetyData.weather.description || 'Backcountry'}</span>
+            </p>
           </div>
-          <div>
-            <dt>Window</dt>
-            <dd>{travelWindowHoursLabel}</dd>
+          <div className="ssr-report-context-side">
+            {reportLayoutToggle}
+            {reportContextFacts}
           </div>
-          <div>
-            <dt>Return</dt>
-            <dd>
-              {returnTimeFormatted ? formatClockForStyle(returnTimeFormatted, preferences.timeStyle) : '—'}
-              {returnExtendsPastMidnight ? <small>+1</small> : null}
-            </dd>
-          </div>
-        </dl>
-        </div>
-      </header>
+        </header>
+      )}
 
+      {reportLayout === 'dashboard' && (
+        <ReportConsole
+          safetyData={safetyData}
+          decision={decision}
+          verdictSummary={
+            decision.blockers[0]
+            || decision.cautions[0]
+            || travelWindowInsights.summary
+            || safetyData.safety.explanations?.[0]
+            || decisionActionLine
+          }
+          scoreColor={getScoreColor(Math.round(safetyData.safety.score), safetyData.safety.tier)}
+          travelWindowRows={travelWindowRows}
+          travelWindowInsights={travelWindowInsights}
+          windowLabel={`${displayStartTime}${returnTimeFormatted ? `–${formatClockForStyle(returnTimeFormatted, preferences.timeStyle)}` : ''}${returnExtendsPastMidnight ? ' (+1)' : ''}`}
+          actions={rankedActions.map((a) => ({ tone: a.tone, tag: TONE_TAG[a.tone], title: a.title }))}
+          avalancheLabel={!avalancheRelevant ? 'N/A' : avalancheUnknown ? 'Unknown · verify' : (safetyData.avalanche?.risk || 'Low')}
+          avalancheTone={!avalancheRelevant ? '' : avalancheUnknown ? 'watch' : avyLevel >= 3 ? 'high' : avyLevel >= 2 ? 'watch' : 'low'}
+          heatRiskLabel={heatRiskLabel}
+          heatRiskTone={heatRiskPillClass}
+          fireRiskLabel={fireRiskLabel}
+          fireRiskTone={fireRiskPillClass}
+          aqiTone={airQualityPillClassFn(safetyData.airQuality?.usAqi)}
+          maxGustMph={preferences.maxWindGustMph || 35}
+          formatTempDisplay={formatTempDisplay}
+          formatWindDisplay={formatWindDisplay}
+          formatClock={(time) => formatClockForStyle(time, preferences.timeStyle)}
+        />
+      )}
+
+      <div className="ssr-classic-flow">
       {jumpSections.length > 1 && (
         <ReportJumpNav sections={jumpSections} onJump={jumpToSection} />
       )}
@@ -2990,6 +3050,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             </section>
           );
         })()}
+      </div>
       </div>
 
       <footer className="ssr-print-note">

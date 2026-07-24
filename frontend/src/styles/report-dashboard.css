@@ -1,11 +1,12 @@
 /* =========================================================
-   DASHBOARD REPORT LAYOUT
-   Toggled via .ssr-dashboard on .ssr-report. Re-lays the same
-   report cards as a bento grid of tiles instead of the classic
-   two-column scroll. Screen-only: print always uses classic.
+   DASHBOARD REPORT MODE — "Field ops console"
+   Toggled via .ssr-dashboard on .ssr-report. Dashboard mode
+   swaps the full report for ReportConsole.tsx: a single
+   fixed-height panel with no scrolling. The classic report
+   tree stays mounted (hidden) so print keeps working.
    ========================================================= */
 
-/* Layout toggle (visible in both layouts, lives in the report header). */
+/* Layout toggle (visible in both layouts). */
 .ssr-report-context-side {
   display: grid;
   justify-items: end;
@@ -55,102 +56,267 @@
   .ssr-report-context-side { justify-items: start; margin-top: 12px; }
 }
 
-@media screen and (min-width: 1081px) {
+/* The classic report tree flows unchanged when wrapped. */
+.ssr-classic-flow { display: contents; }
+
+@media screen {
+
+/* ---------------------------------------------------------
+   Console theme tokens. Scoped re-theme of the shared ssr/d
+   aliases so console children follow the console palette.
+   --------------------------------------------------------- */
+.ssr-report.ssr-dashboard {
+  --console-mono: var(--d-mono);
+  --console-canvas: #e7ebf1;
+  --console-grid-line: rgba(67, 88, 112, 0.07);
+  --console-panel: #fcfdfe;
+  --console-titlebar: #edf1f6;
+  --console-line: #c6d0dc;
+  --console-line-strong: #a9b6c6;
+  --console-ink: #1b2531;
+  --console-ink-2: #49596b;
+  --console-ink-3: #7a899a;
+  --console-accent: #2f6fed;
+  --console-bar-bg: #141e2b;
+  --console-bar-ink: #e9eff6;
+  --console-bar-ink-2: #93a3b8;
+  --console-led-ok: #22a35c;
+  --console-led-warn: #d9930d;
+  --console-led-bad: #d64541;
+
+  --ssr-surface: var(--console-panel);
+  --ssr-surface-2: var(--console-titlebar);
+  --ssr-surface-3: var(--console-titlebar);
+  --ssr-line: var(--console-line);
+  --ssr-line-strong: var(--console-line-strong);
+  --ssr-text: var(--console-ink);
+  --ssr-text-1: var(--console-ink);
+  --ssr-text-2: var(--console-ink-2);
+  --ssr-text-3: var(--console-ink-3);
+  --ssr-text-4: var(--console-ink-3);
+
+  --d-surface: var(--console-panel);
+  --d-surface-2: var(--console-canvas);
+  --d-surface-3: var(--console-titlebar);
+  --d-line: var(--console-line);
+  --d-line-2: var(--console-line-strong);
+  --d-ink: var(--console-ink);
+  --d-ink-2: var(--console-ink-2);
+  --d-ink-3: var(--console-ink-3);
+  --d-ink-4: var(--console-ink-3);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--console-line);
+  border-radius: 10px;
+  background:
+    linear-gradient(var(--console-grid-line) 1px, transparent 1px) 0 0 / 100% 26px,
+    linear-gradient(90deg, var(--console-grid-line) 1px, transparent 1px) 0 0 / 26px 100%,
+    var(--console-canvas);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-theme="dark"] .ssr-report.ssr-dashboard {
+  --console-canvas: #0a1020;
+  --console-grid-line: rgba(120, 150, 200, 0.055);
+  --console-panel: #121b2c;
+  --console-titlebar: #1a2438;
+  --console-line: #283550;
+  --console-line-strong: #3a4a6b;
+  --console-ink: #dde6f3;
+  --console-ink-2: #9fb0c8;
+  --console-ink-3: #6d7f9a;
+  --console-accent: #5b8def;
+  --console-bar-bg: #0b1322;
+  --console-bar-ink: #e6edf7;
+  --console-bar-ink-2: #8498b3;
+  --console-led-ok: #34c977;
+  --console-led-warn: #e8a812;
+  --console-led-bad: #e85d59;
+}
+
+/* Wide screens: the console is one viewport-height panel — no scroll. */
+@media (min-width: 1081px) {
   .ssr-report.ssr-dashboard {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    column-gap: 20px;
-    row-gap: 20px;
-    align-items: stretch;
-    grid-auto-flow: dense;
+    height: calc(100dvh - 96px);
+    min-height: 560px;
+    overflow: hidden;
+  }
+}
+
+/* In dashboard mode the classic report tree is screen-hidden. */
+.ssr-report.ssr-dashboard .ssr-classic-flow { display: none; }
+
+/* ---------------------------------------------------------
+   Console title bar — replaces the classic report header.
+   --------------------------------------------------------- */
+.ssr-console-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  padding: 13px 16px;
+  border: 1px solid var(--console-bar-bg);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 42%),
+    var(--console-bar-bg);
+  color: var(--console-bar-ink);
+}
+
+.ssr-console-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ssr-console-led {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--console-led-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--console-led-ok) 22%, transparent),
+    0 0 10px color-mix(in oklch, var(--console-led-ok) 65%, transparent);
+  animation: ssr-console-led-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes ssr-console-led-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssr-console-led { animation: none; }
+}
+
+.ssr-console-kicker {
+  margin: 0;
+  font-family: var(--console-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--console-bar-ink-2);
+}
+
+.ssr-console-name {
+  margin: 2px 0 0;
+  font-family: var(--ssr-display, var(--ssr-sans));
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.ssr-console-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin: 4px 0 0;
+  font-family: var(--console-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--console-bar-ink-2);
+}
+
+.ssr-console-meta span + span::before {
+  content: '//';
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+.ssr-console-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px 18px;
+}
+
+/* Facts become dark-panel readouts. */
+.ssr-console-side .ssr-report-context-facts {
+  display: flex;
+  gap: 0;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ssr-console-side .ssr-report-context-facts > div {
+  display: grid;
+  gap: 2px;
+  padding: 7px 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ssr-console-side .ssr-report-context-facts > div + div {
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ssr-console-side .ssr-report-context-facts dt {
+  font-family: var(--console-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--console-bar-ink-2);
+}
+
+.ssr-console-side .ssr-report-context-facts dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--console-bar-ink);
+  white-space: nowrap;
+}
+
+.ssr-console-side .ssr-report-context-facts dd small {
+  font-size: 9px;
+  margin-left: 2px;
+  color: var(--console-bar-ink-2);
+}
+
+/* Toggle sits on the dark bar. */
+.ssr-console-bar .ssr-view-toggle {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.ssr-console-bar .ssr-view-toggle button { color: var(--console-bar-ink-2); }
+.ssr-console-bar .ssr-view-toggle button:hover { color: var(--console-bar-ink); }
+
+.ssr-console-bar .ssr-view-toggle button.active {
+  background: var(--console-bar-ink);
+  color: var(--console-bar-bg);
+  box-shadow: none;
+}
+
+} /* end @media screen */
+
+/* ---------------------------------------------------------
+   Print: hide the console, restore the classic report flow.
+   --------------------------------------------------------- */
+@media print {
+  .ssr-console-bar,
+  .ssr-console { display: none; }
+
+  .ssr-report.ssr-dashboard {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow: visible;
   }
 
-  /* Flatten the classic column stacks so every card becomes a grid tile. */
-  .ssr-report.ssr-dashboard .ssr-main,
-  .ssr-report.ssr-dashboard .ssr-side,
-  .ssr-report.ssr-dashboard .ssr-report-footer {
-    display: contents;
-  }
-
-  /* Undo the merged-rail surface so rail cards stand alone as tiles. */
-  .ssr-report.ssr-dashboard .ssr-side > .ssr-card {
-    border: 1px solid var(--ssr-line);
-    border-radius: var(--ssr-section-radius);
-    box-shadow: var(--ssr-section-shadow);
-  }
-  .ssr-report.ssr-dashboard .ssr-side > .ssr-card + .ssr-card {
-    border-top: 1px solid var(--ssr-line);
-  }
-
-  /* Default tile: a third of the row. */
-  .ssr-report.ssr-dashboard .ssr-main > *,
-  .ssr-report.ssr-dashboard .ssr-side > *,
-  .ssr-report.ssr-dashboard .ssr-report-footer > * {
-    grid-column: span 4;
-    min-width: 0;
-  }
-
-  /* Verdict band across the top. */
-  .ssr-report.ssr-dashboard #planner-section-decision {
-    order: 0;
-    grid-column: 1 / -1;
-  }
-
-  /* KPI strip: daylight, heat, fire, air quality — four across. */
-  .ssr-report.ssr-dashboard .ssr-daylight-card,
-  .ssr-report.ssr-dashboard .ssr-heat-card,
-  .ssr-report.ssr-dashboard .ssr-fire-card,
-  .ssr-report.ssr-dashboard .ssr-aqi-card {
-    order: 1;
-    grid-column: span 3;
-  }
-
-  /* Action levers sit right under the KPI strip. */
-  .ssr-report.ssr-dashboard #planner-section-actions {
-    order: 2;
-    grid-column: 1 / -1;
-  }
-
-  /* Wide time-series sections. */
-  .ssr-report.ssr-dashboard #planner-section-travel,
-  .ssr-report.ssr-dashboard #planner-section-terrain-window,
-  .ssr-report.ssr-dashboard #planner-section-weather,
-  .ssr-report.ssr-dashboard #planner-section-start-times,
-  .ssr-report.ssr-dashboard #planner-section-route {
-    order: 3;
-    grid-column: 1 / -1;
-  }
-
-  /* Half-row tiles. */
-  .ssr-report.ssr-dashboard #planner-section-monitor,
-  .ssr-report.ssr-dashboard #planner-section-checks,
-  .ssr-report.ssr-dashboard #planner-section-alerts,
-  .ssr-report.ssr-dashboard #planner-section-elevation,
-  .ssr-report.ssr-dashboard #planner-section-wind,
-  .ssr-report.ssr-dashboard #planner-section-score {
-    order: 4;
-    grid-column: span 6;
-  }
-
-  /* Remaining evidence tiles keep the default third-row span. */
-  .ssr-report.ssr-dashboard #planner-section-avalanche,
-  .ssr-report.ssr-dashboard #planner-section-snowpack,
-  .ssr-report.ssr-dashboard #planner-section-observations,
-  .ssr-report.ssr-dashboard .ssr-terrain-card,
-  .ssr-report.ssr-dashboard .ssr-precip-card,
-  .ssr-report.ssr-dashboard .ssr-sources-card {
-    order: 5;
-  }
-
-  /* Gear is a long list — give it a full-width band at the end so it
-     never pairs with (and stretches) a short evidence tile. */
-  .ssr-report.ssr-dashboard #planner-section-gear {
-    order: 6;
-    grid-column: 1 / -1;
-  }
-
-  /* Tiles stretch to equal height within a row; inner cards fill. */
-  .ssr-report.ssr-dashboard .ssr-jump-anchor > .ssr-dash,
-  .ssr-report.ssr-dashboard .ssr-jump-anchor > .ssr-card {
-    height: 100%;
-  }
+  .ssr-report.ssr-dashboard .ssr-classic-flow { display: contents; }
 }

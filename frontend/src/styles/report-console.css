@@ -1,0 +1,478 @@
+/* =========================================================
+   FIELD OPS CONSOLE — single-screen dashboard view
+   Rendered by ReportConsole.tsx inside .ssr-report.ssr-dashboard.
+   One fixed-height panel: no scrolling, every module clips to
+   fit. Inherits --console-* tokens from report-dashboard.css.
+   ========================================================= */
+
+@media screen {
+
+.ssr-console {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 296px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Shared module chrome — squared instrument panel. */
+.ssr-console-mod {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--console-line);
+  border-radius: 6px;
+  background: var(--console-panel);
+  overflow: hidden;
+}
+
+.ssr-console-mod-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: none;
+  padding: 8px 12px;
+  background: var(--console-titlebar);
+  border-bottom: 1px solid var(--console-line);
+  font-family: var(--console-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--console-ink-2);
+}
+
+.ssr-console-h-meta {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--console-ink-3);
+  text-transform: none;
+}
+
+/* LED status dot. */
+.ssr-console-led-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--console-line-strong);
+}
+
+.ssr-console-led-dot.ok {
+  background: var(--console-led-ok);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--console-led-ok) 70%, transparent);
+}
+
+.ssr-console-led-dot.warn {
+  background: var(--console-led-warn);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--console-led-warn) 70%, transparent);
+}
+
+.ssr-console-led-dot.bad {
+  background: var(--console-led-bad);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--console-led-bad) 70%, transparent);
+}
+
+/* ---------------------------------------------------------
+   Score instrument (left column)
+   --------------------------------------------------------- */
+.ssr-console-score-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 14px;
+  text-align: center;
+}
+
+/* Ticked radial dial. */
+.ssr-console-dial {
+  position: relative;
+  width: clamp(120px, 12vw, 156px);
+  height: clamp(120px, 12vw, 156px);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, var(--console-panel) calc(100% - 11px), transparent calc(100% - 10px)),
+    conic-gradient(var(--brief-score-color, var(--console-accent)) calc(var(--brief-score-pct, 0) * 1%),
+      color-mix(in oklch, var(--brief-score-color, var(--console-accent)) 16%, var(--console-titlebar)) 0);
+  color: var(--console-ink-3);
+}
+
+.ssr-console-dial::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from -90deg,
+    var(--console-ink-3) 0deg 0.7deg,
+    transparent 0.7deg 30deg
+  );
+  opacity: 0.5;
+  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - 15px), #000 calc(100% - 14px), #000 calc(100% - 9px), transparent calc(100% - 8px));
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 15px), #000 calc(100% - 14px), #000 calc(100% - 9px), transparent calc(100% - 8px));
+  pointer-events: none;
+}
+
+.ssr-console-dial b {
+  font-family: var(--console-mono);
+  font-size: clamp(44px, 4.6vw, 58px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--brief-score-color, var(--console-ink));
+  font-variant-numeric: tabular-nums;
+}
+
+.ssr-console-dial.is-three-digit b { font-size: clamp(36px, 3.8vw, 46px); }
+
+.ssr-console-dial span {
+  font-family: var(--console-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+}
+
+.ssr-console-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--console-line);
+  border-radius: 3px;
+  font-family: var(--console-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ssr-console-chip.ok { color: var(--console-led-ok); border-color: color-mix(in oklch, var(--console-led-ok) 45%, var(--console-line)); }
+.ssr-console-chip.warn { color: var(--console-led-warn); border-color: color-mix(in oklch, var(--console-led-warn) 45%, var(--console-line)); }
+.ssr-console-chip.bad { color: var(--console-led-bad); border-color: color-mix(in oklch, var(--console-led-bad) 45%, var(--console-line)); }
+
+.ssr-console-score-tier {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--console-ink);
+}
+
+.ssr-console-score-meta {
+  font-family: var(--console-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--console-ink-3);
+}
+
+/* ---------------------------------------------------------
+   Verdict + travel window + actions (center column)
+   --------------------------------------------------------- */
+.ssr-console-verdict-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.ssr-console-verdict-body h3 {
+  margin: 0;
+  flex: none;
+  font-family: var(--ssr-display, var(--ssr-sans));
+  font-size: clamp(17px, 1.6vw, 22px);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.22;
+  color: var(--console-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ssr-console-verdict-body > p {
+  margin: 0;
+  flex: none;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--console-ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Travel window: segmented LED strip. */
+.ssr-console-window {
+  display: grid;
+  gap: 6px;
+  flex: none;
+  padding: 10px 12px;
+  border: 1px solid var(--console-line);
+  border-radius: 5px;
+  background: var(--console-titlebar);
+}
+
+.ssr-console-window-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--console-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--console-ink-3);
+}
+
+.ssr-console-window-label b { letter-spacing: 0.06em; }
+.ssr-console-window-label b.ok { color: var(--console-led-ok); }
+.ssr-console-window-label b.warn { color: var(--console-led-warn); }
+.ssr-console-window-label b.bad { color: var(--console-led-bad); }
+
+.ssr-console-window-band {
+  display: grid;
+  gap: 2px;
+  height: 18px;
+}
+
+.ssr-console-window-band span { border-radius: 1.5px; }
+
+.ssr-console-window-band span.ok { background: var(--console-led-ok); }
+.ssr-console-window-band span.warn { background: var(--console-led-warn); }
+.ssr-console-window-band span.bad { background: color-mix(in oklch, var(--console-led-bad) 78%, var(--console-panel)); }
+
+.ssr-console-window-hours {
+  display: grid;
+  gap: 2px;
+}
+
+.ssr-console-window-hours span {
+  font-family: var(--console-mono);
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  color: var(--console-ink-3);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Action rows. */
+.ssr-console-actions {
+  display: grid;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  align-content: start;
+}
+
+.ssr-console-actions li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--console-line);
+  min-width: 0;
+}
+
+.ssr-console-actions li:first-child { border-top: 0; }
+
+.ssr-console-action-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--console-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ssr-console-action-tag {
+  flex: none;
+  font-family: var(--console-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ssr-console-action-tag.ok { color: var(--console-led-ok); }
+.ssr-console-action-tag.warn { color: var(--console-led-warn); }
+.ssr-console-action-tag.bad { color: var(--console-led-bad); }
+.ssr-console-action-tag.neutral { color: var(--console-ink-3); }
+
+.ssr-console-allclear {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--console-led-ok);
+}
+
+/* ---------------------------------------------------------
+   KPI stack (right column)
+   --------------------------------------------------------- */
+.ssr-console-kpi-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.ssr-console-kpi {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'dot icon label value'
+    'dot icon sub sub';
+  align-items: center;
+  column-gap: 9px;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--console-line);
+}
+
+.ssr-console-kpi:first-child { border-top: 0; }
+
+.ssr-console-kpi .ssr-console-led-dot { grid-area: dot; }
+
+.ssr-console-kpi-icon {
+  grid-area: icon;
+  display: inline-flex;
+  color: var(--console-ink-3);
+}
+
+.ssr-console-kpi-label {
+  grid-area: label;
+  font-family: var(--console-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--console-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ssr-console-kpi-value {
+  grid-area: value;
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--console-ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ssr-console-kpi-sub {
+  grid-area: sub;
+  font-size: 10.5px;
+  color: var(--console-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------
+   Footer fact strip
+   --------------------------------------------------------- */
+.ssr-console-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 0;
+  border: 1px solid var(--console-line);
+  border-radius: 6px;
+  background: var(--console-panel);
+  overflow: hidden;
+}
+
+.ssr-console-fact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-left: 1px solid var(--console-line);
+  white-space: nowrap;
+}
+
+.ssr-console-fact:first-child { border-left: 0; }
+
+.ssr-console-fact dt {
+  font-family: var(--console-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--console-ink-3);
+}
+
+.ssr-console-fact dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--console-ink);
+}
+
+.ssr-console-fact-note {
+  flex: 1;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--console-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------
+   Narrow screens: stack modules, allow the page to scroll.
+   --------------------------------------------------------- */
+}
+
+@media screen and (max-width: 1080px) {
+  .ssr-console {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    gap: 12px;
+    height: auto;
+  }
+
+  .ssr-console-foot {
+    flex-wrap: wrap;
+  }
+
+  .ssr-console-fact { border-left: 0; border-top: 1px solid var(--console-line); }
+  .ssr-console-fact:first-child { border-top: 0; }
+}
