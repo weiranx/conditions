@@ -27,12 +27,21 @@ interface ConsoleKpi {
   value: string;
   sub?: string;
   tone?: string;
+  detailKey: string;
+  detailTitle: string;
 }
 
 interface ConsoleFact {
   label: string;
   value: string;
   tone?: string;
+  detailKey?: string;
+  detailTitle?: string;
+}
+
+export interface ConsoleDetailSection {
+  key: string;
+  label: string;
 }
 
 export interface ReportConsoleProps {
@@ -52,6 +61,8 @@ export interface ReportConsoleProps {
   fireRiskTone: string;
   aqiTone: string;
   maxGustMph: number;
+  detailSections: ConsoleDetailSection[];
+  onOpenDetail: (key: string, title: string) => void;
   formatTempDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatWindDisplay: (value: number | null | undefined, options?: { includeUnit?: boolean; precision?: number }) => string;
   formatClock: (time: string) => string;
@@ -89,10 +100,24 @@ export function ReportConsole({
   fireRiskTone,
   aqiTone,
   maxGustMph,
+  detailSections,
+  onOpenDetail,
   formatTempDisplay,
   formatWindDisplay,
   formatClock,
 }: ReportConsoleProps) {
+  const detailHandlers = (key: string, title: string) => ({
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-label': `Open full ${title} section`,
+    onClick: () => onOpenDetail(key, title),
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onOpenDetail(key, title);
+      }
+    },
+  });
   const score = Math.round(safetyData.safety.score);
   const tier = safetyData.safety.tier || 'Conditions';
   const levelTone = ledTone(decision.level);
@@ -119,6 +144,8 @@ export function ReportConsole({
       label: 'Daylight',
       value: safetyData.solar ? `${formatClock(safetyData.solar.sunrise)} – ${formatClock(safetyData.solar.sunset)}` : '—',
       sub: dayLengthLabel,
+      detailKey: 'daylight',
+      detailTitle: 'Daylight',
     },
     {
       key: 'temp',
@@ -127,6 +154,8 @@ export function ReportConsole({
       value: formatTempDisplay(safetyData.weather.temp),
       sub: heatRiskLabel ? `Heat: ${heatRiskLabel}` : undefined,
       tone: heatRiskTone,
+      detailKey: 'heat',
+      detailTitle: 'Heat risk',
     },
     {
       key: 'wind',
@@ -135,6 +164,8 @@ export function ReportConsole({
       value: formatWindDisplay(peakGust),
       sub: `Limit ${formatWindDisplay(maxGustMph)}`,
       tone: peakGust >= maxGustMph ? 'high' : peakGust >= maxGustMph * 0.7 ? 'watch' : 'low',
+      detailKey: 'wind',
+      detailTitle: 'Wind loading',
     },
     {
       key: 'fire',
@@ -142,6 +173,8 @@ export function ReportConsole({
       label: 'Fire risk',
       value: fireRiskLabel || 'Not rated',
       tone: fireRiskTone,
+      detailKey: 'fire',
+      detailTitle: 'Fire risk',
     },
     {
       key: 'aqi',
@@ -150,6 +183,8 @@ export function ReportConsole({
       value: typeof aqi === 'number' ? `AQI ${Math.round(aqi)}` : '—',
       sub: safetyData.airQuality?.category || undefined,
       tone: aqiTone,
+      detailKey: 'aqi',
+      detailTitle: 'Air quality',
     },
     {
       key: 'snow',
@@ -157,18 +192,22 @@ export function ReportConsole({
       label: 'Snowpack',
       value: snowDepth || '—',
       sub: snowSwe || undefined,
+      detailKey: 'snowpack',
+      detailTitle: 'Snowpack',
     },
   ];
 
   const alertCount = Number(safetyData.alerts?.activeCount) || 0;
   const facts: ConsoleFact[] = [
-    { label: 'Avalanche', value: avalancheLabel, tone: avalancheTone },
-    { label: 'Alerts', value: alertCount ? `${alertCount} active` : 'None', tone: alertCount ? 'watch' : 'low' },
-    { label: 'Peak precip', value: `${Math.round(peakPrecip)}%`, tone: peakPrecip >= 50 ? 'watch' : 'low' },
+    { label: 'Avalanche', value: avalancheLabel, tone: avalancheTone, detailKey: 'avalanche', detailTitle: 'Avalanche' },
+    { label: 'Alerts', value: alertCount ? `${alertCount} active` : 'None', tone: alertCount ? 'watch' : 'low', detailKey: 'alerts', detailTitle: 'Cautions & alerts' },
+    { label: 'Peak precip', value: `${Math.round(peakPrecip)}%`, tone: peakPrecip >= 50 ? 'watch' : 'low', detailKey: 'precip', detailTitle: 'Precipitation' },
     {
       label: 'Travel window',
       value: `${travelWindowInsights.passHours}/${travelWindowRows.length} hrs clear`,
       tone: travelWindowInsights.passHours === 0 ? 'high' : travelWindowInsights.passHours === travelWindowRows.length ? 'low' : 'watch',
+      detailKey: 'travel',
+      detailTitle: 'Travel window',
     },
   ];
 
@@ -177,7 +216,10 @@ export function ReportConsole({
   return (
     <div className="ssr-console" aria-label="Conditions dashboard">
       {/* Score instrument */}
-      <section className="ssr-console-mod ssr-console-score" aria-label="Safety score">
+      <section
+        className="ssr-console-mod ssr-console-score ssr-console-click"
+        {...detailHandlers('score', 'Score breakdown')}
+      >
         <div className="ssr-console-mod-h"><span>Safety score</span><i className={`ssr-console-led-dot ${levelTone}`} /></div>
         <div className="ssr-console-score-body">
           <div
@@ -206,11 +248,13 @@ export function ReportConsole({
       <section className="ssr-console-mod ssr-console-verdict" aria-label="Verdict and travel window">
         <div className="ssr-console-mod-h"><span>Verdict</span><span className="ssr-console-h-meta">{windowLabel}</span></div>
         <div className="ssr-console-verdict-body">
-          <h3>{decision.headline}</h3>
-          <p>{clampText(verdictSummary, 220)}</p>
+          <div className="ssr-console-click" {...detailHandlers('decision', 'Conditions brief')}>
+            <h3>{decision.headline}</h3>
+            <p>{clampText(verdictSummary, 220)}</p>
+          </div>
 
           {travelWindowRows.length > 0 && (
-            <div className="ssr-console-window">
+            <div className="ssr-console-window ssr-console-click" {...detailHandlers('travel', 'Travel window')}>
               <div className="ssr-console-window-label">
                 <span>Travel window</span>
                 <b className={passAll ? 'ok' : travelWindowInsights.passHours === 0 ? 'bad' : 'warn'}>
@@ -247,7 +291,7 @@ export function ReportConsole({
           {actions.length > 0 && (
             <ol className="ssr-console-actions" aria-label="Top adjustments">
               {actions.slice(0, 3).map((action, index) => (
-                <li key={index}>
+                <li key={index} className="ssr-console-click" {...detailHandlers('actions', 'What to adjust')}>
                   <i className={`ssr-console-led-dot ${ledTone(action.tone)}`} />
                   <span className="ssr-console-action-title">{action.title}</span>
                   <b className={`ssr-console-action-tag ${ledTone(action.tone)}`}>{action.tag}</b>
@@ -270,7 +314,7 @@ export function ReportConsole({
           {kpis.map((kpi) => {
             const Icon = kpi.icon as (props: { size?: number; 'aria-hidden'?: boolean }) => ReactNode;
             return (
-              <li key={kpi.key} className="ssr-console-kpi">
+              <li key={kpi.key} className="ssr-console-kpi ssr-console-click" {...detailHandlers(kpi.detailKey, kpi.detailTitle)}>
                 <i className={`ssr-console-led-dot ${ledTone(kpi.tone)}`} />
                 <span className="ssr-console-kpi-icon" aria-hidden><Icon size={14} aria-hidden /></span>
                 <span className="ssr-console-kpi-label">{kpi.label}</span>
@@ -285,7 +329,11 @@ export function ReportConsole({
       {/* Footer fact strip */}
       <footer className="ssr-console-foot" aria-label="Additional readings">
         {facts.map((fact) => (
-          <div key={fact.label} className="ssr-console-fact">
+          <div
+            key={fact.label}
+            className={`ssr-console-fact${fact.detailKey ? ' ssr-console-click' : ''}`}
+            {...(fact.detailKey ? detailHandlers(fact.detailKey, fact.detailTitle || fact.label) : {})}
+          >
             <i className={`ssr-console-led-dot ${ledTone(fact.tone)}`} />
             <dt>{fact.label}</dt>
             <dd>{fact.value}</dd>
@@ -296,6 +344,18 @@ export function ReportConsole({
           <span>Point-in-time snapshot — recheck official sources before departure.</span>
         </div>
       </footer>
+
+      {/* Full-report section chips */}
+      {detailSections.length > 0 && (
+        <nav className="ssr-console-sections" aria-label="Open a full report section">
+          <span className="ssr-console-sections-label">Full report</span>
+          {detailSections.map((section) => (
+            <button key={section.key} type="button" onClick={() => onOpenDetail(section.key, section.label)}>
+              {section.label}
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }

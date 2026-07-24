@@ -28,6 +28,7 @@ import {
   ExternalLink,
   LayoutGrid,
   Rows3,
+  X,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
@@ -54,6 +55,53 @@ import '../../styles/report-dashboard.css';
 
 const REPORT_LAYOUT_STORAGE_KEY = 'summitsafe:report-layout';
 type ReportLayout = 'classic' | 'dashboard';
+
+/* Console detail overlay: key → selector of the full report section shown
+   when a console module is opened. Mirrors the rules in report-dashboard.css. */
+const CONSOLE_DETAIL_SELECTORS: Record<string, string> = {
+  decision: '#planner-section-decision',
+  score: '#planner-section-score',
+  travel: '#planner-section-travel',
+  actions: '#planner-section-actions',
+  weather: '#planner-section-weather',
+  wind: '#planner-section-wind',
+  avalanche: '#planner-section-avalanche',
+  snowpack: '#planner-section-snowpack',
+  observations: '#planner-section-observations',
+  alerts: '#planner-section-alerts',
+  checks: '#planner-section-checks',
+  gear: '#planner-section-gear',
+  'terrain-window': '#planner-section-terrain-window',
+  'start-times': '#planner-section-start-times',
+  route: '#planner-section-route',
+  monitor: '#planner-section-monitor',
+  daylight: '.ssr-daylight-card',
+  heat: '.ssr-heat-card',
+  fire: '.ssr-fire-card',
+  aqi: '.ssr-aqi-card',
+  precip: '.ssr-precip-card',
+};
+
+/* "Full report" chip strip in the console footer — id-based sections whose
+   presence is tracked by presentSectionIds. */
+const CONSOLE_SECTION_LINKS = [
+  { key: 'decision', label: 'Brief', id: 'planner-section-decision' },
+  { key: 'actions', label: 'Plan', id: 'planner-section-actions' },
+  { key: 'travel', label: 'Travel', id: 'planner-section-travel' },
+  { key: 'checks', label: 'Checks', id: 'planner-section-checks' },
+  { key: 'weather', label: 'Weather', id: 'planner-section-weather' },
+  { key: 'wind', label: 'Wind', id: 'planner-section-wind' },
+  { key: 'avalanche', label: 'Avalanche', id: 'planner-section-avalanche' },
+  { key: 'snowpack', label: 'Snowpack', id: 'planner-section-snowpack' },
+  { key: 'observations', label: 'Observations', id: 'planner-section-observations' },
+  { key: 'alerts', label: 'Alerts', id: 'planner-section-alerts' },
+  { key: 'terrain-window', label: 'Terrain', id: 'planner-section-terrain-window' },
+  { key: 'score', label: 'Score', id: 'planner-section-score' },
+  { key: 'gear', label: 'Gear', id: 'planner-section-gear' },
+  { key: 'start-times', label: 'Start times', id: 'planner-section-start-times' },
+  { key: 'route', label: 'Route', id: 'planner-section-route' },
+  { key: 'monitor', label: 'Watch', id: 'planner-section-monitor' },
+];
 
 function readStoredReportLayout(): ReportLayout {
   try {
@@ -639,10 +687,33 @@ function ReportJumpNav({
 function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability; routeAnalysisSlot?: React.ReactNode }) {
   const featureFlags = useProductFeatureFlags();
   const [reportLayout, setReportLayout] = React.useState<ReportLayout>(readStoredReportLayout);
+  const [consoleDetail, setConsoleDetail] = React.useState<{ key: string; title: string } | null>(null);
   const selectReportLayout = (layout: ReportLayout) => {
     setReportLayout(layout);
     try { window.localStorage.setItem(REPORT_LAYOUT_STORAGE_KEY, layout); } catch { /* ignore */ }
   };
+  const openConsoleDetail = React.useCallback((key: string, title: string) => {
+    const selector = CONSOLE_DETAIL_SELECTORS[key];
+    if (!selector) return;
+    if (!document.querySelector(`.ssr-classic-flow ${selector}`)) return;
+    setConsoleDetail({ key, title });
+  }, []);
+  React.useEffect(() => {
+    if (reportLayout !== 'dashboard') setConsoleDetail(null);
+  }, [reportLayout]);
+  React.useEffect(() => {
+    if (!consoleDetail) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConsoleDetail(null);
+    };
+    document.addEventListener('keydown', onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [consoleDetail]);
   const {
     safetyData,
     aiAvailability,
@@ -1241,13 +1312,23 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           fireRiskTone={fireRiskPillClass}
           aqiTone={airQualityPillClassFn(safetyData.airQuality?.usAqi)}
           maxGustMph={preferences.maxWindGustMph || 35}
+          detailSections={CONSOLE_SECTION_LINKS.filter((link) => presentSectionIds.has(link.id))}
+          onOpenDetail={openConsoleDetail}
           formatTempDisplay={formatTempDisplay}
           formatWindDisplay={formatWindDisplay}
           formatClock={(time) => formatClockForStyle(time, preferences.timeStyle)}
         />
       )}
 
-      <div className="ssr-classic-flow">
+      <div className="ssr-classic-flow" data-console-detail={consoleDetail?.key}>
+      {consoleDetail && (
+        <div className="ssr-console-detail-bar">
+          <span className="ssr-console-detail-title">{consoleDetail.title}</span>
+          <button type="button" onClick={() => setConsoleDetail(null)}>
+            <X size={14} aria-hidden /> Back to console
+          </button>
+        </div>
+      )}
       {jumpSections.length > 1 && (
         <ReportJumpNav sections={jumpSections} onJump={jumpToSection} />
       )}

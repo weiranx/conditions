@@ -300,6 +300,113 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   box-shadow: none;
 }
 
+/* ---------------------------------------------------------
+   Console detail overlay — opening a console module shows the
+   matching full report section inside a fixed panel. The
+   classic flow stays hidden except the selected section.
+   --------------------------------------------------------- */
+.ssr-console-detail-bar { display: none; }
+
+.ssr-report.ssr-dashboard .ssr-classic-flow[data-console-detail] {
+  display: block;
+  position: fixed;
+  inset: 22px;
+  z-index: 80;
+  overflow: auto;
+  padding: 0 16px 16px;
+  border: 1px solid var(--console-line);
+  border-radius: 10px;
+  background:
+    linear-gradient(var(--console-grid-line) 1px, transparent 1px) 0 0 / 100% 26px,
+    linear-gradient(90deg, var(--console-grid-line) 1px, transparent 1px) 0 0 / 26px 100%,
+    var(--console-canvas);
+  box-shadow: 0 24px 80px rgba(10, 16, 26, 0.35), 0 0 0 100vmax rgba(10, 16, 26, 0.45);
+}
+
+.ssr-classic-flow[data-console-detail] .ssr-console-detail-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -16px 14px;
+  padding: 10px 16px;
+  background: var(--console-bar-bg);
+  border-bottom: 1px solid var(--console-line);
+  color: var(--console-bar-ink);
+}
+
+.ssr-console-detail-title {
+  font-family: var(--console-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ssr-console-detail-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--console-bar-ink);
+  font-family: var(--console-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ssr-console-detail-bar button:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Flatten the classic column wrappers, hide every section but the target. */
+.ssr-classic-flow[data-console-detail] .ssr-jump-nav-shell { display: none; }
+
+.ssr-classic-flow[data-console-detail] .ssr-main,
+.ssr-classic-flow[data-console-detail] .ssr-side,
+.ssr-classic-flow[data-console-detail] .ssr-report-footer {
+  display: contents;
+}
+
+.ssr-classic-flow[data-console-detail] .ssr-main > *,
+.ssr-classic-flow[data-console-detail] .ssr-side > *,
+.ssr-classic-flow[data-console-detail] .ssr-report-footer > * {
+  display: none;
+}
+
+/* Mirrors CONSOLE_DETAIL_SELECTORS in RedesignView.tsx. */
+.ssr-classic-flow[data-console-detail="decision"] #planner-section-decision,
+.ssr-classic-flow[data-console-detail="score"] #planner-section-score,
+.ssr-classic-flow[data-console-detail="travel"] #planner-section-travel,
+.ssr-classic-flow[data-console-detail="actions"] #planner-section-actions,
+.ssr-classic-flow[data-console-detail="weather"] #planner-section-weather,
+.ssr-classic-flow[data-console-detail="wind"] #planner-section-wind,
+.ssr-classic-flow[data-console-detail="avalanche"] #planner-section-avalanche,
+.ssr-classic-flow[data-console-detail="snowpack"] #planner-section-snowpack,
+.ssr-classic-flow[data-console-detail="observations"] #planner-section-observations,
+.ssr-classic-flow[data-console-detail="alerts"] #planner-section-alerts,
+.ssr-classic-flow[data-console-detail="checks"] #planner-section-checks,
+.ssr-classic-flow[data-console-detail="gear"] #planner-section-gear,
+.ssr-classic-flow[data-console-detail="terrain-window"] #planner-section-terrain-window,
+.ssr-classic-flow[data-console-detail="start-times"] #planner-section-start-times,
+.ssr-classic-flow[data-console-detail="route"] #planner-section-route,
+.ssr-classic-flow[data-console-detail="monitor"] #planner-section-monitor,
+.ssr-classic-flow[data-console-detail="daylight"] .ssr-daylight-card,
+.ssr-classic-flow[data-console-detail="heat"] .ssr-heat-card,
+.ssr-classic-flow[data-console-detail="fire"] .ssr-fire-card,
+.ssr-classic-flow[data-console-detail="aqi"] .ssr-aqi-card,
+.ssr-classic-flow[data-console-detail="precip"] .ssr-precip-card {
+  display: block;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
 } /* end @media screen */
 
 /* ---------------------------------------------------------
