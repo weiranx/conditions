@@ -204,6 +204,10 @@ export function HomeView({
         <section className="ssr-h-hero" aria-labelledby="home-hero-title">
           <div className="ssr-h-hero-contours" aria-hidden="true"><i /><i /><i /></div>
           <div className="ssr-h-hero-coordinates" aria-hidden="true">46.8523° N&nbsp;&nbsp; 121.7603° W</div>
+          <div className="ssr-h-hero-photo-note" aria-hidden="true">
+            <span className="ssr-h-photo-pin"><i /> Summit</span>
+            <span className="ssr-h-photo-window"><Sunrise size={13} /> Best light <b>06:20–09:10</b></span>
+          </div>
           <div className="ssr-h-hero-inner">
             <div className="ssr-h-hero-copy">
               <div className="ssr-h-kicker"><Sparkles size={13} aria-hidden /> Backcountry planning intelligence</div>
