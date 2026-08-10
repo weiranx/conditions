@@ -354,24 +354,29 @@
     position: sticky;
     z-index: 20;
     top: 0;
-    grid-auto-flow: row;
-    grid-auto-columns: auto;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    overflow: visible;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    grid-template-columns: none;
+    gap: 4px;
+    overflow-x: auto;
     margin-inline: -16px;
-    padding: 6px 16px 8px;
+    padding: 7px 34px 8px 16px;
     border-bottom: 1px solid var(--ssr-line);
     background: color-mix(in oklch, var(--ssr-bg) 96%, transparent);
     box-shadow: 0 8px 18px -18px color-mix(in oklch, var(--ssr-text) 46%, transparent);
-    scroll-snap-type: none;
-    -webkit-mask-image: none;
-    mask-image: none;
+    scroll-padding-inline: 16px 34px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
   }
+  .ssr-set-rail::-webkit-scrollbar { display: none; }
   .ssr-set-rail a,
   .ssr-set-rail button {
     min-height: 44px;
-    white-space: normal;
+    padding-inline: 12px;
+    white-space: nowrap;
+    scroll-snap-align: start;
   }
-  .ssr-set-card { scroll-margin-top: 174px; }
+  .ssr-set-card { scroll-margin-top: 72px; }
 }

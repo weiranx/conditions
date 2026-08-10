@@ -327,7 +327,10 @@ export function AccountView({
           </section>
         )}
 
-        <section className={`account-panel${isSignedIn ? ' is-profile-panel' : ''}`} aria-live="polite">
+        <section
+          className={`account-panel${isSignedIn ? ' is-profile-panel' : ''}${embedded && account.available === false ? ' is-compact-unavailable' : ''}`}
+          aria-live="polite"
+        >
           {account.loading ? (
             <div className="account-loading" role="status">
               <LoaderCircle className="account-spinner" aria-hidden />

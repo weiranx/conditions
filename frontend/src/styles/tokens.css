@@ -11,7 +11,7 @@
   --ui-line-strong:    oklch(81.5% 0.010 155);
   --ui-text:           oklch(20.5% 0.012 155);
   --ui-text-2:         oklch(38% 0.011 155);
-  --ui-text-3:         oklch(54% 0.010 155);
+  --ui-text-3:         oklch(50% 0.010 155);
   --ui-text-4:         var(--ui-text-3);
   --ui-on-strong:      oklch(99% 0.004 155);
   --ui-scrim:          oklch(12% 0.015 155);
@@ -34,6 +34,8 @@
   --ui-motion-medium:  280ms cubic-bezier(.22, 1, .36, 1);
   --ui-motion-slow:    700ms cubic-bezier(.22, 1, .36, 1);
   --ui-line-highlight: color-mix(in oklch, white 58%, transparent);
+  --ui-canvas-glow:    color-mix(in oklch, var(--ui-brand-soft) 64%, transparent);
+  --ui-canvas-warm:    color-mix(in oklch, var(--ui-risk-2) 7%, transparent);
   --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 90%, transparent);
   --ui-shadow-xs:      0 1px 2px oklch(24% 0.02 155 / 0.05);
   --ui-shadow-sm:      0 1px 3px oklch(24% 0.02 155 / 0.055), 0 8px 22px -20px oklch(24% 0.02 155 / 0.18);
@@ -131,11 +133,11 @@ html[data-theme="dark"] {
   --ui-surface:        oklch(19.5% 0.010 155);
   --ui-surface-subtle: oklch(23% 0.011 155);
   --ui-surface-muted:  oklch(27% 0.012 155);
-  --ui-line:           oklch(30% 0.012 155);
-  --ui-line-strong:    oklch(37% 0.014 155);
+  --ui-line:           oklch(32.5% 0.012 155);
+  --ui-line-strong:    oklch(40% 0.014 155);
   --ui-text:           oklch(95% 0.008 155);
   --ui-text-2:         oklch(79% 0.010 155);
-  --ui-text-3:         oklch(63% 0.011 155);
+  --ui-text-3:         oklch(68% 0.011 155);
   --ui-text-4:         var(--ui-text-3);
   --ui-on-strong:      oklch(15.5% 0.008 155);
   --ui-brand:          oklch(70% 0.110 165);
@@ -154,5 +156,7 @@ html[data-theme="dark"] {
   --ui-shadow-md:      0 2px 6px oklch(4% 0.01 155 / 0.28), 0 20px 44px -30px oklch(4% 0.01 155 / 0.56);
   --ui-shadow-lg:      0 3px 9px oklch(4% 0.01 155 / 0.3), 0 30px 62px -38px oklch(4% 0.01 155 / 0.66);
   --ui-line-highlight: color-mix(in oklch, white 12%, transparent);
+  --ui-canvas-glow:    color-mix(in oklch, var(--ui-brand) 9%, transparent);
+  --ui-canvas-warm:    color-mix(in oklch, var(--ui-risk-3) 4%, transparent);
   --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 88%, transparent);
 }

@@ -36,8 +36,10 @@ html[data-theme='dark'] {
 
 body {
   background:
-    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--fi-pine-soft) 54%, transparent), transparent 32rem),
+    radial-gradient(58rem 34rem at 3% 0, var(--ui-canvas-glow), transparent 72%),
+    radial-gradient(46rem 28rem at 100% 24rem, var(--ui-canvas-warm), transparent 76%),
     var(--fi-paper);
+  background-repeat: no-repeat;
 }
 
 .page-shell {

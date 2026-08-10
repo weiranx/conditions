@@ -58,6 +58,10 @@
   border-left: 0;
 }
 
+.account-settings-card .account-panel.is-compact-unavailable {
+  min-height: 0;
+}
+
 .account-page {
   width: min(1060px, calc(100% - 48px));
   min-height: calc(100vh - 146px);
@@ -165,10 +169,12 @@
 .account-unavailable button { max-width: 100%; margin-top: 24px; padding-inline: 18px; }
 
 .account-settings-card .account-panel.is-compact-unavailable .account-unavailable {
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 4px 16px;
+  align-content: center;
   align-items: center;
   padding: 20px 22px;
   text-align: left;
@@ -418,6 +424,15 @@
   .account-settings-card .account-lede { margin-right: 0; margin-left: 0; }
   .account-settings-card .account-benefits { width: auto; margin-right: 0; margin-left: 0; }
   .account-settings-card .account-panel { width: 100%; border-top: 1px solid var(--ui-line); border-left: 0; }
+  .account-settings-card .account-panel.is-compact-unavailable .account-unavailable {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .account-settings-card .account-panel.is-compact-unavailable .account-unavailable button {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    width: 100%;
+    margin-top: 10px;
+  }
   .account-page { padding-top: 48px; grid-template-columns: 1fr; gap: 36px; }
   .account-intro { text-align: center; }
   .account-intro-icon { margin-right: auto; margin-left: auto; }
@@ -436,6 +451,9 @@
   .account-panel { min-height: 0; border-radius: 14px; }
   .account-auth { padding: 10px 22px 24px; }
   .account-loading, .account-unavailable, .account-profile { min-height: 430px; padding-right: 24px; padding-left: 24px; }
+  .account-settings-card .account-panel.is-compact-unavailable .account-unavailable {
+    padding: 18px;
+  }
   .account-profile-header { grid-template-columns: auto minmax(0, 1fr); }
   .account-plan-badge { grid-column: 1 / -1; }
   .account-section-heading { align-items: start; flex-direction: column; gap: 4px; }
