@@ -33,7 +33,6 @@ import type { WeatherHourOption } from '../../app/weather-card-state';
 import type { TravelThresholdPresetKey } from '../../hooks/usePreferenceHandlers';
 import type { RouteAnalysisOptions, RouteOption, RouteAnalysisResult, RouteLoadingState } from '../../hooks/useRouteAnalysis';
 import type { AppView } from '../../hooks/useUrlState';
-import { parseReportSectionHash } from '../../app/report-sections';
 import { ACTIVITY_PROFILES } from '../../app/activity-profiles';
 import { useAiAvailability } from '../../hooks/useAiAvailability';
 import { resolveReportFeatureFlags, useProductFeatureFlags } from '../../contexts/feature-flags';
@@ -643,7 +642,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     && featureFlags.tripPlanning
     && multiDayForecastRows.length >= 2;
   const reportGeneratedAtLabel = formatGeneratedAt(reportGeneratedAt);
-  const reportResumeHandledRef = React.useRef(false);
   const reportScore = safetyData ? Math.round(safetyData.safety.score) : null;
   const reportConfidence = typeof safetyData?.safety.confidence === 'number'
     ? Math.round(safetyData.safety.confidence)
@@ -675,38 +673,6 @@ function PlannerViewComponent(props: PlannerViewProps) {
     observer.observe(root, { childList: true, subtree: true });
     window.setTimeout(() => observer.disconnect(), 4000);
   };
-
-  React.useEffect(() => {
-    if (!safetyData) {
-      reportResumeHandledRef.current = false;
-      return;
-    }
-    if (loading || reportResumeHandledRef.current) return;
-    const requestedSectionId = parseReportSectionHash(window.location.hash);
-    const defaultSectionId = 'planner-decision-overview';
-    const scrollToSection = (sectionId: string) => {
-      const report = document.getElementById(sectionId);
-      if (!report) return false;
-      reportResumeHandledRef.current = true;
-      report.scrollIntoView({ behavior: 'auto', block: 'start' });
-      return true;
-    };
-    if (scrollToSection(requestedSectionId || defaultSectionId)) return;
-    const root = document.getElementById('planner-main-content');
-    if (!root) return;
-    const observer = new MutationObserver(() => {
-      if (scrollToSection(requestedSectionId || defaultSectionId)) observer.disconnect();
-    });
-    observer.observe(root, { childList: true, subtree: true });
-    const timeout = window.setTimeout(() => {
-      observer.disconnect();
-      if (requestedSectionId) scrollToSection(defaultSectionId);
-    }, 2500);
-    return () => {
-      observer.disconnect();
-      window.clearTimeout(timeout);
-    };
-  }, [loading, safetyData]);
 
   return (
     <div
