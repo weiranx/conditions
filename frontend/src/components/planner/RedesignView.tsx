@@ -50,6 +50,7 @@ import { ObjectiveMonitoringCard } from './ObjectiveMonitoringCard';
 import { TerrainWindowCard } from './TerrainWindowCard';
 import { resolveReportFeatureFlags, useProductFeatureFlags } from '../../contexts/feature-flags';
 import { buildReportSectionHash } from '../../app/report-sections';
+import { freshnessClass } from '../../app/core';
 import '../../styles/planning-intelligence.css';
 import '../../styles/report-dashboard.css';
 
@@ -943,10 +944,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
   // ── Sources ──
   const sourceState = (row: (typeof sourceFreshnessRows)[number]): string => {
     if (row.stateOverride) return row.stateOverride;
-    if (row.issued == null) return 'missing';
-    if (row.staleHours <= 2) return 'fresh';
-    if (row.staleHours <= 12) return 'aging';
-    return 'stale';
+    return freshnessClass(row.issued, row.staleHours);
   };
   const freshCount = sourceFreshnessRows.filter((r) => ['fresh', 'ok'].includes(sourceState(r))).length;
   const agingCount = sourceFreshnessRows.filter((r) => sourceState(r) === 'aging').length;
@@ -1312,6 +1310,13 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           fireRiskTone={fireRiskPillClass}
           aqiTone={airQualityPillClassFn(safetyData.airQuality?.usAqi)}
           maxGustMph={preferences.maxWindGustMph || 35}
+          sourceHealth={{
+            fresh: freshCount,
+            aging: agingCount,
+            issues: sourceIssueCount,
+            total: sourceFreshnessRows.length,
+          }}
+          freshnessWarningSummary={props.freshnessWarningSummary}
           detailSections={CONSOLE_SECTION_LINKS.filter((link) => presentSectionIds.has(link.id))}
           onOpenDetail={openConsoleDetail}
           formatTempDisplay={formatTempDisplay}

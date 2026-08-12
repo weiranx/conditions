@@ -232,6 +232,13 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   opacity: 0.5;
 }
 
+@media (max-width: 700px) {
+  .ssr-console-meta span + span::before {
+    content: '·';
+    margin: 0 6px;
+  }
+}
+
 .ssr-console-side {
   display: flex;
   flex-wrap: wrap;
