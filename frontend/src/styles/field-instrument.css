@@ -36,8 +36,9 @@ html[data-theme='dark'] {
 
 body {
   background:
-    radial-gradient(58rem 34rem at 3% 0, var(--ui-canvas-glow), transparent 72%),
-    radial-gradient(46rem 28rem at 100% 24rem, var(--ui-canvas-warm), transparent 76%),
+    radial-gradient(62rem 36rem at -4% -8rem, var(--ui-canvas-glow), transparent 72%),
+    radial-gradient(50rem 34rem at 104% 28rem, var(--ui-canvas-warm), transparent 76%),
+    linear-gradient(180deg, color-mix(in oklch, var(--ui-surface) 28%, transparent), transparent 32rem),
     var(--fi-paper);
   background-repeat: no-repeat;
 }
@@ -80,15 +81,15 @@ body {
 .ssr-trip .ssr-trip-setup {
   border-color: var(--fi-line);
   border-radius: var(--ui-radius-shell);
-  background: var(--fi-panel);
-  box-shadow: var(--ui-shadow-md);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-md), inset 0 1px var(--ui-line-highlight);
 }
 
 .ssr-trip :is(.ssr-trip-panel, .ssr-trip-loading) {
   border-color: var(--fi-line);
   border-radius: var(--ui-radius-card);
-  background: var(--fi-panel);
-  box-shadow: var(--ui-shadow-sm);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-sm), inset 0 1px var(--ui-line-highlight);
 }
 
 .ssr-trip :is(.ssr-trip-panel-head, .ssr-trip-section-head, .ssr-trip-detail-h) {
@@ -120,8 +121,8 @@ body {
 .account-settings-card-shell {
   border-color: var(--fi-line);
   border-radius: var(--ui-radius-card);
-  background: var(--fi-panel);
-  box-shadow: var(--ui-shadow-sm);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-sm), inset 0 1px var(--ui-line-highlight);
 }
 
 .ssr-settings :is(
@@ -142,8 +143,8 @@ body {
 :is(.history-card, .watch-card) {
   border-color: var(--fi-line);
   border-radius: var(--ui-radius-card);
-  background: var(--fi-panel);
-  box-shadow: var(--ui-shadow-sm);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-sm), inset 0 1px var(--ui-line-highlight);
 }
 
 :is(.history-head h1, .watches-head h1) {
@@ -179,14 +180,14 @@ body {
 .status-overview {
   border-color: var(--fi-line);
   border-radius: var(--ui-radius-shell);
-  box-shadow: var(--ui-shadow-md);
+  box-shadow: var(--ui-shadow-md), inset 0 1px var(--ui-line-highlight);
 }
 
 .status-panel {
   border-color: var(--fi-line);
   border-radius: var(--ui-radius-card);
-  background: var(--fi-panel);
-  box-shadow: var(--ui-shadow-sm);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-sm), inset 0 1px var(--ui-line-highlight);
 }
 
 .status-card {
@@ -211,8 +212,8 @@ body {
 
 .not-found-card {
   border-radius: var(--ui-radius-shell);
-  background: color-mix(in srgb, var(--fi-panel) 92%, transparent);
-  box-shadow: var(--ui-shadow-md);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-md), inset 0 1px var(--ui-line-highlight);
 }
 
 .not-found-actions button {
@@ -355,8 +356,8 @@ body {
   padding: clamp(28px, 6vw, 48px);
   border: 1px solid var(--fi-line);
   border-radius: var(--ui-radius-shell);
-  background: var(--fi-panel);
-  box-shadow: var(--ui-shadow-md);
+  background: var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-md), inset 0 1px var(--ui-line-highlight);
 }
 
 .app-error-boundary-icon {
