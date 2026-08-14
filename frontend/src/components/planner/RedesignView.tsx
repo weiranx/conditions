@@ -60,9 +60,9 @@ type ReportLayout = 'classic' | 'dashboard';
 /* "Full report" chip strip in the console footer — id-based sections whose
    presence is tracked by presentSectionIds. */
 const CONSOLE_SECTION_LINKS = [
-  { key: 'decision', label: 'Brief', id: 'planner-section-decision' },
-  { key: 'actions', label: 'Plan', id: 'planner-section-actions' },
-  { key: 'travel', label: 'Travel', id: 'planner-section-travel' },
+  { key: 'decision', label: 'Decision', id: 'planner-section-decision' },
+  { key: 'actions', label: 'Adjustments', id: 'planner-section-actions' },
+  { key: 'travel', label: 'Hourly', id: 'planner-section-travel' },
   { key: 'checks', label: 'Checks', id: 'planner-section-checks' },
   { key: 'weather', label: 'Weather', id: 'planner-section-weather' },
   { key: 'wind', label: 'Wind', id: 'planner-section-wind' },

@@ -1,5 +1,5 @@
-/* Dashboard report mode. The classic report stays mounted for print and
-   becomes the inline destination when a Dashboard module is selected. */
+/* Dashboard report mode. The Classic report stays mounted only for print;
+   interactive Dashboard views remain inside the Dashboard workspace. */
 
 /* Layout toggle (visible in both layouts). */
 .ssr-report-context-side {
@@ -61,6 +61,7 @@
    aliases so console children follow the console palette.
    --------------------------------------------------------- */
 .ssr-report.ssr-dashboard {
+  overflow-anchor: none;
   --console-mono: var(--d-mono);
   --console-canvas: #f1f4ef;
   --console-grid-line: rgba(45, 80, 57, 0.055);

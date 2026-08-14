@@ -11,7 +11,7 @@ import {
   Wind,
   type LucideIcon,
 } from 'lucide-react';
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { SafetyData, SummitDecision, TravelWindowInsights, TravelWindowRow } from '../../app/types';
 import { formatAgeFromNow } from '../../app/core';
 import '../../styles/report-console.css';
@@ -163,14 +163,8 @@ export function ReportConsole({
   formatClock,
 }: ReportConsoleProps) {
   const [activeDetail, setActiveDetail] = useState<ConsoleDetailSection | null>(null);
-  const [detailMinHeight, setDetailMinHeight] = useState<number | null>(null);
-  const overviewRef = useRef<HTMLDivElement | null>(null);
 
   const openDetail = (key: string, title: string) => {
-    if (!activeDetail) {
-      const overviewHeight = overviewRef.current?.getBoundingClientRect().height;
-      if (overviewHeight) setDetailMinHeight(Math.ceil(overviewHeight));
-    }
     setActiveDetail({ key, label: title });
   };
   const closeDetail = () => {
@@ -180,6 +174,7 @@ export function ReportConsole({
     role: 'button' as const,
     tabIndex: 0,
     'aria-label': `Open ${title} Dashboard view`,
+    onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
     onClick: () => openDetail(key, title),
     onKeyDown: (event: React.KeyboardEvent) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -637,17 +632,23 @@ export function ReportConsole({
     'terrain-window': 'Surface conditions and the travel impact expected during this window.',
     gear: 'Conditions-matched additions to the normal backcountry kit.',
   };
+  const activeNavigationKey = ({
+    daylight: 'weather',
+    heat: 'weather',
+    wind: 'weather',
+    precip: 'weather',
+    fire: 'alerts',
+    aqi: 'observations',
+  } as Record<string, string>)[activeDetail?.key || ''] || activeDetail?.key;
 
-  if (activeDetail) {
-    return (
+  const detailView = activeDetail ? (
       <section
         className="ssr-console-detail-view"
         aria-labelledby="ssr-console-detail-heading"
-        style={detailMinHeight ? { minHeight: detailMinHeight } : undefined}
       >
         <header className="ssr-console-detail-head">
-          <button type="button" onClick={closeDetail} className="ssr-console-detail-back">
-            <ArrowLeft size={16} aria-hidden /> Dashboard overview
+          <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={closeDetail} className="ssr-console-detail-back" aria-label="Back to Dashboard overview">
+            <ArrowLeft size={16} aria-hidden /> Overview
           </button>
           <div>
             <span className="ssr-console-section-kicker">Dashboard view</span>
@@ -656,31 +657,67 @@ export function ReportConsole({
           </div>
           <span className={`ssr-console-decision-pill ${levelTone}`}><i className={`ssr-console-led-dot ${levelTone}`} /> {decision.level.replace('-', ' ')}</span>
         </header>
-        <div className="ssr-console-detail-body">
-          {renderDetailContent(activeDetail.key)}
+        <div className="ssr-console-detail-layout">
+          {detailSections.length > 0 && (
+            <nav className="ssr-console-detail-nav" aria-label="Dashboard views">
+              <span className="ssr-console-detail-nav-label">Dashboard views</span>
+              <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={closeDetail} className="ssr-console-detail-overview">
+                <ArrowLeft size={13} aria-hidden /> Overview
+              </button>
+              {detailSections.map((section) => (
+                <button
+                  key={section.key}
+                  type="button"
+                  className={section.key === activeNavigationKey ? 'active' : ''}
+                  aria-pressed={section.key === activeNavigationKey}
+                  onClick={() => openDetail(section.key, section.label)}
+                >
+                  <span>{section.label}</span>
+                  <i aria-hidden />
+                </button>
+              ))}
+            </nav>
+          )}
+          <div className="ssr-console-detail-body">
+            <div className="ssr-console-detail-content">
+              {renderDetailContent(activeDetail.key)}
+            </div>
+            <footer className="ssr-console-detail-context" aria-label="Report context">
+              <div><span>Decision</span><strong className={`is-${levelTone}`}>{decision.level.replace('-', ' ')}</strong></div>
+              <div><span>Planned window</span><strong>{windowLabel}</strong></div>
+              <div><span>Source readiness</span><strong className={`is-${sourceTone}`}>{sourceReadiness}</strong></div>
+              <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={closeDetail}>
+                <ArrowLeft size={14} aria-hidden /> Return to overview
+              </button>
+            </footer>
+          </div>
         </div>
-        {detailSections.length > 0 && (
-          <nav className="ssr-console-detail-nav" aria-label="Other Dashboard views">
-            <button type="button" onClick={closeDetail}>Overview</button>
+      </section>
+  ) : null;
+
+  return (
+    <div className={`ssr-console-stage${activeDetail ? ' is-detail' : ''}`}>
+    <div
+      className={`ssr-console${activeDetail ? ' is-inactive' : ''}`}
+      aria-label="Conditions dashboard"
+      aria-hidden={activeDetail ? true : undefined}
+      inert={activeDetail ? true : undefined}
+    >
+      {detailSections.length > 0 && (
+        <nav className="ssr-console-sections" aria-label="Dashboard views">
+          <span className="ssr-console-sections-label">
+            <strong>Explore report</strong>
+            <small>{detailSections.length} focused views</small>
+          </span>
+          <div className="ssr-console-sections-list">
             {detailSections.map((section) => (
-              <button
-                key={section.key}
-                type="button"
-                className={section.key === activeDetail.key ? 'active' : ''}
-                aria-pressed={section.key === activeDetail.key}
-                onClick={() => openDetail(section.key, section.label)}
-              >
+              <button key={section.key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => openDetail(section.key, section.label)}>
                 {section.label}
               </button>
             ))}
-          </nav>
-        )}
-      </section>
-    );
-  }
-
-  return (
-    <div ref={overviewRef} className="ssr-console" aria-label="Conditions dashboard">
+          </div>
+        </nav>
+      )}
       <section className="ssr-console-mod ssr-console-verdict" aria-label="Trip decision">
         <div className="ssr-console-verdict-body">
           <div className="ssr-console-verdict-topline">
@@ -845,16 +882,8 @@ export function ReportConsole({
         </div>
       </dl>
 
-      {detailSections.length > 0 && (
-        <nav className="ssr-console-sections" aria-label="Open another Dashboard view">
-          <span className="ssr-console-sections-label">Dashboard views</span>
-          {detailSections.map((section) => (
-            <button key={section.key} type="button" onClick={() => openDetail(section.key, section.label)}>
-              {section.label}
-            </button>
-          ))}
-        </nav>
-      )}
+    </div>
+    {detailView}
     </div>
   );
 }
