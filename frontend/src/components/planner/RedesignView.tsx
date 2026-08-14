@@ -29,7 +29,6 @@ import {
   LayoutGrid,
   Rows3,
   ChevronDown,
-  X,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
 import type { ElevationForecastBand } from '../../app/types';
@@ -58,8 +57,7 @@ import '../../styles/report-dashboard.css';
 const REPORT_LAYOUT_STORAGE_KEY = 'summitsafe:report-layout';
 type ReportLayout = 'classic' | 'dashboard';
 
-/* Console detail overlay: key → selector of the full report section shown
-   when a console module is opened. Mirrors the rules in report-dashboard.css. */
+/* Dashboard module key → inline full-report destination. */
 const CONSOLE_DETAIL_SELECTORS: Record<string, string> = {
   decision: '#planner-section-decision',
   score: '#planner-section-score',
@@ -731,33 +729,10 @@ function ReportJumpNav({
 function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFeatureAvailability; routeAnalysisSlot?: React.ReactNode }) {
   const featureFlags = useProductFeatureFlags();
   const [reportLayout, setReportLayout] = React.useState<ReportLayout>(readStoredReportLayout);
-  const [consoleDetail, setConsoleDetail] = React.useState<{ key: string; title: string } | null>(null);
   const selectReportLayout = (layout: ReportLayout) => {
     setReportLayout(layout);
     try { window.localStorage.setItem(REPORT_LAYOUT_STORAGE_KEY, layout); } catch { /* ignore */ }
   };
-  const openConsoleDetail = React.useCallback((key: string, title: string) => {
-    const selector = CONSOLE_DETAIL_SELECTORS[key];
-    if (!selector) return;
-    if (!document.querySelector(`.ssr-classic-flow ${selector}`)) return;
-    setConsoleDetail({ key, title });
-  }, []);
-  React.useEffect(() => {
-    if (reportLayout !== 'dashboard') setConsoleDetail(null);
-  }, [reportLayout]);
-  React.useEffect(() => {
-    if (!consoleDetail) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setConsoleDetail(null);
-    };
-    document.addEventListener('keydown', onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [consoleDetail]);
   const {
     safetyData,
     aiAvailability,
@@ -1226,6 +1201,24 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     target.scrollIntoView({ behavior, block: 'start' });
   };
+  const openConsoleDetail = (key: string) => {
+    const selector = CONSOLE_DETAIL_SELECTORS[key];
+    if (!selector || !document.querySelector(`.ssr-classic-flow ${selector}`)) return;
+    selectReportLayout('classic');
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(`.ssr-classic-flow ${selector}`);
+      if (!target) return;
+      if (target.id) {
+        jumpToSection(target.id, true);
+        return;
+      }
+      const focusTarget = target.querySelector<HTMLElement>('h2') || target;
+      if (!focusTarget.hasAttribute('tabindex')) focusTarget.setAttribute('tabindex', '-1');
+      focusTarget.focus({ preventScroll: true });
+      const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      target.scrollIntoView({ behavior, block: 'start' });
+    });
+  };
   const useStartTimeForNewReport = (startTime: string) => {
     onEditPlan();
     setAlpineStartTime(startTime);
@@ -1368,15 +1361,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         />
       )}
 
-      <div className="ssr-classic-flow" data-console-detail={consoleDetail?.key}>
-      {consoleDetail && (
-        <div className="ssr-console-detail-bar">
-          <span className="ssr-console-detail-title">{consoleDetail.title}</span>
-          <button type="button" onClick={() => setConsoleDetail(null)}>
-            <X size={14} aria-hidden /> Back to console
-          </button>
-        </div>
-      )}
+      <div className="ssr-classic-flow">
       {jumpSections.length > 1 && (
         <ReportJumpNav sections={jumpSections} onJump={jumpToSection} />
       )}
