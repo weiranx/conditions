@@ -242,54 +242,20 @@ export function ReportConsole({
 
   return (
     <div className="ssr-console" aria-label="Conditions dashboard">
-      {/* Verdict + window + actions */}
-      <section className="ssr-console-mod ssr-console-verdict" aria-label="Verdict and travel window">
-        <div className="ssr-console-mod-h"><span>Verdict</span><span className="ssr-console-h-meta">Plan {windowLabel}</span></div>
+      <section className="ssr-console-mod ssr-console-verdict" aria-label="Trip decision">
         <div className="ssr-console-verdict-body">
+          <div className="ssr-console-verdict-topline">
+            <span className={`ssr-console-decision-pill ${levelTone}`}>
+              <i className={`ssr-console-led-dot ${levelTone}`} />
+              {decision.level.replace('-', ' ')}
+            </span>
+            <span className="ssr-console-h-meta">Planned {windowLabel}</span>
+          </div>
           <div className="ssr-console-click" {...detailHandlers('decision', 'Conditions brief')}>
+            <span className="ssr-console-section-kicker">Trip decision</span>
             <h3>{decision.headline}</h3>
             <p>{clampText(verdictSummary, 220)}</p>
           </div>
-
-          {travelWindowRows.length > 0 && (
-            <div className="ssr-console-window ssr-console-click" {...detailHandlers('travel', 'Travel window')}>
-              <div className="ssr-console-window-label">
-                <span>{coverageShifted ? 'Forecast coverage' : 'Travel window'}</span>
-                <b className={passAll ? 'ok' : travelWindowInsights.passHours === 0 ? 'bad' : 'warn'}>
-                  {travelWindowInsights.passHours}/{travelWindowRows.length} forecast hrs within limits
-                </b>
-              </div>
-              <div
-                className="ssr-console-window-band"
-                style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(3px, 1fr))` }}
-                role="img"
-                aria-label={`${travelWindowInsights.passHours} of ${travelWindowRows.length} forecast hours stay within your limits.`}
-              >
-                {travelWindowRows.map((row, index) => {
-                  const tone = row.pass
-                    ? 'ok'
-                    : row.lightningRisk || row.failedRules.length > 1 || row.gust >= maxGustMph
-                      ? 'bad'
-                      : 'warn';
-                  return <span key={`${row.time}-${index}`} className={tone} title={`${formatClock(row.time)}: ${row.reasonSummary}`} />;
-                })}
-              </div>
-              <div
-                className="ssr-console-window-hours"
-                aria-hidden
-                style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(3px, 1fr))` }}
-              >
-                {travelWindowRows.map((row, index) => (
-                  <span key={`${row.time}-h-${index}`}>{formatClock(row.time).replace(':00', '')}</span>
-                ))}
-              </div>
-              {coverageShifted && (
-                <p className="ssr-console-window-gap" role="status">
-                  <TriangleAlert size={11} aria-hidden /> Available rows run {coverageStartLabel}–{coverageEndLabel}; the plan starts at {plannedStartLabel}.
-                </p>
-              )}
-            </div>
-          )}
 
           {sourceHealth.total > 0 && (
             <div className={`ssr-console-readiness ${sourceTone}`} role="status">
@@ -303,15 +269,18 @@ export function ReportConsole({
           )}
 
           {actions.length > 0 && (
-            <ol className="ssr-console-actions" aria-label="Top adjustments">
-              {actions.slice(0, 3).map((action, index) => (
-                <li key={index} className="ssr-console-click" {...detailHandlers('actions', 'What to adjust')}>
-                  <i className={`ssr-console-led-dot ${ledTone(action.tone)}`} />
-                  <span className="ssr-console-action-title">{action.title}</span>
-                  <b className={`ssr-console-action-tag ${ledTone(action.tone)}`}>{action.tag}</b>
-                </li>
-              ))}
-            </ol>
+            <div className="ssr-console-action-block">
+              <span className="ssr-console-section-kicker">Carry into the plan</span>
+              <ol className="ssr-console-actions" aria-label="Top adjustments">
+                {actions.slice(0, 3).map((action, index) => (
+                  <li key={index} className="ssr-console-click" {...detailHandlers('actions', 'What to adjust')}>
+                    <span className="ssr-console-action-index">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="ssr-console-action-title">{action.title}</span>
+                    <b className={`ssr-console-action-tag ${ledTone(action.tone)}`}>{action.tag}</b>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
           {actions.length === 0 && (
             <p className="ssr-console-allclear">
@@ -326,7 +295,10 @@ export function ReportConsole({
         className="ssr-console-mod ssr-console-score ssr-console-click"
         {...detailHandlers('score', 'Score breakdown')}
       >
-        <div className="ssr-console-mod-h"><span>Safety score</span><i className={`ssr-console-led-dot ${levelTone}`} /></div>
+        <div className="ssr-console-mod-h">
+          <span>Safety score</span>
+          <span className="ssr-console-h-meta">Confidence weighted</span>
+        </div>
         <div className="ssr-console-score-body">
           <div
             className={`ssr-console-dial ${score >= 100 ? 'is-three-digit' : ''}`}
@@ -339,30 +311,69 @@ export function ReportConsole({
           >
             <b>{score}</b><span>/ 100</span>
           </div>
-          <span className={`ssr-console-chip ${levelTone}`}>
-            <ShieldCheck size={12} aria-hidden /> {decision.level.replace('-', ' ')}
-          </span>
-          <span className="ssr-console-score-tier">{tier}</span>
-          <span className="ssr-console-score-meta">
-            {confidence !== null ? `${confidence}% confidence` : 'Confidence unrated'}
-            {generatedAge ? ` · updated ${generatedAge}` : ''}
-          </span>
+          <div className="ssr-console-score-copy">
+            <span className={`ssr-console-chip ${levelTone}`}>
+              <ShieldCheck size={12} aria-hidden /> {decision.level.replace('-', ' ')}
+            </span>
+            <strong className="ssr-console-score-tier">{tier}</strong>
+            <span className="ssr-console-score-meta">
+              {confidence !== null ? `${confidence}% evidence confidence` : 'Confidence unrated'}
+            </span>
+            {generatedAge && <span className="ssr-console-score-age">Updated {generatedAge}</span>}
+          </div>
         </div>
       </section>
 
-      {/* KPI stack */}
+      {travelWindowRows.length > 0 && (
+        <section className="ssr-console-mod ssr-console-window ssr-console-click" {...detailHandlers('travel', 'Travel window')}>
+          <div className="ssr-console-window-head">
+            <div>
+              <span className="ssr-console-section-kicker">{coverageShifted ? 'Forecast coverage' : 'Travel window'}</span>
+              <strong>{passAll ? 'Every forecast hour is within your limits' : `${travelWindowInsights.passHours} of ${travelWindowRows.length} forecast hours are within limits`}</strong>
+            </div>
+            <span className={`ssr-console-window-count ${passAll ? 'ok' : travelWindowInsights.passHours === 0 ? 'bad' : 'warn'}`}>
+              {travelWindowInsights.passHours}/{travelWindowRows.length} clear
+            </span>
+          </div>
+          <div
+            className="ssr-console-window-band"
+            style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(44px, 1fr))` }}
+            role="img"
+            aria-label={`${travelWindowInsights.passHours} of ${travelWindowRows.length} forecast hours stay within your limits.`}
+          >
+            {travelWindowRows.map((row, index) => {
+              const tone = row.pass
+                ? 'ok'
+                : row.lightningRisk || row.failedRules.length > 1 || row.gust >= maxGustMph
+                  ? 'bad'
+                  : 'warn';
+              return (
+                <span key={`${row.time}-${index}`} className={tone} title={`${formatClock(row.time)}: ${row.reasonSummary}`}>
+                  <i />
+                  <b>{formatClock(row.time).replace(':00', '')}</b>
+                </span>
+              );
+            })}
+          </div>
+          {coverageShifted && (
+            <p className="ssr-console-window-gap" role="status">
+              <TriangleAlert size={13} aria-hidden /> Available rows run {coverageStartLabel}–{coverageEndLabel}; the plan starts at {plannedStartLabel}.
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="ssr-console-mod ssr-console-kpis" aria-label="Key condition readings">
         <div className="ssr-console-mod-h">
-          <span>Conditions</span>
-          <span className="ssr-console-h-meta">at planned start</span>
+          <span>Conditions at a glance</span>
+          <span className="ssr-console-h-meta">Select any card for detail</span>
         </div>
         <ul className="ssr-console-kpi-list">
           {kpis.map((kpi) => {
             const Icon = kpi.icon as (props: { size?: number; 'aria-hidden'?: boolean }) => ReactNode;
             return (
               <li key={kpi.key} className="ssr-console-kpi ssr-console-click" {...detailHandlers(kpi.detailKey, kpi.detailTitle)}>
-                <i className={`ssr-console-led-dot ${ledTone(kpi.tone)}`} />
-                <span className="ssr-console-kpi-icon" aria-hidden><Icon size={14} aria-hidden /></span>
+                <span className={`ssr-console-kpi-icon ${ledTone(kpi.tone)}`} aria-hidden><Icon size={18} aria-hidden /></span>
                 <span className="ssr-console-kpi-label">{kpi.label}</span>
                 <span className="ssr-console-kpi-value">{kpi.value}</span>
                 {kpi.sub && <span className="ssr-console-kpi-sub">{kpi.sub}</span>}
@@ -372,8 +383,7 @@ export function ReportConsole({
         </ul>
       </section>
 
-      {/* Footer fact strip */}
-      <footer className="ssr-console-foot" aria-label="Additional readings">
+      <dl className="ssr-console-foot" aria-label="Additional readings">
         {facts.map((fact) => (
           <div
             key={fact.label}
@@ -381,20 +391,24 @@ export function ReportConsole({
             {...(fact.detailKey ? detailHandlers(fact.detailKey, fact.detailTitle || fact.label) : {})}
           >
             <i className={`ssr-console-led-dot ${ledTone(fact.tone)}`} />
-            <dt>{fact.label}</dt>
-            <dd>{fact.value}</dd>
+            <span>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
+            </span>
           </div>
         ))}
         <div className="ssr-console-fact ssr-console-fact-note">
           <TriangleAlert size={12} aria-hidden />
-          <span>Point-in-time snapshot — recheck official sources before departure.</span>
+          <span>
+            <dt>Reminder</dt>
+            <dd>Point-in-time snapshot — recheck official sources before departure.</dd>
+          </span>
         </div>
-      </footer>
+      </dl>
 
-      {/* Full-report section chips */}
       {detailSections.length > 0 && (
         <nav className="ssr-console-sections" aria-label="Open a full report section">
-          <span className="ssr-console-sections-label">Full report</span>
+          <span className="ssr-console-sections-label">Explore the full report</span>
           {detailSections.map((section) => (
             <button key={section.key} type="button" onClick={() => onOpenDetail(section.key, section.label)}>
               {section.label}

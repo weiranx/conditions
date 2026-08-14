@@ -1,10 +1,5 @@
-/* =========================================================
-   DASHBOARD REPORT MODE — "Field ops console"
-   Toggled via .ssr-dashboard on .ssr-report. Dashboard mode
-   swaps the full report for ReportConsole.tsx: a single
-   fixed-height panel with no scrolling. The classic report
-   tree stays mounted (hidden) so print keeps working.
-   ========================================================= */
+/* Dashboard report mode. The classic report stays mounted for print and
+   section detail overlays while ReportConsole owns the screen layout. */
 
 /* Layout toggle (visible in both layouts). */
 .ssr-report-context-side {
@@ -67,22 +62,24 @@
    --------------------------------------------------------- */
 .ssr-report.ssr-dashboard {
   --console-mono: var(--d-mono);
-  --console-canvas: #e7ebf1;
-  --console-grid-line: rgba(67, 88, 112, 0.07);
-  --console-panel: #fcfdfe;
-  --console-titlebar: #edf1f6;
-  --console-line: #c6d0dc;
-  --console-line-strong: #a9b6c6;
-  --console-ink: #1b2531;
-  --console-ink-2: #49596b;
-  --console-ink-3: #7a899a;
-  --console-accent: #2f6fed;
-  --console-bar-bg: #141e2b;
-  --console-bar-ink: #e9eff6;
-  --console-bar-ink-2: #93a3b8;
-  --console-led-ok: #22a35c;
-  --console-led-warn: #d9930d;
-  --console-led-bad: #d64541;
+  --console-canvas: #f1f4ef;
+  --console-grid-line: rgba(45, 80, 57, 0.055);
+  --console-panel: #fcfdfb;
+  --console-soft: #f0f4ef;
+  --console-titlebar: #edf2ec;
+  --console-line: #d8e0d7;
+  --console-line-strong: #b7c5b9;
+  --console-ink: #18231c;
+  --console-ink-2: #4d5e52;
+  --console-ink-3: #78867c;
+  --console-accent: #24734a;
+  --console-bar-bg: #173525;
+  --console-bar-ink: #f3f8f3;
+  --console-bar-ink-2: #b8cbbd;
+  --console-led-ok: #218653;
+  --console-led-warn: #b66f12;
+  --console-led-bad: #c94f49;
+  --console-shadow: rgba(24, 49, 32, 0.07);
 
   --ssr-surface: var(--console-panel);
   --ssr-surface-2: var(--console-titlebar);
@@ -107,45 +104,36 @@
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
-  padding: 14px;
+  padding: 15px;
   border: 1px solid var(--console-line);
-  border-radius: 10px;
+  border-radius: 20px;
   background:
-    linear-gradient(var(--console-grid-line) 1px, transparent 1px) 0 0 / 100% 26px,
-    linear-gradient(90deg, var(--console-grid-line) 1px, transparent 1px) 0 0 / 26px 100%,
+    radial-gradient(circle at 5% 0%, rgba(79, 130, 92, 0.09), transparent 28%),
     var(--console-canvas);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 html[data-theme="dark"] .ssr-report.ssr-dashboard {
-  --console-canvas: #0a1020;
-  --console-grid-line: rgba(120, 150, 200, 0.055);
-  --console-panel: #121b2c;
-  --console-titlebar: #1a2438;
-  --console-line: #283550;
-  --console-line-strong: #3a4a6b;
-  --console-ink: #dde6f3;
-  --console-ink-2: #9fb0c8;
-  --console-ink-3: #6d7f9a;
-  --console-accent: #5b8def;
-  --console-bar-bg: #0b1322;
-  --console-bar-ink: #e6edf7;
-  --console-bar-ink-2: #8498b3;
-  --console-led-ok: #34c977;
-  --console-led-warn: #e8a812;
-  --console-led-bad: #e85d59;
-}
-
-/* Wide screens: the console is one viewport-height panel — no scroll. */
-@media (min-width: 1081px) {
-  .ssr-report.ssr-dashboard {
-    height: calc(100dvh - 96px);
-    min-height: 560px;
-    overflow: hidden;
-  }
+  --console-canvas: #101711;
+  --console-grid-line: rgba(140, 178, 147, 0.045);
+  --console-panel: #172019;
+  --console-soft: #1e2921;
+  --console-titlebar: #202c23;
+  --console-line: #303d33;
+  --console-line-strong: #4a5b4e;
+  --console-ink: #ecf2ed;
+  --console-ink-2: #b3c1b6;
+  --console-ink-3: #829087;
+  --console-accent: #70c28c;
+  --console-bar-bg: #112016;
+  --console-bar-ink: #eff7f1;
+  --console-bar-ink-2: #a7bbac;
+  --console-led-ok: #5dc883;
+  --console-led-warn: #e3a044;
+  --console-led-bad: #ed7169;
+  --console-shadow: rgba(0, 0, 0, 0.22);
 }
 
 /* In dashboard mode the classic report tree is screen-hidden. */
@@ -160,13 +148,15 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   align-items: center;
   justify-content: space-between;
   gap: 14px 20px;
-  padding: 13px 16px;
+  padding: 18px 20px;
   border: 1px solid var(--console-bar-bg);
-  border-radius: 8px;
+  border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 42%),
+    radial-gradient(circle at 8% -40%, rgba(255, 255, 255, 0.18), transparent 46%),
+    linear-gradient(110deg, color-mix(in oklch, var(--console-accent) 16%, var(--console-bar-bg)), var(--console-bar-bg) 55%),
     var(--console-bar-bg);
   color: var(--console-bar-ink);
+  box-shadow: 0 12px 28px color-mix(in oklch, var(--console-shadow) 80%, transparent);
 }
 
 .ssr-console-id {
@@ -178,30 +168,18 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
 
 .ssr-console-led {
   flex: none;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--console-led-ok);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--console-led-ok) 22%, transparent),
-    0 0 10px color-mix(in oklch, var(--console-led-ok) 65%, transparent);
-  animation: ssr-console-led-pulse 2.6s ease-in-out infinite;
-}
-
-@keyframes ssr-console-led-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ssr-console-led { animation: none; }
+  width: 12px;
+  height: 36px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--console-led-ok), color-mix(in oklch, var(--console-led-ok) 35%, transparent));
+  box-shadow: 0 0 18px color-mix(in oklch, var(--console-led-ok) 35%, transparent);
 }
 
 .ssr-console-kicker {
   margin: 0;
-  font-family: var(--console-mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--console-bar-ink-2);
 }
@@ -209,9 +187,9 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
 .ssr-console-name {
   margin: 2px 0 0;
   font-family: var(--ssr-display, var(--ssr-sans));
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-size: clamp(21px, 2vw, 28px);
+  font-weight: 680;
+  letter-spacing: -0.025em;
   line-height: 1.15;
 }
 
@@ -220,16 +198,15 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   flex-wrap: wrap;
   gap: 4px 0;
   margin: 4px 0 0;
-  font-family: var(--console-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  letter-spacing: 0.02em;
   color: var(--console-bar-ink-2);
 }
 
 .ssr-console-meta span + span::before {
-  content: '//';
+  content: '·';
   margin: 0 8px;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 @media (max-width: 700px) {
@@ -253,14 +230,14 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   gap: 0;
   margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  border-radius: 11px;
   overflow: hidden;
 }
 
 .ssr-console-side .ssr-report-context-facts > div {
   display: grid;
   gap: 2px;
-  padding: 7px 14px;
+  padding: 8px 13px;
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -269,10 +246,9 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
 }
 
 .ssr-console-side .ssr-report-context-facts dt {
-  font-family: var(--console-mono);
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--console-bar-ink-2);
 }

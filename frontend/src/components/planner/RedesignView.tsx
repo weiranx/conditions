@@ -1298,7 +1298,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           <div className="ssr-console-id">
             <span className="ssr-console-led" aria-hidden="true" />
             <div className="ssr-console-id-copy">
-              <p className="ssr-console-kicker">Field ops console</p>
+              <p className="ssr-console-kicker">Trip dashboard</p>
               <h2 className="ssr-console-name">{objectiveName || 'Backcountry objective'}</h2>
               <p className="ssr-console-meta">
                 <span>{props.formatIsoDateLabel(props.forecastDate)}</span>
