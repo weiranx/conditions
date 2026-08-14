@@ -2,10 +2,27 @@
   position: fixed;
   inset: 0;
   z-index: 2200;
-  display: grid;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  display: none;
   place-items: center;
   padding: 20px;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  color: inherit;
+}
+
+.ai-access-backdrop[open] {
+  display: grid;
+}
+
+.ai-access-backdrop::backdrop {
   background: color-mix(in oklch, var(--ui-scrim) 62%, transparent);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
 

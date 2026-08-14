@@ -556,45 +556,35 @@ export function HomeView({
               </div>
             </article>}
           </div>
-        </section>
 
-        <section className="ssr-h-tools" aria-labelledby="home-tools-title">
-          <div className="ssr-h-tools-head" data-reveal>
-            <span className="ssr-h-eyebrow">Beyond the first brief</span>
-            <h2 id="home-tools-title">Keep planning as the questions get sharper.</h2>
-            <p>Move from “Is Saturday viable?” to the route, start time, and fallback that make the most sense.</p>
-          </div>
-
-          <div className="ssr-h-tools-grid" data-reveal>
-            {featureFlags.tripPlanning && <article>
-              <div className="ssr-h-tool-icon"><CalendarRange aria-hidden /></div>
-              <span>Compare days</span>
-              <h3>Find the best day in the window.</h3>
-              <p>Run the same objective and travel assumptions across several days, then carry your choice directly into Planner.</p>
-              <button type="button" onClick={openTripToolView}>Open Trip tool <ArrowRight size={14} aria-hidden /></button>
-            </article>}
-            {featureFlags.gpxImport && <article>
-              <div className="ssr-h-tool-icon"><MapPinned aria-hidden /></div>
-              <span>Inspect the route</span>
-              <h3>Put the forecast on your line.</h3>
-              <p>Upload a GPX track to see elevation, slope, aspect, and condition changes along the route—not just at one point.</p>
-              <button type="button" onClick={openPlannerView}>Explore route analysis <ArrowRight size={14} aria-hidden /></button>
-            </article>}
-            {featureFlags.startTimeComparisons && <article>
-              <div className="ssr-h-tool-icon"><BarChart3 aria-hidden /></div>
-              <span>Compare start times</span>
-              <h3>See what an hour changes.</h3>
-              <p>Test earlier and later departures against daylight, precipitation, heat, wind, and time-sensitive hazards.</p>
-              <button type="button" onClick={openPlannerView}>Open Planner <ArrowRight size={14} aria-hidden /></button>
-            </article>}
-            <article>
-              <div className="ssr-h-tool-icon"><Sparkles aria-hidden /></div>
-              <span>Ask the report</span>
-              <h3>Follow the question that matters.</h3>
-              <p>Ask focused follow-ups about timing, terrain, gear, or alternatives with your actual report kept in context.</p>
-              <button type="button" onClick={openPlannerView}>Build a report first <ArrowRight size={14} aria-hidden /></button>
-            </article>
-          </div>
+          <nav className="ssr-h-tools-strip" aria-label="Continue planning" data-reveal>
+            <div className="ssr-h-tools-strip-intro">
+              <span>Continue planning</span>
+              <strong>Go deeper when the question gets sharper.</strong>
+            </div>
+            <div className="ssr-h-tools-strip-actions">
+              {featureFlags.tripPlanning && <button type="button" onClick={openTripToolView}>
+                <CalendarRange aria-hidden />
+                <span><strong>Compare days</strong><small>Find the best forecast window.</small></span>
+                <ArrowRight aria-hidden />
+              </button>}
+              {featureFlags.gpxImport && <button type="button" onClick={openPlannerView}>
+                <MapPinned aria-hidden />
+                <span><strong>Inspect a route</strong><small>Put conditions on your GPX line.</small></span>
+                <ArrowRight aria-hidden />
+              </button>}
+              {featureFlags.startTimeComparisons && <button type="button" onClick={openPlannerView}>
+                <BarChart3 aria-hidden />
+                <span><strong>Compare start times</strong><small>See what an hour changes.</small></span>
+                <ArrowRight aria-hidden />
+              </button>}
+              <button type="button" onClick={openPlannerView}>
+                <Sparkles aria-hidden />
+                <span><strong>Ask the report</strong><small>Follow up with the brief in context.</small></span>
+                <ArrowRight aria-hidden />
+              </button>
+            </div>
+          </nav>
         </section>
 
         <section className="ssr-h-sources" aria-labelledby="home-sources-title">

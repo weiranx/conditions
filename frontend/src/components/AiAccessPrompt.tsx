@@ -36,6 +36,7 @@ export function AiAccessPrompt({
   preferences,
 }: AiAccessPromptProps) {
   const account = useAccount();
+  const dialogRef = React.useRef<HTMLDialogElement>(null);
   const initialFocusRef = React.useRef<HTMLInputElement>(null);
   const [mode, setMode] = React.useState<AuthMode>('signin');
   const [displayName, setDisplayName] = React.useState('');
@@ -92,17 +93,15 @@ export function AiAccessPrompt({
     const previousFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    const focusTimer = window.setTimeout(() => initialFocusRef.current?.focus(), 0);
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    const focusFrame = window.requestAnimationFrame(() => initialFocusRef.current?.focus());
     return () => {
-      window.clearTimeout(focusTimer);
-      document.removeEventListener('keydown', handleKeyDown);
+      window.cancelAnimationFrame(focusFrame);
+      if (dialog?.open) dialog.close();
       previousFocus?.focus();
     };
-  }, [onClose, open]);
+  }, [open]);
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -146,20 +145,20 @@ export function AiAccessPrompt({
   const errorMessage = formError || account.error;
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       className="ai-access-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
+      aria-labelledby="ai-access-title"
+      aria-describedby="ai-access-description"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section
-        className="ai-access-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ai-access-title"
-        aria-describedby="ai-access-description"
-      >
+      <section className="ai-access-dialog">
         <button type="button" className="ai-access-close" onClick={onClose} aria-label="Close account prompt">
           <X size={18} aria-hidden />
         </button>
@@ -350,6 +349,6 @@ export function AiAccessPrompt({
           )}
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }

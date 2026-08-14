@@ -362,7 +362,7 @@
     margin-inline: -16px;
     padding: 7px 34px 8px 16px;
     border-bottom: 1px solid var(--ssr-line);
-    background: color-mix(in oklch, var(--ssr-bg) 96%, transparent);
+    background: var(--ui-surface-floating);
     box-shadow: 0 8px 18px -18px color-mix(in oklch, var(--ssr-text) 46%, transparent);
     scroll-padding-inline: 16px 34px;
     scroll-snap-type: x proximity;

@@ -543,6 +543,48 @@
 .ssr-h-new-card:hover { transform: translateY(-3px); border-color: var(--ssr-line-strong); box-shadow: var(--ui-shadow-md); }
 .ssr-h-new-card-featured:hover { border-color: rgba(221, 239, 225, .3); box-shadow: 0 40px 78px -44px rgba(6, 31, 16, .95); }
 
+/* Secondary workflows belong to the feature story without becoming a second
+   feature-story section. This compact action strip preserves every route. */
+.ssr-h-tools-strip {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(0, 2.3fr);
+  gap: 22px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.ssr-h-tools-strip-intro { display: grid; gap: 4px; padding-inline: 4px; }
+.ssr-h-tools-strip-intro span { color: var(--ui-brand-strong); font-size: .7rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.ssr-h-tools-strip-intro strong { color: var(--ui-text); font-size: .95rem; line-height: 1.35; }
+.ssr-h-tools-strip-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ssr-h-tools-strip-actions button {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--ui-motion-fast), background var(--ui-motion-fast);
+}
+.ssr-h-tools-strip-actions button:hover { border-color: var(--ui-brand); background: var(--ui-brand-soft); }
+.ssr-h-tools-strip-actions button > svg:first-child { width: 18px; color: var(--ui-brand-strong); }
+.ssr-h-tools-strip-actions button > svg:last-child { width: 14px; color: var(--ui-text-3); }
+.ssr-h-tools-strip-actions button span { min-width: 0; display: grid; gap: 3px; }
+.ssr-h-tools-strip-actions button strong { color: var(--ui-text); font-size: .8rem; }
+.ssr-h-tools-strip-actions button small { overflow: hidden; color: var(--ui-text-3); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Scroll reveal — only active once the useScrollReveal hook arms the page,
    and never armed for reduced-motion users. */
 .ssr-home[data-reveal-armed] [data-reveal] {
@@ -588,6 +630,7 @@
   .ssr-h-new-head { grid-template-columns: 1fr; gap: 20px; }
   .ssr-h-new-grid { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
   .ssr-h-new-card-featured { grid-column: 1 / 3; grid-row: auto; min-height: 530px; }
+  .ssr-h-tools-strip { grid-template-columns: 1fr; }
   .ssr-h-source-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ssr-h-source-group, .ssr-h-source-group:nth-child(3n) { border-right: 1px solid var(--ssr-line); border-bottom: 1px solid var(--ssr-line); }
   .ssr-h-source-group:nth-child(2n) { border-right: 0; }
@@ -663,6 +706,10 @@
   .ssr-h-new-card-featured .ssr-h-new-card-copy h3 { font-size: 36px; }
   .ssr-h-new-watch-preview { right: 24px; bottom: 24px; left: 24px; }
   .ssr-h-new-window-preview, .ssr-h-new-days-preview { right: 24px; bottom: 24px; }
+  .ssr-h-tools-strip { margin-top: 14px; padding: 12px; gap: 12px; }
+  .ssr-h-tools-strip-actions { grid-template-columns: 1fr; }
+  .ssr-h-tools-strip-actions button { min-height: 68px; }
+  .ssr-h-tools-strip-actions button small { white-space: normal; }
   .ssr-h-tools { padding: 70px 14px 72px; }
   .ssr-h-tools-head { margin-bottom: 28px; }
   .ssr-h-tools-grid { grid-template-columns: 1fr; }

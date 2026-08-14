@@ -13697,3 +13697,82 @@ button.collapsible-card-header:hover .collapsible-chevron {
   .card, .ai-box, .score-card { box-shadow: none; break-inside: avoid; }
   .collapsible-card { border: 1px solid #ddd; }
 }
+
+/* Material hierarchy: content cards are stable reading surfaces. Blur is
+   reserved for floating chrome, menus, sheets, and map controls. */
+:where(
+  .card,
+  .home-card,
+  .settings-card,
+  .score-card,
+  .collapsible-card,
+  .ssr-card,
+  .ssr-set-card,
+  .ssr-trip-panel
+) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Operator data remains dense, but never drops below a readable metadata
+   floor. Larger headings and primary values retain their existing rules. */
+.logs-dashboard small,
+.logs-dashboard em,
+.admin-dashboard-nav strong,
+.admin-dashboard-nav b,
+.admin-operations-nav strong,
+.admin-operations-nav b,
+.admin-workspace-heading > div > span,
+.admin-workspace-heading > span,
+.logs-range-control button,
+.admin-dashboard-kpis small,
+.admin-dashboard-kpis em,
+.admin-action-list small,
+.admin-quick-actions small,
+.admin-system-grid small,
+.admin-diagnostic-row small,
+.admin-health-history-detail small,
+.admin-objective-scheduler-grid span,
+.admin-objective-scheduler-grid small,
+.admin-audit-list time span,
+.admin-provider-options small,
+.admin-runtime-group-head span,
+.admin-runtime-entry-copy p,
+.admin-runtime-entry-copy > span,
+.admin-runtime-readonly small,
+.admin-hotspot-list small {
+  font-size: 0.75rem;
+}
+
+.logs-dashboard small,
+.logs-dashboard em {
+  font-size: 0.75rem !important;
+}
+
+.logs-dashboard-toolbar p,
+.logs-chart-head p,
+.admin-workspace-heading p,
+.logs-card-head p,
+.logs-section-head p,
+.admin-system-card-head p,
+.admin-action-card-head p,
+.admin-quick-actions > div:first-child strong {
+  font-size: 0.75rem;
+}
+
+@media (prefers-contrast: more) {
+  :where(
+    .card,
+    .home-card,
+    .settings-card,
+    .score-card,
+    .collapsible-card,
+    .ssr-card,
+    .ssr-set-card,
+    .ssr-trip-panel,
+    .admin-dashboard-nav,
+    .logs-card
+  ) {
+    border-color: var(--ui-line-strong);
+  }
+}

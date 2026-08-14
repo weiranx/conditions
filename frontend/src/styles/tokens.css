@@ -37,6 +37,7 @@
   --ui-canvas-glow:    color-mix(in oklch, var(--ui-brand-soft) 78%, transparent);
   --ui-canvas-warm:    color-mix(in oklch, var(--ui-risk-2) 9%, transparent);
   --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 86%, transparent);
+  --ui-surface-floating: color-mix(in oklch, var(--ui-surface) 92%, transparent);
   --ui-surface-raised: color-mix(in oklch, var(--ui-surface) 96%, white);
   --ui-card-gradient:  linear-gradient(155deg, var(--ui-surface-raised), var(--ui-surface) 58%, color-mix(in oklch, var(--ui-brand-soft) 10%, var(--ui-surface)));
   --ui-brand-halo:     0 12px 30px -22px color-mix(in oklch, var(--ui-brand) 52%, transparent);
@@ -162,6 +163,48 @@ html[data-theme="dark"] {
   --ui-canvas-glow:    color-mix(in oklch, var(--ui-brand) 9%, transparent);
   --ui-canvas-warm:    color-mix(in oklch, var(--ui-risk-3) 4%, transparent);
   --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 82%, transparent);
+  --ui-surface-floating: color-mix(in oklch, var(--ui-surface) 90%, transparent);
   --ui-surface-raised: color-mix(in oklch, var(--ui-surface) 96%, white);
   --ui-brand-halo:     0 14px 34px -22px color-mix(in oklch, var(--ui-brand) 34%, transparent);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  html[data-theme="dark"] {
+    --ui-surface-glass: var(--ui-surface);
+    --ui-surface-floating: var(--ui-surface);
+    --ui-line-highlight: var(--ui-line-strong);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --ui-bg:             oklch(99% 0.002 150);
+    --ui-surface:        white;
+    --ui-surface-subtle: oklch(96% 0.006 150);
+    --ui-surface-muted:  oklch(91% 0.010 150);
+    --ui-line:           oklch(61% 0.018 150);
+    --ui-line-strong:    oklch(40% 0.022 150);
+    --ui-text:           oklch(10% 0.010 155);
+    --ui-text-2:         oklch(22% 0.010 155);
+    --ui-text-3:         oklch(30% 0.010 155);
+    --ui-surface-glass:  var(--ui-surface);
+    --ui-surface-floating: var(--ui-surface);
+    --ui-focus-ring:     currentColor;
+  }
+
+  html[data-theme="dark"] {
+    --ui-bg:             oklch(8% 0.010 155);
+    --ui-surface:        oklch(12% 0.012 155);
+    --ui-surface-subtle: oklch(17% 0.014 155);
+    --ui-surface-muted:  oklch(22% 0.016 155);
+    --ui-line:           oklch(62% 0.018 155);
+    --ui-line-strong:    oklch(82% 0.015 155);
+    --ui-text:           white;
+    --ui-text-2:         oklch(91% 0.008 155);
+    --ui-text-3:         oklch(82% 0.010 155);
+    --ui-surface-glass:  var(--ui-surface);
+    --ui-surface-floating: var(--ui-surface);
+    --ui-focus-ring:     currentColor;
+  }
 }

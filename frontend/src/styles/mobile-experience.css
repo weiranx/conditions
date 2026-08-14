@@ -52,6 +52,10 @@
     min-height: 52px;
   }
 
+  .search-bar input {
+    min-height: 44px;
+  }
+
   .search-clear-btn {
     width: 44px;
     height: 44px;

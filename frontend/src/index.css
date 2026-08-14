@@ -54,6 +54,35 @@ h3 {
   outline-offset: 2px;
 }
 
+/* Press feedback is a shared interaction primitive. Use the independent
+   scale property so existing translate/rotate transforms keep their meaning. */
+:where(button:not(:disabled), [role='button']:not([aria-disabled='true'])):active {
+  scale: 0.98;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(button, [role='button']):active {
+    scale: 1;
+  }
+}
+
+/* Glass is optional decoration, never a legibility requirement. */
+@media (prefers-reduced-transparency: reduce) {
+  *,
+  *::before,
+  *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :focus-visible {
+    outline-width: 3px;
+    outline-color: currentColor;
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--ssr-sans);
