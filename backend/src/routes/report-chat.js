@@ -149,6 +149,16 @@ const createKimiStreamingModel = ({ createOpenAICompatible, apiKey, baseURL, mod
   return kimi.chatModel(modelId);
 };
 
+const createGeminiStreamingModel = ({ createOpenAICompatible, apiKey, baseURL, modelId }) => {
+  const gemini = createOpenAICompatible({
+    name: 'gemini',
+    apiKey,
+    baseURL,
+    includeUsage: true,
+  });
+  return gemini.chatModel(modelId);
+};
+
 const resolveStreamingModel = async () => {
   assertAIEnabled();
   const status = getAIStatus();
@@ -170,6 +180,20 @@ const resolveStreamingModel = async () => {
     const baseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
     return {
       model: createKimiStreamingModel({ createOpenAICompatible, apiKey, baseURL, modelId }),
+      modelId,
+      provider,
+    };
+  }
+  if (provider === 'gemini') {
+    const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
+    const baseURL = String(process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
+    return {
+      model: createGeminiStreamingModel({
+        createOpenAICompatible,
+        apiKey: process.env.GEMINI_API_KEY,
+        baseURL,
+        modelId,
+      }),
       modelId,
       provider,
     };
@@ -464,6 +488,7 @@ module.exports = {
   FOLLOW_UP_SYSTEM_PROMPT,
   REPORT_CHAT_SYSTEM_PROMPT,
   TRIP_CHAT_SYSTEM_PROMPT,
+  createGeminiStreamingModel,
   createKimiStreamingModel,
   createContextualFollowUps,
   normalizeReport,

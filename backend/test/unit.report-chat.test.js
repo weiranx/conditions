@@ -7,6 +7,7 @@ const {
   REPORT_CHAT_MAX_OUTPUT_TOKENS,
   REPORT_CHAT_SYSTEM_PROMPT,
   TRIP_CHAT_SYSTEM_PROMPT,
+  createGeminiStreamingModel,
   createKimiStreamingModel,
   createContextualFollowUps,
   normalizeReport,
@@ -57,6 +58,38 @@ describe('report chat request handling', () => {
       apiKey: 'kimi-test-key',
       baseURL: 'https://api.moonshot.ai/v1',
       modelId: 'kimi-k2.6',
+    });
+
+    expect(model.specificationVersion).toBe('v3');
+  });
+
+  test('uses the compatible Gemini streaming adapter', () => {
+    const model = { provider: 'gemini', modelId: 'gemini-3.7-flash' };
+    const chatModel = jest.fn(() => model);
+    const createOpenAICompatible = jest.fn(() => ({ chatModel }));
+
+    expect(createGeminiStreamingModel({
+      createOpenAICompatible,
+      apiKey: 'gemini-test-key',
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      modelId: 'gemini-3.7-flash',
+    })).toBe(model);
+    expect(chatModel).toHaveBeenCalledWith('gemini-3.7-flash');
+    expect(createOpenAICompatible).toHaveBeenCalledWith({
+      name: 'gemini',
+      apiKey: 'gemini-test-key',
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      includeUsage: true,
+    });
+  });
+
+  test('creates a Gemini model version supported by the current AI SDK runtime', () => {
+    const { createOpenAICompatible } = require('@ai-sdk/openai-compatible');
+    const model = createGeminiStreamingModel({
+      createOpenAICompatible,
+      apiKey: 'gemini-test-key',
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      modelId: 'gemini-3.7-flash',
     });
 
     expect(model.specificationVersion).toBe('v3');

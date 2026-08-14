@@ -84,5 +84,5 @@ Persisted in browser local storage under `summitsafe:user-preferences:v1`. Unit 
 - Some center-specific avalanche handling exists as explicit hotfix logic in `backend/index.js` — check before modifying avalanche parsing.
 - Backend module system is **CommonJS** (`require`/`module.exports`). Frontend is **ES modules** (`import`/`export`).
 - Backend test suite (`test/unit.helpers.test.js`) is extremely large; run targeted tests during development.
-- `AI_PROVIDER` selects the preferred `openai` (default) or `anthropic` provider. Failed or timed-out requests retry once through the other provider when its key is configured; set both keys for automatic failover. OpenAI defaults to `gpt-5.6-terra`/`gpt-5.6-luna`; Anthropic defaults to `claude-sonnet-5`/`claude-haiku-4-5-20251001`. The `/api/healthz` response exposes preferred/fallback providers and model IDs without exposing credentials.
+- `AI_PROVIDER` selects the preferred `openai` (default), `anthropic`, `kimi`, or `gemini` provider. Failed or timed-out requests retry through the other configured providers. Gemini uses Google's OpenAI-compatible API and defaults to `gemini-3.7-flash`/`gemini-3.5-flash-lite`. The `/api/healthz` response exposes preferred/fallback providers and model IDs without exposing credentials.
 - Set `DEBUG_AVY=true` in `backend/.env` to enable verbose avalanche pipeline debug logs.

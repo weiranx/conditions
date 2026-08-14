@@ -19,6 +19,7 @@ const RUNTIME_ENV_DEFINITIONS = Object.freeze([
   { key: 'AI_FAST_TIMEOUT_MS', label: 'Fast AI timeout', category: 'AI', description: 'Maximum duration for latency-sensitive model requests.', type: 'integer', min: 1000, max: 120000 },
   { key: 'OPENAI_API_KEY', label: 'OpenAI API key', category: 'Credentials', description: 'Credential used for OpenAI model requests.', type: 'secret' },
   { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', category: 'Credentials', description: 'Credential used for Anthropic model requests.', type: 'secret' },
+  { key: 'GEMINI_API_KEY', label: 'Gemini API key', category: 'Credentials', description: 'Credential used for Google Gemini model requests.', type: 'secret' },
 
   { key: 'ACCOUNT_SESSION_DAYS', label: 'Account session lifetime', category: 'Accounts', description: 'Days before an account session expires.', type: 'integer', min: 1, max: 365 },
   { key: 'FREE_MONTHLY_MULTI_DAY_LIMIT', label: 'Free multi-day monthly limit', category: 'Accounts', description: 'Monthly multi-day forecast runs for Free accounts.', type: 'integer', min: 1, max: 1000 },

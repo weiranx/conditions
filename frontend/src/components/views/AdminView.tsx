@@ -314,12 +314,13 @@ interface ExternalDiagnosticsResult {
 
 type DiagnosticService = ExternalDiagnosticsResult['services'][number];
 
-type AIProvider = 'openai' | 'anthropic' | 'kimi';
-const AI_PROVIDERS: AIProvider[] = ['openai', 'anthropic', 'kimi'];
+type AIProvider = 'openai' | 'anthropic' | 'kimi' | 'gemini';
+const AI_PROVIDERS: AIProvider[] = ['openai', 'anthropic', 'kimi', 'gemini'];
 const aiProviderLabel = (provider: AIProvider) => ({
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   kimi: 'Kimi',
+  gemini: 'Gemini',
 })[provider];
 
 interface AIAdminSettings {
@@ -1163,6 +1164,7 @@ function AdminDashboard() {
     openai: { primary: '', fast: '' },
     anthropic: { primary: '', fast: '' },
     kimi: { primary: '', fast: '' },
+    gemini: { primary: '', fast: '' },
   });
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
   const [featureFlagsPending, setFeatureFlagsPending] = useState(false);
@@ -1516,6 +1518,10 @@ function AdminDashboard() {
       kimi: {
         primary: aiSettings.providers.kimi.primary,
         fast: aiSettings.providers.kimi.fast,
+      },
+      gemini: {
+        primary: aiSettings.providers.gemini.primary,
+        fast: aiSettings.providers.gemini.fast,
       },
     });
   }, [aiSettings]);

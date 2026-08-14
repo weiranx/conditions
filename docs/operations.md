@@ -154,7 +154,7 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 | NWS alerts unavailable for future windows | `alerts` section empty | By design — NWS only issues alerts for near-term windows |
 | SNOTEL/NOHRSC variability | Snowpack section sparse or unavailable | Availability varies by location, elevation, and season |
 | Nominatim rate limiting | Search returns only local results | Nominatim enforces usage policies; heavy automated use will be throttled |
-| Preferred AI provider key missing | Requests use a configured fallback, or AI-powered endpoints fail if no key is set | Configure at least two of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `KIMI_API_KEY` for automatic failover |
+| Preferred AI provider key missing | Requests use a configured fallback, or AI-powered endpoints fail if no key is set | Configure at least two of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `KIMI_API_KEY`, and `GEMINI_API_KEY` for automatic failover |
 | Account email unavailable | Registration succeeds but verification is not sent; recovery returns `503` | Check `RESEND_API_KEY`, `EMAIL_FROM`, `APP_BASE_URL`, sender-domain verification, and backend logs |
 | Admin setting does not survive restart | PostgreSQL is unavailable or its admin migration was not applied | Check `/healthz`, run `npm run db:migrate`, and inspect the `admin_settings` table |
 | All configured AI providers fail during route analysis | Route analysis returns `500` | Check provider key validity, model access, quota, base URLs, and the configured AI timeouts. |

@@ -4,7 +4,7 @@ const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
 
-const PROVIDER_IDS = ['openai', 'anthropic', 'kimi'];
+const PROVIDER_IDS = ['openai', 'anthropic', 'kimi', 'gemini'];
 const SUPPORTED_PROVIDERS = new Set(PROVIDER_IDS);
 const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision'];
 const AI_FEATURE_KEY_SET = new Set(AI_FEATURE_KEYS);
@@ -33,6 +33,10 @@ const kimiPrimaryModel = process.env.KIMI_MODEL || 'kimi-k2.6';
 const kimiFastModel = process.env.KIMI_FAST_MODEL || 'kimi-k2.6';
 const kimiApiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || '';
 const kimiBaseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
+const geminiPrimaryModel = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
+const geminiFastModel = process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite';
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const geminiBaseURL = String(process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
 
 const MODEL_CONFIG = {
   openai: {
@@ -53,6 +57,12 @@ const MODEL_CONFIG = {
     options: parseModelOptions(process.env.KIMI_MODEL_OPTIONS, [kimiPrimaryModel, kimiFastModel]),
     configured: Boolean(kimiApiKey),
   },
+  gemini: {
+    primary: geminiPrimaryModel,
+    fast: geminiFastModel,
+    options: parseModelOptions(process.env.GEMINI_MODEL_OPTIONS, [geminiPrimaryModel, geminiFastModel]),
+    configured: Boolean(geminiApiKey),
+  },
 };
 
 const parseTimeout = (value, fallback) => {
@@ -66,6 +76,7 @@ const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
 let openAIClient;
 let anthropicClient;
 let kimiClient;
+let geminiClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
 let aiEnabled = DEFAULT_AI_ENABLED;
 let aiFailoverEnabled = DEFAULT_AI_FAILOVER_ENABLED;
@@ -181,6 +192,14 @@ const getKimiClient = () => {
   return kimiClient;
 };
 
+const getGeminiClient = () => {
+  if (!geminiClient) {
+    if (!geminiApiKey) throw new Error('GEMINI_API_KEY is not set');
+    geminiClient = new OpenAI({ apiKey: geminiApiKey, baseURL: geminiBaseURL });
+  }
+  return geminiClient;
+};
+
 const resolveModel = (provider, { model, tier = 'primary' } = {}, allowExplicitModel = true) => {
   if (allowExplicitModel && model) return model;
   return tier === 'fast' ? MODEL_CONFIG[provider].fast : MODEL_CONFIG[provider].primary;
@@ -244,6 +263,21 @@ const readKimiText = (completion, { maxTokens, model, operation }) => {
   return text;
 };
 
+const readGeminiText = (completion, { maxTokens, model, operation }) => {
+  const text = completion.choices?.[0]?.message?.content?.trim();
+  if (!text) {
+    logger.error(
+      { finishReason: completion.choices?.[0]?.finish_reason },
+      `${operation}: no text in Gemini response`,
+    );
+    throw new Error(`Unexpected response format from Gemini API (finish_reason: ${completion.choices?.[0]?.finish_reason || 'unknown'})`);
+  }
+  if (completion.choices?.[0]?.finish_reason === 'length') {
+    logger.warn({ maxTokens, model }, `${operation}: Gemini response truncated by max_tokens limit`);
+  }
+  return text;
+};
+
 const callTextProvider = async (provider, prompt, options, allowExplicitModel) => {
   const { maxTokens, model, system, tier, feature, userId } = options;
   const resolvedModel = resolveModel(provider, { model, tier }, allowExplicitModel);
@@ -290,6 +324,20 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
         messages,
       }, requestOptions(tier));
       const text = readKimiText(response, { maxTokens: kimiMaxTokens, model: resolvedModel, operation: 'askAI' });
+      await finish('success');
+      return text;
+    }
+
+    if (provider === 'gemini') {
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({ role: 'user', content: prompt });
+      response = await getGeminiClient().chat.completions.create({
+        model: resolvedModel,
+        max_tokens: maxTokens,
+        messages,
+      }, requestOptions(tier));
+      const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
     }
@@ -368,6 +416,26 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
         messages,
       }, requestOptions(tier));
       const text = readKimiText(response, { maxTokens: kimiMaxTokens, model: resolvedModel, operation: 'askAIVision' });
+      await finish('success');
+      return text;
+    }
+
+    if (provider === 'gemini') {
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
+          { type: 'text', text: prompt },
+        ],
+      });
+      response = await getGeminiClient().chat.completions.create({
+        model: resolvedModel,
+        max_tokens: maxTokens,
+        messages,
+      }, requestOptions(tier));
+      const text = readGeminiText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
       await finish('success');
       return text;
     }

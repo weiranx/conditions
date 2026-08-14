@@ -22,6 +22,11 @@ const aiStatus = () => ({
       fast: 'kimi-fast',
       options: ['kimi-configured'],
     },
+    gemini: {
+      primary: 'gemini-current',
+      fast: 'gemini-fast',
+      options: ['gemini-configured'],
+    },
   },
 });
 
@@ -40,6 +45,10 @@ test('loads complete provider catalogs, follows Claude pagination, and caches re
       expect(options.headers.Authorization).toBe('Bearer kimi-secret');
       return jsonResponse({ data: [{ id: 'kimi-z' }, { id: 'kimi-a' }] });
     }
+    if (url === 'https://generativelanguage.googleapis.com/v1beta/openai/models') {
+      expect(options.headers.Authorization).toBe('Bearer gemini-secret');
+      return jsonResponse({ data: [{ id: 'gemini-z' }, { id: 'gemini-a' }] });
+    }
     expect(options.headers['x-api-key']).toBe('anthropic-secret');
     expect(options.headers['anthropic-version']).toBe('2023-06-01');
     if (!url.includes('after_id=')) {
@@ -56,6 +65,7 @@ test('loads complete provider catalogs, follows Claude pagination, and caches re
       OPENAI_API_KEY: 'openai-secret',
       ANTHROPIC_API_KEY: 'anthropic-secret',
       KIMI_API_KEY: 'kimi-secret',
+      GEMINI_API_KEY: 'gemini-secret',
     },
     now: () => currentTime,
   });
@@ -79,16 +89,21 @@ test('loads complete provider catalogs, follows Claude pagination, and caches re
         source: 'provider',
         error: null,
       },
+      gemini: {
+        models: ['gemini-a', 'gemini-configured', 'gemini-current', 'gemini-fast', 'gemini-z'],
+        source: 'provider',
+        error: null,
+      },
     },
   });
-  expect(fetchWithTimeout).toHaveBeenCalledTimes(4);
+  expect(fetchWithTimeout).toHaveBeenCalledTimes(5);
 
   currentTime += 1000;
   expect(await catalog.load()).toBe(first);
-  expect(fetchWithTimeout).toHaveBeenCalledTimes(4);
+  expect(fetchWithTimeout).toHaveBeenCalledTimes(5);
 
   await catalog.load({ force: true });
-  expect(fetchWithTimeout).toHaveBeenCalledTimes(8);
+  expect(fetchWithTimeout).toHaveBeenCalledTimes(10);
 });
 
 test('falls back to configured models without exposing provider failures or missing keys', async () => {
@@ -116,6 +131,11 @@ test('falls back to configured models without exposing provider failures or miss
   });
   expect(result.providers.kimi).toEqual({
     models: ['kimi-configured', 'kimi-current', 'kimi-fast'],
+    source: 'configured',
+    error: 'API key not configured',
+  });
+  expect(result.providers.gemini).toEqual({
+    models: ['gemini-configured', 'gemini-current', 'gemini-fast'],
     source: 'configured',
     error: 'API key not configured',
   });

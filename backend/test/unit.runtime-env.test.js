@@ -13,6 +13,7 @@ test('exposes allowlisted values while redacting credentials', () => {
     baseValues: {
       REQUEST_TIMEOUT_MS: '9000',
       OPENAI_API_KEY: 'deployment-secret',
+      GEMINI_API_KEY: 'gemini-deployment-secret',
       OBJECTIVE_WATCH_CRON_SECRET: 'cron-secret',
     },
     initialOverrides: {},
@@ -31,6 +32,11 @@ test('exposes allowlisted values while redacting credentials', () => {
     configured: true,
     secret: true,
   });
+  expect(status.entries.find((entry) => entry.key === 'GEMINI_API_KEY')).toMatchObject({
+    value: null,
+    configured: true,
+    secret: true,
+  });
   expect(status.entries.find((entry) => entry.key === 'OBJECTIVE_WATCH_CRON_SECRET')).toMatchObject({
     value: null,
     configured: true,
@@ -39,6 +45,7 @@ test('exposes allowlisted values while redacting credentials', () => {
     source: 'deployment environment',
   });
   expect(JSON.stringify(status)).not.toContain('deployment-secret');
+  expect(JSON.stringify(status)).not.toContain('gemini-deployment-secret');
   expect(JSON.stringify(status)).not.toContain('cron-secret');
 });
 

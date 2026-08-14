@@ -102,6 +102,7 @@ test('credentialed diagnostics send keys upstream but never include them in resu
     OPENAI_API_KEY: 'openai-secret',
     ANTHROPIC_API_KEY: 'anthropic-secret',
     KIMI_API_KEY: 'kimi-secret',
+    GEMINI_API_KEY: 'gemini-secret',
   };
   const fetchWithTimeout = jest.fn(async () => createResponse());
 

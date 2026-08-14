@@ -110,7 +110,7 @@ The backend runs against free public data sources out of the box. A couple of fe
 | Variable | Enables | How to get it |
 |---|---|---|
 | `NPS_API_KEY` | The **Access & Closures** sub-section of the Local Conditions card — nearest national-park alerts and closures via the National Park Service API. Without it the section is hidden; the rest of the report is unaffected. | Free, instant — request at [nps.gov developer get-started](https://www.nps.gov/subjects/developer/get-started.htm). |
-| `AI_PROVIDER` | Selects the preferred provider (`openai` by default); use `openai`, `anthropic`, or `kimi`. Failures retry through other configured providers. | — |
+| `AI_PROVIDER` | Selects the preferred provider (`openai` by default); use `openai`, `anthropic`, `kimi`, or `gemini`. Failures retry through other configured providers. | — |
 | `AI_PRIMARY_TIMEOUT_MS` / `AI_FAST_TIMEOUT_MS` | Per-provider attempt limits before failover; defaults to 28000/8000 ms. | — |
 | `OPENAI_API_KEY` | Enables OpenAI as the preferred provider or automatic fallback. | [OpenAI API keys](https://platform.openai.com/api-keys) |
 | `OPENAI_MODEL` / `OPENAI_FAST_MODEL` | OpenAI primary and extraction models; defaults to Terra and Luna. | — |
@@ -119,6 +119,9 @@ The backend runs against free public data sources out of the box. A couple of fe
 | `KIMI_API_KEY` | Enables Kimi as the preferred provider or automatic fallback; `MOONSHOT_API_KEY` is also accepted. | [Kimi API Platform](https://platform.kimi.ai/) |
 | `KIMI_BASE_URL` | Kimi endpoint; defaults to `https://api.moonshot.ai/v1`. | — |
 | `KIMI_MODEL` / `KIMI_FAST_MODEL` | Kimi primary and latency-sensitive models; defaults to `kimi-k3` and `kimi-k2.6`. | — |
+| `GEMINI_API_KEY` | Enables Google Gemini as the preferred provider or automatic fallback. | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `GEMINI_BASE_URL` | Gemini endpoint; defaults to Google's official OpenAI-compatible API. | — |
+| `GEMINI_MODEL` / `GEMINI_FAST_MODEL` | Gemini primary and latency-sensitive models; defaults to `gemini-3.7-flash` and `gemini-3.5-flash-lite`. | — |
 
 Set at least two AI provider keys to enable automatic failover. All API keys are optional to omit — features that do not depend on a missing key continue to work.
 When no AI provider key is configured, AI-powered controls are hidden in the web planner.

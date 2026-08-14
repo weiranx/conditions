@@ -1,10 +1,11 @@
 const mockOpenAICreate = jest.fn();
 const mockAnthropicCreate = jest.fn();
 const mockKimiCreate = jest.fn();
+const mockGeminiCreate = jest.fn();
 
 jest.mock('openai', () => jest.fn().mockImplementation((options = {}) => ({
   responses: { create: mockOpenAICreate },
-  chat: { completions: { create: options.baseURL ? mockKimiCreate : jest.fn() } },
+  chat: { completions: { create: options.baseURL?.includes('generativelanguage.googleapis.com') ? mockGeminiCreate : mockKimiCreate } },
 })));
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockAnthropicCreate },
@@ -30,6 +31,11 @@ const ENV_KEYS = [
   'KIMI_FAST_MODEL',
   'KIMI_MODEL_OPTIONS',
   'KIMI_THINKING_ENABLED',
+  'GEMINI_API_KEY',
+  'GEMINI_BASE_URL',
+  'GEMINI_MODEL',
+  'GEMINI_FAST_MODEL',
+  'GEMINI_MODEL_OPTIONS',
   'AI_PRIMARY_TIMEOUT_MS',
   'AI_FAST_TIMEOUT_MS',
 ];
@@ -46,6 +52,7 @@ describe('AI provider client wrapper', () => {
     mockOpenAICreate.mockReset();
     mockAnthropicCreate.mockReset();
     mockKimiCreate.mockReset();
+    mockGeminiCreate.mockReset();
     process.env.OPENAI_API_KEY = 'openai-test-key';
     process.env.ANTHROPIC_API_KEY = 'anthropic-test-key';
     delete process.env.OPENAI_MODEL;
@@ -61,6 +68,11 @@ describe('AI provider client wrapper', () => {
     delete process.env.KIMI_FAST_MODEL;
     delete process.env.KIMI_MODEL_OPTIONS;
     delete process.env.KIMI_THINKING_ENABLED;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GEMINI_BASE_URL;
+    delete process.env.GEMINI_MODEL;
+    delete process.env.GEMINI_FAST_MODEL;
+    delete process.env.GEMINI_MODEL_OPTIONS;
     delete process.env.AI_PRIMARY_TIMEOUT_MS;
     delete process.env.AI_FAST_TIMEOUT_MS;
     delete process.env.AI_ENABLED;
@@ -203,6 +215,47 @@ describe('AI provider client wrapper', () => {
     }), { timeout: 28000, maxRetries: 0 });
   });
 
+  test('sends text and system prompts through the Gemini chat completions API', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-test-key';
+    process.env.GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+    mockGeminiCreate.mockResolvedValue({
+      choices: [{ message: { content: '  Gemini field brief  ' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 18, completion_tokens: 7, total_tokens: 25 },
+    });
+    const { askAI } = loadClient('gemini');
+
+    await expect(askAI('conditions', { maxTokens: 700, system: 'Be concise.' })).resolves.toBe('Gemini field brief');
+    expect(mockGeminiCreate).toHaveBeenCalledWith({
+      model: 'gemini-3.7-flash',
+      max_tokens: 700,
+      messages: [
+        { role: 'system', content: 'Be concise.' },
+        { role: 'user', content: 'conditions' },
+      ],
+    }, { timeout: 28000, maxRetries: 0 });
+  });
+
+  test('sends base64 images through Gemini multimodal chat input', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-test-key';
+    mockGeminiCreate.mockResolvedValue({
+      choices: [{ message: { content: 'snow coverage' }, finish_reason: 'stop' }],
+    });
+    const { askAIVision } = loadClient('gemini');
+
+    await expect(askAIVision('YWJj', 'analyze', { mediaType: 'image/jpeg' })).resolves.toBe('snow coverage');
+    expect(mockGeminiCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gemini-3.7-flash',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,YWJj' } },
+          { type: 'text', text: 'analyze' },
+        ],
+      }],
+    }), { timeout: 28000, maxRetries: 0 });
+  });
+
   test('reports the selected provider and models without exposing keys', () => {
     const { getAIStatus, isAIAvailable } = loadClient('anthropic');
 
@@ -239,6 +292,12 @@ describe('AI provider client wrapper', () => {
           options: ['kimi-k2.6'],
           configured: false,
         },
+        gemini: {
+          primary: 'gemini-3.7-flash',
+          fast: 'gemini-3.5-flash-lite',
+          options: ['gemini-3.7-flash', 'gemini-3.5-flash-lite'],
+          configured: false,
+        },
       },
       features: {
         aiBrief: { enabled: true, available: true },
@@ -258,6 +317,7 @@ describe('AI provider client wrapper', () => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.KIMI_API_KEY;
     delete process.env.MOONSHOT_API_KEY;
+    delete process.env.GEMINI_API_KEY;
     const { isAIAvailable } = loadClient('openai');
 
     expect(isAIAvailable()).toBe(false);
@@ -539,6 +599,25 @@ describe('AI provider client wrapper', () => {
         max_tokens: 2048,
         thinking: { type: 'disabled' },
       }),
+      { timeout: 28000, maxRetries: 0 },
+    );
+  });
+
+  test('fails over through configured providers to Gemini', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-test-key';
+    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
+    mockAnthropicCreate.mockRejectedValue(new Error('Anthropic unavailable'));
+    mockGeminiCreate.mockResolvedValue({
+      choices: [{ message: { content: 'Gemini fallback brief' }, finish_reason: 'stop' }],
+    });
+    const { askAI } = loadClient('openai');
+
+    await expect(askAI('conditions')).resolves.toBe('Gemini fallback brief');
+    expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
+    expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
+    expect(mockKimiCreate).not.toHaveBeenCalled();
+    expect(mockGeminiCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-3.7-flash', max_tokens: 4096 }),
       { timeout: 28000, maxRetries: 0 },
     );
   });

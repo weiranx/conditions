@@ -7,7 +7,7 @@ test('GET /healthz returns healthy payload', async () => {
   expect(res.status).toBe(200);
   expect(res.body.ok).toBe(true);
   expect(res.body.service).toBe('backcountry-conditions-backend');
-  expect(['openai', 'anthropic', 'kimi']).toContain(res.body.ai.provider);
+  expect(['openai', 'anthropic', 'kimi', 'gemini']).toContain(res.body.ai.provider);
   expect(typeof res.body.ai.primaryModel).toBe('string');
   expect(typeof res.body.ai.fastModel).toBe('string');
   expect(typeof res.body.ai.fallbackProvider).toBe('string');

@@ -22,6 +22,8 @@ const buildExternalServiceChecks = (env = process.env) => {
   const anthropicKey = env.ANTHROPIC_API_KEY || '';
   const kimiKey = env.KIMI_API_KEY || env.MOONSHOT_API_KEY || '';
   const kimiBaseURL = String(env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
+  const geminiKey = env.GEMINI_API_KEY || '';
+  const geminiBaseURL = String(env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
 
   return [
     {
@@ -222,6 +224,15 @@ const buildExternalServiceChecks = (env = process.env) => {
       configured: Boolean(kimiKey),
       url: `${kimiBaseURL}/models`,
       options: { headers: { Authorization: `Bearer ${kimiKey}` } },
+    },
+    {
+      id: 'gemini',
+      name: 'Gemini',
+      category: 'AI',
+      optional: true,
+      configured: Boolean(geminiKey),
+      url: `${geminiBaseURL}/models`,
+      options: { headers: { Authorization: `Bearer ${geminiKey}` } },
     },
   ];
 };
