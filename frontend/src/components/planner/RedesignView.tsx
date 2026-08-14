@@ -28,6 +28,7 @@ import {
   ExternalLink,
   LayoutGrid,
   Rows3,
+  ChevronDown,
   X,
 } from 'lucide-react';
 import type { PlannerViewProps } from './PlannerView';
@@ -570,6 +571,14 @@ interface ReportJumpSection {
   label: string;
 }
 
+const PRIMARY_REPORT_SECTION_IDS = new Set([
+  'planner-section-decision',
+  'planner-section-actions',
+  'planner-section-travel',
+  'planner-section-weather',
+  'planner-section-alerts',
+]);
+
 function ReportJumpNav({
   sections,
   onJump,
@@ -580,9 +589,13 @@ function ReportJumpNav({
   const [activeId, setActiveId] = React.useState(sections[0]?.id || '');
   const [hasMoreSections, setHasMoreSections] = React.useState(false);
   const sectionsRef = React.useRef(sections);
-  const navRef = React.useRef<HTMLElement>(null);
+  const navRef = React.useRef<HTMLDivElement>(null);
+  const moreRef = React.useRef<HTMLDetailsElement>(null);
   const buttonRefs = React.useRef(new Map<string, HTMLAnchorElement>());
   const sectionKey = sections.map((section) => section.id).join('|');
+  const primarySections = sections.filter((section) => PRIMARY_REPORT_SECTION_IDS.has(section.id));
+  const secondarySections = sections.filter((section) => !PRIMARY_REPORT_SECTION_IDS.has(section.id));
+  const activeSecondarySection = secondarySections.find((section) => section.id === activeId);
 
   React.useEffect(() => {
     sectionsRef.current = sections;
@@ -655,26 +668,56 @@ function ReportJumpNav({
 
   return (
     <div className="ssr-jump-nav-shell">
-      <nav ref={navRef} className="ssr-jump-nav" aria-label="Jump to report section" onScroll={updateScrollCue}>
-        {sections.map((section) => (
-          <a
-            key={section.id}
-            ref={(node) => {
-              if (node) buttonRefs.current.set(section.id, node);
-              else buttonRefs.current.delete(section.id);
-            }}
-            href={buildReportSectionHash(section.id)}
-            className={`ssr-jump-chip ${activeId === section.id ? 'active' : ''}`}
-            aria-current={activeId === section.id ? 'location' : undefined}
-            onClick={(event) => {
-              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              event.preventDefault();
-              onJump(section.id, event.detail === 0);
-            }}
-          >
-            {section.label}
-          </a>
-        ))}
+      <nav className="ssr-jump-nav" aria-label="Jump to report section">
+        <span className="ssr-jump-nav-label" aria-hidden="true">Report outline</span>
+        <div ref={navRef} className="ssr-jump-primary" onScroll={updateScrollCue}>
+          {primarySections.map((section) => (
+            <a
+              key={section.id}
+              ref={(node) => {
+                if (node) buttonRefs.current.set(section.id, node);
+                else buttonRefs.current.delete(section.id);
+              }}
+              href={buildReportSectionHash(section.id)}
+              className={`ssr-jump-chip ${activeId === section.id ? 'active' : ''}`}
+              aria-current={activeId === section.id ? 'location' : undefined}
+              onClick={(event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onJump(section.id, event.detail === 0);
+              }}
+            >
+              {section.label}
+            </a>
+          ))}
+        </div>
+        {secondarySections.length > 0 && (
+          <details ref={moreRef} className={`ssr-jump-more ${activeSecondarySection ? 'active' : ''}`}>
+            <summary>
+              <span>{activeSecondarySection ? activeSecondarySection.label : 'More'}</span>
+              <small>{secondarySections.length}</small>
+              <ChevronDown size={13} aria-hidden />
+            </summary>
+            <div className="ssr-jump-more-menu">
+              {secondarySections.map((section) => (
+                <a
+                  key={section.id}
+                  href={buildReportSectionHash(section.id)}
+                  className={activeId === section.id ? 'active' : ''}
+                  aria-current={activeId === section.id ? 'location' : undefined}
+                  onClick={(event) => {
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    moreRef.current?.removeAttribute('open');
+                    onJump(section.id, event.detail === 0);
+                  }}
+                >
+                  {section.label}
+                </a>
+              ))}
+            </div>
+          </details>
+        )}
       </nav>
       {hasMoreSections && (
         <span className="ssr-jump-nav-cue" aria-hidden="true">
