@@ -57,31 +57,6 @@ import '../../styles/report-dashboard.css';
 const REPORT_LAYOUT_STORAGE_KEY = 'summitsafe:report-layout';
 type ReportLayout = 'classic' | 'dashboard';
 
-/* Dashboard module key → inline full-report destination. */
-const CONSOLE_DETAIL_SELECTORS: Record<string, string> = {
-  decision: '#planner-section-decision',
-  score: '#planner-section-score',
-  travel: '#planner-section-travel',
-  actions: '#planner-section-actions',
-  weather: '#planner-section-weather',
-  wind: '#planner-section-wind',
-  avalanche: '#planner-section-avalanche',
-  snowpack: '#planner-section-snowpack',
-  observations: '#planner-section-observations',
-  alerts: '#planner-section-alerts',
-  checks: '#planner-section-checks',
-  gear: '#planner-section-gear',
-  'terrain-window': '#planner-section-terrain-window',
-  'start-times': '#planner-section-start-times',
-  route: '#planner-section-route',
-  monitor: '#planner-section-monitor',
-  daylight: '.ssr-daylight-card',
-  heat: '.ssr-heat-card',
-  fire: '.ssr-fire-card',
-  aqi: '.ssr-aqi-card',
-  precip: '.ssr-precip-card',
-};
-
 /* "Full report" chip strip in the console footer — id-based sections whose
    presence is tracked by presentSectionIds. */
 const CONSOLE_SECTION_LINKS = [
@@ -99,8 +74,6 @@ const CONSOLE_SECTION_LINKS = [
   { key: 'score', label: 'Score', id: 'planner-section-score' },
   { key: 'gear', label: 'Gear', id: 'planner-section-gear' },
   { key: 'start-times', label: 'Start times', id: 'planner-section-start-times' },
-  { key: 'route', label: 'Route', id: 'planner-section-route' },
-  { key: 'monitor', label: 'Watch', id: 'planner-section-monitor' },
 ];
 
 function readStoredReportLayout(): ReportLayout {
@@ -1201,24 +1174,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
     const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     target.scrollIntoView({ behavior, block: 'start' });
   };
-  const openConsoleDetail = (key: string) => {
-    const selector = CONSOLE_DETAIL_SELECTORS[key];
-    if (!selector || !document.querySelector(`.ssr-classic-flow ${selector}`)) return;
-    selectReportLayout('classic');
-    window.requestAnimationFrame(() => {
-      const target = document.querySelector<HTMLElement>(`.ssr-classic-flow ${selector}`);
-      if (!target) return;
-      if (target.id) {
-        jumpToSection(target.id, true);
-        return;
-      }
-      const focusTarget = target.querySelector<HTMLElement>('h2') || target;
-      if (!focusTarget.hasAttribute('tabindex')) focusTarget.setAttribute('tabindex', '-1');
-      focusTarget.focus({ preventScroll: true });
-      const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-      target.scrollIntoView({ behavior, block: 'start' });
-    });
-  };
   const useStartTimeForNewReport = (startTime: string) => {
     onEditPlan();
     setAlpineStartTime(startTime);
@@ -1354,7 +1309,6 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
           }}
           freshnessWarningSummary={props.freshnessWarningSummary}
           detailSections={CONSOLE_SECTION_LINKS.filter((link) => presentSectionIds.has(link.id))}
-          onOpenDetail={openConsoleDetail}
           formatTempDisplay={formatTempDisplay}
           formatWindDisplay={formatWindDisplay}
           formatClock={(time) => formatClockForStyle(time, preferences.timeStyle)}
