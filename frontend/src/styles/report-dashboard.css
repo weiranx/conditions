@@ -176,6 +176,16 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   box-shadow: 0 0 18px color-mix(in oklch, var(--console-led-ok) 35%, transparent);
 }
 
+.ssr-console-led.warn {
+  background: linear-gradient(180deg, var(--console-led-warn), color-mix(in oklch, var(--console-led-warn) 35%, transparent));
+  box-shadow: 0 0 18px color-mix(in oklch, var(--console-led-warn) 35%, transparent);
+}
+
+.ssr-console-led.bad {
+  background: linear-gradient(180deg, var(--console-led-bad), color-mix(in oklch, var(--console-led-bad) 35%, transparent));
+  box-shadow: 0 0 18px color-mix(in oklch, var(--console-led-bad) 35%, transparent);
+}
+
 .ssr-console-kicker {
   margin: 0;
   font-size: 9px;
@@ -223,6 +233,64 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   align-items: center;
   justify-content: flex-end;
   gap: 12px 18px;
+}
+
+.ssr-console-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: max-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--console-bar-ink);
+}
+
+.ssr-console-status > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--console-led-ok);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--console-led-ok) 55%, transparent);
+}
+
+.ssr-console-status.warn > i {
+  background: var(--console-led-warn);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--console-led-warn) 55%, transparent);
+}
+
+.ssr-console-status.bad > i {
+  background: var(--console-led-bad);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--console-led-bad) 55%, transparent);
+}
+
+.ssr-console-status > span {
+  display: grid;
+  gap: 1px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.ssr-console-status small {
+  color: var(--console-bar-ink-2);
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 700px) {
+  .ssr-console-side {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .ssr-console-status { order: 1; }
+  .ssr-console-side .ssr-view-toggle { order: 2; margin-left: auto; }
+  .ssr-console-side .ssr-report-context-facts { order: 3; width: 100%; }
 }
 
 /* Facts become dark-panel readouts. */
