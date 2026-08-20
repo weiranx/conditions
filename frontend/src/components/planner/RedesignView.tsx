@@ -78,9 +78,9 @@ const CONSOLE_SECTION_LINKS = [
 
 function readStoredReportLayout(): ReportLayout {
   try {
-    return window.localStorage.getItem(REPORT_LAYOUT_STORAGE_KEY) === 'dashboard' ? 'dashboard' : 'classic';
+    return window.localStorage.getItem(REPORT_LAYOUT_STORAGE_KEY) === 'classic' ? 'classic' : 'dashboard';
   } catch {
-    return 'classic';
+    return 'dashboard';
   }
 }
 
@@ -1183,6 +1183,11 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       document.getElementById('planner-plan-workflow')?.scrollIntoView({ behavior: 'auto', block: 'start' });
     });
   };
+  const reportDecisionTone = /no[- ]?go|stop|high|severe|extreme/i.test(decision.level)
+    ? 'bad'
+    : /caution|watch|shift|conditional|moderate/i.test(decision.level)
+      ? 'warn'
+      : 'ok';
 
   const reportLayoutToggle = (
     <div className="ssr-view-toggle" role="group" aria-label="Report layout">
@@ -1192,7 +1197,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         aria-pressed={reportLayout === 'classic'}
         onClick={() => selectReportLayout('classic')}
       >
-        <Rows3 size={14} aria-hidden /> Classic
+        <Rows3 size={14} aria-hidden /> Full report
       </button>
       <button
         type="button"
@@ -1200,7 +1205,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         aria-pressed={reportLayout === 'dashboard'}
         onClick={() => selectReportLayout('dashboard')}
       >
-        <LayoutGrid size={14} aria-hidden /> Dashboard
+        <LayoutGrid size={14} aria-hidden /> Overview
       </button>
     </div>
   );
@@ -1244,9 +1249,9 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
       {reportLayout === 'dashboard' ? (
         <header className="ssr-console-bar" aria-label="Report console">
           <div className="ssr-console-id">
-            <span className="ssr-console-led" aria-hidden="true" />
+            <span className={`ssr-console-led ${reportDecisionTone}`} aria-hidden="true" />
             <div className="ssr-console-id-copy">
-              <p className="ssr-console-kicker">Trip dashboard</p>
+              <p className="ssr-console-kicker">Conditions report</p>
               <h2 className="ssr-console-name">{objectiveName || 'Backcountry objective'}</h2>
               <p className="ssr-console-meta">
                 <span>{props.formatIsoDateLabel(props.forecastDate)}</span>
@@ -1256,6 +1261,10 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
             </div>
           </div>
           <div className="ssr-console-side">
+            <span className={`ssr-console-status ${reportDecisionTone}`}>
+              <i aria-hidden="true" />
+              <span><small>Trip decision</small>{decision.level.replace('-', ' ')}</span>
+            </span>
             {reportContextFacts}
             {reportLayoutToggle}
           </div>
