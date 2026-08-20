@@ -26,9 +26,9 @@
   --ui-page-title-tracking: -.045em;
   --ui-control-height: 44px;
   --ui-primary-control-height: 52px;
-  --ui-radius-control: 10px;
-  --ui-radius-card:    14px;
-  --ui-radius-shell:   19px;
+  --ui-radius-control: 11px;
+  --ui-radius-card:    16px;
+  --ui-radius-shell:   22px;
   --ui-meta-size:      11.5px;
   --ui-motion-fast:    160ms ease;
   --ui-motion-medium:  280ms cubic-bezier(.22, 1, .36, 1);
@@ -39,12 +39,13 @@
   --ui-surface-glass:  color-mix(in oklch, var(--ui-surface) 86%, transparent);
   --ui-surface-floating: color-mix(in oklch, var(--ui-surface) 92%, transparent);
   --ui-surface-raised: color-mix(in oklch, var(--ui-surface) 96%, white);
-  --ui-card-gradient:  linear-gradient(155deg, var(--ui-surface-raised), var(--ui-surface) 58%, color-mix(in oklch, var(--ui-brand-soft) 10%, var(--ui-surface)));
+  --ui-card-gradient:  linear-gradient(155deg, var(--ui-surface-raised), var(--ui-surface) 56%, color-mix(in oklch, var(--ui-brand-soft) 15%, var(--ui-surface)));
   --ui-brand-halo:     0 12px 30px -22px color-mix(in oklch, var(--ui-brand) 52%, transparent);
   --ui-shadow-xs:      0 1px 2px oklch(24% 0.025 155 / 0.065);
   --ui-shadow-sm:      0 1px 3px oklch(24% 0.025 155 / 0.065), 0 12px 28px -22px oklch(24% 0.025 155 / 0.24);
   --ui-shadow-md:      0 2px 6px oklch(24% 0.025 155 / 0.07), 0 22px 46px -32px oklch(24% 0.025 155 / 0.30);
   --ui-shadow-lg:      0 3px 9px oklch(24% 0.025 155 / 0.075), 0 32px 68px -42px oklch(24% 0.025 155 / 0.34);
+  --ui-shadow-interactive: 0 2px 5px oklch(24% 0.025 155 / 0.075), 0 18px 38px -28px color-mix(in oklch, var(--ui-brand-strong) 34%, transparent);
   --ui-focus-ring:     var(--ui-brand);
   --ui-risk-1:         oklch(72% 0.170 145);
   --ui-risk-2:         oklch(78% 0.170 100);
@@ -159,6 +160,7 @@ html[data-theme="dark"] {
   --ui-shadow-sm:      0 1px 3px oklch(4% 0.01 155 / 0.24), 0 10px 24px -20px oklch(4% 0.01 155 / 0.44);
   --ui-shadow-md:      0 2px 6px oklch(4% 0.01 155 / 0.28), 0 20px 44px -30px oklch(4% 0.01 155 / 0.56);
   --ui-shadow-lg:      0 3px 9px oklch(4% 0.01 155 / 0.3), 0 30px 62px -38px oklch(4% 0.01 155 / 0.66);
+  --ui-shadow-interactive: 0 2px 6px oklch(4% 0.01 155 / 0.32), 0 20px 42px -28px color-mix(in oklch, var(--ui-brand) 22%, transparent);
   --ui-line-highlight: color-mix(in oklch, white 12%, transparent);
   --ui-canvas-glow:    color-mix(in oklch, var(--ui-brand) 9%, transparent);
   --ui-canvas-warm:    color-mix(in oklch, var(--ui-risk-3) 4%, transparent);

@@ -8,7 +8,7 @@
   min-height: 68px;
   border-bottom: 1px solid color-mix(in oklch, var(--ui-line-strong) 42%, transparent);
   background: var(--ui-surface-glass);
-  box-shadow: 0 10px 30px -28px color-mix(in oklch, var(--ui-text) 30%, transparent), inset 0 -1px color-mix(in oklch, var(--ui-line) 62%, transparent);
+  box-shadow: 0 14px 34px -30px color-mix(in oklch, var(--ui-text) 34%, transparent), inset 0 -1px color-mix(in oklch, var(--ui-line) 62%, transparent), inset 0 1px var(--ui-line-highlight);
   -webkit-backdrop-filter: blur(20px) saturate(1.18);
   backdrop-filter: blur(20px) saturate(1.18);
   font-family: var(--ssr-sans);
@@ -124,12 +124,13 @@
 .ssr-product-links button:hover {
   background: var(--ui-surface-subtle);
   color: var(--ui-text);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--ui-line-strong) 38%, transparent);
 }
 
 .ssr-product-links button.is-active {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--ui-brand-soft) 72%, var(--ui-surface)), color-mix(in oklch, var(--ui-brand-soft) 48%, var(--ui-surface)));
+  background: linear-gradient(180deg, color-mix(in oklch, var(--ui-brand-soft) 82%, var(--ui-surface)), color-mix(in oklch, var(--ui-brand-soft) 54%, var(--ui-surface)));
   color: var(--ui-brand-strong);
-  box-shadow: var(--ui-brand-halo), inset 0 0 0 1px color-mix(in oklch, var(--ui-brand) 18%, transparent), inset 0 1px color-mix(in oklch, white 42%, transparent);
+  box-shadow: var(--ui-brand-halo), inset 0 0 0 1px color-mix(in oklch, var(--ui-brand) 24%, transparent), inset 0 1px color-mix(in oklch, white 48%, transparent);
   cursor: default;
 }
 
@@ -259,7 +260,8 @@
   }
 
   .ssr-product-links button.is-active {
-    box-shadow: inset 0 2px 0 var(--ui-brand-strong);
+    background: linear-gradient(180deg, color-mix(in oklch, var(--ui-brand-soft) 72%, var(--ui-surface)), color-mix(in oklch, var(--ui-brand-soft) 34%, var(--ui-surface)));
+    box-shadow: inset 0 2px 0 var(--ui-brand-strong), inset 0 -1px color-mix(in oklch, var(--ui-brand) 16%, transparent);
   }
 
   /* The navigation no longer overlays page content. */

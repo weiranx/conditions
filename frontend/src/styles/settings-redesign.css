@@ -52,7 +52,7 @@
   color: var(--ssr-text-3);
   cursor: pointer;
   background: none;
-  border: none;
+  border: 1px solid transparent;
   font-family: inherit;
   text-align: left;
   width: 100%;

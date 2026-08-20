@@ -36,11 +36,13 @@ html[data-theme='dark'] {
 
 body {
   background:
+    radial-gradient(ellipse 42rem 25rem at 104% -2rem, transparent 0 37%, color-mix(in oklch, var(--ui-brand) 7%, transparent) 37.3% 37.6%, transparent 37.9% 48%, color-mix(in oklch, var(--ui-brand) 5%, transparent) 48.3% 48.6%, transparent 48.9%),
     radial-gradient(62rem 36rem at -4% -8rem, var(--ui-canvas-glow), transparent 72%),
     radial-gradient(50rem 34rem at 104% 28rem, var(--ui-canvas-warm), transparent 76%),
     linear-gradient(180deg, color-mix(in oklch, var(--ui-surface) 28%, transparent), transparent 32rem),
     var(--fi-paper);
   background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 .page-shell {
@@ -155,12 +157,45 @@ body {
   font-weight: 650;
 }
 
-:is(.history-empty, .watches-empty) {
+.page-shell :is(.history-empty, .watches-empty) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--fi-pine) 20%, var(--fi-line));
   border-radius: var(--ui-radius-shell);
-  background: color-mix(in srgb, var(--fi-panel) 72%, var(--fi-paper));
+  background:
+    radial-gradient(circle at 50% 0, color-mix(in oklch, var(--fi-pine-soft) 84%, transparent), transparent 19rem),
+    var(--ui-card-gradient);
+  box-shadow: var(--ui-shadow-md), inset 0 1px var(--ui-line-highlight);
 }
 
-:is(.history-empty, .watches-empty) :is(h1, h2) {
+.page-shell :is(.history-empty, .watches-empty)::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -11rem;
+  left: 50%;
+  width: 25rem;
+  height: 25rem;
+  border: 1px solid color-mix(in oklch, var(--fi-pine) 10%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2.75rem color-mix(in oklch, var(--fi-pine) 2.5%, transparent), 0 0 0 5.5rem color-mix(in oklch, var(--fi-pine) 1.8%, transparent);
+  transform: translateX(-50%);
+}
+
+.page-shell :is(.history-empty, .watches-empty) > svg {
+  box-sizing: border-box;
+  width: 52px;
+  height: 52px;
+  padding: 13px;
+  border: 1px solid color-mix(in oklch, var(--fi-pine) 28%, var(--fi-line));
+  border-radius: var(--ui-radius-card);
+  background: color-mix(in oklch, var(--fi-pine-soft) 80%, var(--fi-panel));
+  box-shadow: var(--ui-brand-halo), inset 0 1px var(--ui-line-highlight);
+}
+
+.page-shell :is(.history-empty, .watches-empty) :is(h1, h2) {
   font-weight: 650;
 }
 
@@ -174,6 +209,41 @@ body {
   .history-error
 ) {
   border-radius: var(--ui-radius-control);
+}
+
+.page-shell :is(.history-empty button, .watches-empty button) {
+  box-shadow: var(--ui-brand-halo), inset 0 1px color-mix(in oklch, white 20%, transparent);
+  transition: transform var(--ui-motion-fast), background var(--ui-motion-fast), box-shadow var(--ui-motion-fast);
+}
+
+.page-shell :is(.history-empty button, .watches-empty button):hover {
+  background: var(--ui-brand);
+  box-shadow: var(--ui-shadow-interactive);
+  transform: translateY(-1px);
+}
+
+/* Secondary workflow panels receive the same deliberate material treatment as
+   Planner cards, without increasing their information density. */
+.ssr-trip-disclaimer,
+.ssr-trip-banner,
+.watches-explainer {
+  background: linear-gradient(135deg, color-mix(in oklch, var(--fi-pine-soft) 50%, var(--fi-panel)), var(--fi-panel));
+  box-shadow: var(--ui-shadow-xs), inset 0 1px var(--ui-line-highlight);
+}
+
+.ssr-trip-banner {
+  border-color: color-mix(in oklch, var(--ui-risk-3) 32%, var(--fi-line));
+}
+
+.ssr-settings .ssr-set-rail .on {
+  border: 1px solid color-mix(in oklch, var(--fi-pine) 20%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklch, var(--fi-pine-soft) 90%, var(--fi-panel)), color-mix(in oklch, var(--fi-pine-soft) 62%, var(--fi-panel)));
+  box-shadow: var(--ui-brand-halo), inset 0 1px var(--ui-line-highlight);
+}
+
+.ssr-settings .ssr-set-card:focus-within {
+  border-color: color-mix(in oklch, var(--fi-pine) 48%, var(--fi-line));
+  box-shadow: var(--ui-shadow-md), 0 0 0 3px color-mix(in oklch, var(--fi-pine) 8%, transparent), inset 0 1px var(--ui-line-highlight);
 }
 
 /* Status keeps its operational density while using the same outer hierarchy. */
@@ -442,8 +512,37 @@ body {
   .app-error-boundary {
     padding: 18px;
   }
+
+  body {
+    background-attachment: scroll;
+  }
+
+  .page-shell :is(.history-empty, .watches-empty) > svg {
+    width: 48px;
+    height: 48px;
+    padding: 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .app-error-boundary-icon.is-recovering { animation: none; }
+
+  .page-shell :is(.history-empty button, .watches-empty button) { transition: none; }
+  .page-shell :is(.history-empty button, .watches-empty button):hover { transform: none; }
+}
+
+@media (prefers-contrast: more) {
+  body {
+    background: var(--fi-paper);
+  }
+
+  .page-shell :is(.history-empty, .watches-empty) {
+    border-color: var(--ui-line-strong);
+    background: var(--fi-panel);
+    box-shadow: none;
+  }
+
+  .page-shell :is(.history-empty, .watches-empty)::before {
+    display: none;
+  }
 }
