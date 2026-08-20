@@ -64,6 +64,34 @@ test('detects material risk increases but ignores small score movement', () => {
   expect(extractWatchSignals({})).toMatchObject({ score: null, avalancheDanger: null, maxWindGust: null });
 });
 
+test('detects material condition improvements', () => {
+  const previous = {
+    ...safetyPayload({
+      score: 50,
+      danger: 4,
+      gust: 45,
+      precip: 80,
+      closures: [{ title: 'Road closed' }],
+      alerts: [{ event: 'Winter Storm Warning', severity: 'Severe' }],
+    }),
+    terrainCondition: { impact: 'high' },
+  };
+  const current = safetyPayload({ score: 75, danger: 2, gust: 20, precip: 30 });
+  const change = buildMeaningfulChange(previous, current, new Date('2026-07-14T00:00:00.000Z'));
+
+  expect(change.reasons.map((reason) => reason.key)).toEqual(expect.arrayContaining([
+    'score_improvement',
+    'risk_tier_improvement',
+    'avalanche_danger_improvement',
+    'closure_lifted',
+    'weather_alert_cleared',
+    'wind_gust_improvement',
+    'precipitation_improvement',
+    'terrain_condition_improvement',
+  ]));
+  expect(change.reasons.map((reason) => reason.label).join(' ')).toMatch(/improved|decreased|cleared/i);
+});
+
 test('deduplicates identical plans while updating every due watch', async () => {
   const dueRows = [
     {

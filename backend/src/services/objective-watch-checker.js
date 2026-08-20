@@ -132,11 +132,20 @@ const buildMeaningfulChange = (previousPayload, currentPayload, checkedAt) => {
   if (previous.score !== null && current.score !== null && previous.score - current.score >= 10) {
     reasons.push({ key: 'score_drop', label: `Conditions score dropped from ${Math.round(previous.score)} to ${Math.round(current.score)}.` });
   }
+  if (previous.score !== null && current.score !== null && current.score - previous.score >= 10) {
+    reasons.push({ key: 'score_improvement', label: `Conditions score improved from ${Math.round(previous.score)} to ${Math.round(current.score)}.` });
+  }
   if (tierRank(current.tier) > tierRank(previous.tier)) {
     reasons.push({ key: 'risk_tier', label: `Risk tier increased from ${previous.tier || 'unknown'} to ${current.tier}.` });
   }
+  if (tierRank(current.tier) > 0 && tierRank(previous.tier) > tierRank(current.tier)) {
+    reasons.push({ key: 'risk_tier_improvement', label: `Risk tier decreased from ${previous.tier} to ${current.tier || 'unknown'}.` });
+  }
   if (previous.avalancheDanger !== null && current.avalancheDanger !== null && current.avalancheDanger > previous.avalancheDanger) {
     reasons.push({ key: 'avalanche_danger', label: `Avalanche danger increased from ${previous.avalancheDanger} to ${current.avalancheDanger}.` });
+  }
+  if (previous.avalancheDanger !== null && current.avalancheDanger !== null && current.avalancheDanger < previous.avalancheDanger) {
+    reasons.push({ key: 'avalanche_danger_improvement', label: `Avalanche danger decreased from ${previous.avalancheDanger} to ${current.avalancheDanger}.` });
   }
 
   const previousClosures = new Set(previous.closureTitles);
@@ -144,11 +153,21 @@ const buildMeaningfulChange = (previousPayload, currentPayload, checkedAt) => {
   if (newClosures.length > 0) {
     reasons.push({ key: 'new_closure', label: `New access or closure notice: ${newClosures.slice(0, 2).join('; ')}.` });
   }
+  const currentClosures = new Set(current.closureTitles);
+  const liftedClosures = previous.closureTitles.filter((title) => !currentClosures.has(title));
+  if (liftedClosures.length > 0) {
+    reasons.push({ key: 'closure_lifted', label: `Access or closure notice cleared: ${liftedClosures.slice(0, 2).join('; ')}.` });
+  }
 
   const previousAlerts = new Set(previous.alertKeys);
   const newAlerts = current.alertKeys.filter((alert) => !previousAlerts.has(alert));
   if (newAlerts.length > 0) {
     reasons.push({ key: 'new_weather_alert', label: `New weather alert: ${newAlerts.slice(0, 2).join('; ')}.` });
+  }
+  const currentAlerts = new Set(current.alertKeys);
+  const clearedAlerts = previous.alertKeys.filter((alert) => !currentAlerts.has(alert));
+  if (clearedAlerts.length > 0) {
+    reasons.push({ key: 'weather_alert_cleared', label: `Weather alert cleared: ${clearedAlerts.slice(0, 2).join('; ')}.` });
   }
 
   if (
@@ -160,6 +179,14 @@ const buildMeaningfulChange = (previousPayload, currentPayload, checkedAt) => {
     reasons.push({ key: 'wind_gust', label: `Peak gusts increased from ${Math.round(previous.maxWindGust)} to ${Math.round(current.maxWindGust)} mph.` });
   }
   if (
+    current.maxWindGust !== null
+    && previous.maxWindGust !== null
+    && ((previous.maxWindGust >= 35 && current.maxWindGust < 35)
+      || (previous.maxWindGust >= 25 && previous.maxWindGust - current.maxWindGust >= 15))
+  ) {
+    reasons.push({ key: 'wind_gust_improvement', label: `Peak gusts decreased from ${Math.round(previous.maxWindGust)} to ${Math.round(current.maxWindGust)} mph.` });
+  }
+  if (
     current.maxPrecipChance !== null
     && previous.maxPrecipChance !== null
     && current.maxPrecipChance >= 60
@@ -167,8 +194,19 @@ const buildMeaningfulChange = (previousPayload, currentPayload, checkedAt) => {
   ) {
     reasons.push({ key: 'precipitation', label: `Precipitation chance increased from ${Math.round(previous.maxPrecipChance)}% to ${Math.round(current.maxPrecipChance)}%.` });
   }
+  if (
+    current.maxPrecipChance !== null
+    && previous.maxPrecipChance !== null
+    && previous.maxPrecipChance >= 60
+    && current.maxPrecipChance < 60
+  ) {
+    reasons.push({ key: 'precipitation_improvement', label: `Precipitation chance decreased from ${Math.round(previous.maxPrecipChance)}% to ${Math.round(current.maxPrecipChance)}%.` });
+  }
   if (terrainRank(current.terrainImpact) > terrainRank(previous.terrainImpact)) {
     reasons.push({ key: 'terrain_condition', label: `Terrain impact increased from ${previous.terrainImpact || 'unknown'} to ${current.terrainImpact}.` });
+  }
+  if (terrainRank(current.terrainImpact) > 0 && terrainRank(previous.terrainImpact) > terrainRank(current.terrainImpact)) {
+    reasons.push({ key: 'terrain_condition_improvement', label: `Terrain impact decreased from ${previous.terrainImpact} to ${current.terrainImpact || 'unknown'}.` });
   }
 
   if (reasons.length === 0) return null;
