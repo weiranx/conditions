@@ -156,6 +156,12 @@ export function Report({
           <ArrowUpRight size={16} />
         </button>
       </header>
+      {w.viewingHistoryReport && (
+        <aside className="field-feedback" aria-label="Saved report snapshot">
+          This is a saved snapshot. Opening it does not refresh conditions or run AI.
+          To check current conditions, edit the plan and generate a new report.
+        </aside>
+      )}
       <div className="field-report-toolbar">
         <span>
           Generated {ageLabel(data.generatedAt)} ·{" "}
@@ -163,7 +169,7 @@ export function Report({
         </span>
         <div>
           {flags.reportHistory && (
-            <button disabled={actionBusy} onClick={onSave}>
+            <button disabled={actionBusy || Boolean(w.activeSavedReportId)} onClick={onSave}>
               {w.activeSavedReportId ? <Check size={14} /> : <Download size={14} />}
               {w.activeSavedReportId ? "Saved" : "Save"}
             </button>

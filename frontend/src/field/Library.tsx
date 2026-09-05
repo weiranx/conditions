@@ -2,19 +2,11 @@ import { useEffect, useId, useState } from "react";
 import {
   ArrowUpRight,
   Bell,
-  BookOpen,
-  Link,
   RefreshCw,
   Search,
   Trash2,
   X,
 } from "lucide-react";
-import {
-  listSavedReports,
-  getSavedReport,
-  buildSavedReportShareUrl,
-  type SavedReportSummary,
-} from "../lib/saved-reports";
 import {
   listObjectiveWatches,
   refreshObjectiveWatch,
@@ -32,7 +24,7 @@ import {
 import { watchHasEnded, watchNeedsAttention, watchRefreshWait, watchCheckLabel, watchCheckDetail } from "./watch-status";
 import { useVisibleRevalidation } from "../hooks/useVisibleRevalidation";
 import "./watchlist.css";
-import { copyTextToClipboard } from "../app/clipboard";
+import { ReportHistory } from "./ReportHistory";
 import { useAccount } from "../hooks/useAccount";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
@@ -108,27 +100,27 @@ function WatchHistory({ id }: { id: string }) {
   );
 }
 
-export function Library({
-  kind,
-  localReport,
-  onOpen,
-  navigate,
-  workspace: w,
-}: {
+interface LibraryProps {
   kind: "history" | "watches";
   localReport: PersistedReport | null;
-  onOpen: (report: PersistedReport, token?: string) => void;
+  onOpen: (report: PersistedReport, token?: string, reportId?: string) => void;
   navigate: (page: Page) => void;
   workspace: Workspace;
-}) {
+}
+
+export function Library(props: LibraryProps) {
+  return props.kind === "history"
+    ? <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={props.workspace.featureFlags.reportSharing} />
+    : <WatchLibrary {...props} />;
+}
+
+function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
   const account = useAccount();
-  const watches = kind === "watches";
   const searchId = useId();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<'active' | 'attention' | 'ended' | 'all'>('active');
   const [now, setNow] = useState(() => Date.now());
   const query = search.trim().toLocaleLowerCase();
-  const [reports, setReports] = useState<SavedReportSummary[]>([]);
   const [items, setItems] = useState<ObjectiveWatch[]>([]);
   const [policy, setPolicy] = useState<ObjectiveWatchPolicy | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,7 +132,6 @@ export function Library({
   const [deleting, setDeleting] = useState<ObjectiveWatch | null>(null);
   const matches = (title: string, date: string | null) =>
     `${title} ${date || ""} ${date ? dateLabel(date) : ""}`.toLocaleLowerCase().includes(query);
-  const visibleReports = reports.filter((report) => matches(report.title, report.forecastDate));
   const activeCount = items.filter((item) => !watchHasEnded(item, now)).length;
   const attentionCount = items.filter((item) => watchNeedsAttention(item, policy, now)).length;
   const visibleWatches = items.filter((item) => {
@@ -154,38 +145,30 @@ export function Library({
     || a.plan.forecastDate.localeCompare(b.plan.forecastDate)
     || a.plan.alpineStartTime.localeCompare(b.plan.alpineStartTime)
     || a.title.localeCompare(b.title));
-  const showLocalReport = !watches && localReport && matches(localReport.plan.objectiveName, localReport.plan.forecastDate);
-  const resultCount = watches ? visibleWatches.length : visibleReports.length + (showLocalReport ? 1 : 0);
+  const resultCount = visibleWatches.length;
   useEffect(() => {
     setItems([]);
     setPolicy(null);
     setExpanded(null);
-  }, [account.user?.id, watches]);
+  }, [account.user?.id]);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
     if (!account.user) {
       setItems([]);
-      setReports([]);
       setPolicy(null);
       setExpanded(null);
       setLoading(false);
       return;
     }
-    void (
-      watches
-        ? listObjectiveWatches(controller.signal).then((data) => {
-            if (!controller.signal.aborted) {
-              setNow(Date.now());
-              setItems(data.watches);
-              setPolicy(data.policy);
-            }
-          })
-        : listSavedReports(controller.signal).then((data) => {
-            if (!controller.signal.aborted) setReports(data);
-          })
-    )
+    void listObjectiveWatches(controller.signal).then((data) => {
+      if (!controller.signal.aborted) {
+        setNow(Date.now());
+        setItems(data.watches);
+        setPolicy(data.policy);
+      }
+    })
       .catch((error) => {
         if (!controller.signal.aborted)
           setError(
@@ -198,19 +181,19 @@ export function Library({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [account.user, watches, revision]);
+  }, [account.user, revision]);
   useEffect(() => {
-    if (!watches || !items.length) return;
+    if (!items.length) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [watches, items.length]);
+  }, [items.length]);
   useVisibleRevalidation(async (signal) => {
     const data = await listObjectiveWatches(signal);
     if (signal.aborted) return;
     setNow(Date.now());
     setItems(data.watches);
     setPolicy(data.policy);
-  }, watches && Boolean(account.user) && !loading && !pending);
+  }, Boolean(account.user) && !loading && !pending);
   async function run(id: string, action: () => Promise<void>) {
     setPending(id);
     setError("");
@@ -227,29 +210,20 @@ export function Library({
       setPending("");
     }
   }
-  async function copy(token: string) {
-    const copied = await copyTextToClipboard(buildSavedReportShareUrl(token));
-    if (!copied) throw new Error("Could not copy the link.");
-    setNotice("Report link copied.");
-  }
   return (
     <section className="field-library">
       <header className="field-page-heading">
         <span className="field-kicker">
-          {watches ? "Monitoring" : "Library"}
+          Monitoring
         </span>
-        <h1>{watches ? "Watchlist" : "Saved reports"}</h1>
+        <h1>Watchlist</h1>
         <p>
-          {watches
-            ? "Follow conditions, review changes, and manage your objective alerts."
-            : "Your report history, including saved AI conversations and route analysis."}
+          Follow conditions, review changes, and manage your objective alerts.
         </p>
       </header>
       <div className="field-library-bar">
         <span>
-          {watches
-            ? `${activeCount}${policy ? ` / ${policy.activeWatchLimit}` : ""} active watches · ${items.length - activeCount} completed`
-            : `${reports.length} account reports`}
+          {`${activeCount}${policy ? ` / ${policy.activeWatchLimit}` : ""} active watches · ${items.length - activeCount} completed`}
         </span>
         <div className="field-action-row">
           <button
@@ -267,7 +241,7 @@ export function Library({
         </div>
       </div>
       <div className="field-library-search">
-        <label htmlFor={searchId}>{watches ? "Find an objective" : "Find a report"}</label>
+        <label htmlFor={searchId}>Find an objective</label>
         <div className="field-input-icon">
           <Search size={17} aria-hidden="true" />
           <input
@@ -286,7 +260,7 @@ export function Library({
         </div>
         <p role="status">{query && !loading ? `${resultCount} ${resultCount === 1 ? "result" : "results"}` : ""}</p>
       </div>
-      {watches && items.length > 0 && (
+      {items.length > 0 && (
         <div className="field-watch-filters" role="group" aria-label="Filter watches">
           {([
             ['active', 'Active', activeCount], ['attention', 'Needs attention', attentionCount],
@@ -298,7 +272,7 @@ export function Library({
           ))}
         </div>
       )}
-      {watches && policy && (
+      {policy && (
         <p className="field-feedback">
           {policy.automaticChecks
             ? policy.schedulerEnabled
@@ -323,73 +297,7 @@ export function Library({
           {notice}
         </p>
       )}
-      {showLocalReport && localReport && (
-        <button
-          className="field-journal-entry"
-          onClick={() => onOpen(localReport)}
-        >
-          <span className="field-journal-icon">
-            <BookOpen size={22} />
-          </span>
-          <span>
-            <small>ON THIS DEVICE</small>
-            <strong>{localReport.plan.objectiveName}</strong>
-            <span>
-              {dateLabel(localReport.plan.forecastDate)} ·{" "}
-              {localReport.plan.travelWindowHours} hours
-            </span>
-          </span>
-          <b>
-            {localReport.safetyData.safety.score}
-            <small>/100</small>
-          </b>
-          <ArrowUpRight size={18} />
-        </button>
-      )}
-      {!watches &&
-        visibleReports.map((report) => (
-          <article className="field-library-entry" key={report.id}>
-            <button
-              className="field-journal-entry"
-              disabled={!!pending}
-              onClick={() =>
-                void run(report.id, async () =>
-                  onOpen(await getSavedReport(report.id), report.shareToken),
-                )
-              }
-            >
-              <span className="field-journal-icon">
-                <BookOpen size={22} />
-              </span>
-              <span>
-                <small>
-                  {dateLabel(report.forecastDate)}
-                  {report.hasAi && " · Includes AI"}
-                </small>
-                <strong>{report.title}</strong>
-                <span>Saved {ageLabel(report.createdAt)}</span>
-              </span>
-              <b>
-                {report.score ?? "—"}
-                <small>/100</small>
-              </b>
-              <ArrowUpRight size={18} />
-            </button>
-            {w.featureFlags.reportSharing && (
-              <button
-                className="field-text-button"
-                onClick={() =>
-                  void run(report.id, () => copy(report.shareToken))
-                }
-              >
-                <Link size={14} />
-                Copy report link
-              </button>
-            )}
-          </article>
-        ))}
-      {watches &&
-        visibleWatches.map((item) => {
+      {visibleWatches.map((item) => {
           const ended = watchHasEnded(item, now);
           const wait = watchRefreshWait(item, policy, now);
           const latest = item.latestCheck;
@@ -526,7 +434,7 @@ export function Library({
             )}
           </article>
         ); })}
-      {watches && !loading && !error && !query && items.length > 0 && visibleWatches.length === 0 && (
+      {!loading && !error && !query && items.length > 0 && visibleWatches.length === 0 && (
         <div className="field-empty-state">
           <h2>{filter === 'attention' ? 'No objectives need attention' : filter === 'ended' ? 'No completed plans yet' : 'No active watches'}</h2>
           <p>Completed plans keep their history and do not count toward your active watch limit.</p>
@@ -536,28 +444,23 @@ export function Library({
       {!loading && !error && query && resultCount === 0 && (
         <div className="field-empty-state">
           <Search size={32} aria-hidden="true" />
-          <h2>No matching {watches ? "objectives" : "reports"}</h2>
+          <h2>No matching objectives</h2>
           <p>Try a different name or date, or clear your search to see everything.</p>
-          <button className="field-button" onClick={() => { setSearch(""); if (watches) setFilter('all'); }}>Clear search{watches ? ' and show all watches' : ''}</button>
+          <button className="field-button" onClick={() => { setSearch(""); setFilter('all'); }}>Clear search and show all watches</button>
         </div>
       )}
       {!loading && !error && !query &&
-        (!account.user ||
-          (watches
-            ? items.length === 0
-            : reports.length === 0 && !localReport)) && (
+        (!account.user || items.length === 0) && (
           <div className="field-empty-state">
-            {watches ? <Bell size={36} /> : <BookOpen size={36} />}
+            <Bell size={36} />
             <h2>
               {account.user
-                ? watches ? "No watched objectives yet" : "No saved reports yet"
+                ? "No watched objectives yet"
                 : "Sign in to access your plans"}
             </h2>
             <p>
               {account.user
-                ? watches
-                  ? "Create a conditions brief, then add the objective to your watchlist to follow changes."
-                  : "Create a conditions brief and save it to revisit the forecast and your planning notes."
+                ? "Create a conditions brief, then add the objective to your watchlist to follow changes."
                 : "Sync reports and watch objectives across your devices."}
             </p>
             <button

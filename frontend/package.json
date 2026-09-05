@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "dev:mock": "VITE_MOCK_API=true vite --host 127.0.0.1",
     "test:mock": "node --test dev/mock-api.test.mjs",
+    "test:history": "node scripts/verify-report-history.mjs",
     "test:field": "node scripts/verify-field-ui.mjs"
   },
   "engines": {

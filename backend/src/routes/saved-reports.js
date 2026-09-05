@@ -67,6 +67,7 @@ const mapSavedReportSummary = (row) => ({
     ? Number(row.score)
     : null,
   hasAi: Boolean(row.has_ai),
+  generatedAt: normalizeTimestamp(row.generated_at),
   createdAt: normalizeTimestamp(row.created_at),
   updatedAt: normalizeTimestamp(row.updated_at),
 });
@@ -241,29 +242,50 @@ const registerSavedReportRoutes = ({
   app.get('/api/account/reports', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
+    const search = req.query.q ?? '';
+    const cursor = req.query.cursor ?? null;
+    const aiOnly = req.query.aiOnly ?? 'false';
+    if (typeof search !== 'string' || search.length > 200
+      || (cursor !== null && (typeof cursor !== 'string' || !UUID_PATTERN.test(cursor)))
+      || !['true', 'false'].includes(aiOnly)) {
+      return res.status(400).json({ error: 'Provide a valid report search and page cursor.' });
+    }
     try {
       const result = await database.query(`
-        SELECT id, share_token, title, created_at, updated_at,
-               report #>> '{plan,objectiveName}' AS objective_name,
-               report #>> '{plan,forecastDate}' AS forecast_date,
-               report #>> '{plan,alpineStartTime}' AS alpine_start_time,
-               report #>> '{safetyData,safety,score}' AS score,
-               (
-                 NULLIF(report #>> '{ai,aiBriefNarrative}', '') IS NOT NULL
-                 OR NULLIF(report #>> '{ai,snowVisionAnalysis}', '') IS NOT NULL
-                 OR report #>> '{route,routeAnalysis,analysisSource}' = 'ai'
-                 OR CASE
-                   WHEN jsonb_typeof(report #> '{ai,reportChatMessages}') = 'array'
-                     THEN jsonb_array_length(report #> '{ai,reportChatMessages}') > 0
-                   ELSE FALSE
-                 END
-               ) AS has_ai
-        FROM saved_reports
-        WHERE user_id = $1
-        ORDER BY updated_at DESC, id DESC
+        WITH summaries AS (
+          SELECT id, share_token, title, created_at, updated_at,
+                 report #>> '{plan,objectiveName}' AS objective_name,
+                 report #>> '{plan,forecastDate}' AS forecast_date,
+                 report #>> '{plan,alpineStartTime}' AS alpine_start_time,
+                 report #>> '{safetyData,generatedAt}' AS generated_at,
+                 report #>> '{safetyData,safety,score}' AS score,
+                 (
+                   NULLIF(report #>> '{ai,aiBriefNarrative}', '') IS NOT NULL
+                   OR NULLIF(report #>> '{ai,snowVisionAnalysis}', '') IS NOT NULL
+                   OR report #>> '{route,routeAnalysis,analysisSource}' = 'ai'
+                   OR CASE
+                     WHEN jsonb_typeof(report #> '{ai,reportChatMessages}') = 'array'
+                       THEN jsonb_array_length(report #> '{ai,reportChatMessages}') > 0
+                     ELSE FALSE
+                   END
+                 ) AS has_ai
+          FROM saved_reports
+          WHERE user_id = $1
+            AND ($3::uuid IS NULL OR (created_at, id) < (
+              SELECT created_at, id FROM saved_reports WHERE id = $3 AND user_id = $1
+            ))
+        )
+        SELECT * FROM summaries
+        WHERE ($4 = '' OR strpos(lower(concat_ws(' ', title, objective_name, forecast_date)), lower($4)) > 0)
+          AND (NOT $5::boolean OR has_ai IS TRUE)
+        ORDER BY created_at DESC, id DESC
         LIMIT $2
-      `, [user.id, SAVED_REPORT_LIST_LIMIT]);
-      return res.json({ reports: result.rows.map(mapSavedReportSummary) });
+      `, [user.id, SAVED_REPORT_LIST_LIMIT + 1, cursor, search.trim(), aiOnly === 'true']);
+      const rows = result.rows.slice(0, SAVED_REPORT_LIST_LIMIT);
+      return res.json({
+        reports: rows.map(mapSavedReportSummary),
+        nextCursor: result.rows.length > SAVED_REPORT_LIST_LIMIT ? rows.at(-1).id : null,
+      });
     } catch (error) {
       return handleError(req, res, error);
     }

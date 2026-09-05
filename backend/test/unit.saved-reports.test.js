@@ -211,7 +211,7 @@ test('disabled report history keeps previously generated reports available', asy
   })).get('/api/account/reports');
 
   expect(response.status).toBe(200);
-  expect(response.body).toEqual({ reports: [] });
+  expect(response.body).toEqual({ reports: [], nextCursor: null });
   expect(query).toHaveBeenCalledTimes(1);
 });
 
@@ -363,6 +363,7 @@ test('lists compact report history without returning full snapshots', async () =
     alpineStartTime: '05:30',
     score: 72,
     hasAi: true,
+    generatedAt: null,
     createdAt: CREATED_AT.toISOString(),
     updatedAt: CREATED_AT.toISOString(),
   }]);
@@ -483,4 +484,44 @@ test('requires authentication and hides reports belonging to another user', asyn
     .get(`/api/account/reports/${REPORT_ID}`)
     .set('Cookie', 'bc_session=test-session');
   expect(missing.status).toBe(404);
+});
+
+test('pages history with a stable cursor and filters across the account', async () => {
+  const rows = Array.from({ length: 101 }, (_, index) => ({
+    id: `510b78d9-dae0-42aa-bad3-${String(index).padStart(12, '0')}`,
+    share_token: SHARE_TOKEN, title: `Report ${index}`, created_at: CREATED_AT,
+    updated_at: CREATED_AT, generated_at: '2026-07-12T07:00:00Z',
+  }));
+  const query = jest.fn().mockResolvedValueOnce({ rows }).mockResolvedValueOnce({ rows: [rows[100]] });
+  const app = makeApp({ query });
+  const first = await request(app).get('/api/account/reports').query({ q: '  Mount Rainier  ', aiOnly: 'true' });
+  expect(first.status).toBe(200);
+  expect(first.body.reports).toHaveLength(100);
+  expect(first.body.nextCursor).toBe(rows[99].id);
+  expect(first.body.reports[0].generatedAt).toBe('2026-07-12T07:00:00.000Z');
+  const [sql, params] = query.mock.calls[0];
+  expect(params).toEqual([USER_ID, 101, null, 'Mount Rainier', true]);
+  expect(sql).toContain('ORDER BY created_at DESC, id DESC');
+  expect(sql).toContain('WHERE id = $3 AND user_id = $1');
+  expect(sql).toContain('strpos(lower(concat_ws');
+  const second = await request(app).get('/api/account/reports').query({ cursor: first.body.nextCursor, q: 'Mount Rainier', aiOnly: 'true' });
+  expect(second.body.reports).toHaveLength(1);
+  expect(second.body.nextCursor).toBeNull();
+  expect(query.mock.calls[1][1]).toEqual([USER_ID, 101, rows[99].id, 'Mount Rainier', true]);
+});
+
+test.each([
+  { cursor: 'invalid' }, { q: 'x'.repeat(201) }, { aiOnly: 'yes' }, { q: ['one', 'two'] },
+])('rejects invalid history filters without querying: %j', async (params) => {
+  const query = jest.fn();
+  const response = await request(makeApp({ query })).get('/api/account/reports').query(params);
+  expect(response.status).toBe(400);
+  expect(query).not.toHaveBeenCalled();
+});
+
+test('history requires an account even when a cursor is supplied', async () => {
+  const query = jest.fn();
+  const response = await request(makeApp({ query, user: null })).get('/api/account/reports').query({ cursor: REPORT_ID });
+  expect(response.status).toBe(401);
+  expect(query).not.toHaveBeenCalled();
 });

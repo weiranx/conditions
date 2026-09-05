@@ -1,3 +1,4 @@
+import { paginateReportHistory } from "./saved-report-history.mjs";
 import {
   existsSync,
   mkdirSync,
@@ -307,7 +308,9 @@ export function createMockApi({ databasePath } = {}) {
     }
     if (p === "/api/account/reports") {
       if (method === "GET")
-        return ok({ reports: db.reports.map(reportSummary) });
+        return ok(paginateReportHistory(db.reports.map(reportSummary).map((summary, index) => ({
+          ...summary, generatedAt: db.reports[index].snapshot.safetyData.generatedAt || null,
+        })), url.searchParams));
       if (method === "POST") {
         if (!body.report?.plan || !body.report?.safetyData?.safety)
           return fail(400, "A report snapshot is required.");

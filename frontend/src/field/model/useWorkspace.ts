@@ -1471,8 +1471,12 @@ export function useWorkspace() {
       if (!preHistoryPreferencesRef.current) {
         preHistoryPreferencesRef.current = preferencesRef.current;
       }
-      historyReportPreferencesRef.current = report.preferences;
-      if (report.preferences) setPreferences(report.preferences);
+      const reportPreferences = {
+        ...(report.preferences || preferencesRef.current),
+        travelWindowHours: report.plan.travelWindowHours,
+      };
+      historyReportPreferencesRef.current = reportPreferences;
+      setPreferences(reportPreferences);
 
       setPosition(new L.LatLng(report.plan.lat, report.plan.lon));
       setMapFocusNonce((value) => value + 1);

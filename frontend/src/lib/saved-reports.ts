@@ -13,6 +13,7 @@ export interface SavedReportSummary {
   alpineStartTime: string | null;
   score: number | null;
   hasAi: boolean;
+  generatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,22 +107,44 @@ export async function sendReportEmail(report: PersistedReport, shareToken: strin
   return typeof message === 'string' && message.trim() ? message : 'Report sent to your account email.';
 }
 
+export interface SavedReportsPage {
+  reports: SavedReportSummary[];
+  nextCursor: string | null;
+}
+
 export async function listSavedReports(signal?: AbortSignal): Promise<SavedReportSummary[]> {
-  const { response, payload } = await fetchApi('/api/account/reports', { signal });
+  return (await listSavedReportsPage({ signal })).reports;
+}
+
+export async function listSavedReportsPage({
+  signal, search = '', aiOnly = false, cursor,
+}: { signal?: AbortSignal; search?: string; aiOnly?: boolean; cursor?: string | null } = {}): Promise<SavedReportsPage> {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set('q', search.trim());
+  if (aiOnly) params.set('aiOnly', 'true');
+  if (cursor) params.set('cursor', cursor);
+  const { response, payload } = await fetchApi(`/api/account/reports${params.size ? `?${params}` : ''}`, { signal });
   if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not load report history.'));
-  const reports = (payload as { reports?: unknown } | null)?.reports;
-  if (!Array.isArray(reports)) throw new Error('Report history returned an unexpected response.');
-  return reports.filter((value): value is SavedReportSummary => {
+  const page = payload as { reports?: unknown; nextCursor?: unknown } | null;
+  if (!Array.isArray(page?.reports)
+    || (page.nextCursor != null && (typeof page.nextCursor !== 'string' || !page.nextCursor))) {
+    throw new Error('Report history returned an unexpected response.');
+  }
+  const reports = page.reports.filter((value): value is SavedReportSummary => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const report = value as Partial<SavedReportSummary>;
     return typeof report.id === 'string'
       && typeof report.shareToken === 'string'
       && typeof report.title === 'string'
       && typeof report.objectiveName === 'string'
+      && (report.forecastDate === null || typeof report.forecastDate === 'string')
+      && (report.alpineStartTime === null || typeof report.alpineStartTime === 'string')
+      && (report.score === null || (typeof report.score === 'number' && Number.isFinite(report.score)))
       && typeof report.hasAi === 'boolean'
       && typeof report.createdAt === 'string'
       && typeof report.updatedAt === 'string';
   });
+  return { reports, nextCursor: typeof page.nextCursor === 'string' ? page.nextCursor : null };
 }
 
 export async function getSavedReport(reportId: string, signal?: AbortSignal): Promise<PersistedReport> {

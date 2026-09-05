@@ -90,14 +90,20 @@ export default function FieldApp() {
     if (page === "trip") w.openTripToolView();
     else w.navigateToView(page);
   }
-  function openReport(report: PersistedReport, token = "") {
+  function openReport(report: PersistedReport, token = "", reportId?: string) {
     const parsed = parsePersistedReport(report);
-    if (parsed) w.handleOpenSavedReport(parsed, token);
+    if (parsed) {
+      w.handleOpenSavedReport(parsed, token);
+      if (reportId) {
+        w.setActiveSavedReportId(reportId);
+        w.setActiveSavedReportShareToken(token);
+      }
+    }
     else w.setError("This report is incomplete and could not be opened.");
   }
   async function action(kind: "save" | "share" | "watch" | "email") {
     const report = w.reportSnapshot;
-    if (!report || actionBusy) return;
+    if (!report || actionBusy || w.reportSaveIntentRef.current === "saving") return;
     if (kind === "share") {
       const token = w.sharedReportToken || w.activeSavedReportShareToken;
       const link = token
@@ -124,7 +130,9 @@ export default function FieldApp() {
         await saveObjectiveWatch(report);
         setFeedback("This objective is on your watchlist.");
       } else {
-        let token = w.sharedReportToken || w.activeSavedReportShareToken;
+        let token = kind === "save"
+          ? w.activeSavedReportShareToken
+          : w.sharedReportToken || w.activeSavedReportShareToken;
         if (!token) {
           const saved = await createSavedReport(report);
           token = saved.shareToken;
