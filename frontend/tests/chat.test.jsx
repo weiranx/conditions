@@ -4,13 +4,18 @@ import { JSDOM } from 'jsdom';
 import { act, StrictMode } from 'react';
 // React's event support is detected when React DOM is first imported.
 const bootstrap = new JSDOM('<html><body></body></html>');
+const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
 globalThis.window = bootstrap.window;
 globalThis.document = bootstrap.window.document;
+// Node 20 has no navigator; newer Node versions expose a getter-only global.
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: bootstrap.window.navigator });
 const { createRoot } = await import('react-dom/client');
 const { Chat } = await import('../src/field/Chat');
 bootstrap.window.close();
 delete globalThis.window;
 delete globalThis.document;
+if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+else delete globalThis.navigator;
 import { AiAccessContext } from '../src/contexts/ai-access';
 
 async function mount(t, props = {}, allowed = true) {
