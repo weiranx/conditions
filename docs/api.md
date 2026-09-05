@@ -109,11 +109,18 @@ Legacy rain aliases (`past12h*`, `past24h*`, `past48h*`) are included for compat
 
 ### `safety` Field
 
+Model version `2.8.0` evaluates hourly conditions within the selected travel window and retains hazardous start conditions. Peak sustained wind and gusts both count; even one thunderstorm hour triggers the storm safeguard, and hourly blizzard/whiteout conditions enforce the High-risk floor. These are rule-based model thresholds, not estimated incident probabilities.
+
+Missing measurements remain unknown rather than becoming zero readings. Absent core weather dimensions contribute explicit coverage factors; confidence also reflects how many requested hours contain usable temperature, wind, and precipitation data. A complete short outing is not penalized simply for having fewer than six forecast hours.
+
 | Field | Description |
 |---|---|
+| `scoreVersion` | Version of the scoring rules, for comparisons with saved reports |
 | `score` | Numeric conditions score from 0–100 (higher means fewer modeled hazards) |
 | `confidence` | Numeric confidence in the score from 20–100 |
-| `factors` | Array of individual risk factor objects with name, value, and weight |
+| `factors` | Individual contributions with `hazard`, raw `impact`, `group`, `source`, and `message` |
+| `groupImpacts` | Group totals after diminishing returns and any decisive-hazard floor |
+| `confidenceReasons` | Explanations for confidence reductions, including incomplete forecast coverage |
 | `explanations` | Array of plain-language explanation strings for each contributing factor |
 
 ### `pleasantness` Field

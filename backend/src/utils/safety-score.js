@@ -10,7 +10,7 @@ const { deriveTerrainCondition } = require('./terrain-condition');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.7.0',
+  scoreVersion: '2.8.0',
   maxScore: 100,
   scorePrecision: 1,
 
@@ -65,6 +65,9 @@ const SCORING_CONFIG = {
   thresholds: {
     weather: {
       unavailableImpact: 20,
+      missingDimensionImpact: 6,
+      missingDimensionConfidence: 6,
+      incompleteCoverageConfidence: 12,
     },
     avalanche: {
       unknown: 16,
@@ -131,7 +134,7 @@ const SCORING_CONFIG = {
       durModImpact: 3,
       convectiveImpact: 18,
       // Convective signal can also come from trend hours, not just description.
-      convectiveTrendHours: 2,
+      convectiveTrendHours: 1,
       winterImpact: 10,
       expectedRainHigh: 0.5,
       expectedRainLow: 0.2,
@@ -268,6 +271,24 @@ const findTier = (value, ladder, mode) => {
   return ladder.find((tier) => value >= tier.min) || null;
 };
 
+// Provider nulls, blanks, and booleans are missing measurements, never zero.
+const measurement = (value) => {
+  if (typeof value !== 'number' && typeof value !== 'string') return Number.NaN;
+  if (typeof value === 'string' && !value.trim()) return Number.NaN;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : Number.NaN;
+};
+
+const windMeasurement = (value) => {
+  const numeric = measurement(value);
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : parseWindMph(value, Number.NaN);
+};
+
+const finiteExtremum = (values, mode) => {
+  const valid = values.filter(Number.isFinite);
+  return valid.length ? Math[mode](...valid) : Number.NaN;
+};
+
 const calculateSafetyScore = ({
   weatherData,
   avalancheData,
@@ -318,31 +339,30 @@ const calculateSafetyScore = ({
   };
 
   const weatherDescription = String(weatherData?.description || '').toLowerCase();
-  const weatherDataUnavailable = weatherDescription.includes('weather data unavailable');
-  const wind = parseFloat(weatherData?.windSpeed);
-  const gust = parseFloat(weatherData?.windGust);
+  const wind = windMeasurement(weatherData?.windSpeed);
+  const gust = windMeasurement(weatherData?.windGust);
   const precipChance = parseFloat(weatherData?.precipChance);
   const humidity = parseFloat(weatherData?.humidity);
   const tempF = parseFloat(weatherData?.temp);
   const feelsLikeF = Number.isFinite(parseFloat(weatherData?.feelsLike)) ? parseFloat(weatherData?.feelsLike) : tempF;
   const isDaytime = weatherData?.isDaytime;
-  const visibilityRiskScoreRaw = weatherContextEnabled ? Number(weatherData?.visibilityRisk?.score) : Number.NaN;
+  const visibilityRiskScoreRaw = weatherContextEnabled ? measurement(weatherData?.visibilityRisk?.score) : Number.NaN;
   const visibilityRiskScore = Number.isFinite(visibilityRiskScoreRaw) ? visibilityRiskScoreRaw : null;
   const visibilityRiskLevel = String(weatherData?.visibilityRisk?.level || '').trim();
-  const visibilityActiveHoursRaw = weatherContextEnabled ? Number(weatherData?.visibilityRisk?.activeHours) : Number.NaN;
+  const visibilityActiveHoursRaw = weatherContextEnabled ? measurement(weatherData?.visibilityRisk?.activeHours) : Number.NaN;
   const visibilityActiveHours = Number.isFinite(visibilityActiveHoursRaw) ? visibilityActiveHoursRaw : null;
   const radarEchoDetected = fieldObservationsEnabled && localConditionsData?.radar?.echoDetected === true;
-  const observedRain24hIn = fieldObservationsEnabled ? Number(localConditionsData?.radar?.rain24hIn) : Number.NaN;
+  const observedRain24hIn = fieldObservationsEnabled ? measurement(localConditionsData?.radar?.rain24hIn) : Number.NaN;
   const streamflowForecast = fieldObservationsEnabled ? localConditionsData?.streamflow?.forecast || null : null;
-  const streamPeakFlowCfs = Number(streamflowForecast?.peakFlowCfs);
-  const currentStreamflowCfs = fieldObservationsEnabled ? Number(localConditionsData?.streamflow?.dischargeCfs) : Number.NaN;
+  const streamPeakFlowCfs = measurement(streamflowForecast?.peakFlowCfs);
+  const currentStreamflowCfs = fieldObservationsEnabled ? measurement(localConditionsData?.streamflow?.dischargeCfs) : Number.NaN;
   const observedStation = fieldObservationsEnabled ? localConditionsData?.weatherObservation || null : null;
 
   const normalizedRisk = String(avalancheData?.risk || '').toLowerCase();
   const avalancheRelevant = avalancheEnabled && avalancheData?.relevant !== false;
   const avalancheUnknown = avalancheRelevant
     && Boolean(avalancheData?.dangerUnknown || normalizedRisk.includes('unknown') || normalizedRisk.includes('no forecast'));
-  const avalancheDangerLevel = Number(avalancheData?.dangerLevel);
+  const avalancheDangerLevel = measurement(avalancheData?.dangerLevel);
   const avalancheProblems = Array.isArray(avalancheData?.problems) ? avalancheData.problems : [];
   const avalancheProblemCount = avalancheProblems.length;
 
@@ -360,7 +380,7 @@ const calculateSafetyScore = ({
   // by elevation; flag it as added complexity.
   const avalancheBandLevels = avalancheData?.elevations && typeof avalancheData.elevations === 'object'
     ? [avalancheData.elevations.below, avalancheData.elevations.at, avalancheData.elevations.above]
-        .map((band) => Number(band?.level))
+        .map((band) => measurement(band?.level))
         .filter((lvl) => Number.isFinite(lvl) && lvl > 0)
     : [];
   const avalancheBandSpread = avalancheBandLevels.length >= 2
@@ -373,14 +393,14 @@ const calculateSafetyScore = ({
   const snowpackMaxOf = (field) => {
     if (!snowpackEnabled || !snowpackData || typeof snowpackData !== 'object') return null;
     const vals = [snowpackData.snotel, snowpackData.nohrsc, snowpackData.cdec]
-      .map((src) => Number(src?.[field]))
+      .map((src) => measurement(src?.[field]))
       .filter(Number.isFinite);
     return vals.length ? Math.max(...vals) : null;
   };
   const snowpackMaxDepthIn = snowpackMaxOf('snowDepthIn');
   const snowpackMaxSweIn = snowpackMaxOf('sweIn');
   const snowpackOverall = snowpackEnabled ? snowpackData?.historical?.overall || null : null;
-  const snowpackPercentOfAverage = Number(snowpackOverall?.percentOfAverage);
+  const snowpackPercentOfAverage = measurement(snowpackOverall?.percentOfAverage);
   const snowpackAboveAverage = snowpackOverall?.status === 'above_average'
     && Number.isFinite(snowpackPercentOfAverage)
     && snowpackPercentOfAverage >= T.snowpack.aboveAveragePercent;
@@ -393,45 +413,61 @@ const calculateSafetyScore = ({
     && (!Number.isFinite(snowpackMaxDepthIn) || snowpackMaxDepthIn < 6);
 
   const alertsStatus = String(alertsData?.status || '');
-  const alertsCount = Number(alertsData?.activeCount);
+  const alertsCount = measurement(alertsData?.activeCount);
   const highestAlertSeverity = normalizeAlertSeverity(alertsData?.highestSeverity);
   const alertEvents =
     Array.isArray(alertsData?.alerts) && alertsData.alerts.length
       ? [...new Set(alertsData.alerts.map((alert) => alert.event).filter(Boolean))].slice(0, 3)
       : [];
 
-  const usAqi = Number(airQualityData?.usAqi);
+  const usAqi = measurement(airQualityData?.usAqi);
   const airQualityStatus = String(airQualityData?.status || '').toLowerCase();
   const airQualityRelevantForScoring = airQualityEnabled && airQualityStatus !== 'not_applicable_future_date';
   const aqiCategory = String(airQualityData?.category || 'Unknown');
 
-  const trend = Array.isArray(weatherData?.trend) ? weatherData.trend : [];
-  const requestedWindowHours = clampTravelWindowHours(selectedTravelWindowHours, 12);
+  const requestedWindowHours = clampTravelWindowHours(selectedTravelWindowHours ?? 12, 12);
+  const trend = (Array.isArray(weatherData?.trend) ? weatherData.trend : []).slice(0, requestedWindowHours).map((row) => ({
+    ...row,
+    temp: measurement(row?.temp),
+    feelsLike: measurement(row?.feelsLike),
+    wind: windMeasurement(row?.wind),
+    gust: windMeasurement(row?.gust),
+    precipChance: measurement(row?.precipChance),
+  }));
   const effectiveTrendWindowHours = Math.max(1, trend.length || requestedWindowHours);
-  const trendTemps = trend.map((item) => Number(item?.temp)).filter(Number.isFinite);
-  const trendGusts = trend.map((item) => Number(item?.gust)).filter(Number.isFinite);
-  const trendPrecips = trend.map((item) => Number(item?.precipChance)).filter(Number.isFinite);
+  const trendTemps = trend.map((item) => item.temp).filter(Number.isFinite);
+  const trendWinds = trend.map((item) => item.wind).filter(Number.isFinite);
+  const trendGusts = trend.map((item) => item.gust).filter(Number.isFinite);
+  const trendPrecips = trend.map((item) => item.precipChance).filter(Number.isFinite);
   const trendFeelsLike = trend
     .map((item) => {
-      const rowTemp = Number(item?.temp);
-      const rowWind = Number.isFinite(Number(item?.wind)) ? Number(item.wind) : 0;
-      if (!Number.isFinite(rowTemp)) return Number.NaN;
-      return computeFeelsLikeF(rowTemp, Number.isFinite(rowWind) ? rowWind : 0);
+      const rowTemp = item.temp;
+      const rowWind = Number.isFinite(item.wind) ? item.wind : 0;
+      if (!Number.isFinite(rowTemp) && !Number.isFinite(item.feelsLike)) return Number.NaN;
+      return Number.isFinite(item.feelsLike) ? item.feelsLike : computeFeelsLikeF(rowTemp, rowWind);
     })
     .filter(Number.isFinite);
   const tempRange = trendTemps.length ? Math.max(...trendTemps) - Math.min(...trendTemps) : 0;
-  const trendMinFeelsLike = trendFeelsLike.length ? Math.min(...trendFeelsLike) : feelsLikeF;
-  const trendMaxFeelsLike = trendFeelsLike.length ? Math.max(...trendFeelsLike) : feelsLikeF;
-  const trendPeakPrecip = trendPrecips.length ? Math.max(...trendPrecips) : precipChance;
-  const trendPeakGust = trendGusts.length ? Math.max(...trendGusts) : Number.isFinite(gust) ? gust : 0;
+  const trendMinFeelsLike = finiteExtremum([feelsLikeF, ...trendFeelsLike], 'min');
+  const trendMaxFeelsLike = finiteExtremum([feelsLikeF, ...trendFeelsLike], 'max');
+  const trendPeakPrecip = finiteExtremum([precipChance, ...trendPrecips], 'max');
+  const trendPeakGust = finiteExtremum([gust, ...trendGusts], 'max');
+  const peakSustainedWind = finiteExtremum([wind, ...trendWinds], 'max');
+  const missingWeatherDimensions = [
+    !Number.isFinite(trendMinFeelsLike) ? 'temperature' : null,
+    !Number.isFinite(peakSustainedWind) && !Number.isFinite(trendPeakGust) ? 'wind' : null,
+    !Number.isFinite(trendPeakPrecip) ? 'precipitation' : null,
+  ].filter(Boolean);
+  const weatherDataUnavailable = weatherDescription.includes('weather data unavailable')
+    || missingWeatherDimensions.length === 3;
   const severeWindHours = trend.filter((item) => {
-    const rowWind = Number(item?.wind);
-    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
+    const rowWind = item.wind;
+    const rowGust = Number.isFinite(item.gust) ? item.gust : rowWind;
     return (Number.isFinite(rowWind) && rowWind >= 30) || (Number.isFinite(rowGust) && rowGust >= 45);
   }).length;
   const strongWindHours = trend.filter((item) => {
-    const rowWind = Number(item?.wind);
-    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
+    const rowWind = item.wind;
+    const rowGust = Number.isFinite(item.gust) ? item.gust : rowWind;
     return (Number.isFinite(rowWind) && rowWind >= 20) || (Number.isFinite(rowGust) && rowGust >= 30);
   }).length;
   const highPrecipHours = trendPrecips.filter((value) => value >= 60).length;
@@ -442,6 +478,8 @@ const calculateSafetyScore = ({
   // Convective signal from per-hour conditions, not just the summary description.
   const convectiveTrendHours = trend.filter((item) =>
     /thunder|lightning|t-storm|tstm/i.test(String(item?.condition || ''))).length;
+  const severeWinterFromDescription = /blizzard|whiteout/.test(weatherDescription);
+  const severeWinterFromTrend = trend.some((row) => /blizzard|whiteout/i.test(String(row.condition || '')));
 
   // Temporal weighting: early-window hazards penalize more than late-window
   const trendLen = trend.length;
@@ -453,24 +491,20 @@ const calculateSafetyScore = ({
   let weightedStrongWindHours = 0;
   let weightedHighPrecipHours = 0;
   let weightedModeratePrecipHours = 0;
-  let weightedTrendPeakGust = 0;
   let weightedColdExposureHours = 0;
   let weightedExtremeColdHours = 0;
   let weightedHeatExposureHours = 0;
   trend.forEach((item, i) => {
     const w = temporalWeight(i);
-    const rowWind = Number(item?.wind);
-    const rowGust = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : rowWind;
+    const rowWind = item.wind;
+    const rowGust = Number.isFinite(item.gust) ? item.gust : rowWind;
     if ((Number.isFinite(rowWind) && rowWind >= 30) || (Number.isFinite(rowGust) && rowGust >= 45)) {
       weightedSevereWindHours += w;
     }
     if ((Number.isFinite(rowWind) && rowWind >= 20) || (Number.isFinite(rowGust) && rowGust >= 30)) {
       weightedStrongWindHours += w;
     }
-    if (Number.isFinite(rowGust)) {
-      weightedTrendPeakGust = Math.max(weightedTrendPeakGust, rowGust);
-    }
-    const rowPrecip = Number(item?.precipChance);
+    const rowPrecip = item.precipChance;
     if (Number.isFinite(rowPrecip) && rowPrecip >= 60) {
       weightedHighPrecipHours += w;
     }
@@ -478,10 +512,10 @@ const calculateSafetyScore = ({
       weightedModeratePrecipHours += w;
     }
     // Temporal weighting for cold/heat exposure
-    const rowTemp = Number(item?.temp);
+    const rowTemp = item.temp;
     const rowWindForFeels = Number.isFinite(rowWind) ? rowWind : 0;
-    if (Number.isFinite(rowTemp)) {
-      const fl = computeFeelsLikeF(rowTemp, rowWindForFeels);
+    if (Number.isFinite(rowTemp) || Number.isFinite(item.feelsLike)) {
+      const fl = Number.isFinite(item.feelsLike) ? item.feelsLike : computeFeelsLikeF(rowTemp, rowWindForFeels);
       if (Number.isFinite(fl)) {
         if (fl <= 0) weightedExtremeColdHours += w;
         if (fl <= 15) weightedColdExposureHours += w;
@@ -492,10 +526,10 @@ const calculateSafetyScore = ({
 
   const rainfallTotals = rainfallData?.totals || {};
   const rainfallExpected = rainfallData?.expected || {};
-  const rainPast24hIn = Number(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
-  const snowPast24hIn = Number(rainfallTotals?.snowPast24hIn);
-  const expectedRainWindowIn = Number(rainfallExpected?.rainWindowIn);
-  const expectedSnowWindowIn = Number(rainfallExpected?.snowWindowIn);
+  const rainPast24hIn = measurement(rainfallTotals?.rainPast24hIn ?? rainfallTotals?.past24hIn);
+  const snowPast24hIn = measurement(rainfallTotals?.snowPast24hIn);
+  const expectedRainWindowIn = measurement(rainfallExpected?.rainWindowIn);
+  const expectedSnowWindowIn = measurement(rainfallExpected?.snowWindowIn);
   const sunriseMinutes = parseClockToMinutes(solarData?.sunrise);
   const selectedStartMinutes = parseClockToMinutes(selectedStartClock) ?? parseIsoClockMinutes(weatherData?.forecastStartTime);
   const isNightBeforeSunrise =
@@ -534,7 +568,7 @@ const calculateSafetyScore = ({
         unknownMessage += ' Observed snowpack is minimal, but verify conditions directly.';
       }
       applyFactor('Avalanche Uncertainty', unknownImpact, unknownMessage, 'Avalanche center coverage');
-    } else if (Number.isFinite(avalancheDangerLevel)) {
+    } else {
       if (avalancheDangerLevel >= 4 || normalizedRisk.includes('high') || normalizedRisk.includes('extreme')) {
         applyFactor('Avalanche', T.avalanche.high, 'High avalanche danger reported. Avoid avalanche terrain and steep loaded slopes.', 'Avalanche center forecast');
       } else if (avalancheDangerLevel === 3 || normalizedRisk.includes('considerable')) {
@@ -582,9 +616,10 @@ const calculateSafetyScore = ({
   const effectiveWind = Math.max(
     Number.isFinite(wind) ? wind : 0,
     Number.isFinite(gust) ? gust : 0,
-    weightedTrendPeakGust,
+    Number.isFinite(trendPeakGust) ? trendPeakGust : 0,
+    Number.isFinite(peakSustainedWind) ? peakSustainedWind : 0,
   );
-  const sustainedWindImpact = interpolateImpact(wind, [
+  const sustainedWindImpact = interpolateImpact(peakSustainedWind, [
     { value: T.wind.calmSustained, impact: 0 },
     { value: T.wind.moderateStart, impact: T.wind.moderateImpact },
     { value: T.wind.strongStart, impact: T.wind.strongImpact },
@@ -660,15 +695,18 @@ const calculateSafetyScore = ({
     applyFactor('Storm', precipDurationImpact, durationMessage, 'NOAA hourly trend');
   }
 
-  // Convective signal: fire on either the summary description or multiple
-  // trend hours flagged thunder/lightning (structured per-hour conditions).
-  const convectiveFromDescription = /thunderstorm|lightning|blizzard/.test(weatherDescription);
+  // Convective signal: even one hour matters within the travel window. Use the
+  // summary description and structured per-hour conditions.
+  const convectiveFromDescription = /thunder|lightning|t-storm|tstm|blizzard/.test(weatherDescription);
   const convectiveFromTrend = convectiveTrendHours >= T.storm.convectiveTrendHours;
   if (convectiveFromDescription || convectiveFromTrend) {
     const detail = convectiveFromDescription
       ? `Convective or severe weather signal in forecast: "${weatherData.description}".`
       : `Convective signal across ${convectiveTrendHours}/${trend.length} trend hours (thunder/lightning).`;
     applyFactor('Storm', T.storm.convectiveImpact, detail, convectiveFromDescription ? 'NOAA short forecast' : 'NOAA hourly trend');
+  } else if (severeWinterFromDescription || severeWinterFromTrend) {
+    applyFactor('Winter Weather', T.storm.winterImpact, 'Blizzard or whiteout conditions occur within the travel window.',
+      severeWinterFromDescription ? 'NOAA short forecast' : 'NOAA hourly trend');
   } else if (/snow|sleet|freezing rain|ice/.test(weatherDescription)) {
     applyFactor('Winter Weather', T.storm.winterImpact, `Frozen precipitation in forecast ("${weatherData.description}") increases travel hazard.`, 'NOAA short forecast');
   }
@@ -727,7 +765,7 @@ const calculateSafetyScore = ({
     applyFactor('Cold', coldDurationImpact, coldLabel, 'NOAA hourly trend');
   }
 
-  const heatRiskLevel = heatRiskEnabled ? Number(heatRiskData?.level) : Number.NaN;
+  const heatRiskLevel = heatRiskEnabled ? measurement(heatRiskData?.level) : Number.NaN;
   if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 4) {
     applyFactor('Heat', T.heat.level4Impact, `Heat risk is ${heatRiskData?.label || 'Extreme'} with significant heat-stress potential in the selected window.`, heatRiskData?.source || 'Heat risk synthesis');
   } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 3) {
@@ -850,23 +888,12 @@ const calculateSafetyScore = ({
   // Condition trajectory: deteriorating conditions are riskier than improving
   if (trend.length >= 4) {
     const halfLen = Math.floor(trend.length / 2);
-    const firstHalfGusts = trend.slice(0, halfLen).map((item) => {
-      const g = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind);
-      return Number.isFinite(g) ? g : 0;
-    });
-    const secondHalfGusts = trend.slice(halfLen).map((item) => {
-      const g = Number.isFinite(Number(item?.gust)) ? Number(item.gust) : Number(item?.wind);
-      return Number.isFinite(g) ? g : 0;
-    });
-    const firstHalfPrecips = trend.slice(0, halfLen).map((item) => {
-      const p = Number(item?.precipChance);
-      return Number.isFinite(p) ? p : 0;
-    });
-    const secondHalfPrecips = trend.slice(halfLen).map((item) => {
-      const p = Number(item?.precipChance);
-      return Number.isFinite(p) ? p : 0;
-    });
-    const avgArr = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const effectiveRowWind = (row) => finiteExtremum([row.wind, row.gust], 'max');
+    const firstHalfGusts = trend.slice(0, halfLen).map(effectiveRowWind).filter(Number.isFinite);
+    const secondHalfGusts = trend.slice(halfLen).map(effectiveRowWind).filter(Number.isFinite);
+    const firstHalfPrecips = trend.slice(0, halfLen).map((row) => row.precipChance).filter(Number.isFinite);
+    const secondHalfPrecips = trend.slice(halfLen).map((row) => row.precipChance).filter(Number.isFinite);
+    const avgArr = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : Number.NaN;
     const firstAvgGust = avgArr(firstHalfGusts);
     const secondAvgGust = avgArr(secondHalfGusts);
     const firstAvgPrecip = avgArr(firstHalfPrecips);
@@ -916,7 +943,7 @@ const calculateSafetyScore = ({
     }
   }
 
-  const fireLevel = fireRiskEnabled && fireRiskData?.level != null ? Number(fireRiskData.level) : null;
+  const fireLevel = fireRiskEnabled ? measurement(fireRiskData?.level) : null;
   if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
     applyFactor('Fire Danger', T.fire.level4, 'Extreme fire-weather/alert signal for this objective window.', fireRiskData?.source || 'Fire risk synthesis');
   } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
@@ -935,6 +962,11 @@ const calculateSafetyScore = ({
       'All weather data is unavailable — wind, precipitation, and temperature conditions are unknown.',
       'System',
     );
+  }
+
+  if (!weatherDataUnavailable && missingWeatherDimensions.length) {
+    applyFactor('Weather Coverage', missingWeatherDimensions.length * T.weather.missingDimensionImpact,
+      `Forecast ${missingWeatherDimensions.join(', ')} data is missing across the travel window.`, 'System');
   }
 
   // --- Cross-group interaction penalties ---
@@ -978,13 +1010,13 @@ const calculateSafetyScore = ({
     }
   }
 
-  if (/blizzard|whiteout/.test(weatherDescription)) {
+  if (severeWinterFromDescription || severeWinterFromTrend) {
     applyGroupImpactFloor('weather', impactFloors.weather.high, 'Blizzard or whiteout conditions');
   } else if (
     convectiveFromTrend
     || (convectiveFromDescription && !/slight chance|chance|isolated|scattered/.test(weatherDescription))
     || effectiveWind >= T.wind.severeEffective
-    || (Number.isFinite(wind) && wind >= T.wind.severeStart)
+    || (Number.isFinite(peakSustainedWind) && peakSustainedWind >= T.wind.severeStart)
     || (visibilityRiskScore !== null && visibilityRiskScore >= 80)
   ) {
     applyGroupImpactFloor('weather', impactFloors.weather.elevated, 'Severe weather exposure');
@@ -1065,12 +1097,25 @@ const calculateSafetyScore = ({
     }
   }
 
-  if (trend.length < 6) {
-    applyConfidencePenalty(6, 'Limited hourly trend depth (<6 points).');
+  if (!weatherDataUnavailable) {
+    if (missingWeatherDimensions.length) {
+      applyConfidencePenalty(missingWeatherDimensions.length * T.weather.missingDimensionConfidence,
+        `Missing core forecast dimensions: ${missingWeatherDimensions.join(', ')}.`);
+    }
+    // Row count alone overstates confidence when an hourly feed has holes.
+    const usableHours = trend.filter((row) =>
+      (Number.isFinite(row.temp) || Number.isFinite(row.feelsLike))
+      && (Number.isFinite(row.wind) || Number.isFinite(row.gust))
+      && Number.isFinite(row.precipChance)).length;
+    const expectedHours = requestedWindowHours;
+    if (usableHours < expectedHours) {
+      applyConfidencePenalty(Math.ceil(T.weather.incompleteCoverageConfidence * (1 - usableHours / expectedHours)),
+        `Complete hourly weather coverage for ${usableHours}/${expectedHours} travel-window hours.`);
+    }
   }
 
-  const observedTempF = Number(observedStation?.tempF);
-  const observedWindMph = Number(observedStation?.windMph);
+  const observedTempF = measurement(observedStation?.tempF);
+  const observedWindMph = measurement(observedStation?.windMph);
   if (observedStation?.available && Number.isFinite(observedTempF) && Number.isFinite(tempF) && Math.abs(observedTempF - tempF) >= 15) {
     applyConfidencePenalty(5, `Nearby station temperature differs from the forecast by ${Math.round(Math.abs(observedTempF - tempF))}F; mountain microclimates may be significant.`);
   }
@@ -1105,7 +1150,7 @@ const calculateSafetyScore = ({
   }
   if (airQualityRelevantForScoring && airQualityData?.status === 'unavailable') {
     applyConfidencePenalty(6, 'Air quality feed unavailable.');
-  } else if (airQualityRelevantForScoring && airQualityData?.status === 'no_data') {
+  } else if (airQualityRelevantForScoring && (airQualityData?.status === 'no_data' || !Number.isFinite(usAqi))) {
     applyConfidencePenalty(3, 'Air quality point data unavailable.');
   }
   const rainfallAnchorMs = parseIsoTimeToMs(rainfallData?.anchorTime);

@@ -42,6 +42,142 @@ const baseSafetyInput = () => ({
   solarData: { sunrise: '6:00 AM', sunset: '8:00 PM' },
 });
 
+test.each([null, undefined, '', '   ', false])('missing hourly temperatures (%p) do not become zero', (missing) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row) => ({ ...row, temp: missing })),
+  }) });
+  expect(result.factors.some((factor) => factor.hazard === 'Cold')).toBe(false);
+  expect(result.confidence).toBeLessThan(calculateSafetyScore(baseSafetyInput()).confidence);
+  expect(result.confidenceReasons.join(' ')).toMatch(/hourly weather coverage/);
+});
+
+test.each([null, {}, { description: 'Sunny', trend: Array(8).fill({ temp: null, wind: null, precipChance: null }) }])(
+  'weather outages are detected without a special description: %p', (weatherData) => {
+    const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData });
+    expect(result.factors.some((factor) => factor.hazard === 'Weather Unavailable')).toBe(true);
+    expect(result.score).toBeLessThan(85);
+    expect(result.confidence).toBeLessThanOrEqual(70);
+    expect(result.sourcesUsed).not.toContain('NOAA/NWS hourly forecast');
+    expect(result.factors.some((factor) => factor.hazard === 'Cold')).toBe(false);
+  },
+);
+
+test('missing precipitation throughout the forecast affects score and confidence', () => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    precipChance: null, trend: calmWeather().trend.map((row) => ({ ...row, precipChance: null })),
+  }) });
+  expect(result.factors).toEqual(expect.arrayContaining([expect.objectContaining({
+    hazard: 'Weather Coverage', message: expect.stringContaining('precipitation'),
+  })]));
+  expect(result.score).toBeLessThan(calculateSafetyScore(baseSafetyInput()).score);
+  expect(result.confidence).toBeLessThan(calculateSafetyScore(baseSafetyInput()).confidence);
+});
+
+test('complete short outings have full coverage while truncated long outings lose confidence', () => {
+  const weatherData = calmWeather({ trend: calmWeather().trend.slice(0, 4) });
+  const short = calculateSafetyScore({ ...baseSafetyInput(), weatherData, selectedTravelWindowHours: 4 });
+  const long = calculateSafetyScore({ ...baseSafetyInput(), weatherData, selectedTravelWindowHours: 12 });
+  expect(short.confidence).toBe(100);
+  expect(long.confidence).toBeLessThan(short.confidence);
+  expect(long.confidenceReasons.join(' ')).toMatch(/4\/12/);
+});
+
+test.each([null, 0, 9])('late sustained wind remains decisive with gust reading %p', (gust) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row, i) => i === 7 ? { ...row, wind: 40, gust } : row),
+  }) });
+  expect(result.score).toBeLessThanOrEqual(69);
+  expect(result.factors).toEqual(expect.arrayContaining([expect.objectContaining({ hazard: 'Wind', impact: 20 })]));
+});
+
+test.each(['Thunderstorms', 'Chance Thunderstorms', 'T-Storms', 'Lightning'])('one late %s hour is not hidden by a sunny summary', (condition) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row, i) => i === 7 ? { ...row, condition } : row),
+  }) });
+  expect(result.score).toBeLessThanOrEqual(69);
+  expect(result.factors.some((factor) => factor.hazard === 'Storm')).toBe(true);
+});
+
+test('an hourly blizzard enforces the High floor', () => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row, i) => i === 7 ? { ...row, condition: 'Blizzard' } : row),
+  }) });
+  expect(result.score).toBeLessThanOrEqual(54);
+  expect(result.groupImpacts.weather.floorReason).toMatch(/Blizzard/);
+  expect(result.factors.some((factor) => factor.hazard === 'Winter Weather')).toBe(true);
+});
+
+test('hazards after the selected travel window do not affect the score', () => {
+  const weatherData = calmWeather({ trend: [
+    ...calmWeather().trend,
+    { temp: -20, wind: 60, gust: 80, precipChance: 100, condition: 'Blizzard and Thunderstorms' },
+  ] });
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData });
+  const baseline = calculateSafetyScore(baseSafetyInput());
+  expect(result.score).toBe(baseline.score);
+  expect(result.confidence).toBe(baseline.confidence);
+  expect(result.factors).toEqual(baseline.factors);
+});
+
+test('numeric wind precision and range upper bounds are preserved', () => {
+  const scoreWithWind = (windSpeed) => calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({ windSpeed }) });
+  expect(scoreWithWind(21.1).score).toBeGreaterThan(scoreWithWind(21.9).score);
+  expect(scoreWithWind('20 to 40 mph').score).toBe(scoreWithWind(40).score);
+});
+
+test.each([null, undefined])('omitted travel window (%p) retains the twelve-hour default', (selectedTravelWindowHours) => {
+  const weatherData = calmWeather({ trend: Array.from({ length: 12 }, (_, i) => ({
+    ...calmWeather().trend[0], wind: i === 11 ? 40 : 5,
+  })) });
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData, selectedTravelWindowHours });
+  expect(result.score).toBeLessThanOrEqual(69);
+  expect(result.confidence).toBe(100);
+});
+
+test.each([{ precipChance: 90 }, { temp: 0, feelsLike: -15 }])('calm trend does not erase hazardous start conditions: %p', (overrides) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather(overrides) });
+  expect(result.score).toBeLessThan(calculateSafetyScore(baseSafetyInput()).score);
+  expect(result.factors.some((factor) => ['Storm', 'Cold'].includes(factor.hazard))).toBe(true);
+});
+
+test.each([{ temp: 0 }, { feelsLike: -15 }])('real hourly cold readings remain hazards: %p', (overrides) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row) => ({ ...row, ...overrides })),
+  }) });
+  expect(result.factors.some((factor) => factor.hazard === 'Cold')).toBe(true);
+});
+
+test('null snow measurements cannot reduce avalanche uncertainty as minimal snowpack', () => {
+  const input = { ...baseSafetyInput(), avalancheData: { relevant: true, dangerUnknown: true } };
+  const absent = calculateSafetyScore(input);
+  const nulls = calculateSafetyScore({ ...input, snowpackData: { snotel: { snowDepthIn: null, sweIn: null } } });
+  expect(nulls.score).toBe(absent.score);
+  expect(nulls.explanations.join(' ')).not.toMatch(/snowpack is minimal/);
+});
+
+test('null station readings do not create forecast discrepancies', () => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(),
+    localConditionsData: { weatherObservation: { available: true, tempF: null, windMph: null } },
+  });
+  expect(result.confidenceReasons.join(' ')).not.toMatch(/Nearby station/);
+});
+
+test('missing AQI reduces confidence while measured zero remains valid', () => {
+  const missing = calculateSafetyScore({ ...baseSafetyInput(), airQualityData: { status: 'ok', usAqi: null } });
+  const zero = calculateSafetyScore({ ...baseSafetyInput(), airQualityData: { status: 'ok', usAqi: 0 } });
+  expect(missing.confidence).toBeLessThan(zero.confidence);
+  expect(missing.confidenceReasons.join(' ')).toMatch(/Air quality point data unavailable/);
+});
+
+test('missing first-half readings do not invent a deteriorating trajectory', () => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row, i) => ({ ...row,
+      wind: i < 4 ? null : 22, gust: i < 4 ? null : 30, precipChance: i < 4 ? null : 60,
+    })),
+  }) });
+  expect(result.factors.some((factor) => factor.hazard === 'Condition Trajectory')).toBe(false);
+});
+
 test.each([
   [2, 'Moderate', 84, 'Caution'],
   [3, 'Considerable', 69, 'Elevated'],
