@@ -224,3 +224,37 @@ test('late previous-day responses do not overwrite a newly selected report', asy
   await respondAll([oldRequest]);
   assert.equal(h.current.dayOverDay, comparison);
 });
+
+
+import { useTripForecast } from '../src/hooks/useTripForecast';
+
+test('multi-day parsing preserves missing readings and genuine zero values', async t => {
+  const h = await mountHook(t, useTripForecast, {
+    hasObjective: true,
+    position: { lat: plan.lat, lng: plan.lon },
+    todayDate: plan.date,
+    maxForecastDate: '2026-09-13',
+    initialStartDate: plan.date,
+    initialStartTime: plan.start,
+    preferences,
+    objectiveName: 'Test mountain',
+  });
+  const reports = [null, '', 0].map((value, index) => {
+    const data = makeReport({ ...plan, date: `2026-09-0${6 + index}` }, 'clear');
+    data.safety.score = value;
+    data.weather.windGust = value;
+    data.weather.precipChance = value;
+    return data;
+  });
+  await act(async () => {
+    const pending = h.current.runTripForecast();
+    assert.equal(h.requests.length, 1);
+    h.requests[0].respond({ days: reports });
+    await pending;
+  });
+  assert.equal(h.current.tripForecastError, null);
+  assert.equal(h.current.tripForecastRows.length, 3);
+  for (const field of ['score', 'windGustMph', 'precipChance']) {
+    assert.deepEqual(h.current.tripForecastRows.map(day => day[field]), [null, null, 0], field);
+  }
+});

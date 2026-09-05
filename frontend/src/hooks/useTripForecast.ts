@@ -218,16 +218,16 @@ export function useTripForecast({
               : dayDecision.headline;
 
             // Match the score shown by the individual Planner report exactly.
-            const rawSafetyScore = Number(dayData?.safety?.score);
-            const score = Number.isFinite(rawSafetyScore) ? Math.round(rawSafetyScore) : null;
+            const rawSafetyScore = finiteNumberOrNull(dayData?.safety?.score);
+            const score = rawSafetyScore !== null ? Math.round(rawSafetyScore) : null;
             const tempHighRaw = finiteNumberOrNull(
               dayData?.weather?.dailyTempHighF ?? dayData?.weather?.temperatureContext24h?.maxTempF,
             );
             const tempLowRaw = finiteNumberOrNull(
               dayData?.weather?.dailyTempLowF ?? dayData?.weather?.temperatureContext24h?.minTempF,
             );
-            const gustRaw = Number(dayData?.weather?.windGust);
-            const precipRaw = Number(dayData?.weather?.precipChance);
+            const gustRaw = finiteNumberOrNull(dayData?.weather?.windGust);
+            const precipRaw = finiteNumberOrNull(dayData?.weather?.precipChance);
             const humidityRaw = finiteNumberOrNull(dayData?.weather?.humidity);
             const cloudCoverRaw = finiteNumberOrNull(dayData?.weather?.cloudCover);
             const expectedRainRaw = finiteNumberOrNull(dayData?.rainfall?.expected?.rainWindowIn);
@@ -247,9 +247,9 @@ export function useTripForecast({
               weatherDescription: String(dayData?.weather?.description || 'Unknown'),
               tempHighF: tempHighRaw,
               tempLowF: tempLowRaw,
-              windGustMph: Number.isFinite(gustRaw) ? gustRaw : null,
+              windGustMph: gustRaw,
               windDirection: dayData?.weather?.windDirection || null,
-              precipChance: Number.isFinite(precipRaw) ? Math.round(precipRaw) : null,
+              precipChance: precipRaw !== null ? Math.round(precipRaw) : null,
               expectedRainIn: expectedRainRaw,
               expectedSnowIn: expectedSnowRaw,
               humidityPct: humidityRaw !== null ? Math.round(humidityRaw) : null,

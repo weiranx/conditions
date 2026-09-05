@@ -73,9 +73,8 @@ test("sparse chart readings never create invalid SVG coordinates", () => {
   assert.match(html, /Hourly evidence is incomplete/);
   assert.doesNotMatch(html, />0°F</);
 });
-function comparison(decisions) {
+function comparison(decisions, overrides = {}) {
   const days = decisions.map((day) => ({
-    ...day,
     decisionHeadline: `Decision for ${day.date}`,
     safetyData: { weather: { trend: [] }, capabilities: { ai: false } },
     windGustMph: 10,
@@ -87,6 +86,7 @@ function comparison(decisions) {
     expectedRainIn: 1,
     expectedSnowIn: 1,
     alertCount: 0,
+    ...day,
   }));
   const w = {
     preferences: { ...preferences, elevationUnit: "m" },
@@ -108,6 +108,7 @@ function comparison(decisions) {
     handlePlannerTimeChange: () => () => void 0,
     objectiveTimezone: "America/Los_Angeles",
     handleInputChange: () => void 0,
+    ...overrides,
   };
   return renderToStaticMarkup(<Compare workspace={w} />);
 }
@@ -134,6 +135,37 @@ test("a comparison with only blocked days never presents a favorable recommendat
   ]);
   assert.match(html, /Least unfavorable window · still blocked/);
   assert.doesNotMatch(html, /Most favorable weather window/);
+});
+
+test("comparison exposes weather tradeoffs, ties and incomplete coverage", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: 75, windGustMph: 0, precipChance: 0, travelPassHours: 1, travelTotalHours: 1 },
+    { date: "2026-09-07", decisionLevel: "GO", score: 70, windGustMph: 0, precipChance: 0, travelPassHours: 2, travelTotalHours: 3 },
+  ]);
+  assert.match(html, /Every day, side by side/);
+  assert.match(html, /All days tied/);
+  assert.match(html, /Only 1 of 3 planned hours covered/);
+  assert.match(html, /2 hours within limits/);
+  assert.match(html, /Departure gust/);
+  assert.match(html, /Avalanche conditions are excluded/);
+});
+
+test("missing comparison readings stay unavailable and do not win weather highlights", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "CAUTION", score: null, windGustMph: null, precipChance: null, travelPassHours: 0, travelTotalHours: 0, partialData: true },
+  ]);
+  assert.match(html, /Score unavailable/);
+  assert.match(html, /Hourly forecast unavailable/);
+  assert.match(html, /Partial data/);
+  assert.doesNotMatch(html, /NaN|Infinity|0 \/ 0 hours|0 mph|unavailable%/);
+});
+
+test("refresh hides the previous comparison and its hourly detail", () => {
+  const html = comparison([
+    { date: "2026-09-06", decisionLevel: "GO", score: 90 },
+  ], { tripForecastLoading: true, featureFlags: { hourlyWeatherCharts: true } });
+  assert.match(html, /Comparing forecasts/);
+  assert.doesNotMatch(html, /Most favorable weather window|Every day, side by side|Hourly detail/);
 });
 
 import {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { copyTextToClipboard } from "../app/clipboard";
 import { Details } from "./Details";
 import { ArrowRight, Sunrise } from "lucide-react";
@@ -9,10 +9,26 @@ import { buildPersistedReport } from "../app/report-storage";
 import { emptyAi, dateLabel, ageLabel } from "./data";
 import { Chat } from "./Chat";
 import { useAiAvailability } from "../hooks/useAiAvailability";
+import type { MultiDayTripForecastDay } from "../hooks/useTripForecast";
+import "./compare.css";
+
+const isNumber = (value: number | null | undefined): value is number =>
+  value != null && Number.isFinite(value);
+const percent = (value: number | null) => isNumber(value) ? `${value}%` : "Unavailable";
+const hoursLabel = (day: MultiDayTripForecastDay) => day.travelTotalHours > 0
+  ? `${day.travelPassHours} of ${day.travelTotalHours} forecast hours within limits`
+  : "Hourly forecast unavailable";
+const decisionTone = (day: MultiDayTripForecastDay) =>
+  day.decisionLevel === "GO" ? "go" : day.decisionLevel === "NO-GO" ? "blocked" : "caution";
 
 export default function Compare({ workspace: w }: { workspace: Workspace }) {
   const [selectedDate, setSelectedDate] = useState("");
-  const days = w.tripForecastRows;
+  const tableId = useId();
+  const [showMeasurements, setShowMeasurements] = useState(false);
+  const days = useMemo(
+    () => w.tripForecastLoading ? [] : w.tripForecastRows,
+    [w.tripForecastLoading, w.tripForecastRows],
+  );
   const priority = { GO: 2, CAUTION: 1, "NO-GO": 0 };
   const ordered = [...days].sort(
     (a, b) =>
@@ -20,35 +36,32 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
       (b.score ?? -Infinity) - (a.score ?? -Infinity),
   );
   const best = ordered[0];
+  const topRankCount = days.filter((day) => day.decisionLevel === best?.decisionLevel && day.score === best?.score).length;
   const selected = days.find((day) => day.date === selectedDate) || best;
   const [copyStatus, setCopyStatus] = useState("");
   const extremes = [
     {
       label: "Calmest day",
-      day: [...days]
-        .filter((d) => d.windGustMph !== null)
-        .sort((a, b) => a.windGustMph! - b.windGustMph!)[0],
+      metric: (d: MultiDayTripForecastDay) => isNumber(d.windGustMph) ? -d.windGustMph : null,
+      format: (d: MultiDayTripForecastDay) => `${w.formatWindDisplay(d.windGustMph)} gust at departure`,
     },
     {
-      label: "Driest day",
-      day: [...days]
-        .filter((d) => d.precipChance !== null)
-        .sort((a, b) => a.precipChance! - b.precipChance!)[0],
+      label: "Lowest rain / snow chance",
+      metric: (d: MultiDayTripForecastDay) => isNumber(d.precipChance) ? -d.precipChance : null,
+      format: (d: MultiDayTripForecastDay) => `${percent(d.precipChance)} at departure`,
     },
     {
       label: "Most hours within limits",
-      day: [...days]
-        .filter((d) => d.travelTotalHours > 0)
-        .sort(
-          (a, b) =>
-            b.travelPassHours / b.travelTotalHours -
-            a.travelPassHours / a.travelTotalHours,
-        )[0],
+      metric: (d: MultiDayTripForecastDay) => d.travelTotalHours > 0 ? d.travelPassHours : null,
+      format: (d: MultiDayTripForecastDay) => `${d.travelPassHours} hours within limits`,
     },
-    { label: "Watch closely", day: ordered[ordered.length - 1] },
-  ];
+  ].map((item) => {
+    const measured = days.filter((day) => item.metric(day) !== null);
+    const maximum = Math.max(...measured.map((day) => item.metric(day)!));
+    return { ...item, days: measured.filter((day) => item.metric(day) === maximum) };
+  });
   const amount = (value: number | null, snow = false) =>
-    value === null
+    !isNumber(value)
       ? "Unavailable"
       : w.preferences.elevationUnit === "m"
         ? `${(value * (snow ? 2.54 : 25.4)).toFixed(1)} ${snow ? "cm" : "mm"}`
@@ -59,7 +72,7 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
       `${w.tripStartDate} · ${w.tripStartTime} daily start · ${w.travelWindowHours} hours`,
       ...days.map(
         (day) =>
-          `${day.date}: ${day.decisionLevel}, ${day.score ?? "unavailable"}/100. ${day.decisionHeadline} ${day.weatherDescription}. Gust ${w.formatWindDisplay(day.windGustMph)}; precipitation ${day.precipChance ?? "unavailable"}%; ${day.travelPassHours}/${day.travelTotalHours} hours within thresholds.`,
+          `${day.date}: ${day.decisionLevel}, ${isNumber(day.score) ? `${day.score}/100` : "score unavailable"}. ${day.decisionHeadline} ${day.weatherDescription}. Departure gust ${w.formatWindDisplay(day.windGustMph)}; rain / snow chance ${percent(day.precipChance)}; ${hoursLabel(day)}. ${day.partialData ? "Partial data. " : ""}Forecast issued: ${ageLabel(day.sourceIssuedTime)}.`,
       ),
       "Weather comparison only. Verify official sources and current avalanche information before departure.",
     ].join("\n");
@@ -149,76 +162,141 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
           ) : (
             <>
               {best && (
-                <section className="field-panel">
-                  <span className="field-kicker">
-                    {best.decisionLevel === "NO-GO"
-                      ? "Least unfavorable window · still blocked"
-                      : "Most favorable weather window"}
-                  </span>
-                  <h2>{dateLabel(best.date)}</h2>
+                <section className={`field-panel compare-recommendation is-${decisionTone(best)}`}>
+                  <div className="field-panel-heading">
+                    <div>
+                      <span className="field-kicker">
+                        {best.decisionLevel === "NO-GO"
+                          ? "Least unfavorable window · still blocked"
+                          : "Most favorable weather window"}
+                      </span>
+                      <h2>{dateLabel(best.date)}</h2>
+                    </div>
+                    <span className={`compare-decision is-${decisionTone(best)}`}>{best.decisionLevel}</span>
+                  </div>
                   <p>{best.decisionHeadline}</p>
-                  <button
-                    className="field-button"
-                    onClick={() => setSelectedDate(best.date)}
-                  >
-                    Review this window
+                  {topRankCount > 1 && <p className="compare-context">{topRankCount} days share this rank. Compare their weather and coverage below.</p>}
+                  <p className="compare-context">
+                    {days.length} days at {w.objectiveName || "the selected objective"} · {w.tripStartTime} daily departure · {w.travelWindowHours} hours<br />
+                    {w.objectiveTimezone || "Objective local time"}
+                  </p>
+                  <p className="compare-method">
+                    Ranked by weather decision, then score. Avalanche conditions are excluded from this comparison; review the full report before choosing a day.
+                    {best.partialData && " The leading day has partial data."}
+                    {!isNumber(best.score) && " Its score is unavailable."}
+                  </p>
+                  <button className="field-button" onClick={() => {
+                    setSelectedDate(best.date);
+                    document.getElementById(`${tableId}-detail`)?.scrollIntoView({ block: "start" });
+                  }}>
+                    Review this window <ArrowRight size={15} aria-hidden="true" />
                   </button>
-                  <div className="field-preset-list">
-                    {extremes.map(
-                      (item) =>
-                        item.day && (
-                          <button
-                            key={item.label}
-                            onClick={() => setSelectedDate(item.day.date)}
-                          >
-                            {item.label} · {dateLabel(item.day.date)}
-                          </button>
-                        ),
-                    )}
-                  </div>
-                  <div className="field-action-row">
-                    <button
-                      className="field-button"
-                      onClick={() => void copyBrief()}
-                    >
-                      Copy trip brief
-                    </button>
-                    <button
-                      className="field-button"
-                      onClick={() => window.print()}
-                    >
-                      Print comparison
-                    </button>
-                  </div>
-                  {copyStatus && <p role="status">{copyStatus}</p>}
                 </section>
               )}
-              <div
-                className="field-day-tabs"
-                role="group"
-                aria-label="Select comparison day"
-              >
-                {days.map((day) => (
-                  <button
-                    key={day.date}
-                    aria-pressed={selected?.date === day.date}
-                    onClick={() => setSelectedDate(day.date)}
-                  >
-                    <span>{dateLabel(day.date)}</span>
-                    <strong>
-                      {day.score ?? "—"}
-                      <small>/100</small>
-                    </strong>
-                    <span>{day.decisionLevel}</span>
-                    <p>
-                      {w.formatTempDisplay(day.tempHighF)} ·{" "}
-                      {w.formatWindDisplay(day.windGustMph)} gust
-                    </p>
-                  </button>
+              <div className="compare-highlights" aria-label="Weather tradeoffs" role="group">
+                {extremes.map((item) => (
+                  <div key={item.label}>
+                    <span className="field-kicker">{item.label}</span>
+                    {item.days.length === 0 ? <p>Unavailable</p> : (
+                      <>
+                        <p>{item.days.length === days.length && days.length > 1 ? "All days tied" : item.days.length > 1 ? `${item.days.length} days tied` : dateLabel(item.days[0].date)}</p>
+                        <small>{item.format(item.days[0])}</small>
+                        {item.days.length < days.length && <div className="compare-highlight-days">
+                          {item.days.map((day) => (
+                            <button key={day.date} aria-pressed={selected?.date === day.date} onClick={() => setSelectedDate(day.date)}>
+                              {dateLabel(day.date)}{day.decisionLevel === "NO-GO" ? " · blocked" : day.decisionLevel === "CAUTION" ? " · caution" : ""}
+                            </button>
+                          ))}
+                        </div>}
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
+              <section className="compare-overview" aria-labelledby={`${tableId}-heading`}>
+                <div className="field-panel-heading">
+                  <div>
+                    <h2 id={`${tableId}-heading`}>Every day, side by side</h2>
+                    <p>Select a date to explore its hourly forecast. Scroll across to see more days.</p>
+                  </div>
+                  <button className="field-button" aria-expanded={showMeasurements} aria-controls={`${tableId}-extra`} onClick={() => setShowMeasurements(!showMeasurements)}>
+                    {showMeasurements ? "Fewer measurements" : "More measurements"}
+                  </button>
+                </div>
+                <p className="compare-table-note">{w.tripStartTime} departure each day · {w.travelWindowHours}-hour plan. Wind and precipitation chance are departure readings; hours within limits assess the available travel window.</p>
+                <div className="compare-table-scroll" role="region" aria-label="Daily forecast comparison" tabIndex={0}>
+                  <table className="compare-table">
+                    <caption>Daily weather and travel-window comparison</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Forecast</th>
+                        {days.map((day) => (
+                          <th scope="col" key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>
+                            <button aria-pressed={selected?.date === day.date} aria-controls={`${tableId}-detail`} onClick={() => setSelectedDate(day.date)}>
+                              <span>{dateLabel(day.date)}</span>
+                              <span className={`compare-decision is-${decisionTone(day)}`}>{day.decisionLevel}</span>
+                              <strong>{isNumber(day.score) ? day.score : "—"}<small>{isNumber(day.score) ? "/100" : "Score unavailable"}</small></strong>
+                              <span className="compare-selection">{selected?.date === day.date ? "Viewing this day" : "View day"}</span>
+                            </button>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: "Conditions", value: (d: MultiDayTripForecastDay) => d.weatherDescription || "Unavailable" },
+                        { label: "Low / high", value: (d: MultiDayTripForecastDay) => `${w.formatTempDisplay(d.tempLowF)} / ${w.formatTempDisplay(d.tempHighF)}` },
+                        { label: "Departure gust", value: (d: MultiDayTripForecastDay) => isNumber(d.windGustMph) ? w.formatWindDisplay(d.windGustMph) : "Unavailable" },
+                        { label: "Rain / snow chance", value: (d: MultiDayTripForecastDay) => percent(d.precipChance) },
+                      ].map((metric) => (
+                        <tr key={metric.label}><th scope="row">{metric.label}</th>{days.map((day) => <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>{metric.value(day)}</td>)}</tr>
+                      ))}
+                      <tr>
+                        <th scope="row">Hours within limits</th>
+                        {days.map((day) => (
+                          <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>
+                            {day.travelTotalHours > 0 ? <>
+                              <strong>{day.travelPassHours} / {day.travelTotalHours} hours</strong>
+                              <span className="compare-hours-track" aria-hidden="true"><span style={{ width: `${Math.min(100, Math.max(0, day.travelPassHours / Math.max(day.travelTotalHours, w.travelWindowHours) * 100))}%` }} /></span>
+                              {day.travelTotalHours < w.travelWindowHours && <small className="compare-data-warning">Only {day.travelTotalHours} of {w.travelWindowHours} planned hours covered</small>}
+                            </> : "Unavailable"}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th scope="row">Forecast evidence</th>
+                        {days.map((day) => (
+                          <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>
+                            <span className={day.partialData ? "compare-data-warning" : undefined}>{day.partialData ? "Partial data" : "Forecast available"}</span>
+                            <small>Issued {ageLabel(day.sourceIssuedTime)}</small>
+                            {day.apiWarning && <small className="compare-data-warning">Source warning · review this day</small>}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                    <tbody id={`${tableId}-extra`} hidden={!showMeasurements}>
+                      {[
+                        { label: "Expected rain", value: (d: MultiDayTripForecastDay) => amount(d.expectedRainIn) },
+                        { label: "Expected snow", value: (d: MultiDayTripForecastDay) => amount(d.expectedSnowIn, true) },
+                        { label: "Cloud cover", value: (d: MultiDayTripForecastDay) => percent(d.cloudCoverPct) },
+                        { label: "Visibility risk", value: (d: MultiDayTripForecastDay) => d.visibilityLevel || "Unavailable" },
+                        { label: "Air quality", value: (d: MultiDayTripForecastDay) => isNumber(d.airQualityAqi) ? `${d.airQualityAqi} AQI` : "Unavailable" },
+                        { label: "Active alerts", value: (d: MultiDayTripForecastDay) => String(d.alertCount) },
+                        { label: "Sunrise / sunset", value: (d: MultiDayTripForecastDay) => `${d.sunrise || "—"} / ${d.sunset || "—"}` },
+                      ].map((metric) => (
+                        <tr key={metric.label}><th scope="row">{metric.label}</th>{days.map((day) => <td key={day.date} className={selected?.date === day.date ? "is-selected" : undefined}>{metric.value(day)}</td>)}</tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="compare-export field-action-row">
+                  <button className="field-button" onClick={() => void copyBrief()}>Copy trip brief</button>
+                  <button className="field-button" onClick={() => window.print()}>Print comparison</button>
+                  {copyStatus && <p role="status">{copyStatus}</p>}
+                </div>
+              </section>
               {selected && (
-                <article className="field-panel">
+                <article className="field-panel compare-selected-detail" id={`${tableId}-detail`}>
                   <div className="field-panel-heading">
                     <div>
                       <span className="field-kicker">
@@ -238,7 +316,7 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
                       Open this day <ArrowRight size={15} />
                     </button>
                   </div>
-                  <p>{selected.travelSummary}</p>
+                  <p>{hoursLabel(selected)}</p>
                   <dl className="field-detail-grid">
                     <div>
                       <dt>Temperature</dt>
@@ -285,7 +363,7 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
                   </dl>
                   {selected.deltas && (
                     <p className="field-muted">
-                      Change from prior day: score{" "}
+                      Change from previous available day: score{" "}
                       {selected.deltas.score === null
                         ? "unavailable"
                         : `${selected.deltas.score > 0 ? "+" : ""}${selected.deltas.score}`}{" "}
