@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   ArrowUpRight,
   Bell,
   BookOpen,
   Link,
   RefreshCw,
+  Search,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   listSavedReports,
@@ -121,6 +123,9 @@ export function Library({
 }) {
   const account = useAccount();
   const watches = kind === "watches";
+  const searchId = useId();
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase();
   const [reports, setReports] = useState<SavedReportSummary[]>([]);
   const [items, setItems] = useState<ObjectiveWatch[]>([]);
   const [policy, setPolicy] = useState<ObjectiveWatchPolicy | null>(null);
@@ -131,6 +136,12 @@ export function Library({
   const [pending, setPending] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ObjectiveWatch | null>(null);
+  const matches = (title: string, date: string | null) =>
+    `${title} ${date || ""} ${date ? dateLabel(date) : ""}`.toLocaleLowerCase().includes(query);
+  const visibleReports = reports.filter((report) => matches(report.title, report.forecastDate));
+  const visibleWatches = items.filter((item) => matches(item.title, item.plan.forecastDate));
+  const showLocalReport = !watches && localReport && matches(localReport.plan.objectiveName, localReport.plan.forecastDate);
+  const resultCount = watches ? visibleWatches.length : visibleReports.length + (showLocalReport ? 1 : 0);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -219,6 +230,26 @@ export function Library({
           </button>
         </div>
       </div>
+      <div className="field-library-search">
+        <label htmlFor={searchId}>{watches ? "Find an objective" : "Find a report"}</label>
+        <div className="field-input-icon">
+          <Search size={17} aria-hidden="true" />
+          <input
+            id={searchId}
+            type="search"
+            placeholder="Search by name or date"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {search && (
+            <button type="button" className="field-icon-button" aria-label="Clear search" onClick={() => {
+              setSearch("");
+              document.getElementById(searchId)?.focus({ preventScroll: true });
+            }}><X size={16} /></button>
+          )}
+        </div>
+        <p role="status">{query && !loading ? `${resultCount} ${resultCount === 1 ? "result" : "results"}` : ""}</p>
+      </div>
       {policy && (
         <p className="field-feedback">
           {policy.automaticChecks
@@ -243,7 +274,7 @@ export function Library({
           {notice}
         </p>
       )}
-      {!watches && localReport && (
+      {showLocalReport && localReport && (
         <button
           className="field-journal-entry"
           onClick={() => onOpen(localReport)}
@@ -267,7 +298,7 @@ export function Library({
         </button>
       )}
       {!watches &&
-        reports.map((report) => (
+        visibleReports.map((report) => (
           <article className="field-library-entry" key={report.id}>
             <button
               className="field-journal-entry"
@@ -309,7 +340,7 @@ export function Library({
           </article>
         ))}
       {watches &&
-        items.map((item) => (
+        visibleWatches.map((item) => (
           <article className="field-panel" key={item.id}>
             <div className="field-panel-heading">
               <div>
@@ -412,7 +443,15 @@ export function Library({
             )}
           </article>
         ))}
-      {!loading &&
+      {!loading && !error && query && resultCount === 0 && (
+        <div className="field-empty-state">
+          <Search size={32} aria-hidden="true" />
+          <h2>No matching {watches ? "objectives" : "reports"}</h2>
+          <p>Try a different name or date, or clear your search to see everything.</p>
+          <button className="field-button" onClick={() => setSearch("")}>Clear search</button>
+        </div>
+      )}
+      {!loading && !error && !query &&
         (!account.user ||
           (watches
             ? items.length === 0
@@ -421,12 +460,14 @@ export function Library({
             {watches ? <Bell size={36} /> : <BookOpen size={36} />}
             <h2>
               {account.user
-                ? "No saved plans yet"
+                ? watches ? "No watched objectives yet" : "No saved reports yet"
                 : "Sign in to access your plans"}
             </h2>
             <p>
               {account.user
-                ? "Create a conditions brief and add it to your watchlist or saved reports."
+                ? watches
+                  ? "Create a conditions brief, then add the objective to your watchlist to follow changes."
+                  : "Create a conditions brief and save it to revisit the forecast and your planning notes."
                 : "Sync reports and watch objectives across your devices."}
             </p>
             <button

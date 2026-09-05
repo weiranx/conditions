@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { UserPreferences } from "../app/types";
 import type { Workspace } from "./model/useWorkspace";
 import {
@@ -104,6 +105,7 @@ export function Settings({
   workspace: Workspace;
 }) {
   const account = useAccount();
+  const sectionId = useId();
   return (
     <div className="field-settings">
       <header className="field-page-heading">
@@ -115,12 +117,35 @@ export function Settings({
             : "Make the tool work for your activity, units, and travel pace."}
         </p>
       </header>
+      {!accountOnly && (
+        <nav className="field-settings-shortcuts" aria-label="Preference sections">
+          {[
+            ["display", "Display"],
+            ["plan", "Default plan"],
+            ["weather", "Weather limits"],
+            ["route", "Route timing"],
+            ["save", "Save and apply"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                const section = document.getElementById(`${sectionId}-${key}`);
+                section?.scrollIntoView({ block: "start", behavior: "instant" });
+                section?.focus({ preventScroll: true });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
       {accountOnly ? (
         <Account workspace={w} />
       ) : (
         <div className="field-settings-layout">
           <div>
-            <section className="field-panel field-settings-panel">
+            <section id={`${sectionId}-display`} tabIndex={-1} aria-label="Display" className="field-panel field-settings-panel">
               <h2>Display</h2>
               {(
                 [
@@ -189,7 +214,7 @@ export function Settings({
                 </div>
               ))}
             </section>
-            <section className="field-panel field-settings-panel">
+            <section id={`${sectionId}-plan`} tabIndex={-1} aria-label="Default plan" className="field-panel field-settings-panel">
               <h2>Default plan</h2>
               <div className="field-settings-inputs">
                 <label>
@@ -251,7 +276,7 @@ export function Settings({
             </section>
           </div>
           <div>
-            <section className="field-panel field-settings-panel">
+            <section id={`${sectionId}-weather`} tabIndex={-1} aria-label="Weather thresholds" className="field-panel field-settings-panel">
               <h2>Weather thresholds</h2>
               <Thresholds workspace={w} />
               <details className="field-details">
@@ -291,7 +316,7 @@ export function Settings({
                 ))}
               </details>
             </section>
-            <section className="field-panel field-settings-panel">
+            <section id={`${sectionId}-route`} tabIndex={-1} aria-label="Route timing" className="field-panel field-settings-panel">
               <h2>Route timing</h2>
               <p>Used to estimate GPX checkpoint arrivals for your party.</p>
               <div className="field-settings-inputs">
@@ -338,7 +363,7 @@ export function Settings({
                 ))}
               </div>
             </section>
-            <section className="field-panel">
+            <section id={`${sectionId}-save`} tabIndex={-1} aria-label="Save and apply" className="field-panel">
               <h2>Save and apply</h2>
               <p>
                 {account.user

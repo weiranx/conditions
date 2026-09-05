@@ -62,6 +62,113 @@
   justify-content: space-between;
   gap: 12px;
 }
+.field-location-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--f-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.field-location-status.is-selected {
+  color: var(--f-green);
+}
+.field-location-status svg {
+  flex: none;
+  margin-top: 3px;
+}
+.field-settings-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 24px;
+}
+.field-settings-shortcuts button {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid var(--f-line);
+  border-radius: 10px;
+  background: var(--f-paper);
+  color: var(--f-ink);
+  font-size: 13px;
+}
+.field-settings-shortcuts button:hover {
+  color: var(--f-green);
+  border-color: var(--f-green);
+  background: var(--f-wash);
+}
+.field-settings section[id] {
+  scroll-margin-top: 24px;
+}
+.field-settings section[id]:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 4px;
+}
+.field-library-search {
+  max-width: 520px;
+  margin: 0 0 20px;
+}
+.field-library-search > label {
+  font-size: 12px;
+  font-weight: 550;
+}
+.field-library-search .field-input-icon {
+  border-radius: 10px;
+  background: var(--f-paper);
+}
+.field-library-search input {
+  width: 100%;
+  min-height: 46px;
+  color: var(--f-ink);
+  font-size: 14px;
+  padding: 10px 0;
+}
+.field-library-search > p {
+  min-height: 20px;
+  margin-top: 6px;
+  color: var(--f-muted);
+  font-size: 12px;
+}
+.field-library-search input::-webkit-search-cancel-button {
+  display: none;
+}
+@media (max-width: 650px) {
+  .field-library-bar {
+    display: grid;
+    gap: 12px;
+    padding-bottom: 16px;
+    margin-bottom: 18px;
+  }
+  .field-library-bar > .field-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .field-library-bar .field-button {
+    flex: 1;
+    padding-inline: 12px;
+    white-space: nowrap;
+  }
+  .field-library-search input {
+    font-size: 16px;
+  }
+  .field-plan-utilities {
+    flex-wrap: wrap;
+  }
+  .field-plan-form .field-text-button,
+  .field-map-surface .field-map-tools button {
+    min-height: 44px;
+  }
+  .field-topbar button {
+    min-height: 44px;
+  }
+  .field-library-search .field-icon-button,
+  .field-plan-form .field-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 .field-plan-utilities button {
   font-size: 11px;
   gap: 6px;
@@ -1128,7 +1235,7 @@
 .field-admin-setting input {
   width: 100%;
 }
-@media (max-width: 720px) {
+@media (max-width: 850px) {
   .field-sidebar-bottom button {
     padding: 0 !important;
     gap: 0 !important;

@@ -27,6 +27,7 @@ export function WorkspacePlan({
   const id = useId();
   const file = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
+  const [selectingLocation, setSelectingLocation] = useState(false);
   const busy = comparison ? w.tripForecastLoading : w.loading;
   const selected = w.hasObjective && !w.objectiveDraftDirty;
   return (
@@ -34,14 +35,21 @@ export function WorkspacePlan({
       className="field-plan-form"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (busy) return;
+        if (busy || selectingLocation) return;
         if (!selected) {
-          const found = await w.handleSearchSubmit();
-          setError(
-            found
-              ? "Location selected. Review the plan, then create your brief."
-              : "Choose a search result or enter coordinates.",
-          );
+          setSelectingLocation(true);
+          setError("");
+          try {
+            const found = await w.handleSearchSubmit();
+            if (!found) {
+              setError("Choose a search result or enter latitude, longitude.");
+              searchInputRef.current?.focus({ preventScroll: true });
+            }
+          } catch {
+            setError("Could not select this location. Try a search result or pick a point on the map.");
+          } finally {
+            setSelectingLocation(false);
+          }
           return;
         }
         setError("");
@@ -82,6 +90,7 @@ export function WorkspacePlan({
               aria-expanded={w.showSuggestions}
               aria-controls={`${id}-results`}
               aria-autocomplete="list"
+              aria-describedby={`${id}-location-status`}
               aria-activedescendant={
                 w.showSuggestions && w.activeSuggestionIndex >= 0
                   ? `suggestion-${w.activeSuggestionIndex}`
@@ -89,7 +98,10 @@ export function WorkspacePlan({
               }
               autoComplete="off"
               onFocus={w.handleFocus}
-              onChange={w.handleInputChange}
+              onChange={(event) => {
+                setError("");
+                w.handleInputChange(event);
+              }}
               onKeyDown={w.handleSearchKeyDown}
             />
             {selected && <Check size={16} aria-label="Location selected" />}
@@ -98,7 +110,11 @@ export function WorkspacePlan({
                 type="button"
                 aria-label="Clear location"
                 className="field-icon-button"
-                onClick={w.handleSearchClear}
+                onClick={() => {
+                  setError("");
+                  w.handleSearchClear();
+                  searchInputRef.current?.focus({ preventScroll: true });
+                }}
               >
                 <X size={15} />
               </button>
@@ -193,6 +209,15 @@ export function WorkspacePlan({
             </>
           )}
         </div>
+        <p
+          id={`${id}-location-status`}
+          className={`field-location-status${selected ? " is-selected" : ""}`}
+          role="status"
+        >
+          {selected ? (
+            <><Check size={14} aria-hidden="true" /> Location selected. Review your date and time below.</>
+          ) : "Choose a search result, use your location, or pick a point on the map."}
+        </p>
         {w.importedGpxRoute && (
           <div className="field-route-import">
             <strong>{w.importedGpxRoute.fileName}</strong>
@@ -351,9 +376,14 @@ export function WorkspacePlan({
         <button
           className="field-button field-button-primary field-form-submit"
           type="submit"
+          disabled={selectingLocation}
         >
-          {busy
+          {selectingLocation
+            ? "Selecting location…"
+            : busy
             ? "Reading conditions…"
+            : !selected
+              ? "Select location"
             : comparison
               ? "Compare these days"
               : "Create conditions brief"}

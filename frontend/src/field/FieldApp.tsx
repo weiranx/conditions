@@ -75,6 +75,15 @@ export default function FieldApp() {
       ? [{ id: "watches", label: "Watchlist", icon: Bell }]
       : []),
   ];
+  const pageLabels: Record<string, string> = {
+    settings: "Preferences",
+    account: "Your account",
+    admin: "Administration",
+    status: "Service status",
+    privacy: "Privacy",
+    terms: "Terms",
+  };
+  const pageLabel = nav.find((item) => item.id === w.view)?.label || pageLabels[w.view] || "Planning";
   function navigate(page: AppView) {
     setFeedback("");
     if (page === "trip") w.openTripToolView();
@@ -211,6 +220,7 @@ export default function FieldApp() {
           <div className="field-sidebar-bottom">
             {w.isAdminAccount && (
               <button
+                title="Administration"
                 aria-current={w.view === "admin" ? "page" : undefined}
                 onClick={() => navigate("admin")}
               >
@@ -219,6 +229,7 @@ export default function FieldApp() {
               </button>
             )}
             <button
+              title="Preferences"
               aria-current={w.view === "settings" ? "page" : undefined}
               onClick={() => navigate("settings")}
             >
@@ -226,6 +237,7 @@ export default function FieldApp() {
               Preferences
             </button>
             <button
+              title="Your account"
               aria-current={w.view === "account" ? "page" : undefined}
               onClick={() => navigate("account")}
             >
@@ -238,7 +250,7 @@ export default function FieldApp() {
           <header className="field-topbar">
             <span>
               <span className="field-status-dot" />
-              BACKCOUNTRY / PLANNING
+              BACKCOUNTRY / {pageLabel}
             </span>
             <div>
               <span>{dateLabel(w.todayDate)}</span>
