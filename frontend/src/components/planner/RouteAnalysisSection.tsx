@@ -422,7 +422,7 @@ export function RouteAnalysisSection({
             </div>
           )}
           {routeAnalysis.partialData && (
-            <p className="route-analysis-disclaimer route-analysis-partial">Some waypoints have no data and are excluded from scoring. Treat those segments as unknown, review the briefing notes, and verify them from current sources before travel.</p>
+            <p className="route-analysis-disclaimer route-analysis-partial">Some checkpoint data is missing or incomplete. Available scores may not cover every source or segment. Review the briefing notes and verify data gaps from current sources before travel.</p>
           )}
           <div className="route-waypoints">
             {routeAnalysis.summaries.map((wp, i) => {

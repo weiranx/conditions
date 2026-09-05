@@ -10,6 +10,7 @@ const {
 } = require('../utils/report-feature-filter');
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
+const { finiteNumber, serializeWaypointReports } = require('../utils/route-briefing');
 
 const withTimeout = (promise, ms, label) => {
   let timeout = null;
@@ -25,9 +26,6 @@ const withTimeout = (promise, ms, label) => {
   });
 };
 
-// Bounds the combined raw per-waypoint report JSON before it's interpolated into the
-// AI prompt, so a route with several waypoints can't blow up prompt size.
-const MAX_WAYPOINT_REPORTS_LENGTH = 30000;
 const MAX_SUPPLIED_WAYPOINTS = 8;
 const MAX_WAYPOINT_DISTANCE_FROM_OBJECTIVE_KM = 200;
 const ROUTE_ANALYSIS_MAX_TOKENS = 8192;
@@ -65,12 +63,32 @@ const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowH
   });
 };
 
-const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = []) => {
+const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = [], units = null) => {
   const available = summaries.filter((summary) => summary.dataAvailable);
-  const scored = available.filter((summary) => Number.isFinite(Number(summary.score)));
+  const scored = available.filter((summary) => finiteNumber(summary.score));
   const worst = scored.reduce((current, summary) => (!current || Number(summary.score) < Number(current.score) ? summary : current), null);
-  const peakGust = available.reduce((peak, summary) => Math.max(peak, Number(summary.weather?.windGust) || 0), 0);
-  const peakPrecip = available.reduce((peak, summary) => Math.max(peak, Number(summary.weather?.precipChance) || 0), 0);
+  const peakValue = (key) => {
+    const values = available.map((summary) => summary.weather?.[key]).filter(finiteNumber);
+    return values.length ? Math.max(...values) : null;
+  };
+  const peakGust = peakValue('windGust');
+  const peakPrecip = peakValue('precipChance');
+  const gustText = peakGust === null ? 'Gust forecasts are unavailable.'
+    : `Peak modeled gust at available checkpoints is ${Math.round(peakGust * (units?.wind === 'kph' ? 1.609344 : 1))} ${units?.wind === 'kph' ? 'km/h' : 'mph'}.`;
+  const precipText = peakPrecip === null ? 'Precipitation probabilities are unavailable.'
+    : `Peak precipitation chance at available checkpoints is ${Math.round(peakPrecip)}%.`;
+  const incompleteWeather = available.some((summary) => !finiteNumber(summary.weather?.windGust) || !finiteNumber(summary.weather?.precipChance));
+  const hazards = available.filter((summary) => summary.primaryHazard && summary.primaryHazard !== 'None')
+    .map((summary) => `${summary.name}: ${summary.primaryHazard}`).join('; ');
+  const avalancheConcerns = available.filter((summary) => summary.avalanche?.risk)
+    .map((summary) => `${summary.name}: ${summary.avalanche.risk} avalanche danger`).join('; ');
+  const alerted = available.filter((summary) => summary.activeAlerts > 0).map((summary) => summary.name);
+  const incomplete = summaries.filter((summary) => summary.partialData).map((summary) => summary.name);
+  const concerns = [
+    avalancheConcerns,
+    alerted.length ? `Active alerts at ${alerted.join(', ')}; read the official alert details.` : '',
+    incomplete.length ? `Some source data is incomplete at ${incomplete.join(', ')}.` : '',
+  ].filter(Boolean).join(' ');
   const first = available[0];
   const last = available[available.length - 1];
   const timing = first && last ? `${first.name} at ${first.etaTime} to ${last.name} at ${last.etaTime}` : 'the planned route window';
@@ -78,12 +96,12 @@ const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = []) =>
     ? ` Data is missing at ${failedWaypointNames.join(', ')} and must be treated as unknown.`
     : '';
   return [
-    `HAZARD ZONES: ${worst ? `${worst.name} has the least modeled margin at ${worst.etaTime} with a score of ${Math.round(worst.score)}.` : 'No checkpoint score is available.'}${missing}`,
-    `WEATHER WINDOW: Checkpoint forecasts follow estimated arrival times from ${timing}. Peak modeled gust is ${Math.round(peakGust)} mph and peak precipitation chance is ${Math.round(peakPrecip)}%.`,
-    'OTHER CONCERNS: This briefing uses forecast and modeled checkpoint data. Verify official alerts, route access, surface conditions, and any unavailable checkpoint before departure.',
+    `HAZARD ZONES: ${worst ? `${worst.name} has the least modeled margin at ${worst.etaTime} with a score of ${Math.round(worst.score)}${worst.tier ? ` (${worst.tier})` : ''}.` : 'No checkpoint score is available.'}${missing}${hazards ? ` Reported primary hazards: ${hazards}.` : ''}`,
+    `WEATHER WINDOW: Checkpoint forecasts follow estimated arrival times from ${timing}. ${gustText} ${precipText}${incompleteWeather ? ' Weather coverage is incomplete; missing values are unknown.' : ''}`,
+    `OTHER CONCERNS: ${concerns ? `${concerns} ` : ''}This briefing uses forecast and modeled checkpoint data. Verify official alerts, route access, surface conditions, and any unavailable checkpoint before departure.`,
     `DECISION POINTS: Reassess at each timed checkpoint${worst ? `, especially before ${worst.name}` : ''}. Turn around when observed conditions arrive earlier or are worse than the checkpoint forecast.`,
     'GEAR CHECK: Offline route and navigation backup; emergency communication; weather protection matched to the report; lighting and reserve power; normal backcountry emergency kit.',
-    `BOTTOM LINE: ${worst && Number(worst.score) < 40 ? 'The route contains a low-margin checkpoint and should not be treated as a go.' : 'Use the timed checkpoints as verification gates rather than a guarantee.'} Rebuild the route brief when timing or pace changes.`,
+    `BOTTOM LINE: ${available.some((summary) => (finiteNumber(summary.score) && summary.score < 40) || summary.tier === 'Extreme') ? 'The route contains a low-margin checkpoint and should not be treated as a go.' : !scored.length ? 'Checkpoint scores are unavailable; there is insufficient evidence for a route decision.' : 'Use the timed checkpoints as verification gates rather than a guarantee.'} Rebuild the route brief when timing or pace changes.`,
   ].join('\n');
 };
 
@@ -432,16 +450,13 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         waypoint.eta_time = checkpointSchedule[index].time;
         waypoint.offset_minutes = checkpointSchedule[index].offsetMinutes;
       });
-      const safetySettled = await withTimeout(
-        Promise.allSettled(
-          waypointsCopy.map((wp, index) =>
-            invokeSafetyHandler(
-              { lat: String(wp.lat), lon: String(wp.lon), date: checkpointSchedule[index].date, start: checkpointSchedule[index].time, travel_window_hours: '1', name: `Route waypoint: ${wp.name || 'unnamed'}` },
-              { suppressReportLog: true },
-            )
-          )
-        ),
-        60000, 'Safety checks'
+      const safetySettled = await Promise.allSettled(
+        waypointsCopy.map((wp, index) =>
+          withTimeout(Promise.resolve().then(() => invokeSafetyHandler(
+            { lat: String(wp.lat), lon: String(wp.lon), date: checkpointSchedule[index].date, start: checkpointSchedule[index].time, travel_window_hours: '1', name: `Route waypoint: ${wp.name || 'unnamed'}` },
+            { suppressReportLog: true },
+          )), 60000, `Safety check for ${wp.name}`)
+        )
       );
 
       // Step 3: Build a compact per-waypoint summary for the UI (waypoint list,
@@ -472,9 +487,12 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,
           dataAvailable,
-          score: p.safety?.score ?? null,
+          score: finiteNumber(p.safety?.score) ? p.safety.score : null,
+          tier: p.safety?.tier ?? null,
+          primaryHazard: p.safety?.primaryHazard ?? null,
+          partialData: p.partialData === true,
           weather: pick(p.weather, ['temp', 'feelsLike', 'windSpeed', 'windGust', 'description', 'precipChance']),
-          ...(avyRelevant && hasSnow ? { avalanche: pick(p.avalanche, ['risk', 'dangerLevel', 'bottomLine']) } : {}),
+          ...(avyRelevant ? { avalanche: pick(p.avalanche, ['risk', 'dangerLevel', 'bottomLine']) } : {}),
           activeAlerts: Array.isArray(p.alerts?.alerts) ? p.alerts.alerts.length : 0,
           ...(hasSnow ? { snowDepthIn } : {}),
         };
@@ -500,15 +518,19 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         };
       });
       const failedWaypointNames = rawWaypointReports.filter((r) => !r.dataAvailable).map((r) => r.name).filter(Boolean);
-      const partialData = failedWaypointNames.length > 0;
-      const reportsJson = JSON.stringify(rawWaypointReports).slice(0, MAX_WAYPOINT_REPORTS_LENGTH);
+      const partialData = failedWaypointNames.length > 0 || summaries.some((summary) => summary.partialData);
+      const reportsJson = serializeWaypointReports(rawWaypointReports);
       const disabledDomains = getDisabledScoreFeatureLabels(featureFlags);
       const disabledDomainInstruction = disabledDomains.length === 0
         ? ''
         : `\nDisabled product domains: ${disabledDomains.join(', ')}. Do not mention them, infer them, recommend domain-specific checks or gear, or refer the user to their sources.\n`;
 
-      const generatedAnalysis = aiFeatureEnabled ? await withTimeout(askAI(
-        `${describeUnitsInstruction(units)}
+      let analysisSource = 'deterministic';
+      let generatedAnalysis = buildDeterministicRouteBriefing(summaries, failedWaypointNames, units);
+      if (aiFeatureEnabled && summaries.some((summary) => summary.dataAvailable)) {
+        try {
+          const aiAnalysis = await withTimeout(askAI(
+            `${describeUnitsInstruction(units)}
 
 You are analyzing backcountry conditions for a trip on ${safePeak}.
 Route: ${safeRoute}
@@ -523,8 +545,8 @@ ${routeSourceDetails ? `Mapped route match: ${JSON.stringify(routeSourceDetails)
 ${routeMetadata ? `Recorded GPX metadata: ${JSON.stringify(routeMetadata)}` : ''}
 ${terrainProfile ? `Sampled terrain profile: ${JSON.stringify(terrainProfile)}` : ''}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
-${partialData ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
-Raw safety report per waypoint, trailhead to summit (JSON):
+${failedWaypointNames.length ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
+Safety report per waypoint in route travel order (JSON; reportCondensed and omittedReportFields identify abridged evidence, never assume omitted fields are clear):
 ${reportsJson}
 ${disabledDomainInstruction}
 
@@ -541,15 +563,22 @@ BOTTOM LINE: 2-3 sentences stating go, go-with-caution, or no-go, identifying th
 Aim for a substantive 300-550 word briefing when the route evidence supports it. Do not pad sparse data, repeat the same point in multiple sections, or give generic backcountry advice that is unrelated to the reports.
 
 Use plain, calm language that feels like advice from an experienced trip partner. Plain text only: no markdown, headings, bullets, numbered lists, "#" characters, or asterisks.`,
-        { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis', userId: req.accountUser.id }
-      ), 60000, 'Route synthesis') : buildDeterministicRouteBriefing(summaries, failedWaypointNames);
+            { maxTokens: ROUTE_ANALYSIS_MAX_TOKENS, feature: 'route-analysis', userId: req.accountUser.id }
+          ), 60000, 'Route synthesis');
+          if (typeof aiAnalysis !== 'string' || !aiAnalysis.trim()) throw new Error('Empty route synthesis');
+          generatedAnalysis = aiAnalysis;
+          analysisSource = 'ai';
+        } catch (err) {
+          logger.warn({ err }, 'Route synthesis unavailable; returning checkpoint briefing');
+        }
+      }
       const analysis = removeDisabledNarrativeReferences(generatedAnalysis, featureFlags);
 
       return res.json({
         waypoints: waypointsCopy,
         summaries,
         analysis,
-        analysisSource: aiFeatureEnabled ? 'ai' : 'deterministic',
+        analysisSource,
         featureFlags,
         partialData,
         routeSource,
