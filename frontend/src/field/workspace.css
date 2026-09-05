@@ -1,24 +1,52 @@
+/* Warm paper and evergreen materials, shared by every planning surface. */
+:root {
+  --f-bg: #f3f1eb;
+  --f-paper: #fffefb;
+  --f-soft: #eeece5;
+  --f-ink: #23392f;
+  --f-muted: #657067;
+  --f-line: #dedfd6;
+  --f-wash: #e8ede5;
+  --f-accent: #897044;
+  --f-shadow: 0 1px 2px #23392f05, 0 8px 24px -16px #23392f24;
+}
+html[data-theme="dark"] {
+  --f-bg: #131c18;
+  --f-paper: #1c2821;
+  --f-soft: #253229;
+  --f-line: #34433a;
+  --f-ink: #f0eee4;
+  --f-muted: #aebaae;
+  --f-accent: #c6b38a;
+  --f-shadow: 0 1px 2px #0002, 0 10px 28px -16px #0005;
+}
+
 /* Editorial hierarchy stays separate from the compact type used for evidence. */
+.field-app {
+  font-optical-sizing: auto;
+}
 .field-app :is(.field-page-heading, .field-report-head) h1 {
   font-family: var(--f-serif);
-  font-size: clamp(34px, 3.6vw, 48px);
+  font-size: clamp(36px, 4vw, 54px);
   font-weight: 400;
   letter-spacing: -.035em;
   line-height: 1.12;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 .field-workspace .field-workspace-heading {
   position: relative;
   isolation: isolate;
-  min-height: 216px;
-  margin: 28px 0;
+  min-height: 224px;
+  margin: 32px 0;
   padding: 32px 36px;
   overflow: hidden;
   border: 1px solid #ffffff18;
-  border-radius: 18px;
+  border-radius: 12px;
   background: #243c31;
   color: #fffdf4;
-  box-shadow: var(--f-shadow);
+  box-shadow: 0 16px 36px -24px #172b2360, inset 0 1px #ffffff14;
 }
 
 .field-workspace-heading::before {
@@ -27,22 +55,22 @@
   z-index: -1;
   inset: 0;
   background:
-    linear-gradient(90deg, #172b23f5 0%, #172b23e8 30%, #172b2360 72%, #172b2340),
+    linear-gradient(90deg, #14291ff5 0%, #172b23dc 32%, #172b2350 72%, #172b2320),
     url('/hero-rainier.jpg') 66% 43% / cover;
 }
 
 .field-workspace .field-workspace-heading h1 {
   max-width: 600px;
   margin: 13px 0 12px;
-  font: 400 clamp(34px, 3.5vw, 48px) / 1.1 var(--f-serif);
+  font: 400 clamp(36px, 3.8vw, 50px) / 1.1 var(--f-serif);
   letter-spacing: -.035em;
   text-wrap: balance;
 }
 
 .field-workspace .field-workspace-heading p {
-  max-width: 380px;
+  max-width: 400px;
   color: #e0e7db;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.65;
 }
 
@@ -65,9 +93,23 @@
   color: #d9cfae;
 }
 
+.field-workspace .field-workspace-label {
+  border-top: 1px solid #d9cfae66;
+  padding-top: 12px;
+}
+
+.field-form-title .field-kicker,
+.field-page-heading > .field-kicker {
+  color: var(--f-accent);
+  letter-spacing: .13em;
+}
+
 .field-form-title h2 {
   margin-top: 5px;
-  font: 400 27px / 1.2 var(--f-serif);
+  font-family: inherit;
+  font-size: 23px;
+  font-weight: 550;
+  line-height: 1.3;
   letter-spacing: -.025em;
 }
 
@@ -75,8 +117,171 @@
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
+.field-app .field-button {
+  box-shadow: 0 1px 2px #23392f06;
+}
+.field-app .field-button-primary {
+  background: var(--f-primary);
+  box-shadow: none;
+}
+.field-app .field-button-primary:hover {
+  background: var(--f-primary-hover);
+}
+.field-app .field-button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.field-sidebar nav button[aria-current="page"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--f-green) 12%, transparent);
+}
+.field-sidebar .field-brand > span {
+  border-color: #899a7666;
+  box-shadow: inset 0 1px #e4d8aa55, 0 3px 8px #23392f20;
+}
+.field-sidebar .field-brand small {
+  letter-spacing: .2em;
+}
+
+.field-app .field-topbar {
+  background: transparent;
+  border-bottom-color: color-mix(in srgb, var(--f-line) 65%, transparent);
+}
+.field-topbar > span {
+  color: var(--f-muted);
+}
+
+.field-workspace-bottom > section {
+  padding: 26px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.field-workspace-bottom h2 {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 550;
+  line-height: 1.3;
+  letter-spacing: -.02em;
+  margin-bottom: 18px;
+}
+.field-location-row > svg:last-child,
+.field-recent-row > svg:last-child {
+  color: var(--f-accent);
+}
+.field-quick-locations .field-location-row {
+  padding: 15px 0;
+  border-top: 1px solid var(--f-line);
+  border-radius: 0;
+  background: transparent;
+}
+.field-quick-locations .field-location-row > svg:first-child {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.field-quick-locations .field-location-row:hover {
+  background: var(--f-soft);
+}
+.field-workspace-bottom > .field-recent-brief {
+  --f-ink: #fffbed;
+  --f-muted: #c5d5c8;
+  --f-accent: #c5d5c8;
+  --f-green: #d6e4d4;
+  --f-soft: #315445;
+  color: var(--f-ink);
+  border-color: #315445;
+  background: #233f32;
+  display: flex;
+  flex-direction: column;
+}
+.field-recent-brief .field-recent-row {
+  flex: 1;
+  border-top: 1px solid #c5d5c833;
+  border-bottom: 1px solid #c5d5c833;
+  border-radius: 0;
+  padding-block: 24px;
+}
+.field-recent-brief .field-recent-row strong {
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.25;
+  margin-block: 10px;
+  overflow-wrap: anywhere;
+}
+.field-recent-brief .field-recent-row > div { min-width: 0; }
+.field-recent-brief .field-recent-row > span {
+  font-size: 36px;
+}
+.field-recent-brief .field-recent-row > svg { flex: none; }
+
+.field-comparison .field-compare-intro {
+  align-items: stretch;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid var(--f-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 28px 0;
+  margin-top: 0;
+  min-height: 0;
+  gap: 12px;
+}
+.field-compare-intro h2 {
+  font-family: inherit;
+  font-size: 23px;
+  font-weight: 550;
+  line-height: 1.3;
+  letter-spacing: -.02em;
+  margin: 0;
+}
+.field-compare-intro > p {
+  max-width: 54ch;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.field-compare-features {
+  margin: 16px 0 0;
+  width: 100%;
+}
+.field-compare-features > div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--f-line);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.field-compare-features dt { font-weight: 550; }
+.field-compare-features dd { color: var(--f-muted); margin: 0; }
+@media (max-width: 650px) {
+  .field-recent-brief .field-recent-row { gap: 12px; }
+  .field-recent-brief .field-recent-row > span { font-size: 32px; }
+  .field-compare-features > div {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
 .field-app :is(.field-plan-form, .field-planner-map, .field-settings-panel, .field-account-panel) {
-  box-shadow: var(--f-shadow), inset 0 1px color-mix(in srgb, var(--f-ink) 3%, transparent);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.field-plan-form .field-input-icon,
+.field-plan-form input:not([type="file"]),
+.field-plan-form select {
+  border-color: color-mix(in srgb, var(--f-line) 85%, var(--f-paper));
+}
+.field-plan-form .field-input-icon input {
+  border: 0;
+}
+.field-plan-form .field-input-icon:focus-within {
+  border-color: var(--f-green);
+}
+.field-plan-form .field-form-title {
+  padding-bottom: 21px;
+  border-bottom: 1px solid var(--f-line);
 }
 
 .field-plan-form .field-form-submit {
@@ -89,8 +294,11 @@
 }
 
 @media (max-width: 850px) {
+  .field-sidebar nav button[aria-current="page"] {
+    box-shadow: inset 0 -2px var(--f-green);
+  }
   .field-workspace .field-workspace-heading {
-    min-height: 200px;
+    min-height: 230px;
     margin-top: 22px;
     padding: 28px;
   }
@@ -124,17 +332,36 @@
   .field-app :is(.field-button, .field-sidebar button, .field-location-row, .field-recent-row) {
     transition: none;
   }
-  .field-app button:active:not(:disabled) {
+  .field-app button:active:not(:disabled),
+  .field-app .field-button:active:not(:disabled) {
     transform: none;
   }
 }
 
 @media (prefers-contrast: more) {
+  :root {
+    --f-muted: #3c473b;
+    --f-line: #6a7567;
+    --f-accent: #3c473b;
+  }
+  html[data-theme="dark"] {
+    --f-muted: #d5ddcb;
+    --f-line: #b0bda8;
+    --f-accent: #d5ddcb;
+  }
   .field-workspace-heading::before { display: none; }
   .field-workspace .field-workspace-heading { border-color: currentColor; }
 }
 
 @media print {
+  .field-workspace-bottom > .field-recent-brief {
+    --f-ink: #17202b;
+    --f-muted: #4e5967;
+    --f-accent: #17202b;
+    --f-green: #17202b;
+    background: white;
+    color: var(--f-ink);
+  }
   .field-workspace .field-workspace-heading {
     background: white;
     color: black;
@@ -226,6 +453,22 @@
 .field-location-status svg {
   flex: none;
   margin-top: 3px;
+}
+.field-plan-timezone {
+  margin: -8px 0 16px;
+  color: var(--f-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.field-plan-form .field-input-grid {
+  align-items: start;
+}
+.field-duration-unit {
+  color: var(--f-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 .field-settings-shortcuts {
   display: flex;
@@ -414,54 +657,6 @@
   font-size: 11px;
   margin-top: 8px;
 }
-.field-chat-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  padding: 0;
-}
-.field-chat-toggle > span:first-of-type {
-  flex: 1;
-}
-.field-chat-toggle strong {
-  display: block;
-  font-size: 17px;
-}
-.field-chat-toggle small {
-  display: block;
-  font-size: 12px;
-  color: var(--f-muted);
-  margin-top: 4px;
-}
-.field-chat-toggle > span:last-child {
-  font-size: 12px;
-  color: var(--f-green);
-}
-.field-chat-messages {
-  max-height: 520px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding-top: 20px;
-}
-.field-chat-message {
-  padding: 18px 0;
-  border-top: 1px solid var(--f-line);
-  font-size: 14px;
-}
-.field-chat-message.is-user {
-  background: var(--f-wash);
-  border-radius: 12px;
-  padding: 18px;
-  margin-block: 12px;
-  border: 0;
-}
-.field-chat-message .field-kicker {
-  margin-bottom: 8px;
-}
 .field-markdown {
   font-size: 14px;
   line-height: 1.85;
@@ -484,45 +679,6 @@
 .field-markdown :is(td, th) {
   border: 1px solid var(--f-line);
   padding: 8px;
-}
-.field-chat-suggestions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 20px 0;
-}
-.field-chat-suggestions button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  background: var(--f-soft);
-  border: 1px solid var(--f-line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 12px;
-  min-height: 42px;
-}
-.field-chat-form {
-  display: flex;
-  gap: 10px;
-  margin: 20px 0;
-}
-.field-chat-form textarea {
-  flex: 1;
-  resize: vertical;
-  min-width: 0;
-  padding: 13px;
-  border: 1px solid var(--f-line);
-  border-radius: 10px;
-  background: var(--f-bg);
-  color: var(--f-ink);
-  font: inherit;
-  font-size: 14px;
-}
-.field-chat-form button {
-  align-self: end;
-  min-height: 46px;
 }
 .field-map-tools {
   display: flex;

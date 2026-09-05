@@ -137,10 +137,14 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
               <p>Checking each day for the same objective and travel window.</p>
             </div>
           ) : !days.length ? (
-            <div className="field-empty-state">
-              <Sunrise size={44} />
-              <h2>Find your weather window</h2>
-              <p>Set a location and compare two to seven days.</p>
+            <div className="field-empty-state field-compare-intro">
+              <h2>Choose the days to compare</h2>
+              <p>Select a location and a start date. Each day uses the same departure time and trip duration.</p>
+              <dl className="field-compare-features">
+                <div><dt>Weather</dt><dd>Wind, rain, and temperature across 2–7 days</dd></div>
+                <div><dt>Timing</dt><dd>Hours within your limits and available daylight</dd></div>
+                <div><dt>Sources</dt><dd>Forecast freshness, confidence, and missing data</dd></div>
+              </dl>
             </div>
           ) : (
             <>
@@ -313,7 +317,7 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
         </section>
       )}
       {days.length > 0 && available.reportChat && (
-        <Chat key={payload} reportPayload={payload} contextType="trip" />
+        <Chat key={payload} reportPayload={payload} contextType="trip" contextLabel={`${w.objectiveName || "Selected objective"} · ${days.length} days`} />
       )}
     </section>
   );

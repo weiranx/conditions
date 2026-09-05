@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  BookOpen,
   Check,
   Clock3,
   Download,
@@ -157,14 +158,13 @@ export function Report({
       </header>
       <div className="field-report-toolbar">
         <span>
-          <span className="field-status-dot" />
           Generated {ageLabel(data.generatedAt)} ·{" "}
           {w.objectiveTimezone || "Objective local time"}
         </span>
         <div>
           {flags.reportHistory && (
             <button disabled={actionBusy} onClick={onSave}>
-              <Download size={14} />
+              {w.activeSavedReportId ? <Check size={14} /> : <Download size={14} />}
               {w.activeSavedReportId ? "Saved" : "Save"}
             </button>
           )}
@@ -193,8 +193,10 @@ export function Report({
                 event.currentTarget.open = false;
             }}
             onClick={(event) => {
-              if ((event.target as HTMLElement).closest("button"))
+              if ((event.target as HTMLElement).closest("button")) {
                 event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus({ preventScroll: true });
+              }
             }}
           >
             <summary>
@@ -213,9 +215,6 @@ export function Report({
               <button onClick={download}>
                 <ArrowDown size={16} />
                 Export report data
-              </button>
-              <button onClick={() => setFullReport((value) => !value)}>
-                {fullReport ? "Back to chapters" : "Full report"}
               </button>
               <button onClick={() => window.print()}>Print view</button>
             </div>
@@ -291,11 +290,30 @@ export function Report({
         <ReportSummary workspace={w} onOpen={selectChapter} />
       </div>
       <div className="field-report-layout">
+        <div className="report-reading-controls">
+          <div>
+            <h2>Report sections</h2>
+            <p role="status">
+              {fullReport ? "All sections in one view" : "Weather, timing, terrain, and source evidence."}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="field-button"
+            aria-pressed={fullReport}
+            aria-controls="field-report-detail"
+            onClick={() => setFullReport((value) => !value)}
+          >
+            <BookOpen size={16} aria-hidden="true" />
+            {fullReport ? "Back to chapters" : "Read full report"}
+          </button>
+        </div>
         <nav className="field-chapters" aria-label="Briefing chapters">
           {visibleChapters.map((c) => (
             <button
               key={c.id}
-              aria-current={activeChapter === c.id ? "page" : undefined}
+              aria-current={!fullReport && activeChapter === c.id ? "page" : undefined}
+              aria-controls="field-report-detail"
               onClick={() => selectChapter(c.id)}
             >
               <c.icon size={17} />
@@ -304,7 +322,7 @@ export function Report({
             </button>
           ))}
         </nav>
-        <div className="field-chapter-content">
+        <div className="field-chapter-content" id="field-report-detail">
           <Suspense
             fallback={
               <p className="field-loading" role="status">
@@ -420,6 +438,7 @@ export function Report({
           <Chat
             key={w.reportChatSessionKey}
             reportPayload={w.rawReportPayload}
+            contextLabel={`${report.plan.objectiveName} · ${dateLabel(report.plan.forecastDate)}`}
             initialMessages={w.reportChatMessages}
             onMessagesChange={w.setReportChatMessages}
             readOnly={w.viewingHistoryReport}

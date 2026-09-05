@@ -249,7 +249,6 @@ export default function FieldApp() {
         <div className="field-content">
           <header className="field-topbar">
             <span>
-              <span className="field-status-dot" />
               BACKCOUNTRY / {pageLabel}
             </span>
             <div>
@@ -285,17 +284,13 @@ export default function FieldApp() {
                       A clear view of the weather, terrain, and hours ahead.
                     </p>
                   </div>
-                  <span className="field-workspace-label">
-                    <Mountain size={16} />
-                    Built for the backcountry
-                  </span>
                 </header>
                 <div className="field-planner-grid">
                   <WorkspacePlan workspace={w} />
                   {map}
                 </div>
                 <div className="field-workspace-bottom">
-                  <section>
+                  <section className="field-quick-locations">
                     <h2>Quick locations</h2>
                     {peaks.map((peak) => (
                       <button
@@ -318,7 +313,7 @@ export default function FieldApp() {
                       </button>
                     ))}
                   </section>
-                  <section>
+                  <section className="field-recent-brief">
                     <h2>Recent brief</h2>
                     {w.reportSnapshot ? (
                       <button

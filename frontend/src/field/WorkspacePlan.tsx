@@ -62,10 +62,8 @@ export function WorkspacePlan({
     >
       <div className="field-form-title">
         <div>
-          <span className="field-kicker">Trip setup</span>
           <h2>Plan details</h2>
         </div>
-        <MapPin aria-hidden="true" />
       </div>
       <fieldset disabled={busy}>
         <div
@@ -256,11 +254,17 @@ export function WorkspacePlan({
         <div className="field-form-divider">
           <span className="field-kicker">Date and time</span>
         </div>
+        <p className="field-plan-timezone" id={`${id}-timezone`}>
+          {w.hasObjective
+            ? `Local time · ${w.objectiveTimezone || "the objective"}`
+            : "Choose a location to set the local time zone."}
+        </p>
         <div className="field-input-grid">
           <label>
             Date
             <input
               type="date"
+              aria-describedby={`${id}-timezone`}
               min={w.todayDate}
               max={w.maxForecastDate}
               required
@@ -289,6 +293,7 @@ export function WorkspacePlan({
             Start time
             <input
               type="time"
+              aria-describedby={`${id}-timezone`}
               required
               onInput={(event) => {
                 const value = event.currentTarget.value;
@@ -312,8 +317,9 @@ export function WorkspacePlan({
             />
           </label>
           <label>
-            Hours
+            Duration
             <input
+              aria-label="Duration in hours"
               type="number"
               min="1"
               max="24"
@@ -325,6 +331,7 @@ export function WorkspacePlan({
               }}
               onBlur={w.handleTravelWindowHoursDraftBlur}
             />
+            <span className="field-duration-unit">hours</span>
           </label>
         </div>
         {comparison ? (
@@ -395,11 +402,6 @@ export function WorkspacePlan({
           {error}
         </p>
       )}
-      <p className="field-form-note">
-        {w.hasObjective
-          ? `Times are local to ${w.objectiveTimezone || "the objective"}.`
-          : "Choose a location to set the local time zone."}
-      </p>
     </form>
   );
 }

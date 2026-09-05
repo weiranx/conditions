@@ -38,7 +38,7 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
   const percent = (value: number) => `${Math.round(value)}%`;
   return (
     <div className="field-conditions">
-      <section className="field-panel">
+      <section className="field-panel report-precip-panel">
         <div className="field-panel-heading">
           <div>
             <span className="field-kicker condition-label">

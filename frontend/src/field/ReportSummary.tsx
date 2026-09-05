@@ -24,7 +24,7 @@ export function ReportSummary({
   return (
     <section className="report-plan-summary" aria-label="Plan at a glance">
       <header>
-        <span className="field-kicker">Your plan at a glance</span>
+        <h2>Plan at a glance</h2>
         <span>{w.travelWindowHours} hours outside</span>
       </header>
       <div className="report-summary-grid">
