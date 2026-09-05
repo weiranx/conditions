@@ -46,7 +46,7 @@ Browser verification also covers report generation, date/time commits, hourly me
 
 ## Objective shortlist
 
-Open **Compare → Compare objectives** to select 2–5 points and 2–7 consecutive dates. Each objective uses the same local departure time and trip duration. Forecast requests use the existing `/api/trip-forecasts` endpoint sequentially, with one comparison allowance per objective, idempotency keys, cancellation, and account usage updates. Missing dates remain visible; mismatched date, location, time, or duration responses are rejected.
+Open **Compare → Compare objectives** to select 2–5 points and 2–7 consecutive dates. Each objective uses the same local departure time and trip duration. Forecast requests use the existing `/api/trip-forecasts` endpoint sequentially, with one comparison allowance per objective, idempotency keys, cancellation, and account usage updates. Missing dates remain visible; mismatched dates, locations, or reported durations are rejected. Request identity and cancellation bind responses to the selected departure; provider forecast-period timestamps are not compared to the requested clock. Missing precipitation metadata is retained as incomplete evidence.
 
 Ranking uses the existing full hazard decision (including relevant avalanche evidence), then the canonical report score. Partial reports and incomplete hourly windows do not win ranking; comfort remains separate. This differs from the weather-only **Compare days** mode. Neither mode evaluates a route automatically.
 

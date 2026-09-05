@@ -255,17 +255,24 @@ export function createMockApi({ databasePath } = {}) {
         (_, i) => {
           const d = new Date(`${body.startDate}T12:00:00Z`);
           d.setUTCDate(d.getUTCDate() + i);
+          const report = makeReport(
+            {
+              ...body,
+              date: d.toISOString().slice(0, 10),
+              start: body.startTime,
+            },
+            scenario === "mixed"
+              ? ["clear", "rain", "snow"][i % 3]
+              : scenario,
+          );
           return {
-            ...makeReport(
-              {
-                ...body,
-                date: d.toISOString().slice(0, 10),
-                start: body.startTime,
-              },
-              scenario === "mixed"
-                ? ["clear", "rain", "snow"][i % 3]
-                : scenario,
-            ),
+            ...report,
+            // The production API reports provider period timestamps, not the request clock.
+            forecast: {
+              ...report.forecast,
+              selectedStartTime: report.weather.forecastStartTime,
+              selectedEndTime: report.weather.forecastEndTime,
+            },
             featureFlags: db.flags,
           };
         },

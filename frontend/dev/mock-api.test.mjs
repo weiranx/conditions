@@ -169,3 +169,17 @@ test("AI model and provider selections survive reads and unrelated updates", asy
   assert.equal(result.providers.gemini.fast, "demo-fast");
   assert.equal(result.features.snowVision.available, false);
 });
+
+test("multi-day responses use production forecast-period timestamp fields", async () => {
+  const api = createMockApi();
+  const result = await api.handle("/api/trip-forecasts", "POST", {
+    lat: 46.8523, lon: -121.7603, startDate: "2026-09-05", startTime: "07:30", durationDays: 2, travelWindowHours: 10,
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.payload.days.length, 2);
+  for (const day of result.payload.days) {
+    assert.match(day.forecast.selectedStartTime, /^2026-09-0[56]T07:30:00-07:00$/);
+    assert.equal(day.forecast.selectedStartTime, day.weather.forecastStartTime);
+    assert.equal(day.forecast.selectedEndTime, day.weather.forecastEndTime);
+  }
+});

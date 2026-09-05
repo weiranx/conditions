@@ -43,11 +43,13 @@ export function useObjectiveShortlist(state: ShortlistState, preferences: UserPr
             if (response.status === 429) { stop = true; if (usage) callbacks.onUsageLimitReached(usage); }
             results.push({ objectiveId: objective.id, days: [], error: typeof record.error === 'string' ? record.error : 'Forecast unavailable. Try again.' });
           } else {
-            // Failed days are omitted by the API. Require explicit date/location identity instead of assigning by index.
+            // Failed days are omitted by the API. Match explicit date/location instead of assigning by index.
+            // selectedStartTime describes a provider forecast period (usually ISO), not the requested
+            // local departure clock. The request key and abort guard already bind results to that clock.
+            // Missing precipitation metadata must not discard otherwise usable weather evidence.
             const entries = (Array.isArray(record.days) ? record.days : []).filter(entry => entry && typeof entry === 'object'
               && dates.includes(entry.forecast?.selectedDate)
-              && entry.forecast?.selectedStartTime === state.startTime
-              && entry.rainfall?.expected?.travelWindowHours === state.hours
+              && (entry.rainfall?.expected?.travelWindowHours == null || entry.rainfall.expected.travelWindowHours === state.hours)
               && Math.abs(Number(entry.location?.lat) - objective.lat) < 0.0001
               && Math.abs(Number(entry.location?.lon) - objective.lon) < 0.0001);
             const uniqueEntries = [...new Map(entries.map(entry => [entry.forecast.selectedDate, entry])).values()];

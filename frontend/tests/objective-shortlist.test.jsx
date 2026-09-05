@@ -13,7 +13,13 @@ const rainier = objectiveFrom({ name: 'Rainier', lat: 46.8523, lon: -121.7603 })
 const hood = objectiveFrom({ name: 'Hood', lat: 45.3735, lon: -121.6959 });
 const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 const state = { objectives: [rainier, hood], startDate: date, durationDays: 2, startTime: '07:00', hours: 8, planA: null, planB: null };
-const report = (objective = rainier, day = date) => makeReport({ lat: objective.lat, lon: objective.lon, date: day, start: '07:00', travel_window_hours: 8 }, 'clear');
+const report = (objective = rainier, day = date) => {
+  const data = makeReport({ lat: objective.lat, lon: objective.lon, date: day, start: '07:00', travel_window_hours: 8 }, 'clear');
+  // Production returns forecast-period timestamps, not the requested HH:mm.
+  data.forecast.selectedStartTime = data.weather.forecastStartTime;
+  data.forecast.selectedEndTime = data.weather.forecastEndTime;
+  return data;
+};
 async function harness(t, initial = state, component = false) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = { window: globalThis.window, document: globalThis.document, localStorage: globalThis.localStorage, fetch: globalThis.fetch };
@@ -93,14 +99,13 @@ test('comparison is explicit, sequential, and preserves local time, hours and qu
   assert.equal(h.current.results.length, 2); assert.equal(h.current.loading, false);
   assert.equal(h.current.results[0].days[0].date, date);
 });
-test('missing dates stay missing and wrong location/time responses are rejected', async t => {
+test('missing dates stay missing and wrong location/duration responses are rejected', async t => {
   const h = await harness(t);
   let pending; await act(async () => { pending = h.current.run(); });
   const next = new Date(`${date}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
   const nextDate = next.toISOString().slice(0, 10);
-  const wrongTime = report(); wrongTime.forecast.selectedStartTime = '19:00';
   const wrongDuration = report(); wrongDuration.rainfall.expected.travelWindowHours = 12;
-  await respond(h.requests[0], { days: [report(rainier, nextDate), report(hood), wrongTime, wrongDuration, { weather: {} }] });
+  await respond(h.requests[0], { days: [report(rainier, nextDate), report(hood), wrongDuration, { weather: {} }] });
   await respond(h.requests[1], { days: [] }); await pending;
   assert.deepEqual(h.current.results[0].days.map(d => d.date), [nextDate]);
   assert.equal(h.current.results[1].days.length, 0);
@@ -173,4 +178,29 @@ test('unmount aborts pending comparison work', async t => {
   assert.equal(h.requests[0].init.signal.aborted, true);
   await respond(h.requests[0], { days: [report()] }); await pending;
   assert.equal(h.requests.length, 1);
+});
+
+test('production forecast-period timestamps are accepted for a non-hour departure', async t => {
+  const h = await harness(t, { ...state, startTime: '07:30' });
+  let pending; await act(async () => { pending = h.current.run(); });
+  const data = report();
+  assert.match(data.forecast.selectedStartTime, /T07:00:00-07:00$/);
+  await respond(h.requests[0], { days: [data] });
+  await respond(h.requests[1], { days: [report(hood)] }); await pending;
+  assert.equal(h.current.results[0].days.length, 1);
+  assert.equal(h.current.results[1].days.length, 1);
+  assert.equal(JSON.parse(h.requests[0].init.body).startTime, '07:30');
+});
+test('unavailable precipitation metadata does not discard the weather forecast', async t => {
+  const h = await harness(t);
+  let pending; await act(async () => { pending = h.current.run(); });
+  const data = report();
+  data.partialData = true;
+  data.rainfall = { status: 'unavailable', expected: { status: 'unavailable', travelWindowHours: null } };
+  await respond(h.requests[0], { days: [data] });
+  const missing = report(hood); delete missing.rainfall;
+  await respond(h.requests[1], { days: [missing] }); await pending;
+  assert.equal(h.current.results[0].days.length, 1);
+  assert.equal(h.current.results[0].days[0].partialData, true);
+  assert.equal(h.current.results[1].days.length, 1);
 });
