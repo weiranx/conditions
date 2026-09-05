@@ -1176,3 +1176,5 @@
     break-inside: auto;
   }
 }
+
+.field-model-select{display:grid;gap:10px;flex:1;min-width:0}.field-model-select select,.field-model-select input{width:100%;min-width:0}.field-admin-setting:has(.field-model-select)>.field-action-row{align-items:flex-end}.field-admin-setting:has(.field-model-select){min-width:0}@media(max-width:650px){.field-admin-setting:has(.field-model-select)>.field-action-row{display:grid;grid-template-columns:1fr;width:100%}.field-model-select select{min-height:44px}}

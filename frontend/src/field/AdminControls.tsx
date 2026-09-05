@@ -1,3 +1,5 @@
+import { ModelSelect } from "./ModelSelect";
+import { modelOptions } from "./model/model-drafts";
 import type {
   Administration,
   RuntimeEnvironmentEntry,
@@ -321,35 +323,39 @@ export function AdminControls({ a }: { a: Administration }) {
                 />
                 <div className="field-action-row">
                   {(["primary", "fast"] as const).map((kind) => (
-                    <label key={kind} className="field-form-label">
-                      {kind === "primary" ? "Primary model" : "Fast model"}
-                      <input
-                        list={`models-${provider}`}
-                        value={a.modelDrafts[provider][kind]}
-                        onChange={(e) =>
-                          a.setModelDrafts((d) => ({
-                            ...d,
-                            [provider]: {
-                              ...d[provider],
-                              [kind]: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
+                    <ModelSelect
+                      key={kind}
+                      label={`${a.aiProviderLabel(provider)} ${kind === "primary" ? "primary" : "fast"} model`}
+                      value={a.modelDrafts[provider][kind]}
+                      options={modelOptions(
+                        a.aiModelCatalog?.providers[provider]?.models || [],
+                        [
+                          a.aiSettings?.providers[provider]?.primary || "",
+                          a.aiSettings?.providers[provider]?.fast || "",
+                          ...(a.aiSettings?.providers[provider]?.options || []),
+                        ],
+                      )}
+                      disabled={a.aiSettingsPending || !a.aiSettings}
+                      onChange={(value) =>
+                        a.setModelDrafts((current) => ({
+                          ...current,
+                          [provider]: { ...current[provider], [kind]: value },
+                        }))
+                      }
+                    />
                   ))}
-                  <datalist id={`models-${provider}`}>
-                    {(
-                      a.aiModelCatalog?.providers[provider]?.models ||
-                      a.aiSettings?.providers[provider]?.options ||
-                      []
-                    ).map((model) => (
-                      <option key={model} value={model} />
-                    ))}
-                  </datalist>
                   <button
                     className="field-button"
-                    disabled={a.aiSettingsPending || !a.aiSettings}
+                    disabled={
+                      a.aiSettingsPending ||
+                      !a.aiSettings ||
+                      !a.modelDrafts[provider].primary.trim() ||
+                      !a.modelDrafts[provider].fast.trim() ||
+                      (a.modelDrafts[provider].primary ===
+                        a.aiSettings.providers[provider].primary &&
+                        a.modelDrafts[provider].fast ===
+                          a.aiSettings.providers[provider].fast)
+                    }
                     onClick={() => void a.saveProviderModels(provider)}
                   >
                     Save {a.aiProviderLabel(provider)} models

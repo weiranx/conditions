@@ -659,7 +659,11 @@ export function createMockApi({ databasePath } = {}) {
         providers: Object.fromEntries(
           ["openai", "anthropic", "kimi", "gemini"].map((provider) => [
             provider,
-            { models: ["demo-fixture"], source: "configured", error: null },
+            {
+              models: ["demo-fixture", "demo-reasoning", "demo-fast"],
+              source: "configured",
+              error: null,
+            },
           ]),
         ),
       });
@@ -680,6 +684,21 @@ export function createMockApi({ databasePath } = {}) {
           ...db.aiSettings,
           ...body,
           features: { ...db.aiSettings.features, ...body.features },
+          models: Object.fromEntries(
+            ["openai", "anthropic", "kimi", "gemini"].map((provider) => [
+              provider,
+              {
+                primary:
+                  body.models?.[provider]?.primary ??
+                  db.aiSettings.models?.[provider]?.primary ??
+                  "demo-fixture",
+                fast:
+                  body.models?.[provider]?.fast ??
+                  db.aiSettings.models?.[provider]?.fast ??
+                  "demo-fixture",
+              },
+            ]),
+          ),
         };
         persist();
       }
@@ -688,8 +707,12 @@ export function createMockApi({ databasePath } = {}) {
         available: db.aiSettings.enabled,
         persistent: true,
         defaultProvider: "openai",
-        primaryModel: "demo-fixture",
-        fastModel: "demo-fixture",
+        primaryModel:
+          db.aiSettings.models?.[db.aiSettings.provider]?.primary ||
+          "demo-fixture",
+        fastModel:
+          db.aiSettings.models?.[db.aiSettings.provider]?.fast ||
+          "demo-fixture",
         configured: true,
         fallbackProvider: "anthropic",
         fallbackConfigured: true,
@@ -697,9 +720,10 @@ export function createMockApi({ databasePath } = {}) {
           ["openai", "anthropic", "kimi", "gemini"].map((provider) => [
             provider,
             {
-              primary: "demo-fixture",
-              fast: "demo-fixture",
-              options: ["demo-fixture"],
+              primary:
+                db.aiSettings.models?.[provider]?.primary || "demo-fixture",
+              fast: db.aiSettings.models?.[provider]?.fast || "demo-fixture",
+              options: ["demo-fixture", "demo-reasoning", "demo-fast"],
               configured: true,
             },
           ]),

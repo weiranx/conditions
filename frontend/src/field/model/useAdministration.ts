@@ -1,3 +1,4 @@
+import { mergeModelDrafts } from "./model-drafts";
 import {
   Activity,
   AlertTriangle,
@@ -2070,26 +2071,24 @@ export function useAdministration() {
     [fetchAuditTrail],
   );
 
+  const previousSavedModels = useRef<Record<
+    AIProvider,
+    { primary: string; fast: string }
+  > | null>(null);
   useEffect(() => {
     if (!aiSettings) return;
-    setModelDrafts({
-      openai: {
-        primary: aiSettings.providers.openai.primary,
-        fast: aiSettings.providers.openai.fast,
-      },
-      anthropic: {
-        primary: aiSettings.providers.anthropic.primary,
-        fast: aiSettings.providers.anthropic.fast,
-      },
-      kimi: {
-        primary: aiSettings.providers.kimi.primary,
-        fast: aiSettings.providers.kimi.fast,
-      },
-      gemini: {
-        primary: aiSettings.providers.gemini.primary,
-        fast: aiSettings.providers.gemini.fast,
-      },
-    });
+    const next = Object.fromEntries(
+      AI_PROVIDERS.map((provider) => [
+        provider,
+        {
+          primary: aiSettings.providers[provider].primary,
+          fast: aiSettings.providers[provider].fast,
+        },
+      ]),
+    ) as Record<AIProvider, { primary: string; fast: string }>;
+    const previous = previousSavedModels.current;
+    previousSavedModels.current = next;
+    setModelDrafts((current) => mergeModelDrafts(current, previous, next));
   }, [aiSettings]);
 
   const toggleAIEnabled = async () => {

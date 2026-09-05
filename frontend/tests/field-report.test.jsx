@@ -294,3 +294,48 @@ test("AI explanation retains legacy text, preambles, markdown labels and unknown
   );
   assert.deepEqual(parseExplanation("  "), []);
 });
+
+import {
+  mergeModelDrafts,
+  modelOptions,
+} from "../src/field/model/model-drafts";
+import { ModelSelect } from "../src/field/ModelSelect";
+test("admin refresh preserves unsaved models while updating untouched fields", () => {
+  const previous = {
+    openai: { primary: "old-primary", fast: "old-fast" },
+    gemini: { primary: "g-primary", fast: "g-fast" },
+  };
+  const current = {
+    ...previous,
+    openai: { ...previous.openai, primary: "my-unsaved-model" },
+  };
+  const next = {
+    ...previous,
+    openai: { primary: "remote-primary", fast: "remote-fast" },
+  };
+  const merged = mergeModelDrafts(current, previous, next);
+  assert.equal(merged.openai.primary, "my-unsaved-model");
+  assert.equal(merged.openai.fast, "remote-fast");
+  assert.equal(merged.gemini.primary, "g-primary");
+  assert.deepEqual(mergeModelDrafts(previous, null, next), next);
+});
+test("model selector exposes the full catalog and retains configured models", () => {
+  const options = modelOptions(
+    ["model-a", "model-b", "model-a"],
+    ["older-configured-model", ""],
+  );
+  assert.deepEqual(options, ["model-a", "model-b", "older-configured-model"]);
+  const html = renderToStaticMarkup(
+    <ModelSelect
+      label="OpenAI primary model"
+      value="model-a"
+      options={options}
+      disabled={false}
+      onChange={() => {}}
+    />,
+  );
+  assert.match(html, /<select/);
+  assert.match(html, /<option value="model-b"/);
+  assert.match(html, /Enter a custom model ID/);
+  assert.doesNotMatch(html, /<datalist/);
+});

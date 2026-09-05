@@ -149,3 +149,23 @@ test("multi-day results preserve selected dates, coordinates and duration", asyn
   assert.equal(payload.days[0].weather.trend.length, 6);
   assert.equal(payload.multiDayUsage.unlimited, true);
 });
+
+test("AI model and provider selections survive reads and unrelated updates", async () => {
+  const api = createMockApi();
+  await api.handle("/api/admin/ai-settings", "PATCH", {
+    models: { openai: { primary: "demo-reasoning", fast: "demo-fast" } },
+  });
+  await api.handle("/api/admin/ai-settings", "PATCH", {
+    provider: "gemini",
+    models: { gemini: { primary: "custom-gemini", fast: "demo-fast" } },
+  });
+  await api.handle("/api/admin/ai-settings", "PATCH", {
+    features: { snowVision: false },
+  });
+  const result = (await api.handle("/api/admin/ai-settings")).payload;
+  assert.equal(result.provider, "gemini");
+  assert.equal(result.primaryModel, "custom-gemini");
+  assert.equal(result.providers.openai.primary, "demo-reasoning");
+  assert.equal(result.providers.gemini.fast, "demo-fast");
+  assert.equal(result.features.snowVision.available, false);
+});
