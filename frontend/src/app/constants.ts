@@ -4,8 +4,9 @@ import type { MapStyle } from './types';
 
 export const DATE_FMT = /^\d{4}-\d{2}-\d{2}$/;
 export const DEFAULT_CENTER = new L.LatLng(39.8283, -98.5795);
-export const USER_PREFERENCES_KEY = 'summitsafe:user-preferences:v1';
-export const PERSISTED_REPORT_KEY = 'summitsafe:persisted-report:v1';
+const localDataPrefix = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? 'summitsafe:mock:' : 'summitsafe:';
+export const USER_PREFERENCES_KEY = `${localDataPrefix}user-preferences:v1`;
+export const PERSISTED_REPORT_KEY = `${localDataPrefix}persisted-report:v1`;
 export const LEGACY_DEFAULT_START_TIME = '04:30';
 export const TEMP_LAPSE_F_PER_1000FT = 3.3;
 export const WIND_INCREASE_MPH_PER_1000FT = 2;

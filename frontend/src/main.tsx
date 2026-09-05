@@ -1,17 +1,16 @@
-import { StrictMode, Suspense } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import './styles/tokens.css'
-import App from './App.tsx'
-import './styles/mobile-experience.css'
-import './styles/field-instrument.css'
+import App from './field/FieldApp.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
 import { AccountProvider } from './contexts/AccountProvider.tsx'
 
+const MockControls = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? lazy(() => import('./field/MockControls')) : null;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
+      {MockControls && <Suspense fallback={null}><MockControls /></Suspense>}
       <Suspense
         fallback={(
           <main className="loading-state" role="status" aria-live="polite" aria-busy="true">

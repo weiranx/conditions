@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
+const API_BASE = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? '' : (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
 
 function normalizeApiBase(rawBase: string): string | null {
   const trimmed = rawBase.trim().replace(/\/+$/, '');
@@ -30,11 +30,15 @@ const DEV_BACKEND_FALLBACK_BASES = (() => {
 export function buildApiUrl(path: string): string {
   const normalizedBase = API_BASE.replace(/\/+$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true') {
+    const scenario = new URLSearchParams(window.location.search).get('mock_scenario') || sessionStorage.getItem('summitsafe:mock:scenario');
+    if (scenario) return `${normalizedPath}${normalizedPath.includes('?') ? '&' : '?'}mock_scenario=${encodeURIComponent(scenario)}`;
+  }
   return normalizedBase ? `${normalizedBase}${normalizedPath}` : normalizedPath;
 }
 
 function buildDevFallbackApiUrls(path: string): string[] {
-  if (!import.meta.env.DEV || API_BASE) {
+  if (!import.meta.env.DEV || API_BASE || import.meta.env.VITE_MOCK_API === 'true') {
     return [];
   }
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;

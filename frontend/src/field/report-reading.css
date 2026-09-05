@@ -1,0 +1,1411 @@
+/* Report reading surface: clear decisions, compact facts, and deeper evidence. */
+.field-report {
+  max-width: 1220px;
+  margin-inline: auto;
+  --report-shadow: 0 3px 14px #18314904;
+  font-size: 15px;
+}
+.field-report .field-report-head {
+  align-items: center;
+  padding-bottom: 0;
+  margin-bottom: 16px;
+}
+.field-report .field-report-head h1 {
+  font-size: clamp(30px, 3.4vw, 44px);
+  font-weight: 630;
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+  margin: 10px 0 14px;
+}
+.field-report .field-report-head p {
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.field-report .field-kicker {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  line-height: 1.6;
+}
+.field-report .field-report-toolbar {
+  gap: 16px;
+  padding: 12px 0 20px;
+  margin-bottom: 0;
+  align-items: center;
+}
+.field-report .field-report-toolbar > span {
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.field-report .field-report-toolbar > div {
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.field-report .field-report-toolbar button,
+.report-actions-menu > summary {
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.3;
+  border: 1px solid var(--f-line);
+  background: var(--f-paper);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--f-ink);
+}
+.field-report .field-report-toolbar button:hover,
+.report-actions-menu > summary:hover {
+  background: var(--f-soft);
+}
+.report-actions-menu {
+  position: relative;
+  font-weight: 450;
+}
+.report-actions-menu > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.report-actions-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.report-actions-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 1002;
+  width: 225px;
+  padding: 7px;
+  background: var(--f-paper);
+  border: 1px solid var(--f-line);
+  border-radius: 14px;
+  box-shadow: 0 12px 36px #18283d24;
+}
+.field-report .report-actions-popover button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  text-align: left;
+}
+.report-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+  margin: 22px 0 26px;
+}
+.field-report .field-verdict {
+  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  padding: 26px;
+  margin: 0;
+  gap: 16px 22px;
+  border-radius: 19px;
+  box-shadow: var(--report-shadow);
+  align-items: start;
+}
+.field-report .field-verdict-number {
+  padding-top: 3px;
+}
+.field-report .field-verdict-number > strong {
+  font-size: 54px;
+  font-weight: 450;
+  letter-spacing: -0.055em;
+  margin-top: 9px;
+  line-height: 1.1;
+}
+.field-report .field-verdict-number small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.8;
+  letter-spacing: 0;
+}
+.field-report .field-verdict-number > span:last-child {
+  font-size: 12px;
+  margin-top: 6px;
+  display: block;
+}
+.field-report .field-verdict-story {
+  padding-left: 21px;
+  align-self: start;
+  border-left: 1px solid var(--f-line);
+}
+.field-report .field-badge {
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  letter-spacing: 0;
+}
+.field-report .field-verdict h2 {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 610;
+  letter-spacing: -0.03em;
+  margin: 12px 0 10px;
+  text-wrap: pretty;
+}
+.field-report .field-verdict-story p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--f-muted);
+  max-width: 56ch;
+}
+.field-report .field-verdict-aside {
+  grid-column: 1/-1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--f-line);
+  padding-top: 15px;
+  margin-top: 3px;
+  align-self: end;
+}
+.field-report .field-verdict-aside .field-kicker {
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.field-report .field-verdict-aside > strong {
+  font-size: 17px;
+  margin: 0;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+.field-report .field-verdict-aside button {
+  margin-left: auto;
+  font-size: 12px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-plan-summary {
+  border: 1px solid var(--f-line);
+  border-radius: 19px;
+  background: var(--f-paper);
+  padding: 23px 24px 9px;
+  box-shadow: var(--report-shadow);
+}
+.report-plan-summary > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+.report-plan-summary > header > span:last-child {
+  font-size: 12px;
+  color: var(--f-muted);
+}
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.report-summary-grid > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--f-line);
+  padding: 18px 12px 18px 0;
+  min-width: 0;
+  color: var(--f-ink);
+  border-radius: 0;
+}
+.report-summary-grid > button:nth-child(even) {
+  padding-left: 20px;
+  padding-right: 0;
+}
+.report-summary-grid > button:hover .report-summary-label {
+  color: var(--f-green);
+}
+.report-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--f-muted);
+}
+.report-summary-label svg {
+  flex: none;
+  stroke-width: 1.6;
+}
+.report-summary-grid strong {
+  font-size: 25px;
+  line-height: 1.25;
+  font-weight: 520;
+  letter-spacing: -0.04em;
+  margin: 9px 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+.report-summary-grid .report-summary-surface {
+  font-size: 20px;
+  line-height: 1.45;
+  letter-spacing: -0.025em;
+}
+.report-summary-grid > button > span:last-child {
+  font-size: 11px;
+  color: var(--f-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.5;
+}
+.report-summary-grid > button > span:last-child svg {
+  flex: none;
+  opacity: 0.6;
+}
+.field-report .field-chapters {
+  border: 1px solid var(--f-line);
+  border-radius: 13px;
+  background: var(--f-paper);
+  padding: 5px;
+  gap: 3px;
+  margin: 0 0 28px;
+  box-shadow: var(--report-shadow);
+}
+.field-report .field-chapters button {
+  flex: 1;
+  justify-content: center;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 0 !important;
+  border-radius: 9px;
+  gap: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.field-report .field-chapters button[aria-current="page"] {
+  background: var(--f-wash);
+  color: var(--f-green);
+  box-shadow: none;
+}
+.field-report .field-chapters button > svg:last-child {
+  display: none;
+}
+.field-report .field-chapter-heading {
+  margin: 0 0 21px;
+}
+.field-report .field-chapter-heading h2 {
+  font-size: 25px;
+  letter-spacing: -0.03em;
+  font-weight: 610;
+  margin-bottom: 7px;
+}
+.field-report .field-chapter-heading p {
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 80ch;
+  color: var(--f-muted);
+}
+.field-report .field-panel {
+  border-radius: 18px;
+  padding: 26px;
+  box-shadow: var(--report-shadow);
+}
+.field-report .field-panel h2 {
+  font-size: 23px;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+}
+.field-report .field-panel > p,
+.field-report .field-panel-heading p,
+.field-report .field-prose-list {
+  font-size: 14px;
+  line-height: 1.75;
+  max-width: 85ch;
+}
+.field-report .field-panel > p + p {
+  margin-top: 9px;
+}
+.field-report .field-detail-grid {
+  gap: 22px;
+  margin: 24px 0;
+}
+.field-report .field-detail-grid dt {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 7px;
+}
+.field-report .field-detail-grid dd {
+  font-size: 24px;
+  letter-spacing: -0.035em;
+  font-weight: 500;
+}
+.field-report .field-detail-grid small {
+  font-size: 12px;
+  line-height: 1.65;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.field-report .field-data-table {
+  font-size: 13px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+.field-report .field-data-table th {
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 550;
+}
+.field-report .field-data-table td,
+.field-report .field-data-table th {
+  padding: 14px 12px;
+}
+.field-report .field-data-table tbody tr:hover {
+  background: var(--f-soft);
+}
+.field-report .field-detail-disclosure {
+  border-width: 1px 0 0;
+  border-radius: 0;
+  padding: 15px 0 0;
+  margin: 20px 0 0;
+  background: transparent;
+}
+.field-report .field-detail-disclosure > summary {
+  color: var(--f-green);
+  font-size: 13px;
+  line-height: 1.65;
+  min-height: 34px;
+  font-weight: 500;
+}
+.field-report .field-detail-disclosure[open] > summary {
+  margin-bottom: 12px;
+}
+.field-report .field-record {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+  background: var(--f-soft);
+  border-radius: 10px;
+  padding: 5px 16px;
+}
+.field-report .field-record > div {
+  padding: 12px 0;
+  gap: 20px;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1fr);
+}
+.field-report .field-record > div:first-child {
+  border-top: 0;
+}
+.field-report .field-record dd {
+  font-size: 13px;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.field-report .field-record summary {
+  min-height: 28px;
+  color: var(--f-green);
+}
+.field-report .field-record .field-record {
+  padding: 0;
+  background: transparent;
+  margin-top: 12px;
+}
+.field-report .field-record-list > div {
+  padding: 12px 0;
+}
+.field-report .field-source-link {
+  font-size: 12px;
+  min-height: 36px;
+}
+.field-report .field-warning {
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 15px 19px;
+  border-radius: 12px;
+}
+.field-report .forecast-sky {
+  padding: 32px 36px 0;
+  border-radius: 20px;
+  column-gap: 42px;
+  background:
+    var(--sky-art, none),
+    linear-gradient(145deg, var(--sky-top), var(--sky-bottom));
+}
+.field-report .forecast-eyebrow,
+.field-report .forecast-range {
+  font-size: 13px;
+}
+.field-report .forecast-temperature strong {
+  font-size: 82px;
+}
+.field-report .forecast-current h3 {
+  font-size: 23px;
+}
+.field-report .forecast-metrics dt {
+  font-size: 13px;
+}
+.field-report .forecast-metrics dd {
+  font-size: 32px;
+}
+.field-report .forecast-metrics small,
+.field-report .forecast-context,
+.field-report .forecast-hour-status p {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.field-report .forecast-timeline {
+  padding: 24px;
+  border-radius: 18px;
+  margin-top: 18px;
+}
+.field-report .forecast-timeline-heading h3 {
+  font-size: 17px;
+}
+.field-report .forecast-timeline-heading select {
+  font-size: 13px;
+  min-height: 40px;
+}
+.field-report .forecast-hours {
+  gap: 8px;
+}
+.field-report .forecast-hours button {
+  padding: 15px 10px;
+  min-width: 90px;
+  border-radius: 12px;
+}
+.field-report .forecast-hours button > span {
+  font-size: 12px;
+}
+.field-report .forecast-hours button > strong {
+  font-size: 22px;
+  font-weight: 500;
+}
+.field-report .forecast-hours button small {
+  font-size: 10px;
+}
+.field-report .field-window-summary {
+  padding: 20px 3px 26px;
+  margin-bottom: 0;
+  align-items: start;
+}
+.field-report .field-window-summary h3 {
+  font-size: 16px;
+  font-weight: 550;
+  margin-bottom: 4px;
+}
+.field-report .field-window-summary p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--f-muted);
+}
+.field-report .report-conditions-heading {
+  margin: 34px 0 20px;
+}
+.field-report .field-condition-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+.field-report .field-condition-grid .field-panel {
+  margin: 0;
+  padding: 24px;
+  min-width: 0;
+}
+.field-report .condition-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 17px;
+  text-transform: none;
+  font-size: 13px;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--f-muted);
+}
+.field-report .condition-label svg {
+  stroke-width: 1.6;
+  color: var(--f-green);
+}
+.field-report .field-condition-grid h2 {
+  margin-bottom: 10px;
+  font-size: 25px;
+}
+.report-atmosphere-facts {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+.report-atmosphere-facts > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 12px;
+  align-items: baseline;
+}
+.report-atmosphere-facts dt {
+  font-size: 12px;
+  color: var(--f-muted);
+}
+.report-atmosphere-facts dd {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.report-atmosphere-facts small {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--f-muted);
+}
+@media (min-width: 1550px) {
+  .field-report {
+    max-width: 1240px;
+  }
+  .field-report .field-verdict-story p {
+    font-size: 15px;
+  }
+}
+@media (max-width: 1120px) {
+  .report-overview {
+    grid-template-columns: 1fr;
+  }
+  .report-plan-summary {
+    padding-bottom: 5px;
+  }
+  .report-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .report-summary-grid > button {
+    padding: 18px 12px !important;
+  }
+  .report-summary-grid > button:first-child {
+    padding-left: 0 !important;
+  }
+  .report-summary-grid > button:last-child {
+    padding-right: 0 !important;
+  }
+  .report-summary-grid strong {
+    font-size: 22px;
+  }
+  .field-report .field-condition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .field-report .field-chapters button {
+    flex: 0 0 auto;
+  }
+  .field-report .field-verdict {
+    grid-template-columns: 100px minmax(0, 1fr);
+  }
+  .field-report .field-verdict-number small {
+    display: inline;
+    margin-left: 4px;
+  }
+  .field-report .field-verdict-story p {
+    max-width: 80ch;
+  }
+}
+@media (max-width: 650px) {
+  .field-report .field-report-head h1 {
+    font-size: 33px;
+  }
+  .field-report .field-report-head p {
+    font-size: 13px;
+  }
+  .field-report .field-report-head > .field-button {
+    font-size: 12px;
+    min-width: 44px;
+    gap: 5px;
+  }
+  .field-report .field-report-toolbar {
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 17px;
+  }
+  .field-report .field-report-toolbar > span {
+    font-size: 11px;
+  }
+  .field-report .field-report-toolbar button,
+  .report-actions-menu > summary {
+    min-height: 44px;
+    font-size: 12px;
+    padding: 10px;
+  }
+  .report-actions-popover {
+    width: 215px;
+  }
+  .report-overview {
+    gap: 14px;
+    margin: 18px 0 22px;
+  }
+  .field-report .field-verdict {
+    padding: 21px;
+    grid-template-columns: 65px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .field-report .field-verdict-number > strong {
+    font-size: 43px;
+  }
+  .field-report .field-verdict-number small {
+    display: block;
+    margin: 0;
+  }
+  .field-report .field-verdict-number .field-kicker {
+    font-size: 10px;
+  }
+  .field-report .field-verdict-story {
+    padding-left: 16px;
+  }
+  .field-report .field-verdict h2 {
+    font-size: 20px;
+  }
+  .field-report .field-verdict-story p {
+    font-size: 13px;
+  }
+  .field-report .field-verdict-aside {
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .field-report .field-verdict-aside button {
+    font-size: 11px;
+  }
+  .report-plan-summary {
+    padding: 19px 20px 0;
+  }
+  .report-plan-summary > header > span:last-child {
+    font-size: 11px;
+  }
+  .report-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .report-summary-grid > button {
+    padding: 17px 10px 17px 0 !important;
+  }
+  .report-summary-grid > button:nth-child(even) {
+    padding-left: 14px !important;
+    padding-right: 0 !important;
+  }
+  .report-summary-grid strong {
+    font-size: 23px;
+  }
+  .report-summary-grid .report-summary-surface {
+    font-size: 19px;
+  }
+  .report-summary-grid > button > span:last-child {
+    font-size: 11px;
+  }
+  .field-report .field-chapters {
+    margin-bottom: 23px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .field-report .field-chapters button {
+    font-size: 12px;
+    min-height: 44px;
+  }
+  .field-report .field-chapter-heading h2 {
+    font-size: 23px;
+  }
+  .field-report .field-chapter-heading p {
+    font-size: 13px;
+  }
+  .field-report .field-panel {
+    padding: 21px;
+  }
+  .field-report .field-panel > p,
+  .field-report .field-prose-list {
+    font-size: 14px;
+  }
+  .field-report .field-condition-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .field-report .field-condition-grid .field-panel {
+    padding: 22px;
+  }
+  .field-report .field-record > div {
+    grid-template-columns: minmax(85px, 0.7fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  .field-report .field-record {
+    padding-inline: 12px;
+  }
+  .field-report .field-record > div:has(> dd > details) {
+    grid-template-columns: 1fr;
+  }
+  .field-report .field-detail-grid dd {
+    font-size: 21px;
+  }
+  .field-report .forecast-sky {
+    padding: 26px 24px 0;
+    grid-template-columns: 1fr;
+  }
+  .field-report .forecast-temperature strong {
+    font-size: 76px;
+  }
+  .field-report .forecast-metrics {
+    gap: 23px 20px;
+    margin-top: 29px;
+  }
+  .field-report .forecast-metrics dd {
+    font-size: 28px;
+  }
+  .field-report .forecast-timeline {
+    padding: 20px 14px;
+  }
+  .field-report .forecast-timeline-heading {
+    gap: 10px;
+  }
+  .field-report .forecast-timeline-heading h3 {
+    font-size: 16px;
+  }
+  .field-report .forecast-timeline-heading select {
+    font-size: 12px;
+  }
+  .field-report .forecast-hours button {
+    min-width: 82px;
+  }
+  .field-report .field-data-table {
+    font-size: 12px;
+  }
+  .field-report .field-data-table th {
+    font-size: 11px;
+  }
+}
+@media (prefers-contrast: more) {
+  .report-actions-popover {
+    border: 2px solid var(--f-ink);
+  }
+  .report-summary-label,
+  .report-summary-grid > button > span:last-child {
+    color: var(--f-ink);
+  }
+}
+@media print {
+  .report-overview {
+    grid-template-columns: 1fr 1fr;
+    break-inside: avoid;
+  }
+  .report-actions-menu {
+    display: none;
+  }
+  .report-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .report-summary-grid button > span:last-child svg {
+    display: none;
+  }
+  .field-report .field-condition-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .field-report .field-panel {
+    break-inside: avoid;
+  }
+}
+/* Domain color identifies the measurement; the written assessment conveys risk. */
+.field-report .condition-card {
+  --condition-color: #367ac1;
+  --condition-wash: #367ac10a;
+  background:
+    linear-gradient(var(--condition-wash), transparent 210px), var(--f-paper);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.field-report .condition-card.is-heat {
+  --condition-color: #b9791b;
+  --condition-wash: #d89b2210;
+}
+.field-report .condition-card.is-fire {
+  --condition-color: #bb6250;
+  --condition-wash: #d5715210;
+}
+.field-report .condition-card.is-air {
+  --condition-color: #258578;
+  --condition-wash: #389f8b0d;
+}
+.field-report .condition-card.is-visibility {
+  --condition-color: #7161ae;
+  --condition-wash: #806ac310;
+}
+.field-report .condition-card.is-atmosphere {
+  --condition-color: #407ac0;
+  --condition-wash: #4b96dc0d;
+}
+.field-report .condition-card.is-comfort {
+  --condition-color: #54835b;
+  --condition-wash: #70a96b0d;
+}
+.field-report .condition-card .condition-label svg {
+  color: var(--condition-color);
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--condition-color) 9%, transparent);
+}
+.field-report .field-condition-grid {
+  align-items: stretch;
+}
+.field-report .condition-card > .field-detail-disclosure:last-child {
+  margin-top: auto;
+  padding-top: 17px;
+}
+.field-report .condition-card > p:last-of-type {
+  margin-bottom: 20px;
+}
+.field-report .condition-card h2 {
+  font-size: 27px;
+  letter-spacing: -0.035em;
+}
+.condition-trend,
+.condition-scale {
+  margin: 7px 0 22px;
+  color: var(--condition-color, #367ac1);
+  min-width: 0;
+}
+.condition-trend figcaption,
+.condition-scale figcaption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--f-muted);
+  margin-bottom: 8px;
+}
+.condition-trend figcaption strong,
+.condition-scale figcaption strong {
+  font-weight: 550;
+  color: var(--condition-color);
+  font-variant-numeric: tabular-nums;
+}
+.condition-trend svg {
+  display: block;
+  width: 100%;
+  height: 76px;
+  overflow: visible;
+}
+.condition-chart-baseline {
+  fill: none;
+  stroke: var(--f-line);
+  stroke-dasharray: 3 4;
+  stroke-width: 1;
+}
+.condition-chart-times {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--f-muted);
+  font-variant-numeric: tabular-nums;
+}
+.condition-scale {
+  padding-top: 2px;
+}
+.condition-scale-track {
+  height: 9px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--condition-color) 12%, var(--f-paper));
+  position: relative;
+  margin: 26px 5px 17px;
+}
+.condition-scale-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--condition-color) 40%, var(--f-paper)),
+    var(--condition-color)
+  );
+}
+.condition-scale-marker {
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--condition-color);
+  border: 3px solid var(--f-paper);
+  box-shadow: 0 0 0 1px var(--condition-color);
+  transform: translate(-50%, -50%);
+}
+.field-report .condition-chart-empty {
+  font-size: 12px;
+  color: var(--f-muted);
+  padding: 15px 0;
+  margin-bottom: 14px;
+}
+.report-precip-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin: 28px 0 24px;
+  --condition-color: #4486c7;
+}
+.condition-accumulation:nth-child(2) {
+  --condition-color: #75a9c5;
+}
+.condition-accumulation figcaption {
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 17px;
+  color: var(--f-ink);
+}
+.condition-accumulation-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 75px;
+  gap: 14px;
+  align-items: center;
+  margin: 15px 0;
+}
+.condition-accumulation-row > span {
+  font-size: 12px;
+  color: var(--f-muted);
+}
+.condition-accumulation-row > strong {
+  font-size: 13px;
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.condition-accumulation-track {
+  height: 10px;
+  border-radius: 4px;
+  background: var(--f-soft);
+  overflow: hidden;
+}
+.condition-accumulation-track > span {
+  display: block;
+  height: 100%;
+  background: var(--condition-color);
+  border-radius: 4px;
+}
+html[data-theme="dark"] .field-report .condition-card.is-heat {
+  --condition-color: #e2b466;
+}
+html[data-theme="dark"] .field-report .condition-card.is-fire {
+  --condition-color: #e69583;
+}
+html[data-theme="dark"] .field-report .condition-card.is-air {
+  --condition-color: #77c6b7;
+}
+html[data-theme="dark"] .field-report .condition-card.is-visibility {
+  --condition-color: #b5a4eb;
+}
+html[data-theme="dark"] .field-report .condition-card.is-atmosphere {
+  --condition-color: #87b2e6;
+}
+html[data-theme="dark"] .field-report .condition-card.is-comfort {
+  --condition-color: #a0c999;
+}
+@media (max-width: 650px) {
+  .report-precip-charts {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  .condition-trend svg {
+    height: 90px;
+  }
+  .condition-trend figcaption,
+  .condition-scale figcaption {
+    font-size: 12px;
+  }
+  .condition-chart-times {
+    font-size: 11px;
+  }
+  .field-report .condition-card {
+    height: auto;
+  }
+  .condition-accumulation-row {
+    grid-template-columns: 55px minmax(0, 1fr) 64px;
+    gap: 10px;
+  }
+}
+
+.field-report .condition-card > p {
+  min-height: 0;
+  line-height: 1.55;
+  font-size: 13px;
+}
+.field-report .condition-card > h2 {
+  font-size: 29px;
+  margin-block: 13px 5px;
+}
+.field-report .condition-card .field-detail-disclosure {
+  margin-top: auto;
+  padding-top: 14px;
+}
+.field-signal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+.field-signal {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 17px;
+  background: color-mix(in srgb, #c78828 10%, var(--f-paper));
+  border: 1px solid color-mix(in srgb, #c78828 30%, var(--f-line));
+  border-radius: 12px;
+}
+.field-signal > svg {
+  color: #b27b23;
+  flex-shrink: 0;
+}
+.field-signal strong {
+  font-size: 14px;
+}
+.field-signal p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+  color: var(--f-muted);
+}
+.field-missing-signals {
+  margin: 14px 0;
+  font-size: 13px;
+  color: var(--f-muted);
+}
+.field-missing-signals summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.field-report .report-daylight-panel {
+  background:
+    radial-gradient(ellipse at 100% 0%, #ecc57924, transparent 70%),
+    var(--f-paper);
+}
+.daylight-chart {
+  margin: 27px 0;
+}
+.daylight-chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.daylight-chart figcaption > span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.daylight-chart svg {
+  color: #b87920;
+}
+.daylight-track {
+  position: relative;
+  height: 56px;
+  border-radius: 12px;
+  background: #263d61;
+  margin-top: 18px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 4px #0002;
+}
+.daylight-sun {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #c48f4e, #e4c57f 40%, #dcaa65);
+}
+.daylight-trip {
+  position: absolute;
+  top: 22px;
+  height: 12px;
+  box-shadow: 0 1px 4px #0005;
+  background: #fff;
+  border-radius: 8px;
+  border-inline: 3px solid #336b9f;
+}
+.daylight-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--f-muted);
+}
+.daylight-legend {
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  margin-top: 15px;
+}
+.daylight-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  background: #d8b16b;
+  border-radius: 3px;
+  margin-right: 6px;
+}
+.daylight-legend span:last-child::before {
+  background: #fff;
+  border: 1px solid #336b9f;
+}
+.report-threshold-disclosure > summary {
+  font-size: 16px;
+  font-weight: 550;
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+}
+.report-hour-strip {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  margin-block: 18px;
+}
+.report-hour-strip > div {
+  display: flex;
+  flex: 1;
+  min-width: 76px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 15px 5px;
+  border-radius: 9px;
+  background: color-mix(in srgb, #418e78 9%, var(--f-paper));
+  font-size: 12px;
+}
+.report-hour-strip strong {
+  color: #398570;
+  font-size: 22px;
+}
+.report-hour-strip .is-review {
+  background: color-mix(in srgb, #cc902d 12%, var(--f-paper));
+}
+.report-hour-strip .is-review strong {
+  color: #ac7014;
+}
+.report-hour-strip small {
+  font-size: 10px;
+  color: var(--f-muted);
+}
+.field-report .report-terrain-hero {
+  background:
+    radial-gradient(ellipse at 100% 0%, #bedad720, transparent 70%),
+    linear-gradient(145deg, #315d67, #24404f);
+  color: #fff;
+}
+.report-terrain-hero .field-kicker,
+.report-terrain-hero p,
+.report-terrain-hero dt {
+  color: #e0edf0 !important;
+}
+.report-terrain-numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+  margin: 25px 0;
+}
+.report-terrain-numbers dt {
+  font-size: 12px;
+}
+.report-terrain-numbers dd {
+  font-size: 31px;
+  letter-spacing: -0.03em;
+  margin: 7px 0;
+  text-transform: capitalize;
+}
+.report-terrain-hero .field-detail-disclosure {
+  background: var(--f-paper);
+  color: var(--f-ink);
+  padding: 5px 15px;
+  border-radius: 9px;
+}
+.report-check-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--f-line);
+  border-radius: 16px;
+  margin: 20px 0;
+  background: var(--f-line);
+}
+.report-check-summary > div {
+  background: var(--f-paper);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.report-check-summary strong {
+  font-size: 42px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  color: #398570;
+}
+.report-check-summary > div:nth-child(2) strong {
+  color: #b17d26;
+}
+.report-check-summary > div:nth-child(3) strong {
+  color: #4983b7;
+}
+.report-check-summary small {
+  font-size: 22px;
+}
+.report-check-summary span {
+  font-size: 12px;
+  color: var(--f-muted);
+}
+.field-report .field-sources-score {
+  --condition-color: #5b7caa;
+}
+.field-report .field-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field-report .field-checks details {
+  border: 1px solid var(--f-line);
+  border-radius: 12px;
+  background: var(--f-paper);
+}
+@media (max-width: 650px) {
+  .field-signal-grid,
+  .field-report .field-checks {
+    grid-template-columns: 1fr;
+  }
+  .report-terrain-numbers {
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .report-terrain-numbers dd {
+    font-size: 25px;
+  }
+  .report-check-summary > div {
+    padding: 18px 12px;
+  }
+  .report-check-summary strong {
+    font-size: 34px;
+  }
+  .report-check-summary span {
+    font-size: 11px;
+  }
+  .daylight-chart figcaption {
+    font-size: 12px;
+  }
+}
+.report-decision-detail {
+  margin-top: 13px;
+  font-size: 12px;
+}
+.report-decision-detail summary {
+  cursor: pointer;
+  color: var(--f-muted);
+  min-height: 30px;
+  align-content: center;
+}
+.departure-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-block: 16px;
+}
+.departure-card {
+  padding: 19px;
+  border: 1px solid var(--f-line);
+  border-radius: 13px;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+}
+.departure-card.is-best {
+  background: var(--f-wash);
+  border-color: color-mix(in srgb, var(--f-green) 35%, var(--f-line));
+}
+.departure-card > strong {
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.departure-card dl {
+  width: 100%;
+  font-size: 12px;
+}
+.departure-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+}
+.departure-card dt {
+  color: var(--f-muted);
+}
+.departure-card dd {
+  margin: 0;
+}
+.departure-card button {
+  width: 100%;
+  justify-content: center;
+}
+.report-map-disclosure > summary {
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 550;
+  min-height: 44px;
+  align-content: center;
+}
+.report-map-disclosure .field-map {
+  margin-top: 15px;
+}
+.wind-compass {
+  float: right;
+  width: 185px;
+  margin: 0 10px 15px 28px;
+}
+.wind-compass svg {
+  width: 100%;
+  height: auto;
+}
+.wind-compass path {
+  fill: var(--f-soft);
+  stroke: var(--f-line);
+  stroke-width: 1;
+}
+.wind-compass path.is-leeward {
+  fill: #c59045;
+  stroke: #a5732c;
+}
+.wind-compass path.is-secondary {
+  fill: #dcc49d;
+  stroke: #a98b60;
+}
+.wind-compass text {
+  fill: var(--f-muted);
+  font-size: 11px;
+}
+.wind-compass circle {
+  fill: var(--f-ink);
+}
+.wind-compass figcaption {
+  text-align: center;
+  font-size: 11px;
+  color: var(--f-muted);
+}
+.wind-compass figcaption strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--f-ink);
+}
+.field-panel:has(> .wind-compass)::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+@media (max-width: 650px) {
+  .wind-compass {
+    float: none;
+    margin: 15px auto;
+    width: 175px;
+  }
+}

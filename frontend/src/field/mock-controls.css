@@ -1,0 +1,68 @@
+.mock-controls {
+  position: relative;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 24px;
+  background: #e9eff9;
+  color: #203a60;
+  border-bottom: 1px solid #cbd8e9;
+  font:
+    12px/1.4 -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+.mock-controls > strong {
+  font-size: 12px;
+}
+.mock-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.mock-controls select,
+.mock-controls button,
+.mock-controls summary {
+  font: inherit;
+  min-height: 32px;
+  border: 1px solid #bccce2;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #203a60;
+  cursor: pointer;
+}
+.mock-controls details {
+  position: relative;
+}
+.mock-controls details[open] {
+  max-width: 300px;
+}
+.mock-controls details p {
+  font-size: 12px;
+}
+.mock-controls select {
+  text-transform: capitalize;
+}
+@media (max-width: 650px) {
+  .mock-controls {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .mock-controls label {
+    margin-left: 0;
+  }
+  .mock-controls select,
+  .mock-controls button,
+  .mock-controls summary {
+    min-height: 44px;
+  }
+}
+@media print {
+  .mock-controls {
+    display: none;
+  }
+}

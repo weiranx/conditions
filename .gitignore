@@ -39,3 +39,6 @@ lerna-debug.log*
 
 # Local Codex metadata
 .codex/
+
+# Local development mock database
+frontend/.mock/
