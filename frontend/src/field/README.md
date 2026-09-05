@@ -2,6 +2,8 @@
 
 `main.tsx` mounts `FieldApp`. The new presentation uses its own components and styles. The former frontend remains in place to preserve unrelated work.
 
+`model/useReportGeneration.ts` owns generation and startup checks; `useSavedReportSync.ts` owns browser/account persistence and report identity; `useReportComparisons.ts` enables comparisons only for the current completed plan. `useWorkspace.ts` composes these controllers.
+
 The controllers in `model/` retain the established planning, account, persistence, sharing, feature-flag, and administrative behavior. Domain hooks and score calculations continue to come from the existing application modules. GPX duration is applied through an explicit action, and report chapter changes preserve page position.
 
 ## Feature coverage
@@ -32,10 +34,11 @@ Run from the repository root:
 npm --prefix frontend run typecheck
 npm --prefix frontend run lint
 npm --prefix frontend run build
-node frontend/scripts/verify-field-ui.mjs
+npm --prefix frontend run test:field
+npm --prefix frontend run test:mock
 git diff --check
 ```
 
-The presentation tests cover unit conversion, empty and sparse hourly evidence, comparison decision ranking, metric accumulation amounts, and blocked-day recommendations. They render components without a network; the map dependency is replaced by its coordinate constructor in this test harness only.
+The presentation tests cover unit conversion, empty and sparse hourly evidence, comparison decision ranking, metric accumulation amounts, and blocked-day recommendations. The hook tests exercise changing plans during in-flight comparisons, aborted responses, saved-report boundaries, and report startup. CI runs both suites. Tests render components without a network; the map dependency is replaced by its coordinate constructor in this test harness only.
 
 Browser verification also covers report generation, date/time commits, hourly metric changes, full report chapters, units/themes, mobile overflow, coordinate search, account and library states, and local administration. Database-backed actions and live AI require the corresponding backend configuration; an unavailable response is not a successful end-to-end test.

@@ -18,6 +18,7 @@ import {
   Sunrise,
   TriangleAlert,
 } from "lucide-react";
+import { ReportVerdict } from "./ReportVerdict";
 import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
 import { AiExplanation } from "./AiExplanation";
@@ -93,12 +94,6 @@ export function Report({
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
   const decision = w.decision!;
-  const tone =
-    decision.level === "GO"
-      ? "go"
-      : decision.level === "NO-GO"
-        ? "stop"
-        : "watch";
   const passed = getPastPlannedStart(
     report.plan.forecastDate,
     report.plan.alpineStartTime,
@@ -285,46 +280,14 @@ export function Report({
         </div>
       )}
       <div className="report-overview">
-        <section
-          className={`field-verdict is-${tone}`}
-          aria-labelledby="field-verdict-title"
-        >
-          <div className="field-verdict-number">
-            <span className="field-kicker">Safety score</span>
-            <strong>
-              {Number.isFinite(data.safety.score)
-                ? Math.round(data.safety.score)
-                : "—"}
-              <small>/100</small>
-            </strong>
-            <span>{data.safety.tier || "Forecast assessment"}</span>
-          </div>
-          <div className="field-verdict-story">
-            <span className={`field-badge is-${tone}`}>{decision.level}</span>
-            <h2 id="field-verdict-title">{decision.headline}</h2>
-            <details className="report-decision-detail">
-              <summary>Why this decision</summary>
-              <p>
-                {w.fieldBriefPrimaryReason ||
-                  decision.blockers[0] ||
-                  decision.cautions[0] ||
-                  "No critical threshold failures in the available forecast. Reassess conditions in the field."}
-              </p>
-            </details>
-          </div>
-          <div className="field-verdict-aside">
-            <span className="field-kicker">Evidence confidence</span>
-            <strong>
-              {Number.isFinite(data.safety.confidence)
-                ? `${Math.round(data.safety.confidence!)}%`
-                : "Unknown"}
-            </strong>
-            <button onClick={() => selectChapter("sources")}>
-              See the reasoning
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        </section>
+        <ReportVerdict
+          data={data}
+          decision={decision}
+          primaryReason={w.fieldBriefPrimaryReason}
+          freshnessWarning={w.hasFreshnessWarning ? w.freshnessWarningSummary : null}
+          preferences={w.preferences}
+          onSources={() => selectChapter("sources")}
+        />
         <ReportSummary workspace={w} onOpen={selectChapter} />
       </div>
       <div className="field-report-layout">

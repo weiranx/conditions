@@ -49,7 +49,6 @@ import {
 } from "../../app/date-time-inputs";
 import {
   type PastPlannedStart,
-  getPastPlannedStart,
   getTomorrowDate,
   resolveObjectiveTimeZone,
 } from "../../app/planned-start";
@@ -135,7 +134,6 @@ import {
   loadPersistedReport,
   parsePersistedReport,
   persistedReportMatchesPlan,
-  persistReport,
   type PersistedReport,
   type PersistedReportChatMessage,
   type PersistedReportPlan,
@@ -152,8 +150,9 @@ import { normalizeSuggestionText } from "../../lib/search";
 import { estimateRouteDurationHours, type ParsedGpxRoute } from "../../lib/gpx";
 import { useUrlState, useSyncUrlEffect } from "../../hooks/useUrlState";
 import type { AppView } from "../../hooks/useUrlState";
-import { useDayComparisons } from "../../hooks/useDayComparisons";
-import { useStartTimeScenarios } from "../../hooks/useStartTimeScenarios";
+import { useReportGeneration } from "./useReportGeneration";
+import { useReportComparisons } from "./useReportComparisons";
+import { useSavedReportSession, useSavedReportSync } from "./useSavedReportSync";
 import {
   usePreferenceHandlers,
   TRAVEL_THRESHOLD_PRESETS,
@@ -163,9 +162,7 @@ import { useProductFeatureFlags } from "../../contexts/feature-flags";
 import { useAccount } from "../../hooks/useAccount";
 import {
   buildSavedReportShareUrl,
-  createSavedReport,
   getSharedReport,
-  updateSavedReport,
 } from "../../lib/saved-reports";
 type AccountAccessReason =
   | "ai"
@@ -500,22 +497,17 @@ export function useWorkspace() {
   const [restoredReportSource, setRestoredReportSource] = useState<
     "saved" | "shared" | null
   >(null);
-  const [activeSavedReportId, setActiveSavedReportId] = useState<string | null>(
-    null,
-  );
-  const [activeSavedReportShareToken, setActiveSavedReportShareToken] =
-    useState<string | null>(null);
-  const [reportGenerationPending, setReportGenerationPending] = useState(false);
-  const reportGenerationRef = useRef(0);
-  const reportSaveIntentRef = useRef<
-    "waiting-for-account" | "save" | "saving" | "browser-only"
-  >("browser-only");
-  const reportSaveSourceDataRef = useRef<SafetyData | null>(null);
-  const reportSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const reportUpdateChainRef = useRef<Promise<void>>(Promise.resolve());
-  const lastSavedReportSnapshotRef = useRef("");
+  const savedReportSession = useSavedReportSession({ safetyData, accountLoading, accountUserId });
+  const {
+    activeSavedReportId, activeSavedReportShareToken, reportGenerationPending,
+    setActiveSavedReportId, setActiveSavedReportShareToken, reportSaveIntentRef,
+    resetSavedReportTracking, beginSavedReportGeneration,
+  } = savedReportSession;
+  const beginReportGeneration = useCallback(() => {
+    beginSavedReportGeneration();
+    setViewingHistoryReport(false);
+    setRestoredReportSource(null);
+  }, [beginSavedReportGeneration]);
   useEffect(() => {
     if (!safetyData) setPreviousSafetyData(null);
   }, [safetyData]);
@@ -526,42 +518,6 @@ export function useWorkspace() {
     preHistoryPreferencesRef.current = null;
     historyReportPreferencesRef.current = null;
   }, [viewingHistoryReport]);
-
-  const resetSavedReportTracking = useCallback(() => {
-    reportGenerationRef.current += 1;
-    reportSaveIntentRef.current = "browser-only";
-    reportSaveSourceDataRef.current = null;
-    lastSavedReportSnapshotRef.current = "";
-    setReportGenerationPending(false);
-    setActiveSavedReportId(null);
-    setActiveSavedReportShareToken(null);
-    if (reportSyncTimeoutRef.current) {
-      clearTimeout(reportSyncTimeoutRef.current);
-      reportSyncTimeoutRef.current = null;
-    }
-  }, []);
-
-  const beginReportGeneration = useCallback(() => {
-    const priorSafetyData = safetyData;
-    resetSavedReportTracking();
-    reportSaveSourceDataRef.current = priorSafetyData;
-    setReportGenerationPending(true);
-    reportSaveIntentRef.current = accountLoading
-      ? "waiting-for-account"
-      : accountUserId
-        ? "save"
-        : "browser-only";
-    setViewingHistoryReport(false);
-    setRestoredReportSource(null);
-  }, [accountLoading, accountUserId, resetSavedReportTracking, safetyData]);
-
-  useEffect(
-    () => () => {
-      if (reportSyncTimeoutRef.current)
-        clearTimeout(reportSyncTimeoutRef.current);
-    },
-    [],
-  );
 
   const coordinateTimezone = useMemo(
     () => resolveObjectiveTimeZone(position.lat, position.lng),
@@ -1194,117 +1150,11 @@ export function useWorkspace() {
     ],
   );
 
-  useEffect(() => {
-    if (
-      !reportGenerationPending ||
-      !safetyData ||
-      safetyData === reportSaveSourceDataRef.current
-    )
-      return;
-    setReportChatMessages([]);
-    resetRouteState();
-    setReportGenerationPending(false);
-    setReportChatSessionKey((value) => value + 1);
-  }, [reportGenerationPending, resetRouteState, safetyData]);
-
-  useEffect(() => {
-    if (!hasObjective || !reportSnapshot || reportGenerationPending) return;
-    persistReport(
-      reportSnapshot.plan,
-      reportSnapshot.safetyData,
-      reportSnapshot.ai,
-      {
-        preferences: reportSnapshot.preferences,
-        route: reportSnapshot.route,
-      },
-    );
-  }, [hasObjective, reportGenerationPending, reportSnapshot]);
-
-  useEffect(() => {
-    if (
-      !reportSnapshot ||
-      reportGenerationPending ||
-      reportSnapshot.safetyData === reportSaveSourceDataRef.current ||
-      viewingHistoryReport ||
-      reportSaveIntentRef.current === "browser-only"
-    )
-      return;
-    if (reportSaveIntentRef.current === "waiting-for-account") {
-      if (accountLoading) return;
-      reportSaveIntentRef.current = accountUserId ? "save" : "browser-only";
-    }
-    if (
-      reportSaveIntentRef.current !== "save" ||
-      !accountUserId ||
-      !featureFlags.reportHistory
-    )
-      return;
-
-    reportSaveIntentRef.current = "saving";
-    const generation = reportGenerationRef.current;
-    const serialized = JSON.stringify(reportSnapshot);
-    void createSavedReport(reportSnapshot)
-      .then(({ id: reportId, shareToken, reportCount, reportUsage }) => {
-        syncGeneratedReportUsage(accountUserId, reportCount, reportUsage);
-        if (generation !== reportGenerationRef.current) return;
-        lastSavedReportSnapshotRef.current = serialized;
-        reportSaveSourceDataRef.current = null;
-        reportSaveIntentRef.current = "browser-only";
-        setActiveSavedReportId(reportId);
-        setActiveSavedReportShareToken(shareToken);
-      })
-      .catch(() => {
-        if (generation !== reportGenerationRef.current) return;
-        reportSaveIntentRef.current = "browser-only";
-      });
-  }, [
-    accountLoading,
-    accountUserId,
-    featureFlags.reportHistory,
-    reportGenerationPending,
-    reportSnapshot,
-    syncGeneratedReportUsage,
-    viewingHistoryReport,
-  ]);
-
-  useEffect(() => {
-    if (
-      !activeSavedReportId ||
-      !accountUserId ||
-      !reportSnapshot ||
-      viewingHistoryReport
-    )
-      return;
-    const serialized = JSON.stringify(reportSnapshot);
-    if (serialized === lastSavedReportSnapshotRef.current) return;
-    if (reportSyncTimeoutRef.current)
-      clearTimeout(reportSyncTimeoutRef.current);
-    const generation = reportGenerationRef.current;
-    reportSyncTimeoutRef.current = setTimeout(() => {
-      reportSyncTimeoutRef.current = null;
-      const update = reportUpdateChainRef.current.then(async () => {
-        if (generation !== reportGenerationRef.current) return;
-        await updateSavedReport(activeSavedReportId, reportSnapshot);
-        if (generation === reportGenerationRef.current) {
-          lastSavedReportSnapshotRef.current = serialized;
-        }
-      });
-      reportUpdateChainRef.current = update.catch(() => {
-        // The in-memory and browser snapshots remain available if account sync is offline.
-      });
-    }, 400);
-    return () => {
-      if (reportSyncTimeoutRef.current) {
-        clearTimeout(reportSyncTimeoutRef.current);
-        reportSyncTimeoutRef.current = null;
-      }
-    };
-  }, [
-    accountUserId,
-    activeSavedReportId,
-    reportSnapshot,
-    viewingHistoryReport,
-  ]);
+  useSavedReportSync(savedReportSession, {
+    hasObjective, reportSnapshot, safetyData, viewingHistoryReport,
+    accountLoading, accountUserId, reportHistoryEnabled: featureFlags.reportHistory,
+    syncGeneratedReportUsage, setReportChatMessages, resetRouteState, setReportChatSessionKey,
+  });
 
   const handleRecenterMap = () => {
     setMapFocusNonce((prev) => prev + 1);
@@ -1554,107 +1404,12 @@ export function useWorkspace() {
     }
   };
 
-  const handleRetryFetch = () => {
-    if (!hasObjective) {
-      return;
-    }
-    const pastStart = getPastPlannedStart(
-      forecastDate,
-      alpineStartTime,
-      objectiveTimezone,
-    );
-    if (pastStart) {
-      setPastStartPrompt(pastStart);
-      return;
-    }
-    if (!requestNewReportAccess()) {
-      return;
-    }
-    beginReportGeneration();
-    setPreviousSafetyData(safetyData);
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
-      force: true,
-      countAsNewReport: true,
-    });
-  };
-
-  // Fetching a report is an explicit, user-confirmed action rather than an automatic
-  // side effect of editing fields — this is the only place (besides Refresh) that
-  // triggers a fetch, so a report never regenerates out from under someone mid-edit.
-  const handleGenerateReport = () => {
-    if (!hasObjective) {
-      return;
-    }
-    const pastStart = getPastPlannedStart(
-      forecastDate,
-      alpineStartTime,
-      objectiveTimezone,
-    );
-    if (pastStart) {
-      setPastStartPrompt(pastStart);
-      return;
-    }
-    if (!requestNewReportAccess()) {
-      return;
-    }
-    beginReportGeneration();
-    collapseMobilePlanControls();
-    setPreviousSafetyData(null);
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
-      force: true,
-      countAsNewReport: true,
-    });
-  };
-
-  // Arms a one-shot report fetch when the page loads from a shared link (URL already carries
-  // lat/lon), then clears itself so later field edits still require an explicit Generate/Refresh.
-  // Home-page selections intentionally do not arm this: users review their plan in the planner
-  // and confirm it with Generate Report before any report request is made.
-  const [pendingAutoGenerate, setPendingAutoGenerate] = useState(
-    initialLinkState.hasObjective && !initialRestoredReport,
-  );
-  useEffect(() => {
-    if (
-      !pendingAutoGenerate ||
-      !hasObjective ||
-      view !== "planner" ||
-      accountLoading
-    ) {
-      return;
-    }
-    setPendingAutoGenerate(false);
-    const pastStart = getPastPlannedStart(
-      forecastDate,
-      alpineStartTime,
-      objectiveTimezone,
-    );
-    if (pastStart) {
-      setPastStartPrompt(pastStart);
-      return;
-    }
-    if (!requestNewReportAccess()) {
-      return;
-    }
-    beginReportGeneration();
-    collapseMobilePlanControls();
-    fetchSafetyData(position.lat, position.lng, forecastDate, alpineStartTime, {
-      force: true,
-      countAsNewReport: true,
-    });
-  }, [
-    pendingAutoGenerate,
-    hasObjective,
-    view,
-    accountLoading,
-    position,
-    forecastDate,
-    alpineStartTime,
-    objectiveTimezone,
-    beginReportGeneration,
-    fetchSafetyData,
-    collapseMobilePlanControls,
-    requestNewReportAccess,
-  ]);
+  const { handleRetryFetch, handleGenerateReport, pendingAutoGenerate, setPendingAutoGenerate } = useReportGeneration({
+    autoGenerateInitially: initialLinkState.hasObjective && !initialRestoredReport,
+    hasObjective, forecastDate, alpineStartTime, objectiveTimezone,
+    accountLoading, view, position, safetyData, requestNewReportAccess, beginReportGeneration,
+    collapseMobilePlanControls, fetchSafetyData, setPreviousSafetyData, setPastStartPrompt,
+  });
 
   const handleEditPlan = useCallback(() => {
     if (!requestNewReportAccess()) {
@@ -1751,6 +1506,7 @@ export function useWorkspace() {
       navigateToView("planner");
     },
     [
+      setPendingAutoGenerate,
       clearLastLoadedKey,
       clearWakeRetry,
       resetSavedReportTracking,
@@ -1875,6 +1631,7 @@ export function useWorkspace() {
       navigateToView("planner");
     },
     [
+      setPendingAutoGenerate,
       clearLastLoadedKey,
       clearWakeRetry,
       forecastDate,
@@ -1933,6 +1690,7 @@ export function useWorkspace() {
       navigateToView("planner");
     },
     [
+      setPendingAutoGenerate,
       clearLastLoadedKey,
       setActiveSuggestionIndex,
       setCommittedSearchQuery,
@@ -2212,26 +1970,11 @@ export function useWorkspace() {
       })
     : null;
 
-  const dayComparisonsHook = useDayComparisons({
-    hasObjective,
-    view: viewingHistoryReport ? "history" : view,
-    safetyData,
-    forecastDate,
-    position: { lat: position.lat, lng: position.lng },
-    preferences,
-  });
-  const { dayOverDay } = dayComparisonsHook;
-  const startTimeScenarios = useStartTimeScenarios({
-    enabled:
-      featureFlags.startTimeComparisons &&
-      hasObjective &&
-      view === "planner" &&
-      Boolean(safetyData) &&
-      !viewingHistoryReport,
-    forecastDate,
-    currentStartTime: alpineStartTime,
-    position: { lat: position.lat, lng: position.lng },
-    preferences,
+  const { dayOverDay, startTimeScenarios } = useReportComparisons({
+    hasObjective, view, safetyData, forecastDate, currentStartTime: alpineStartTime,
+    position: { lat: position.lat, lng: position.lng }, preferences,
+    viewingHistoryReport, loading: loading || reportGenerationPending,
+    startTimeComparisonsEnabled: featureFlags.startTimeComparisons,
   });
 
   const decisionDisplay = buildDecisionDisplayState(decision);
@@ -3110,6 +2853,7 @@ export function useWorkspace() {
     openPlannerView();
   };
   return {
+    setActiveSavedReportId, setActiveSavedReportShareToken, reportSaveIntentRef,
     featureFlags,
     accountLoading,
     refreshAccount,
@@ -3217,17 +2961,8 @@ export function useWorkspace() {
     restoredReportSource,
     setRestoredReportSource,
     activeSavedReportId,
-    setActiveSavedReportId,
     activeSavedReportShareToken,
-    setActiveSavedReportShareToken,
     reportGenerationPending,
-    setReportGenerationPending,
-    reportGenerationRef,
-    reportSaveIntentRef,
-    reportSaveSourceDataRef,
-    reportSyncTimeoutRef,
-    reportUpdateChainRef,
-    lastSavedReportSnapshotRef,
     resetSavedReportTracking,
     beginReportGeneration,
     coordinateTimezone,
@@ -3410,7 +3145,6 @@ export function useWorkspace() {
     returnTimeFormatted,
     returnTimeDisplay,
     decision,
-    dayComparisonsHook,
     dayOverDay,
     startTimeScenarios,
     decisionDisplay,

@@ -1695,11 +1695,13 @@ function App() {
     view: viewingHistoryReport ? 'history' : view,
     safetyData,
     forecastDate,
+    currentStartTime: alpineStartTime,
     position: { lat: position.lat, lng: position.lng },
     preferences,
   });
   const { dayOverDay } = dayComparisonsHook;
   const startTimeScenarios = useStartTimeScenarios({
+    sourceReport: safetyData,
     enabled: featureFlags.startTimeComparisons && hasObjective && view === 'planner' && Boolean(safetyData) && !viewingHistoryReport,
     forecastDate,
     currentStartTime: alpineStartTime,

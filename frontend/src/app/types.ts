@@ -799,6 +799,8 @@ export interface TargetElevationForecast {
 
 export interface DayOverDayComparison {
   previousDate: string;
+  startTime: string;
+  travelWindowHours: number;
   previousScore: number;
   delta: number;
   changes: string[];

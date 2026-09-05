@@ -4,12 +4,14 @@ import type { DayOverDayComparison, SafetyData, UserPreferences } from '../app/t
 import { DATE_FMT } from '../app/constants';
 import { addDaysToIsoDate } from '../app/core';
 import { buildDayOverDayChanges } from '../app/day-over-day';
+import { comparisonRequestUrl, comparisonTravelHours } from '../app/comparison-request';
 
 export interface UseDayComparisonsParams {
   hasObjective: boolean;
   view: string;
   safetyData: SafetyData | null;
   forecastDate: string;
+  currentStartTime: string;
   position: { lat: number; lng: number };
   preferences: UserPreferences;
 }
@@ -23,18 +25,23 @@ export function useDayComparisons({
   view,
   safetyData,
   forecastDate,
+  currentStartTime,
   position,
   preferences,
 }: UseDayComparisonsParams): UseDayComparisonsReturn {
-  const [result, setResult] = useState<{ key: string; comparison: DayOverDayComparison | null } | null>(null);
+  const [result, setResult] = useState<{ key: string; source: SafetyData; comparison: DayOverDayComparison | null } | null>(null);
   const { temperatureUnit, windSpeedUnit } = preferences;
   const selectedDate = safetyData?.forecast?.selectedDate || forecastDate;
+  const startTime = safetyData?.forecast?.selectedStartTime || currentStartTime;
+  const travelWindowHours = comparisonTravelHours(preferences.travelWindowHours);
   const comparisonEnabled = Boolean(
     hasObjective && view === 'planner' && safetyData && DATE_FMT.test(selectedDate),
   );
   const comparisonKey = comparisonEnabled && safetyData
     ? JSON.stringify([
         selectedDate,
+        startTime,
+        travelWindowHours,
         position.lat,
         position.lng,
         temperatureUnit,
@@ -60,26 +67,29 @@ export function useDayComparisons({
     (async () => {
       try {
         const { response, payload } = await fetchApi(
-          `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(previousDate)}`,
+          comparisonRequestUrl(position.lat, position.lng, previousDate, startTime, travelWindowHours),
           { signal: controller.signal },
         );
         if (!response.ok || !payload || typeof payload !== 'object') {
-          if (!controller.signal.aborted) setResult({ key: comparisonKey, comparison: null });
+          if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
           return;
         }
 
         const previousPayload = payload as SafetyData;
         const prevScore = Number(previousPayload?.safety?.score);
         if (!Number.isFinite(prevScore)) {
-          if (!controller.signal.aborted) setResult({ key: comparisonKey, comparison: null });
+          if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
           return;
         }
 
         if (!controller.signal.aborted) {
           setResult({
             key: comparisonKey,
+            source: safetyData,
             comparison: {
               previousDate,
+              startTime,
+              travelWindowHours,
               previousScore: prevScore,
               delta: safetyData.safety.score - prevScore,
               changes: buildDayOverDayChanges(safetyData, previousPayload, { temperatureUnit, windSpeedUnit }),
@@ -87,7 +97,7 @@ export function useDayComparisons({
           });
         }
       } catch {
-        if (!controller.signal.aborted) setResult({ key: comparisonKey, comparison: null });
+        if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
       }
     })();
 
@@ -97,6 +107,8 @@ export function useDayComparisons({
   }, [
     comparisonKey,
     selectedDate,
+    startTime,
+    travelWindowHours,
     safetyData,
     position.lat,
     position.lng,
@@ -104,5 +116,5 @@ export function useDayComparisons({
     windSpeedUnit,
   ]);
 
-  return { dayOverDay: result?.key === comparisonKey ? result.comparison : null };
+  return { dayOverDay: result?.key === comparisonKey && result?.source === safetyData ? result.comparison : null };
 }

@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "dev:mock": "VITE_MOCK_API=true vite --host 127.0.0.1",
-    "test:mock": "node --test dev/mock-api.test.mjs"
+    "test:mock": "node --test dev/mock-api.test.mjs",
+    "test:field": "node scripts/verify-field-ui.mjs"
   },
   "engines": {
     "node": ">=20.19.0"
@@ -47,6 +48,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^26.1.0",
     "shadcn": "^4.13.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~5.9.3",

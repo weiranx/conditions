@@ -53,5 +53,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Field UI and comparison tests
+        run: npm run test:field
+
+      - name: Mock API tests
+        run: npm run test:mock
+
       - name: Build
         run: npm run build

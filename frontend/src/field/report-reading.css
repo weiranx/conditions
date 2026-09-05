@@ -1409,3 +1409,21 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
     width: 175px;
   }
 }
+
+/* Keep the reason and evidence gaps visible alongside the score. */
+.report-verdict-warnings {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--f-line);
+  padding-top: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.report-verdict-warnings h3 { font-size: 14px; margin: 12px 0 8px; }
+.report-verdict-warnings ul { padding-left: 18px; margin: 8px 0; }
+.report-verdict-warnings li + li { margin-top: 8px; }
+.report-verdict-warnings li span { display: block; color: var(--f-muted); }
+.report-verdict-warnings > p { color: var(--f-muted); margin: 8px 0; }
+.report-verdict-freshness { display: flex; align-items: start; gap: 8px; }
+.report-verdict-freshness svg { flex-shrink: 0; margin-top: 3px; }
+.field-report .field-verdict-aside { flex-wrap: wrap; }

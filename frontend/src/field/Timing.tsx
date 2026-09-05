@@ -140,7 +140,7 @@ export function Timing({ workspace: w }: { workspace: Workspace }) {
                     </dl>
                     <button
                       className="field-button"
-                      disabled={scenario.startTime === w.alpineStartTime}
+                      disabled={w.startTimeScenarios.loading || w.viewingHistoryReport || scenario.startTime === w.alpineStartTime}
                       onClick={() => {
                         if (w.handleEditPlan())
                           w.setAlpineStartTime(scenario.startTime);
@@ -218,7 +218,7 @@ export function Timing({ workspace: w }: { workspace: Workspace }) {
                             <button
                               className="field-text-button"
                               disabled={
-                                scenario.startTime === w.alpineStartTime
+                                w.startTimeScenarios.loading || w.viewingHistoryReport || scenario.startTime === w.alpineStartTime
                               }
                               onClick={() => {
                                 if (w.handleEditPlan())

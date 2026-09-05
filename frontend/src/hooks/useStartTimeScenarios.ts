@@ -9,11 +9,12 @@ import {
   includeUserStartTimeScenario,
   type StartTimeScenario,
 } from '../app/start-time-scenarios';
-import { MAX_TRAVEL_WINDOW_HOURS, MIN_TRAVEL_WINDOW_HOURS } from '../app/constants';
+import { comparisonRequestUrl, comparisonTravelHours } from '../app/comparison-request';
 import { fetchApi } from '../lib/api-client';
 
 interface UseStartTimeScenariosParams {
   enabled: boolean;
+  sourceReport: SafetyData | null;
   forecastDate: string;
   currentStartTime: string;
   position: { lat: number; lng: number };
@@ -22,15 +23,22 @@ interface UseStartTimeScenariosParams {
 
 export function useStartTimeScenarios({
   enabled,
+  sourceReport,
   forecastDate,
   currentStartTime,
   position,
   preferences,
 }: UseStartTimeScenariosParams) {
-  const [scenarioPayloads, setScenarioPayloads] = useState<Array<{ startTime: string; data: SafetyData }>>([]);
-  const [includeMoreScenarios, setIncludeMoreScenarios] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    key: string;
+    source: SafetyData | null;
+    payloads: Array<{ startTime: string; data: SafetyData }>;
+    error: string | null;
+  } | null>(null);
+  const travelWindowHours = comparisonTravelHours(preferences.travelWindowHours);
+  const planKey = comparisonRequestUrl(position.lat, position.lng, forecastDate, currentStartTime, travelWindowHours);
+  const [expandedPlanKey, setExpandedPlanKey] = useState<string | null>(null);
+  const includeMoreScenarios = expandedPlanKey === planKey;
   const scenarioTimes = useMemo(
     () => includeUserStartTimeScenario(
       includeMoreScenarios ? EXTENDED_START_TIME_SCENARIO_TIMES : START_TIME_SCENARIO_TIMES,
@@ -39,25 +47,22 @@ export function useStartTimeScenarios({
     [currentStartTime, includeMoreScenarios],
   );
 
+  const requestKey = JSON.stringify([planKey, scenarioTimes]);
+  const currentResult = enabled && result?.key === requestKey && result.source === sourceReport ? result : null;
+
   useEffect(() => {
     if (!enabled) {
       return;
     }
 
-    const safeTravelWindowHours = Math.max(
-      MIN_TRAVEL_WINDOW_HOURS,
-      Math.min(MAX_TRAVEL_WINDOW_HOURS, Math.round(Number(preferences.travelWindowHours) || 12)),
-    );
     const controller = new AbortController();
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      setError(null);
       const results = await Promise.all(
         scenarioTimes.map(async (startTime) => {
           try {
             const { response, payload } = await fetchApi(
-              `/api/safety?lat=${position.lat}&lon=${position.lng}&date=${encodeURIComponent(forecastDate)}&start=${encodeURIComponent(startTime)}&travel_window_hours=${safeTravelWindowHours}`,
+              comparisonRequestUrl(position.lat, position.lng, forecastDate, startTime, travelWindowHours),
               { signal: controller.signal },
             );
             if (!response.ok || !payload || typeof payload !== 'object') return null;
@@ -70,11 +75,13 @@ export function useStartTimeScenarios({
 
       if (cancelled) return;
       const valid = results.filter((scenario): scenario is NonNullable<(typeof results)[number]> => scenario !== null);
-      setScenarioPayloads(valid);
-      setError(valid.length === scenarioTimes.length ? null : 'Some departure scenarios could not be evaluated.');
-    })().finally(() => {
-      if (!cancelled) setLoading(false);
-    });
+      setResult({
+        key: requestKey,
+        source: sourceReport,
+        payloads: valid,
+        error: valid.length === scenarioTimes.length ? null : 'Some departure scenarios could not be evaluated.',
+      });
+    })();
 
     return () => {
       cancelled = true;
@@ -85,28 +92,30 @@ export function useStartTimeScenarios({
     forecastDate,
     position.lat,
     position.lng,
-    preferences.travelWindowHours,
+    travelWindowHours,
+    requestKey,
+    sourceReport,
     scenarioTimes,
   ]);
 
-  const scenarios = useMemo<StartTimeScenario[]>(() => scenarioPayloads.map(({ startTime, data }) => {
+  const scenarios = useMemo<StartTimeScenario[]>(() => (currentResult?.payloads ?? []).map(({ startTime, data }) => {
     const startMinutes = (Number.parseInt(startTime.slice(0, 2), 10) * 60) + Number.parseInt(startTime.slice(3, 5), 10);
-    const returnMinutes = startMinutes + Math.max(1, Math.round(Number(preferences.travelWindowHours) || 12)) * 60;
+    const returnMinutes = startMinutes + travelWindowHours * 60;
     const turnaroundTime = `${String(Math.floor((returnMinutes % 1440) / 60)).padStart(2, '0')}:${String(returnMinutes % 60).padStart(2, '0')}`;
     const decision = evaluateBackcountryDecision(data, startTime, preferences, { turnaroundTime });
     return buildStartTimeScenario(startTime, data, decision, preferences);
-  }), [scenarioPayloads, preferences]);
+  }), [currentResult, preferences, travelWindowHours]);
 
   const comparison = useMemo(
     () => compareStartTimeScenarios(scenarios, preferences),
     [scenarios, preferences],
   );
-  const generateMore = useCallback(() => setIncludeMoreScenarios(true), []);
+  const generateMore = useCallback(() => setExpandedPlanKey(planKey), [planKey, setExpandedPlanKey]);
 
   return {
     comparison,
-    loading,
-    error,
+    loading: enabled && !currentResult,
+    error: currentResult?.error ?? null,
     canGenerateMore: !includeMoreScenarios,
     generateMore,
   };

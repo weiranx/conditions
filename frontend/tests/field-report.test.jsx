@@ -339,3 +339,36 @@ test("model selector exposes the full catalog and retains configured models", ()
   assert.match(html, /Enter a custom model ID/);
   assert.doesNotMatch(html, /<datalist/);
 });
+
+import { JSDOM } from 'jsdom';
+import { ReportVerdict } from '../src/field/ReportVerdict';
+import { makeReport } from '../dev/mock-data.mjs';
+test('verdict keeps caution, stale evidence, and field warnings visible beside the score', () => {
+  const data = makeReport({}, 'field-alerts');
+  const html = renderToStaticMarkup(<ReportVerdict data={data}
+    decision={{ level: 'CAUTION', headline: 'Review conditions before committing.', blockers: [], cautions: [] }}
+    primaryReason="Weather and precipitation timestamps need review."
+    freshnessWarning="Weather and precipitation feeds are stale or missing timestamps."
+    preferences={preferences} onSources={() => {}} />);
+  const dom = new JSDOM(html);
+  const root = dom.window.document;
+  const reason = root.querySelector('.report-decision-reason');
+  assert.match(reason.textContent, /timestamps need review/);
+  assert.equal(reason.closest('details'), null);
+  const warnings = root.querySelector('[aria-label="Warnings and evidence gaps"]');
+  assert.match(warnings.textContent, /Source freshness needs review/);
+  assert.match(warnings.textContent, /Lightning detected at the objective/);
+  assert.match(warnings.textContent, /road closure/);
+  assert.match(warnings.textContent, /land-manager notice/);
+  assert.equal(warnings.querySelector('details'), null);
+  assert.match(warnings.querySelector('li').textContent, /Lightning/);
+  dom.window.close();
+});
+test('verdict respects disabled field observations and does not invent field warnings', () => {
+  const data = makeReport({}, 'field-alerts');
+  const html = renderToStaticMarkup(<ReportVerdict data={{ ...data, featureFlags: { fieldObservations: false } }}
+    decision={{ level: 'GO', headline: 'Within thresholds.', blockers: [], cautions: [] }}
+    primaryReason="Within selected thresholds." freshnessWarning={null}
+    preferences={preferences} onSources={() => {}} />);
+  assert.doesNotMatch(html, /Lightning detected|Reported field warnings|Warnings and evidence gaps/);
+});

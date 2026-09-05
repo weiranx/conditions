@@ -148,6 +148,10 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
             {w.dayOverDay.delta} score points compared with{" "}
             {dateLabel(w.dayOverDay.previousDate)}.
           </p>
+          <p className="field-muted">
+            Both days use a {w.formatClockForStyle(w.dayOverDay.startTime, w.preferences.timeStyle)} local start
+            and a {w.dayOverDay.travelWindowHours}-hour travel window.
+          </p>
           <Details title="What changed" value={w.dayOverDay.changes} open />
         </section>
       )}

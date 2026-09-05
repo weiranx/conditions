@@ -114,7 +114,7 @@ export function StartTimeScenarioCard({
               <span className="start-scenarios__driver">{comparison.effectivelyTied ? 'Tie-breaker' : 'Biggest timing difference'}: <b>{comparison.drivingRisk}</b></span>
             </div>
             {!currentIsBest && (
-              <button type="button" onClick={() => onUseForNewReport(best.startTime)}>
+              <button type="button" disabled={loading} onClick={() => onUseForNewReport(best.startTime)}>
                 Use {formatClockForStyle(best.startTime, preferences.timeStyle)}
                 <ArrowRight size={14} aria-hidden />
               </button>
@@ -167,7 +167,7 @@ export function StartTimeScenarioCard({
                     <div className={comparison.drivingRisk === 'Storm / lightning' ? 'is-driver' : ''}><dt>Storm-free hours</dt><dd><b>{scenario.cleanHours}h</b><small>{scenario.stormHours > 0 ? `${scenario.stormHours}h storm signal` : 'no storm signal'}</small></dd></div>
                   </dl>
                   {!isCurrent && (
-                    <button type="button" className="start-scenario__use" onClick={() => onUseForNewReport(scenario.startTime)}>
+                    <button type="button" className="start-scenario__use" disabled={loading} onClick={() => onUseForNewReport(scenario.startTime)}>
                       Build report for {displayedStart}
                       <ArrowRight size={14} aria-hidden />
                     </button>
