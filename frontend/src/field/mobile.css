@@ -1,0 +1,134 @@
+/* Shared phone behavior for the active field interface. Keep desktop layouts
+   and explicit navigation/scroll actions owned by their components. */
+@media screen and (max-width: 650px) {
+  .field-app .field-sidebar {
+    min-width: 0;
+  }
+
+  .field-app .field-sidebar nav {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    min-width: 0;
+    margin-inline: -8px;
+    padding-inline: 0;
+    overflow: visible;
+  }
+
+  .field-app .field-sidebar nav button {
+    min-width: 0;
+    padding-inline: 1px;
+    overflow-wrap: normal;
+  }
+
+  /* Native date/time controls must not set the grid's minimum width. */
+  .field-app .field-planner-grid,
+  .field-app .field-compare-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-app .field-plan-form,
+  .field-app .field-planner-map,
+  .field-app .field-input-grid > label {
+    min-width: 0;
+  }
+
+  .field-app .field-input-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-app .field-input-grid > label:last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* A 16px editing size prevents focus zoom on iOS, including account and
+     comparison fields that inherit compact desktop styles. */
+  .field-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .field-app select,
+  .field-app .forecast-timeline-heading select,
+  .field-dialog input,
+  .field-dialog select,
+  .field-dialog textarea {
+    font-size: 16px;
+  }
+
+  .field-app .field-search-results {
+    max-height: min(300px, 45dvh);
+    overscroll-behavior-y: contain;
+  }
+
+  .field-app .field-search-results button {
+    font-size: 13px;
+  }
+
+  .field-app .field-search-results button > span,
+  .field-app .field-route-import strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .field-app .field-preset-list button,
+  .field-app .forecast-timeline-heading select,
+  .field-app .field-details > summary,
+  .field-app .field-report .field-detail-disclosure > summary,
+  .field-app .field-report .field-verdict-aside button,
+  .field-app .field-footer a {
+    min-height: 44px;
+  }
+
+  .field-app .field-footer a {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .field-app .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+
+  /* Keep long preference pages navigable without returning to the top. */
+  .field-app .field-settings-shortcuts {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 8px 4px;
+    background: var(--f-bg);
+    border-bottom: 1px solid var(--f-line);
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 4px;
+  }
+
+  .field-app .field-settings-shortcuts button {
+    flex: 0 0 auto;
+  }
+
+  .field-app .field-settings section[id] {
+    scroll-margin-top: 80px;
+  }
+
+  .field-dialog {
+    overscroll-behavior-y: contain;
+  }
+}
+
+@media screen and (max-width: 380px) {
+  .field-app .field-plan-form {
+    padding: 18px;
+  }
+
+  .field-app .field-input-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-app .field-workspace-heading {
+    padding: 22px 20px;
+    min-height: 180px;
+  }
+
+  .field-app .field-workspace-heading h1 {
+    font-size: 30px;
+  }
+}
