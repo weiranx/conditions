@@ -1,0 +1,19 @@
+.field-watch-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.field-watch-filters .field-button { min-height: 44px; }
+.field-watch-filters [aria-pressed="true"] { color: var(--f-green); border-color: currentColor; background: var(--f-soft); }
+.field-watch-filters span { font-variant-numeric: tabular-nums; }
+.field-watch-state { font-size: 12px; color: var(--f-muted); text-align: right; }
+.field-watch-latest { padding: 16px; margin: 16px 0; border: 1px solid var(--f-line); border-radius: 12px; background: var(--f-soft); }
+.field-watch-latest > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.field-watch-latest time { font-size: 12px; color: var(--f-muted); }
+.field-watch-latest p { margin-bottom: 0; font-size: 13px; line-height: 1.6; }
+.field-watch-latest.is-partial, .field-watch-latest.is-changed, .field-watch-latest.is-failed { border-left: 3px solid var(--f-warn); }
+.field-watch-measurements { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.field-watch-card .field-action-row { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .field-watch-card .field-action-row .field-button { min-height: 44px; }
+  .field-watch-latest { padding: 12px; }
+}
+
+.field-watch-latest.is-failed { border-left-color: var(--f-red); }
+.field-watch-latest p { margin-top: 10px; }

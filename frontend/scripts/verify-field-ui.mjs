@@ -7,7 +7,7 @@ const cache = `${root}node_modules/.cache/field-ui-tests`;
 await mkdir(cache, { recursive: true });
 try {
   await build({
-    entryPoints: [`${root}tests/field-report.test.jsx`, `${root}tests/report-comparisons.test.jsx`, `${root}tests/chat.test.jsx`],
+    entryPoints: [`${root}tests/field-report.test.jsx`, `${root}tests/report-comparisons.test.jsx`, `${root}tests/chat.test.jsx`, `${root}tests/objective-watches.test.jsx`],
     outdir: cache,
     outExtension: { ".js": ".mjs" },
     bundle: true,
@@ -37,7 +37,7 @@ try {
   });
   const result = spawnSync(
     process.execPath,
-    ["--test", `${cache}/field-report.test.mjs`, `${cache}/report-comparisons.test.mjs`, `${cache}/chat.test.mjs`],
+    ["--test", `${cache}/field-report.test.mjs`, `${cache}/report-comparisons.test.mjs`, `${cache}/chat.test.mjs`, `${cache}/objective-watches.test.mjs`],
     { stdio: "inherit", cwd: root },
   );
   process.exitCode = result.status ?? 1;

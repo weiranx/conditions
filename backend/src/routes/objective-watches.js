@@ -108,6 +108,7 @@ const mapObjectiveWatch = (row, { includeBaseline = false, policy = null } = {})
   lastCheckedAt: normalizeTimestamp(row.last_checked_at),
   nextCheckAt: policy?.automaticChecks === false ? null : normalizeTimestamp(row.next_check_at),
   lastChange: row.last_change || null,
+  ...(Object.hasOwn(row, 'latest_check') ? { latestCheck: row.latest_check ? mapObjectiveWatchCheck(row.latest_check) : null } : {}),
   consecutiveFailures: Math.max(0, Number(row.consecutive_failures) || 0),
   notificationsEnabled: policy?.emailAlerts === false ? false : row.notifications_enabled === true,
   createdAt: normalizeTimestamp(row.created_at),
@@ -260,12 +261,24 @@ const registerObjectiveWatchRoutes = ({
       }
       const result = await database.query(`
         SELECT id, title, plan, last_attempted_at, last_checked_at, next_check_at, last_change,
-               consecutive_failures, notifications_enabled, created_at, updated_at
+               consecutive_failures, notifications_enabled, created_at, updated_at,
+               (
+                 SELECT row_to_json(latest)
+                 FROM (
+                   SELECT checks.id, checks.check_type, checks.status, checks.summary,
+                          checks.change, checks.error, checks.checked_at
+                   FROM objective_watch_checks checks
+                   WHERE checks.watch_id = objective_watches.id
+                     AND checks.checked_at >= NOW() - ($2::integer * INTERVAL '1 day')
+                   ORDER BY checks.checked_at DESC, checks.id DESC
+                   LIMIT 1
+                 ) latest
+               ) AS latest_check
         FROM objective_watches
         WHERE user_id = $1
         ORDER BY updated_at DESC, id DESC
         LIMIT 100
-      `, [user.id]);
+      `, [user.id, policy.historyDays]);
       return res.json({ watches: result.rows.map((row) => mapObjectiveWatch(row, { policy })), policy });
     } catch (error) {
       return handleError(req, res, error);

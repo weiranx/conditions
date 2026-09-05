@@ -29,6 +29,9 @@ import {
   type ObjectiveWatchCheck,
   type ObjectiveWatchEvent,
 } from "../lib/objective-watches";
+import { watchHasEnded, watchNeedsAttention, watchRefreshWait, watchCheckLabel, watchCheckDetail } from "./watch-status";
+import { useVisibleRevalidation } from "../hooks/useVisibleRevalidation";
+import "./watchlist.css";
 import { copyTextToClipboard } from "../app/clipboard";
 import { useAccount } from "../hooks/useAccount";
 import type { PersistedReport } from "../app/report-storage";
@@ -89,13 +92,10 @@ function WatchHistory({ id }: { id: string }) {
       {checks.map((check) => (
         <article key={check.id}>
           <span className="field-kicker">
-            {check.checkType} · {check.status}
+            {check.checkType === "manual" ? "Manual check" : "Automatic check"} · {watchCheckLabel(check.status)}
           </span>
           <h3>{ageLabel(check.checkedAt)}</h3>
-          <p>
-            {check.change?.reasons?.map((reason) => reason.label).join(" · ") ||
-              "No material changes recorded."}
-          </p>
+          <p>{watchCheckDetail(check)}</p>
           {check.error && <p className="field-warning">{check.error}</p>}
           <Details title="Check measurements" value={check.summary} />
         </article>
@@ -125,6 +125,8 @@ export function Library({
   const watches = kind === "watches";
   const searchId = useId();
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<'active' | 'attention' | 'ended' | 'all'>('active');
+  const [now, setNow] = useState(() => Date.now());
   const query = search.trim().toLocaleLowerCase();
   const [reports, setReports] = useState<SavedReportSummary[]>([]);
   const [items, setItems] = useState<ObjectiveWatch[]>([]);
@@ -139,14 +141,35 @@ export function Library({
   const matches = (title: string, date: string | null) =>
     `${title} ${date || ""} ${date ? dateLabel(date) : ""}`.toLocaleLowerCase().includes(query);
   const visibleReports = reports.filter((report) => matches(report.title, report.forecastDate));
-  const visibleWatches = items.filter((item) => matches(item.title, item.plan.forecastDate));
+  const activeCount = items.filter((item) => !watchHasEnded(item, now)).length;
+  const attentionCount = items.filter((item) => watchNeedsAttention(item, policy, now)).length;
+  const visibleWatches = items.filter((item) => {
+    if (!matches(item.title, item.plan.forecastDate)) return false;
+    if (filter === 'active') return !watchHasEnded(item, now);
+    if (filter === 'ended') return watchHasEnded(item, now);
+    if (filter === 'attention') return watchNeedsAttention(item, policy, now);
+    return true;
+  }).sort((a, b) => Number(watchHasEnded(a, now)) - Number(watchHasEnded(b, now))
+    || Number(watchNeedsAttention(b, policy, now)) - Number(watchNeedsAttention(a, policy, now))
+    || a.plan.forecastDate.localeCompare(b.plan.forecastDate)
+    || a.plan.alpineStartTime.localeCompare(b.plan.alpineStartTime)
+    || a.title.localeCompare(b.title));
   const showLocalReport = !watches && localReport && matches(localReport.plan.objectiveName, localReport.plan.forecastDate);
   const resultCount = watches ? visibleWatches.length : visibleReports.length + (showLocalReport ? 1 : 0);
+  useEffect(() => {
+    setItems([]);
+    setPolicy(null);
+    setExpanded(null);
+  }, [account.user?.id, watches]);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
     if (!account.user) {
+      setItems([]);
+      setReports([]);
+      setPolicy(null);
+      setExpanded(null);
       setLoading(false);
       return;
     }
@@ -154,6 +177,7 @@ export function Library({
       watches
         ? listObjectiveWatches(controller.signal).then((data) => {
             if (!controller.signal.aborted) {
+              setNow(Date.now());
               setItems(data.watches);
               setPolicy(data.policy);
             }
@@ -175,6 +199,18 @@ export function Library({
       });
     return () => controller.abort();
   }, [account.user, watches, revision]);
+  useEffect(() => {
+    if (!watches || !items.length) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [watches, items.length]);
+  useVisibleRevalidation(async (signal) => {
+    const data = await listObjectiveWatches(signal);
+    if (signal.aborted) return;
+    setNow(Date.now());
+    setItems(data.watches);
+    setPolicy(data.policy);
+  }, watches && Boolean(account.user) && !loading && !pending);
   async function run(id: string, action: () => Promise<void>) {
     setPending(id);
     setError("");
@@ -212,7 +248,7 @@ export function Library({
       <div className="field-library-bar">
         <span>
           {watches
-            ? `${items.length}${policy ? ` / ${policy.activeWatchLimit}` : ""} watched objectives`
+            ? `${activeCount}${policy ? ` / ${policy.activeWatchLimit}` : ""} active watches · ${items.length - activeCount} completed`
             : `${reports.length} account reports`}
         </span>
         <div className="field-action-row">
@@ -250,7 +286,19 @@ export function Library({
         </div>
         <p role="status">{query && !loading ? `${resultCount} ${resultCount === 1 ? "result" : "results"}` : ""}</p>
       </div>
-      {policy && (
+      {watches && items.length > 0 && (
+        <div className="field-watch-filters" role="group" aria-label="Filter watches">
+          {([
+            ['active', 'Active', activeCount], ['attention', 'Needs attention', attentionCount],
+            ['ended', 'Completed', items.length - activeCount], ['all', 'All', items.length],
+          ] as const).map(([value, label, count]) => (
+            <button type="button" className="field-button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+              {label} <span>{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {watches && policy && (
         <p className="field-feedback">
           {policy.automaticChecks
             ? policy.schedulerEnabled
@@ -265,9 +313,10 @@ export function Library({
       )}
       {loading && <p role="status">Loading your plans…</p>}
       {error && (
-        <p className="field-warning" role="alert">
-          {error}
-        </p>
+        <div className="field-warning" role="alert">
+          <p>{error}</p>
+          <button className="field-button" disabled={loading || !!pending} onClick={() => setRevision((n) => n + 1)}>Retry loading plans</button>
+        </div>
       )}
       {notice && (
         <p className="field-feedback" role="status">
@@ -340,29 +389,47 @@ export function Library({
           </article>
         ))}
       {watches &&
-        visibleWatches.map((item) => (
-          <article className="field-panel" key={item.id}>
+        visibleWatches.map((item) => {
+          const ended = watchHasEnded(item, now);
+          const wait = watchRefreshWait(item, policy, now);
+          const latest = item.latestCheck;
+          return (
+          <article className="field-panel field-watch-card" key={item.id}>
             <div className="field-panel-heading">
               <div>
                 <span className="field-kicker">
                   {dateLabel(item.plan.forecastDate)} ·{" "}
-                  {item.plan.alpineStartTime}
+                  {item.plan.alpineStartTime} · {item.plan.travelWindowHours}h window
                 </span>
                 <h2>{item.title}</h2>
               </div>
-              <Bell size={22} />
+              <span className="field-watch-state">{ended ? 'Completed' : policy?.automaticChecks ? policy.schedulerEnabled ? 'Monitoring' : 'Checks paused' : 'Manual checks'}</span>
             </div>
-            <p>
-              Last checked {ageLabel(item.lastCheckedAt)}
-              {item.nextCheckAt
-                ? ` · Next check ${new Date(item.nextCheckAt).toLocaleString()}`
-                : ""}
+            <p className="field-muted">
+              {ended ? 'Monitoring complete · history remains available' : item.lastCheckedAt ? `Last successful check ${ageLabel(item.lastCheckedAt)}` : 'No successful checks yet'}
+              {!ended && policy?.automaticChecks && policy.schedulerEnabled && item.nextCheckAt
+                ? ` · Next check ${new Date(item.nextCheckAt).toLocaleString()}` : ''}
             </p>
-            <p>
-              {item.lastChange?.reasons?.map((r) => r.label).join(" · ") ||
-                "No condition changes recorded."}
-            </p>
-            {isObjectiveWatchCheckOverdue(item, policy) && (
+            {latest && (
+              <section className={`field-watch-latest is-${latest.status}`} aria-label={`${item.title} latest check`}>
+                <div><strong>{watchCheckLabel(latest.status)}</strong>
+                  {latest.checkedAt && <time dateTime={latest.checkedAt}>{new Date(latest.checkedAt).toLocaleString()}</time>}
+                </div>
+                {latest.status !== 'failed' && latest.summary && (
+                  <p className="field-watch-measurements">
+                    {typeof latest.summary.score === 'number' && <span>Score <b>{Math.round(latest.summary.score)}/100</b></span>}
+                    {latest.summary.tier && <span>{latest.summary.tier} risk</span>}
+                    {typeof latest.summary.maxWindGust === 'number' && <span>Peak gust <b>{Math.round(latest.summary.maxWindGust)} mph</b></span>}
+                    {typeof latest.summary.maxPrecipChance === 'number' && <span>Precipitation <b>{Math.round(latest.summary.maxPrecipChance)}%</b></span>}
+                  </p>
+                )}
+                <p>{watchCheckDetail(latest)}</p>
+              </section>
+            )}
+            {!!item.lastChange?.reasons?.length && latest?.status !== 'changed' && (
+              <p className="field-warning">Previous risk increase{item.lastChange.checkedAt ? ` · ${new Date(item.lastChange.checkedAt).toLocaleString()}` : ''}: {item.lastChange.reasons.map((r) => r.label).join(' · ')}</p>
+            )}
+            {!ended && isObjectiveWatchCheckOverdue(item, policy, now) && (
               <p className="field-warning">
                 Scheduled check is overdue. Refresh manually and verify the
                 latest source evidence.
@@ -391,21 +458,35 @@ export function Library({
               )}
               <button
                 className="field-button"
-                disabled={!!pending}
-                onClick={() =>
+                disabled={!!pending || !policy || ended || wait > 0}
+                title={ended ? 'This plan date has ended' : wait > 0 ? `Check available ${new Date(now + wait).toLocaleString()}` : undefined}
+                onClick={() => {
+                  if (!policy || watchHasEnded(item) || watchRefreshWait(item, policy) > 0) return;
                   void run(item.id, async () => {
-                    await refreshObjectiveWatch(item.id);
-                    setRevision((n) => n + 1);
-                    setNotice("Watch checked.");
-                  })
-                }
+                    try {
+                      await refreshObjectiveWatch(item.id);
+                      setNotice("Check complete. Review the latest result below.");
+                      setRevision((n) => n + 1);
+                    } catch (error) {
+                      // Failed attempts also start a cooldown and can add history.
+                      try {
+                        const data = await listObjectiveWatches();
+                        setNow(Date.now());
+                        setItems(data.watches);
+                        setPolicy(data.policy);
+                      } catch { /* Preserve the original check failure. */ }
+                      throw error;
+                    }
+                  });
+                }}
               >
                 <RefreshCw size={14} />
-                Check now
+                {pending === item.id ? 'Working…' : ended ? 'Plan completed' : wait > 0 ? `Check in ${Math.ceil(wait / 60000)}m` : 'Check now'}
               </button>
               <button
                 className="field-button"
                 aria-expanded={expanded === item.id}
+                aria-controls={`watch-history-${item.id}`}
                 onClick={() =>
                   setExpanded(expanded === item.id ? null : item.id)
                 }
@@ -426,7 +507,7 @@ export function Library({
                 <input
                   type="checkbox"
                   checked={item.notificationsEnabled}
-                  disabled={!!pending}
+                  disabled={!!pending || ended || !account.user?.emailVerified}
                   onChange={(e) => {
                     const enabled = e.target.checked;
                     void run(item.id, async () => {
@@ -435,20 +516,29 @@ export function Library({
                     });
                   }}
                 />
-                Email when conditions change
+                {account.user?.emailVerified ? 'Email when risk increases' : 'Verify your email in Account to enable alerts'}
               </label>
             )}
             {expanded === item.id && (
-              <WatchHistory key={`${item.id}-${revision}`} id={item.id} />
+              <div id={`watch-history-${item.id}`}>
+                <WatchHistory key={`${item.id}-${revision}-${item.latestCheck?.id || item.lastAttemptedAt || ''}`} id={item.id} />
+              </div>
             )}
           </article>
-        ))}
+        ); })}
+      {watches && !loading && !error && !query && items.length > 0 && visibleWatches.length === 0 && (
+        <div className="field-empty-state">
+          <h2>{filter === 'attention' ? 'No objectives need attention' : filter === 'ended' ? 'No completed plans yet' : 'No active watches'}</h2>
+          <p>Completed plans keep their history and do not count toward your active watch limit.</p>
+          <button className="field-button" onClick={() => setFilter('all')}>Show all watches</button>
+        </div>
+      )}
       {!loading && !error && query && resultCount === 0 && (
         <div className="field-empty-state">
           <Search size={32} aria-hidden="true" />
           <h2>No matching {watches ? "objectives" : "reports"}</h2>
           <p>Try a different name or date, or clear your search to see everything.</p>
-          <button className="field-button" onClick={() => setSearch("")}>Clear search</button>
+          <button className="field-button" onClick={() => { setSearch(""); if (watches) setFilter('all'); }}>Clear search{watches ? ' and show all watches' : ''}</button>
         </div>
       )}
       {!loading && !error && !query &&

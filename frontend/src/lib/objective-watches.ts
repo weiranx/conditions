@@ -8,6 +8,7 @@ export interface ObjectiveWatch {
   baselineReport?: PersistedReport;
   lastAttemptedAt: string | null;
   lastCheckedAt: string | null;
+  latestCheck?: ObjectiveWatchCheck | null;
   nextCheckAt: string | null;
   lastChange: {
     checkedAt?: string;

@@ -146,7 +146,9 @@ test('lists watched objectives for the signed-in account without returning basel
   });
   expect(response.body.watches[0]).not.toHaveProperty('baselineReport');
   expect(query.mock.calls[0][0]).toContain('ORDER BY updated_at DESC, id DESC');
-  expect(query.mock.calls[0][1]).toEqual([USER_ID]);
+  expect(query.mock.calls[0][1]).toEqual([USER_ID, 14]);
+  expect(query.mock.calls[0][0]).toContain('checks.watch_id = objective_watches.id');
+  expect(query.mock.calls[0][0]).toContain('ORDER BY checks.checked_at DESC, checks.id DESC');
   expect(response.body.policy).toMatchObject({ tierKey: 'free', historyDays: 14 });
 });
 
@@ -730,4 +732,24 @@ test('rejects objective watch requests before account or database access when di
   expect(response.status).toBe(503);
   expect(response.body).toEqual({ error: 'This feature is unavailable', code: 'FEATURE_DISABLED' });
   expect(query).not.toHaveBeenCalled();
+});
+
+test('includes the latest check without exposing internal errors or private check fields', async () => {
+  const query = jest.fn().mockResolvedValue({ rows: [{
+    id: WATCH_ID, title: 'Mount Rainier', plan: SNAPSHOT.plan,
+    created_at: CREATED_AT, updated_at: CREATED_AT,
+    latest_check: { id: 42, check_type: 'automatic', status: 'failed',
+      summary: null, change: null, error: 'private upstream token and endpoint',
+      checked_at: CREATED_AT, watch_id: WATCH_ID },
+  }, { id: 'no-check', title: 'Mount Baker', plan: SNAPSHOT.plan,
+    created_at: CREATED_AT, updated_at: CREATED_AT, latest_check: null }] });
+  const response = await request(makeApp({ query, tierKey: 'premium' }))
+    .get('/api/account/objective-watches');
+  expect(response.status).toBe(200);
+  expect(response.body.watches[0].latestCheck).toEqual({
+    id: '42', checkType: 'automatic', status: 'failed', summary: null, change: null,
+    error: 'Conditions data was unavailable for this check.', checkedAt: CREATED_AT.toISOString(),
+  });
+  expect(response.body.watches[1].latestCheck).toBeNull();
+  expect(query.mock.calls[0][1]).toEqual([USER_ID, 90]);
 });

@@ -360,7 +360,7 @@ export function createMockApi({ databasePath } = {}) {
               ) || null,
             policy,
           });
-        return ok({ watches: db.watches, policy });
+        return ok({ watches: db.watches.map((watch) => ({ ...watch, latestCheck: watch.checks?.[0] || null })), policy });
       }
       if (method === "POST") {
         if (!body.report?.plan) return fail(400, "Report required.");
