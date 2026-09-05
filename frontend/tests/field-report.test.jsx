@@ -244,3 +244,53 @@ test("daylight chart marks overnight trips and refuses missing solar data", () =
     /unavailable/,
   );
 });
+
+import { parseExplanation } from "../src/field/ai-explanation";
+import { AiExplanation } from "../src/field/AiExplanation";
+test("AI explanation splits inline labels without losing long continuation paragraphs", () => {
+  const continuation =
+    "A separate observation needs verification before departure. "
+      .repeat(12)
+      .trim();
+  const parts = [
+    ["BIG PICTURE", "Wind builds after noon."],
+    ["WHY IT MATTERS", `Gusts reach 35 mph.\n\n${continuation}`],
+    ["WATCH CLOSELY", "Watch the 2 PM window."],
+    ["DATA CONFIDENCE", "The station report is 3 hours old."],
+    ["COMFORT CHECK", "Temperatures stay near 50°F."],
+    ["BEST MOVE", "Choose sheltered terrain."],
+  ];
+  const parsed = parseExplanation(
+    parts.map(([label, text]) => `${label}: ${text}`).join(" "),
+  );
+  assert.equal(parsed.length, 6);
+  assert.deepEqual(
+    parsed.map((section) => section.text),
+    parts.map(([, text]) => text),
+  );
+  const html = renderToStaticMarkup(
+    <AiExplanation
+      text={parts.map(([label, text]) => `${label}: ${text}`).join(" ")}
+    />,
+  );
+  assert.match(html, /<h3>Big picture<\/h3>/);
+  assert.match(html, /<h3>Best move<\/h3>/);
+  assert.match(html, /Choose sheltered terrain/);
+  assert.match(html, /ai-explanation-detail is-watch[^>]*open/);
+  assert.doesNotMatch(html, /BIG PICTURE:/);
+});
+test("AI explanation retains legacy text, preambles, markdown labels and unknown sections", () => {
+  const text =
+    "A plain legacy explanation.\n\nAnother paragraph with 0.5 in of rain.";
+  assert.equal(parseExplanation(text)[0].text, text);
+  const sections = parseExplanation(
+    "Intro remains.\n## BIG PICTURE: Calm early.\n**BEST MOVE:** Turn back before noon.\nOTHER NOTES: Keep this too.",
+  );
+  assert.equal(sections.length, 3);
+  assert.equal(sections[0].text, "Intro remains.");
+  assert.equal(
+    sections[2].text,
+    "Turn back before noon.\nOTHER NOTES: Keep this too.",
+  );
+  assert.deepEqual(parseExplanation("  "), []);
+});

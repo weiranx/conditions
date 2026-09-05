@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
-import { Streamdown } from "streamdown";
+import { AiExplanation } from "./AiExplanation";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
@@ -449,11 +449,7 @@ export function Report({
               {w.aiBriefError}
             </p>
           )}
-          {w.aiBriefNarrative && (
-            <div className="field-markdown">
-              <Streamdown>{w.aiBriefNarrative}</Streamdown>
-            </div>
-          )}
+          {w.aiBriefNarrative && <AiExplanation text={w.aiBriefNarrative} />}
         </section>
       )}
       {(ai.reportChat || w.reportChatMessages.length > 0) && (

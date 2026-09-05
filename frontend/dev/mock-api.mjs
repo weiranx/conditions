@@ -420,7 +420,7 @@ export function createMockApi({ databasePath } = {}) {
     if (p === "/api/ai-brief")
       return ok({
         narrative:
-          "**Demo brief.** Start early for the calmer part of the forecast. Wind and precipitation increase later in this sample. These are synthetic conditions for testing the interface.",
+          "BIG PICTURE: This is a synthetic local briefing for testing the report layout. The selected fixture supplies the weather and field observations. WHY IT MATTERS: Large values and hourly charts show how this sample changes through the outing. These are demonstration values, not live observations. WATCH CLOSELY: Review the selected hour and any highlighted field signals in the sample report. DATA CONFIDENCE: All data in this briefing is mocked. No live forecast or AI provider was contacted. COMFORT CHECK: The comfort card is separate from the safety decision. BEST MOVE: Use the scenario selector to test clear skies, storms, snow, and missing data. Use a real report before making an outing decision.",
         cached: false,
       });
     if (p === "/api/snow-vision")
