@@ -3146,28 +3146,38 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   }
 }
 
-/* A quiet application shell around the weather and terrain. */
+/* Alpine field journal: warm paper, forest ink, and editorial display type. */
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --f-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --f-bg: #f4f6f9;
-  --f-ink: #202936;
-  --f-muted: #626f80;
-  --f-line: #e0e6ed;
-  --f-green: #246bc1;
-  --f-wash: #eaf2fc;
-  --f-shadow: 0 2px 3px #20395803, 0 8px 24px -16px #20395823;
+  --f-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --f-bg: #f5f3ee;
+  --f-paper: #fffefa;
+  --f-soft: #eeeee7;
+  --f-ink: #24362f;
+  --f-muted: #656e65;
+  --f-line: #dedfd5;
+  --f-green: #32604d;
+  --f-on: #fffef8;
+  --f-wash: #e9efe6;
+  --f-primary: #294f40;
+  --f-primary-hover: #1e4033;
+  --f-primary-ink: #fffef8;
+  --f-shadow: 0 1px 2px #24362f04, 0 12px 32px -20px #24362f24;
 }
 html[data-theme="dark"] {
-  --f-bg: #141a23;
-  --f-paper: #1c2430;
-  --f-soft: #252f3e;
-  --f-line: #333f50;
-  --f-ink: #edf2f8;
-  --f-muted: #acb8c9;
-  --f-green: #91beff;
-  --f-wash: #253c58;
-  --f-shadow: 0 6px 18px -12px #0005;
+  --f-bg: #151d19;
+  --f-paper: #1d2822;
+  --f-soft: #27332b;
+  --f-line: #38463c;
+  --f-ink: #f2f0e7;
+  --f-muted: #aeb9ac;
+  --f-green: #b2ceb5;
+  --f-on: #18261e;
+  --f-wash: #2c3d30;
+  --f-primary: #bdd2b8;
+  --f-primary-hover: #d0e0ca;
+  --f-primary-ink: #192b21;
+  --f-shadow: 0 1px 2px #0002, 0 14px 32px -20px #0006;
 }
 .field-app {
   grid-template-columns: 216px minmax(0, 1fr);
@@ -3183,13 +3193,13 @@ html[data-theme="dark"] {
 .field-brand > span {
   width: 38px;
   height: 38px;
-  color: white;
-  border: 1px solid #356ea9;
-  background: linear-gradient(145deg, #4c8ac8, #245f9b);
+  color: #f4edda;
+  border: 1px solid #53745e;
+  background: linear-gradient(145deg, #456952, #233f32);
   border-radius: 11px;
   box-shadow:
     inset 0 1px #ffffff40,
-    0 3px 7px #24517e20;
+    0 3px 7px #24362f20;
 }
 .field-brand strong {
   font-size: 14px;
@@ -3218,10 +3228,10 @@ html[data-theme="dark"] {
   padding: 11px 12px;
 }
 .field-sidebar nav button[aria-current="page"] {
-  background: var(--f-paper);
+  background: var(--f-wash);
   color: var(--f-green);
   box-shadow:
-    0 1px 4px #172c4210,
+    0 1px 4px #24362f08,
     inset 0 0 0 1px var(--f-line);
   font-weight: 550;
 }
@@ -3371,15 +3381,16 @@ html[data-theme="dark"] {
   font-weight: 550;
 }
 .field-button-primary {
-  background: #286cb6;
-  border-color: #286cb6;
-  color: #fff;
+  background: var(--f-primary);
+  border-color: var(--f-primary);
+  color: var(--f-primary-ink);
   box-shadow:
     inset 0 1px #ffffff25,
-    0 4px 8px #204f8c12;
+    0 4px 8px #24362f12;
 }
 .field-button-primary:hover {
-  background: #2363aa;
+  background: var(--f-primary-hover);
+  border-color: var(--f-primary-hover);
   filter: none;
 }
 .field-form-submit {
