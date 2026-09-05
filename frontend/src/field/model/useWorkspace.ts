@@ -3087,6 +3087,7 @@ export function useWorkspace() {
     handleUseTripDayInPlanner,
     handleSelectMultiDayForecastDay,
     handleOpenObjectiveWatch,
+    handleOpenComparisonPlan: handleOpenObjectiveWatch,
     appShellClassName,
     liveSearchQuery,
     trimmedSearchQuery,

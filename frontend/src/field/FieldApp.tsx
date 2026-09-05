@@ -67,7 +67,7 @@ export default function FieldApp() {
     { id: "home", label: "Workspace", icon: Compass },
     { id: "planner", label: "Conditions brief", icon: Map },
     ...(w.featureFlags.tripPlanning
-      ? [{ id: "trip", label: "Compare days", icon: Sunrise }]
+      ? [{ id: "trip", label: "Compare", icon: Sunrise }]
       : []),
     ...(w.featureFlags.reportHistory
       ? [{ id: "history", label: "Saved reports", icon: BookOpen }]

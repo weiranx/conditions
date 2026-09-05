@@ -19,6 +19,7 @@ The controllers in `model/` retain the established planning, account, persistenc
 | Named routes, GPX checkpoint analysis, elevation profile, checkpoint details | `Route` |
 | Gear checklist, AI brief, persistent report chat | `Report`, `Chat` |
 | Multi-day ranking, day detail, copy/print, open day in planner, trip chat | `Compare` |
+| Objective × date shortlist, hazard ranking, weather tradeoffs, local Plan A / Plan B | `ObjectiveShortlist`, `useObjectiveShortlist` |
 | Saved reports, sharing, email, report export, full report and printing | `FieldApp`, `Report`, `Library` |
 | Objective watches, manual checks, notifications, baseline, checks and change history | `Library` |
 | Units, appearance, activity defaults, thresholds, route pace, account sync | `Settings` |
@@ -42,3 +43,11 @@ git diff --check
 The presentation tests cover unit conversion, empty and sparse hourly evidence, comparison decision ranking, metric accumulation amounts, and blocked-day recommendations. The hook tests exercise changing plans during in-flight comparisons, aborted responses, saved-report boundaries, and report startup. CI runs both suites. Tests render components without a network; the map dependency is replaced by its coordinate constructor in this test harness only.
 
 Browser verification also covers report generation, date/time commits, hourly metric changes, full report chapters, units/themes, mobile overflow, coordinate search, account and library states, and local administration. Database-backed actions and live AI require the corresponding backend configuration; an unavailable response is not a successful end-to-end test.
+
+## Objective shortlist
+
+Open **Compare → Compare objectives** to select 2–5 points and 2–7 consecutive dates. Each objective uses the same local departure time and trip duration. Forecast requests use the existing `/api/trip-forecasts` endpoint sequentially, with one comparison allowance per objective, idempotency keys, cancellation, and account usage updates. Missing dates remain visible; mismatched date, location, time, or duration responses are rejected.
+
+Ranking uses the existing full hazard decision (including relevant avalanche evidence), then the canonical report score. Partial reports and incomplete hourly windows do not win ranking; comfort remains separate. This differs from the weather-only **Compare days** mode. Neither mode evaluates a route automatically.
+
+Shortlists and explicit Plan A / Plan B selections persist in this browser under `summitsafe:objective-shortlist:v1`; forecast payloads are not persisted. Opening a saved choice prepares the selected objective, date, time, and duration in the planner for a fresh full report. It clears prior route/elevation context. Search, settings changes, and reloads do not automatically spend comparison allowances.

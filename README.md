@@ -36,6 +36,7 @@ Enter an objective, pick a date and start time, and the app returns a unified co
 - On-demand AI field brief narrative
 - Shareable planner URLs, printable report, and SAT one-liner output
 - Multi-day trip risk view and built-in app status checks
+- Objective shortlist: compare 2–5 destinations across 2–7 dates, inspect hazard and weather tradeoffs, and save Plan A / Plan B in this browser
 - Unit settings for temperature, elevation, wind speed, and time style
 - Collapsible card UI with preview summaries
 - Report logging with access-controlled retrieval

@@ -11,6 +11,7 @@ import { Chat } from "./Chat";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import type { MultiDayTripForecastDay } from "../hooks/useTripForecast";
 import "./compare.css";
+import ObjectiveShortlist from "./ObjectiveShortlist";
 
 const isNumber = (value: number | null | undefined): value is number =>
   value != null && Number.isFinite(value);
@@ -22,6 +23,27 @@ const decisionTone = (day: MultiDayTripForecastDay) =>
   day.decisionLevel === "GO" ? "go" : day.decisionLevel === "NO-GO" ? "blocked" : "caution";
 
 export default function Compare({ workspace: w }: { workspace: Workspace }) {
+  const [mode, setMode] = useState<'days' | 'objectives'>(() => {
+    try { return localStorage.getItem('summitsafe:comparison-mode') === 'objectives' ? 'objectives' : 'days'; }
+    catch { return 'days'; }
+  });
+  function chooseMode(next: 'days' | 'objectives') {
+    setMode(next);
+    try { localStorage.setItem('summitsafe:comparison-mode', next); } catch { /* Mode still works without storage. */ }
+  }
+  return <>
+    <div className="shortlist-mode" role="group" aria-label="Comparison mode">
+      <button className="field-button" aria-pressed={mode === 'days'} onClick={() => chooseMode('days')}>Compare days</button>
+      <button className="field-button" aria-pressed={mode === 'objectives'} onClick={() => chooseMode('objectives')}>Compare objectives</button>
+    </div>
+    {mode === 'days' ? <CompareDays workspace={w} /> : <>
+      <header className="field-page-heading"><span className="field-kicker">Objective comparison</span><h1>Where should you go?</h1><p>Compare your shortlist, find the tradeoffs, and keep a backup plan.</p></header>
+      <ObjectiveShortlist workspace={w} />
+    </>}
+  </>;
+}
+
+function CompareDays({ workspace: w }: { workspace: Workspace }) {
   const [selectedDate, setSelectedDate] = useState("");
   const tableId = useId();
   const [showMeasurements, setShowMeasurements] = useState(false);

@@ -1,0 +1,57 @@
+.shortlist-mode { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+.shortlist-mode button[aria-pressed="true"], .shortlist-detail button[aria-pressed="true"] { background: var(--f-wash); border-color: var(--f-green); color: var(--f-green); }
+.shortlist-layout { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 28px; align-items: start; }
+.shortlist-content, .shortlist-controls { min-width: 0; }
+.shortlist-controls h2 { display: flex; justify-content: space-between; gap: 12px; }
+.shortlist-controls h2 small { color: var(--f-muted); font-size: 13px; }
+.shortlist-controls > p { margin: 12px 0 20px; font-size: 13px; line-height: 1.7; }
+.shortlist-controls fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.shortlist-controls fieldset:disabled { opacity: .65; }
+.shortlist-controls .field-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.shortlist-controls label { display: grid; gap: 8px; font-size: 12px; font-weight: 550; }
+.shortlist-controls input, .shortlist-controls select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--f-line); border-radius: 7px; background: var(--f-paper); color: var(--f-ink); padding: 10px; font: inherit; }
+.shortlist-controls .field-input-icon input { padding-left: 36px; padding-right: 36px; }
+.shortlist-controls .field-text-button { min-height: 44px; }
+.shortlist-controls form .field-muted, .shortlist-validation { font-size: 12px; line-height: 1.7; margin: 14px 0; }
+.shortlist-validation { color: var(--f-warn); }
+.shortlist-allowance, .shortlist-caption { color: var(--f-muted); font-size: 12px; line-height: 1.7; margin: 12px 0 20px; }
+.shortlist-objectives { list-style: none; padding: 0; margin: 16px 0 24px; }
+.shortlist-objectives li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--f-line); }
+.shortlist-objectives strong { font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.shortlist-objectives small { display: block; margin-top: 5px; font-size: 11px; color: var(--f-muted); overflow-wrap: anywhere; }
+.shortlist-objectives button { flex-shrink: 0; width: 44px; height: 44px; }
+.shortlist-saved { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.shortlist-saved .field-panel { margin: 0; padding: 20px; min-width: 0; }
+.shortlist-saved h3 { font-size: 16px; margin: 12px 0 8px; overflow-wrap: anywhere; }
+.shortlist-saved p { font-size: 12px; color: var(--f-muted); line-height: 1.7; }
+.shortlist-saved .field-action-row { margin-top: 12px; }
+.shortlist-intro p { max-width: 480px; margin-inline: auto; }
+.shortlist-intro .field-button { margin-top: 20px; }
+.shortlist-recommendation h2 { margin: 10px 0 14px; font-size: 22px; }
+.shortlist-recommendation p { line-height: 1.7; margin-top: 10px; }
+.shortlist-grid-heading { font-size: 22px; }
+.shortlist-table thead th { padding: 16px; white-space: nowrap; }
+.shortlist-table th:first-child { width: 155px; overflow-wrap: anywhere; }
+.shortlist-table th small { display: block; margin-top: 8px; font-weight: 400; color: var(--f-muted); font-size: 10px; }
+.shortlist-table td { padding: 0; }
+.shortlist-table td:has(> strong) { padding: 16px; }
+.shortlist-cell { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; padding: 16px; width: 100%; min-height: 250px; border: 0; background: transparent; color: inherit; font: inherit; line-height: 1.6; }
+.shortlist-cell:hover { background: var(--f-wash); }
+.shortlist-cell:focus-visible { outline-offset: -4px; }
+.shortlist-cell > strong { font-size: 22px; font-weight: 550; }
+.shortlist-cell small { margin: 0; }
+.shortlist-detail { margin-top: 24px; }
+.shortlist-detail h2 { margin: 8px 0; }
+.shortlist-detail p { font-size: 13px; line-height: 1.7; }
+.shortlist-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin: 24px 0; }
+.shortlist-details dt { font-size: 11px; color: var(--f-muted); margin-bottom: 7px; }
+.shortlist-details dd { margin: 0; font-size: 14px; line-height: 1.6; }
+@media (max-width: 1150px) { .shortlist-layout { grid-template-columns: 1fr; } .shortlist-controls .field-input-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 650px) {
+  .shortlist-saved, .shortlist-details { grid-template-columns: 1fr; }
+  .shortlist-controls .field-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shortlist-controls input, .shortlist-controls select { font-size: 16px; }
+  .shortlist-table th:first-child { min-width: 108px; width: 108px; }
+  .shortlist-table td { min-width: 180px; }
+  .shortlist-mode button, .shortlist-detail button, .shortlist-saved button { min-height: 44px; }
+}
