@@ -1,8 +1,11 @@
+import { Download, RefreshCw } from "lucide-react";
+import { AdminOverview } from "./AdminOverview";
+import "./administration.css";
 import {
   useAdministration,
   type Administration as Model,
 } from "./model/useAdministration";
-import { Details, DetailValues } from "./Details";
+import { DetailValues } from "./Details";
 import { Dialog } from "./Dialog";
 import { AdminControls } from "./AdminControls";
 import { AdminUsers } from "./AdminUsers";
@@ -22,26 +25,47 @@ export function AdminStats({ a }: { a: Model }) {
   return (
     <div className="field-admin-stats">
       {[
-        ["Reports", a.metrics.total],
+        [
+          "Reports",
+          a.metrics.total.toLocaleString(),
+          "Requests in selected period",
+          !!a.error,
+        ],
         [
           "Healthy responses",
           a.metrics.healthyRate === null ? "—" : `${a.metrics.healthyRate}%`,
+          "Complete, successful responses",
+          !!a.error,
         ],
         [
           "P95 response",
           a.metrics.p95Duration === null
             ? "—"
             : a.formatDuration(a.metrics.p95Duration),
+          "95% of requests finish within this",
+          !!a.error,
         ],
-        ["AI calls", a.aiMetrics.calls],
+        [
+          "AI calls",
+          a.aiMetrics.calls.toLocaleString(),
+          "Model requests in selected period",
+          !!a.aiUsageError,
+        ],
         [
           "AI cost estimate",
-          a.formatEstimatedCost(a.aiMetrics.estimatedCostUsd),
+          a.aiMetrics.calls > 0 && a.aiMetrics.pricedCalls === 0
+            ? "—"
+            : a.formatEstimatedCost(a.aiMetrics.estimatedCostUsd),
+          `${a.aiMetrics.pricedCalls} of ${a.aiMetrics.calls} calls priced`,
+          !!a.aiUsageError,
         ],
-      ].map(([label, value]) => (
-        <article className="field-panel" key={label}>
+      ].map(([label, value, detail, unavailable]) => (
+        <article className="field-panel" key={String(label)}>
           <span className="field-kicker">{label}</span>
-          <strong>{value}</strong>
+          <strong>{a.loading || unavailable ? "—" : value}</strong>
+          <small>
+            {a.loading ? "Loading…" : unavailable ? "Data unavailable" : detail}
+          </small>
         </article>
       ))}
     </div>
@@ -57,9 +81,9 @@ export default function Administration() {
         <h1>Administration</h1>
         <p>Service health, account access, and product performance.</p>
       </header>
-      <div className="field-action-row">
+      <div className="field-action-row admin-toolbar">
         <label className="field-form-label">
-          Time range
+          Analytics period
           <select
             value={a.analyticsRange}
             onChange={(e) =>
@@ -78,9 +102,10 @@ export default function Administration() {
           onClick={() => void a.fetchAdminData(true)}
           disabled={a.refreshing || a.loading}
         >
+          <RefreshCw size={16} aria-hidden="true" />
           {a.refreshing || a.loading ? "Refreshing…" : "Refresh data"}
         </button>
-        <label>
+        <label className="admin-auto-refresh">
           <input
             type="checkbox"
             checked={a.autoRefresh}
@@ -88,16 +113,22 @@ export default function Administration() {
           />{" "}
           Refresh every 30 seconds
         </label>
-        <button className="field-button" onClick={a.downloadOperationsSnapshot}>
+        <button
+          className="field-button"
+          disabled={a.loading || !a.lastRefreshed}
+          onClick={a.downloadOperationsSnapshot}
+        >
+          <Download size={16} aria-hidden="true" />
           Export snapshot
         </button>
-        <small>
+        <small className="admin-updated">
           {a.lastRefreshed
-            ? `Updated ${a.lastRefreshed.toLocaleTimeString()}`
+            ? `Report logs updated ${a.lastRefreshed.toLocaleTimeString()}`
             : "Waiting for data"}
         </small>
       </div>
       <AdminNotice message={a.error} />
+      <AdminNotice message={a.aiUsageError} />
       <nav className="field-chapter-nav" aria-label="Administration sections">
         {a.ADMIN_SECTIONS.map((section) => (
           <button
@@ -107,66 +138,24 @@ export default function Administration() {
             }
             onClick={() => a.setActiveSection(section.value)}
           >
-            <section.icon size={16} />
+            <section.icon size={16} aria-hidden="true" />
             {section.label}
+            {!a.loading && a.sectionCounts[section.value] > 0 && (
+              <span
+                className="admin-nav-count"
+                aria-label={a.sectionCountTitle(
+                  section.value,
+                  a.sectionCounts[section.value],
+                )}
+              >
+                {a.sectionCounts[section.value].toLocaleString()}
+              </span>
+            )}
           </button>
         ))}
       </nav>
       <div ref={dashboardContentRef}>
-        {a.activeSection === "overview" && (
-          <>
-            <AdminStats a={a} />
-            <section className="field-panel">
-              <h2>Needs attention</h2>
-              {a.attentionSignals.length ? (
-                a.attentionSignals.map((signal) => (
-                  <button
-                    className="field-location-row"
-                    key={signal.key}
-                    onClick={() => a.reviewAttentionSignal(signal.key)}
-                  >
-                    <signal.icon size={18} />
-                    <span>
-                      <strong>{signal.label}</strong>
-                      <small>{signal.detail}</small>
-                    </span>
-                    <b>{signal.count}</b>
-                  </button>
-                ))
-              ) : (
-                <p>No active attention signals in the available data.</p>
-              )}
-              <button
-                className="field-button"
-                disabled={a.diagnosticsPending}
-                onClick={a.runDiagnosticsFromOverview}
-              >
-                Run service diagnostics
-              </button>
-            </section>
-            <div className="field-detail-grid">
-              <section className="field-panel">
-                <h2>Platform health</h2>
-                <AdminNotice message={a.healthError} />
-                <DetailValues value={a.health} />
-              </section>
-              <section className="field-panel">
-                <h2>Resources & caching</h2>
-                <AdminNotice message={a.systemResourcesError} />
-                <DetailValues value={a.systemResources} />
-                <Details
-                  title="Cache measurements"
-                  value={{ summary: a.cacheMetrics, caches: a.health?.caches }}
-                />
-              </section>
-              <section className="field-panel">
-                <h2>Account activity</h2>
-                <AdminNotice message={a.usersError} />
-                <DetailValues value={a.userSummary} />
-              </section>
-            </div>
-          </>
-        )}
+        {a.activeSection === "overview" && <AdminOverview a={a} />}
         {a.activeSection === "users" && <AdminUsers a={a} />}
         {a.activeSection === "operations" && <AdminControls a={a} />}
         {a.activeSection === "analytics" && <AdminAnalytics a={a} />}
@@ -227,7 +216,23 @@ export default function Administration() {
               </button>
             </div>
             <AdminNotice message={a.auditError} />
-            <p>{a.filteredAuditEntries.length} events</p>
+            <div className="admin-result-summary" role="status">
+              <span>
+                {a.filteredAuditEntries.length} of {a.auditEntries.length}{" "}
+                loaded events
+              </span>
+              {(a.auditQuery || a.auditFilter !== "all") && (
+                <button
+                  className="field-text-button"
+                  onClick={() => {
+                    a.setAuditQuery("");
+                    a.setAuditFilter("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
             {a.filteredAuditEntries.map((entry, i) => (
               <details
                 className="field-details"

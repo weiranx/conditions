@@ -1,81 +1,11 @@
+import { useState } from "react";
 import type { Administration } from "./model/useAdministration";
 import { AdminNotice } from "./Administration";
 import { Details } from "./Details";
 export function AdminUsers({ a }: { a: Administration }) {
+  const [refreshingUsers, setRefreshingUsers] = useState(false);
   return (
     <>
-      <section className="field-panel">
-        <h2>Free account allowances</h2>
-        <p>
-          Monthly defaults apply to accounts without individual overrides.
-          Premium accounts have unlimited usage.
-        </p>
-        <AdminNotice message={a.usageSettingsError} />
-        <div className="field-action-row">
-          <label className="field-form-label">
-            AI tokens per month
-            <input
-              type="number"
-              min="0"
-              max={a.usageSettings?.maxMonthlyAITokenLimit}
-              value={a.usageLimitDraft}
-              onChange={(e) => a.setUsageLimitDraft(e.target.value)}
-            />
-          </label>
-          <label className="field-form-label">
-            Reports per month
-            <input
-              type="number"
-              min="0"
-              max={a.usageSettings?.maxFreeMonthlyUsageLimit}
-              value={a.reportLimitDraft}
-              onChange={(e) => a.setReportLimitDraft(e.target.value)}
-            />
-          </label>
-          <button
-            className="field-button field-button-primary"
-            disabled={a.usageSettingsPending || !a.usageSettings}
-            onClick={() => void a.updateDefaultUsageLimits()}
-          >
-            Save allowances
-          </button>
-          <button
-            className="field-button"
-            disabled={a.usageSettingsPending || !a.usageSettings}
-            onClick={() =>
-              a.usageSettings &&
-              void a.updateDefaultUsageLimits(
-                String(a.usageSettings.environmentFreeMonthlyAITokenLimit),
-                String(a.usageSettings.environmentFreeMonthlyReportUsageLimit),
-              )
-            }
-          >
-            Restore deployment defaults
-          </button>
-        </div>
-        <details className="field-details">
-          <summary>Bulk account maintenance</summary>
-          <p>
-            These actions affect all managed accounts and require confirmation.
-          </p>
-          <div className="field-action-row">
-            <button
-              className="field-button"
-              disabled={!!a.userActionPending}
-              onClick={() => void a.resetAllManagedUserUsageLimits()}
-            >
-              Clear individual limits
-            </button>
-            <button
-              className="field-button"
-              disabled={!!a.userActionPending}
-              onClick={() => void a.resetAllManagedUserUsage()}
-            >
-              Reset current month usage
-            </button>
-          </div>
-        </details>
-      </section>
       <section className="field-panel">
         <h2>
           Accounts <small>{a.usersTotal}</small>
@@ -85,6 +15,7 @@ export function AdminUsers({ a }: { a: Administration }) {
             Search accounts
             <input
               type="search"
+              placeholder="Name, email, or sign-in method"
               value={a.userQuery}
               onChange={(e) => a.setUserQuery(e.target.value)}
             />
@@ -108,12 +39,44 @@ export function AdminUsers({ a }: { a: Administration }) {
           </label>
           <button
             className="field-button"
-            onClick={() => void a.fetchUserDirectory()}
+            disabled={refreshingUsers || a.loading}
+            onClick={async () => {
+              setRefreshingUsers(true);
+              try {
+                await a.fetchUserDirectory();
+              } finally {
+                setRefreshingUsers(false);
+              }
+            }}
           >
-            Refresh accounts
+            {refreshingUsers ? "Refreshing accounts…" : "Refresh accounts"}
           </button>
         </div>
         <AdminNotice message={a.usersError || a.usersNotice} />
+        <div className="admin-result-summary" role="status">
+          <span>
+            {a.loading
+              ? "Loading accounts…"
+              : `${a.filteredUsers.length} of ${a.users.length} loaded accounts`}
+          </span>
+          {(a.userQuery || a.userStatusFilter !== "all") && (
+            <button
+              className="field-text-button"
+              onClick={() => {
+                a.setUserQuery("");
+                a.setUserStatusFilter("all");
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+        {a.usersTotal > a.users.length && (
+          <p className="field-muted">
+            Search covers the {a.users.length} loaded accounts of {a.usersTotal}{" "}
+            total.
+          </p>
+        )}
         {a.filteredUsers.map((user) => {
           const disabled = !!a.userActionPending;
           const aiLimit =
@@ -140,9 +103,15 @@ export function AdminUsers({ a }: { a: Administration }) {
                     {user.emailVerified ? "Verified" : "Unverified"}
                   </small>
                 </span>
-                <span>
-                  {user.tier} · {user.status}
-                  {user.isOwner ? " · Owner" : ""}
+                <span className="admin-user-badges">
+                  <span
+                    className="admin-badge"
+                    data-tone={user.status === "active" ? "good" : "critical"}
+                  >
+                    {user.status}
+                  </span>
+                  <span className="admin-badge">{user.tier}</span>
+                  {user.isOwner && <span className="admin-badge">Owner</span>}
                 </span>
               </summary>
               <p>
@@ -288,7 +257,87 @@ export function AdminUsers({ a }: { a: Administration }) {
             </details>
           );
         })}
-        {!a.filteredUsers.length && <p>No accounts match this filter.</p>}
+        {!a.loading && !a.usersError && !a.filteredUsers.length && (
+          <div className="admin-empty">
+            <p>
+              {a.users.length
+                ? "No accounts match these filters. Try another name or email."
+                : "No accounts are available."}
+            </p>
+          </div>
+        )}
+      </section>
+      <section className="field-panel">
+        <h2>Free account allowances</h2>
+        <p>
+          Monthly defaults apply to accounts without individual overrides.
+          Premium accounts have unlimited usage.
+        </p>
+        <AdminNotice message={a.usageSettingsError} />
+        <div className="field-action-row">
+          <label className="field-form-label">
+            AI tokens per month
+            <input
+              type="number"
+              min="0"
+              max={a.usageSettings?.maxMonthlyAITokenLimit}
+              value={a.usageLimitDraft}
+              onChange={(e) => a.setUsageLimitDraft(e.target.value)}
+            />
+          </label>
+          <label className="field-form-label">
+            Reports per month
+            <input
+              type="number"
+              min="0"
+              max={a.usageSettings?.maxFreeMonthlyUsageLimit}
+              value={a.reportLimitDraft}
+              onChange={(e) => a.setReportLimitDraft(e.target.value)}
+            />
+          </label>
+          <button
+            className="field-button field-button-primary"
+            disabled={a.usageSettingsPending || !a.usageSettings}
+            onClick={() => void a.updateDefaultUsageLimits()}
+          >
+            Save allowances
+          </button>
+          <button
+            className="field-button"
+            disabled={a.usageSettingsPending || !a.usageSettings}
+            onClick={() =>
+              a.usageSettings &&
+              void a.updateDefaultUsageLimits(
+                String(a.usageSettings.environmentFreeMonthlyAITokenLimit),
+                String(a.usageSettings.environmentFreeMonthlyReportUsageLimit),
+              )
+            }
+          >
+            Restore deployment defaults
+          </button>
+        </div>
+        <details className="field-details">
+          <summary>Bulk account maintenance</summary>
+          <p>
+            These actions affect all managed accounts and require confirmation.
+          </p>
+          <div className="field-action-row">
+            <button
+              className="field-button"
+              disabled={!!a.userActionPending}
+              onClick={() => void a.resetAllManagedUserUsageLimits()}
+            >
+              Clear individual limits
+            </button>
+            <button
+              className="field-button"
+              disabled={!!a.userActionPending}
+              onClick={() => void a.resetAllManagedUserUsage()}
+            >
+              Reset current month usage
+            </button>
+          </div>
+        </details>
       </section>
     </>
   );
