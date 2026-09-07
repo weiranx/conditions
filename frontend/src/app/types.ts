@@ -655,7 +655,7 @@ export interface SafetyData {
     explanations?: string[];
     sourcesUsed?: string[];
     factors?: Array<{ hazard?: string; impact?: number; source?: string; message?: string; group?: string }>;
-    groupImpacts?: Record<string, { raw?: number; effective?: number; scale?: number; /** @deprecated alias of effective */ capped?: number; /** @deprecated alias of scale */ cap?: number }>;
+    groupImpacts?: Record<string, { raw?: number; effective?: number; scale?: number; floor?: number; floorReason?: string; /** @deprecated alias of effective */ capped?: number; /** @deprecated alias of scale */ cap?: number }>;
     confidenceReasons?: string[];
     airQualityCategory?: string;
   };

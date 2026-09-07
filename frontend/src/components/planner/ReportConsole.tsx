@@ -107,7 +107,7 @@ function DashboardDetailMetrics({ items }: { items: DashboardDetailMetric[] }) {
         <div key={item.label} className={item.tone ? `is-${item.tone}` : undefined}>
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
-          {item.note && <span>{item.note}</span>}
+          {item.note && <dd className="ssr-console-detail-metric-note">{item.note}</dd>}
         </div>
       ))}
     </dl>
@@ -302,7 +302,7 @@ export function ReportConsole({
   const failedChecks = decision.checks.filter((check) => !check.ok);
   const passedChecks = decision.checks.filter((check) => check.ok);
   const hourlyDetail = (
-    <div className="ssr-console-detail-hours" aria-label="Hourly conditions in the selected window">
+    <div className="ssr-console-detail-hours" role="group" aria-label="Hourly conditions in the selected window">
       {travelWindowRows.map((row, index) => {
         const tone = row.pass
           ? 'ok'
@@ -682,7 +682,7 @@ export function ReportConsole({
             <div className="ssr-console-detail-content">
               {renderDetailContent(activeDetail.key)}
             </div>
-            <footer className="ssr-console-detail-context" aria-label="Report context">
+            <footer className="ssr-console-detail-context" role="group" aria-label="Report context">
               <div><span>Decision</span><strong className={`is-${levelTone}`}>{decision.level.replace('-', ' ')}</strong></div>
               <div><span>Planned window</span><strong>{windowLabel}</strong></div>
               <div><span>Source readiness</span><strong className={`is-${sourceTone}`}>{sourceReadiness}</strong></div>
@@ -699,6 +699,7 @@ export function ReportConsole({
     <div className={`ssr-console-stage${activeDetail ? ' is-detail' : ''}`}>
     <div
       className={`ssr-console${activeDetail ? ' is-inactive' : ''}`}
+      role="region"
       aria-label="Conditions dashboard"
       aria-hidden={activeDetail ? true : undefined}
       inert={activeDetail ? true : undefined}
@@ -747,15 +748,15 @@ export function ReportConsole({
           {actions.length > 0 && (
             <div className="ssr-console-action-block">
               <span className="ssr-console-section-kicker">Carry into the plan</span>
-              <ol className="ssr-console-actions" aria-label="Top adjustments">
+              <div className="ssr-console-actions" role="group" aria-label="Top adjustments">
                 {actions.slice(0, 3).map((action, index) => (
-                  <li key={index} className="ssr-console-click" {...detailHandlers('actions', 'What to adjust')}>
+                  <button type="button" key={index} className="ssr-console-action ssr-console-click" {...detailHandlers('actions', 'What to adjust')}>
                     <span className="ssr-console-action-index">{String(index + 1).padStart(2, '0')}</span>
                     <span className="ssr-console-action-title">{action.title}</span>
                     <b className={`ssr-console-action-tag ${ledTone(action.tone)}`}>{action.tag}</b>
-                  </li>
+                  </button>
                 ))}
-              </ol>
+              </div>
             </div>
           )}
           {actions.length === 0 && (
@@ -767,7 +768,7 @@ export function ReportConsole({
       </section>
 
       {/* Score instrument */}
-      <section
+      <div
         className="ssr-console-mod ssr-console-score ssr-console-click"
         {...detailHandlers('score', 'Score breakdown')}
       >
@@ -798,10 +799,10 @@ export function ReportConsole({
             {generatedAge && <span className="ssr-console-score-age">Updated {generatedAge}</span>}
           </div>
         </div>
-      </section>
+      </div>
 
       {travelWindowRows.length > 0 && (
-        <section className="ssr-console-mod ssr-console-window ssr-console-click" {...detailHandlers('travel', 'Travel window')}>
+        <div className="ssr-console-mod ssr-console-window ssr-console-click" {...detailHandlers('travel', 'Travel window')}>
           <div className="ssr-console-window-head">
             <div>
               <span className="ssr-console-section-kicker">{coverageShifted ? 'Forecast coverage' : 'Travel window'}</span>
@@ -815,6 +816,7 @@ export function ReportConsole({
             className="ssr-console-window-band"
             style={{ gridTemplateColumns: `repeat(${travelWindowRows.length}, minmax(44px, 1fr))` }}
             role="img"
+            tabIndex={0}
             aria-label={`${travelWindowInsights.passHours} of ${travelWindowRows.length} forecast hours stay within your limits.`}
           >
             {travelWindowRows.map((row, index) => {
@@ -836,7 +838,7 @@ export function ReportConsole({
               <TriangleAlert size={13} aria-hidden /> Available rows run {coverageStartLabel}–{coverageEndLabel}; the plan starts at {plannedStartLabel}.
             </p>
           )}
-        </section>
+        </div>
       )}
 
       <section className="ssr-console-mod ssr-console-kpis" aria-label="Key condition readings">
@@ -844,43 +846,44 @@ export function ReportConsole({
           <span>Conditions at a glance</span>
           <span className="ssr-console-h-meta">Select any card for detail</span>
         </div>
-        <ul className="ssr-console-kpi-list">
+        <div className="ssr-console-kpi-list" role="group" aria-label="Condition readings">
           {kpis.map((kpi) => {
             const Icon = kpi.icon as (props: { size?: number; 'aria-hidden'?: boolean }) => ReactNode;
             return (
-              <li key={kpi.key} className="ssr-console-kpi ssr-console-click" {...detailHandlers(kpi.detailKey, kpi.detailTitle)}>
+              <button type="button" key={kpi.key} className="ssr-console-kpi ssr-console-click" {...detailHandlers(kpi.detailKey, kpi.detailTitle)}>
                 <span className={`ssr-console-kpi-icon ${ledTone(kpi.tone)}`} aria-hidden><Icon size={18} aria-hidden /></span>
                 <span className="ssr-console-kpi-label">{kpi.label}</span>
                 <span className="ssr-console-kpi-value">{kpi.value}</span>
                 {kpi.sub && <span className="ssr-console-kpi-sub">{kpi.sub}</span>}
-              </li>
+              </button>
             );
           })}
-        </ul>
+        </div>
       </section>
 
-      <dl className="ssr-console-foot" aria-label="Additional readings">
+      <div className="ssr-console-foot" role="group" aria-label="Additional readings">
         {facts.map((fact) => (
-          <div
+          <button
+            type="button"
             key={fact.label}
-            className={`ssr-console-fact${fact.detailKey ? ' ssr-console-click' : ''}`}
-            {...(fact.detailKey ? detailHandlers(fact.detailKey, fact.detailTitle || fact.label) : {})}
+            className="ssr-console-fact ssr-console-click"
+            {...detailHandlers(fact.detailKey || 'decision', fact.detailTitle || fact.label)}
           >
             <i className={`ssr-console-led-dot ${ledTone(fact.tone)}`} />
             <span>
-              <dt>{fact.label}</dt>
-              <dd>{fact.value}</dd>
+              <span className="ssr-console-fact-label">{fact.label}</span>
+              <span className="ssr-console-fact-value">{fact.value}</span>
             </span>
-          </div>
+          </button>
         ))}
         <div className="ssr-console-fact ssr-console-fact-note">
           <TriangleAlert size={12} aria-hidden />
           <span>
-            <dt>Reminder</dt>
-            <dd>Point-in-time snapshot — recheck official sources before departure.</dd>
+            <span className="ssr-console-fact-label">Reminder</span>
+            <span className="ssr-console-fact-value">Point-in-time snapshot — recheck official sources before departure.</span>
           </span>
         </div>
-      </dl>
+      </div>
 
     </div>
     {detailView}

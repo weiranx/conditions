@@ -23,13 +23,18 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
     <section className={`field-verdict is-${tone}`} aria-labelledby="field-verdict-title">
       <div className="field-verdict-number">
         <span className="field-kicker">Safety score</span>
-        <strong>{Number.isFinite(data.safety.score) ? Math.round(data.safety.score) : '—'}<small>/100</small></strong>
+        <strong>{Number.isFinite(data.safety.score) ? Number(data.safety.score.toFixed(1)) : '—'}<small>/100</small></strong>
         <span>{data.safety.tier || 'Forecast assessment'}</span>
       </div>
       <div className="field-verdict-story">
-        <span className={`field-badge is-${tone}`}>{decision.level}</span>
+        <span className="report-decision-label">Trip decision</span><span className={`field-badge is-${tone}`}>{decision.level}</span>
         <h2 id="field-verdict-title">{decision.headline}</h2>
         <p className="report-decision-reason">{reason}</p>
+      </div>
+      <div className="field-verdict-aside">
+        <span className="field-kicker">Evidence confidence</span>
+        <strong>{Number.isFinite(data.safety.confidence) ? `${Math.round(data.safety.confidence!)}%` : 'Unknown'}</strong>
+        <button onClick={onSources}>Checks &amp; sources<ArrowRight size={14} /></button>
       </div>
       {(freshnessWarning || warnings.length > 0 || missing.length > 0) && (
         <div className="report-verdict-warnings" aria-label="Warnings and evidence gaps">
@@ -42,11 +47,7 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
           {missing.length > 0 && <p>{missing.map((signal) => signal.title).join(' · ')}. Missing feeds cannot confirm clear conditions.</p>}
         </div>
       )}
-      <div className="field-verdict-aside">
-        <span className="field-kicker">Evidence confidence</span>
-        <strong>{Number.isFinite(data.safety.confidence) ? `${Math.round(data.safety.confidence!)}%` : 'Unknown'}</strong>
-        <button onClick={onSources}>Checks &amp; sources<ArrowRight size={14} /></button>
-      </div>
+
     </section>
   );
 }

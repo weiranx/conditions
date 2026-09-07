@@ -11,10 +11,11 @@
 .ssr-view-toggle {
   display: inline-flex;
   gap: 2px;
-  padding: 3px;
+  padding: 4px;
   border: 1px solid var(--ssr-line);
   border-radius: 999px;
-  background: var(--ssr-surface-2);
+  background: color-mix(in oklch, var(--ssr-surface-2) 88%, transparent);
+  box-shadow: inset 0 1px color-mix(in oklch, white 44%, transparent);
 }
 
 .ssr-view-toggle button {
@@ -31,10 +32,11 @@
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 100ms ease;
 }
 
 .ssr-view-toggle button:hover { color: var(--ssr-text); }
+.ssr-view-toggle button:active { transform: scale(.97); }
 
 .ssr-view-toggle button.active {
   background: var(--ssr-surface);
@@ -63,24 +65,24 @@
 .ssr-report.ssr-dashboard {
   overflow-anchor: none;
   --console-mono: var(--d-mono);
-  --console-canvas: #f1f4ef;
-  --console-grid-line: rgba(45, 80, 57, 0.055);
-  --console-panel: #fcfdfb;
-  --console-soft: #f0f4ef;
-  --console-titlebar: #edf2ec;
-  --console-line: #d8e0d7;
-  --console-line-strong: #b7c5b9;
-  --console-ink: #18231c;
-  --console-ink-2: #4d5e52;
-  --console-ink-3: #78867c;
+  --console-canvas: #eef3ed;
+  --console-grid-line: rgba(45, 80, 57, 0.06);
+  --console-panel: #fdfefc;
+  --console-soft: #f2f6f1;
+  --console-titlebar: #eaf1e9;
+  --console-line: #d4ded4;
+  --console-line-strong: #aebfb1;
+  --console-ink: #142019;
+  --console-ink-2: #46584c;
+  --console-ink-3: #718078;
   --console-accent: #24734a;
   --console-bar-bg: #173525;
   --console-bar-ink: #f3f8f3;
-  --console-bar-ink-2: #b8cbbd;
+  --console-bar-ink-2: #c1d2c5;
   --console-led-ok: #218653;
   --console-led-warn: #b66f12;
   --console-led-bad: #c94f49;
-  --console-shadow: rgba(24, 49, 32, 0.07);
+  --console-shadow: rgba(24, 49, 32, 0.105);
 
   --ssr-surface: var(--console-panel);
   --ssr-surface-2: var(--console-titlebar);
@@ -105,25 +107,28 @@
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  padding: 15px;
+  gap: 14px;
+  padding: 17px;
   border: 1px solid var(--console-line);
-  border-radius: 20px;
+  border-radius: 26px;
   background:
-    radial-gradient(circle at 5% 0%, rgba(79, 130, 92, 0.09), transparent 28%),
+    radial-gradient(ellipse 46rem 22rem at -4rem -9rem, rgba(71, 129, 88, 0.14), transparent 68%),
+    radial-gradient(circle at 102% 46%, rgba(191, 128, 55, 0.055), transparent 22rem),
+    linear-gradient(145deg, rgba(255, 255, 255, .4), transparent 32%),
     var(--console-canvas);
+  box-shadow: 0 24px 70px -54px rgba(13, 45, 25, .55), inset 0 1px rgba(255, 255, 255, .8);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 html[data-theme="dark"] .ssr-report.ssr-dashboard {
-  --console-canvas: #101711;
+  --console-canvas: #0e1710;
   --console-grid-line: rgba(140, 178, 147, 0.045);
-  --console-panel: #172019;
-  --console-soft: #1e2921;
-  --console-titlebar: #202c23;
-  --console-line: #303d33;
-  --console-line-strong: #4a5b4e;
+  --console-panel: #17211a;
+  --console-soft: #1d2920;
+  --console-titlebar: #202e24;
+  --console-line: #314036;
+  --console-line-strong: #526457;
   --console-ink: #ecf2ed;
   --console-ink-2: #b3c1b6;
   --console-ink-3: #829087;
@@ -135,6 +140,12 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   --console-led-warn: #e3a044;
   --console-led-bad: #ed7169;
   --console-shadow: rgba(0, 0, 0, 0.22);
+  background:
+    radial-gradient(ellipse 46rem 22rem at -4rem -9rem, rgba(91, 154, 109, .1), transparent 68%),
+    radial-gradient(circle at 102% 46%, rgba(191, 128, 55, .035), transparent 22rem),
+    linear-gradient(145deg, rgba(255, 255, 255, .025), transparent 32%),
+    var(--console-canvas);
+  box-shadow: 0 26px 72px -50px rgba(0, 0, 0, .72), inset 0 1px rgba(255, 255, 255, .06);
 }
 
 /* In dashboard mode the classic report tree is screen-hidden. */
@@ -144,20 +155,37 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
    Console title bar — replaces the classic report header.
    --------------------------------------------------------- */
 .ssr-console-bar {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 14px 20px;
-  padding: 18px 20px;
-  border: 1px solid var(--console-bar-bg);
-  border-radius: 16px;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in oklch, var(--console-accent) 30%, var(--console-bar-bg));
+  border-radius: 21px;
   background:
-    radial-gradient(circle at 8% -40%, rgba(255, 255, 255, 0.18), transparent 46%),
-    linear-gradient(110deg, color-mix(in oklch, var(--console-accent) 16%, var(--console-bar-bg)), var(--console-bar-bg) 55%),
+    radial-gradient(circle at 7% -35%, rgba(255, 255, 255, 0.2), transparent 44%),
+    linear-gradient(112deg, color-mix(in oklch, var(--console-accent) 22%, var(--console-bar-bg)), var(--console-bar-bg) 54%, color-mix(in oklch, black 6%, var(--console-bar-bg))),
     var(--console-bar-bg);
   color: var(--console-bar-ink);
-  box-shadow: 0 12px 28px color-mix(in oklch, var(--console-shadow) 80%, transparent);
+  box-shadow: 0 18px 38px -24px color-mix(in oklch, var(--console-bar-bg) 75%, transparent), inset 0 1px rgba(255, 255, 255, .1);
+}
+
+.ssr-console-bar::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -8.5rem;
+  right: -3rem;
+  width: 24rem;
+  height: 24rem;
+  border: 1px solid rgba(215, 237, 220, .07);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2.75rem rgba(215, 237, 220, .035), 0 0 0 5.5rem rgba(215, 237, 220, .025);
+  pointer-events: none;
 }
 
 .ssr-console-id {
@@ -173,7 +201,7 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   height: 36px;
   border-radius: 999px;
   background: linear-gradient(180deg, var(--console-led-ok), color-mix(in oklch, var(--console-led-ok) 35%, transparent));
-  box-shadow: 0 0 18px color-mix(in oklch, var(--console-led-ok) 35%, transparent);
+  box-shadow: 0 0 18px color-mix(in oklch, var(--console-led-ok) 42%, transparent), inset 0 1px rgba(255, 255, 255, .22);
 }
 
 .ssr-console-led.warn {
@@ -241,10 +269,11 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   gap: 8px;
   min-width: max-content;
   padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
   color: var(--console-bar-ink);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .07);
 }
 
 .ssr-console-status > i {
@@ -298,8 +327,9 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   display: flex;
   gap: 0;
   margin: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
   overflow: hidden;
 }
 
@@ -307,7 +337,7 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
   display: grid;
   gap: 2px;
   padding: 8px 13px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .ssr-console-side .ssr-report-context-facts > div + div {
@@ -339,8 +369,9 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
 
 /* Toggle sits on the dark bar. */
 .ssr-console-bar .ssr-view-toggle {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06);
 }
 
 .ssr-console-bar .ssr-view-toggle button { color: var(--console-bar-ink-2); }
@@ -349,7 +380,63 @@ html[data-theme="dark"] .ssr-report.ssr-dashboard {
 .ssr-console-bar .ssr-view-toggle button.active {
   background: var(--console-bar-ink);
   color: var(--console-bar-bg);
-  box-shadow: none;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .18);
+}
+
+@media (max-width: 700px) {
+  .ssr-report.ssr-dashboard {
+    gap: 10px;
+    padding: 9px;
+    border-radius: 21px;
+  }
+
+  .ssr-console-bar {
+    padding: 18px 16px;
+    border-radius: 17px;
+  }
+
+  .ssr-console-name { font-size: clamp(22px, 7vw, 28px); }
+
+  .ssr-console-side .ssr-report-context-facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .ssr-console-side .ssr-report-context-facts > div {
+    min-width: 0;
+    padding: 9px 10px;
+  }
+
+  .ssr-console-side .ssr-report-context-facts dd {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ssr-view-toggle,
+  .ssr-console-bar .ssr-view-toggle,
+  .ssr-console-side .ssr-report-context-facts,
+  .ssr-console-status {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .ssr-report.ssr-dashboard {
+    border-color: var(--console-line-strong);
+    background: var(--console-canvas);
+    box-shadow: none;
+  }
+
+  .ssr-console-bar::after { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssr-view-toggle button { transition: none; }
+  .ssr-view-toggle button:active { transform: none; }
 }
 
 } /* end @media screen */

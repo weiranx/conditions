@@ -1247,7 +1247,7 @@ function RedesignViewComponent(props: PlannerViewProps & { aiAvailability: AiFea
         </div>
       </div>
       {reportLayout === 'dashboard' ? (
-        <header className="ssr-console-bar" aria-label="Report console">
+        <header className="ssr-console-bar" role="group" aria-label="Report console">
           <div className="ssr-console-id">
             <span className={`ssr-console-led ${reportDecisionTone}`} aria-hidden="true" />
             <div className="ssr-console-id-copy">

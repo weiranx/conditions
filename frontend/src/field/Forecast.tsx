@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import "./forecast.css";
+import { buildReportWeatherRows } from "./report-weather";
 import { weatherAppearance } from "./weather-appearance";
 import {
   buildWeatherTrendRows,
@@ -30,7 +31,6 @@ import type { PersistedReport } from "../app/report-storage";
 import type { WeatherTrendPoint } from "../app/types";
 import {
   buildTravelWindowInsights,
-  buildTravelWindowRows,
 } from "../app/travel-window";
 import {
   formatClockForStyle,
@@ -75,29 +75,7 @@ export function Forecast({ report }: { report: PersistedReport }) {
     0,
     report.plan.travelWindowHours,
   );
-  const rows = buildTravelWindowRows(trend, preferences, {
-    snowDepthIn:
-      report.safetyData.terrainCondition?.signals?.maxSnowDepthIn ??
-      report.safetyData.snowpack?.snotel?.snowDepthIn ??
-      report.safetyData.snowpack?.nohrsc?.snowDepthIn ??
-      null,
-  }).map((row, index) => {
-    const point = trend[index];
-    const complete = [
-      point.temp,
-      point.wind,
-      point.gust,
-      point.precipChance,
-    ].every((value) => typeof value === "number" && Number.isFinite(value));
-    return complete
-      ? row
-      : {
-          ...row,
-          pass: false,
-          reasonSummary:
-            "Hourly evidence is incomplete. Verify the missing weather observations.",
-        };
-  });
+  const rows = buildReportWeatherRows(report.safetyData, preferences, report.plan.travelWindowHours);
   const insight = buildTravelWindowInsights(rows, preferences.timeStyle);
   const selectedIndex = Math.min(hour, Math.max(0, trend.length - 1));
   const selected = trend[selectedIndex];

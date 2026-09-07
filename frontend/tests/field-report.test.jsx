@@ -404,3 +404,79 @@ test('verdict respects disabled field observations and does not invent field war
     preferences={preferences} onSources={() => {}} />);
   assert.doesNotMatch(html, /Lightning detected|Reported field warnings|Warnings and evidence gaps/);
 });
+
+import { ScoreExplanation } from '../src/field/ScoreExplanation';
+import { ReportSummary } from '../src/field/ReportSummary';
+import { buildReportWeatherRows } from '../src/field/report-weather';
+
+test('score explanation preserves canonical fractional scores, safeguards, and separate confidence reasons', () => {
+  const html = renderToStaticMarkup(<ScoreExplanation safety={{
+    score: 46.3, confidence: 64, scoreVersion: '2.8.0', tier: 'High',
+    groupImpacts: { airQuality: { effective: 46, floor: 46, floorReason: 'US AQI 220' }, weather: { effective: 7.7 } },
+    confidenceReasons: ['Complete hourly weather coverage for 4/8 travel-window hours.'],
+    factors: [{ hazard: 'Wind', impact: 8, message: 'Wind increases late.', source: 'Hourly forecast' }],
+  }} />);
+  assert.match(html, /46\.3/);
+  assert.match(html, /Air quality/);
+  assert.match(html, /−46 pts/);
+  assert.match(html, /Hazard safeguard:/);
+  assert.match(html, /US AQI 220/);
+  assert.match(html, /4\/8 travel-window hours/);
+  assert.match(html, /Wind increases late/);
+  assert.doesNotMatch(html, /airQuality|\+8|NaN|Infinity/);
+  assert.ok(html.indexOf('Air quality') < html.indexOf('Weather &amp; exposure'));
+});
+
+test('older score reports use deduction aliases and missing evidence is explicit', () => {
+  const html = renderToStaticMarkup(<ScoreExplanation safety={{ score: 80, groupImpacts: { weather: { capped: 20 } }, explanations: ['Legacy forecast explanation.'] }} />);
+  assert.match(html, /−20 pts/);
+  assert.match(html, /Unknown/);
+  assert.match(html, /Legacy forecast explanation/);
+  assert.doesNotMatch(html, /Hazard safeguard|undefined|NaN/);
+  const empty = renderToStaticMarkup(<ScoreExplanation safety={{ score: 100 }} />);
+  assert.match(empty, /No group deductions were supplied/);
+  assert.doesNotMatch(empty, /No hazards/);
+});
+
+function summaryWorkspace(data, overrides = {}) {
+  return {
+    safetyData: data, preferences, travelWindowHours: 3,
+    formatWindDisplay: (v) => v == null ? '—' : `${v} mph`,
+    formatClockForStyle: (v) => v || '—',
+    expectedRainWindowDisplay: '0.1 in', expectedTravelWindowHours: 3,
+    returnMinutes: 1260, sunsetMinutesForPlan: 1200,
+    returnTimeDisplay: '21:00', returnExtendsPastMidnight: false,
+    displayStartTime: '18:00', ...overrides,
+  };
+}
+test('summary distinguishes missing hours from passing hours and highlights a return after sunset', () => {
+  const data = makeReport({}, 'clear');
+  data.weather.trend = [weatherHour, { ...weatherHour, time: '10:00', temp: null }];
+  data.weather.windGust = 40;
+  data.terrainCondition = undefined;
+  data.snowpack = undefined;
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data)} onOpen={() => {}} />);
+  assert.match(html, /1 of 3 hours within limits/);
+  assert.match(html, /1 of 3 hours have complete weather readings/);
+  assert.match(html, /Return is after sunset/);
+  assert.match(html, /40 mph/);
+  assert.equal((html.match(/class="is-missing"/g) || []).length, 2);
+  assert.doesNotMatch(html, /NaN|Infinity/);
+});
+test('summary does not imply clear weather when the hourly forecast is absent', () => {
+  const data = makeReport({}, 'missing');
+  data.weather.trend = [];
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data)} onOpen={() => {}} />);
+  assert.match(html, /Hourly evidence unavailable/);
+  assert.doesNotMatch(html, /hours within limits/);
+});
+test('report weather coverage preserves zero measurements and excludes hazards outside the window', () => {
+  const data = makeReport({}, 'clear');
+  data.weather.trend = [{ ...weatherHour, precipChance: 0 }, { ...weatherHour, gust: 80 }];
+  data.terrainCondition = undefined;
+  data.snowpack = undefined;
+  const rows = buildReportWeatherRows(data, preferences, 1);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].complete, true);
+  assert.equal(rows[0].pass, true);
+});

@@ -6,7 +6,7 @@ import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { compareReports, type ReportComparison } from "../app/report-changes";
 import { getReportComparisonBaseline } from "../lib/saved-reports";
 import { parsePersistedReport } from "../app/report-storage";
-import { AccumulationBars, ConditionScale } from "./ConditionCharts";
+import { ScoreExplanation } from "./ScoreExplanation";
 import { Details, SourceLink } from "./Details";
 import { dateLabel } from "./data";
 
@@ -56,15 +56,15 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
         </div>
         <div>
           <strong>
-            {w.safetyData?.safety.confidence ?? "—"}
-            <small>%</small>
+            {typeof w.safetyData?.safety.confidence === "number" && Number.isFinite(w.safetyData.safety.confidence)
+              ? `${Math.round(w.safetyData.safety.confidence)}%` : "—"}
           </strong>
           <span>evidence confidence</span>
         </div>
       </div>
       <div className="field-checks">
-        {w.decision?.checks.map((check, i) => (
-          <details key={check.key || i}>
+        {[...(w.decision?.checks || [])].sort((a, b) => Number(a.ok) - Number(b.ok)).map((check, i) => (
+          <details key={check.key || i} open={!check.ok}>
             <summary>
               <span className={check.ok ? "field-pass" : "field-fail"}>
                 {check.ok ? <Check size={17} /> : <TriangleAlert size={17} />}
@@ -81,49 +81,8 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
           </details>
         ))}
       </div>
-      {flags.scoreBreakdown && (
-        <section className="field-panel field-sources-score">
-          <h2>Score and confidence</h2>
-          <ConditionScale
-            label="Safety score"
-            value={w.safetyData?.safety.score}
-            maximum={100}
-          />
-          <AccumulationBars
-            label="Effective score deductions"
-            rows={Object.entries(w.safetyData?.safety.groupImpacts || {}).map(
-              ([label, impact]) => ({
-                label,
-                value: impact.effective ?? impact.capped ?? null,
-                display: `${impact.effective ?? impact.capped ?? "—"} pts`,
-              }),
-            )}
-          />
-          <details className="field-detail-disclosure">
-            <summary>How the score is calculated</summary>
-            <p>
-              Overlapping hazard adjustments mean individual factors may not sum
-              to the final score.
-            </p>
-            <ul className="field-prose-list">
-              {w.safetyData?.safety.explanations?.map((text, i) => (
-                <li key={i}>{w.localizeUnitText(text)}</li>
-              ))}
-            </ul>
-            <Details
-              title="Raw and effective deductions"
-              value={w.safetyData?.safety.groupImpacts}
-            />
-          </details>
-          <Details
-            title="Individual factors and confidence reasons"
-            value={{
-              factors: w.safetyData?.safety.factors,
-              confidence: w.safetyData?.safety.confidence,
-              reasons: w.safetyData?.safety.confidenceReasons,
-            }}
-          />
-        </section>
+      {flags.scoreBreakdown && w.safetyData && (
+        <ScoreExplanation safety={w.safetyData.safety} localize={w.localizeUnitText} />
       )}
       {comparison && (
         <section className="field-panel">
