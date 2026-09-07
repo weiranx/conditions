@@ -19,6 +19,7 @@ import {
   Sunrise,
   TriangleAlert,
 } from "lucide-react";
+import { GearActions } from "./GearActions";
 import { ReportVerdict } from "./ReportVerdict";
 import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
@@ -90,7 +91,6 @@ export function Report({
 }) {
   const [chapter, setChapter] = useState<Chapter>(chapterFromHash);
   const [fullReport, setFullReport] = useState(false);
-  const [packed, setPacked] = useState<Set<string>>(() => new Set());
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
@@ -356,56 +356,16 @@ export function Report({
             )}
             {(fullReport || activeChapter === "route") &&
               flags.routeAnalysis && <Route workspace={w} />}
-            {(fullReport || activeChapter === "gear") &&
-              flags.gearRecommendations && (
-                <section>
-                  <div className="field-chapter-heading">
-                    <h2>Gear and field actions</h2>
-                    <p>
-                      Turn the report’s main findings into a practical
-                      preparation list.
-                    </p>
-                  </div>
-                  {[...decision.blockers, ...decision.cautions].map(
-                    (item, i) => (
-                      <div className="field-pack-caution" key={i}>
-                        <TriangleAlert size={18} />
-                        <p>{item}</p>
-                      </div>
-                    ),
-                  )}
-                  <div className="field-packing-list">
-                    {w.gearRecommendations.map((gear, i) => {
-                      const key = `${gear.title}-${i}`;
-                      return (
-                        <label key={key}>
-                          <input
-                            type="checkbox"
-                            checked={packed.has(key)}
-                            onChange={(e) =>
-                              setPacked((current) => {
-                                const next = new Set(current);
-                                if (e.target.checked) next.add(key);
-                                else next.delete(key);
-                                return next;
-                              })
-                            }
-                          />
-                          <span>
-                            <small>{gear.category}</small>
-                            <strong>{gear.title}</strong>
-                            <small>{gear.detail}</small>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="field-muted">
-                    Checked items are kept for this report session. Carry your
-                    normal essentials in addition to these suggestions.
-                  </p>
-                </section>
-              )}
+            {flags.gearRecommendations && (
+              <GearActions
+                key={JSON.stringify([report.plan, data.generatedAt, data.gear])}
+                hidden={!fullReport && activeChapter !== "gear"}
+                recommendations={w.gearRecommendations}
+                decision={decision}
+                actionLine={w.decisionActionLine}
+                onSources={() => selectChapter("sources")}
+              />
+            )}
           </Suspense>
         </div>
       </div>
