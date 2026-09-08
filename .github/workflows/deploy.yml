@@ -41,7 +41,7 @@ jobs:
           host: ${{ secrets.DO_SSH_HOST }}
           username: ${{ secrets.DO_SSH_USER }}
           key: ${{ secrets.DO_SSH_KEY }}
-          version: v1.8.4
+          version: 1.8.4 # ssh-action adds the release tag's v prefix.
           timeout: 30s
           command_timeout: 20m
           envs: DEPLOY_SHA
