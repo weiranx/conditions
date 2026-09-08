@@ -39,6 +39,31 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
     }
   }, []);
 
+  // Manual saves share the same generation boundary as automatic saves.
+  const saveReportSnapshot = useCallback(async (
+    report: PersistedReport,
+    onSaved: (saved: Awaited<ReturnType<typeof createSavedReport>>) => void,
+  ) => {
+    if (reportSaveIntentRef.current === "saving") return null;
+    const generation = reportGenerationRef.current;
+    reportSaveIntentRef.current = "saving";
+    try {
+      const saved = await createSavedReport(report);
+      onSaved(saved);
+      if (generation !== reportGenerationRef.current) return null;
+      lastSavedReportSnapshotRef.current = JSON.stringify(report);
+      reportSaveSourceDataRef.current = null;
+      reportSaveIntentRef.current = "browser-only";
+      setActiveSavedReportId(saved.id);
+      setActiveSavedReportShareToken(saved.shareToken);
+      return saved;
+    } catch (error) {
+      if (generation !== reportGenerationRef.current) return null;
+      reportSaveIntentRef.current = "browser-only";
+      throw error;
+    }
+  }, []);
+
   const beginSavedReportGeneration = useCallback(() => {
     const priorSafetyData = safetyData;
     resetSavedReportTracking();
@@ -62,7 +87,7 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
   return {
     activeSavedReportId, activeSavedReportShareToken, reportGenerationPending,
     setReportGenerationPending, resetSavedReportTracking, beginSavedReportGeneration,
-    setActiveSavedReportId, setActiveSavedReportShareToken,
+    setActiveSavedReportId, setActiveSavedReportShareToken, saveReportSnapshot,
     reportGenerationRef, reportSaveIntentRef, reportSaveSourceDataRef,
     reportSyncTimeoutRef, reportUpdateChainRef, lastSavedReportSnapshotRef,
   };

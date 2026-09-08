@@ -183,3 +183,29 @@ test("multi-day responses use production forecast-period timestamp fields", asyn
     assert.equal(day.forecast.selectedEndTime, day.weather.forecastEndTime);
   }
 });
+
+test('history endpoint filters all AI sections and pages beyond 100 without repeats', async () => {
+  const api = createMockApi();
+  for (let i = 0; i < 105; i++) {
+    const report = snapshot();
+    report.plan.objectiveName = `History ${String(i).padStart(3, '0')}`;
+    if (i === 0) report.ai.reportChatMessages = [{ role: 'user', text: 'Saved question' }];
+    if (i === 1) report.ai.snowVisionAnalysis = 'Snow analysis';
+    if (i === 2) report.route.routeAnalysis = { analysisSource: 'ai' };
+    if (i === 3) report.ai.aiBriefNarrative = 'Brief';
+    await api.handle('/api/account/reports', 'POST', { report });
+  }
+  const first = (await api.handle('/api/account/reports')).payload;
+  assert.equal(first.reports.length, 100);
+  assert.ok(first.nextCursor);
+  const second = (await api.handle(`/api/account/reports?cursor=${first.nextCursor}`)).payload;
+  assert.equal(second.reports.length, 5);
+  assert.equal(second.nextCursor, null);
+  assert.equal(new Set([...first.reports, ...second.reports].map(report => report.id)).size, 105);
+  assert.ok(first.reports.every(report => report.generatedAt));
+  const matches = (await api.handle('/api/account/reports?q=History%2000&aiOnly=true')).payload;
+  assert.equal(matches.reports.length, 4);
+  assert.ok(matches.reports.every(report => report.hasAi));
+  const empty = (await api.handle('/api/account/reports?q=NONEXISTENT&aiOnly=true')).payload;
+  assert.deepEqual(empty, {reports:[], nextCursor:null});
+});

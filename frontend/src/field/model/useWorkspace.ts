@@ -7,6 +7,7 @@ import React, {
   useRef,
 } from "react";
 import L from "leaflet";
+import { buildPlannedReportWeatherRows } from "../report-weather";
 import {
   DATE_FMT,
   GUST_INCREASE_MPH_PER_1000FT,
@@ -115,7 +116,6 @@ import {
   pillClassForLevel,
 } from "../../app/risk-display";
 import {
-  buildTravelWindowRows,
   formatTravelWindowSpan,
   buildTravelWindowInsights,
   buildTrendWindowFromStart,
@@ -501,7 +501,7 @@ export function useWorkspace() {
   const {
     activeSavedReportId, activeSavedReportShareToken, reportGenerationPending,
     setActiveSavedReportId, setActiveSavedReportShareToken, reportSaveIntentRef,
-    resetSavedReportTracking, beginSavedReportGeneration,
+    resetSavedReportTracking, beginSavedReportGeneration, saveReportSnapshot,
   } = savedReportSession;
   const beginReportGeneration = useCallback(() => {
     beginSavedReportGeneration();
@@ -2054,9 +2054,9 @@ export function useWorkspace() {
   const travelWindowRows = useMemo(
     () =>
       safetyData
-        ? buildTravelWindowRows(trendWindow, preferences, travelWindowContext)
+        ? buildPlannedReportWeatherRows(safetyData, preferences, travelWindowHours, { start: alpineStartTime, date: forecastDate })
         : [],
-    [safetyData, trendWindow, preferences, travelWindowContext],
+    [safetyData, preferences, travelWindowHours, alpineStartTime, forecastDate],
   );
   const travelWindowInsights = buildTravelWindowInsights(
     travelWindowRows,
@@ -2966,6 +2966,7 @@ export function useWorkspace() {
     setRestoredReportSource,
     activeSavedReportId,
     activeSavedReportShareToken,
+    saveReportSnapshot,
     reportGenerationPending,
     resetSavedReportTracking,
     beginReportGeneration,

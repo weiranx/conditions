@@ -19,7 +19,6 @@ import { useWorkspace } from "./model/useWorkspace";
 import { useAccount } from "../hooks/useAccount";
 import { AiAccessContext } from "../contexts/ai-access";
 import {
-  createSavedReport,
   buildSavedReportShareUrl,
   sendReportEmail,
 } from "../lib/saved-reports";
@@ -134,16 +133,11 @@ export default function FieldApp() {
           ? w.activeSavedReportShareToken
           : w.sharedReportToken || w.activeSavedReportShareToken;
         if (!token) {
-          const saved = await createSavedReport(report);
+          const saved = await w.saveReportSnapshot(report, (result) => {
+            account.syncGeneratedReportUsage(account.user!.id, result.reportCount, result.reportUsage);
+          });
+          if (!saved) return;
           token = saved.shareToken;
-          w.setActiveSavedReportId(saved.id);
-          w.setActiveSavedReportShareToken(token);
-          w.reportSaveIntentRef.current = "browser-only";
-          account.syncGeneratedReportUsage(
-            account.user.id,
-            saved.reportCount,
-            saved.reportUsage,
-          );
         }
         if (kind === "email") setFeedback(await sendReportEmail(report, token));
         else {

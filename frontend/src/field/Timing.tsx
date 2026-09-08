@@ -301,9 +301,9 @@ export function Timing({ workspace: w }: { workspace: Workspace }) {
                     <th>
                       {w.formatClockForStyle(row.time, w.preferences.timeStyle)}
                     </th>
-                    <td>{w.formatTempDisplay(row.feelsLike)}</td>
-                    <td>{w.formatWindDisplay(row.gust)}</td>
-                    <td>{row.precipChance}%</td>
+                    <td>{w.formatTempDisplay(row.complete ? row.feelsLike : null)}</td>
+                    <td>{w.formatWindDisplay(row.complete ? row.gust : null)}</td>
+                    <td>{row.complete ? `${row.precipChance}%` : "Unavailable"}</td>
                     <td>
                       {row.pass ? "Within limits" : "Review"}
                       <small>{row.reasonSummary}</small>

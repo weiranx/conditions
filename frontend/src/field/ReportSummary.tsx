@@ -1,6 +1,6 @@
 import { ArrowUpRight, Clock3, Droplets, Mountain, Wind } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
-import { buildReportWeatherRows } from "./report-weather";
+import { buildPlannedReportWeatherRows } from "./report-weather";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 
 export function ReportSummary({
@@ -20,7 +20,7 @@ export function ReportSummary({
   const peakGust = knownGusts.length ? Math.max(...knownGusts) : null;
   const returnAfterSunset = flags.daylightTimeline && w.returnMinutes != null && w.sunsetMinutesForPlan != null
     && w.returnMinutes > w.sunsetMinutesForPlan;
-  const hours = buildReportWeatherRows(data, w.preferences, w.travelWindowHours);
+  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate });
   const completeHours = hours.filter((hour) => hour.complete);
   const withinLimits = completeHours.filter((hour) => hour.pass).length;
   const coverageMissing = completeHours.length < w.travelWindowHours;
@@ -95,7 +95,7 @@ export function ReportSummary({
       </div>
       <button className={`report-window-summary${coverageMissing || withinLimits < hours.length ? " needs-review" : ""}`} onClick={() => onOpen("timing")}>
         <span className="report-summary-label"><Clock3 size={17} aria-hidden="true" /> Travel window <ArrowUpRight size={14} aria-hidden="true" /></span>
-        <strong>{hours.length ? `${withinLimits} of ${w.travelWindowHours} hours within limits` : "Hourly evidence unavailable"}</strong>
+        <strong>{(data.weather.trend || []).length ? `${withinLimits} of ${w.travelWindowHours} hours within limits` : "Hourly evidence unavailable"}</strong>
         <span className="report-window-segments" aria-hidden="true">
           {Array.from({ length: w.travelWindowHours }, (_, index) => {
             const hour = hours[index];

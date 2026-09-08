@@ -153,7 +153,9 @@ export function createMockApi({ databasePath } = {}) {
       forecastDate: snapshot.plan.forecastDate,
       alpineStartTime: snapshot.plan.alpineStartTime,
       score: snapshot.safetyData.safety.score,
-      hasAi: Boolean(snapshot.ai.aiBriefNarrative),
+      generatedAt: snapshot.safetyData.generatedAt || null,
+      hasAi: Boolean(snapshot.ai?.aiBriefNarrative || snapshot.ai?.snowVisionAnalysis
+        || snapshot.ai?.reportChatMessages?.length || snapshot.route?.routeAnalysis?.analysisSource === "ai"),
     };
   };
   async function handle(path, method = "GET", body = {}) {

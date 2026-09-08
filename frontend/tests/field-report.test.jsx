@@ -407,7 +407,8 @@ test('verdict respects disabled field observations and does not invent field war
 
 import { ScoreExplanation } from '../src/field/ScoreExplanation';
 import { ReportSummary } from '../src/field/ReportSummary';
-import { buildReportWeatherRows } from '../src/field/report-weather';
+import { buildReportWeatherRows, buildPlannedReportWeatherRows } from '../src/field/report-weather';
+import { buildTravelWindowInsights } from '../src/app/travel-window';
 
 test('score explanation preserves canonical fractional scores, safeguards, and separate confidence reasons', () => {
   const html = renderToStaticMarkup(<ScoreExplanation safety={{
@@ -440,7 +441,7 @@ test('older score reports use deduction aliases and missing evidence is explicit
 
 function summaryWorkspace(data, overrides = {}) {
   return {
-    safetyData: data, preferences, travelWindowHours: 3,
+    safetyData: data, preferences, travelWindowHours: 3, alpineStartTime: "09:00", forecastDate: "2026-09-06",
     formatWindDisplay: (v) => v == null ? '—' : `${v} mph`,
     formatClockForStyle: (v) => v || '—',
     expectedRainWindowDisplay: '0.1 in', expectedTravelWindowHours: 3,
@@ -479,4 +480,65 @@ test('report weather coverage preserves zero measurements and excludes hazards o
   assert.equal(rows.length, 1);
   assert.equal(rows[0].complete, true);
   assert.equal(rows[0].pass, true);
+});
+
+function weatherData(trend) { return { weather: { trend } }; }
+const plannedWindow = { start: '06:00', date: '2026-09-06' };
+test('summary rejects complete forecast readings outside the planned window', () => {
+  const data = weatherData([9, 10, 11].map(hour => ({ ...weatherHour, time: `${hour}:00` })));
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00' })} onOpen={() => {}} />);
+  assert.match(html, /0 of 3 hours within limits/);
+  assert.equal((html.match(/class="is-missing"/g) || []).length, 3);
+});
+
+test('planned weather rows preserve gaps and ignore duplicates and out-of-window hazards', () => {
+  const data = weatherData([6, 6, 8, 9].map(hour => ({ ...weatherHour, time: `${hour}:00`, gust: hour === 9 ? 90 : 5 })));
+  const rows = buildPlannedReportWeatherRows(data, preferences, 3, plannedWindow);
+  assert.deepEqual(rows.map(row => [row.time, row.complete, row.pass]), [
+    ['06:00', true, true], ['07:00', false, false], ['08:00', true, true],
+  ]);
+  assert.match(rows[1].reasonSummary, /No hourly forecast covers/);
+  assert.equal(buildTravelWindowInsights(rows).passHours, 2);
+});
+
+test('Timing and summary both reject missing gust and precipitation but preserve measured zero', () => {
+  const data = weatherData([{ ...weatherHour, time: '06:00', gust: null, precipChance: null },
+    { ...weatherHour, time: '07:00', gust: 0, wind: 0, precipChance: 0 }]);
+  const rows = buildPlannedReportWeatherRows(data, preferences, 2, plannedWindow);
+  assert.deepEqual(rows.map(row => row.pass), [false, true]);
+  assert.equal(buildTravelWindowInsights(rows).passHours, 1);
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00', travelWindowHours: 2 })} onOpen={() => {}} />);
+  assert.match(html, /1 of 2 hours within limits/);
+  assert.match(rows[0].reasonSummary, /incomplete/);
+});
+
+test('planned coverage uses dates and objective timezone across midnight', () => {
+  const data = weatherData([
+    { ...weatherHour, time: '11 PM', timeIso: '2026-09-07T06:00:00Z' },
+    { ...weatherHour, time: '12 AM', timeIso: '2026-09-07T07:00:00Z' },
+    { ...weatherHour, time: '1 AM', timeIso: '2026-09-08T08:00:00Z' },
+  ]);
+  data.weather.timezone = 'America/Los_Angeles';
+  const rows = buildPlannedReportWeatherRows(data, preferences, 3, { ...plannedWindow, start: '23:00' });
+  assert.deepEqual(rows.map(row => [row.time, row.pass]), [['23:00', true], ['00:00', true], ['01:00', false]]);
+});
+
+test('legacy clock labels roll over midnight and fractional starts do not borrow future readings', () => {
+  const data = weatherData(['11 PM', '12 AM', '1 AM'].map(time => ({ ...weatherHour, time })));
+  assert.deepEqual(buildPlannedReportWeatherRows(data, preferences, 3, { ...plannedWindow, start: '23:00' }).map(row => row.pass), [true, true, true]);
+  const later = weatherData(['07:00', '08:00', '09:00'].map(time => ({ ...weatherHour, time })));
+  assert.deepEqual(buildPlannedReportWeatherRows(later, preferences, 3, { ...plannedWindow, start: '06:30' }).map(row => row.pass), [false, true, true]);
+});
+
+test('missing weather does not erase known high-wind warnings', () => {
+  const rows = buildReportWeatherRows(weatherData([{ ...weatherHour, gust: 90, precipChance: null }]), preferences, 1);
+  assert.match(rows[0].reasonSummary, /incomplete/);
+  assert.match(rows[0].reasonSummary, /gust/);
+});
+
+test('missing temperature never invents a freezing reading in the reasons', () => {
+  const rows = buildReportWeatherRows(weatherData([{ ...weatherHour, temp: null }]), preferences, 1);
+  assert.match(rows[0].reasonSummary, /incomplete/);
+  assert.doesNotMatch(rows[0].reasonSummary, /feels|0°F/);
+  assert.deepEqual(rows[0].failedRuleLabels, ['Incomplete hourly evidence']);
 });

@@ -258,3 +258,48 @@ test('multi-day parsing preserves missing readings and genuine zero values', asy
     assert.deepEqual(h.current.tripForecastRows.map(day => day[field]), [null, null, 0], field);
   }
 });
+
+const manualSaveUsage = { usedReports: 1, limitReports: 10, remainingReports: 9, percentUsed: 10, unlimited: false, exhausted: false, tierKey: 'free', periodStart: '2026-09-01', periodEnd: '2026-10-01', resetAt: '2026-10-01' };
+
+for (const transition of ['edit', 'new generation', 'saved history']) {
+  test(`late manual save does not attach after ${transition}`, async t => {
+    const input = { accountLoading: false, accountUserId: 'test-account', safetyData: null };
+    const h = await mountHook(t, useSavedReportSession, input);
+    const data = makeReport(plan, 'clear');
+    const snapshot = buildPersistedReport({ lat: plan.lat, lon: plan.lon, objectiveName: 'Report A', searchQuery: '', forecastDate: plan.date,
+      alpineStartTime: plan.start, targetElevationInput: '', travelWindowHours: 10 }, data, {}, { preferences });
+    let saving;
+    let usageSyncs = 0;
+    await act(async () => { saving = h.current.saveReportSnapshot(snapshot, () => { usageSyncs++; }); });
+    assert.equal(h.requests.length, 1);
+    await act(async () => {
+      if (transition === 'new generation') h.current.beginSavedReportGeneration();
+      else h.current.resetSavedReportTracking();
+      if (transition === 'saved history') { h.current.setActiveSavedReportId('report-B'); h.current.setActiveSavedReportShareToken('token-B'); }
+    });
+    const intent = h.current.reportSaveIntentRef.current;
+    await act(async () => {
+      h.requests[0].respond({ report: { id: 'report-A', shareToken: 'token-A' }, reportCount: 1, reportUsage: manualSaveUsage });
+      assert.equal(await saving, null);
+    });
+    assert.equal(h.current.activeSavedReportId, transition === 'saved history' ? 'report-B' : null);
+    assert.equal(h.current.activeSavedReportShareToken, transition === 'saved history' ? 'token-B' : null);
+    assert.equal(h.current.reportSaveIntentRef.current, intent);
+    assert.equal(usageSyncs, 1);
+  });
+}
+
+test('manual save attaches once when current and can retry an error', async t => {
+  const h = await mountHook(t, useSavedReportSession, { accountLoading: false, accountUserId: 'test-account', safetyData: null });
+  const snapshot = { plan: {}, safetyData: {} };
+  let saving;
+  await act(async () => { saving = h.current.saveReportSnapshot(snapshot, () => {}).catch(error => error); });
+  assert.equal(await h.current.saveReportSnapshot(snapshot, () => {}), null);
+  await act(async () => { h.requests[0].respond({error:'Offline'}, 400); });
+  assert.match((await saving).message, /Offline/);
+  assert.equal(h.current.reportSaveIntentRef.current, 'browser-only');
+  await act(async () => { saving = h.current.saveReportSnapshot(snapshot, () => {}); });
+  await act(async () => { h.requests[1].respond({report:{id:'saved',shareToken:'token'},reportCount:1,reportUsage:manualSaveUsage}); await saving; });
+  assert.equal(h.current.activeSavedReportId, 'saved');
+  assert.equal(h.current.lastSavedReportSnapshotRef.current, JSON.stringify(snapshot));
+});
