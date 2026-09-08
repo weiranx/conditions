@@ -633,6 +633,10 @@ export interface SafetyData {
     scoreVersion?: string;
     score: number | null;
     confidence?: number;
+    confidenceReasons?: string[];
+    coverage?: { requestedHours: number; completeHours: number };
+    weightedScore?: number;
+    adjustments?: Array<{ maximumScore: number; reason: string }>;
     label: 'Excellent' | 'Pleasant' | 'Mixed' | 'Uncomfortable' | 'Harsh' | 'Unknown' | string;
     summary: string;
     factors?: Array<{

@@ -1,4 +1,5 @@
 // Synthetic fixtures, never observations. No external requests or credentials.
+import pleasantnessScoring from "../../backend/src/utils/pleasantness-score.js";
 export const scenarios = [
   "mixed",
   "clear",
@@ -104,7 +105,7 @@ export function makeReport(params = {}, scenario = "mixed") {
     (n, h) => n + (/snow/i.test(h.condition) ? 0.4 : 0),
     0,
   );
-  return {
+  const report = {
     generatedAt: now,
     partialData: scenario === "missing",
     apiWarning: "Simulated conditions · local development only.",
@@ -388,13 +389,6 @@ export function makeReport(params = {}, scenario = "mixed") {
         incidents: [],
       },
     },
-    pleasantness: {
-      score: stormy ? 22 : snowy ? 48 : 82,
-      confidence: 90,
-      label: stormy ? "Harsh" : snowy ? "Mixed" : "Pleasant",
-      summary: "Synthetic comfort outlook.",
-      disclaimer: "Weather comfort, separate from safety.",
-    },
     safety: {
       scoreVersion: "mock-v1",
       score: stormy ? 28 : snowy ? 66 : scenario === "mixed" ? 74 : 91,
@@ -433,4 +427,10 @@ export function makeReport(params = {}, scenario = "mixed") {
       },
     ],
   };
+  report.pleasantness = pleasantnessScoring.calculatePleasantnessScore({
+    weatherData: report.weather,
+    airQualityData: report.airQuality,
+    selectedTravelWindowHours: count,
+  });
+  return report;
 }

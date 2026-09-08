@@ -1,11 +1,11 @@
 const { computeFeelsLikeF } = require('./weather-normalizers');
-const { clampTravelWindowHours } = require('./time');
+const { clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
 
 // Pleasantness is intentionally independent from the safety score. It describes
 // forecast comfort across the selected travel window; it must never be used as a
 // go/no-go signal or allowed to offset a hazard.
 const PLEASANTNESS_CONFIG = {
-  scoreVersion: '1.2.0',
+  scoreVersion: '1.3.0',
   weights: {
     temperature: 30,
     wind: 25,
@@ -45,9 +45,15 @@ const AIR_QUALITY_CURVE = [
 const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, value));
 
 const finiteNumber = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value));
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const inRange = (value, min, max = Infinity) => {
+  const numeric = finiteNumber(value);
+  return numeric !== null && numeric >= min && numeric <= max ? numeric : null;
 };
 
 const scoreOnCurve = (value, curve) => {
@@ -68,13 +74,44 @@ const scoreOnCurve = (value, curve) => {
 // Most of the score reflects the whole outing, while the least-comfortable hour
 // gets extra weight so one rough period is not hidden by a long benign window.
 const combineWindowScores = (scores) => {
-  const valid = scores.filter(Number.isFinite);
+  const valid = scores.map((entry) => typeof entry === 'number' ? { score: entry, hours: 1 } : entry)
+    .filter((entry) => entry && Number.isFinite(entry.score) && entry.hours > 0);
   if (valid.length === 0) return null;
-  const average = valid.reduce((sum, score) => sum + score, 0) / valid.length;
-  return Math.round((average * 0.8) + (Math.min(...valid) * 0.2));
+  const average = valid.reduce((sum, entry) => sum + entry.score * entry.hours, 0)
+    / valid.reduce((sum, entry) => sum + entry.hours, 0);
+  return Math.round((average * 0.8) + (Math.min(...valid.map((entry) => entry.score)) * 0.2));
 };
 
-const precipitationConditionCap = (condition) => {
+const coveredHours = (rows) => Math.round(rows.reduce((sum, row) => sum + row.hours, 0) * 100) / 100;
+
+// Hourly forecasts describe intervals. Clip them to the actual departure and
+// return, deduplicate overlapping intervals, and retain gaps as missing coverage.
+const selectComfortWindow = (weather, requestedHours, selectedStartTime) => {
+  const source = Array.isArray(weather?.trend) ? weather.trend : [];
+  const start = parseIsoTimeToMs(selectedStartTime ?? weather?.forecastStartTime ?? source.find((row) => row?.timeIso)?.timeIso);
+  if (start === null || !source.some((row) => row?.timeIso)) {
+    return source.slice(0, requestedHours).map((row) => ({ ...row, hours: 1 }));
+  }
+  const hourMs = 3600000;
+  const end = start + requestedHours * hourMs;
+  const timed = source.map((row) => ({ row, start: parseIsoTimeToMs(row?.timeIso) }))
+    .filter((entry) => entry.start !== null && entry.start < end && entry.start + hourMs > start)
+    .sort((a, b) => b.start - a.start);
+  const boundaries = [...new Set([start, end, ...timed.flatMap((entry) => [
+    Math.max(start, entry.start), Math.min(end, entry.start + hourMs),
+  ])])].sort((a, b) => a - b);
+  const samples = new Map();
+  for (let i = 0; i < boundaries.length - 1; i += 1) {
+    const entry = timed.find((point) => point.start <= boundaries[i] && point.start + hourMs > boundaries[i]);
+    if (!entry) continue;
+    const sample = samples.get(entry) || { ...entry.row, hours: 0 };
+    sample.hours += (boundaries[i + 1] - boundaries[i]) / hourMs;
+    samples.set(entry, sample);
+  }
+  return [...samples.values()];
+};
+
+const precipitationConditionCap = (condition, chance = null) => {
   const normalized = String(condition || '').toLowerCase();
   if (!normalized) return 100;
   const convective = /thunder|lightning/.test(normalized);
@@ -83,7 +120,12 @@ const precipitationConditionCap = (condition) => {
   if (convective || /blizzard|freezing rain|ice pellet/.test(normalized)) return 8;
   if (/heavy rain|downpour/.test(normalized)) return 20;
   if (/heavy snow/.test(normalized)) return 35;
-  if (/rain|shower/.test(normalized)) return 45;
+  if (/rain|shower/.test(normalized)) {
+    if (/chance|possible|isolated|scattered/.test(normalized)) {
+      return chance !== null ? 100 - (55 * chance / 100) : normalized.includes('slight chance') ? 85 : 65;
+    }
+    return 45;
+  }
   if (/drizzle/.test(normalized)) return 55;
   if (/snow|flurr/.test(normalized)) return 65;
   return 100;
@@ -102,10 +144,10 @@ const conditionViewScore = (condition) => {
   if (/rain|shower|snow|drizzle|flurr/.test(normalized)) return 50;
   if (/overcast/.test(normalized)) return 55;
   if (/mostly cloudy/.test(normalized)) return 70;
-  if (/cloudy/.test(normalized)) return 75;
   if (/partly|few clouds|scattered clouds/.test(normalized)) return 90;
+  if (/cloudy/.test(normalized)) return 75;
   if (/clear|sunny/.test(normalized)) return 100;
-  return 75;
+  return null;
 };
 
 const cloudCoverScore = (cloudCover) => scoreOnCurve(cloudCover, [
@@ -172,31 +214,33 @@ const calculatePleasantnessScore = ({
   weatherData,
   airQualityData,
   selectedTravelWindowHours = null,
+  selectedStartTime = null,
   scoreFeatures = null,
 }) => {
   const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
   const airQualityEnabled = scoreFeatureEnabled('airQualityDetails');
   const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
   const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
-  const requestedHours = clampTravelWindowHours(selectedTravelWindowHours, 12);
+  const requestedHours = clampTravelWindowHours(finiteNumber(selectedTravelWindowHours) ?? 12, 12);
   const weatherDescription = String(weatherData?.description || '');
-  const trend = Array.isArray(weatherData?.trend)
-    ? weatherData.trend.slice(0, requestedHours)
-    : [];
+  const trend = selectComfortWindow(weatherData, requestedHours, selectedStartTime);
+  const hourlyConditions = [...new Set(trend.map((row) => String(row?.condition || '').trim()).filter(Boolean))];
+  const conditionDescription = hourlyConditions.join('; ') || weatherDescription;
 
   const pointTemp = finiteNumber(weatherData?.temp);
-  const pointWind = finiteNumber(weatherData?.windSpeed);
+  const pointWind = inRange(weatherData?.windSpeed, 0);
   const pointFeelsLike = finiteNumber(weatherData?.feelsLike)
     ?? (pointTemp !== null ? computeFeelsLikeF(pointTemp, pointWind ?? 0) : null);
 
   const temperatureRows = trend
     .map((row) => {
       const temp = finiteNumber(row?.temp);
-      const wind = finiteNumber(row?.wind) ?? 0;
-      if (temp === null) return null;
-      const feelsLike = computeFeelsLikeF(temp, wind);
+      const wind = inRange(row?.wind, 0) ?? 0;
+      const feelsLike = finiteNumber(row?.feelsLike) ?? (temp === null ? null : computeFeelsLikeF(temp, wind));
+      if (feelsLike === null) return null;
       return {
         feelsLike,
+        hours: row.hours,
         humidity: finiteNumber(row?.humidity),
         dewPoint: finiteNumber(row?.dewPoint),
         moisturePenalty: moistureComfortPenalty({
@@ -208,9 +252,11 @@ const calculatePleasantnessScore = ({
       };
     })
     .filter(Boolean);
+  const temperatureHours = coveredHours(temperatureRows);
   if (temperatureRows.length === 0 && pointFeelsLike !== null) {
     temperatureRows.push({
       feelsLike: pointFeelsLike,
+      hours: 1,
       humidity: finiteNumber(weatherData?.humidity),
       dewPoint: finiteNumber(weatherData?.dewPoint),
       moisturePenalty: moistureComfortPenalty({
@@ -225,9 +271,9 @@ const calculatePleasantnessScore = ({
   const temperatureScores = temperatureRows
     .map((row) => {
       const baseScore = scoreOnCurve(row.feelsLike, TEMPERATURE_CURVE);
-      return baseScore === null ? null : clamp(baseScore - row.moisturePenalty);
+      return baseScore === null ? null : { score: clamp(baseScore - row.moisturePenalty), hours: row.hours };
     })
-    .filter(Number.isFinite);
+    .filter(Boolean);
   const peakMoisturePenalty = temperatureRows.length
     ? Math.max(...temperatureRows.map((row) => row.moisturePenalty))
     : 0;
@@ -235,48 +281,51 @@ const calculatePleasantnessScore = ({
   const humidityValues = temperatureRows.map((row) => row.humidity).filter(Number.isFinite);
 
   const windRows = trend.map((row) => {
-    const sustained = finiteNumber(row?.wind);
-    const gust = finiteNumber(row?.gust) ?? sustained;
+    const sustained = inRange(row?.wind, 0);
+    const gust = inRange(row?.gust, 0) ?? sustained;
     if (sustained === null && gust === null) return null;
-    return Math.max(sustained ?? 0, (gust ?? 0) * 0.65);
-  }).filter(Number.isFinite);
-  const pointGust = finiteNumber(weatherData?.windGust) ?? pointWind;
+    return { score: scoreOnCurve(Math.max(sustained ?? 0, (gust ?? 0) * 0.65), WIND_CURVE), hours: row.hours };
+  }).filter(Boolean);
+  const windHours = coveredHours(windRows);
+  const pointGust = inRange(weatherData?.windGust, 0);
   if (windRows.length === 0 && (pointWind !== null || pointGust !== null)) {
-    windRows.push(Math.max(pointWind ?? 0, (pointGust ?? 0) * 0.65));
+    windRows.push({ score: scoreOnCurve(Math.max(pointWind ?? 0, (pointGust ?? 0) * 0.65), WIND_CURVE), hours: 1 });
   }
 
-  const precipRows = trend.map((row) => {
-    const chanceScore = scoreOnCurve(finiteNumber(row?.precipChance), PRECIPITATION_CURVE);
-    const cap = precipitationConditionCap(row?.condition);
+  const precipitationScore = (row) => {
+    const chance = inRange(row?.precipChance, 0, 100);
+    const chanceScore = scoreOnCurve(chance, PRECIPITATION_CURVE);
+    const cap = precipitationConditionCap(row?.condition, chance);
     return chanceScore === null ? (cap < 100 ? cap : null) : Math.min(chanceScore, cap);
-  }).filter(Number.isFinite);
-  const pointPrecip = finiteNumber(weatherData?.precipChance);
+  };
+  const precipRows = trend.map((row) => ({ score: precipitationScore(row), hours: row.hours })).filter((row) => row.score !== null);
+  const precipitationHours = coveredHours(precipRows);
+  const pointPrecip = inRange(weatherData?.precipChance, 0, 100);
   if (precipRows.length === 0) {
-    const chanceScore = scoreOnCurve(pointPrecip, PRECIPITATION_CURVE);
-    const cap = precipitationConditionCap(weatherDescription);
-    const pointScore = chanceScore === null ? (cap < 100 ? cap : null) : Math.min(chanceScore, cap);
-    if (pointScore !== null) precipRows.push(pointScore);
+    const pointScore = precipitationScore({ precipChance: pointPrecip, condition: weatherDescription });
+    if (pointScore !== null) precipRows.push({ score: pointScore, hours: 1 });
   }
 
   const viewRows = trend.map((row) => {
     const conditionScore = conditionViewScore(row?.condition);
-    const coverScore = cloudCoverScore(finiteNumber(row?.cloudCover));
+    const coverScore = cloudCoverScore(inRange(row?.cloudCover, 0, 100));
     let rowScore = conditionScore ?? coverScore;
     if (rowScore === null) return null;
-    if (daylightEnabled && row?.isDaytime === false) rowScore = Math.max(35, rowScore - 25);
-    return rowScore;
-  }).filter(Number.isFinite);
+    if (daylightEnabled && row?.isDaytime === false) rowScore = Math.max(0, rowScore - 25);
+    return { score: rowScore, hours: row.hours };
+  }).filter(Boolean);
+  const viewsHours = coveredHours(viewRows);
   if (viewRows.length === 0) {
     let pointViewScore = conditionViewScore(weatherDescription)
-      ?? cloudCoverScore(finiteNumber(weatherData?.cloudCover));
+      ?? cloudCoverScore(inRange(weatherData?.cloudCover, 0, 100));
     if (daylightEnabled && pointViewScore !== null && weatherData?.isDaytime === false) {
-      pointViewScore = Math.max(35, pointViewScore - 25);
+      pointViewScore = Math.max(0, pointViewScore - 25);
     }
-    if (pointViewScore !== null) viewRows.push(pointViewScore);
+    if (pointViewScore !== null) viewRows.push({ score: pointViewScore, hours: 1 });
   }
 
   let viewsScore = combineWindowScores(viewRows);
-  const visibilityRisk = weatherContextEnabled ? finiteNumber(weatherData?.visibilityRisk?.score) : null;
+  const visibilityRisk = weatherContextEnabled ? inRange(weatherData?.visibilityRisk?.score, 0, 100) : null;
   if (visibilityRisk !== null) {
     const visibilityComfort = clamp(100 - visibilityRisk);
     viewsScore = viewsScore === null
@@ -289,6 +338,7 @@ const calculatePleasantnessScore = ({
       factor: 'Temperature',
       score: combineWindowScores(temperatureScores),
       weight: PLEASANTNESS_CONFIG.weights.temperature,
+      hours: temperatureHours,
       message: (() => {
         const range = formatRange(feelsLikeValues, '°F');
         if (!range) return 'Temperature comfort is unavailable.';
@@ -303,29 +353,31 @@ const calculatePleasantnessScore = ({
     },
     {
       factor: 'Wind',
-      score: combineWindowScores(windRows.map((value) => scoreOnCurve(value, WIND_CURVE))),
+      score: combineWindowScores(windRows),
       weight: PLEASANTNESS_CONFIG.weights.wind,
+      hours: windHours,
       message: (() => {
-        const sustainedValues = trend.map((row) => finiteNumber(row?.wind)).filter(Number.isFinite);
-        const gustValues = trend.map((row) => finiteNumber(row?.gust)).filter(Number.isFinite);
+        const sustainedValues = trend.map((row) => inRange(row?.wind, 0)).filter(Number.isFinite);
+        const gustValues = trend.map((row) => inRange(row?.gust, 0)).filter(Number.isFinite);
         if (sustainedValues.length === 0 && pointWind !== null) sustainedValues.push(pointWind);
         if (gustValues.length === 0 && pointGust !== null) gustValues.push(pointGust);
         const peakWind = sustainedValues.length ? Math.round(Math.max(...sustainedValues)) : null;
         const peakGustValue = gustValues.length ? Math.round(Math.max(...gustValues)) : null;
         if (peakWind === null && peakGustValue === null) return 'Wind comfort is unavailable.';
-        return `Peak wind is ${peakWind ?? '—'} mph with gusts to ${peakGustValue ?? peakWind ?? '—'} mph.`;
+        return `Peak wind is ${peakWind === null ? 'unavailable' : `${peakWind} mph`}; ${peakGustValue === null ? 'gust readings unavailable' : `gusts reach ${peakGustValue} mph`}.`;
       })(),
     },
     {
       factor: 'Precipitation',
       score: combineWindowScores(precipRows),
       weight: PLEASANTNESS_CONFIG.weights.precipitation,
+      hours: precipitationHours,
       message: (() => {
-        const chances = trend.map((row) => finiteNumber(row?.precipChance)).filter(Number.isFinite);
+        const chances = trend.map((row) => inRange(row?.precipChance, 0, 100)).filter(Number.isFinite);
         if (chances.length === 0 && pointPrecip !== null) chances.push(pointPrecip);
         const peakChance = chances.length ? Math.round(Math.max(...chances)) : null;
         return peakChance === null
-          ? `Forecast conditions: ${weatherDescription || 'unavailable'}.`
+          ? `Forecast conditions: ${conditionDescription || 'unavailable'}.`
           : `Precipitation chance peaks at ${peakChance}% during the selected window.`;
       })(),
     },
@@ -333,15 +385,16 @@ const calculatePleasantnessScore = ({
       factor: 'Views & daylight',
       score: viewsScore,
       weight: PLEASANTNESS_CONFIG.weights.views,
+      hours: viewsHours,
       message: visibilityRisk !== null && visibilityRisk >= 20
-        ? `${weatherDescription || 'Forecast conditions'} with a ${Math.round(visibilityRisk)}/100 visibility-risk signal.`
-        : `${weatherDescription || 'Sky and visibility details unavailable'}.`,
+        ? `${conditionDescription || 'Forecast conditions'} with a ${Math.round(visibilityRisk)}/100 visibility-risk signal.`
+        : `${conditionDescription || 'Sky and visibility details unavailable'}.`,
     },
     {
       factor: 'Air quality',
       score: !airQualityEnabled || String(airQualityData?.status || '').toLowerCase() === 'not_applicable_future_date'
         ? null
-        : scoreOnCurve(finiteNumber(airQualityData?.usAqi), AIR_QUALITY_CURVE),
+        : scoreOnCurve(inRange(airQualityData?.usAqi, 0), AIR_QUALITY_CURVE),
       weight: PLEASANTNESS_CONFIG.weights.airQuality,
       message: finiteNumber(airQualityData?.usAqi) !== null
         ? `Air quality is ${airQualityData?.category || 'reported'} (AQI ${Math.round(finiteNumber(airQualityData.usAqi))}).`
@@ -352,13 +405,28 @@ const calculatePleasantnessScore = ({
   const availableComponents = componentInputs.filter((component) => Number.isFinite(component.score));
   const coreComponentNames = ['Temperature', 'Wind', 'Precipitation'];
   const availableCoreComponents = availableComponents.filter((component) => coreComponentNames.includes(component.factor));
+  const completeHours = coveredHours(trend.filter((row) =>
+    (finiteNumber(row?.feelsLike) !== null || finiteNumber(row?.temp) !== null)
+    && (inRange(row?.wind, 0) !== null || inRange(row?.gust, 0) !== null)
+    && precipitationScore(row) !== null));
+  const coverage = { requestedHours, completeHours };
+  const confidenceReasons = componentInputs.flatMap((component) => {
+    if (component.factor === 'Air quality' && !airQualityEnabled) return [];
+    if (component.score === null) return [`${component.factor} data is unavailable${component.factor === 'Air quality' ? ' for this date' : ''}.`];
+    if (component.hours < requestedHours) return [
+      `${component.factor}: hourly readings cover ${component.hours} of ${requestedHours} planned hours.${component.hours === 0 ? ' Only a summary or start-time reading is available.' : ''}`,
+    ];
+    return [];
+  });
   if (availableCoreComponents.length < 2 || (/weather data unavailable/i.test(weatherDescription) && trend.length === 0)) {
     return {
       scoreVersion: PLEASANTNESS_CONFIG.scoreVersion,
       score: null,
       confidence: 0,
       label: 'Unknown',
-      summary: 'Pleasantness is unavailable because the report lacks enough core temperature, wind, and precipitation data.',
+      summary: 'Weather comfort is unavailable because the report lacks enough temperature, wind, and precipitation data.',
+      coverage,
+      confidenceReasons,
       factors: [],
       disclaimer: 'Weather comfort only; this score does not change the safety score or go/no-go decision.',
     };
@@ -366,34 +434,38 @@ const calculatePleasantnessScore = ({
 
   const availableWeight = availableComponents.reduce((sum, component) => sum + component.weight, 0);
   const weightedTotal = availableComponents.reduce((sum, component) => sum + (component.score * component.weight), 0);
-  let score = clamp(Math.round(weightedTotal / availableWeight));
+  const weightedScore = clamp(Math.round(weightedTotal / availableWeight));
+  let score = weightedScore;
+  const adjustments = [];
+  const limitScore = (maximumScore, reason) => {
+    if (weightedScore > maximumScore) adjustments.push({ maximumScore, reason });
+    score = Math.min(score, maximumScore);
+  };
 
   // A weighted average alone can call a day "Excellent" even when one core
   // comfort dimension is plainly rough (for example, ideal temperatures in
   // 20 mph wind). These caps keep a severe component from being averaged away.
-  const coreScores = availableComponents
-    .filter((component) => ['Temperature', 'Wind', 'Precipitation'].includes(component.factor))
-    .map((component) => component.score);
-  const contextScores = availableComponents
-    .filter((component) => ['Views & daylight', 'Air quality'].includes(component.factor))
-    .map((component) => component.score);
-  const worstCoreScore = coreScores.length ? Math.min(...coreScores) : 100;
-  const worstContextScore = contextScores.length ? Math.min(...contextScores) : 100;
-  if (worstCoreScore < 25) score = Math.min(score, 39);
-  else if (worstCoreScore < 50) score = Math.min(score, 59);
-  else if (worstCoreScore < 70) score = Math.min(score, 74);
-  else if (worstCoreScore < 85) score = Math.min(score, 89);
-  if (worstContextScore < 25) score = Math.min(score, 74);
-  else if (worstContextScore < 50) score = Math.min(score, 84);
-  else if (worstContextScore < 70) score = Math.min(score, 89);
+  for (const component of availableComponents) {
+    const core = coreComponentNames.includes(component.factor);
+    const maximum = component.score < 25 ? (core ? 39 : 74)
+      : component.score < 50 ? (core ? 59 : 84)
+        : component.score < 70 ? (core ? 74 : 89)
+          : core && component.score < 85 ? 89 : 100;
+    limitScore(maximum, `${component.factor} limits overall comfort to ${labelForScore(maximum)} (${maximum}/100).`);
+  }
 
   // Do not let missing core inputs or a short severe period disappear inside
   // the weighted average. Forecast qualifiers get a less restrictive cap than
   // explicit severe conditions, while blizzard/icing conditions remain Harsh.
   if (availableCoreComponents.length < coreComponentNames.length) {
-    score = Math.min(score, 74);
+    limitScore(74, 'A core weather factor is missing, so comfort cannot be rated above Mixed.');
   }
-  const windowConditions = [weatherDescription, ...trend.map((row) => String(row?.condition || ''))]
+  if (completeHours < requestedHours) {
+    const maximum = completeHours / requestedHours < 0.75 ? 74 : 89;
+    limitScore(maximum, `Complete temperature, wind, and precipitation readings cover ${completeHours} of ${requestedHours} planned hours; the rating is limited to ${labelForScore(maximum)}.`);
+  }
+  const allHoursHaveConditions = coveredHours(trend) === requestedHours && trend.every((row) => String(row?.condition || '').trim());
+  const windowConditions = (allHoursHaveConditions ? hourlyConditions : [weatherDescription, ...hourlyConditions])
     .map((condition) => condition.toLowerCase())
     .filter(Boolean);
   const hasHarshCondition = windowConditions.some((condition) => /blizzard|freezing rain|ice pellet/.test(condition));
@@ -403,34 +475,42 @@ const calculatePleasantnessScore = ({
   const hasExplicitConvectiveCondition = hasConvectiveCondition && windowConditions.some((condition) =>
     /thunder|lightning/.test(condition) && !/slight chance|chance|isolated|scattered/.test(condition));
   const hasSeverePrecipitation = windowConditions.some((condition) => /heavy rain|heavy snow|downpour/.test(condition));
-  if (hasHarshCondition) score = Math.min(score, 39);
-  else if (hasExplicitConvectiveCondition || hasSeverePrecipitation) score = Math.min(score, 59);
-  else if (hasQualifiedConvectiveCondition) score = Math.min(score, 74);
+  if (hasHarshCondition) limitScore(39, 'Blizzard or icing conditions in the travel window limit comfort to Harsh.');
+  else if (hasExplicitConvectiveCondition || hasSeverePrecipitation) limitScore(59, 'Storms or heavy precipitation in the travel window limit comfort to Uncomfortable.');
+  else if (hasQualifiedConvectiveCondition) limitScore(74, 'Possible thunderstorms in the travel window limit comfort to Mixed.');
   const factors = availableComponents
     .map((component) => ({
       factor: component.factor,
       score: Math.round(component.score),
       weight: component.weight,
-      impact: Math.round((component.weight * (1 - (component.score / 100))) * 10) / 10,
+      impact: Math.round((100 * component.weight / availableWeight * (1 - (component.score / 100))) * 10) / 10,
       message: component.message,
     }))
     .sort((a, b) => b.impact - a.impact);
 
-  const expectedTrendHours = Math.min(requestedHours, 12);
-  const trendCoverage = expectedTrendHours > 0 ? Math.min(1, trend.length / expectedTrendHours) : 1;
-  const trendPenalty = trend.length === 0 ? 15 : Math.round((1 - trendCoverage) * 10);
   const disabledOptionalWeight = airQualityEnabled ? 0 : PLEASANTNESS_CONFIG.weights.airQuality;
-  const confidence = clamp(Math.round(availableWeight + disabledOptionalWeight - trendPenalty));
+  // Count usable readings per factor over the entire outing. A start-time or
+  // summary fallback contributes at most one hour; empty rows contribute none.
+  const confidence = clamp(Math.round(disabledOptionalWeight + availableComponents.reduce((total, component) =>
+    total + component.weight * (component.hours === undefined ? 1 : (component.hours || 1) / requestedHours), 0)));
   const label = labelForScore(score);
   const limiters = factors.filter((factor) => factor.score < 85).slice(0, 2).map((factor) => factor.factor.toLowerCase());
-  const summary = limiters.length > 0
+  const outlook = limiters.length > 0
     ? `${label} overall; ${joinNaturally(limiters)} ${limiters.length === 1 ? 'is' : 'are'} the main comfort ${limiters.length === 1 ? 'limiter' : 'limiters'}.`
     : `${label} overall, with comfortable weather across the selected travel window.`;
+  const bindingAdjustments = adjustments.filter((adjustment) => adjustment.maximumScore === score);
+  const summary = completeHours < requestedHours
+    ? `Limited forecast coverage (${completeHours}/${requestedHours} complete hours). ${limiters.length ? outlook : `${label} rating based on available readings.`}`
+    : bindingAdjustments.length > 0 ? `${outlook} ${bindingAdjustments[0].reason}` : outlook;
 
   return {
     scoreVersion: PLEASANTNESS_CONFIG.scoreVersion,
     score,
     confidence,
+    confidenceReasons,
+    coverage,
+    weightedScore,
+    adjustments: bindingAdjustments,
     label,
     summary,
     factors,

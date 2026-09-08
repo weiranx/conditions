@@ -603,6 +603,7 @@ const safetyHandler = async (req, res) => {
     const pleasantness = calculatePleasantnessScore({
       weatherData,
       airQualityData,
+      selectedStartTime: alertTargetTimeIso,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
     });
@@ -708,6 +709,11 @@ const safetyHandler = async (req, res) => {
     const pleasantness = calculatePleasantnessScore({
       weatherData: safeWeatherData,
       airQualityData: safeAirQualityData,
+      selectedStartTime: buildPlannedStartIso({
+        selectedDate: fallbackSelectedDate,
+        startClock: requestedStartClock,
+        referenceIso: safeWeatherData?.forecastStartTime,
+      }),
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
     });

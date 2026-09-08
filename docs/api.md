@@ -132,9 +132,16 @@ This score describes expected weather comfort and is deliberately independent fr
 | `score` | Weather-comfort score from 0–100, or `null` when no usable weather forecast is available |
 | `label` | `Excellent`, `Pleasant`, `Mixed`, `Uncomfortable`, `Harsh`, or `Unknown` |
 | `confidence` | Numeric coverage confidence from 0–100 |
+| `scoreVersion` | Comfort model version (`1.3.0` for new reports) |
+| `coverage` | `completeHours` with usable temperature, wind, and precipitation readings out of `requestedHours` (up to 24) |
+| `confidenceReasons` | Missing factors and hourly coverage gaps; start-time fallbacks do not fill the planned window |
+| `weightedScore` | Weighted component estimate before comfort and coverage limits |
+| `adjustments` | Binding limits with `maximumScore` and a plain-language `reason` |
 | `summary` | Plain-language comfort outlook for the selected travel window |
 | `factors` | Temperature (including capped dew-point/humidity comfort), wind, precipitation, views/daylight, and air-quality component scores with weights and impacts |
 | `disclaimer` | Reminder that pleasantness does not change the safety decision |
+
+Version `1.3.0` honors supplied hourly feels-like temperatures, distinguishes a chance of showers from forecast rain, and prevents darkness from improving fog or storm visibility scores. Each weather component combines its duration-weighted hourly mean (80%) and worst period (20%). Timestamped readings are clipped to departure and return, deduplicated, and gaps remain missing; `completeHours` may be fractional. Legacy untimed readings use array order. Missing factors are excluded from the weighted estimate; factor `impact` is the normalized deduction from that estimate. Confidence weights usable hourly samples across the full requested window, with at most one hour of credit for summary/start-time fallbacks. Incomplete core coverage prevents an Excellent rating; less than 75% complete hours limits the rating to Mixed. Fewer than two available core factors returns Unknown. These coverage limits express uncertainty, not additional weather hazards. Existing severe-weather limits remain independent of the safety decision.
 
 ---
 

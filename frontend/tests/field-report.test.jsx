@@ -6,7 +6,36 @@ import Compare from "../src/field/Compare";
 import { buildPersistedReport } from "../src/app/report-storage";
 import { getDefaultUserPreferences } from "../src/app/preferences";
 import { emptyAi } from "../src/field/data";
+import { ComfortScore } from "../src/field/ComfortScore";
 const preferences = getDefaultUserPreferences();
+test("comfort shows its outlook, coverage, and the reason for a limiting score", () => {
+  const html = renderToStaticMarkup(<ComfortScore comfort={{
+    score: 74, label: 'Mixed', confidence: 53, weightedScore: 98,
+    summary: 'Limited forecast coverage (12/24 complete hours).',
+    coverage: { completeHours: 12, requestedHours: 24 },
+    confidenceReasons: ['Wind: hourly readings cover 12 of 24 planned hours.'],
+    adjustments: [{ maximumScore: 74, reason: 'Incomplete coverage limits the rating to Mixed.' }],
+    factors: [{ factor: 'Temperature', score: 100, weight: 30, impact: 0, message: 'Feels like 58°F.' }],
+  }} localize={(text) => text.replace('58°F', '14°C')} />);
+  for (const expected of [/74\/100/, /53%/, /12 of 24 planned hours/, /Incomplete coverage limits/, /weighted estimate is 98\/100/, /14°C/, /What shapes this score/, /Missing forecast evidence/]) assert.match(html, expected);
+  assert.doesNotMatch(html, /58°F|NaN|Infinity/);
+});
+
+test("legacy comfort reports do not invent coverage or confidence", () => {
+  const html = renderToStaticMarkup(<ComfortScore comfort={{ score: 80, label: 'Pleasant', summary: 'Pleasant overall.' }} />);
+  assert.match(html, /Hourly coverage was not recorded/);
+  assert.match(html, /Forecast confidence<\/strong><span>Unknown/);
+  assert.match(html, /No individual comfort factors/);
+});
+
+test("unknown comfort remains unavailable and a genuine zero remains visible", () => {
+  const unknown = renderToStaticMarkup(<ComfortScore comfort={{ score: null, label: 'Unknown', confidence: 0, summary: 'Insufficient weather data.' }} />);
+  assert.match(unknown, /Weather comfort score unavailable/);
+  assert.doesNotMatch(unknown, /0\/100/);
+  const zero = renderToStaticMarkup(<ComfortScore comfort={{ score: 0, label: 'Harsh', summary: 'Harsh weather.' }} />);
+  assert.match(zero, /0\/100/);
+  assert.match(zero, /does not change the safety score/);
+});
 const weatherHour = {
   time: "09:00",
   temp: 50,

@@ -248,3 +248,149 @@ test('unavailable weather returns an explicit unknown score', () => {
 
   expect(result).toMatchObject({ score: null, confidence: 0, label: 'Unknown', factors: [] });
 });
+
+test('supplied hourly feels-like readings drive temperature comfort, including zero', () => {
+  const supplied = calculatePleasantnessScore(idealInput({ trend: trend({ feelsLike: 0 }) }));
+  const derived = calculatePleasantnessScore(idealInput());
+  expect(supplied.factors.find((factor) => factor.factor === 'Temperature')).toMatchObject({ score: 10 });
+  expect(supplied.score).toBeLessThan(derived.score);
+  expect(supplied.summary).toMatch(/temperature/i);
+});
+
+test('omitted and null travel windows retain the twelve-hour default', () => {
+  const input = idealInput({ trend: [...trend({}, 8), ...trend({ condition: 'Thunderstorms' }, 4)] });
+  delete input.selectedTravelWindowHours;
+  for (const selectedTravelWindowHours of [undefined, null, '', '  ']) {
+    const result = calculatePleasantnessScore({ ...input, selectedTravelWindowHours });
+    expect(result.coverage).toEqual({ requestedHours: 12, completeHours: 12 });
+    expect(result.score).toBeLessThanOrEqual(59);
+  }
+});
+
+test('twelve readings do not count as full coverage for a twenty-four-hour outing', () => {
+  const result = calculatePleasantnessScore({ ...idealInput({ trend: trend({}, 12) }), selectedTravelWindowHours: 24 });
+  expect(result.coverage).toEqual({ requestedHours: 24, completeHours: 12 });
+  expect(result.confidence).toBe(53);
+  expect(result.label).toBe('Mixed');
+  expect(result.summary).toMatch(/Limited forecast coverage/);
+  expect(result.adjustments).toEqual(expect.arrayContaining([expect.objectContaining({ maximumScore: 74 })]));
+});
+
+test('empty rows cannot raise confidence or imply comfortable weather for the whole outing', () => {
+  const emptyRows = calculatePleasantnessScore(idealInput({ trend: Array(8).fill({}) }));
+  const pointOnly = calculatePleasantnessScore(idealInput({ trend: [] }));
+  expect(emptyRows.confidence).toBe(pointOnly.confidence);
+  expect(emptyRows.confidence).toBeLessThan(25);
+  expect(emptyRows.coverage.completeHours).toBe(0);
+  expect(emptyRows.confidenceReasons.join(' ')).toMatch(/Only a summary or start-time reading/);
+  expect(emptyRows.summary).not.toMatch(/comfortable weather across/);
+});
+
+test('one missing core hour lowers confidence and prevents an Excellent rating', () => {
+  const result = calculatePleasantnessScore(idealInput({ trend: [...trend({}, 7), ...trend({ wind: null, gust: null }, 1)] }));
+  expect(result.coverage.completeHours).toBe(7);
+  expect(result.confidence).toBeLessThan(100);
+  expect(result.label).toBe('Pleasant');
+  expect(result.confidenceReasons).toContain('Wind: hourly readings cover 7 of 8 planned hours.');
+});
+
+test.each([null, undefined, '', ' ', false, true, {}, [], NaN, Infinity, '5mph', -5])('invalid wind %p remains missing', (wind) => {
+  const result = calculatePleasantnessScore(idealInput({ windSpeed: wind, windGust: wind, trend: trend({ wind, gust: wind }) }));
+  expect(result.factors.some((factor) => factor.factor === 'Wind')).toBe(false);
+  expect(result.coverage.completeHours).toBe(0);
+  expect(result.score).toBeLessThanOrEqual(74);
+});
+
+test('genuine zero and numeric string readings remain available', () => {
+  const result = calculatePleasantnessScore(idealInput({ trend: trend({ wind: '0', gust: 0, precipChance: 0, feelsLike: '58' }) }));
+  expect(result.confidence).toBe(100);
+  expect(result.coverage.completeHours).toBe(8);
+  expect(result.label).toBe('Excellent');
+});
+
+test('fog never earns a higher views score after dark', () => {
+  const views = (isDaytime) => calculatePleasantnessScore(idealInput({
+    description: 'Fog', visibilityRisk: null, trend: trend({ condition: 'Fog', isDaytime }),
+  })).factors.find((factor) => factor.factor === 'Views & daylight').score;
+  expect(views(false)).toBeLessThanOrEqual(views(true));
+});
+
+test('partly cloudy skies rate above cloudy skies', () => {
+  const views = (condition) => calculatePleasantnessScore(idealInput({ trend: trend({ condition }) }))
+    .factors.find((factor) => factor.factor === 'Views & daylight').score;
+  expect(views('Partly Cloudy')).toBeGreaterThan(views('Cloudy'));
+});
+
+test('a low chance of showers is more comfortable than forecast rain', () => {
+  const score = (condition, precipChance) => calculatePleasantnessScore(idealInput({ trend: trend({ condition, precipChance }) }));
+  const possible = score('Slight Chance Rain Showers', 20);
+  const certain = score('Rain Showers', 90);
+  expect(possible.score).toBeGreaterThanOrEqual(75);
+  expect(possible.score).toBeGreaterThan(certain.score);
+});
+
+test('broader summary storms outside a complete hourly window do not override its comfort', () => {
+  const result = calculatePleasantnessScore(idealInput({ description: 'Sunny then Thunderstorms' }));
+  expect(result.label).toBe('Excellent');
+  expect(result.factors.find((factor) => factor.factor === 'Views & daylight').message).not.toMatch(/thunderstorms/i);
+});
+
+test('missing gusts are explained without inventing a peak gust measurement', () => {
+  const result = calculatePleasantnessScore(idealInput({ windGust: null, trend: trend({ gust: null }) }));
+  expect(result.factors.find((factor) => factor.factor === 'Wind').message).toMatch(/gust readings unavailable/);
+});
+
+test('normalized factor deductions explain the weighted score when AQI is absent', () => {
+  const result = calculatePleasantnessScore({ ...idealInput({ trend: trend({ wind: 20, gust: 28 }) }), airQualityData: null });
+  expect(Math.abs(100 - result.factors.reduce((sum, factor) => sum + factor.impact, 0) - result.weightedScore)).toBeLessThan(1);
+  expect(result.weightedScore).toBeGreaterThan(result.score);
+  expect(result.adjustments).toContainEqual({ maximumScore: 74, reason: 'Wind limits overall comfort to Mixed (74/100).' });
+});
+
+const timedRow = (hour, overrides = {}) => ({ ...trend(overrides, 1)[0], timeIso: `2026-09-08T${hour}:00-07:00` });
+
+test('a departure between forecast hours includes the last partial hour and excludes the return boundary', () => {
+  const input = {
+    ...idealInput({ trend: [timedRow('07:00'), timedRow('08:00'), timedRow('09:00', { condition: 'Thunderstorms' })] }),
+    selectedStartTime: '2026-09-08T07:30:00-07:00', selectedTravelWindowHours: 2,
+  };
+  const result = calculatePleasantnessScore(input);
+  expect(result.coverage.completeHours).toBe(2);
+  expect(result.score).toBeLessThanOrEqual(59);
+  const earlier = calculatePleasantnessScore({ ...input, selectedStartTime: '2026-09-08T07:00:00-07:00' });
+  expect(earlier.label).toBe('Excellent');
+});
+
+test('partial periods contribute only the hours actually covered', () => {
+  const result = calculatePleasantnessScore({
+    ...idealInput({ trend: [timedRow('07:00'), timedRow('08:00')] }),
+    selectedStartTime: '2026-09-08T07:30:00-07:00', selectedTravelWindowHours: 2,
+  });
+  expect(result.coverage.completeHours).toBe(1.5);
+  expect(result.confidence).toBe(76);
+  expect(result.label).toBe('Pleasant');
+  expect(result.summary).toMatch(/1.5\/2 complete hours/);
+});
+
+test('duplicates and out-of-window readings cannot fill a missing hour', () => {
+  const result = calculatePleasantnessScore({
+    ...idealInput({ trend: [timedRow('09:00'), timedRow('07:00'), timedRow('07:00'), timedRow('10:00')] }),
+    selectedStartTime: '2026-09-08T07:00:00-07:00', selectedTravelWindowHours: 3,
+  });
+  expect(result.coverage.completeHours).toBe(2);
+  expect(result.confidence).toBe(68);
+  expect(result.label).toBe('Mixed');
+});
+
+test('timed coverage honors UTC offsets across midnight', () => {
+  const result = calculatePleasantnessScore({
+    ...idealInput({ trend: [
+      { ...trend({}, 1)[0], timeIso: '2026-09-09T06:00:00Z' },
+      { ...trend({}, 1)[0], timeIso: '2026-09-09T07:00:00Z' },
+      { ...trend({ condition: 'Thunderstorms' }, 1)[0], timeIso: '2026-09-09T08:00:00Z' },
+    ] }),
+    selectedStartTime: '2026-09-08T23:30:00-07:00', selectedTravelWindowHours: 2,
+  });
+  expect(result.coverage.completeHours).toBe(2);
+  expect(result.score).toBeLessThanOrEqual(59);
+});

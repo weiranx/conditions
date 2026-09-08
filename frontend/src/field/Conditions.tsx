@@ -4,7 +4,6 @@ import {
   Wind,
   Eye,
   Sun,
-  Smile,
   Droplets,
   TriangleAlert,
   CircleHelp,
@@ -18,6 +17,7 @@ import { fieldSignals } from "./field-signals";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { Details, SourceLink } from "./Details";
+import { ComfortScore } from "./ComfortScore";
 
 export function Conditions({ workspace: w }: { workspace: Workspace }) {
   const data = w.safetyData!;
@@ -285,25 +285,7 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
           </section>
         )}
         {data.pleasantness && (
-          <section className="field-panel condition-card is-comfort">
-            <span className="field-kicker condition-label">
-              <Smile size={18} />
-              Weather comfort
-            </span>
-            <h2>{data.pleasantness.label}</h2>
-            <ConditionScale
-              label="Weather comfort score"
-              value={data.pleasantness.score}
-              maximum={100}
-              format={(value) => `${Math.round(value)}/100`}
-            />
-
-            <p className="field-muted">
-              {data.pleasantness.disclaimer ||
-                "A weather-comfort outlook; separate from the safety decision."}
-            </p>
-            <Details title="Comfort factors" value={data.pleasantness} />
-          </section>
+          <ComfortScore comfort={data.pleasantness} localize={w.localizeUnitText} />
         )}
       </div>
       {flags.fieldObservations && (
