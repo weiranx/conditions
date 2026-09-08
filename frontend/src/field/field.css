@@ -1,40 +1,46 @@
 :root {
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  color: #22262d;
-  background: #f8f9fb;
+  --f-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--f-font);
+  color: var(--f-ink);
+  background: var(--f-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --f-bg: #f8f9fb;
+  --f-bg: #f7f8f6;
   --f-paper: #ffffff;
-  --f-soft: #f0f2f5;
-  --f-line: #e1e4e9;
-  --f-ink: #22262d;
-  --f-muted: #656d79;
-  --f-green: #2563b5;
+  --f-soft: #eff2ef;
+  --f-line: #d9dfda;
+  --f-ink: #252d28;
+  --f-muted: #626e65;
+  --f-green: #32604d;
   --f-on: #ffffff;
-  --f-wash: #edf3fc;
+  --f-wash: #e8efe9;
   --f-warn: #8b501e;
   --f-warn-bg: #f8eddb;
   --f-red: #9e3d35;
-  --f-serif: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --f-serif: var(--f-font);
+  --f-primary: #294f40;
+  --f-primary-hover: #1e4033;
+  --f-primary-ink: #ffffff;
+  --f-accent: var(--f-muted);
+  --f-shadow: none;
+  --f-radius: 8px;
+  --f-control-radius: 6px;
   color-scheme: light;
 }
 html[data-theme="dark"] {
-  --f-bg: #15171c;
-  --f-paper: #1c1f26;
-  --f-soft: #252932;
-  --f-line: #363c48;
-  --f-ink: #eceef3;
-  --f-muted: #a5adbc;
-  --f-green: #8bb7ff;
-  --f-on: #111d32;
-  --f-wash: #25334b;
+  --f-bg: #171b19;
+  --f-paper: #1e2421;
+  --f-soft: #282f2a;
+  --f-line: #3c473f;
+  --f-ink: #edf1ec;
+  --f-muted: #aab7ac;
+  --f-green: #b2ceb5;
+  --f-on: #18261e;
+  --f-wash: #2c3d30;
+  --f-primary: #bdd2b8;
+  --f-primary-hover: #d0e0ca;
+  --f-primary-ink: #192b21;
   --f-warn: #edc087;
   --f-warn-bg: #3b3023;
   --f-red: #f2a39b;
@@ -3146,39 +3152,7 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   }
 }
 
-/* Alpine field journal: warm paper, forest ink, and editorial display type. */
-:root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --f-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-  --f-bg: #f5f3ee;
-  --f-paper: #fffefa;
-  --f-soft: #eeeee7;
-  --f-ink: #24362f;
-  --f-muted: #656e65;
-  --f-line: #dedfd5;
-  --f-green: #32604d;
-  --f-on: #fffef8;
-  --f-wash: #e9efe6;
-  --f-primary: #294f40;
-  --f-primary-hover: #1e4033;
-  --f-primary-ink: #fffef8;
-  --f-shadow: 0 1px 2px #24362f04, 0 12px 32px -20px #24362f24;
-}
-html[data-theme="dark"] {
-  --f-bg: #151d19;
-  --f-paper: #1d2822;
-  --f-soft: #27332b;
-  --f-line: #38463c;
-  --f-ink: #f2f0e7;
-  --f-muted: #aeb9ac;
-  --f-green: #b2ceb5;
-  --f-on: #18261e;
-  --f-wash: #2c3d30;
-  --f-primary: #bdd2b8;
-  --f-primary-hover: #d0e0ca;
-  --f-primary-ink: #192b21;
-  --f-shadow: 0 1px 2px #0002, 0 14px 32px -20px #0006;
-}
+/* Shared application shell and controls. Theme tokens are defined above. */
 .field-app {
   grid-template-columns: 216px minmax(0, 1fr);
 }
@@ -3193,13 +3167,11 @@ html[data-theme="dark"] {
 .field-brand > span {
   width: 38px;
   height: 38px;
-  color: #f4edda;
-  border: 1px solid #53745e;
-  background: linear-gradient(145deg, #456952, #233f32);
-  border-radius: 11px;
-  box-shadow:
-    inset 0 1px #ffffff40,
-    0 3px 7px #24362f20;
+  color: var(--f-green);
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
 }
 .field-brand strong {
   font-size: 14px;
@@ -3224,20 +3196,17 @@ html[data-theme="dark"] {
   font-size: 13px;
   gap: 11px;
   min-height: 44px;
-  border-radius: 9px;
+  border-radius: var(--f-control-radius);
   padding: 11px 12px;
 }
 .field-sidebar nav button[aria-current="page"] {
   background: var(--f-wash);
   color: var(--f-green);
-  box-shadow:
-    0 1px 4px #24362f08,
-    inset 0 0 0 1px var(--f-line);
+  box-shadow: none;
   font-weight: 550;
 }
 .field-nav-dot {
-  width: 4px;
-  height: 4px;
+  display: none;
 }
 .field-topbar {
   height: 62px;
@@ -3245,8 +3214,8 @@ html[data-theme="dark"] {
   padding-inline: 36px;
 }
 .field-topbar > span {
-  font-size: 10px;
-  letter-spacing: 0.055em;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 .field-topbar > div {
   font-size: 12px;
@@ -3265,8 +3234,8 @@ html[data-theme="dark"] {
   max-width: 1440px;
 }
 .field-kicker {
-  font-size: 10px;
-  letter-spacing: 0.075em;
+  font-size: 11px;
+  letter-spacing: 0.04em;
   font-weight: 550;
 }
 .field-workspace-heading {
@@ -3333,16 +3302,16 @@ html[data-theme="dark"] {
 .field-account-panel input,
 .field-settings select {
   min-height: 46px;
-  border-radius: 9px;
+  border-radius: var(--f-control-radius);
   font-size: 13px;
-  background: color-mix(in srgb, var(--f-bg) 42%, var(--f-paper));
+  background: var(--f-paper);
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
 }
 .field-input-icon {
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--f-bg) 42%, var(--f-paper));
+  border-radius: var(--f-control-radius);
+  background: var(--f-paper);
 }
 .field-input-icon input {
   background: transparent;
@@ -3376,7 +3345,7 @@ html[data-theme="dark"] {
   margin-top: 22px;
 }
 .field-button {
-  border-radius: 10px;
+  border-radius: var(--f-control-radius);
   font-size: 13px;
   font-weight: 550;
 }
@@ -3384,9 +3353,7 @@ html[data-theme="dark"] {
   background: var(--f-primary);
   border-color: var(--f-primary);
   color: var(--f-primary-ink);
-  box-shadow:
-    inset 0 1px #ffffff25,
-    0 4px 8px #24362f12;
+  box-shadow: none;
 }
 .field-button-primary:hover {
   background: var(--f-primary-hover);
@@ -3425,7 +3392,7 @@ html[data-theme="dark"] {
   height: 400px;
 }
 .field-map .leaflet-tile-pane {
-  filter: saturate(0.46) contrast(0.9) brightness(1.08);
+  filter: none;
 }
 .field-map .leaflet-control-zoom {
   border: 1px solid #c6ced5;

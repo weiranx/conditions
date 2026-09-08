@@ -1,114 +1,53 @@
-/* Warm paper and evergreen materials, shared by every planning surface. */
-:root {
-  --f-bg: #f3f1eb;
-  --f-paper: #fffefb;
-  --f-soft: #eeece5;
-  --f-ink: #23392f;
-  --f-muted: #657067;
-  --f-line: #dedfd6;
-  --f-wash: #e8ede5;
-  --f-accent: #897044;
-  --f-shadow: 0 1px 2px #23392f05, 0 8px 24px -16px #23392f24;
-}
-html[data-theme="dark"] {
-  --f-bg: #131c18;
-  --f-paper: #1c2821;
-  --f-soft: #253229;
-  --f-line: #34433a;
-  --f-ink: #f0eee4;
-  --f-muted: #aebaae;
-  --f-accent: #c6b38a;
-  --f-shadow: 0 1px 2px #0002, 0 10px 28px -16px #0005;
-}
-
-/* Editorial hierarchy stays separate from the compact type used for evidence. */
+/* Layout and component styling share the tokens in field.css. */
 .field-app {
   font-optical-sizing: auto;
 }
 .field-app :is(.field-page-heading, .field-report-head) h1 {
-  font-family: var(--f-serif);
-  font-size: clamp(36px, 4vw, 54px);
-  font-weight: 400;
+  font-family: var(--f-font);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 600;
   letter-spacing: -.035em;
-  line-height: 1.12;
+  line-height: 1.2;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
 
 .field-workspace .field-workspace-heading {
-  position: relative;
-  isolation: isolate;
-  min-height: 224px;
-  margin: 32px 0;
-  padding: 32px 36px;
-  overflow: hidden;
-  border: 1px solid #ffffff18;
-  border-radius: 12px;
-  background: #243c31;
-  color: #fffdf4;
-  box-shadow: 0 16px 36px -24px #172b2360, inset 0 1px #ffffff14;
-}
-
-.field-workspace-heading::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background:
-    linear-gradient(90deg, #14291ff5 0%, #172b23dc 32%, #172b2350 72%, #172b2320),
-    url('/hero-rainier.jpg') 66% 43% / cover;
+  min-height: 0;
+  margin: 0;
+  padding: 36px 0 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--f-ink);
+  box-shadow: none;
 }
 
 .field-workspace .field-workspace-heading h1 {
-  max-width: 600px;
-  margin: 13px 0 12px;
-  font: 400 clamp(36px, 3.8vw, 50px) / 1.1 var(--f-serif);
+  margin: 0 0 10px;
+  font: 600 clamp(28px, 3vw, 36px) / 1.2 var(--f-font);
   letter-spacing: -.035em;
   text-wrap: balance;
 }
 
 .field-workspace .field-workspace-heading p {
-  max-width: 400px;
-  color: #e0e7db;
-  font-size: 15px;
-  line-height: 1.65;
-}
-
-.field-workspace-heading .field-kicker {
-  color: #d9cfae;
-  font-size: 10px;
-  letter-spacing: .16em;
-}
-
-.field-workspace .field-workspace-label {
-  align-self: end;
-  flex: none;
-  color: #f0efdf;
-  font-size: 10px;
-  letter-spacing: .03em;
-  text-shadow: 0 1px 5px #172b23;
-}
-
-.field-workspace-label svg {
-  color: #d9cfae;
-}
-
-.field-workspace .field-workspace-label {
-  border-top: 1px solid #d9cfae66;
-  padding-top: 12px;
+  max-width: 58ch;
+  color: var(--f-muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .field-form-title .field-kicker,
 .field-page-heading > .field-kicker {
-  color: var(--f-accent);
-  letter-spacing: .13em;
+  color: var(--f-muted);
+  letter-spacing: .04em;
 }
 
 .field-form-title h2 {
   margin-top: 5px;
   font-family: inherit;
-  font-size: 23px;
-  font-weight: 550;
+  font-size: 20px;
+  font-weight: 600;
   line-height: 1.3;
   letter-spacing: -.025em;
 }
@@ -118,7 +57,7 @@ html[data-theme="dark"] {
 }
 
 .field-app .field-button {
-  box-shadow: 0 1px 2px #23392f06;
+  box-shadow: none;
 }
 .field-app .field-button-primary {
   background: var(--f-primary);
@@ -133,11 +72,11 @@ html[data-theme="dark"] {
 }
 
 .field-sidebar nav button[aria-current="page"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--f-green) 12%, transparent);
+  box-shadow: none;
 }
 .field-sidebar .field-brand > span {
-  border-color: #899a7666;
-  box-shadow: inset 0 1px #e4d8aa55, 0 3px 8px #23392f20;
+  border: 0;
+  box-shadow: none;
 }
 .field-sidebar .field-brand small {
   letter-spacing: .2em;
@@ -153,7 +92,7 @@ html[data-theme="dark"] {
 
 .field-workspace-bottom > section {
   padding: 26px;
-  border-radius: 12px;
+  border-radius: var(--f-radius);
   box-shadow: none;
 }
 .field-workspace-bottom h2 {
@@ -183,27 +122,19 @@ html[data-theme="dark"] {
   background: var(--f-soft);
 }
 .field-workspace-bottom > .field-recent-brief {
-  --f-ink: #fffbed;
-  --f-muted: #c5d5c8;
-  --f-accent: #c5d5c8;
-  --f-green: #d6e4d4;
-  --f-soft: #315445;
-  color: var(--f-ink);
-  border-color: #315445;
-  background: #233f32;
   display: flex;
   flex-direction: column;
 }
 .field-recent-brief .field-recent-row {
   flex: 1;
-  border-top: 1px solid #c5d5c833;
-  border-bottom: 1px solid #c5d5c833;
+  border-top: 1px solid var(--f-line);
+  border-bottom: 1px solid var(--f-line);
   border-radius: 0;
   padding-block: 24px;
 }
 .field-recent-brief .field-recent-row strong {
-  font-size: 25px;
-  font-weight: 500;
+  font-size: 22px;
+  font-weight: 600;
   line-height: 1.25;
   margin-block: 10px;
   overflow-wrap: anywhere;
@@ -264,14 +195,14 @@ html[data-theme="dark"] {
 }
 
 .field-app :is(.field-plan-form, .field-planner-map, .field-settings-panel, .field-account-panel) {
-  border-radius: 12px;
+  border-radius: var(--f-radius);
   box-shadow: none;
 }
 
 .field-plan-form .field-input-icon,
 .field-plan-form input:not([type="file"]),
 .field-plan-form select {
-  border-color: color-mix(in srgb, var(--f-line) 85%, var(--f-paper));
+  border-color: var(--f-line);
 }
 .field-plan-form .field-input-icon input {
   border: 0;
@@ -280,8 +211,8 @@ html[data-theme="dark"] {
   border-color: var(--f-green);
 }
 .field-plan-form .field-form-title {
-  padding-bottom: 21px;
-  border-bottom: 1px solid var(--f-line);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .field-plan-form .field-form-submit {
@@ -297,34 +228,15 @@ html[data-theme="dark"] {
   .field-sidebar nav button[aria-current="page"] {
     box-shadow: inset 0 -2px var(--f-green);
   }
-  .field-workspace .field-workspace-heading {
-    min-height: 230px;
-    margin-top: 22px;
-    padding: 28px;
-  }
 }
 
 @media (max-width: 650px) {
   .field-workspace .field-workspace-heading {
-    min-height: 210px;
-    margin: 18px 0 22px;
-    padding: 26px 24px;
-    border-radius: 14px;
+    padding: 26px 0 22px;
   }
-  .field-workspace-heading::before {
-    background:
-      linear-gradient(90deg, #172b23ef, #172b2399),
-      url('/hero-rainier.jpg') 65% center / cover;
-  }
-  .field-workspace .field-workspace-heading h1 {
-    font-size: 36px;
-    max-width: 280px;
-  }
-  .field-workspace .field-workspace-heading p {
-    font-size: 13px;
-  }
+  .field-workspace .field-workspace-heading h1,
   .field-app :is(.field-page-heading, .field-report-head) h1 {
-    font-size: 34px;
+    font-size: 28px;
   }
 }
 
@@ -349,25 +261,14 @@ html[data-theme="dark"] {
     --f-line: #b0bda8;
     --f-accent: #d5ddcb;
   }
-  .field-workspace-heading::before { display: none; }
-  .field-workspace .field-workspace-heading { border-color: currentColor; }
 }
 
 @media print {
-  .field-workspace-bottom > .field-recent-brief {
-    --f-ink: #17202b;
-    --f-muted: #4e5967;
-    --f-accent: #17202b;
-    --f-green: #17202b;
-    background: white;
-    color: var(--f-ink);
-  }
   .field-workspace .field-workspace-heading {
     background: white;
     color: black;
     box-shadow: none;
   }
-  .field-workspace-heading::before { display: none; }
   .field-workspace .field-workspace-heading :is(p, .field-kicker, .field-workspace-label) {
     color: black;
     text-shadow: none;
@@ -377,7 +278,7 @@ html[data-theme="dark"] {
 .field-panel {
   background: var(--f-paper);
   border: 1px solid var(--f-line);
-  border-radius: 16px;
+  border-radius: var(--f-radius);
   padding: 24px;
   box-shadow: var(--f-shadow);
   margin-bottom: 20px;
@@ -864,7 +765,7 @@ html[data-theme="dark"] {
 .field-usage {
   padding: 18px;
   border: 1px solid var(--f-line);
-  border-radius: 12px;
+  border-radius: var(--f-radius);
   margin-block: 15px;
   background: var(--f-bg);
 }
@@ -1091,7 +992,7 @@ html[data-theme="dark"] {
 .field-checkpoint {
   padding: 20px;
   background: var(--f-wash);
-  border-radius: 12px;
+  border-radius: var(--f-radius);
   margin-top: 22px;
 }
 .field-checkpoint > p {
@@ -1236,7 +1137,7 @@ html[data-theme="dark"] {
   width: min(100%, 700px);
   max-height: 540px;
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: var(--f-radius);
   margin-block: 20px;
 }
 .field-condition-grid {
@@ -1460,7 +1361,7 @@ html[data-theme="dark"] {
   padding: 6px;
   background: var(--f-soft);
   border: 1px solid var(--f-line);
-  border-radius: 12px;
+  border-radius: var(--f-radius);
   margin: 22px 0;
 }
 .field-chapter-nav button {

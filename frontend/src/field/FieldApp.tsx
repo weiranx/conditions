@@ -281,10 +281,9 @@ export default function FieldApp() {
               <section className="field-workspace">
                 <header className="field-workspace-heading">
                   <div>
-                    <span className="field-kicker">Planning workspace</span>
                     <h1>Plan your next outing</h1>
                     <p>
-                      A clear view of the weather, terrain, and hours ahead.
+                      Choose a location and time to check weather, terrain, and daylight.
                     </p>
                   </div>
                 </header>
