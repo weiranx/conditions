@@ -176,13 +176,66 @@ The app intentionally degrades gracefully when upstream providers are unavailabl
 
 ---
 
+## CI and Automatic Deployment
+
+`.github/workflows/ci.yml` runs three parallel jobs on pull requests and pushes
+to `main`:
+
+- `pipeline-checks`: validates Actions YAML with checksum-verified actionlint,
+  checks deployment shell scripts with ShellCheck, and runs release regression
+  tests against temporary Git repositories.
+- `backend-tests`: installs locked dependencies and runs the complete Jest suite.
+- `frontend-checks`: installs locked dependencies, typechecks, lints, runs field,
+  comparison, mock API, and saved-report history tests, and builds the frontend.
+
+CI uses Node 20 to match the backend Docker runtime. Jobs have explicit timeouts,
+read-only repository permissions, and pinned action commits. Dependabot proposes
+weekly grouped action updates. New commits cancel superseded CI runs on the same
+branch or pull request.
+
+`.github/workflows/deploy.yml` starts after CI completes. Only a successful
+`push` run on this repository's `main` branch can deploy to DigitalOcean; failed,
+cancelled, and pull-request runs cannot use the deployment job. Backend tests are
+not repeated during deployment. This gate covers the DigitalOcean backend; the
+frontend's hosting provider keeps its own deployment configuration.
+
+The job checks out CI's `head_sha` and sends `scripts/ci-deploy.sh` over SSH using
+the existing `DO_SSH_HOST`, `DO_SSH_USER`, and `DO_SSH_KEY` repository secrets.
+Sending the script from the runner also supports the first release before the
+VPS has that script. It takes the same lock as manual deployments, fetches `main`,
+and skips the release if `main` has advanced beyond the tested commit. Otherwise
+it fast-forwards the clean production checkout to that exact SHA, then runs
+`scripts/deploy.sh --no-pull --no-nginx` with the lock held through build,
+migrations, restart, and readiness checks. Detached branches, tracked edits,
+divergent history, and commits present only on the server fail without resetting
+the checkout. Active deployments are never cancelled by a newer CI run.
+
+To retry a failed release, rerun its **Deploy to DigitalOcean** workflow. A retry
+is eligible only while its tested SHA remains the tip of `main`; if `main` has
+moved, wait for that commit's successful CI and deployment. The Actions log
+prints the full tested SHA or an explicit superseded-commit skip message.
+
+For an intentional manual release on the VPS, `./scripts/deploy.sh` retains its
+existing behavior of pulling and deploying current `main`, independent of the CI
+gate. Inspect the logs and readiness endpoint before considering a release
+complete. Docker and SSH transport still need verification in a real Actions
+run; local release tests replace Docker and HTTP calls with test commands.
+
+Local pipeline checks (requires Node, Git, Bash, actionlint, and ShellCheck):
+
+```bash
+actionlint
+shellcheck scripts/deploy.sh scripts/ci-deploy.sh
+node --test scripts/tests/*.test.mjs
+```
+
 ## Release Checklist
 
 Before deploying a new version:
 
-1. `cd backend && npm run test:unit` — all unit tests pass
-2. `cd backend && npm run test:integration` — all integration tests pass
-3. `cd frontend && npm run typecheck` — no TypeScript errors
+1. `cd backend && npm test` — the complete backend test suite passes
+2. `cd frontend && npm run test:field && npm run test:mock && npm run test:history` — frontend test suites pass
+3. `cd frontend && npm run typecheck && npm run lint` — no TypeScript or lint errors
 4. `cd frontend && npm run build` — production build succeeds
 5. Smoke-test the planner: search an objective, reload the forecast, toggle settings/unit preferences
 6. Smoke-test report actions: print report, SAT one-liner copy, team brief copy

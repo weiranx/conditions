@@ -5,13 +5,18 @@ import { act } from 'react';
 import { AccountContext } from '../src/contexts/account';
 import { paginateReportHistory } from '../dev/saved-report-history.mjs';
 const bootstrap = new JSDOM('<html><body></body></html>');
+const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
 globalThis.window = bootstrap.window;
 globalThis.document = bootstrap.window.document;
+// Node 20 has no navigator; newer Node versions expose a getter-only global.
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: bootstrap.window.navigator });
 const { createRoot } = await import('react-dom/client');
 const { ReportHistory } = await import('../src/field/ReportHistory');
 bootstrap.window.close();
 delete globalThis.window;
 delete globalThis.document;
+if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+else delete globalThis.navigator;
 const row = (id, overrides = {}) => ({
   id, title: `Mountain ${id}`, objectiveName: `Mountain ${id}`, shareToken: `share-token-${id}`,
   forecastDate: '2026-09-06', alpineStartTime: '05:30', score: 72.6, hasAi: false,

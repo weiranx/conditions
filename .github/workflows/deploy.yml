@@ -1,57 +1,50 @@
 name: Deploy to DigitalOcean
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
 
 concurrency:
   group: production-deploy
+  # CI may be superseded, but an active release must finish migrations/restart.
   cancel-in-progress: false
 
 jobs:
-  # Run backend tests as a deploy gate. The deploy job only runs if these pass.
-  # Tests are run inline (rather than depending on ci.yml) because GitHub Actions
-  # does not natively support cross-workflow job dependencies.
-  backend-tests:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Run tests
-        run: npm test
-
   deploy:
-    needs: backend-tests
+    # workflow_run also fires for failed/cancelled CI and can receive PR runs.
+    # Only successful pushes to this repository's main may use deploy secrets.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
-      - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Check out the commit that passed CI
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Deploy tested commit to VPS
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
         with:
           host: ${{ secrets.DO_SSH_HOST }}
           username: ${{ secrets.DO_SSH_USER }}
           key: ${{ secrets.DO_SSH_KEY }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-
-            cd /opt/summitsafe
-
-            # Pull, build, migrate, recreate, and verify through the same
-            # locked deployment path used for manual VPS releases. The CI user
-            # does not manage host nginx, so that privileged step is skipped.
-            ./scripts/deploy.sh --no-nginx
+          version: v1.8.4
+          timeout: 30s
+          command_timeout: 20m
+          envs: DEPLOY_SHA
+          # Send the tested bootstrap from the runner, including on the first
+          # release when the VPS still has the previous deployment script.
+          script_path: scripts/ci-deploy.sh

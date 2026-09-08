@@ -143,7 +143,7 @@ docker compose up -d --force-recreate --no-deps backend
 echo "==> Waiting for health check..."
 backend_ready=false
 for _ in {1..30}; do
-  if curl --fail --silent http://localhost:3001/healthz | grep --quiet '"ok":true'; then
+  if curl --fail --silent --connect-timeout 2 --max-time 5 http://localhost:3001/healthz | grep --quiet '"ok":true'; then
     backend_ready=true
     break
   fi
@@ -152,7 +152,7 @@ done
 if [ "$backend_ready" != true ]; then
   docker compose ps backend >&2
   docker compose logs --tail 50 backend >&2
-  echo "Backend did not become healthy within 30 seconds." >&2
+  echo "Backend did not become healthy after 30 attempts." >&2
   exit 1
 fi
 
