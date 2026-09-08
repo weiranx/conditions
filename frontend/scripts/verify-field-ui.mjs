@@ -7,7 +7,7 @@ const cache = `${root}node_modules/.cache/field-ui-tests`;
 await mkdir(cache, { recursive: true });
 try {
   await build({
-    entryPoints: [`${root}tests/gear-actions.test.jsx`, `${root}tests/field-report.test.jsx`, `${root}tests/report-comparisons.test.jsx`, `${root}tests/chat.test.jsx`, `${root}tests/objective-watches.test.jsx`, `${root}tests/objective-shortlist.test.jsx`],
+    entryPoints: [`${root}tests/route-planning.test.jsx`, `${root}tests/gear-actions.test.jsx`, `${root}tests/field-report.test.jsx`, `${root}tests/report-comparisons.test.jsx`, `${root}tests/chat.test.jsx`, `${root}tests/objective-watches.test.jsx`, `${root}tests/objective-shortlist.test.jsx`],
     outdir: cache,
     outExtension: { ".js": ".mjs" },
     bundle: true,
@@ -37,7 +37,7 @@ try {
   });
   const result = spawnSync(
     process.execPath,
-    ["--test", `${cache}/gear-actions.test.mjs`, `${cache}/field-report.test.mjs`, `${cache}/report-comparisons.test.mjs`, `${cache}/chat.test.mjs`, `${cache}/objective-watches.test.mjs`, `${cache}/objective-shortlist.test.mjs`],
+    ["--test", `${cache}/route-planning.test.mjs`, `${cache}/gear-actions.test.mjs`, `${cache}/field-report.test.mjs`, `${cache}/report-comparisons.test.mjs`, `${cache}/chat.test.mjs`, `${cache}/objective-watches.test.mjs`, `${cache}/objective-shortlist.test.mjs`],
     { stdio: "inherit", cwd: root },
   );
   process.exitCode = result.status ?? 1;

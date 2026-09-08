@@ -1,0 +1,110 @@
+.field-route-plan-context,
+.field-route-profile-caption {
+  color: var(--f-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.field-route-plan-context {
+  background: var(--f-wash);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 20px;
+}
+.field-route-profile-caption {
+  margin: -12px 0 26px;
+}
+.field-route-alternatives {
+  margin: 22px 0;
+}
+.field-route-alternatives > summary {
+  cursor: pointer;
+  padding: 14px 0;
+  font-weight: 600;
+  min-height: 44px;
+}
+.field-route-itinerary {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.field-route-stop {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--f-line);
+  border-radius: 10px;
+  background: var(--f-paper);
+  text-align: left;
+  color: var(--f-ink);
+}
+.field-route-stop[aria-pressed="true"] {
+  background: var(--f-wash);
+  border-color: var(--f-green);
+}
+.field-route-stop:hover {
+  border-color: var(--f-green);
+}
+.field-route-stop:active {
+  background: var(--f-soft);
+}
+.field-route-stop:focus-visible,
+.field-route-alternatives > summary:focus-visible {
+  outline: 2px solid var(--f-green);
+  outline-offset: 3px;
+}
+.field-route-stop strong,
+.field-route-stop small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.field-route-stop strong {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.field-route-stop small {
+  color: var(--f-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.field-route-stop-number {
+  border: 1px solid var(--f-line);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+@media (max-width: 850px) {
+  .field-route-stop {
+    grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px 12px;
+  }
+  .field-route-stop > :nth-child(4) {
+    grid-column: 2;
+  }
+}
+@media (max-width: 420px) {
+  .field-route-stop {
+    padding: 12px;
+  }
+  .field-route-stop-place {
+    grid-column: 2 / -1;
+  }
+  .field-route-stop > :nth-child(3) {
+    grid-column: 2;
+  }
+  .field-route-stop > :nth-child(4) {
+    grid-column: 3;
+  }
+  .field-route-stop-evidence {
+    grid-column: 2 / -1;
+  }
+}

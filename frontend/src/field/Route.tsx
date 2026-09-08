@@ -6,6 +6,8 @@ import type { Workspace } from "./model/useWorkspace";
 import { parseGpxFile } from "../lib/gpx";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
+import { buildCheckpointProfile, hasRouteNumber } from "./route-planning";
+import "./route-planning.css";
 
 export function Route({ workspace: w }: { workspace: Workspace }) {
   const upload = useRef<HTMLInputElement>(null);
@@ -14,20 +16,15 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const result = w.routeAnalysis;
   const gpx = w.importedGpxRoute;
   const readOnly = w.viewingHistoryReport;
-  const selected =
-    result?.summaries[Math.min(checkpoint, result.summaries.length - 1)];
-  const elevations =
-    result?.summaries.map((point) => point.elev_ft).filter(Number.isFinite) ||
-    [];
-  const low = Math.min(...elevations);
-  const high = Math.max(...elevations);
-  const points =
-    result?.summaries.map((point, index) => ({
-      x: 20 + (index * 960) / Math.max(1, result.summaries.length - 1),
-      y: 155 - ((point.elev_ft - low) / Math.max(100, high - low)) * 125,
-    })) || [];
+  const selectedIndex = Math.min(checkpoint, Math.max(0, (result?.summaries.length ?? 1) - 1));
+  const selected = result?.summaries[selectedIndex];
+  const profile = buildCheckpointProfile(result?.summaries ?? []);
+  const points = profile?.points ?? [];
+  const returned = result?.summaries.filter((p) => p.dataAvailable).length ?? 0;
+  const displayNumber = (value: unknown, format: (n: number) => string) =>
+    hasRouteNumber(value) ? format(value) : "Unavailable";
   function analyze(name: string, useGpx = false) {
-    if (!name.trim()) return;
+    if (!name.trim() || readOnly || w.routeLoading || !available.routeAnalysis) return;
     w.handleFetchRouteAnalysis(
       w.objectiveName,
       name,
@@ -85,6 +82,10 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               Find routes <ArrowRight size={15} />
             </button>
           </div>
+          <p className="field-route-plan-context">
+            {w.forecastDate} · {w.alpineStartTime} start · {w.travelWindowHours} hours
+            {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
+          </p>
           <form
             className="field-inline-form"
             onSubmit={(e) => {
@@ -196,7 +197,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
           {w.routeError}
         </p>
       )}
-      {!result && w.routeSuggestions && (
+      {w.routeSuggestions && w.routeSuggestions.length > 0 && (
+        <details className="field-route-alternatives" open={!result}>
+          <summary>Route options ({w.routeSuggestions.length})</summary>
         <div className="field-route-options">
           {w.routeSuggestions.map((route, i) => (
             <article className="field-panel" key={i}>
@@ -215,7 +218,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               {!readOnly && (
                 <button
                   className="field-text-button"
-                  disabled={w.routeLoading}
+                  disabled={w.routeLoading || !available.routeAnalysis}
                   onClick={() => analyze(route.name)}
                 >
                   Analyze this route
@@ -225,6 +228,10 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
             </article>
           ))}
         </div>
+        </details>
+      )}
+      {!w.routeLoading && w.routeSuggestions?.length === 0 && (
+        <p className="field-feedback">No route suggestions found. Enter a route name or import a GPX track.</p>
       )}
       {result && (
         <>
@@ -239,21 +246,24 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                 <h2>Checkpoint forecast</h2>
               </div>
               <span className="field-badge">
-                {result.summaries.length} checkpoints
+                {returned} of {result.summaries.length} forecasts returned
               </span>
             </div>
-            {result.partialData && (
+            {result.routeSource === "generated" && (
+              <p className="field-feedback">Estimated checkpoints · Route geometry is generated and has not been verified against a mapped trail.</p>
+            )}
+            {(result.partialData || returned < result.summaries.length) && (
               <p className="field-warning">
                 Some checkpoints have incomplete source data. Review each
                 forecast before relying on this analysis.
               </p>
             )}
-            {elevations.length === points.length && points.length > 1 && (
+            {profile && (
               <svg
                 className="field-route-profile"
                 viewBox="0 0 1000 180"
                 preserveAspectRatio="none"
-                role="img"
+                role="group"
                 aria-label="Elevation profile across route checkpoints"
               >
                 <path
@@ -274,6 +284,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     role="button"
                     tabIndex={0}
                     aria-label={`Select ${result.summaries[i].name}`}
+                    aria-pressed={i === selectedIndex}
                     onClick={() => setCheckpoint(i)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -285,7 +296,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                     <circle
                       cx={point.x}
                       cy={point.y}
-                      r={i === checkpoint ? 5 : 3}
+                      r={i === selectedIndex ? 5 : 3}
                       fill="currentColor"
                     />
                     <rect
@@ -299,34 +310,68 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                 ))}
               </svg>
             )}
-            <div
-              className="field-preset-list"
-              role="group"
-              aria-label="Route checkpoints"
-            >
-              {result.summaries.map((point, i) => (
-                <button
-                  key={i}
-                  aria-pressed={checkpoint === i}
-                  onClick={() => setCheckpoint(i)}
-                >
-                  {point.name}
-                </button>
-              ))}
+            {profile && (
+              <p className="field-route-profile-caption">
+                {w.formatElevationDisplay(profile.low)}–{w.formatElevationDisplay(profile.high)} · {profile.axis === "distance"
+                  ? "Spaced by route distance"
+                  : profile.axis === "progress" ? "Spaced by estimated route progress" : "Checkpoint order; distance unavailable"}
+              </p>
+            )}
+            <div className="field-panel-heading">
+              <div>
+                <h3>Checkpoint itinerary</h3>
+                <p className="field-muted">Estimated arrivals use your planned duration, not terrain-adjusted pace. Times are local to the objective.</p>
+              </div>
             </div>
+            {result.summaries.length === 0 ? (
+              <p className="field-feedback">No checkpoint forecasts were returned. Try another route or import a GPX track.</p>
+            ) : (
+              <ol className="field-route-itinerary" aria-label="Checkpoint itinerary">
+                {result.summaries.map((point, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      className="field-route-stop"
+                      aria-pressed={selectedIndex === i}
+                      aria-controls="field-route-checkpoint-detail"
+                      onClick={() => setCheckpoint(i)}
+                    >
+                      <span className="field-route-stop-number" aria-hidden="true">{i + 1}</span>
+                      <span className="field-route-stop-place">
+                        <strong>{point.name}</strong>
+                        <small>{displayNumber(point.elev_ft, w.formatElevationDisplay)} · {hasRouteNumber(point.distance_miles) ? `${w.formatDistanceDisplay(point.distance_miles)} along route` : "Distance unavailable"}</small>
+                      </span>
+                      <span>
+                        <strong>{point.etaTime || "Time unavailable"}</strong>
+                        <small>{point.etaDate || "Date unavailable"}</small>
+                      </span>
+                      <span>
+                        <strong>{point.dataAvailable ? displayNumber(point.weather.temp, w.formatTempDisplay) : "Unavailable"}</strong>
+                        <small>Gust {point.dataAvailable ? displayNumber(point.weather.windGust, w.formatWindDisplay) : "unavailable"}</small>
+                      </span>
+                      <span className="field-route-stop-evidence">
+                        <strong>{point.dataAvailable ? "Forecast returned" : "Missing forecast"}</strong>
+                        <small>{point.dataAvailable && hasRouteNumber(point.activeAlerts) && point.activeAlerts > 0
+                          ? `${point.activeAlerts} active alerts` : "View checkpoint details"}</small>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
             {selected && (
-              <div className="field-checkpoint">
+              <div className="field-checkpoint" id="field-route-checkpoint-detail" role="region" aria-label="Selected checkpoint" aria-live="polite">
                 <h3>{selected.name}</h3>
                 <p>
-                  {w.formatElevationDisplay(selected.elev_ft)} ·{" "}
-                  {w.formatDistanceDisplay(selected.distance_miles)} · Arrive{" "}
+                  {displayNumber(selected.elev_ft, w.formatElevationDisplay)} ·{" "}
+                  {hasRouteNumber(selected.distance_miles) ? `${w.formatDistanceDisplay(selected.distance_miles)} along route` : "Distance unavailable"} · Arrive{" "}
                   {selected.etaDate || ""}{" "}
                   {selected.etaTime || "Time unavailable"}
                 </p>
                 <dl className="field-detail-grid">
                   <div>
                     <dt>Planning score</dt>
-                    <dd>{selected.score ?? "—"}/100</dd>
+                    <dd>{selected.dataAvailable ? displayNumber(selected.score, (n) => `${n}/100`) : "Unavailable"}</dd>
                     <small>
                       {selected.dataAvailable
                         ? "Forecast available"
@@ -335,31 +380,31 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   </div>
                   <div>
                     <dt>Weather</dt>
-                    <dd>{w.formatTempDisplay(selected.weather.temp)}</dd>
-                    <small>{selected.weather.description}</small>
+                    <dd>{selected.dataAvailable ? displayNumber(selected.weather.temp, w.formatTempDisplay) : "Unavailable"}</dd>
+                    <small>{selected.dataAvailable ? selected.weather.description : "Forecast did not load"}</small>
                   </div>
                   <div>
                     <dt>Wind gust</dt>
-                    <dd>{w.formatWindDisplay(selected.weather.windGust)}</dd>
+                    <dd>{selected.dataAvailable ? displayNumber(selected.weather.windGust, w.formatWindDisplay) : "Unavailable"}</dd>
                     <small>
                       Feels like{" "}
-                      {w.formatTempDisplay(selected.weather.feelsLike)}
+                      {selected.dataAvailable ? displayNumber(selected.weather.feelsLike, w.formatTempDisplay) : "unavailable"}
                     </small>
                   </div>
                   <div>
                     <dt>Precipitation</dt>
-                    <dd>{selected.weather.precipChance ?? "—"}%</dd>
+                    <dd>{selected.dataAvailable ? displayNumber(selected.weather.precipChance, (n) => `${n}%`) : "Unavailable"}</dd>
                   </div>
                   <div>
                     <dt>Avalanche</dt>
-                    <dd>{selected.avalanche?.risk || "Unavailable"}</dd>
+                    <dd>{(selected.dataAvailable && selected.avalanche?.risk) || "Unavailable"}</dd>
                   </div>
                   <div>
                     <dt>Alerts / snow depth</dt>
                     <dd>
-                      {selected.activeAlerts} alerts ·{" "}
+                      {selected.dataAvailable ? displayNumber(selected.activeAlerts, (n) => `${n} alerts`) : "Alerts unavailable"} ·{" "}
                       {formatSnowDepthForElevationUnit(
-                        selected.snowDepthIn,
+                        selected.dataAvailable ? selected.snowDepthIn : null,
                         w.preferences.elevationUnit,
                       )}
                     </dd>
