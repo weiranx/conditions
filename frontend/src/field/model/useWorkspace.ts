@@ -494,6 +494,7 @@ export function useWorkspace() {
   >(initialRestoredReport?.ai.reportChatMessages ?? []);
   const [reportChatSessionKey, setReportChatSessionKey] = useState(0);
   const [viewingHistoryReport, setViewingHistoryReport] = useState(false);
+  const [restoredReportSnapshot, setRestoredReportSnapshot] = useState<PersistedReport | null>(null);
   const [restoredReportSource, setRestoredReportSource] = useState<
     "saved" | "shared" | null
   >(null);
@@ -1114,7 +1115,9 @@ export function useWorkspace() {
 
   const reportSnapshot = useMemo(
     () =>
-      safetyData
+      viewingHistoryReport && restoredReportSnapshot
+        ? restoredReportSnapshot
+        : safetyData
         ? buildPersistedReport(
             reportPlan,
             safetyData,
@@ -1136,6 +1139,8 @@ export function useWorkspace() {
           )
         : null,
     [
+      viewingHistoryReport,
+      restoredReportSnapshot,
       reportPlan,
       safetyData,
       aiBriefNarrative,
@@ -1475,6 +1480,9 @@ export function useWorkspace() {
         ...(report.preferences || preferencesRef.current),
         travelWindowHours: report.plan.travelWindowHours,
       };
+      // Navigation may restore the user's preferences for other pages, but
+      // the saved snapshot must retain its own plan and settings.
+      setRestoredReportSnapshot({ ...report, preferences: reportPreferences });
       historyReportPreferencesRef.current = reportPreferences;
       setPreferences(reportPreferences);
 

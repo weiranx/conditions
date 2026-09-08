@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { SafetyData } from '../../app/types';
 import { persistReport, type PersistedReport, type PersistedReportChatMessage } from '../../app/report-storage';
@@ -9,6 +9,8 @@ type AccountState = { accountLoading: boolean; accountUserId: string | undefined
 
 // Owns the identity and generation boundary of an account-saved report.
 export function useSavedReportSession({ safetyData, accountLoading, accountUserId }: AccountState & { safetyData: SafetyData | null }) {
+  const [sessionOwnerId, setSessionOwnerId] = useState(accountUserId);
+  const accountResolvedRef = useRef(!accountLoading);
   const [activeSavedReportId, setActiveSavedReportId] = useState<string | null>(
     null,
   );
@@ -38,6 +40,18 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
       reportSyncTimeoutRef.current = null;
     }
   }, []);
+
+  // Invalidate pending saves/updates before passive sync effects can run for
+  // another user. Initial account hydration may finish a waiting generation.
+  useLayoutEffect(() => {
+    if (accountLoading) return;
+    if (sessionOwnerId !== accountUserId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Cancel external writes synchronously at an account boundary.
+      if (accountResolvedRef.current) resetSavedReportTracking();
+      setSessionOwnerId(accountUserId);
+    }
+    accountResolvedRef.current = true;
+  }, [accountLoading, accountUserId, sessionOwnerId, resetSavedReportTracking]);
 
   // Manual saves share the same generation boundary as automatic saves.
   const saveReportSnapshot = useCallback(async (
@@ -85,7 +99,9 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
   );
 
   return {
-    activeSavedReportId, activeSavedReportShareToken, reportGenerationPending,
+    activeSavedReportId: sessionOwnerId === accountUserId ? activeSavedReportId : null,
+    activeSavedReportShareToken: sessionOwnerId === accountUserId ? activeSavedReportShareToken : null,
+    reportGenerationPending,
     setReportGenerationPending, resetSavedReportTracking, beginSavedReportGeneration,
     setActiveSavedReportId, setActiveSavedReportShareToken, saveReportSnapshot,
     reportGenerationRef, reportSaveIntentRef, reportSaveSourceDataRef,

@@ -8,9 +8,11 @@ import { useStartTimeScenarios } from '../src/hooks/useStartTimeScenarios';
 import { useReportComparisons } from '../src/field/model/useReportComparisons';
 import { useReportGeneration } from '../src/field/model/useReportGeneration';
 import { useSavedReportSession, useSavedReportSync } from '../src/field/model/useSavedReportSync';
-import { buildPersistedReport } from '../src/app/report-storage';
+import { buildPersistedReport, loadPersistedReport } from '../src/app/report-storage';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import { makeReport } from '../dev/mock-data.mjs';
+import { useWorkspace } from '../src/field/model/useWorkspace';
+import { AccountContext } from '../src/contexts/account';
 
 const preferences = { ...getDefaultUserPreferences(), travelWindowHours: 10 };
 const plan = { lat: 46.8523, lon: -121.7603, date: '2026-09-06', start: '07:00', travel_window_hours: 10 };
@@ -18,9 +20,11 @@ function props(overrides = {}) {
   return { enabled: true, sourceReport: makeReport(plan, 'clear'), forecastDate: plan.date,
     currentStartTime: plan.start, position: { lat: plan.lat, lng: plan.lon }, preferences, ...overrides };
 }
-async function mountHook(t, hook, initial, strict = false) {
+async function mountHook(t, hook, initial, strict = false, account = null) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = { window: globalThis.window, document: globalThis.document, localStorage: globalThis.localStorage, fetch: globalThis.fetch };
+  dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  dom.window.scrollTo = () => {};
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.localStorage = dom.window.localStorage;
@@ -36,7 +40,7 @@ async function mountHook(t, hook, initial, strict = false) {
   function Probe(input) { current = hook(input); renders.push(current); return null; }
   const root = createRoot(document.getElementById('root'));
   async function render(input) {
-    await act(async () => root.render(strict ? <StrictMode><Probe {...input} /></StrictMode> : <Probe {...input} />));
+    await act(async () => root.render(<AccountContext.Provider value={account}>{strict ? <StrictMode><Probe {...input} /></StrictMode> : <Probe {...input} />}</AccountContext.Provider>));
   }
   t.after(async () => {
     await act(async () => root.unmount());
@@ -303,3 +307,102 @@ test('manual save attaches once when current and can retry an error', async t =>
   assert.equal(h.current.activeSavedReportId, 'saved');
   assert.equal(h.current.lastSavedReportSnapshotRef.current, JSON.stringify(snapshot));
 });
+
+for (const nextUser of [undefined, 'account-B']) {
+  test(`account change to ${nextUser || 'signed out'} clears identity before it is rendered`, async t => {
+    const input = { accountLoading: false, accountUserId: 'account-A', safetyData: null };
+    const h = await mountHook(t, useSavedReportSession, input);
+    await act(async () => { h.current.setActiveSavedReportId('owned-by-A'); h.current.setActiveSavedReportShareToken('token-A'); });
+    const firstRender = h.renders.length;
+    await h.render({ ...input, accountUserId: nextUser });
+    assert.equal(h.renders[firstRender].activeSavedReportId, null);
+    assert.equal(h.renders[firstRender].activeSavedReportShareToken, null);
+    assert.equal(h.current.activeSavedReportId, null);
+    // A -> B -> A must not resurrect the old saved identity either.
+    await h.render(input);
+    assert.equal(h.current.activeSavedReportId, null);
+  });
+}
+
+test('late manual saves from the old account cannot attach to the new one', async t => {
+  const input = { accountLoading: false, accountUserId: 'account-A', safetyData: null };
+  const h = await mountHook(t, useSavedReportSession, input);
+  let pending;
+  await act(async () => { pending = h.current.saveReportSnapshot({plan:{},safetyData:{}}, () => {}); });
+  await h.render({ ...input, accountUserId: 'account-B' });
+  await act(async () => {
+    h.requests[0].respond({report:{id:'old-A',shareToken:'token-A'},reportCount:1,reportUsage:manualSaveUsage});
+    assert.equal(await pending, null);
+  });
+  assert.equal(h.current.activeSavedReportId, null);
+  assert.equal(h.current.activeSavedReportShareToken, null);
+  assert.equal(h.current.reportSaveIntentRef.current, 'browser-only');
+});
+
+function useSyncedSession(input) {
+  const session = useSavedReportSession(input);
+  const noOp = () => {};
+  useSavedReportSync(session, { ...input, hasObjective: true, viewingHistoryReport: false, reportHistoryEnabled: true,
+    syncGeneratedReportUsage: noOp, setReportChatMessages: noOp, resetRouteState: noOp, setReportChatSessionKey: noOp });
+  return session;
+}
+function savedTestSnapshot() {
+  const safetyData = makeReport(plan, 'clear');
+  return buildPersistedReport({lat:plan.lat,lon:plan.lon,objectiveName:'Test',searchQuery:'',forecastDate:plan.date,
+    alpineStartTime:plan.start,targetElevationInput:'',travelWindowHours:10},safetyData,{}, {preferences});
+}
+test('account changes cancel queued updates and reject old automatic saves', async t => {
+  const input = {accountLoading:false,accountUserId:'account-A',safetyData:null,reportSnapshot:null};
+  const h = await mountHook(t,useSyncedSession,input);
+  await act(async () => h.current.beginSavedReportGeneration());
+  const snapshot = savedTestSnapshot();
+  await h.render({...input,safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  assert.equal(h.requests.length,1);
+  await h.render({...input,accountUserId:'account-B',safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  await act(async()=>h.requests[0].respond({report:{id:'old-A',shareToken:'token-A'},reportCount:1,reportUsage:manualSaveUsage}));
+  assert.equal(h.current.activeSavedReportId,null);
+  await act(async()=>h.current.setActiveSavedReportId('owned-by-B'));
+  await h.render({...input,accountUserId:'account-C',safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,450));});
+  assert.equal(h.requests.length,1,'no queued update is sent with the next account session');
+});
+
+test('initial account hydration preserves an explicitly waiting report generation', async t => {
+  const input={accountLoading:true,accountUserId:undefined,safetyData:null,reportSnapshot:null};
+  const h=await mountHook(t,useSyncedSession,input,true);
+  await act(async()=>h.current.beginSavedReportGeneration());
+  const snapshot=savedTestSnapshot();
+  await h.render({...input,safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  assert.equal(h.requests.length,0);
+  await h.render({...input,accountLoading:false,accountUserId:'account-A',safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  assert.equal(h.requests.length,1);
+  await act(async()=>h.requests[0].respond({report:{id:'current-A',shareToken:'token-A'},reportCount:1,reportUsage:manualSaveUsage}));
+  assert.equal(h.current.activeSavedReportId,'current-A');
+});
+
+for (const legacy of [false, true]) {
+  test(`saved snapshot survives preference navigation${legacy ? ' without embedded preferences' : ''}`, async t => {
+    const userPreferences = { ...getDefaultUserPreferences(), travelWindowHours: 12 };
+    const account = { loading: false, user: { id: 'test-account', email: 'test@example.test', preferences: userPreferences },
+      refreshAccount: async () => {}, savePreferences: async () => {}, syncMultiDayUsage: () => {}, syncGeneratedReportUsage: () => {} };
+    const h = await mountHook(t, useWorkspace, {}, false, account);
+    const snapshot = savedTestSnapshot();
+    snapshot.plan.travelWindowHours = 3;
+    snapshot.preferences = legacy ? null : { ...snapshot.preferences, travelWindowHours: 3 };
+    await act(async () => h.current.handleOpenSavedReport(snapshot, ''));
+    assert.equal(h.current.reportSnapshot.plan.travelWindowHours, 3);
+    const restored = h.current.reportSnapshot;
+    await act(async () => h.current.navigateToView('settings'));
+    assert.equal(h.current.preferences.travelWindowHours, 12, 'settings retains the user preference');
+    assert.equal(h.current.reportSnapshot, restored, 'navigation does not rebuild the saved snapshot');
+    assert.equal(loadPersistedReport().plan.travelWindowHours, 3);
+    assert.equal(loadPersistedReport().preferences.travelWindowHours, 3);
+    await act(async () => h.current.navigateToView('history'));
+    assert.equal(loadPersistedReport().plan.travelWindowHours, 3);
+    await act(async () => h.current.navigateToView('planner'));
+    assert.equal(h.current.reportSnapshot.plan.travelWindowHours, 3);
+    await act(async () => h.current.handleEditPlan());
+    assert.equal(h.current.reportSnapshot, null, 'editing leaves the saved snapshot');
+    assert.equal(h.current.preferences.travelWindowHours, 12);
+  });
+}

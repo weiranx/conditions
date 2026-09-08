@@ -71,11 +71,51 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
   const rows = Array.from({ length: hours }, (_, index) => {
     const minute = start === null ? NaN : start + index * 60;
     const time = Number.isFinite(minute) ? minutesToTwentyFourHourClock(minute % 1440) : "Unavailable";
-    const match = timed.find(entry => entry.minute <= minute && minute < entry.minute + 60);
-    if (match) return { ...match.row, time };
-    const missing: WeatherTrendPoint = { time, temp: NaN, wind: NaN, gust: NaN, precipChance: NaN, condition: "Unavailable" };
-    const row = buildReportWeatherRows({ ...data, weather: { ...data.weather, trend: [missing] } }, preferences, 1)[0];
-    return { ...row, reasonSummary: "No hourly forecast covers this planned time. Verify conditions before departure." };
+    const end = minute + 60;
+    const overlaps = timed.filter(entry => entry.minute < end && entry.minute + 60 > minute);
+    // Check every subinterval, including the part after the final clock-hour
+    // boundary. Sampling only the slot's start misses late storms and gaps.
+    const boundaries = [...new Set([minute, end, ...overlaps.flatMap(entry => [
+      Math.max(minute, entry.minute), Math.min(end, entry.minute + 60),
+    ])])].sort((a, b) => a - b);
+    const used = new Set<typeof timed[number]>();
+    let covered = Number.isFinite(minute);
+    for (const boundary of boundaries.slice(0, -1)) {
+      const entry = overlaps.find(item => item.minute <= boundary && boundary < item.minute + 60);
+      if (entry) used.add(entry);
+      else covered = false;
+    }
+    const contributing = [...used].map(entry => entry.row);
+    if (contributing.length === 0) {
+      const missing: WeatherTrendPoint = { time, temp: NaN, wind: NaN, gust: NaN, precipChance: NaN, condition: "Unavailable" };
+      const row = buildReportWeatherRows({ ...data, weather: { ...data.weather, trend: [missing] } }, preferences, 1)[0];
+      return { ...row, reasonSummary: "No hourly forecast covers this planned time. Verify conditions before departure." };
+    }
+    const complete = covered && contributing.every(row => row.complete);
+    const pass = complete && contributing.every(row => row.pass);
+    const failedRules = [...new Set(contributing.flatMap(row => row.failedRules))];
+    const failedRuleLabels = [...new Set([
+      ...contributing.flatMap(row => row.failedRuleLabels),
+      ...(!covered ? ["Incomplete hourly coverage"] : []),
+    ])];
+    // Keep both cold and heat hazards in the reasons; display the breached
+    // temperature extreme alongside the largest wind/precipitation readings.
+    const coldest = contributing.reduce((a, b) => a.feelsLike < b.feelsLike ? a : b);
+    const hottest = contributing.reduce((a, b) => a.feelsLike > b.feelsLike ? a : b);
+    const thermal = coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest;
+    return {
+      ...thermal, time, complete, pass, failedRules, failedRuleLabels,
+      wind: Math.max(...contributing.map(row => row.wind)),
+      gust: Math.max(...contributing.map(row => row.gust)),
+      precipChance: Math.max(...contributing.map(row => row.precipChance)),
+      lightningRisk: contributing.some(row => row.lightningRisk),
+      condition: [...new Set(contributing.map(row => row.condition))].join(" / "),
+      reasonSummary: pass ? "Meets thresholds" : [
+        ...(!covered ? ["Hourly forecast coverage is incomplete for this planned hour."] : []),
+        ...(!contributing.every(row => row.complete) ? ["Hourly evidence is incomplete. Verify the missing weather observations."] : []),
+        ...failedRules,
+      ].join(" "),
+    };
   });
   annotateExposure(rows);
   return rows;

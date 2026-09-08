@@ -542,3 +542,47 @@ test('missing temperature never invents a freezing reading in the reasons', () =
   assert.doesNotMatch(rows[0].reasonSummary, /feels|0°F/);
   assert.deepEqual(rows[0].failedRuleLabels, ['Incomplete hourly evidence']);
 });
+
+test('fractional departures include hazards in the final partial hour', () => {
+  const data = weatherData([7, 8, 9].map(hour => ({ ...weatherHour, time: `${hour}:00`,
+    gust: hour === 9 ? 90 : 5, condition: hour === 9 ? 'Thunderstorms' : 'Clear' })));
+  const rows = buildPlannedReportWeatherRows(data, preferences, 3, { ...plannedWindow, start: '06:30' });
+  assert.deepEqual(rows.map(row => [row.complete, row.pass]), [[false, false], [true, true], [true, false]]);
+  assert.equal(rows[2].gust, 90);
+  assert.equal(rows[2].lightningRisk, true);
+  assert.match(rows[2].reasonSummary, /Thunderstorms/);
+  assert.match(rows[2].reasonSummary, /gust/);
+});
+
+test('a gap in the final half hour is incomplete even when the slot starts with data', () => {
+  const data = weatherData([6, 7, 8].map(hour => ({ ...weatherHour, time: `${hour}:00` })));
+  const rows = buildPlannedReportWeatherRows(data, preferences, 3, { ...plannedWindow, start: '06:30' });
+  assert.deepEqual(rows.map(row => row.complete), [true, true, false]);
+  assert.equal(rows[2].pass, false);
+  assert.match(rows[2].reasonSummary, /coverage is incomplete/);
+});
+
+test('interval checks retain cold and heat extremes and exclude hazards at the return boundary', () => {
+  const data = weatherData([
+    { ...weatherHour, time: '06:00', temp: -20 },
+    { ...weatherHour, time: '07:00', temp: 110 },
+    { ...weatherHour, time: '07:30', gust: 100, condition: 'Thunderstorms' },
+  ]);
+  const [row] = buildPlannedReportWeatherRows(data, preferences, 1, { ...plannedWindow, start: '06:30' });
+  assert.equal(row.complete, true);
+  assert.equal(row.pass, false);
+  assert.ok(row.failedRuleLabels.includes('Feels-like below limit'));
+  assert.ok(row.failedRuleLabels.includes('Heat above limit'));
+  assert.equal(row.lightningRisk, false);
+  assert.equal(row.gust, weatherHour.gust);
+});
+
+test('fractional intervals cross midnight without losing the next day storm', () => {
+  const data = weatherData(['23:00', '00:00', '01:00'].map((time, index) => ({ ...weatherHour, time,
+    timeIso: `2026-09-${index === 0 ? '06' : '07'}T${time}:00-07:00`,
+    condition: index === 2 ? 'Thunderstorms' : 'Clear' })));
+  const rows = buildPlannedReportWeatherRows(data, preferences, 2, { ...plannedWindow, start: '23:30' });
+  assert.deepEqual(rows.map(row => row.complete), [true, true]);
+  assert.equal(rows[1].lightningRisk, true);
+  assert.equal(rows[1].pass, false);
+});
