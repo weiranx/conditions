@@ -284,6 +284,7 @@ const createContextualFollowUps = async ({
     }
   };
 
+  let suggestions = [];
   try {
     const { output } = await generateTracked({
       ...request,
@@ -293,17 +294,27 @@ const createContextualFollowUps = async ({
         description: 'Three concise, conversation-specific follow-up questions.',
       }),
     });
-    const suggestions = sanitizeFollowUpSuggestions(output, askedQuestions);
-    if (suggestions.length > 0) return suggestions;
+    suggestions = sanitizeFollowUpSuggestions(output, askedQuestions);
+    if (suggestions.length === 3) return suggestions;
   } catch (error) {
     if (followUpAbortSignal.aborted) throw error;
   }
 
-  const { text } = await generateTracked({
-    ...request,
-    system: `${FOLLOW_UP_SYSTEM_PROMPT}\n\nReturn only three questions, one per line, with no numbering or commentary.`,
-  });
-  return sanitizeFollowUpSuggestions({ suggestions: text.split(/\r?\n/) }, askedQuestions);
+  try {
+    const { text } = await generateTracked({
+      ...request,
+      system: `${FOLLOW_UP_SYSTEM_PROMPT}\n\nReturn only three questions, one per line, with no numbering or commentary.`,
+      messages: suggestions.length > 0 ? [
+        ...followUpMessages,
+        { role: 'user', content: `Only ${suggestions.length} distinct valid questions were retained. Generate three additional concise questions to complete the list. Do not repeat these retained questions: ${JSON.stringify(suggestions)}` },
+      ] : followUpMessages,
+    });
+    return sanitizeFollowUpSuggestions({ suggestions: [...suggestions, ...text.split(/\r?\n/)] }, askedQuestions);
+  } catch (error) {
+    // A failed repair must not discard useful questions from the first pass.
+    if (suggestions.length > 0 && !abortSignal.aborted) return suggestions;
+    throw error;
+  }
 };
 
 const createReportChatStream = async ({

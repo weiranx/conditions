@@ -126,3 +126,41 @@ test('retry keeps one user question and sends the same report context', async t 
   assert.match(document.querySelector('.is-assistant').textContent, /Compare the conditions/);
   assert.equal(document.querySelector('[role="alert"]'), null);
 });
+
+test('suggested follow-up sends conversation history and renders the next answer', async t => {
+  await mount(t, { initialMessages: [
+    { id: 'question', role: 'user', parts: [{ type: 'text', text: 'How does the forecast look?' }] },
+    { id: 'answer', role: 'assistant', parts: [
+      { type: 'text', text: 'Expect windy conditions.' },
+      { type: 'data-followUpSuggestions', data: { suggestions: ['What are the wind speeds expected?'] } },
+    ] },
+  ] });
+  const previousFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    const chunks = [
+      { type: 'start', messageId: 'follow-up-answer' },
+      { type: 'text-start', id: 'text' },
+      { type: 'text-delta', id: 'text', delta: 'Winds are forecast at 20 mph.' },
+      { type: 'text-end', id: 'text' },
+      { type: 'data-followUpSuggestions', id: 'follow-up-suggestions', data: { suggestions: ['When will the wind ease?', 'How strong are the gusts?', 'Would an earlier start help?'] } },
+      { type: 'finish' },
+    ];
+    return new Response(chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n', {
+      headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+    });
+  };
+  t.after(() => { globalThis.fetch = previousFetch; });
+  await act(async () => document.querySelector('.field-chat-suggestions button').click());
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].report, '{"objective":"Rainier"}');
+  assert.equal(requests[0].messages.length, 3);
+  assert.equal(requests[0].messages.at(-1).parts[0].text, 'What are the wind speeds expected?');
+  assert.equal(document.querySelectorAll('.is-user').length, 2);
+  assert.equal(document.querySelectorAll('.is-assistant').length, 2);
+  assert.match(document.querySelector('[role="log"]').textContent, /Winds are forecast at 20 mph/);
+  assert.equal(document.querySelector('.field-chat-suggestions button').textContent, 'When will the wind ease?');
+  assert.equal(document.querySelectorAll('.field-chat-suggestions button').length, 3);
+  assert.equal(document.querySelector('[role="alert"]'), null);
+});

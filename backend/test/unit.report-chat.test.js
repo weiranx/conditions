@@ -247,6 +247,39 @@ describe('report chat request handling', () => {
     ]);
   });
 
+  test.each([1, 2])('replenishes %i retained follow-ups after filtering without repeating asked questions', async (retainedCount) => {
+    const retained = ['When do the strongest gusts arrive?', 'Would an earlier start avoid the wind?'].slice(0, retainedCount);
+    const generateText = jest.fn()
+      .mockResolvedValueOnce({ output: { suggestions: [...retained, 'How windy is it?', retained[0], 'x'.repeat(121)] } })
+      .mockResolvedValueOnce({ text: [retained[0], 'How windy is it?', 'Which forecast source should I recheck?', 'When should I turn around?'].join('\n') });
+    const suggestions = await createContextualFollowUps({
+      model: {},
+      modelMessages: [{ role: 'user', content: 'How windy is it?' }],
+      answer: 'Gusts strengthen in the afternoon. Recheck the forecast and plan a turnaround.',
+      messages: [{ role: 'user', parts: [{ type: 'text', text: 'How windy is it?' }] }],
+      abortSignal: new AbortController().signal,
+      generateText,
+      jsonSchema: schema => schema,
+      Output: { object: options => options },
+    });
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[1][0].messages.at(-1).content).toContain(JSON.stringify(retained));
+    expect(suggestions).toEqual([...retained, 'Which forecast source should I recheck?', 'When should I turn around?'].slice(0, 3));
+  });
+
+  test('preserves valid follow-ups when the replacement request fails', async () => {
+    const generateText = jest.fn()
+      .mockResolvedValueOnce({ output: { suggestions: ['When do the strongest gusts arrive?'] } })
+      .mockRejectedValueOnce(new Error('Suggestions unavailable'));
+    const suggestions = await createContextualFollowUps({
+      model: {}, modelMessages: [], messages: [], answer: 'Gusts strengthen in the afternoon.',
+      abortSignal: new AbortController().signal, generateText,
+      jsonSchema: schema => schema, Output: { object: options => options },
+    });
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(suggestions).toEqual(['When do the strongest gusts arrive?']);
+  });
+
   test('streams a valid report-aware request after validation', async () => {
     const app = express();
     app.use(express.json());
