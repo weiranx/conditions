@@ -36,6 +36,12 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
       )
     : "End";
   const percent = (value: number) => `${Math.round(value)}%`;
+  const uvDisplay = (value: number | null | undefined) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0
+      ? value < 0.1 && value > 0 ? "<0.1" : value.toFixed(1)
+      : "Unavailable";
+  const peakUv = data.atmosphere?.uvIndexMax;
+  const hasPeakUv = typeof peakUv === "number" && Number.isFinite(peakUv) && peakUv >= 0;
   return (
     <div className="field-conditions">
       <section className="field-panel report-precip-panel">
@@ -247,33 +253,38 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
           <section className="field-panel condition-card is-atmosphere">
             <span className="field-kicker condition-label">
               <Sun size={18} />
-              Atmosphere
+              Sun exposure
             </span>
-            <h2>Sky and pressure</h2>
-            <ConditionScale
-              label="UV index"
-              value={data.atmosphere?.uvIndex}
-              maximum={11}
-              endLabel="11+"
-            />
+            <h2>{hasPeakUv ? `Peak UV ${uvDisplay(peakUv)}` : "Daily UV peak unavailable"}</h2>
             <p>
-              {w.weatherPressureTrendSummary ||
-                "Pressure trend is unavailable."}
+              {hasPeakUv
+                ? "Maximum forecast for the selected day; it may fall outside your outing hours. A low UV index at an early start does not describe exposure later in the day."
+                : "The start-time reading alone cannot describe sun exposure later in the day."}
             </p>
             <dl className="report-atmosphere-facts">
               <div>
-                <dt>Freezing level</dt>
-                <dd>
-                  {w.formatElevationDisplay(data.atmosphere?.freezingLevelFt)}
-                </dd>
-              </div>
-              <div>
-                <dt>Snow level</dt>
-                <dd>
-                  {w.formatElevationDisplay(data.atmosphere?.snowLevelFt)}
-                </dd>
+                <dt>UV near your start</dt>
+                <dd>{uvDisplay(data.atmosphere?.uvIndex)}</dd>
               </div>
             </dl>
+            <details className="field-detail-disclosure">
+              <summary>Pressure and snow levels</summary>
+              <p>{w.weatherPressureTrendSummary || "Pressure trend is unavailable."}</p>
+              <dl className="report-atmosphere-facts">
+                <div>
+                  <dt>Freezing level</dt>
+                  <dd>
+                    {w.formatElevationDisplay(data.atmosphere?.freezingLevelFt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Snow level</dt>
+                  <dd>
+                    {w.formatElevationDisplay(data.atmosphere?.snowLevelFt)}
+                  </dd>
+                </div>
+              </dl>
+            </details>
             <Details
               title="UV, freezing level, and atmospheric context"
               value={data.atmosphere}
