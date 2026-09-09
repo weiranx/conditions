@@ -343,3 +343,43 @@ test('serializes a route-owned manual claim against an automatic scheduler check
   expect(claimCalls[1][0]).toContain('COALESCE(watches.last_attempted_at, watches.last_checked_at) <= $7::timestamptz');
   expect(OBJECTIVE_WATCH_CLAIM_LEASE_MS).toBeGreaterThan(0);
 });
+
+test.each([
+  ['2026-07-26T06:59:59Z', 'America/Los_Angeles', 200, null, 1, 0, 0],
+  ['2026-07-26T07:00:00Z', 'America/Los_Angeles', 200, null, 0, 1, 0],
+  ['2026-07-25T15:00:00Z', 'Asia/Tokyo', 200, null, 0, 1, 0],
+  ['2026-07-26T07:50:00Z', null, 400, '2026-07-26', 1, 1, 0],
+  ['2026-07-26T07:50:00Z', 'invalid-zone', 400, '2026-07-26', 1, 1, 0],
+  ['2026-07-26T07:50:00Z', null, 503, '2026-07-26', 1, 0, 1],
+  ['2026-07-26T07:50:00Z', null, 400, null, 1, 0, 1],
+  ['2026-07-25T20:00:00Z', null, 400, '2026-07-26', 1, 0, 1],
+  ['2026-07-24T20:00:00Z', null, 400, '2026-07-24', 1, 0, 1],
+])('handles watch expiry at %s in %s with response %s/%s', async (at, timezone, statusCode, start, calls, completed, failed) => {
+  const row = {
+    id: 'watch-1', title: 'Mineral King',
+    plan: { ...PLAN, forecastDate: '2026-07-25' },
+    baseline_report: { safetyData: { ...safetyPayload(), weather: { timezone } } },
+    tier_key: 'premium', consecutive_failures: 0,
+  };
+  const query = jest.fn(async (sql) => ({
+    rows: sql.includes('FROM objective_watches watches') ? [row] : [],
+  }));
+  const invokeSafetyHandler = jest.fn().mockResolvedValue({
+    statusCode,
+    payload: statusCode === 200 ? safetyPayload() : {
+      error: 'Requested forecast date is outside NOAA forecast range', availableRange: { start },
+    },
+  });
+  const checker = createObjectiveWatchChecker({
+    database: { configured: true, query }, invokeSafetyHandler,
+    log: { warn: jest.fn() }, now: () => new Date(at),
+  });
+  expect(await checker.run()).toMatchObject({ failed, completed });
+  expect(invokeSafetyHandler).toHaveBeenCalledTimes(calls);
+  expect(query.mock.calls.filter(([sql]) => sql.includes('SET consecutive_failures'))).toHaveLength(failed);
+  if (completed) {
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO objective_watch_checks'))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => sql.includes('last_snapshot ='))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => sql.includes('check_claim_token = NULL'))).toBe(true);
+  }
+});

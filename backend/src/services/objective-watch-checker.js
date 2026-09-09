@@ -68,9 +68,21 @@ const parsePlannedStart = (plan) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const planDateHasEnded = (plan, now) => {
+const planDateHasEnded = (plan, now, timeZone = null) => {
   const date = String(plan?.forecastDate || '');
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) return true;
+  // Forecast dates belong to the objective's timezone, not the server's day.
+  if (timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(now);
+      const part = (type) => parts.find((value) => value.type === type).value;
+      return date < `${part('year')}-${part('month')}-${part('day')}`;
+    } catch {
+      // Older snapshots may lack a usable timezone; retain the global grace.
+    }
+  }
   const end = new Date(`${date}T23:59:59.999Z`);
   return Number.isNaN(end.getTime()) || now.getTime() > end.getTime() + PLAN_DATE_EXPIRY_GRACE_MS;
 };
@@ -409,10 +421,14 @@ const createObjectiveWatchChecker = ({
 
     const groups = new Map();
     let invalid = 0;
+    let completed = 0;
     for (const watch of dueResult.rows) {
       const key = buildPlanKey(watch.plan);
-      if (!key || planDateHasEnded(watch.plan, checkedAt)) {
-        invalid += 1;
+      const timeZone = watch.last_snapshot?.weather?.timezone
+        || watch.baseline_report?.safetyData?.weather?.timezone;
+      if (!key || planDateHasEnded(watch.plan, checkedAt, timeZone)) {
+        if (!key) invalid += 1;
+        else completed += 1;
         await database.query(`
           UPDATE objective_watches
           SET last_attempted_at = $2, next_check_at = NULL,
@@ -439,6 +455,23 @@ const createObjectiveWatchChecker = ({
           travel_window_hours: String(sample.plan.travelWindowHours || 12),
           name: sample.title,
         }, { suppressReportLog: true });
+        // A date that has rolled out of the forecast is finished, not a
+        // provider outage. This also handles legacy snapshots without a zone.
+        const rangeStart = result?.payload?.availableRange?.start;
+        if (result?.statusCode === 400
+          && /^\d{4}-\d{2}-\d{2}$/u.test(String(rangeStart || ''))
+          && sample.plan.forecastDate < rangeStart
+          && sample.plan.forecastDate < checkedAt.toISOString().slice(0, 10)) {
+          for (const watch of group) {
+            await database.query(`
+              UPDATE objective_watches
+              SET next_check_at = NULL, check_claimed_at = NULL, check_claim_token = NULL
+              WHERE id = $1 AND check_claim_token = $2::uuid
+            `, [watch.id, claimToken]);
+            completed += 1;
+          }
+          return;
+        }
         if (result?.statusCode !== 200 || !result.payload) {
           throw new Error(result?.payload?.error || `Safety report returned ${result?.statusCode || 'no response'}.`);
         }
@@ -529,6 +562,7 @@ const createObjectiveWatchChecker = ({
       changed,
       failed,
       invalid,
+      completed,
       uniquePlans: groups.size,
       notificationsSent,
       checkedAt: checkedAt.toISOString(),
