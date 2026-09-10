@@ -119,6 +119,7 @@ export function makeReport(params = {}, scenario = "mixed") {
     location: { lat, lon },
     forecast: {
       selectedDate: date,
+      requestedStartTime: start,
       selectedStartTime: start,
       selectedEndTime: clock(minutes + count * 60),
       isFuture: date > now.slice(0, 10),

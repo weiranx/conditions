@@ -9,7 +9,7 @@ import {
   includeUserStartTimeScenario,
   type StartTimeScenario,
 } from '../app/start-time-scenarios';
-import { comparisonRequestUrl, comparisonTravelHours } from '../app/comparison-request';
+import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours } from '../app/comparison-request';
 import { fetchApi } from '../lib/api-client';
 
 interface UseStartTimeScenariosParams {
@@ -66,6 +66,7 @@ export function useStartTimeScenarios({
               { signal: controller.signal },
             );
             if (!response.ok || !payload || typeof payload !== 'object') return null;
+            if (!comparisonReportMatches(payload as SafetyData, position.lat, position.lng, forecastDate, startTime, travelWindowHours)) return null;
             return { startTime, data: payload as SafetyData };
           } catch {
             return null;

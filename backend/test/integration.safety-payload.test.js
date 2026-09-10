@@ -175,7 +175,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
       snowpackDetails: expect.any(Boolean),
     });
     expect(res.body.location).toEqual({ lat: 46.88, lon: -121.7269 });
-    expect(res.body.forecast).toMatchObject({ selectedDate: FORECAST_DATE });
+    expect(res.body.forecast).toMatchObject({ selectedDate: FORECAST_DATE, requestedStartTime: '08:00' });
     expect(res.body.weather).toMatchObject({
       dataSource: 'noaa',
       dailyTempHighF: 59,
@@ -211,6 +211,14 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(Array.isArray(res.body.pleasantness.factors)).toBe(true);
   }, 20000);
 
+  test('GET /api/safety preserves requested minutes separately from the provider period', async () => {
+    const res = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=13:30`);
+    expect(res.status).toBe(200);
+    expect(res.body.forecast.requestedStartTime).toBe('13:30');
+    expect(res.body.forecast.selectedStartTime).toBe(`${FORECAST_DATE}T14:00:00-07:00`);
+  }, 20000);
+
   test('GET /api/safety returns 200 with partialData:true and an apiWarning when a pipeline step throws', async () => {
     // Force a synchronous throw inside the success-path-only computation of fire risk data
     // (only reachable before `gearSuggestions`/`fireRiskData` are reassigned in the try
@@ -226,6 +234,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.partialData).toBe(true);
+    expect(res.body.forecast.requestedStartTime).toBe('08:00');
     expect(typeof res.body.apiWarning).toBe('string');
     expect(res.body.apiWarning.length).toBeGreaterThan(0);
     expect(typeof res.body.capabilities.ai).toBe('boolean');

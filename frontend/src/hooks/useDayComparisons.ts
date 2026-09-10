@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { fetchApi } from '../lib/api-client';
 import type { DayOverDayComparison, SafetyData, UserPreferences } from '../app/types';
 import { DATE_FMT } from '../app/constants';
-import { addDaysToIsoDate } from '../app/core';
+import { addDaysToIsoDate, parseOptionalFiniteNumber } from '../app/core';
 import { buildDayOverDayChanges } from '../app/day-over-day';
-import { comparisonRequestUrl, comparisonTravelHours } from '../app/comparison-request';
+import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours, reportRequestedStartTime } from '../app/comparison-request';
 
 export interface UseDayComparisonsParams {
   hasObjective: boolean;
@@ -32,10 +32,11 @@ export function useDayComparisons({
   const [result, setResult] = useState<{ key: string; source: SafetyData; comparison: DayOverDayComparison | null } | null>(null);
   const { temperatureUnit, windSpeedUnit } = preferences;
   const selectedDate = safetyData?.forecast?.selectedDate || forecastDate;
-  const startTime = safetyData?.forecast?.selectedStartTime || currentStartTime;
+  const startTime = (safetyData && reportRequestedStartTime(safetyData)) || currentStartTime;
   const travelWindowHours = comparisonTravelHours(preferences.travelWindowHours);
   const comparisonEnabled = Boolean(
-    hasObjective && view === 'planner' && safetyData && DATE_FMT.test(selectedDate),
+    hasObjective && view === 'planner' && safetyData && DATE_FMT.test(selectedDate)
+      && Number.isFinite(parseOptionalFiniteNumber(safetyData.safety?.score)),
   );
   const comparisonKey = comparisonEnabled && safetyData
     ? JSON.stringify([
@@ -76,8 +77,10 @@ export function useDayComparisons({
         }
 
         const previousPayload = payload as SafetyData;
-        const prevScore = Number(previousPayload?.safety?.score);
-        if (!Number.isFinite(prevScore)) {
+        const prevScore = parseOptionalFiniteNumber(previousPayload?.safety?.score);
+        if (!Number.isFinite(prevScore) || !comparisonReportMatches(
+          previousPayload, position.lat, position.lng, previousDate, startTime, travelWindowHours,
+        )) {
           if (!controller.signal.aborted) setResult({ key: comparisonKey, source: safetyData, comparison: null });
           return;
         }

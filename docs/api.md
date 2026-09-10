@@ -25,6 +25,7 @@ Returns a synthesized planning report for a coordinate, date, start time, and tr
 | `travelWindowHours` | integer | No | camelCase alias for `travel_window_hours` |
 
 **Behavior notes:**
+- `forecast.requestedStartTime` echoes the validated local departure clock (`HH:mm`, or `null` if omitted/invalid). `forecast.selectedStartTime` is the provider's forecast-period timestamp and may differ from the requested departure.
 - If `start` is missing or invalid, the backend selects the first available NOAA hourly forecast period for the selected date.
 - `travel_window_hours` values are rounded and clamped to `1`–`24`; invalid values fall back to `12`.
 

@@ -102,6 +102,7 @@ export interface SafetyData {
   location: { lat: number; lon: number };
   forecast?: {
     selectedDate?: string;
+    requestedStartTime?: string | null;
     selectedStartTime?: string;
     selectedEndTime?: string;
     isFuture?: boolean;

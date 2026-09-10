@@ -406,3 +406,96 @@ for (const legacy of [false, true]) {
     assert.equal(h.current.preferences.travelWindowHours, 12);
   });
 }
+
+
+test('comparison coordination uses the requested clock instead of the forecast period timestamp', async t => {
+  const base = props({ currentStartTime: '13:30' });
+  base.sourceReport.forecast.selectedStartTime = `${plan.date}T13:00:00-07:00`;
+  base.sourceReport.forecast.requestedStartTime = '13:30';
+  const input = { ...base, hasObjective: true, view: 'planner', safetyData: base.sourceReport,
+    viewingHistoryReport: false, loading: false, startTimeComparisonsEnabled: true };
+  const h = await mountHook(t, useReportComparisons, input);
+  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests[0].url.searchParams.get('start'), '13:30');
+  await respondAll(h.requests);
+  assert.equal(h.current.dayOverDay.startTime, '13:30');
+  await h.render({ ...input, currentStartTime: '14:00' });
+  assert.equal(h.requests.length, 4, 'editing departure hides comparisons until a new report exists');
+  assert.equal(h.current.dayOverDay, null);
+  assert.equal(h.current.startTimeScenarios.comparison, null);
+});
+
+test('legacy timestamp reports use the planner clock for previous-day requests', async t => {
+  const source = makeReport(plan, 'clear');
+  delete source.forecast.requestedStartTime;
+  source.forecast.selectedStartTime = `${plan.date}T06:00:00-07:00`;
+  const h = await mountHook(t, useDayComparisons, { hasObjective: true, view: 'planner', safetyData: source,
+    forecastDate: plan.date, currentStartTime: '07:30', position: { lat: plan.lat, lng: plan.lon }, preferences });
+  assert.equal(h.requests[0].url.searchParams.get('start'), '07:30');
+});
+
+test('previous-day comparisons accept a real zero score and stop when the current score is missing', async t => {
+  const source = makeReport(plan, 'clear');
+  const input = { hasObjective: true, view: 'planner', safetyData: source,
+    forecastDate: plan.date, currentStartTime: plan.start, position: { lat: plan.lat, lng: plan.lon }, preferences };
+  const h = await mountHook(t, useDayComparisons, input);
+  const previous = makeReport({ ...plan, date: '2026-09-05' }, 'clear');
+  previous.safety.score = 0;
+  await act(async () => h.requests[0].respond(previous));
+  assert.equal(h.current.dayOverDay.previousScore, 0);
+  assert.equal(h.current.dayOverDay.delta, source.safety.score);
+  await h.render({ ...input, safetyData: { ...source, safety: { ...source.safety, score: null } } });
+  assert.equal(h.current.dayOverDay, null);
+  assert.equal(h.requests.length, 1);
+});
+
+for (const missing of [null, '', '   ']) {
+  test(`previous-day comparison rejects missing scores (${JSON.stringify(missing)})`, async t => {
+    const source = makeReport(plan, 'clear');
+    const h = await mountHook(t, useDayComparisons, { hasObjective: true, view: 'planner', safetyData: source,
+      forecastDate: plan.date, currentStartTime: plan.start, position: { lat: plan.lat, lng: plan.lon }, preferences });
+    const previous = makeReport({ ...plan, date: '2026-09-05' }, 'clear');
+    previous.safety.score = missing;
+    await act(async () => h.requests[0].respond(previous));
+    assert.equal(h.current.dayOverDay, null);
+  });
+}
+
+import { buildDayOverDayChanges } from '../src/app/day-over-day';
+test('day-over-day changes preserve missing evidence and genuine zero readings', () => {
+  const current = makeReport(plan, 'clear');
+  const previous = makeReport(plan, 'clear');
+  previous.safety.score = null;
+  previous.avalanche.dangerLevel = null;
+  previous.weather.windGust = null;
+  previous.weather.feelsLike = '';
+  previous.weather.temp = null;
+  previous.weather.precipChance = ' ';
+  assert.deepEqual(buildDayOverDayChanges(current, previous, preferences), []);
+  previous.safety.score = 0;
+  previous.weather.windGust = 0;
+  const changes = buildDayOverDayChanges(current, previous, preferences);
+  assert.ok(changes.some(change => change.startsWith('Safety score')));
+  assert.ok(changes.some(change => change.startsWith('Wind gust')));
+});
+
+for (const mismatch of ['date', 'location', 'start', 'duration']) {
+  test(`comparison responses for a different ${mismatch} are rejected`, async t => {
+    const base = props();
+    const h = await mountHook(t, useReportComparisons, { ...base, hasObjective: true, view: 'planner', safetyData: base.sourceReport,
+      viewingHistoryReport: false, loading: false, startTimeComparisonsEnabled: true });
+    await act(async () => {
+      for (const req of h.requests) {
+        const data = makeReport(Object.fromEntries(req.url.searchParams), 'clear');
+        if (mismatch === 'date') data.forecast.selectedDate = '2026-09-08';
+        if (mismatch === 'location') data.location.lat += 1;
+        if (mismatch === 'start') data.forecast.requestedStartTime = '23:00';
+        if (mismatch === 'duration') data.rainfall.expected.travelWindowHours = 2;
+        req.respond(data);
+      }
+    });
+    assert.equal(h.current.dayOverDay, null);
+    assert.equal(h.current.startTimeScenarios.comparison, null);
+    assert.match(h.current.startTimeScenarios.error, /could not be evaluated/);
+  });
+}
