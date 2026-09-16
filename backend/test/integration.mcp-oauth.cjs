@@ -106,11 +106,13 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
   for (const callback of [...googleCallbacks,'https://claude.ai/api/mcp/auth_callback','https://grok.com/connectors-oauth-exchange-code/','http://127.0.0.1:49152/callback','http://localhost:54321/oauth/callback','http://[::1]:54321/callback']) {
     const native=await auth.register({redirect_uris:[callback],token_endpoint_auth_method:'none',client_name:'ChatGPT'});
     assert.notEqual(native.client_name,'ChatGPT');
-    const nq={...q,client_id:native.client_id,redirect_uri:callback};delete nq.scope;
+    const nq={...q,client_id:native.client_id,redirect_uri:callback,state:callback.includes('.googleusercontent.com/')?'s'.repeat(1272):q.state};delete nq.scope;
+    await assert.rejects(auth.start({...nq,state:'s'.repeat(4097)}));
     const nr=new URL(await auth.start(nq)).searchParams.get('request');
     await assert.rejects(auth.start({...nq,redirect_uri:callback+'/other'}));
     const back=new URL(await auth.approve(nr,bob,sessionB,true));
     assert.equal(back.origin,new URL(callback).origin);
+    assert.equal(back.searchParams.get('state'),nq.state);
     const nt=await auth.exchange({...exchange,code:back.searchParams.get('code'),redirect_uri:callback},native.client_id);
     assert.equal((await auth.userForToken(nt.access_token)).id,bob);
     const grant=(await auth.list(bob)).find(g=>g.client_id===native.client_id);

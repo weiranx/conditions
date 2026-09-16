@@ -39,7 +39,7 @@ function createMcpOAuthService({ database, clientId, clientSecret, redirectUris,
     const client=await clientForId(q.client_id);
     if (!client || q.response_type !== 'code' || !client.redirect_uris.includes(q.redirect_uri)
       || q.code_challenge_method !== 'S256' || !/^[A-Za-z0-9_-]{43}$/u.test(q.code_challenge || '')
-      || typeof q.state !== 'string' || q.state.length > 1024 || (q.scope !== undefined && q.scope !== 'conditions:read')
+      || typeof q.state !== 'string' || q.state.length > 4096 || (q.scope !== undefined && q.scope !== 'conditions:read')
       || (q.resource !== undefined && q.resource !== resource)) throw invalid();
     return q;
   };
