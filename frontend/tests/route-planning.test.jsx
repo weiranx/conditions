@@ -6,6 +6,42 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Route } from '../src/field/Route';
 import { buildCheckpointProfile } from '../src/field/route-planning';
+import { parseGpxText } from '../src/lib/gpx';
+
+function parseGpx(xml) {
+  const dom = new JSDOM('');
+  const previous = globalThis.DOMParser;
+  globalThis.DOMParser = dom.window.DOMParser;
+  try {
+    return parseGpxText(`<gpx>${xml}</gpx>`);
+  } finally {
+    if (previous === undefined) delete globalThis.DOMParser;
+    else globalThis.DOMParser = previous;
+    dom.window.close();
+  }
+}
+
+test('GPX skips missing and blank coordinates instead of inventing zero coordinates', () => {
+  const valid = '<trkpt lat="34" lon="-117"/><trkpt lat="34.01" lon="-117"/>';
+  const malformed = '<trkpt lon="-117"/><trkpt lat="34"/><trkpt lat=" " lon="-117"/><trkpt lat="34" lon=""/>';
+  const baseline = parseGpx(`<trk><trkseg>${valid}</trkseg></trk>`);
+  const route = parseGpx(`<trk><trkseg>${valid}${malformed}</trkseg></trk>`);
+  assert.equal(route.pointCount, 2);
+  assert.equal(route.distanceMiles, baseline.distanceMiles);
+  assert.deepEqual(route.checkpoints, baseline.checkpoints);
+  assert.throws(() => parseGpx(`<rte><rtept lon="1"/><rtept lat="1"/></rte>`), /at least two valid/);
+  assert.equal(parseGpx('<rte><rtept lat="0" lon="0"/><rtept lat="0" lon="0.01"/></rte>').pointCount, 2);
+});
+
+test('GPX route elements do not add distance or ascent across disconnected routes', () => {
+  const first = '<rte><rtept lat="34" lon="-117"><ele>100</ele></rtept><rtept lat="34.01" lon="-117"><ele>110</ele></rtept></rte>';
+  const second = '<rte><rtept lat="40" lon="-117"><ele>1000</ele></rtept><rtept lat="40.01" lon="-117"><ele>1010</ele></rtept></rte>';
+  const combined = parseGpx(first + second);
+  assert.equal(combined.pointCount, 4);
+  assert.ok(Math.abs(combined.distanceMiles - parseGpx(first).distanceMiles - parseGpx(second).distanceMiles) <= 0.02);
+  assert.equal(combined.elevationGainFt, 66);
+});
+
 
 const point = (overrides = {}) => ({
   name: 'Trailhead', elev_ft: 6000, distance_miles: 0, progress_percent: 0,

@@ -90,10 +90,10 @@ function extractTrackPoints(document: Document): ParsedTrackPoint[] {
         segment: index,
         elements: elementsByLocalName(segment, 'trkpt'),
       }))
-    : [{
-        segment: 0,
-        elements: elementsByLocalName(document, 'rtept'),
-      }];
+    : elementsByLocalName(document, 'rte').map((route, index) => ({
+        segment: index,
+        elements: elementsByLocalName(route, 'rtept'),
+      }));
 
   const points: ParsedTrackPoint[] = [];
   for (const source of sources) {
@@ -101,8 +101,11 @@ function extractTrackPoints(document: Document): ParsedTrackPoint[] {
       if (points.length >= MAX_TRACK_POINTS) {
         throw new Error(`GPX files are limited to ${MAX_TRACK_POINTS.toLocaleString()} track points.`);
       }
-      const lat = Number(element.getAttribute('lat'));
-      const lon = Number(element.getAttribute('lon'));
+      const latText = element.getAttribute('lat')?.trim();
+      const lonText = element.getAttribute('lon')?.trim();
+      if (!latText || !lonText) continue;
+      const lat = Number(latText);
+      const lon = Number(lonText);
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
         continue;
       }
