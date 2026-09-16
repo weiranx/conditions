@@ -10,10 +10,11 @@ RUN npm ci --omit=dev
 # ── Stage 2: final runtime image ──────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runner
 
-# Run as a non-root user for security.
+# Reserve the existing volume owner IDs before packages create system accounts.
+RUN groupadd --system --gid 101 appgroup && useradd --system --uid 100 --gid 101 appuser
+
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-eccodes wget ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system --gid 101 appgroup && useradd --system --uid 100 --gid 101 appuser
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
