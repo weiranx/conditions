@@ -60,3 +60,17 @@ const {describeCallback}=require('../src/auth/mcp-clients');
 test('callback allowlist rejects lookalikes, private networks, credentials, fragments and unsafe schemes',()=>{
  for(const uri of ['https://claude.ai.evil.com/api/mcp/auth_callback','https://claude.ai/api/mcp/auth_callback?next=evil','https://claude.ai/other','http://192.168.1.1:3000/callback','http://0.0.0.0:3000/callback','http://127.1:3000/callback','http://127.0.0.1.evil.com:3000/callback','http://user@localhost:3000/callback','http://localhost:3000/callback#x','http://localhost:99999/callback','javascript:alert(1)','file:///tmp/callback']) expect(describeCallback(uri)).toBeNull();
 });
+
+test('Grok registration allows only its observed exact callback',()=>{
+ const uri='https://grok.com/connectors-oauth-exchange-code/';
+ expect(describeCallback(uri)).toEqual({clientName:'Grok',callbackUri:uri});
+ for(const bad of [uri+'?next=evil',uri+'#x',uri.replace('grok.com','grok.com.evil.example'),uri.replace('https:','http:'),uri.slice(0,-1),uri.replace('grok.com','user@grok.com')]) expect(describeCallback(bad)).toBeNull();
+});
+
+test('Gemini accepts only Google relay hosts and this server callback namespace',()=>{
+ for(const host of ['oauth-redirect','oauth-redirect-test','oauth-redirect-sandbox']) for(const path of ['r','a']) {
+  const uri=`https://${host}.googleusercontent.com/${path}/user_bound_custom-mcp-123456789012345678901-apivps_conditions_weiranxiong_com`;
+  expect(describeCallback(uri)).toEqual({clientName:'Gemini',callbackUri:uri});
+  for(const bad of [uri+'?next=evil',uri+'#x',uri+'/',uri.replace('.com/','.com.evil.example/'),uri.replace('https:','http:'),uri.replace('apivps_conditions_weiranxiong_com','other_server'),uri.replace('123456789012345678901','abc'),uri.replace('/'+path+'/','/other/')]) expect(describeCallback(bad)).toBeNull();
+ }
+});

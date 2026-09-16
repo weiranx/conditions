@@ -99,7 +99,11 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
   const basic=await auth.register({redirect_uris:config.redirectUris});
   assert.equal(await auth.authenticateClient({},'Basic '+Buffer.from(basic.client_id+':'+basic.client_secret).toString('base64')),basic.client_id);
   assert.equal(await auth.authenticateClient({client_id:other.client_id},'Basic '+Buffer.from(basic.client_id+':'+basic.client_secret).toString('base64')),false);
-  for (const callback of ['https://claude.ai/api/mcp/auth_callback','http://127.0.0.1:49152/callback','http://localhost:54321/oauth/callback','http://[::1]:54321/callback']) {
+  const googleCallbacks=['oauth-redirect','oauth-redirect-test','oauth-redirect-sandbox'].flatMap(host=>['r','a'].map(path=>`https://${host}.googleusercontent.com/${path}/user_bound_custom-mcp-123456789012345678901-apivps_conditions_weiranxiong_com`));
+  const googleClient=await auth.register({redirect_uris:googleCallbacks,token_endpoint_auth_method:'client_secret_post'});
+  assert.deepEqual(googleClient.redirect_uris,googleCallbacks);
+  await assert.rejects(auth.register({redirect_uris:[...googleCallbacks,googleCallbacks[0]]}));
+  for (const callback of [...googleCallbacks,'https://claude.ai/api/mcp/auth_callback','https://grok.com/connectors-oauth-exchange-code/','http://127.0.0.1:49152/callback','http://localhost:54321/oauth/callback','http://[::1]:54321/callback']) {
     const native=await auth.register({redirect_uris:[callback],token_endpoint_auth_method:'none',client_name:'ChatGPT'});
     assert.notEqual(native.client_name,'ChatGPT');
     const nq={...q,client_id:native.client_id,redirect_uri:callback};delete nq.scope;
@@ -111,7 +115,7 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
     assert.equal((await auth.userForToken(nt.access_token)).id,bob);
     const grant=(await auth.list(bob)).find(g=>g.client_id===native.client_id);
     assert.equal(grant.callbackUri,callback);
-    assert.equal(grant.clientName,callback.startsWith('https:')?'Claude':'Local MCP client');
+    assert.equal(grant.clientName,callback.startsWith('https://claude.ai/')?'Claude':callback.startsWith('https://grok.com/')?'Grok':callback.includes('.googleusercontent.com/')?'Gemini':'Local MCP client');
   }
   const logout=await auth.exchange({...exchange,code:await authorize(alice,sessionA)});
   await pool.query('DELETE FROM user_sessions WHERE user_id=$1',[alice]);

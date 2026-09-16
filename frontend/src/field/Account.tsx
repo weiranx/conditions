@@ -176,10 +176,12 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
               <p>If custom apps or Developer mode are unavailable, check your ChatGPT account or workspace permissions. See the <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt" target="_blank" rel="noreferrer">official ChatGPT setup guide</a>.</p>
             </details>
             <details className="field-disclosure">
-              <summary>Set up Claude or another MCP client</summary>
+              <summary>Set up Claude, Grok, Gemini, or another MCP client</summary>
               <p><strong>Claude:</strong> Open Customize → Connectors, add a custom connector named Conditions, and enter <code style={{overflowWrap:"anywhere"}}>https://apivps.conditions.weiranxiong.com/mcp</code>. Leave optional OAuth credentials blank, then connect and sign in to Conditions.</p>
+              <p><strong>Grok:</strong> Open Plugins → Connectors → New Connector → Custom. Name it Conditions, enter <code style={{overflowWrap:"anywhere"}}>https://apivps.conditions.weiranxiong.com/mcp</code>, then add the connector and sign in to Conditions.</p>
+              <p><strong>Gemini:</strong> Open Settings → Personal Intelligence → Connected Apps (or Settings → Connected Apps). Under Custom apps, enter <code style={{overflowWrap:"anywhere"}}>https://apivps.conditions.weiranxiong.com/mcp</code>, then choose Next. Leave the optional client ID and secret blank. Review Google's connection notice, connect, and sign in to Conditions. Custom apps may appear under Spark and depend on your account's availability.</p>
               <p><strong>Desktop and CLI apps:</strong> Add the same URL as a remote Streamable HTTP MCP server with OAuth. The client must support automatic registration, PKCE, and a local browser callback. Start the connection on this device and verify the return address on the consent page.</p>
-              <p>Supported return destinations are ChatGPT, Claude, and local callbacks on localhost, 127.0.0.1, or [::1]. Other hosted AI services and clients that only support API keys or local stdio are not supported by this connection flow.</p>
+              <p>Supported return destinations are ChatGPT, Claude, Grok, Gemini’s Google callbacks, and local callbacks on localhost, 127.0.0.1, or [::1]. Other hosted AI services and clients that only support API keys or local stdio are not supported by this connection flow.</p>
               <p>Approve read access, return to your AI app, and try “Show my saved Conditions reports.” See <a href="https://claude.com/docs/connectors/building" target="_blank" rel="noreferrer">Claude’s connector guide</a> for client setup details.</p>
             </details>
             <p>Access is read-only and limited to your account, including saved trip locations and dates. Signing out of Conditions or letting your sign-in expire ends access; reconnect in your AI app to renew it.</p>

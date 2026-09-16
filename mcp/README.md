@@ -52,7 +52,7 @@ allowlist. These settings preserve existing manually registered connections.
 New compatible MCP connections use the advertised `/api/auth/mcp/register` endpoint:
 leave client ID and secret blank in ChatGPT. Registration accepts only exact
 HTTPS ChatGPT callbacks, the exact Claude callback
-`https://claude.ai/api/mcp/auth_callback`, and explicit-port HTTP loopback
+`https://claude.ai/api/mcp/auth_callback`, the Grok callback `https://grok.com/connectors-oauth-exchange-code/`, Gemini’s six Google relay callbacks, and explicit-port HTTP loopback
 callbacks on `localhost`, `127.0.0.1`, or `[::1]`. It stores secrets only as hashes and
 supports public PKCE clients or generated credentials using secret-post/basic.
 Registration grants no account access; each user must sign in and consent.
@@ -110,7 +110,7 @@ Claude supports the same remote MCP URL through Customize → Connectors, with
 optional OAuth credentials left blank. Compatible desktop/CLI clients must
 support Streamable HTTP, DCR, and authorization-code PKCE with a loopback
 callback. Callbacks are matched exactly to each registration. Hosted callback
-domains other than ChatGPT and Claude and private URI schemes are rejected.
+domains other than ChatGPT, Claude, Grok, and the supported Gemini relay hosts and private URI schemes are rejected.
 
 Consent displays the actual callback and derives the app label from its destination,
 not caller-supplied names. Local-client identity is not verified: users should only
@@ -121,3 +121,17 @@ supported scope, `conditions:read`; other scopes remain rejected.
 Protocol regression coverage exercises registration, consent, code exchange and
 private account token resolution for Claude and IPv4/IPv6/localhost callbacks.
 This does not establish compatibility with every third-party app version.
+
+### Grok and Gemini web
+
+Grok: Plugins → Connectors → New Connector → Custom, then use the MCP URL.
+Gemini: Settings → Personal Intelligence → Connected Apps → Custom apps (sometimes under Spark), then use the same URL. Leave optional OAuth credentials blank.
+Both use dynamic registration and the Conditions sign-in/consent page.
+
+Observed Gemini registration supplies six callbacks: HTTPS hosts
+`oauth-redirect.googleusercontent.com`, `oauth-redirect-test.googleusercontent.com`,
+and `oauth-redirect-sandbox.googleusercontent.com`, each with `/r/` and `/a/`
+paths followed by `user_bound_custom-mcp-<numeric-user-id>-apivps_conditions_weiranxiong_com`.
+The allowlist matches only that server namespace, and each authorization still
+requires an exact callback registered to its client. Registration permits at most six callbacks.
+These destinations were verified from live client registration on 2026-09-16.

@@ -16,7 +16,7 @@ function createMcpOAuthService({ database, clientId, clientSecret, redirectUris,
   };
   const register = async body => {
     const fail = code => { throw Object.assign(new Error(code),{statusCode:400,code}); };
-    if (!body || !Array.isArray(body.redirect_uris) || !body.redirect_uris.length || body.redirect_uris.length>5
+    if (!body || !Array.isArray(body.redirect_uris) || !body.redirect_uris.length || body.redirect_uris.length>6
       || body.redirect_uris.some(uri => !describeCallback(uri))) fail('invalid_redirect_uri');
     const method=body.token_endpoint_auth_method || 'client_secret_basic';
     if (!['none','client_secret_post','client_secret_basic'].includes(method)
