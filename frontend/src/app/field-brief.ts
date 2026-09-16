@@ -1,3 +1,4 @@
+import { reportInsightItems } from './report-insights';
 import type { ActivityType, SafetyData, SummitDecision } from './types';
 import type { ParsedGpxRoute } from '../lib/gpx';
 import { ACTIVITY_PROFILES } from './activity-profiles';
@@ -85,6 +86,8 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
     .filter(Boolean);
   if (triggers.length === 0 && input.actionLine) triggers.push(compact(input.actionLine));
 
+  const insights = reportInsightItems(safetyData);
+  const insightLines = insights.map(item => `${compact(item.title)}: ${compact(item.meaning)} Action: ${compact(item.action)}`);
   const verificationItems = [
     safetyData.partialData ? compact(safetyData.apiWarning || 'Some report inputs are missing.') : '',
     avalancheEnabled && safetyData.avalanche?.relevant !== false && safetyData.avalanche?.dangerUnknown
@@ -139,6 +142,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
     `DECISIVE HAZARDS\n${(hazards.length ? hazards : ['No modeled blocker; normal mountain hazards still apply.']).map((item) => `- ${item}`).join('\n')}`,
     `TURNAROUND TRIGGERS\n${triggers.map((item) => `- ${item}`).join('\n') || '- Set objective-specific turnaround triggers before departure.'}`,
     `VERIFY BEFORE LEAVING\n${verificationItems.map((item) => `- ${item}`).join('\n')}`,
+    insightLines.length ? `REPORT INSIGHTS\n${insightLines.map(item => `- ${item}`).join('\n')}` : '',
     `WEATHER SNAPSHOT\n${weatherFacts.map(([label, value]) => `- ${label}: ${value}`).join('\n')}`,
     `MOUNTAIN CONDITIONS\n${mountainFacts.map(([label, value]) => `- ${label}: ${value}`).join('\n')}`,
     checkpoints.length ? `ROUTE CHECKPOINTS\n${checkpoints.map((item) => `- ${item}`).join('\n')}` : '',
@@ -196,6 +200,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
         <section class="card"><p class="section-label">What can change the decision</p><h2>Decisive hazards</h2>${renderList(hazards, 'No modeled blocker; normal mountain hazards still apply.')}</section>
         <section class="card"><p class="section-label">Pre-committed limits</p><h2>Turnaround triggers</h2>${renderList(triggers, 'Set objective-specific turnaround triggers before departure.')}</section>
       </div>
+      ${insightLines.length ? `<section class="card"><h2>What this means for your trip</h2>${renderList(insightLines, '')}</section>` : ''}
       <section class="card verify"><p class="section-label">Trailhead check</p><h2>Verify before leaving</h2>${renderList(verificationItems, 'Recheck official sources immediately before departure.')}</section>
       <div class="columns">
         <section class="card tint"><p class="section-label">Selected start time</p><h2>Weather snapshot</h2><div class="fact-grid">${renderFactGrid(weatherFacts)}</div></section>

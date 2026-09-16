@@ -1,3 +1,4 @@
+import { reportInsightItems } from '../app/report-insights';
 import { ArrowRight, TriangleAlert } from 'lucide-react';
 import type { SafetyData, SummitDecision, UserPreferences } from '../app/types';
 import { resolveReportFeatureFlags } from '../contexts/feature-flags';
@@ -14,12 +15,16 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
   const insufficient = data.safety.assessmentStatus === 'insufficient_evidence';
   const tone = decision.level === 'GO' ? 'go' : decision.level === 'NO-GO' ? 'stop' : 'watch';
   const flags = resolveReportFeatureFlags(data.featureFlags);
-  const signals = flags.fieldObservations ? fieldSignals(data.localConditions, preferences) : [];
+  const insightIds = new Set(reportInsightItems(data).map(item => item.id));
+  const covered: Record<string, string> = { roads: 'access', closures: 'access', lightning: 'lightning', radar: 'radar', water: 'water', smoke: 'air-outlook', fire: 'fire-access', detections: 'fire-access' };
+  const signals = flags.fieldObservations ? fieldSignals(data.localConditions, preferences).filter(signal =>
+    !insightIds.has(covered[signal.key]) && !(signal.tone === 'unavailable' && insightIds.has('evidence-gaps'))) : [];
   const attention = signals.filter((signal) => signal.tone === 'attention');
   // Put an observation at the objective before nearby access/area reports.
   const warnings = [...attention.filter((signal) => signal.key === 'lightning'), ...attention.filter((signal) => signal.key !== 'lightning')];
   const missing = signals.filter((signal) => signal.tone === 'unavailable');
-  const reason = primaryReason || decision.blockers[0] || decision.cautions[0] || 'No critical threshold failures in the available forecast. Reassess conditions in the field.';
+  const review = reportInsightItems(data).find(item => item.decisionRelevant);
+  const reason = decision.blockers[0] || (review ? `${review.title}. ${review.action}` : '') || primaryReason || decision.cautions[0] || 'No critical threshold failures in the available forecast. Reassess conditions in the field.';
   return (
     <section className={`field-verdict is-${tone}`} aria-labelledby="field-verdict-title">
       <div className="field-verdict-number">

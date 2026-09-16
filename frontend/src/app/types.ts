@@ -484,6 +484,20 @@ export interface SafetyData {
     sources?: Record<string, string>;
     generatedTime?: string | null;
   };
+  reportInsights?: {
+    version: number;
+    summary: string;
+    items: Array<{
+      id: string;
+      tone: 'caution' | 'context' | 'support' | 'gap';
+      title: string;
+      meaning: string;
+      action: string;
+      decisionRelevant: boolean;
+      features: string[];
+      evidence: Array<{ source: string; detail: string; time?: string; url?: string }>;
+    }>;
+  };
   supplementalEvidence?: Partial<Record<'synoptic' | 'nbm' | 'discussion' | 'hrrrSmoke', SupplementalSource>> | null;
   localConditions?: {
     streamflow?: {

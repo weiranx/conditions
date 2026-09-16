@@ -1,3 +1,4 @@
+import { reportInsightItems } from './report-insights';
 import type {
   DecisionLevel,
   SafetyData,
@@ -463,6 +464,11 @@ export function evaluateBackcountryDecision(
   });
 
   if (data.safety.assessmentStatus) checks.push({ key: 'evidence-coverage', label: 'Critical evidence covers the trip window', ok: !insufficientEvidence, detail: (data.safety.evidenceReasons || []).join(' ') || 'Critical evidence is available for the requested window.', action: insufficientEvidence ? 'Refresh missing sources and verify the full travel window before committing.' : undefined });
+
+  for (const insight of reportInsightItems(data).filter(item => item.decisionRelevant)) {
+    addCaution(`${insight.title}. ${insight.action}`);
+    checks.push({ key: `source-${insight.id}`, label: insight.title, ok: false, detail: insight.meaning, action: insight.action });
+  }
 
   let level: DecisionLevel = 'GO';
   let headline = 'No current threshold is tripped — keep normal precautions.';
