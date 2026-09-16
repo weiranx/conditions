@@ -34,6 +34,8 @@ const RUNTIME_ENV_DEFINITIONS = Object.freeze([
   { key: 'OBJECTIVE_WATCH_CRON_SECRET', label: 'Scheduler credential', category: 'Objective Watch', description: 'Protected credential used by the host cron to trigger automatic checks. Configure it in /opt/summitsafe/.env, then deploy to install the cron.', type: 'secret', editable: false },
 
   { key: 'NPS_API_KEY', label: 'National Park Service API key', category: 'Credentials', description: 'Enables nearby park alerts and closures.', type: 'secret' },
+  { key: 'SYNOPTIC_API_TOKEN', label: 'Synoptic API token', category: 'Credentials', description: 'Enables quality-controlled nearby weather observations.', type: 'secret' },
+  { key: 'USGS_API_KEY', label: 'USGS Water Data API key', category: 'Credentials', description: 'API key for modern Water Data request quotas.', type: 'secret' },
   { key: 'AIRNOW_API_KEY', label: 'AirNow API key', category: 'Credentials', description: 'Enables EPA AirNow observations.', type: 'secret' },
   { key: 'NASA_FIRMS_MAP_KEY', label: 'NASA FIRMS map key', category: 'Credentials', description: 'Enables active-fire detection data.', type: 'secret' },
   { key: 'SENTINEL_HUB_CLIENT_ID', label: 'Sentinel Hub client ID', category: 'Credentials', description: 'OAuth client identifier for Sentinel imagery.', type: 'secret' },

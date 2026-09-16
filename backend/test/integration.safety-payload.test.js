@@ -136,7 +136,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
         const startedAllPrefetches =
           urls.some((url) => url.includes('/gridpoints/MOCK/1,1/forecast/hourly'))
           && urls.some((url) => url.includes('api.sunrisesunset.io'))
-          && urls.some((url) => url.includes('waterservices.usgs.gov/nwis/iv/'))
+          && urls.some((url) => url.includes('api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/'))
           && urls.some((url) => url.includes('/awdbRestApi/services/v1/stations'));
         if (startedAllPrefetches) break;
         await new Promise((resolve) => setImmediate(resolve));
@@ -145,7 +145,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
       const urlsBeforeWeatherResolved = fetchMock.mock.calls.map(([url]) => String(url));
       expect(urlsBeforeWeatherResolved).toEqual(expect.arrayContaining([
         expect.stringContaining('api.sunrisesunset.io'),
-        expect.stringContaining('waterservices.usgs.gov/nwis/iv/'),
+        expect.stringContaining('api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/'),
         expect.stringContaining('/awdbRestApi/services/v1/stations'),
       ]));
     } finally {
@@ -164,6 +164,12 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.status).toBe(200);
     expect(res.body.partialData).toBeUndefined();
     expect(res.body.apiWarning).toBeUndefined();
+    expect(res.body.supplementalEvidence).toMatchObject({
+      synoptic: { available: false, kind: 'observation' },
+      nbm: { available: false, kind: 'probabilistic_forecast' },
+      discussion: { available: false, kind: 'regional_context' },
+      hrrrSmoke: { available: false, kind: 'modeled_forecast' },
+    });
 
     expect(typeof res.body.generatedAt).toBe('string');
     expect(typeof res.body.capabilities.ai).toBe('boolean');

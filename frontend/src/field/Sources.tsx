@@ -1,3 +1,4 @@
+import { SupplementalEvidence } from './SupplementalEvidence';
 import { useEffect, useState } from "react";
 import { Check, TriangleAlert } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
@@ -83,6 +84,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
       {flags.scoreBreakdown && w.safetyData && (
         <ScoreExplanation safety={w.safetyData.safety} localize={w.localizeUnitText} />
       )}
+      <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} />
       {comparison && (
         <section className="field-panel">
           <span className="field-kicker">

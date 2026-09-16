@@ -1,3 +1,5 @@
+const { buildAirNowUrl, parseAirNowObservations } = require('./airnow-observations');
+const { toFiniteOrNull } = require('./local-conditions');
 const { normalizeHttpUrl } = require('./url-utils');
 const { parseIsoTimeToMs, findClosestTimeIndex, withExplicitTimezone } = require('./time');
 const { createCache, normalizeCoordKey } = require('./cache');
@@ -313,10 +315,10 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
       };
     }
 
-    const usAqi = Number(hourly?.us_aqi?.[timeIdx]);
-    const pm25 = Number(hourly?.pm2_5?.[timeIdx]);
-    const pm10 = Number(hourly?.pm10?.[timeIdx]);
-    const ozone = Number(hourly?.ozone?.[timeIdx]);
+    const usAqi = toFiniteOrNull(hourly?.us_aqi?.[timeIdx]);
+    const pm25 = toFiniteOrNull(hourly?.pm2_5?.[timeIdx]);
+    const pm10 = toFiniteOrNull(hourly?.pm10?.[timeIdx]);
+    const ozone = toFiniteOrNull(hourly?.ozone?.[timeIdx]);
     const measuredTime = withExplicitTimezone(timeArray[timeIdx] || null, aqiJson?.timezone || 'UTC');
 
     const openMeteoResult = {
@@ -340,31 +342,10 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     }
 
     try {
-      const params = new URLSearchParams({
-        format: 'application/json',
-        latitude: String(lat),
-        longitude: String(lon),
-        distance: '75',
-        API_KEY: airNowApiKey,
-      });
-      const response = await fetchWithTimeout(
-        `https://www.airnowapi.org/aq/observation/latLong/current/?${params.toString()}`,
-        fetchOptions,
-      );
-      if (!response.ok) throw new Error(`AirNow request failed with status ${response.status}`);
-      const rows = await response.json();
-      const observations = (Array.isArray(rows) ? rows : []).map((row) => ({
-        parameter: row?.ParameterName || null,
-        aqi: Number.isFinite(Number(row?.AQI)) ? Math.round(Number(row.AQI)) : null,
-        category: row?.Category?.Name || null,
-        reportingArea: row?.ReportingArea || null,
-        latitude: Number.isFinite(Number(row?.Latitude)) ? Number(row.Latitude) : null,
-        longitude: Number.isFinite(Number(row?.Longitude)) ? Number(row.Longitude) : null,
-        observedDate: row?.DateObserved || null,
-        observedHour: Number.isFinite(Number(row?.HourObserved)) ? Number(row.HourObserved) : null,
-        localTimeZone: row?.LocalTimeZone || null,
-      })).filter((row) => row.aqi !== null);
-      if (!observations.length) return openMeteoResult;
+      const response = await fetchWithTimeout(buildAirNowUrl({ lat, lon, apiKey: airNowApiKey }), fetchOptions);
+      if (!response.ok) throw new Error(`AirNow HTTP ${response.status}`);
+      const observations = parseAirNowObservations(await response.json(), { lat, lon });
+      if (!observations.length) return { ...openMeteoResult, observation: { available: false, source: 'EPA AirNow', note: 'No fresh monitor AQI within 75 km.' } };
       const dominant = observations.reduce((best, row) => (!best || row.aqi > best.aqi ? row : best), null);
       const targetMs = parseIsoTimeToMs(targetForecastTimeIso) ?? Date.now();
       const useObservationAsHeadline = Math.abs(targetMs - Date.now()) <= 2 * 60 * 60 * 1000;
@@ -376,6 +357,8 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
         usAqi: useObservationAsHeadline ? dominant.aqi : openMeteoResult.usAqi,
         category: useObservationAsHeadline ? dominant.category || classifyUsAqi(dominant.aqi) : openMeteoResult.category,
         dataType: useObservationAsHeadline ? 'observed_nowcast' : 'modeled_forecast',
+        measuredTime: useObservationAsHeadline ? dominant.observedTime : openMeteoResult.measuredTime,
+        validTime: useObservationAsHeadline ? dominant.observedTime : openMeteoResult.validTime,
         observation: {
           available: true,
           dominant,
@@ -399,7 +382,7 @@ const createAlertsService = ({ fetchWithTimeout, airNowApiKey = null }) => {
     } catch (error) {
       return {
         ...openMeteoResult,
-        note: `EPA AirNow observation unavailable; using modeled hourly air quality. ${error.message}`,
+        note: 'EPA AirNow observation unavailable; using modeled hourly air quality.',
       };
     }
   };

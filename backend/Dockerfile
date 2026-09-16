@@ -1,5 +1,5 @@
 # ── Stage 1: install production deps ──────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:20-bookworm-slim AS deps
 
 WORKDIR /app
 
@@ -8,10 +8,12 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Stage 2: final runtime image ──────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 
 # Run as a non-root user for security.
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-eccodes wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 101 appgroup && useradd --system --uid 100 --gid 101 appuser
 
 WORKDIR /app
 

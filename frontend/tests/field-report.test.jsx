@@ -628,3 +628,16 @@ test('insufficient report evidence suppresses the score and cannot produce GO', 
   assert.match(html, /1.5 of 2 hours covered/);
   assert.doesNotMatch(html, /95%|>99</);
 });
+
+test('supplemental sources distinguish unavailable data, probabilities, zero smoke and regional text', async () => {
+  const { SupplementalEvidence } = await import('../src/field/SupplementalEvidence');
+  const html = renderToStaticMarkup(<SupplementalEvidence evidence={{
+    synoptic: { source: 'Synoptic Weather', kind: 'observation', available: false, status: 'not_configured', note: 'Not configured.' },
+    nbm: { source: 'NOAA NBM', kind: 'probabilistic_forecast', available: true, status: 'ok', station: { id: 'KSAN', name: 'Airport', distanceKm: 12, elevationFt: 13 }, points: [{ validTime: '2026-09-17T12:00:00Z', windMph: { p10: 0, p50: 5, p90: 12 } }] },
+    hrrrSmoke: { source: 'HRRR-Smoke', kind: 'modeled_forecast', available: true, status: 'ok', nearSurfaceUgM3: 0, columnMgM2: 0, validTime: '2026-09-17T12:00:00Z' },
+    discussion: { source: 'NWS discussion', kind: 'regional_context', available: true, status: 'ok', office: 'SGX', text: '<script>untrusted</script>\nRegional discussion.' },
+  }} />);
+  for (const expected of [/Not configured/, /P10/, /Median/, /P90/, /0 mph/, /0 µg\/m³/, /0 mg\/m²/, /Regional forecaster context/, /&lt;script&gt;/, /do not change its safety score/]) assert.match(html, expected);
+  assert.doesNotMatch(html, /<script>|NaN/);
+  assert.equal(renderToStaticMarkup(<SupplementalEvidence />), '');
+});

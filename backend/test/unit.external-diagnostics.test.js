@@ -96,6 +96,8 @@ test('credentialed diagnostics send keys upstream but never include them in resu
   const env = {
     NPS_API_KEY: 'nps-secret',
     AIRNOW_API_KEY: 'air-secret',
+    SYNOPTIC_API_TOKEN: 'synoptic-secret',
+    USGS_API_KEY: 'usgs-secret',
     NASA_FIRMS_MAP_KEY: 'firms-secret',
     SENTINEL_HUB_CLIENT_ID: 'sentinel-client',
     SENTINEL_HUB_CLIENT_SECRET: 'sentinel-secret',

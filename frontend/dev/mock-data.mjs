@@ -333,6 +333,16 @@ export function makeReport(params = {}, scenario = "mixed") {
       moon: { name: "Waning crescent", illumination: 24, phase: 0.8 },
       generatedTime: now,
     },
+    supplementalEvidence: {
+      synoptic: { source: 'Synoptic Weather (demo)', kind: 'observation', available: false, status: 'not_configured', note: 'Synthetic fixture: station credentials are not configured.' },
+      nbm: { source: 'NOAA NBM (demo)', kind: 'probabilistic_forecast', available: true, status: 'ok', issuedTime: now,
+        station: { id: 'DEMO', name: 'Nearby forecast station', distanceKm: 24, elevationFt: 5400 },
+        points: [{ validTime: `${date}T18:00:00Z`, windMph: { p10: 5, p50: 12, p90: 24 } }],
+        note: 'Synthetic station probability guidance for layout testing. P10–P90 shows the middle 80% of the model distribution.' },
+      discussion: { source: 'NWS discussion (demo)', kind: 'regional_context', available: true, status: 'ok', office: 'DEMO', issuedTime: now,
+        text: 'SYNTHETIC FORECAST DISCUSSION\n\nAfternoon winds increase across the region. This fixture is not a live forecast.', note: 'Regional context; read its stated forecast periods and locations.' },
+      hrrrSmoke: { source: 'HRRR-Smoke (demo)', kind: 'modeled_forecast', available: true, status: 'ok', issuedTime: now, validTime: `${date}T18:00:00Z`, nearSurfaceUgM3: 0, columnMgM2: 1.2, gridDistanceKm: 1.4, note: 'Synthetic smoke snapshot, not AQI or whole-trip exposure.' },
+    },
     localConditions: {
       hasAnySignal: true,
       generatedTime: now,

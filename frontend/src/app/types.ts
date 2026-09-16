@@ -1,3 +1,31 @@
+export interface SupplementalStation {
+  id: string;
+  name: string;
+  distanceKm: number;
+  elevationFt?: number | null;
+  elevationDifferenceFt?: number | null;
+  readings?: Record<string, { value: number; observedTime: string }>;
+}
+export interface SupplementalSource {
+  source: string;
+  kind: 'observation' | 'probabilistic_forecast' | 'regional_context' | 'modeled_forecast';
+  available: boolean;
+  status: 'ok' | 'unavailable' | 'not_configured' | 'out_of_range' | 'no_data';
+  note?: string;
+  sourceLink?: string;
+  issuedTime?: string;
+  checkedTime?: string;
+  validTime?: string;
+  stations?: SupplementalStation[];
+  station?: SupplementalStation;
+  points?: Array<{ validTime: string; windMph: { p10: number; p50: number; p90: number } }>;
+  nearSurfaceUgM3?: number;
+  columnMgM2?: number;
+  gridDistanceKm?: number;
+  office?: string;
+  text?: string;
+}
+
 import L from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
@@ -456,6 +484,7 @@ export interface SafetyData {
     sources?: Record<string, string>;
     generatedTime?: string | null;
   };
+  supplementalEvidence?: Partial<Record<'synoptic' | 'nbm' | 'discussion' | 'hrrrSmoke', SupplementalSource>> | null;
   localConditions?: {
     streamflow?: {
       available?: boolean;

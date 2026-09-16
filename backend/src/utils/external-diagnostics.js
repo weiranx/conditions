@@ -1,4 +1,5 @@
 'use strict';
+const { buildAirNowUrl } = require('./airnow-observations');
 
 const DIAGNOSTIC_TIMEOUT_MS = 9000;
 const DIAGNOSTIC_MAX_ATTEMPTS = 2;
@@ -25,7 +26,16 @@ const buildExternalServiceChecks = (env = process.env) => {
   const geminiKey = env.GEMINI_API_KEY || '';
   const geminiBaseURL = String(env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
 
+  const hrrrCycle = new Date(Math.floor((Date.now() - 2 * 3600000) / (6 * 3600000)) * 6 * 3600000).toISOString();
+  const nbmCycle = new Date(Math.floor((Date.now() - 3 * 3600000) / (6 * 3600000)) * 6 * 3600000 + 3600000).toISOString();
   return [
+    { id: 'synoptic', name: 'Synoptic Weather', category: 'Weather', optional: true, configured: Boolean(env.SYNOPTIC_API_TOKEN),
+      url: `https://api.synopticdata.com/v2/stations/latest?stid=KSAN&within=120&token=${encodeURIComponent(env.SYNOPTIC_API_TOKEN || '')}` },
+    { id: 'nws-discussion', name: 'NWS Area Forecast Discussion', category: 'Weather', url: 'https://api.weather.gov/products/types/AFD/locations/SGX' },
+    { id: 'nbm-probabilities', name: 'NOAA NBM probability bulletin', category: 'Weather', options: { method: 'HEAD' },
+      url: `https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.${nbmCycle.slice(0, 10).replace(/-/g, '')}/${nbmCycle.slice(11, 13)}/text/blend_nbptx.t${nbmCycle.slice(11, 13)}z` },
+    { id: 'hrrr-smoke', name: 'NOAA HRRR smoke index', category: 'Air quality',
+      url: `https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.${hrrrCycle.slice(0, 10).replace(/-/g, '')}/conus/hrrr.t${hrrrCycle.slice(11, 13)}z.wrfsfcf01.grib2.idx` },
     {
       id: 'nws-weather',
       name: 'NOAA / NWS weather',
@@ -94,9 +104,10 @@ const buildExternalServiceChecks = (env = process.env) => {
     },
     {
       id: 'usgs-water',
-      name: 'USGS Water Services',
+      name: 'USGS Water Data',
       category: 'Water',
-      url: 'https://waterservices.usgs.gov/nwis/iv/?format=json&sites=12092000&period=P1D&parameterCd=00060',
+      url: 'https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?f=json&monitoring_location_id=USGS-12092000&parameter_code=00060&limit=1',
+      options: { headers: env.USGS_API_KEY ? { 'X-Api-Key': env.USGS_API_KEY } : {} },
     },
     {
       id: 'noaa-nwps',
@@ -166,7 +177,7 @@ const buildExternalServiceChecks = (env = process.env) => {
       category: 'Air quality',
       optional: true,
       configured: Boolean(airNowKey),
-      url: `https://www.airnowapi.org/aq/observation/latLong/current/?format=application/json&latitude=46.8523&longitude=-121.7603&distance=25&API_KEY=${encodeURIComponent(airNowKey)}`,
+      url: buildAirNowUrl({ lat: 46.8523, lon: -121.7603, apiKey: airNowKey }),
     },
     {
       id: 'nasa-firms',

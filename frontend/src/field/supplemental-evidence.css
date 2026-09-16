@@ -1,0 +1,17 @@
+.supplemental-evidence article { padding: 1rem 0; border-top: 1px solid var(--field-line, #d5d8dc); }
+.supplemental-evidence-heading { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+.supplemental-evidence-heading h3 { margin: 0; font-size: 1rem; }
+.supplemental-evidence-heading > span { font-size: .8rem; }
+.supplemental-evidence p { margin: .5rem 0; }
+.supplemental-evidence dl { margin: .6rem 0; }
+.supplemental-evidence dl > div { display: flex; flex-wrap: wrap; gap: .35rem 1rem; padding: .2rem 0; }
+.supplemental-evidence dt { min-width: 9rem; }
+.supplemental-evidence dd { margin: 0; }
+.supplemental-evidence small { font-size: .8rem; }
+.supplemental-evidence pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.5; max-height: 30rem; overflow-y: auto; }
+.supplemental-evidence summary { cursor: pointer; padding: .5rem 0; }
+.supplemental-station + .supplemental-station { margin-top: 1rem; }
+.supplemental-table-scroll { overflow-x: auto; }
+.supplemental-evidence table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.supplemental-evidence caption { text-align: left; margin-bottom: .5rem; }
+.supplemental-evidence th, .supplemental-evidence td { text-align: left; padding: .5rem .5rem .5rem 0; border-bottom: 1px solid var(--field-line, #d5d8dc); }

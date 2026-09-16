@@ -11,6 +11,7 @@ const {
 } = require('./src/server/runtime');
 // Runtime configuration loads dotenv. Keep it ahead of modules that initialize
 // environment-sensitive singletons (notably the logger transport).
+const { createSupplementalEvidenceService } = require('./src/utils/supplemental-evidence');
 const { createApp } = require('./src/server/create-app');
 const { startServer: startBackendServer } = require('./src/server/start-server');
 const { DEFAULT_FETCH_HEADERS, createFetchWithTimeout, createCircuitBreaker, withCircuitBreaker } = require('./src/utils/http-client');
@@ -162,6 +163,8 @@ const { fetchAtmosphericSignals } = createAtmosphericService({
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 });
 
+const fetchSupplementalEvidence = createSupplementalEvidenceService({ fetchWithTimeout, synopticToken: process.env.SYNOPTIC_API_TOKEN || null });
+
 const tideStationCache = createCache({ name: 'co-ops-stations', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
 const npsParkCache = createCache({ name: 'nps-parks', ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 4 });
 const satelliteTileCache = createCache({ name: 'satellite-tiles', ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 24 * 60 * 60 * 1000, maxEntries: 3000 });
@@ -171,6 +174,7 @@ const { fetchLocalConditions } = createLocalConditionsService({
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
   npsApiKey: process.env.NPS_API_KEY || null,
   firmsMapKey: process.env.NASA_FIRMS_MAP_KEY || null,
+  usgsApiKey: process.env.USGS_API_KEY || null,
   tideStationCache,
   npsParkCache,
 });
@@ -244,6 +248,7 @@ const buildSafetyResponsePayload = ({
   heatRiskData,
   atmosphereData,
   localConditionsData,
+  supplementalEvidence,
   gearSuggestions,
   trailStatus,
   terrainConditionData,
@@ -289,6 +294,7 @@ const buildSafetyResponsePayload = ({
     heatRisk: stampGeneratedTime(heatRiskData),
     atmosphere: stampGeneratedTime(atmosphereData),
     localConditions: localConditionsData ? stampGeneratedTime(localConditionsData) : null,
+    supplementalEvidence: supplementalEvidence || null,
     gear: gearSuggestions,
     trail: trailStatus,
     terrainCondition: terrainConditionData,
@@ -459,7 +465,9 @@ const safetyHandler = async (req, res) => {
       (value) => ({ status: 'fulfilled', value }),
       (reason) => ({ status: 'rejected', reason }),
     );
+    const scoreFeatures = getFeatureFlags();
     const parallelBatchPromise = Promise.all([
+      settle(fetchSupplementalEvidence({ lat: parsedLat, lon: parsedLon, targetTimeIso: alertTargetTimeIso || airQualityTargetTime, elevationFt: weatherData?.elevation, featureFlags: scoreFeatures, fetchOptions })),
       settle(fetchWeatherAlertsData(parsedLat, parsedLon, fetchOptions, alertTargetTimeIso)),
       settle(fetchAirQualityData(parsedLat, parsedLon, airQualityTargetTime, fetchOptions)),
       settle(fetchRecentRainfallData(parsedLat, parsedLon, alertTargetTimeIso || airQualityTargetTime, requestedTravelWindowHours, fetchOptions)),
@@ -493,7 +501,7 @@ const safetyHandler = async (req, res) => {
     // Post-processing: derived danger, expiry checks, staleness warnings
     avalancheData = applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso });
 
-    const [alertsResult, airQualityResult, rainfallResult, snowpackResult, atmosphericResult, localConditionsResult] = await parallelBatchPromise;
+    const [supplementalResult, alertsResult, airQualityResult, rainfallResult, snowpackResult, atmosphericResult, localConditionsResult] = await parallelBatchPromise;
 
     if (alertsResult.status === 'fulfilled') {
       alertsData = alertsResult.value;
@@ -570,7 +578,6 @@ const safetyHandler = async (req, res) => {
       relevanceReason: avalancheRelevance.reason,
     };
 
-    const scoreFeatures = getFeatureFlags();
     gearSuggestions = buildLayeringGearSuggestions({
       weatherData,
       trailStatus,
@@ -633,6 +640,7 @@ const safetyHandler = async (req, res) => {
       heatRiskData,
       atmosphereData,
       localConditionsData,
+      supplementalEvidence: supplementalResult.status === 'fulfilled' ? supplementalResult.value : null,
       gearSuggestions,
       trailStatus,
       terrainConditionData,

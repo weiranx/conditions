@@ -18,3 +18,5 @@ This folder contains technical documentation for the web app's development and o
 4. `development.md`
 5. `operations.md`
 6. `vps-setup.md`
+
+- [Supplemental report data sources](supplemental-data-sources.md): provider coverage, credentials, smoke decoder setup and validation.

@@ -264,6 +264,14 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
       : items
   );
 
+  if (filtered.supplementalEvidence) {
+    if (!isFeatureEnabled(flags, 'fieldObservations')) delete filtered.supplementalEvidence.synoptic;
+    if (!isFeatureEnabled(flags, 'airQualityDetails')) delete filtered.supplementalEvidence.hrrrSmoke;
+    if (!isFeatureEnabled(flags, 'weatherContextDetails')) {
+      delete filtered.supplementalEvidence.nbm;
+      delete filtered.supplementalEvidence.discussion;
+    }
+  }
   if (!isFeatureEnabled(flags, 'avalancheDetails')) delete filtered.avalanche;
   if (!isFeatureEnabled(flags, 'airQualityDetails')) delete filtered.airQuality;
   if (!isFeatureEnabled(flags, 'fireRiskDetails')) delete filtered.fireRisk;

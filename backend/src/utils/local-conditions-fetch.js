@@ -8,12 +8,12 @@ const { logger } = require('./logger');
 const { createCache, normalizeCoordDateKey } = require('./cache');
 const {
   toFiniteOrNull,
-  classifyFlowTrend,
   categorizePm25,
   summarizeTides,
   filterClosureAlerts,
   buildLocalConditions,
 } = require('./local-conditions');
+const { createUsgsWaterService } = require('./usgs-water');
 const { createEnvironmentalObservationService } = require('./environmental-observations');
 
 const yyyymmdd = (dateLike) => {
@@ -28,6 +28,7 @@ const createLocalConditionsService = ({
   requestTimeoutMs = 10000,
   npsApiKey = null,
   firmsMapKey = null,
+  usgsApiKey = null,
   tideStationCache = null,
   npsParkCache = null,
 } = {}) => {
@@ -43,78 +44,11 @@ const createLocalConditionsService = ({
     staleTtlMs: 10 * 60 * 1000,
     maxEntries: 300,
   });
-  // ── USGS NWIS streamflow ────────────────────────────────────────────────
+  const fetchUsgs = createUsgsWaterService({ fetchWithTimeout, haversineKm, apiKey: usgsApiKey });
   const fetchStreamflow = async ({ lat, lon, fetchOptions }) => {
-    const pad = 0.25;
-    const west = (lon - pad).toFixed(6);
-    const east = (lon + pad).toFixed(6);
-    const south = (lat - pad).toFixed(6);
-    const north = (lat + pad).toFixed(6);
-    const url =
-      `https://waterservices.usgs.gov/nwis/iv/?format=json` +
-      `&bBox=${west},${south},${east},${north}` +
-      `&parameterCd=00060,00065&siteStatus=active&period=P1D`;
-
-    // USGS NWIS runs slower than the other providers; give it more headroom.
-    const res = await fetchWithTimeout(url, fetchOptions, Math.max(requestTimeoutMs, 12000));
-    if (!res.ok) throw new Error(`USGS NWIS failed ${res.status}`);
-    const json = await res.json();
-    const series = json?.value?.timeSeries || [];
-    if (!series.length) return { available: false };
-
-    // Group time series by site, tracking nearest site to the objective.
-    const sites = new Map();
-    for (const ts of series) {
-      const info = ts?.sourceInfo || {};
-      const siteId = info?.siteCode?.[0]?.value || null;
-      if (!siteId) continue;
-      const siteLat = toFiniteOrNull(info?.geoLocation?.geogLocation?.latitude);
-      const siteLon = toFiniteOrNull(info?.geoLocation?.geogLocation?.longitude);
-      if (siteLat === null || siteLon === null) continue;
-      const paramCode = ts?.variable?.variableCode?.[0]?.value || '';
-      const points = (ts?.values?.[0]?.value || [])
-        .map((p) => ({ value: toFiniteOrNull(p?.value), dateTime: p?.dateTime || null }))
-        .filter((p) => p.value !== null);
-      if (!points.length) continue;
-
-      if (!sites.has(siteId)) {
-        sites.set(siteId, {
-          siteId,
-          siteName: info?.siteName || null,
-          distanceKm: haversineKm(lat, lon, siteLat, siteLon),
-          discharge: null,
-          gageHeight: null,
-        });
-      }
-      const entry = sites.get(siteId);
-      if (paramCode === '00060') entry.discharge = points;
-      else if (paramCode === '00065') entry.gageHeight = points;
-    }
-
-    const candidates = [...sites.values()].filter((s) => s.discharge || s.gageHeight);
-    if (!candidates.length) return { available: false };
-    candidates.sort((a, b) => a.distanceKm - b.distanceKm);
-    const nearest = candidates[0];
-    if (nearest.distanceKm > 50) return { available: false };
-
-    const dischargeSeries = nearest.discharge || [];
-    const gageSeries = nearest.gageHeight || [];
-    const latest = (arr) => (arr.length ? arr[arr.length - 1] : null);
-    const latestDischarge = latest(dischargeSeries);
-    const latestGage = latest(gageSeries);
-    const trendSeries = dischargeSeries.length >= 4 ? dischargeSeries : gageSeries;
-
-    const result = {
-      available: true,
-      siteName: nearest.siteName,
-      siteId: nearest.siteId,
-      distanceKm: Math.round(nearest.distanceKm * 10) / 10,
-      dischargeCfs: latestDischarge ? latestDischarge.value : null,
-      gageHeightFt: latestGage ? latestGage.value : null,
-      trend: classifyFlowTrend(trendSeries.map((p) => p.value)),
-      observedTime: (latestDischarge || latestGage)?.dateTime || null,
-      source: 'USGS NWIS',
-    };
+    const result = await fetchUsgs({ lat, lon, fetchOptions });
+    if (!result.available) return result;
+    const nearest = { siteId: result.siteId };
 
     // NWPS can add an official forecast or National Water Model guidance to the
     // same USGS identifier. A missing forecast is not a failure of the observed
@@ -155,7 +89,7 @@ const createLocalConditionsService = ({
             source: 'NOAA National Water Prediction Service',
             note: 'Forecast applies to the selected gauge. Confirm that the gauge is on the route-crossed drainage.',
           };
-          result.source = 'USGS NWIS observations + NOAA NWPS forecast';
+          result.source = 'USGS Water Data observations + NOAA NWPS forecast';
         }
       }
     } catch (error) {
