@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { GearActions } from "./GearActions";
 import { ReportVerdict } from "./ReportVerdict";
+import { ReportInsights } from "./ReportInsights";
 import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
 import { AiExplanation } from "./AiExplanation";
@@ -295,6 +296,7 @@ export function Report({
         />
         <ReportSummary workspace={w} onOpen={selectChapter} />
       </div>
+      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => selectChapter("sources")} />
       <div className="field-report-layout">
         <div className="report-reading-controls">
           <div>

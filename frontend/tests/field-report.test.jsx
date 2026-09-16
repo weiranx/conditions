@@ -664,3 +664,55 @@ test('surface outlook exposes coverage, changing footing, and missing evidence',
   for (const text of ['2.5 of 4', 'Route aspect is not measured', 'firm or frozen possible', 'softening possible', 'Preceding-night', 'Drainage is unknown']) assert.ok(html.includes(text));
   assert.equal(renderToStaticMarkup(<SurfacePrediction condition={{ label: 'Legacy surface' }} />), '');
 });
+
+import { ReportInsights } from '../src/field/ReportInsights';
+import { reportInsightItems } from '../src/app/report-insights';
+import { buildFieldBrief } from '../src/app/field-brief';
+const accessInsight = { id: 'access', tone: 'caution', title: 'Verify the approach before committing', meaning: 'Nearby closures have not been matched to your route.', action: 'Check road names and choose an alternate approach if needed.', features: ['fieldObservations'], decisionRelevant: true, evidence: [{ source: 'Land manager', detail: '<script>bad()</script> Road work', url: 'https://www.nps.gov/alerts' }] };
+test('source insights are actionable, traceable and escape provider text', () => {
+  const data = makeReport({}, 'field-alerts');
+  data.reportInsights = { version: 1, summary: 'Access needs review', items: [accessInsight] };
+  const html = renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />);
+  assert.match(html, /What this means for your trip/);
+  assert.match(html, /For your plan/);
+  assert.match(html, /Why the report says this/);
+  assert.match(html, /not been matched to your route/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /https:\/\/www.nps.gov\/alerts/);
+});
+test('access review propagates into decision checks without changing safety score', () => {
+  const data = makeReport({}, 'field-alerts');
+  const original = data.safety.score;
+  data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+  const decision = evaluateBackcountryDecision(data, '12:00', preferences);
+  assert.notEqual(decision.level, 'GO');
+  assert.ok(decision.checks.some(check => check.key === 'source-access' && !check.ok));
+  assert.ok(decision.cautions.some(text => text.includes(accessInsight.action)));
+  assert.equal(data.safety.score, original);
+  data.featureFlags = { ...data.featureFlags, fieldObservations: false };
+  assert.equal(reportInsightItems(data).length, 0);
+  assert.equal(renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />), '');
+  assert.ok(!evaluateBackcountryDecision(data, '12:00', preferences).checks.some(check => check.key === 'source-access'));
+});
+test('offline field brief carries interpreted findings and actions', () => {
+  const data = makeReport({}, 'field-alerts'); data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+  const brief = buildFieldBrief({ objectiveName: 'Test', forecastDate: '2026-09-16', startTime: '07:00', returnTime: '12:00', travelWindowHours: 5, activity: 'hiking', safetyData: data, decision: evaluateBackcountryDecision(data, '12:00', preferences), actionLine: '' });
+  assert.match(brief.text, /REPORT INSIGHTS/); assert.ok(brief.text.includes(accessInsight.action)); assert.ok(brief.html.includes(accessInsight.meaning));
+});
+test('older reports without synthesis retain compatible rendering', () => {
+  assert.equal(renderToStaticMarkup(<ReportInsights data={makeReport({}, 'field-alerts')} onSources={() => {}} />), '');
+});
+
+test('a source review changes an otherwise GO decision to CAUTION, never weakens NO-GO', () => {
+  const data = makeReport({}, 'clear');
+  data.featureFlags = { avalancheDetails: false, daylightTimeline: false, snowpackDetails: false, airQualityDetails: false, heatRiskDetails: false, fireRiskDetails: false, weatherContextDetails: false, fieldObservations: true };
+  data.rainfall = { ...data.rainfall, anchorTime: new Date().toISOString() };
+  const relaxed = { ...preferences, maxWindGustMph: 100, maxPrecipChance: 100, minFeelsLikeF: -100, maxFeelsLikeF: 150 };
+  const before = evaluateBackcountryDecision(data, '23:59', relaxed);
+  assert.equal(before.level, 'GO', JSON.stringify(before));
+  data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
+  assert.equal(evaluateBackcountryDecision(data, '23:59', relaxed).level, 'CAUTION');
+  data.weather.description = 'Weather data unavailable';
+  assert.equal(evaluateBackcountryDecision(data, '23:59', relaxed).level, 'NO-GO');
+});

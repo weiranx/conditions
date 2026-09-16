@@ -1,3 +1,4 @@
+const { buildReportInsights } = require('./report-insights');
 const SCORE_FEATURE_KEYS = Object.freeze([
   'avalancheDetails',
   'airQualityDetails',
@@ -335,7 +336,11 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
     delete filtered.safety.sourcesUsed;
     delete filtered.safety.groupImpacts;
   }
-  return removeDisabledFeatureReferences(filtered, flags);
+  const result = removeDisabledFeatureReferences(filtered, flags);
+  delete result.reportInsights;
+  const insights = buildReportInsights(result);
+  if (insights) result.reportInsights = insights;
+  return result;
 };
 
 module.exports = {

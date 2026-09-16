@@ -30,14 +30,16 @@ const validateBrief = (raw, report, decisionLevel) => {
 };
 const deterministicBrief = (report, decisionLevel) => {
   const safety = report.safety || {};
+  const insights = report.reportInsights?.items || [];
+  const concerns = insights.filter(item => item.decisionRelevant);
   const reasons = [...(safety.evidenceReasons || []), ...(safety.confidenceReasons || [])];
   return [
     `BIG PICTURE: Computed decision: ${decisionLevel}. ${safety.assessmentStatus === 'insufficient_evidence' ? 'Insufficient evidence for a complete trip assessment.' : 'Review the report checks before committing.'}`,
-    `WHY IT MATTERS: ${(safety.explanations || []).slice(0, 3).join(' ') || 'No supporting hazard explanations were supplied.'}`,
-    'WATCH CLOSELY: Recheck source validity and conditions across the entire planned travel window.',
+    `WHY IT MATTERS: ${[(safety.explanations || []).slice(0, 2).join(' '), ...insights.slice(0, 2).map(item => item.meaning)].filter(Boolean).join(' ') || 'No supporting hazard explanations were supplied.'}`,
+    `WATCH CLOSELY: ${concerns.slice(0, 2).map(item => `${item.title}. ${item.meaning}`).join(' ') || 'Recheck source validity and conditions across the entire planned travel window.'}`,
     `DATA CONFIDENCE: ${reasons.join(' ') || 'Evidence quality has not been independently calibrated against observations.'}`,
     'COMFORT CHECK: Weather comfort does not offset hazards or missing evidence.',
-    `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : 'Resolve failed checks and missing evidence before committing.'}`,
+    `BEST MOVE: ${decisionLevel === 'NO-GO' ? 'Postpone or change the objective, timing, or day.' : concerns.slice(0, 2).map(item => item.action).join(' ') || 'Resolve failed checks and missing evidence before committing.'}`,
   ].join('\n');
 };
 module.exports = { validateBrief, deterministicBrief };

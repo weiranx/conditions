@@ -43,3 +43,14 @@ The Python helper decodes downloaded GRIB messages and has no network responsibi
 ## Verification
 
 `backend/test/unit.supplemental-evidence.test.js` covers freshness, QC, missing values, valid zeroes, fixed-width probability parsing, GRIB parameter/time/units, byte-range enforcement, gauge migration, AirNow deduplication and feature filtering. Field rendering coverage verifies unavailable states, probability labels, zero smoke and escaped discussion text. Public live checks are reproducible with `node backend/scripts/verify-supplemental-sources.js LAT LON`; configure `GRIB_PYTHON` for HRRR. Keys are never printed.
+
+
+## Interpreted report findings
+
+New reports include `reportInsights`: deterministic, traceable findings combining supplemental forecasts with field observations and access. The report overview, review checks, AI briefing/chat context, and offline field brief use these findings. Raw sources remain under Checks and sources. The synthesis runs after feature filtering and is rebuilt rather than trusting client-supplied insights.
+
+Each finding includes an interpretation, a concrete action, source evidence, feature dependencies, and whether it requires decision review. Review findings can promote GO to CAUTION; they do not override NO-GO or add another safety-score penalty. The report keeps legacy field warnings for domains that have not been synthesized.
+
+Station wind comparisons require fresh readings (within two hours of report generation), a departure within two hours of generation, a reading within one hour of departure, distance at most 15 km, and known station/objective elevations within 500 ft. These are conservative eligibility heuristics, not proof of equal exposure. Station IDs are deduplicated across providers. A difference of at least 10 mph above the sustained forecast prompts review; readings within 5 mph give limited wind agreement only. NBM uses the same spatial/elevation constraints and a sample within one hour of departure, and compares sustained P90 with sustained forecast wind, never with gusts. Missing numbers remain missing; genuine zeroes remain valid.
+
+Nearby access restrictions require matching roads and notice boundaries to the actual approach. Rising gauges do not establish crossing safety or drainage relevance. Current lightning, radar and water observations are not forecasts for future trips; old or undated observations cannot generate time-sensitive decision review. Zero modeled smoke does not establish clean air. Regional forecaster key messages are quoted with their scope intact, not keyword-classified into point hazards. Missing access and observation coverage is explicit.
