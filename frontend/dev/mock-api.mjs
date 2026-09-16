@@ -669,7 +669,7 @@ export function createMockApi({ databasePath } = {}) {
       return ok({
         fetchedAt: now(),
         providers: Object.fromEntries(
-          ["openai", "anthropic", "kimi", "gemini"].map((provider) => [
+          ["openai", "anthropic", "gemini"].map((provider) => [
             provider,
             {
               models: ["demo-fixture", "demo-reasoning", "demo-fast"],
@@ -697,7 +697,7 @@ export function createMockApi({ databasePath } = {}) {
           ...body,
           features: { ...db.aiSettings.features, ...body.features },
           models: Object.fromEntries(
-            ["openai", "anthropic", "kimi", "gemini"].map((provider) => [
+            ["openai", "anthropic", "gemini"].map((provider) => [
               provider,
               {
                 primary:
@@ -729,7 +729,7 @@ export function createMockApi({ databasePath } = {}) {
         fallbackProvider: "anthropic",
         fallbackConfigured: true,
         providers: Object.fromEntries(
-          ["openai", "anthropic", "kimi", "gemini"].map((provider) => [
+          ["openai", "anthropic", "gemini"].map((provider) => [
             provider,
             {
               primary:

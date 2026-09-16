@@ -314,12 +314,11 @@ interface ExternalDiagnosticsResult {
 
 type DiagnosticService = ExternalDiagnosticsResult['services'][number];
 
-type AIProvider = 'openai' | 'anthropic' | 'kimi' | 'gemini';
-const AI_PROVIDERS: AIProvider[] = ['openai', 'anthropic', 'kimi', 'gemini'];
+type AIProvider = 'openai' | 'anthropic' | 'gemini';
+const AI_PROVIDERS: AIProvider[] = ['openai', 'anthropic', 'gemini'];
 const aiProviderLabel = (provider: AIProvider) => ({
   openai: 'OpenAI',
   anthropic: 'Anthropic',
-  kimi: 'Kimi',
   gemini: 'Gemini',
 })[provider];
 
@@ -1163,7 +1162,6 @@ function AdminDashboard() {
   const [modelDrafts, setModelDrafts] = useState<Record<AIProvider, { primary: string; fast: string }>>({
     openai: { primary: '', fast: '' },
     anthropic: { primary: '', fast: '' },
-    kimi: { primary: '', fast: '' },
     gemini: { primary: '', fast: '' },
   });
   const [featureFlagsError, setFeatureFlagsError] = useState<string | null>(null);
@@ -1514,10 +1512,6 @@ function AdminDashboard() {
       anthropic: {
         primary: aiSettings.providers.anthropic.primary,
         fast: aiSettings.providers.anthropic.fast,
-      },
-      kimi: {
-        primary: aiSettings.providers.kimi.primary,
-        fast: aiSettings.providers.kimi.fast,
       },
       gemini: {
         primary: aiSettings.providers.gemini.primary,

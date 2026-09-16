@@ -40,15 +40,6 @@ const fetchOpenAIModels = async ({ fetchWithTimeout, apiKey }) => {
   return normalizeModelIds(Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : []);
 };
 
-const fetchKimiModels = async ({ fetchWithTimeout, apiKey, baseURL }) => {
-  const normalizedBaseURL = String(baseURL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
-  const response = await fetchWithTimeout(`${normalizedBaseURL}/models`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  }, PROVIDER_TIMEOUT_MS);
-  const payload = await readJsonResponse(response, 'Kimi');
-  return normalizeModelIds(Array.isArray(payload?.data) ? payload.data.map((model) => model?.id) : []);
-};
-
 const fetchGeminiModels = async ({ fetchWithTimeout, apiKey, baseURL }) => {
   const normalizedBaseURL = String(baseURL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
   const response = await fetchWithTimeout(`${normalizedBaseURL}/models`, {
@@ -125,10 +116,8 @@ const createAIModelCatalog = ({ fetchWithTimeout, getAIStatus, env = process.env
     const status = getAIStatus();
     const openAIFallback = configuredModels(status?.providers?.openai);
     const anthropicFallback = configuredModels(status?.providers?.anthropic);
-    const kimiFallback = configuredModels(status?.providers?.kimi);
     const geminiFallback = configuredModels(status?.providers?.gemini);
-    const kimiApiKey = env.KIMI_API_KEY || env.MOONSHOT_API_KEY || '';
-    const [openai, anthropic, kimi, gemini] = await Promise.all([
+    const [openai, anthropic, gemini] = await Promise.all([
       loadProvider({
         provider: 'OpenAI',
         apiKey: env.OPENAI_API_KEY || '',
@@ -142,15 +131,6 @@ const createAIModelCatalog = ({ fetchWithTimeout, getAIStatus, env = process.env
         fallback: anthropicFallback,
       }),
       loadProvider({
-        provider: 'Kimi',
-        apiKey: kimiApiKey,
-        fetchModels: (options) => fetchKimiModels({
-          ...options,
-          baseURL: env.KIMI_BASE_URL,
-        }),
-        fallback: kimiFallback,
-      }),
-      loadProvider({
         provider: 'Gemini',
         apiKey: env.GEMINI_API_KEY || '',
         fetchModels: (options) => fetchGeminiModels({
@@ -162,7 +142,7 @@ const createAIModelCatalog = ({ fetchWithTimeout, getAIStatus, env = process.env
     ]);
     const result = {
       fetchedAt: new Date(now()).toISOString(),
-      providers: { openai, anthropic, kimi, gemini },
+      providers: { openai, anthropic, gemini },
     };
     cached = { value: result, expiresAt: now() + MODEL_CATALOG_TTL_MS };
     return result;

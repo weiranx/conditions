@@ -1,11 +1,10 @@
 const mockOpenAICreate = jest.fn();
 const mockAnthropicCreate = jest.fn();
-const mockKimiCreate = jest.fn();
 const mockGeminiCreate = jest.fn();
 
-jest.mock('openai', () => jest.fn().mockImplementation((options = {}) => ({
+jest.mock('openai', () => jest.fn().mockImplementation(() => ({
   responses: { create: mockOpenAICreate },
-  chat: { completions: { create: options.baseURL?.includes('generativelanguage.googleapis.com') ? mockGeminiCreate : mockKimiCreate } },
+  chat: { completions: { create: mockGeminiCreate } },
 })));
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockAnthropicCreate },
@@ -24,13 +23,6 @@ const ENV_KEYS = [
   'ANTHROPIC_MODEL',
   'ANTHROPIC_FAST_MODEL',
   'ANTHROPIC_MODEL_OPTIONS',
-  'KIMI_API_KEY',
-  'MOONSHOT_API_KEY',
-  'KIMI_BASE_URL',
-  'KIMI_MODEL',
-  'KIMI_FAST_MODEL',
-  'KIMI_MODEL_OPTIONS',
-  'KIMI_THINKING_ENABLED',
   'GEMINI_API_KEY',
   'GEMINI_BASE_URL',
   'GEMINI_MODEL',
@@ -51,7 +43,6 @@ describe('AI provider client wrapper', () => {
   beforeEach(() => {
     mockOpenAICreate.mockReset();
     mockAnthropicCreate.mockReset();
-    mockKimiCreate.mockReset();
     mockGeminiCreate.mockReset();
     process.env.OPENAI_API_KEY = 'openai-test-key';
     process.env.ANTHROPIC_API_KEY = 'anthropic-test-key';
@@ -61,13 +52,6 @@ describe('AI provider client wrapper', () => {
     delete process.env.ANTHROPIC_MODEL;
     delete process.env.ANTHROPIC_FAST_MODEL;
     delete process.env.ANTHROPIC_MODEL_OPTIONS;
-    delete process.env.KIMI_API_KEY;
-    delete process.env.MOONSHOT_API_KEY;
-    delete process.env.KIMI_BASE_URL;
-    delete process.env.KIMI_MODEL;
-    delete process.env.KIMI_FAST_MODEL;
-    delete process.env.KIMI_MODEL_OPTIONS;
-    delete process.env.KIMI_THINKING_ENABLED;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GEMINI_BASE_URL;
     delete process.env.GEMINI_MODEL;
@@ -85,6 +69,41 @@ describe('AI provider client wrapper', () => {
       if (originalEnv[key] === undefined) delete process.env[key];
       else process.env[key] = originalEnv[key];
     });
+  });
+
+  test('rejects the removed Kimi provider in environment and runtime settings', () => {
+    expect(() => loadClient('kimi')).toThrow('AI_PROVIDER must be one of: openai, anthropic, gemini');
+    const client = loadClient('openai');
+    expect(() => client.updateAISettings({ provider: 'kimi' })).toThrow('provider must be one of');
+    expect(() => client.updateAISettings({ models: { kimi: { primary: 'old-model' } } }))
+      .toThrow('Unknown AI model provider');
+    expect(Object.keys(client.getAIStatus().providers)).toEqual(['openai', 'anthropic', 'gemini']);
+  });
+
+  test('ignores persisted Kimi settings while preserving supported provider settings', async () => {
+    jest.doMock('../src/db/app-data-store', () => ({
+      appDataStore: {
+        configured: true,
+        getAdminSetting: jest.fn().mockResolvedValue({
+          provider: 'kimi',
+          models: {
+            kimi: { primary: 'old-model' },
+            openai: { primary: 'gpt-custom' },
+          },
+        }),
+      },
+    }));
+    try {
+      const client = loadClient('openai');
+      await client.initializeAISettings();
+      const status = client.getAIStatus();
+      expect(status.provider).toBe('openai');
+      expect(status.providers.openai.primary).toBe('gpt-custom');
+      expect(status.providers).not.toHaveProperty('kimi');
+    } finally {
+      jest.dontMock('../src/db/app-data-store');
+      jest.resetModules();
+    }
   });
 
   test('sends text prompts through OpenAI Responses API', async () => {
@@ -172,49 +191,6 @@ describe('AI provider client wrapper', () => {
     }), { timeout: 28000, maxRetries: 0 });
   });
 
-  test('sends text and system prompts through the Kimi chat completions API', async () => {
-    process.env.KIMI_API_KEY = 'kimi-test-key';
-    process.env.KIMI_BASE_URL = 'https://api.moonshot.ai/v1/';
-    mockKimiCreate.mockResolvedValue({
-      choices: [{ message: { content: '  Kimi field brief  ' }, finish_reason: 'stop' }],
-      usage: { prompt_tokens: 20, completion_tokens: 8, total_tokens: 28 },
-    });
-    const { askAI } = loadClient('kimi');
-
-    await expect(askAI('conditions', { maxTokens: 700, system: 'Be concise.' })).resolves.toBe('Kimi field brief');
-    expect(mockKimiCreate).toHaveBeenCalledWith({
-      model: 'kimi-k2.6',
-      max_tokens: 700,
-      thinking: { type: 'disabled' },
-      messages: [
-        { role: 'system', content: 'Be concise.' },
-        { role: 'user', content: 'conditions' },
-      ],
-    }, { timeout: 28000, maxRetries: 0 });
-  });
-
-  test('sends base64 images through Kimi multimodal chat input', async () => {
-    process.env.MOONSHOT_API_KEY = 'kimi-test-key';
-    mockKimiCreate.mockResolvedValue({
-      choices: [{ message: { content: 'snow coverage' }, finish_reason: 'stop' }],
-    });
-    const { askAIVision } = loadClient('kimi');
-
-    await expect(askAIVision('YWJj', 'analyze', { mediaType: 'image/jpeg' })).resolves.toBe('snow coverage');
-    expect(mockKimiCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'kimi-k2.6',
-      max_tokens: 2048,
-      thinking: { type: 'disabled' },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,YWJj' } },
-          { type: 'text', text: 'analyze' },
-        ],
-      }],
-    }), { timeout: 28000, maxRetries: 0 });
-  });
-
   test('sends text and system prompts through the Gemini chat completions API', async () => {
     process.env.GEMINI_API_KEY = 'gemini-test-key';
     process.env.GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
@@ -286,12 +262,6 @@ describe('AI provider client wrapper', () => {
           options: ['claude-sonnet-5', 'claude-haiku-4-5-20251001'],
           configured: true,
         },
-        kimi: {
-          primary: 'kimi-k2.6',
-          fast: 'kimi-k2.6',
-          options: ['kimi-k2.6'],
-          configured: false,
-        },
         gemini: {
           primary: 'gemini-3.7-flash',
           fast: 'gemini-3.5-flash-lite',
@@ -315,8 +285,6 @@ describe('AI provider client wrapper', () => {
   test('reports AI unavailable when no provider key is configured', () => {
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.KIMI_API_KEY;
-    delete process.env.MOONSHOT_API_KEY;
     delete process.env.GEMINI_API_KEY;
     const { isAIAvailable } = loadClient('openai');
 
@@ -581,28 +549,6 @@ describe('AI provider client wrapper', () => {
     );
   });
 
-  test('fails over through all configured providers to Kimi', async () => {
-    process.env.KIMI_API_KEY = 'kimi-test-key';
-    mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
-    mockAnthropicCreate.mockRejectedValue(new Error('Anthropic unavailable'));
-    mockKimiCreate.mockResolvedValue({
-      choices: [{ message: { content: 'Kimi fallback brief' }, finish_reason: 'stop' }],
-    });
-    const { askAI } = loadClient('openai');
-
-    await expect(askAI('conditions')).resolves.toBe('Kimi fallback brief');
-    expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
-    expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
-    expect(mockKimiCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'kimi-k2.6',
-        max_tokens: 2048,
-        thinking: { type: 'disabled' },
-      }),
-      { timeout: 28000, maxRetries: 0 },
-    );
-  });
-
   test('fails over through configured providers to Gemini', async () => {
     process.env.GEMINI_API_KEY = 'gemini-test-key';
     mockOpenAICreate.mockRejectedValue(new Error('OpenAI unavailable'));
@@ -615,25 +561,8 @@ describe('AI provider client wrapper', () => {
     await expect(askAI('conditions')).resolves.toBe('Gemini fallback brief');
     expect(mockOpenAICreate).toHaveBeenCalledTimes(1);
     expect(mockAnthropicCreate).toHaveBeenCalledTimes(1);
-    expect(mockKimiCreate).not.toHaveBeenCalled();
     expect(mockGeminiCreate).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gemini-3.7-flash', max_tokens: 4096 }),
-      { timeout: 28000, maxRetries: 0 },
-    );
-  });
-
-  test('allows Kimi thinking only when explicitly enabled', async () => {
-    process.env.KIMI_API_KEY = 'kimi-test-key';
-    process.env.KIMI_THINKING_ENABLED = 'true';
-    mockKimiCreate.mockResolvedValue({
-      choices: [{ message: { content: 'reasoned answer' }, finish_reason: 'stop' }],
-    });
-    const { askAI, getKimiRequestOverrides } = loadClient('kimi');
-
-    expect(getKimiRequestOverrides()).toEqual({});
-    await askAI('conditions');
-    expect(mockKimiCreate).toHaveBeenCalledWith(
-      expect.not.objectContaining({ thinking: expect.anything() }),
       { timeout: 28000, maxRetries: 0 },
     );
   });
@@ -645,7 +574,6 @@ describe('AI provider client wrapper', () => {
 
     await expect(askAI('conditions')).rejects.toThrow('OpenAI unavailable');
     expect(mockAnthropicCreate).not.toHaveBeenCalled();
-    expect(mockKimiCreate).not.toHaveBeenCalled();
   });
 
   test('reports both provider failures', async () => {

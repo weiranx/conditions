@@ -147,11 +147,6 @@ ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5
 ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
 
-KIMI_API_KEY=
-KIMI_BASE_URL=https://api.moonshot.ai/v1
-KIMI_MODEL=kimi-k3
-KIMI_FAST_MODEL=kimi-k2.6
-
 GEMINI_API_KEY=
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
 GEMINI_MODEL=gemini-3.7-flash

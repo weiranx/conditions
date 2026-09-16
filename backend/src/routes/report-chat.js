@@ -1,9 +1,7 @@
 const {
-  KIMI_MAX_OUTPUT_TOKENS,
   assertAIEnabled,
   assertAIFeatureEnabled,
   getAIStatus,
-  getKimiRequestOverrides,
 } = require('../utils/ai-client');
 const { recordAIUsage } = require('../utils/ai-usage');
 const { logger } = require('../utils/logger');
@@ -141,17 +139,6 @@ const sanitizeFollowUpSuggestions = (value, askedQuestions = []) => {
   return result;
 };
 
-const createKimiStreamingModel = ({ createOpenAICompatible, apiKey, baseURL, modelId }) => {
-  const kimi = createOpenAICompatible({
-    name: 'kimi',
-    apiKey,
-    baseURL,
-    includeUsage: true,
-    transformRequestBody: (body) => ({ ...body, ...getKimiRequestOverrides() }),
-  });
-  return kimi.chatModel(modelId);
-};
-
 const createGeminiStreamingModel = ({ createOpenAICompatible, apiKey, baseURL, modelId }) => {
   const gemini = createOpenAICompatible({
     name: 'gemini',
@@ -176,16 +163,6 @@ const resolveStreamingModel = async () => {
   if (provider === 'anthropic') {
     const { createAnthropic } = await import('@ai-sdk/anthropic');
     return { model: createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId), modelId, provider };
-  }
-  if (provider === 'kimi') {
-    const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
-    const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
-    const baseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
-    return {
-      model: createKimiStreamingModel({ createOpenAICompatible, apiKey, baseURL, modelId }),
-      modelId,
-      provider,
-    };
   }
   if (provider === 'gemini') {
     const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
@@ -355,7 +332,7 @@ const createReportChatStream = async ({
         model,
         system: `${systemPrompt}\n\n<${contextTag}>\n${reportJson}\n</${contextTag}>`,
         messages: modelMessages,
-        maxOutputTokens: provider === 'kimi' ? KIMI_MAX_OUTPUT_TOKENS : REPORT_CHAT_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: REPORT_CHAT_MAX_OUTPUT_TOKENS,
         abortSignal,
         async onFinish({ text, finishReason, totalUsage }) {
           await persistAIUsage({
@@ -503,7 +480,6 @@ module.exports = {
   REPORT_CHAT_SYSTEM_PROMPT,
   TRIP_CHAT_SYSTEM_PROMPT,
   createGeminiStreamingModel,
-  createKimiStreamingModel,
   createContextualFollowUps,
   normalizeReport,
   sanitizeFollowUpSuggestions,

@@ -21,8 +21,6 @@ const buildExternalServiceChecks = (env = process.env) => {
   const sentinelClientSecret = env.SENTINEL_HUB_CLIENT_SECRET || '';
   const openAIKey = env.OPENAI_API_KEY || '';
   const anthropicKey = env.ANTHROPIC_API_KEY || '';
-  const kimiKey = env.KIMI_API_KEY || env.MOONSHOT_API_KEY || '';
-  const kimiBaseURL = String(env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
   const geminiKey = env.GEMINI_API_KEY || '';
   const geminiBaseURL = String(env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
 
@@ -226,15 +224,6 @@ const buildExternalServiceChecks = (env = process.env) => {
           'anthropic-version': '2023-06-01',
         },
       },
-    },
-    {
-      id: 'kimi',
-      name: 'Kimi',
-      category: 'AI',
-      optional: true,
-      configured: Boolean(kimiKey),
-      url: `${kimiBaseURL}/models`,
-      options: { headers: { Authorization: `Bearer ${kimiKey}` } },
     },
     {
       id: 'gemini',

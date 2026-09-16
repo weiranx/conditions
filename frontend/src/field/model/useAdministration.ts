@@ -271,13 +271,12 @@ export interface ExternalDiagnosticsResult {
   }>;
 }
 export type DiagnosticService = ExternalDiagnosticsResult["services"][number];
-export type AIProvider = "openai" | "anthropic" | "kimi" | "gemini";
-const AI_PROVIDERS: AIProvider[] = ["openai", "anthropic", "kimi", "gemini"];
+export type AIProvider = "openai" | "anthropic" | "gemini";
+const AI_PROVIDERS: AIProvider[] = ["openai", "anthropic", "gemini"];
 const aiProviderLabel = (provider: AIProvider) =>
   ({
     openai: "OpenAI",
     anthropic: "Anthropic",
-    kimi: "Kimi",
     gemini: "Gemini",
   })[provider];
 export interface AIAdminSettings {
@@ -1485,7 +1484,6 @@ export function useAdministration() {
   >({
     openai: { primary: "", fast: "" },
     anthropic: { primary: "", fast: "" },
-    kimi: { primary: "", fast: "" },
     gemini: { primary: "", fast: "" },
   });
 

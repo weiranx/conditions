@@ -4,7 +4,7 @@ const { appDataStore } = require('../db/app-data-store');
 const { logger } = require('./logger');
 const { recordAIUsage } = require('./ai-usage');
 
-const PROVIDER_IDS = ['openai', 'anthropic', 'kimi', 'gemini'];
+const PROVIDER_IDS = ['openai', 'anthropic', 'gemini'];
 const SUPPORTED_PROVIDERS = new Set(PROVIDER_IDS);
 const AI_FEATURE_KEYS = ['aiBrief', 'reportChat', 'routeAnalysis', 'snowVision'];
 const AI_FEATURE_KEY_SET = new Set(AI_FEATURE_KEYS);
@@ -17,8 +17,6 @@ if (!SUPPORTED_PROVIDERS.has(DEFAULT_AI_PROVIDER)) {
 }
 const DEFAULT_AI_ENABLED = String(process.env.AI_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
 const DEFAULT_AI_FAILOVER_ENABLED = String(process.env.AI_FAILOVER_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
-const KIMI_THINKING_ENABLED = String(process.env.KIMI_THINKING_ENABLED ?? 'false').trim().toLowerCase() === 'true';
-const KIMI_MAX_OUTPUT_TOKENS = 2048;
 
 const parseModelOptions = (value, defaults) => [...new Set([
   ...defaults,
@@ -29,10 +27,6 @@ const openAIPrimaryModel = process.env.OPENAI_MODEL || 'gpt-5.6-terra';
 const openAIFastModel = process.env.OPENAI_FAST_MODEL || 'gpt-5.6-luna';
 const anthropicPrimaryModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const anthropicFastModel = process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001';
-const kimiPrimaryModel = process.env.KIMI_MODEL || 'kimi-k2.6';
-const kimiFastModel = process.env.KIMI_FAST_MODEL || 'kimi-k2.6';
-const kimiApiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || '';
-const kimiBaseURL = String(process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
 const geminiPrimaryModel = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 const geminiFastModel = process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite';
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
@@ -50,12 +44,6 @@ const MODEL_CONFIG = {
     fast: anthropicFastModel,
     options: parseModelOptions(process.env.ANTHROPIC_MODEL_OPTIONS, [anthropicPrimaryModel, anthropicFastModel]),
     configured: Boolean(process.env.ANTHROPIC_API_KEY),
-  },
-  kimi: {
-    primary: kimiPrimaryModel,
-    fast: kimiFastModel,
-    options: parseModelOptions(process.env.KIMI_MODEL_OPTIONS, [kimiPrimaryModel, kimiFastModel]),
-    configured: Boolean(kimiApiKey),
   },
   gemini: {
     primary: geminiPrimaryModel,
@@ -75,7 +63,6 @@ const FAST_TIMEOUT_MS = parseTimeout(process.env.AI_FAST_TIMEOUT_MS, 8000);
 
 let openAIClient;
 let anthropicClient;
-let kimiClient;
 let geminiClient;
 let activeProvider = DEFAULT_AI_PROVIDER;
 let aiEnabled = DEFAULT_AI_ENABLED;
@@ -184,14 +171,6 @@ const getAnthropicClient = () => {
   return anthropicClient;
 };
 
-const getKimiClient = () => {
-  if (!kimiClient) {
-    if (!kimiApiKey) throw new Error('KIMI_API_KEY or MOONSHOT_API_KEY is not set');
-    kimiClient = new OpenAI({ apiKey: kimiApiKey, baseURL: kimiBaseURL });
-  }
-  return kimiClient;
-};
-
 const getGeminiClient = () => {
   if (!geminiClient) {
     if (!geminiApiKey) throw new Error('GEMINI_API_KEY is not set');
@@ -209,10 +188,6 @@ const requestOptions = (tier) => ({
   timeout: tier === 'fast' ? FAST_TIMEOUT_MS : PRIMARY_TIMEOUT_MS,
   maxRetries: 0,
 });
-
-const getKimiRequestOverrides = () => KIMI_THINKING_ENABLED
-  ? {}
-  : { thinking: { type: 'disabled' } };
 
 const readOpenAIText = (response, { maxTokens, model, operation }) => {
   const text = response.output_text?.trim();
@@ -244,21 +219,6 @@ const readAnthropicText = (message, { maxTokens, model, operation }) => {
   }
   if (message.stop_reason === 'max_tokens') {
     logger.warn({ maxTokens, model }, `${operation}: Anthropic response truncated by max_tokens limit`);
-  }
-  return text;
-};
-
-const readKimiText = (completion, { maxTokens, model, operation }) => {
-  const text = completion.choices?.[0]?.message?.content?.trim();
-  if (!text) {
-    logger.error(
-      { finishReason: completion.choices?.[0]?.finish_reason },
-      `${operation}: no text in Kimi response`,
-    );
-    throw new Error(`Unexpected response format from Kimi API (finish_reason: ${completion.choices?.[0]?.finish_reason || 'unknown'})`);
-  }
-  if (completion.choices?.[0]?.finish_reason === 'length') {
-    logger.warn({ maxTokens, model }, `${operation}: Kimi response truncated by max_tokens limit`);
   }
   return text;
 };
@@ -308,22 +268,6 @@ const callTextProvider = async (provider, prompt, options, allowExplicitModel) =
       if (system) params.system = system;
       response = await getAnthropicClient().messages.create(params, requestOptions(tier));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAI' });
-      await finish('success');
-      return text;
-    }
-
-    if (provider === 'kimi') {
-      const kimiMaxTokens = Math.min(maxTokens, KIMI_MAX_OUTPUT_TOKENS);
-      const messages = [];
-      if (system) messages.push({ role: 'system', content: system });
-      messages.push({ role: 'user', content: prompt });
-      response = await getKimiClient().chat.completions.create({
-        model: resolvedModel,
-        max_tokens: kimiMaxTokens,
-        ...getKimiRequestOverrides(),
-        messages,
-      }, requestOptions(tier));
-      const text = readKimiText(response, { maxTokens: kimiMaxTokens, model: resolvedModel, operation: 'askAI' });
       await finish('success');
       return text;
     }
@@ -394,28 +338,6 @@ const callVisionProvider = async (provider, imageBase64, prompt, options, allowE
       if (system) params.system = system;
       response = await getAnthropicClient().messages.create(params, requestOptions(tier));
       const text = readAnthropicText(response, { maxTokens, model: resolvedModel, operation: 'askAIVision' });
-      await finish('success');
-      return text;
-    }
-
-    if (provider === 'kimi') {
-      const kimiMaxTokens = Math.min(maxTokens, KIMI_MAX_OUTPUT_TOKENS);
-      const messages = [];
-      if (system) messages.push({ role: 'system', content: system });
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-          { type: 'text', text: prompt },
-        ],
-      });
-      response = await getKimiClient().chat.completions.create({
-        model: resolvedModel,
-        max_tokens: kimiMaxTokens,
-        ...getKimiRequestOverrides(),
-        messages,
-      }, requestOptions(tier));
-      const text = readKimiText(response, { maxTokens: kimiMaxTokens, model: resolvedModel, operation: 'askAIVision' });
       await finish('success');
       return text;
     }
@@ -711,14 +633,12 @@ const getAIFeatureAvailability = () => Object.fromEntries(
 );
 
 module.exports = {
-  KIMI_MAX_OUTPUT_TOKENS,
   askAI,
   askAIVision,
   assertAIEnabled,
   assertAIFeatureEnabled,
   getAIFeatureAvailability,
   getAIStatus,
-  getKimiRequestOverrides,
   initializeAISettings,
   isAIAvailable,
   isAIFeatureAvailable,

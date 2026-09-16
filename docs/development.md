@@ -53,7 +53,7 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `EMAIL_FROM` | — | Verified sender used for account emails |
 | `APP_BASE_URL` | — | Public web origin used in verification and reset links |
 | `DEBUG_AVY` | `false` | Set to `true` to enable avalanche pipeline debug logs |
-| `AI_PROVIDER` | `openai` | Preferred AI provider: `openai`, `anthropic`, `kimi`, or `gemini`; a failed request retries through the other configured providers. |
+| `AI_PROVIDER` | `openai` | Preferred AI provider: `openai`, `anthropic`, or `gemini`; a failed request retries through the other configured providers. |
 | `AI_FAILOVER_ENABLED` | `true` | Startup default for automatic provider failover; administrators can change it at runtime. |
 | `AI_PRIMARY_TIMEOUT_MS` | `28000` | Per-provider timeout for synthesis, briefs, and vision before failover. |
 | `AI_FAST_TIMEOUT_MS` | `8000` | Per-provider timeout for route suggestions and extraction before failover. |
@@ -63,11 +63,6 @@ By default, Vite proxies `/api` to `VITE_DEV_BACKEND_URL` (default `http://local
 | `ANTHROPIC_API_KEY` | — | Enables Anthropic as preferred provider or fallback. |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5` | Claude model for route synthesis, field briefs, and snow-image analysis. |
 | `ANTHROPIC_FAST_MODEL` | `claude-haiku-4-5-20251001` | Claude model for route suggestions and waypoint extraction. |
-| `KIMI_API_KEY` | — | Enables Kimi. `MOONSHOT_API_KEY` is accepted as an alias. |
-| `KIMI_BASE_URL` | `https://api.moonshot.ai/v1` | Kimi API endpoint; change only when using another Kimi region. |
-| `KIMI_MODEL` | `kimi-k2.6` | Kimi model for route synthesis, field briefs, chat, and snow-image analysis. |
-| `KIMI_FAST_MODEL` | `kimi-k2.6` | Kimi model for route suggestions and waypoint extraction. |
-| `KIMI_THINKING_ENABLED` | `false` | Set to `true` to allow Kimi reasoning; disabled by default to keep interactive requests within their latency budgets. |
 | `GEMINI_API_KEY` | — | Enables Google Gemini as preferred provider or fallback. |
 | `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Official OpenAI-compatible Gemini API endpoint. |
 | `GEMINI_MODEL` | `gemini-3.7-flash` | Gemini model for route synthesis, field briefs, chat, and snow-image analysis. |
@@ -127,7 +122,8 @@ Do not mix module systems within each tier.
 
 - New backend domain logic goes in `backend/index.js` or a new utility in `backend/src/utils/`.
 - New backend routes go in `backend/src/routes/`.
-- OpenAI, Anthropic, and Kimi integrations use `backend/src/utils/ai-client.js` as the shared provider-switching client.
+- Kimi is no longer supported. Change any existing `AI_PROVIDER=kimi` environment setting to a supported provider before starting the backend. Saved Kimi provider and model settings are ignored; the environment default is used instead.
+- OpenAI, Anthropic, and Gemini integrations use `backend/src/utils/ai-client.js` as the shared provider-switching client.
 - Caching logic uses `backend/src/utils/cache.js` for tiered in-memory caches.
 - New frontend utilities go in `frontend/src/app/` or `frontend/src/lib/`.
 - New frontend UI components go in `frontend/src/components/`. Domain-specific cards go in `frontend/src/components/planner/cards/`.

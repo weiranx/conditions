@@ -15,7 +15,6 @@ export interface UseHealthChecksReturn {
 const aiProviderLabel = (provider: string) => ({
   openai: 'OpenAI',
   anthropic: 'Anthropic',
-  kimi: 'Kimi',
   gemini: 'Gemini',
 })[provider] || provider;
 

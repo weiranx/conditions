@@ -8,7 +8,6 @@ const {
   REPORT_CHAT_SYSTEM_PROMPT,
   TRIP_CHAT_SYSTEM_PROMPT,
   createGeminiStreamingModel,
-  createKimiStreamingModel,
   createContextualFollowUps,
   normalizeReport,
   registerReportChatRoute: registerReportChatRouteWithoutAccount,
@@ -26,43 +25,6 @@ const registerReportChatRoute = (options) => registerReportChatRouteWithoutAccou
 });
 
 describe('report chat request handling', () => {
-  test('uses the compatible Kimi adapter with thinking disabled', () => {
-    const model = { provider: 'kimi', modelId: 'kimi-k2.6' };
-    const chatModel = jest.fn(() => model);
-    const createOpenAICompatible = jest.fn(() => ({ chatModel }));
-
-    expect(createKimiStreamingModel({
-      createOpenAICompatible,
-      apiKey: 'kimi-test-key',
-      baseURL: 'https://api.moonshot.ai/v1',
-      modelId: 'kimi-k2.6',
-    })).toBe(model);
-    expect(chatModel).toHaveBeenCalledWith('kimi-k2.6');
-    const settings = createOpenAICompatible.mock.calls[0][0];
-    expect(settings).toMatchObject({
-      name: 'kimi',
-      apiKey: 'kimi-test-key',
-      baseURL: 'https://api.moonshot.ai/v1',
-      includeUsage: true,
-    });
-    expect(settings.transformRequestBody({ model: 'kimi-k2.6' })).toEqual({
-      model: 'kimi-k2.6',
-      thinking: { type: 'disabled' },
-    });
-  });
-
-  test('creates a Kimi model version supported by the current AI SDK runtime', () => {
-    const { createOpenAICompatible } = require('@ai-sdk/openai-compatible');
-    const model = createKimiStreamingModel({
-      createOpenAICompatible,
-      apiKey: 'kimi-test-key',
-      baseURL: 'https://api.moonshot.ai/v1',
-      modelId: 'kimi-k2.6',
-    });
-
-    expect(model.specificationVersion).toBe('v3');
-  });
-
   test('uses the compatible Gemini streaming adapter', () => {
     const model = { provider: 'gemini', modelId: 'gemini-3.7-flash' };
     const chatModel = jest.fn(() => model);
