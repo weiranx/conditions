@@ -112,7 +112,8 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
     });
 
   expect(response.status).toBe(200);
-  expect(response.body.narrative).toBe('BIG PICTURE: Weather is the enabled concern.');
+  expect(response.body.validation).toBe('deterministic_fallback');
+  expect(response.body.narrative).toContain('Strong wind is expected.');
   expect(response.body.narrative).not.toMatch(/avalanche/i);
   expect(askAI).toHaveBeenCalledTimes(1);
   const prompt = askAI.mock.calls[0][0];
@@ -124,7 +125,7 @@ test('AI brief excludes a disabled avalanche domain from the model prompt', asyn
 test('AI brief preserves the feature snapshot of a previously generated report', async () => {
   const app = express();
   app.use(express.json());
-  const askAI = jest.fn().mockResolvedValue('BIG PICTURE: Avalanche conditions remain part of this saved report.');
+  const askAI = jest.fn().mockResolvedValue(JSON.stringify({ sections: ['BIG PICTURE', 'WHY IT MATTERS', 'WATCH CLOSELY', 'DATA CONFIDENCE', 'COMFORT CHECK', 'BEST MOVE'].map(heading => ({ heading, text: 'Avalanche conditions remain part of this saved report.', evidence: [{ path: 'avalanche.risk', value: 'Moderate' }] })) }));
   registerAiBriefRoute({ app, askAI });
 
   const response = await request(app)

@@ -127,7 +127,7 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled }:
 
   const filtered = Boolean(query || aiOnly);
   function clearFilters() { setSearch(''); setQuery(''); setAiOnly(false); }
-  const localScore = localReport?.safetyData.safety.score;
+  const localScore = localReport?.safetyData.safety.assessmentStatus === 'insufficient_evidence' ? null : localReport?.safetyData.safety.score;
 
   return <section className="field-library field-report-history">
     <header className="field-page-heading">

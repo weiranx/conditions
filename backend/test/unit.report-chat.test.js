@@ -129,9 +129,7 @@ describe('report chat request handling', () => {
   });
 
   test('bounds oversized report context', () => {
-    const normalized = normalizeReport({ detail: 'x'.repeat(MAX_REPORT_LENGTH + 100) });
-    expect(normalized.length).toBeGreaterThan(MAX_REPORT_LENGTH);
-    expect(normalized).toContain('[Report truncated');
+    expect(() => normalizeReport({ detail: 'x'.repeat(MAX_REPORT_LENGTH + 100) })).toThrow(/too large/i);
   });
 
   test('keeps recent text messages and removes unsupported parts', () => {

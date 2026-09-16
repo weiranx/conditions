@@ -1541,7 +1541,7 @@ test('proportional cold duration: scales with exposure hours', () => {
     ...safetyScoreBaseInput(),
     weatherData: makeWeather(1, -5),
   });
-  const cold1h = result1h.factors.filter((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  const cold1h = result1h.factors.filter((f) => f.hazard === 'Cold' && f.source.endsWith('hourly trend'));
   // With 1 extreme-cold hour, retain the calibrated fractional exposure.
   expect(cold1h.length).toBe(1);
   expect(cold1h[0].impact).toBe(1.5);
@@ -1551,7 +1551,7 @@ test('proportional cold duration: scales with exposure hours', () => {
     ...safetyScoreBaseInput(),
     weatherData: makeWeather(8, -10),
   });
-  const cold8h = result8h.factors.filter((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  const cold8h = result8h.factors.filter((f) => f.hazard === 'Cold' && f.source.endsWith('hourly trend'));
   expect(cold8h.length).toBe(1);
   // Temporal weighting reduces effective hours: sum of weights for 8 items = 5.2.
   expect(cold8h[0].impact).toBe(7.8);
@@ -1702,7 +1702,7 @@ test('proportional cold duration: mixed extreme + cold hours sum correctly', () 
   });
 
   // 3 extreme hours * 1.5 = 4.5, ~3 cold-only hours * 0.8 = 2.4, total ≈ 7
-  const coldDuration = result.factors.find((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  const coldDuration = result.factors.find((f) => f.hazard === 'Cold' && f.source.endsWith('hourly trend'));
   expect(coldDuration).toBeDefined();
   expect(coldDuration.impact).toBeGreaterThanOrEqual(4.5);
   expect(coldDuration.impact).toBeLessThanOrEqual(9);
@@ -1723,7 +1723,7 @@ test('proportional cold duration: cap at 12 even with many extreme hours', () =>
   });
 
   // 12 extreme hours * 1.5 = 18, but capped at 12
-  const coldDuration = result.factors.find((f) => f.hazard === 'Cold' && f.source === 'NOAA hourly trend');
+  const coldDuration = result.factors.find((f) => f.hazard === 'Cold' && f.source.endsWith('hourly trend'));
   expect(coldDuration).toBeDefined();
   expect(coldDuration.impact).toBeGreaterThanOrEqual(11.5);
   expect(coldDuration.impact).toBeLessThanOrEqual(12);
@@ -1744,7 +1744,7 @@ describe('calculateSafetyScore cold tier boundaries', () => {
         trend: [],
       },
     });
-    return result.factors.find((f) => f.hazard === 'Cold' && f.source === 'NOAA temp + windchill');
+    return result.factors.find((f) => f.hazard === 'Cold' && f.source.endsWith('temp + windchill'));
   };
 
   test('feels-like -10F triggers extreme cold tier (impact 15)', () => {
@@ -3544,7 +3544,7 @@ const calmWeather = (overrides = {}) => ({
 
 test('calculateSafetyScore stamps the scoring model version', () => {
   const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
-  expect(result.scoreVersion).toBe('2.8.0');
+  expect(result.scoreVersion).toBe('2.9.0');
 });
 
 test('calculateSafetyScore gives benign conditions the full 100-point baseline', () => {

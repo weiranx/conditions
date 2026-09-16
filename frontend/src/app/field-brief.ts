@@ -73,7 +73,8 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   const { safetyData, decision } = input;
   const featureFlags = resolveReportFeatureFlags(safetyData.featureFlags);
   const avalancheEnabled = featureFlags.avalancheDetails && Boolean(safetyData.avalanche);
-  const score = Math.round(Number(safetyData.safety?.score) || 0);
+  const score = safetyData.safety?.assessmentStatus === 'insufficient_evidence' || !Number.isFinite(safetyData.safety?.score) ? null : Math.round(safetyData.safety.score);
+  const scoreLabel = score === null ? 'Insufficient evidence' : `${score}/100`;
   const generatedAt = safetyData.generatedAt ? new Date(safetyData.generatedAt).toLocaleString() : 'Unknown';
   const hazards = [...decision.blockers, ...decision.cautions]
     .map(compact)
@@ -134,7 +135,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   const textSections = [
     `${input.objectiveName || 'Backcountry objective'} — FIELD BRIEF`,
     planLines.join('\n'),
-    `DECISION\n${decision.level} · ${score}/100\n${compact(decision.headline)}`,
+    `DECISION\n${decision.level} · ${scoreLabel}\n${compact(decision.headline)}`,
     `DECISIVE HAZARDS\n${(hazards.length ? hazards : ['No modeled blocker; normal mountain hazards still apply.']).map((item) => `- ${item}`).join('\n')}`,
     `TURNAROUND TRIGGERS\n${triggers.map((item) => `- ${item}`).join('\n') || '- Set objective-specific turnaround triggers before departure.'}`,
     `VERIFY BEFORE LEAVING\n${verificationItems.map((item) => `- ${item}`).join('\n')}`,
@@ -185,7 +186,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
       <p class="brand">Backcountry Conditions · Offline field brief</p>
       <div class="hero-grid">
         <div><p class="eyebrow">${escapeHtml(activityLabel)} · ${escapeHtml(input.forecastDate)}</p><h1>${escapeHtml(input.objectiveName || 'Backcountry objective')}</h1><p class="hero-meta">Departure ${escapeHtml(input.startTime)} · Expected return ${escapeHtml(input.returnTime || 'not set')}</p></div>
-        <div class="score"><strong>${score}</strong><span>out of 100</span></div>
+        <div class="score"><strong>${score ?? '—'}</strong><span>${score === null ? 'Insufficient evidence' : 'out of 100'}</span></div>
       </div>
     </header>
     <main>

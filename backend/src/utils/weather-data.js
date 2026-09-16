@@ -1,3 +1,4 @@
+const { zonedForecastIso } = require('./report-evidence');
 const { computeFeelsLikeF, normalizePressureHpa } = require('./weather-normalizers');
 const { buildVisibilityRisk, buildElevationForecastBands } = require('./visibility-risk');
 const { estimateWindGustFromWindSpeed, findNearestCardinalFromDegreeSeries } = require('./wind');
@@ -402,7 +403,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     const { payload, payloadIssuedTime } = cachedForecast;
 
     const hourly = payload?.hourly;
-    const hourlyTimes = Array.isArray(hourly?.time) ? hourly.time : [];
+    const hourlyTimes = Array.isArray(hourly?.time) ? hourly.time.map(time => zonedForecastIso(time, payload?.timezone)) : [];
     if (!hourlyTimes.length) {
       throw new Error('Open-Meteo forecast response did not include hourly time series.');
     }
@@ -424,7 +425,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         const m = ts.match(/T(\d{2}):(\d{2})/);
         if (!m) return false;
         const minutes = Number(m[1]) * 60 + Number(m[2]);
-        return minutes >= targetMinutes;
+        return minutes <= targetMinutes && minutes + 60 > targetMinutes;
       });
       if (Number.isInteger(byStart)) {
         selectedHourIndex = byStart;
@@ -434,33 +435,32 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     }
     const selectedHourIso = hourlyTimes[selectedHourIndex] || null;
 
-    const readHourlyValue = (key, index, fallback = 0) => {
+    const readHourlyValue = (key, index, fallback = Number.NaN) => {
       const series = hourly && Array.isArray(hourly[key]) ? hourly[key] : [];
-      const value = Number(series[index]);
+      const raw = series[index];
+      const value = raw === null || raw === undefined || typeof raw === 'boolean' || (typeof raw === 'string' && !raw.trim()) ? Number.NaN : Number(raw);
       return Number.isFinite(value) ? value : fallback;
     };
 
-    const currentTemp = Math.round(readHourlyValue('temperature_2m', selectedHourIndex, 0));
-    const currentWind = Math.round(readHourlyValue('wind_speed_10m', selectedHourIndex, 0));
-    const gustSeries = hourly && Array.isArray(hourly.wind_gusts_10m) ? hourly.wind_gusts_10m : [];
-    const rawCurrentGust = Number(gustSeries[selectedHourIndex]);
+    const currentTemp = Math.round(readHourlyValue('temperature_2m', selectedHourIndex, Number.NaN));
+    const currentWind = Math.round(readHourlyValue('wind_speed_10m', selectedHourIndex, Number.NaN));
+    const rawCurrentGust = readHourlyValue('wind_gusts_10m', selectedHourIndex);
     const hasOpenMeteoGust = Number.isFinite(rawCurrentGust);
     const currentGust = hasOpenMeteoGust
-      ? Math.max(currentWind, Math.round(rawCurrentGust))
-      : Math.max(currentWind, estimateWindGustFromWindSpeed(currentWind));
+      ? Math.max(Number.isFinite(currentWind) ? currentWind : 0, Math.round(rawCurrentGust))
+      : Number.isFinite(currentWind) ? Math.max(currentWind, estimateWindGustFromWindSpeed(currentWind)) : null;
     const windDirectionSeries = Array.isArray(hourly?.wind_direction_10m) ? hourly.wind_direction_10m : [];
     const currentWindDirection = findNearestCardinalFromDegreeSeries(windDirectionSeries, selectedHourIndex);
-    const dewPointSeries = hourly && Array.isArray(hourly.dew_point_2m) ? hourly.dew_point_2m : [];
-    const rawCurrentDewPoint = Number(dewPointSeries[selectedHourIndex]);
+    const rawCurrentDewPoint = readHourlyValue('dew_point_2m', selectedHourIndex);
     const currentDewPoint = Number.isFinite(rawCurrentDewPoint) ? Math.round(rawCurrentDewPoint) : null;
-    const currentHumidity = Math.round(readHourlyValue('relative_humidity_2m', selectedHourIndex, 0));
-    const currentCloud = Math.round(readHourlyValue('cloud_cover', selectedHourIndex, 0));
-    const pressureSeries = hourly && Array.isArray(hourly.surface_pressure) ? hourly.surface_pressure : [];
-    const rawCurrentPressure = Number(pressureSeries[selectedHourIndex]);
+    const currentHumidity = Math.round(readHourlyValue('relative_humidity_2m', selectedHourIndex, Number.NaN));
+    const currentCloud = Math.round(readHourlyValue('cloud_cover', selectedHourIndex, Number.NaN));
+    const rawCurrentPressure = readHourlyValue('surface_pressure', selectedHourIndex);
     const currentPressure = normalizePressureHpa(rawCurrentPressure);
-    const currentPrecipProb = Math.round(readHourlyValue('precipitation_probability', selectedHourIndex, 0));
+    const currentPrecipProb = Math.round(readHourlyValue('precipitation_probability', selectedHourIndex, Number.NaN));
     const currentWeatherCode = Math.round(readHourlyValue('weather_code', selectedHourIndex, -1));
-    const currentIsDay = readHourlyValue('is_day', selectedHourIndex, 1) >= 1;
+    const currentDayFlag = readHourlyValue('is_day', selectedHourIndex);
+    const currentIsDay = Number.isFinite(currentDayFlag) ? currentDayFlag >= 1 : null;
     const feelsLike = computeFeelsLikeF(currentTemp, currentWind);
     const dailyTemperatureRange = buildDailyTemperatureRange(dayHourIndexes.map((rowIndex) => ({
       tempF: readHourlyValue('temperature_2m', rowIndex, Number.NaN),
@@ -476,8 +476,8 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       }
       temperatureContextPoints.push({
         timeIso: rowIso,
-        tempF: Math.round(readHourlyValue('temperature_2m', rowIndex, currentTemp)),
-        isDaytime: readHourlyValue('is_day', rowIndex, 1) >= 1,
+        tempF: Math.round(readHourlyValue('temperature_2m', rowIndex, Number.NaN)),
+        isDaytime: Number.isFinite(readHourlyValue('is_day', rowIndex)) ? readHourlyValue('is_day', rowIndex) >= 1 : null,
       });
     }
     const temperatureContext24h = buildTemperatureContext24h({
@@ -487,33 +487,33 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     });
 
     const forecastTrendHours = clampTravelWindowHours(trendHours, 12);
-    for (let offset = 0; offset < forecastTrendHours; offset += 1) {
+    for (let offset = 0; offset < forecastTrendHours + (startClock && !startClock.endsWith(':00') ? 1 : 0); offset += 1) {
       const rowIndex = selectedHourIndex + offset;
       const rowIso = hourlyTimes[rowIndex];
       if (!rowIso) {
         break;
       }
-      const rawRowGust = Number(gustSeries[rowIndex]);
-      const rowWind = Math.round(readHourlyValue('wind_speed_10m', rowIndex, currentWind));
+      const rawRowGust = readHourlyValue('wind_gusts_10m', rowIndex);
+      const rowWind = Math.round(readHourlyValue('wind_speed_10m', rowIndex, Number.NaN));
       trend.push({
         time: hourLabelFromIso(rowIso, payload?.timezone || null),
         timeIso: rowIso,
-        temp: Math.round(readHourlyValue('temperature_2m', rowIndex, currentTemp)),
+        temp: Math.round(readHourlyValue('temperature_2m', rowIndex, Number.NaN)),
         wind: rowWind,
         gust: Number.isFinite(rawRowGust)
-          ? Math.max(rowWind, Math.round(rawRowGust))
-          : Math.max(rowWind, estimateWindGustFromWindSpeed(rowWind)),
+          ? Math.max(Number.isFinite(rowWind) ? rowWind : 0, Math.round(rawRowGust))
+          : Number.isFinite(rowWind) ? Math.max(rowWind, estimateWindGustFromWindSpeed(rowWind)) : null,
         windDirection: findNearestCardinalFromDegreeSeries(windDirectionSeries, rowIndex),
-        precipChance: Math.round(readHourlyValue('precipitation_probability', rowIndex, currentPrecipProb)),
-        humidity: Math.round(readHourlyValue('relative_humidity_2m', rowIndex, currentHumidity)),
+        precipChance: Math.round(readHourlyValue('precipitation_probability', rowIndex, Number.NaN)),
+        humidity: Math.round(readHourlyValue('relative_humidity_2m', rowIndex, Number.NaN)),
         dewPoint: (() => {
-          const rawDewPoint = Number(dewPointSeries[rowIndex]);
+          const rawDewPoint = readHourlyValue('dew_point_2m', rowIndex);
           return Number.isFinite(rawDewPoint) ? Math.round(rawDewPoint) : null;
         })(),
-        cloudCover: Math.round(readHourlyValue('cloud_cover', rowIndex, currentCloud)),
-        pressure: normalizePressureHpa(Number(pressureSeries[rowIndex])),
-        condition: openMeteoCodeToText(readHourlyValue('weather_code', rowIndex, currentWeatherCode)),
-        isDaytime: readHourlyValue('is_day', rowIndex, 1) >= 1,
+        cloudCover: Math.round(readHourlyValue('cloud_cover', rowIndex, Number.NaN)),
+        pressure: normalizePressureHpa(readHourlyValue('surface_pressure', rowIndex)),
+        condition: openMeteoCodeToText(readHourlyValue('weather_code', rowIndex, -1)),
+        isDaytime: Number.isFinite(readHourlyValue('is_day', rowIndex)) ? readHourlyValue('is_day', rowIndex) >= 1 : null,
       });
     }
 
@@ -540,7 +540,8 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       cloudCover: currentCloud,
       precipChance: currentPrecipProb,
       isDaytime: currentIsDay,
-      issuedTime: payloadIssuedTime || null,
+      issuedTime: null,
+      fetchedAt: payloadIssuedTime || null,
       timezone: payload?.timezone || null,
       forecastStartTime: selectedHourIso,
       forecastEndTime: hourlyTimes[selectedHourIndex + 1]
@@ -567,7 +568,8 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
               cloudCover: 'Open-Meteo',
           precipChance: 'Open-Meteo',
           isDaytime: 'Open-Meteo',
-              issuedTime: 'Open-Meteo response timestamp',
+              issuedTime: 'Unavailable; response timestamp is retrieval time, not model issuance',
+              fetchedAt: 'Open-Meteo response timestamp',
           timezone: 'Open-Meteo',
           forecastStartTime: 'Open-Meteo',
           forecastEndTime: 'Open-Meteo',

@@ -193,7 +193,7 @@ const removeDisabledAnalysisDetails = (analysis, flags) => {
   if (!isFeatureEnabled(flags, 'weatherContextDetails')) disabledPatterns.push(/visibility/iu);
   const keepText = (value) => !disabledPatterns.some((pattern) => pattern.test(String(value || '')));
 
-  ['explanations', 'confidenceReasons', 'sourcesUsed'].forEach((key) => {
+  ['explanations', 'confidenceReasons', 'evidenceReasons', 'sourcesUsed'].forEach((key) => {
     if (Array.isArray(analysis[key])) filtered[key] = analysis[key].filter(keepText);
   });
 

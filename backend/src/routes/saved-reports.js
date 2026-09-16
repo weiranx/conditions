@@ -258,7 +258,8 @@ const registerSavedReportRoutes = ({
                  report #>> '{plan,forecastDate}' AS forecast_date,
                  report #>> '{plan,alpineStartTime}' AS alpine_start_time,
                  report #>> '{safetyData,generatedAt}' AS generated_at,
-                 report #>> '{safetyData,safety,score}' AS score,
+                 CASE WHEN report #>> '{safetyData,safety,assessmentStatus}' = 'insufficient_evidence' THEN NULL
+                      ELSE report #>> '{safetyData,safety,score}' END AS score,
                  (
                    NULLIF(report #>> '{ai,aiBriefNarrative}', '') IS NOT NULL
                    OR NULLIF(report #>> '{ai,snowVisionAnalysis}', '') IS NOT NULL

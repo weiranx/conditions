@@ -18,7 +18,8 @@ export function ScoreExplanation({ safety, localize = (text) => text }: {
     .map(([key, group]) => ({ key, ...group, deduction: group.effective ?? group.capped }))
     .filter((group) => typeof group.deduction === "number" && Number.isFinite(group.deduction) && group.deduction > 0)
     .sort((a, b) => b.deduction! - a.deduction!);
-  const reasons = safety.confidenceReasons || [];
+  const insufficient = safety.assessmentStatus === 'insufficient_evidence';
+  const reasons = [...new Set([...(safety.evidenceReasons || []), ...(safety.confidenceReasons || [])])];
   return (
     <section className="field-panel report-score-explanation" aria-labelledby="report-score-heading">
       <header className="report-score-heading">
@@ -27,9 +28,9 @@ export function ScoreExplanation({ safety, localize = (text) => text }: {
           <h2 id="report-score-heading">What drives this score</h2>
           <p>Higher scores mean fewer modeled hazards. Trip checks and field warnings still apply.</p>
         </div>
-        <div className="report-score-total" aria-label={`Safety score ${Number.isFinite(safety.score) ? points(safety.score) : 'unavailable'} out of 100`}>
-          <strong>{Number.isFinite(safety.score) ? points(safety.score) : "—"}</strong><span>/100</span>
-          <small>{safety.tier || "Unrated"}</small>
+        <div className="report-score-total" aria-label={`Safety score ${!insufficient && Number.isFinite(safety.score) ? points(safety.score) : 'unavailable'} out of 100`}>
+          <strong>{!insufficient && Number.isFinite(safety.score) ? points(safety.score) : "—"}</strong><span>/100</span>
+          <small>{insufficient ? "Insufficient evidence" : safety.tier || "Unrated"}</small>
         </div>
       </header>
       {groups.length > 0 ? (
@@ -47,10 +48,10 @@ export function ScoreExplanation({ safety, localize = (text) => text }: {
       ) : <p className="field-muted">No group deductions were supplied with this report.</p>}
       <p className="report-score-method">The score starts at 100. Related hazards are combined to limit double counting; severe hazards can enforce a minimum deduction. The result cannot fall below zero.</p>
       <div className="report-confidence-explanation">
-        <div><h3>Evidence confidence</h3><strong>{typeof safety.confidence === "number" && Number.isFinite(safety.confidence) ? `${Math.round(safety.confidence)}%` : "Unknown"}</strong></div>
-        <p>Describes the quality and coverage of the evidence, not the chance of a safe trip.</p>
+        <div><h3>Evidence quality</h3><strong>{safety.evidenceQuality || "Not assessed"}</strong></div>
+        <p>A rule-based assessment of source freshness and coverage, not a measured probability of accuracy or a safe trip.</p>
         {reasons.length > 0 ? <ul>{reasons.map((reason, i) => <li key={i}>{localize(reason)}</li>)}</ul>
-          : <p className="field-muted">No confidence reductions were supplied. Check source timestamps below.</p>}
+          : <p className="field-muted">Evidence quality was not assessed or no reductions were recorded. Check source timestamps below.</p>}
       </div>
       <details className="field-detail-disclosure">
         <summary>All contributing factors</summary>

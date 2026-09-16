@@ -212,8 +212,8 @@ const buildElevationForecastBands = ({ baseElevationFt, tempF, windSpeedMph, win
       const actualDeltaFromObjectiveFt = elevationFt - objectiveElevationFt;
       const deltaKft = actualDeltaFromObjectiveFt / 1000;
       const estimatedTempF = Math.round(tempF - (deltaKft * TEMP_LAPSE_F_PER_1000FT));
-      const estimatedWindSpeed = Math.max(0, Math.round((windSpeedMph || 0) + (deltaKft * WIND_INCREASE_MPH_PER_1000FT)));
-      const estimatedWindGust = Math.max(0, Math.round((windGustMph || 0) + (deltaKft * GUST_INCREASE_MPH_PER_1000FT)));
+      const estimatedWindSpeed = Number.isFinite(windSpeedMph) ? Math.max(0, Math.round(windSpeedMph + (deltaKft * WIND_INCREASE_MPH_PER_1000FT))) : null;
+      const estimatedWindGust = Number.isFinite(windGustMph) ? Math.max(0, Math.round(windGustMph + (deltaKft * GUST_INCREASE_MPH_PER_1000FT))) : null;
 
       return {
         label: band.label,

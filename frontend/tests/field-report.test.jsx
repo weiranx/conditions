@@ -1,3 +1,4 @@
+import { evaluateBackcountryDecision } from '../src/app/decision';
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -17,14 +18,14 @@ test("comfort shows its outlook, coverage, and the reason for a limiting score",
     adjustments: [{ maximumScore: 74, reason: 'Incomplete coverage limits the rating to Mixed.' }],
     factors: [{ factor: 'Temperature', score: 100, weight: 30, impact: 0, message: 'Feels like 58°F.' }],
   }} localize={(text) => text.replace('58°F', '14°C')} />);
-  for (const expected of [/74\/100/, /53%/, /12 of 24 planned hours/, /Incomplete coverage limits/, /weighted estimate is 98\/100/, /14°C/, /What shapes this score/, /Missing forecast evidence/]) assert.match(html, expected);
+  for (const expected of [/74\/100/, /12\/24 hours/, /12 of 24 planned hours/, /Incomplete coverage limits/, /weighted estimate is 98\/100/, /14°C/, /What shapes this score/, /Missing forecast evidence/]) assert.match(html, expected);
   assert.doesNotMatch(html, /58°F|NaN|Infinity/);
 });
 
 test("legacy comfort reports do not invent coverage or confidence", () => {
   const html = renderToStaticMarkup(<ComfortScore comfort={{ score: 80, label: 'Pleasant', summary: 'Pleasant overall.' }} />);
   assert.match(html, /Hourly coverage was not recorded/);
-  assert.match(html, /Forecast confidence<\/strong><span>Unknown/);
+  assert.match(html, /Evidence coverage<\/strong><span>Unknown/);
   assert.match(html, /No individual comfort factors/);
 });
 
@@ -460,7 +461,7 @@ test('score explanation preserves canonical fractional scores, safeguards, and s
 test('older score reports use deduction aliases and missing evidence is explicit', () => {
   const html = renderToStaticMarkup(<ScoreExplanation safety={{ score: 80, groupImpacts: { weather: { capped: 20 } }, explanations: ['Legacy forecast explanation.'] }} />);
   assert.match(html, /−20 pts/);
-  assert.match(html, /Unknown/);
+  assert.match(html, /Not assessed/);
   assert.match(html, /Legacy forecast explanation/);
   assert.doesNotMatch(html, /Hazard safeguard|undefined|NaN/);
   const empty = renderToStaticMarkup(<ScoreExplanation safety={{ score: 100 }} />);
@@ -614,4 +615,16 @@ test('fractional intervals cross midnight without losing the next day storm', ()
   assert.deepEqual(rows.map(row => row.complete), [true, true]);
   assert.equal(rows[1].lightningRisk, true);
   assert.equal(rows[1].pass, false);
+});
+
+test('insufficient report evidence suppresses the score and cannot produce GO', () => {
+  const data = makeReport({}, 'field-alerts');
+  data.safety = { ...data.safety, score: 99, confidence: 95, assessmentStatus: 'insufficient_evidence', evidenceQuality: 'Insufficient', coverage: { completeHours: 1.5, requestedHours: 2 }, evidenceReasons: ['Wind unavailable for the return.'] };
+  const decision = evaluateBackcountryDecision(data, '12:00', preferences);
+  assert.notEqual(decision.level, 'GO');
+  assert.ok(decision.checks.some(check => check.key === 'evidence-coverage' && !check.ok));
+  const html = renderToStaticMarkup(<ReportVerdict data={data} decision={decision} primaryReason="" freshnessWarning={null} preferences={preferences} onSources={() => {}} />);
+  assert.match(html, /Insufficient evidence/);
+  assert.match(html, /1.5 of 2 hours covered/);
+  assert.doesNotMatch(html, /95%|>99</);
 });

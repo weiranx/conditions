@@ -22,11 +22,11 @@ export function ComfortScore({ comfort, localize = (text) => text }: {
       <ConditionScale label="Weather comfort score" value={score} maximum={100} format={(value) => `${Math.round(value)}/100`} />
       <p className="comfort-outlook">{localize(comfort.summary || "A weather-comfort outlook for this outing.")}</p>
       <div className="comfort-evidence">
-        <div><strong>Forecast confidence</strong><span>{validScore(comfort.confidence) ? `${Math.round(comfort.confidence)}%` : "Unknown"}</span></div>
+        <div><strong>Evidence coverage</strong><span>{coverage ? `${coverage.completeHours}/${coverage.requestedHours} hours` : "Unknown"}</span></div>
         <p>{coverage
           ? `${coverage.completeHours} of ${coverage.requestedHours} planned hours have temperature, wind, and precipitation readings.`
           : "Hourly coverage was not recorded in this saved report."}</p>
-        <small>Confidence describes forecast coverage, not how comfortable or safe the trip will be.</small>
+        <small>Coverage describes available readings, not a probability of accurate forecasts or a safe trip.</small>
         {reasons.length > 0 && <details className="field-detail-disclosure">
           <summary>Missing forecast evidence</summary>
           <ul>{reasons.map((reason, index) => <li key={index}>{localize(reason)}</li>)}</ul>

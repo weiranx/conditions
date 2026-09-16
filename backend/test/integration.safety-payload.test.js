@@ -216,7 +216,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
       .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=13:30`);
     expect(res.status).toBe(200);
     expect(res.body.forecast.requestedStartTime).toBe('13:30');
-    expect(res.body.forecast.selectedStartTime).toBe(`${FORECAST_DATE}T14:00:00-07:00`);
+    expect(res.body.forecast.selectedStartTime).toBe(`${FORECAST_DATE}T13:00:00-07:00`);
   }, 20000);
 
   test('GET /api/safety returns 200 with partialData:true and an apiWarning when a pipeline step throws', async () => {

@@ -599,6 +599,7 @@ const safetyHandler = async (req, res) => {
       selectedDate: selectedForecastDate,
       solarData,
       selectedStartClock: requestedStartClock,
+      selectedStartTime: alertTargetTimeIso,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
     });
@@ -706,6 +707,7 @@ const safetyHandler = async (req, res) => {
       selectedDate: fallbackSelectedDate,
       solarData,
       selectedStartClock: requestedStartClock,
+      selectedStartTime: buildPlannedStartIso({ selectedDate: fallbackSelectedDate, startClock: requestedStartClock, referenceIso: safeWeatherData?.forecastStartTime }),
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
     });

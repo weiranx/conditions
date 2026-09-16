@@ -332,8 +332,8 @@ export default function FieldApp() {
                           </span>
                         </div>
                         <span>
-                          {w.safetyData?.safety.score}
-                          <small>/100</small>
+                          {w.safetyData?.safety.assessmentStatus === 'insufficient_evidence' ? 'Insufficient evidence' : w.safetyData?.safety.score}
+                          {w.safetyData?.safety.assessmentStatus !== 'insufficient_evidence' && <small>/100</small>}
                         </span>
                         <ArrowUpRight size={17} />
                       </button>

@@ -56,10 +56,9 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
         </div>
         <div>
           <strong>
-            {typeof w.safetyData?.safety.confidence === "number" && Number.isFinite(w.safetyData.safety.confidence)
-              ? `${Math.round(w.safetyData.safety.confidence)}%` : "—"}
+            {w.safetyData?.safety.evidenceQuality || "Not assessed"}
           </strong>
-          <span>evidence confidence</span>
+          <span>evidence quality</span>
         </div>
       </div>
       <div className="field-checks">
@@ -191,6 +190,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
           title="Weather field sources and forecast context"
           value={{
             sources: w.safetyData?.weather.sourceDetails,
+            evidence: w.safetyData?.safety.weatherProvenance,
             forecast: w.safetyData?.forecast,
             timeZone: w.objectiveTimezone,
           }}

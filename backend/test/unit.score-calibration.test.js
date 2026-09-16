@@ -5,7 +5,8 @@ const { calculatePleasantnessScore } = require('../src/utils/pleasantness-score'
 
 const now = () => new Date().toISOString();
 
-const calmWeather = (overrides = {}) => ({
+const calmWeather = (overrides = {}) => {
+  const weather = {
   description: 'Sunny',
   windSpeed: 5,
   windGust: 9,
@@ -26,7 +27,11 @@ const calmWeather = (overrides = {}) => ({
     condition: 'Sunny',
   })),
   ...overrides,
-});
+  };
+  weather.forecastStartTime = `${now().slice(0, 10)}T08:00:00Z`;
+  weather.trend = weather.trend.map((row, index) => ({ ...row, timeIso: new Date(Date.parse(weather.forecastStartTime) + index * 3600000).toISOString() }));
+  return weather;
+};
 
 const baseSafetyInput = () => ({
   weatherData: calmWeather(),

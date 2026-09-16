@@ -76,6 +76,9 @@ export function evaluateBackcountryDecision(
     }
   };
 
+  const insufficientEvidence = data.safety.assessmentStatus === 'insufficient_evidence';
+  if (insufficientEvidence) addCaution('Insufficient evidence for a trip assessment. ' + (data.safety.evidenceReasons || []).join(' '));
+
   const avalanche = data.avalanche;
   const danger = avalanche?.dangerLevel || 0;
   let gust = data.weather.windGust ?? 0;
@@ -459,12 +462,17 @@ export function evaluateBackcountryDecision(
     action: freshnessIssues.length > 0 ? 'Refresh the report and open each affected official source before committing.' : undefined,
   });
 
+  if (data.safety.assessmentStatus) checks.push({ key: 'evidence-coverage', label: 'Critical evidence covers the trip window', ok: !insufficientEvidence, detail: (data.safety.evidenceReasons || []).join(' ') || 'Critical evidence is available for the requested window.', action: insufficientEvidence ? 'Refresh missing sources and verify the full travel window before committing.' : undefined });
+
   let level: DecisionLevel = 'GO';
   let headline = 'No current threshold is tripped — keep normal precautions.';
 
   if (blockers.length > 0) {
     level = 'NO-GO';
     headline = 'Do not commit to this plan — change the objective, timing, or day.';
+  } else if (insufficientEvidence) {
+    level = 'CAUTION';
+    headline = 'Insufficient evidence — resolve the missing coverage before committing.';
   } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
     headline = 'No current avalanche bulletin — use unrated-terrain travel practices.';

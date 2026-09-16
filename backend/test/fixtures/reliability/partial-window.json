@@ -1,0 +1,17 @@
+{
+  "description": "Synthetic normalized NOAA hourly fixture; not an archived observation or calibration dataset.",
+  "selectedStartTime": "2026-09-16T08:30:00-07:00",
+  "selectedTravelWindowHours": 2,
+  "weatherData": {
+    "temp": 55, "feelsLike": 55, "windSpeed": 5, "windGust": 8, "precipChance": 0,
+    "issuedTime": "2026-09-16T14:00:00Z",
+    "forecastStartTime": "2026-09-16T08:00:00-07:00",
+    "sourceDetails": { "primary": "NOAA" },
+    "trend": [
+      { "timeIso": "2026-09-16T08:00:00-07:00", "temp": 55, "wind": 5, "gust": 8, "precipChance": 0 },
+      { "timeIso": "2026-09-16T09:00:00-07:00", "temp": 55, "wind": 5, "gust": 8, "precipChance": 0 }
+    ]
+  },
+  "avalancheData": { "relevant": false },
+  "alertsData": { "status": "none", "alerts": [] }
+}

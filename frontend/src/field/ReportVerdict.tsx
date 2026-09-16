@@ -11,6 +11,7 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
   preferences: UserPreferences;
   onSources: () => void;
 }) {
+  const insufficient = data.safety.assessmentStatus === 'insufficient_evidence';
   const tone = decision.level === 'GO' ? 'go' : decision.level === 'NO-GO' ? 'stop' : 'watch';
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const signals = flags.fieldObservations ? fieldSignals(data.localConditions, preferences) : [];
@@ -23,8 +24,8 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
     <section className={`field-verdict is-${tone}`} aria-labelledby="field-verdict-title">
       <div className="field-verdict-number">
         <span className="field-kicker">Safety score</span>
-        <strong>{Number.isFinite(data.safety.score) ? Number(data.safety.score.toFixed(1)) : '—'}<small>/100</small></strong>
-        <span>{data.safety.tier || 'Forecast assessment'}</span>
+        <strong>{!insufficient && Number.isFinite(data.safety.score) ? Number(data.safety.score.toFixed(1)) : '—'}<small>/100</small></strong>
+        <span>{insufficient ? 'Insufficient evidence' : data.safety.tier || 'Forecast assessment'}</span>
       </div>
       <div className="field-verdict-story">
         <span className="report-decision-label">Trip decision</span><span className={`field-badge is-${tone}`}>{decision.level}</span>
@@ -32,8 +33,9 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
         <p className="report-decision-reason">{reason}</p>
       </div>
       <div className="field-verdict-aside">
-        <span className="field-kicker">Evidence confidence</span>
-        <strong>{Number.isFinite(data.safety.confidence) ? `${Math.round(data.safety.confidence!)}%` : 'Unknown'}</strong>
+        <span className="field-kicker">Evidence quality</span>
+        <strong>{data.safety.evidenceQuality || 'Not assessed'}</strong>
+        {data.safety.coverage && <span>{data.safety.coverage.completeHours} of {data.safety.coverage.requestedHours} hours covered</span>}
         <button onClick={onSources}>Checks &amp; sources<ArrowRight size={14} /></button>
       </div>
       {(freshnessWarning || warnings.length > 0 || missing.length > 0) && (

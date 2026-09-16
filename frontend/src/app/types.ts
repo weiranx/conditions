@@ -654,6 +654,11 @@ export interface SafetyData {
     scoreVersion?: string;
     score: number;
     confidence?: number;
+    assessmentStatus?: 'supported' | 'insufficient_evidence';
+    evidenceQuality?: 'Strong' | 'Mixed' | 'Limited' | 'Insufficient';
+    evidenceReasons?: string[];
+    coverage?: { requestedHours: number; completeHours: number };
+    weatherProvenance?: Record<string, unknown>;
     tier?: string;
     tierClass?: string;
     primaryHazard?: string;

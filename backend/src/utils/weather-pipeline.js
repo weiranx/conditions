@@ -184,7 +184,12 @@ async function fetchWeatherPipeline({
       });
       const targetMs = parseIsoTimeToMs(targetIso);
       if (targetMs !== null) {
-        const firstAtOrAfter = dayPeriods.find((entry) => {
+        const containing = dayPeriods.find(({ period }) => {
+          const from = parseIsoTimeToMs(period.startTime);
+          const to = parseIsoTimeToMs(period.endTime);
+          return from !== null && to !== null && from <= targetMs && to > targetMs;
+        });
+        const firstAtOrAfter = containing || dayPeriods.find((entry) => {
           const periodStartMs = parseIsoTimeToMs(entry.period?.startTime);
           return periodStartMs !== null && periodStartMs >= targetMs;
         });
@@ -219,15 +224,15 @@ async function fetchWeatherPipeline({
     const forecastTrendHours = clampTravelWindowHours(requestedTravelWindowHours, 12);
     // Build trend window from selected hour using user-selected travel window length (up to 24h).
     const hourlyTrend = periods
-      .slice(forecastStartIndex, forecastStartIndex + forecastTrendHours)
+      .slice(forecastStartIndex, forecastStartIndex + forecastTrendHours + (requestedStartClock && !requestedStartClock.endsWith(':00') ? 1 : 0))
       .map((p, offset) => {
         const rowIndex = forecastStartIndex + offset;
-        const windSpeedValue = parseWindMph(p.windSpeed, 0);
+        const windSpeedValue = parseWindMph(p.windSpeed, Number.NaN);
         const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
-        const trendTemp = Number.isFinite(p.temperature) ? p.temperature : 0;
+        const trendTemp = Number.isFinite(p.temperature) ? p.temperature : null;
         const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value)
           ? p.probabilityOfPrecipitation.value
-          : 0;
+          : null;
         const trendHumidity = Number.isFinite(p?.relativeHumidity?.value)
           ? p.relativeHumidity.value
           : null;
@@ -238,9 +243,10 @@ async function fetchWeatherPipeline({
         return {
           time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
           timeIso: p.startTime || null,
+          endTimeIso: p.endTime || null,
           temp: trendTemp,
           wind: windSpeedValue,
-          gust: windGustValue,
+          gust: Number.isFinite(windSpeedValue) ? windGustValue : parseWindMph(p.windGust, null),
           windDirection: findNearestWindDirection(periods, rowIndex),
           precipChance: trendPrecip,
           humidity: trendHumidity,
@@ -252,13 +258,13 @@ async function fetchWeatherPipeline({
         };
       });
 
-    const currentWindSpeed = parseWindMph(selectedForecastPeriod?.windSpeed, 0);
+    const currentWindSpeed = parseWindMph(selectedForecastPeriod?.windSpeed, Number.NaN);
     const inferredCurrentGust = inferWindGustFromPeriods(
       periods,
       forecastStartIndex,
       currentWindSpeed,
     );
-    const currentWindGust = inferredCurrentGust.gustMph;
+    const currentWindGust = Number.isFinite(currentWindSpeed) ? inferredCurrentGust.gustMph : parseWindMph(selectedForecastPeriod?.windGust, null);
     const currentCloudCover = resolveNoaaCloudCover(selectedForecastPeriod);
     const windGustSource =
       inferredCurrentGust.source === 'reported'
@@ -268,7 +274,7 @@ async function fetchWeatherPipeline({
           : 'Estimated from NOAA sustained wind';
     const currentTemp = Number.isFinite(selectedForecastPeriod?.temperature)
       ? selectedForecastPeriod.temperature
-      : 0;
+      : null;
     const feelsLike = computeFeelsLikeF(currentTemp, currentWindSpeed);
     const currentDewPoint = normalizeNoaaDewPointF(selectedForecastPeriod?.dewpoint);
     const currentPressure = normalizeNoaaPressureHpa(selectedForecastPeriod?.barometricPressure);
