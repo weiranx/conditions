@@ -163,17 +163,16 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
             <p>Search objectives, compare forecasts, and read your saved reports and objective watches from ChatGPT.</p>
             <details className="field-disclosure">
               <summary>Set up ChatGPT</summary>
-              <p>Setup currently requires access from the Conditions administrator. This connector is not yet available as a public ChatGPT plugin.</p>
+              <p>Connect with your own Conditions account. ChatGPT registers the connection automatically—no client ID or secret to request or copy.</p>
               <ol>
-                <li>Ask the Conditions administrator for access to the configured plugin. If creating a custom connection, ask them to register your ChatGPT callback and provide the OAuth client details privately.</li>
-                <li>In ChatGPT on the web, open Settings → Plugins (or Apps). Open Conditions and choose Connect or Reconnect. For a custom connection, enable Developer mode if available and create an app using the details below.</li>
-                <li>Sign in to your own Conditions account and review the permissions. Choose “Allow read access” to connect your reports and watches.</li>
-                <li>Return to ChatGPT, refresh the plugin’s actions if needed, and select Conditions in a chat. Try “Show my saved Conditions reports.”</li>
+                <li>In ChatGPT on the web, open Settings → Plugins (or Apps). Enable Developer mode if available, then create a custom app named Conditions.</li>
+                <li>Paste the MCP server URL below, select OAuth, and leave the optional client ID and client secret fields blank. If offered a registration method, choose automatic or dynamic registration.</li>
+                <li>Continue to Conditions, sign in to your own account, and review the permissions. Choose “Allow read access”.</li>
+                <li>Return to ChatGPT and select Conditions in a chat. Try “Show my saved Conditions reports.” Refresh the plugin’s actions if the saved-report tools are missing.</li>
               </ol>
               <p><strong>MCP server URL</strong><br /><code style={{ overflowWrap: "anywhere" }}>https://apivps.conditions.weiranxiong.com/mcp</code></p>
-              <p><strong>Client ID:</strong> <code>conditions-chatgpt</code></p>
-              <p><strong>Authentication:</strong> OAuth · <strong>Scope:</strong> <code>conditions:read</code>.</p>
-              <p><strong>Client secret:</strong> Obtain this privately from the Conditions administrator, who must also register your ChatGPT callback URL. Your Conditions password belongs on the Conditions sign-in page.</p>
+              <p><strong>Authentication:</strong> OAuth · <strong>Scope (if requested):</strong> <code>conditions:read</code>.</p>
+              <p>Already connected? Your existing connection still works. To switch a manually configured connection to automatic registration, create a new connection with both client fields blank.</p>
               <p>If custom apps or Developer mode are unavailable, check your ChatGPT account or workspace permissions. See the <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt" target="_blank" rel="noreferrer">official ChatGPT setup guide</a>.</p>
             </details>
             <p>Access is read-only and limited to your account, including saved trip locations and dates. Signing out of Conditions or letting your sign-in expire ends access; reconnect in ChatGPT to renew it.</p>

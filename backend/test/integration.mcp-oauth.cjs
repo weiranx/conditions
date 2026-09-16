@@ -18,6 +18,7 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
   await pool.query(`CREATE TABLE users(id uuid PRIMARY KEY,email text,display_name text,status text DEFAULT 'active');
    CREATE TABLE user_sessions(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),token_hash char(64),expires_at timestamptz);`);
   await pool.query(readFileSync(require('node:path').join(__dirname,'../migrations/018_mcp_oauth.sql'),'utf8'));
+  await pool.query(readFileSync(require('node:path').join(__dirname,'../migrations/019_mcp_oauth_clients.sql'),'utf8'));
   const alice=randomUUID(),bob=randomUUID(),sessionA='alice-session',sessionB='bob-session';
   for(const [id,session] of [[alice,sessionA],[bob,sessionB]]){
    await pool.query('INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)',[id,id+'@example.com',id]);
@@ -26,10 +27,10 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
   const auth=createMcpOAuthService({database,...config});
   const verifier='v'.repeat(43),challenge=createHash('sha256').update(verifier).digest('base64url');
   const q={client_id:config.clientId,response_type:'code',redirect_uri:config.redirectUris[0],state:'original-state',scope:'conditions:read',code_challenge:challenge,code_challenge_method:'S256',resource:auth.resource};
-  assert.throws(()=>auth.validateRequest({...q,redirect_uri:'https://evil.example'}));
-  assert.throws(()=>auth.validateRequest({...q,scope:'conditions:write'}));
-  assert.throws(()=>auth.validateRequest({...q,resource:'https://evil.example'}));
-  assert.equal(auth.authenticateClient({client_id:'chatgpt',client_secret:'bad'}),false);
+  await assert.rejects(auth.validateRequest({...q,redirect_uri:'https://evil.example'}));
+  await assert.rejects(auth.validateRequest({...q,scope:'conditions:write'}));
+  await assert.rejects(auth.validateRequest({...q,resource:'https://evil.example'}));
+  assert.equal(await auth.authenticateClient({client_id:'chatgpt',client_secret:'bad'}),false);
   const authorize=async(id,session)=>{
    const request=new URL(await auth.start(q)).searchParams.get('request');
    return new URL(await auth.approve(request,id,session,true)).searchParams.get('code');
@@ -68,6 +69,35 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
   await pool.query("UPDATE users SET status='active' WHERE id=$1",[bob]);
   await auth.revokeToken(b.refresh_token);
   assert.equal(await auth.userForToken(b.access_token),null);
+  // Dynamic registrations persist and cannot exchange or revoke another client's tokens.
+  for (const uri of ['https://evil.example/cb','https://chatgpt.com.evil.example/connector/oauth/x','https://chatgpt.com/connector/oauth/x?next=evil','http://chatgpt.com/connector/oauth/x','https://chatgpt.com/connector/oauth/%2e%2e'])
+    await assert.rejects(auth.register({redirect_uris:[uri]}));
+  await assert.rejects(auth.register({redirect_uris:config.redirectUris,scope:'conditions:write'}));
+  await assert.rejects(auth.register({redirect_uris:config.redirectUris,token_endpoint_auth_method:'private_key_jwt'}));
+  const client=await auth.register({redirect_uris:config.redirectUris,token_endpoint_auth_method:'client_secret_post'});
+  const other=await auth.register({redirect_uris:config.redirectUris,token_endpoint_auth_method:'none'});
+  assert.equal(other.client_secret,undefined);
+  assert.equal(await auth.authenticateClient({client_id:client.client_id,client_secret:'wrong'}),false);
+  assert.equal(await auth.authenticateClient({client_id:client.client_id,client_secret:client.client_secret}),client.client_id);
+  assert.equal(await auth.authenticateClient({client_id:client.client_id}),false);
+  assert.equal(await auth.authenticateClient({client_id:other.client_id}),other.client_id);
+  assert.equal(await auth.authenticateClient({client_id:other.client_id,client_secret:'unexpected'}),false);
+  assert.equal(await restarted.authenticateClient({client_id:client.client_id,client_secret:client.client_secret}),client.client_id);
+  const stored=(await pool.query('SELECT secret_hash FROM mcp_oauth_clients WHERE client_id=$1',[client.client_id])).rows[0];
+  assert.equal(stored.secret_hash,hash(client.client_secret));
+  const dynamicRequest=new URL(await auth.start({...q,client_id:client.client_id})).searchParams.get('request');
+  const dynamicCode=new URL(await auth.approve(dynamicRequest,alice,sessionA,true)).searchParams.get('code');
+  await assert.rejects(auth.exchange({...exchange,code:dynamicCode},other.client_id));
+  const dynamic=await auth.exchange({...exchange,code:dynamicCode},client.client_id);
+  assert.equal((await auth.userForToken(dynamic.access_token)).id,alice);
+  await assert.rejects(auth.exchange({grant_type:'refresh_token',refresh_token:dynamic.refresh_token},other.client_id));
+  await auth.revokeToken(dynamic.access_token,other.client_id);
+  assert.ok(await auth.userForToken(dynamic.access_token));
+  await auth.revokeToken(dynamic.access_token,client.client_id);
+  assert.equal(await auth.userForToken(dynamic.access_token),null);
+  const basic=await auth.register({redirect_uris:config.redirectUris});
+  assert.equal(await auth.authenticateClient({},'Basic '+Buffer.from(basic.client_id+':'+basic.client_secret).toString('base64')),basic.client_id);
+  assert.equal(await auth.authenticateClient({client_id:other.client_id},'Basic '+Buffer.from(basic.client_id+':'+basic.client_secret).toString('base64')),false);
   const logout=await auth.exchange({...exchange,code:await authorize(alice,sessionA)});
   await pool.query('DELETE FROM user_sessions WHERE user_id=$1',[alice]);
   assert.equal(await auth.userForToken(logout.access_token),null);

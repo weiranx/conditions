@@ -35,7 +35,7 @@ invalidate persistent grants. Refresh does not silently extend a grant forever.
 
 ## Configuration
 
-Run migration `018_mcp_oauth.sql` through the normal backend migration runner.
+Run migrations `018_mcp_oauth.sql` and `019_mcp_oauth_clients.sql` through the normal backend migration runner.
 Add these private settings to the **backend** environment:
 
 ```dotenv
@@ -48,8 +48,16 @@ MCP_OAUTH_REDIRECT_URIS=EXACT_CHATGPT_CALLBACK_FROM_THE_CONNECTION_SETTINGS
 
 Client callbacks must be exact HTTPS URLs, without fragments or wildcards.
 Keep secrets out of Git. The website origin must already be in the API CORS
-allowlist. The OAuth client is statically registered: each user authorizes their
-own account under that client; app distribution/publication is separate.
+allowlist. These settings preserve existing manually registered connections.
+New ChatGPT connections use the advertised `/api/auth/mcp/register` endpoint:
+leave client ID and secret blank in ChatGPT. Registration accepts only exact
+HTTPS ChatGPT callback addresses, stores generated secrets only as hashes, and
+supports public PKCE clients or generated credentials using secret-post/basic.
+Registration grants no account access; each user must sign in and consent.
+Codes, refresh tokens, and revocation are bound to the authenticated client.
+Registration is limited to 20 requests per IP per hour and 10,000 stored clients.
+The storage cap fails closed; operators should investigate abuse before raising
+it or removing unused client records. App distribution/publication is separate.
 
 The **MCP service** `.env` contains only the origins/port in `.env.example`.
 Remove legacy `MCP_BEARER_TOKEN`, `MCP_OWNER_PASSWORD`, and `CONDITIONS_SESSION`.
@@ -72,8 +80,9 @@ Disable access logs for both aliases and `/api/auth/mcp/`. Auth responses use `C
 query strings containing codes. The new consent page uses the website's existing
 login rather than an MCP-hosted password form.
 
-In ChatGPT, refresh OAuth settings or reconnect with the registered client ID,
-secret, `client_secret_post`, and `conditions:read`. Metadata supplies the new
+In ChatGPT, create a custom connection using the MCP URL and OAuth, leaving
+the optional client ID and secret blank. Select dynamic registration if prompted.
+Existing manually configured connections continue to work. Metadata supplies the new
 `/api/auth/mcp/authorize`, `/token`, and `/revoke` endpoints. Existing shared-owner
 tokens stop working on cutover and users must reconnect with their own account.
 

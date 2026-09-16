@@ -35,3 +35,17 @@ test('disconnect uses signed-in user rather than body ownership',async()=>{
  await request(app).post('/api/auth/mcp/disconnect').set('Cookie','bc_session=alice-session').set('Origin',env.MCP_FRONTEND_ORIGIN).send({id,userId:'alice'}).expect(200);
  expect(service.revoke).toHaveBeenCalledWith(id,'alice');
 });
+
+test('discovery advertises registration and token routes await client authentication',async()=>{
+ const {app,service}=setup();
+ expect((await request(app).get('/api/auth/mcp/metadata')).body.registration_endpoint).toBe(env.MCP_PUBLIC_URL+'/api/auth/mcp/register');
+ service.register=jest.fn(async()=>({client_id:'new-client'}));
+ await request(app).post('/api/auth/mcp/register').send({redirect_uris:[env.MCP_OAUTH_REDIRECT_URIS]}).expect(201);
+ service.authenticateClient=jest.fn(async()=>false);
+ service.exchange=jest.fn(async()=>({access_token:'token'}));
+ await request(app).post('/api/auth/mcp/token').type('form').send({client_id:'bad'}).expect(401);
+ expect(service.exchange).not.toHaveBeenCalled();
+ service.authenticateClient.mockResolvedValue('registered-client');
+ await request(app).post('/api/auth/mcp/token').type('form').send({client_id:'registered-client'}).expect(200);
+ expect(service.exchange).toHaveBeenCalledWith({client_id:'registered-client'},'registered-client');
+});

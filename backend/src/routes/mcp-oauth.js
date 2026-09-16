@@ -32,9 +32,11 @@ function registerMcpOAuthRoutes({ app, database, accountService, env = process.e
   });
   app.get('/api/auth/mcp/metadata', noStore, (_req,res)=>res.json({issuer,
     authorization_endpoint:`${issuer}/api/auth/mcp/authorize`,token_endpoint:`${issuer}/api/auth/mcp/token`,
+    registration_endpoint:`${issuer}/api/auth/mcp/register`,
     revocation_endpoint:`${issuer}/api/auth/mcp/revoke`,response_types_supported:['code'],
     grant_types_supported:['authorization_code','refresh_token'],code_challenge_methods_supported:['S256'],
-    token_endpoint_auth_methods_supported:['client_secret_post','client_secret_basic'],scopes_supported:['conditions:read']}));
+    token_endpoint_auth_methods_supported:['none','client_secret_post','client_secret_basic'],scopes_supported:['conditions:read']}));
+  app.post('/api/auth/mcp/register',rateLimit({windowMs:3600000,limit:20,standardHeaders:true,legacyHeaders:false}),wrap(async(req,res)=>res.status(201).json(await auth.register(req.body))));
   app.get('/api/auth/mcp/authorize',wrap(async(req,res)=>res.redirect(303,await auth.start(req.query))));
   app.get('/api/auth/mcp/request/:request',requireBrowser,wrap(async(req,res)=>{
     await auth.pending(req.params.request);
@@ -49,9 +51,13 @@ function registerMcpOAuthRoutes({ app, database, accountService, env = process.e
     if (!/^[0-9a-f-]{36}$/iu.test(req.body?.id || '') || req.body.userId !== req.oauthUser.id) return res.status(400).json({error:'invalid_request'});
     await auth.revoke(req.body.id,req.oauthUser.id); res.json({ok:true});
   }));
-  const clientAuth = (req,res,next) => auth.authenticateClient(req.body,req.headers.authorization) ? next() : res.status(401).json({error:'invalid_client'});
-  app.post('/api/auth/mcp/token',express.urlencoded({extended:false,limit:'8kb'}),clientAuth,wrap(async(req,res)=>res.json(await auth.exchange(req.body))));
-  app.post('/api/auth/mcp/revoke',express.urlencoded({extended:false,limit:'8kb'}),clientAuth,wrap(async(req,res)=>{await auth.revokeToken(req.body.token);res.json({});}));
+  const clientAuth = wrap(async(req,res,next) => {
+    const id=await auth.authenticateClient(req.body,req.headers.authorization);
+    if (!id) return res.status(401).json({error:'invalid_client'});
+    req.oauthClientId=id; next();
+  });
+  app.post('/api/auth/mcp/token',express.urlencoded({extended:false,limit:'8kb'}),clientAuth,wrap(async(req,res)=>res.json(await auth.exchange(req.body,req.oauthClientId))));
+  app.post('/api/auth/mcp/revoke',express.urlencoded({extended:false,limit:'8kb'}),clientAuth,wrap(async(req,res)=>{await auth.revokeToken(req.body.token,req.oauthClientId);res.json({});}));
   // OAuth bearer credentials never grant writes or access to arbitrary API routes.
   app.use(wrap(async(req,res,next)=>{
     if (!req.headers.authorization?.startsWith('Bearer cmcp_')) return next();

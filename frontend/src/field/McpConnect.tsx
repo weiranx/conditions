@@ -52,7 +52,7 @@ export default function McpConnect() {
     if (currentUser.current !== id) throw new Error('Account changed. Please reconnect.');
     const redirect = new URL(data.redirect);
     // The server validates the exact registered callback; also constrain the UI destination.
-    if (redirect.origin !== 'https://chatgpt.com' || !redirect.pathname.startsWith('/connector/oauth/')) throw new Error('Invalid return address.');
+    if (redirect.origin !== 'https://chatgpt.com' || !(redirect.pathname.startsWith('/connector/oauth/') || redirect.pathname === '/connector_platform_oauth_redirect')) throw new Error('Invalid return address.');
     window.location.assign(redirect.href);
   }
   const pending = busy || account.busy || account.loading;
