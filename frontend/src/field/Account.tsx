@@ -158,7 +158,25 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
               </div>
             </div>
           )}
-          <p><a href="/connect">Manage connected apps</a></p>
+          <section aria-labelledby="chatgpt-setup-heading">
+            <h3 id="chatgpt-setup-heading" className="field-subtitle">Use Conditions in ChatGPT</h3>
+            <p>Search objectives, compare forecasts, and read your saved reports and objective watches from ChatGPT.</p>
+            <details className="field-disclosure">
+              <summary>Set up ChatGPT</summary>
+              <p>Setup currently requires access from the Conditions administrator. This connector is not yet available as a public ChatGPT plugin.</p>
+              <ol>
+                <li>Ask the Conditions administrator for access to the configured plugin. If creating a custom connection, ask them to register your ChatGPT callback and provide the OAuth client details privately.</li>
+                <li>In ChatGPT on the web, open Settings → Plugins (or Apps). Open Conditions and choose Connect or Reconnect. For a custom connection, enable Developer mode if available and create an app using the details below.</li>
+                <li>Sign in to your own Conditions account and review the permissions. Choose “Allow read access” to connect your reports and watches.</li>
+                <li>Return to ChatGPT, refresh the plugin’s actions if needed, and select Conditions in a chat. Try “Show my saved Conditions reports.”</li>
+              </ol>
+              <p><strong>MCP server URL</strong><br /><code style={{ overflowWrap: "anywhere" }}>https://apivps.conditions.weiranxiong.com/mcp</code></p>
+              <p><strong>Authentication:</strong> OAuth · <strong>Scope:</strong> <code>conditions:read</code>. Use only the client details supplied by the administrator; your Conditions password belongs on the Conditions sign-in page.</p>
+              <p>If custom apps or Developer mode are unavailable, check your ChatGPT account or workspace permissions. See the <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt" target="_blank" rel="noreferrer">official ChatGPT setup guide</a>.</p>
+            </details>
+            <p>Access is read-only and limited to your account, including saved trip locations and dates. Signing out of Conditions or letting your sign-in expire ends access; reconnect in ChatGPT to renew it.</p>
+            <p><a href="/connect">Manage connected apps or disconnect ChatGPT</a></p>
+          </section>
           <h3 className="field-subtitle">Usage this month</h3>
           <div className="field-usage-grid">
             <Usage
