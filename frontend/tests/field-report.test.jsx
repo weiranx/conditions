@@ -295,6 +295,18 @@ test("field signals flag reported issues without treating missing or clear feeds
     0,
   );
 });
+test("daylight chart accepts solar times with seconds from the report", () => {
+  const html = renderToStaticMarkup(
+    <DaylightChart start="07:00" hours={9} sunrise="6:26:22 AM" sunset="7:08:07 PM" />,
+  );
+  const document = new JSDOM(html).window.document;
+  assert.ok(document.querySelector('.daylight-track'));
+  assert.doesNotMatch(html, /unavailable|NaN/);
+  const sun = document.querySelector('.daylight-sun');
+  assert.ok(Math.abs(parseFloat(sun.style.left) - 386 / 1440 * 100) < 0.001);
+  assert.ok(Math.abs(parseFloat(sun.style.width) - 762 / 1440 * 100) < 0.001);
+});
+
 test("daylight chart marks overnight trips and refuses missing solar data", () => {
   assert.match(
     renderToStaticMarkup(

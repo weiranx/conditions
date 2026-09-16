@@ -1,5 +1,5 @@
 import { Sunrise, Sunset } from "lucide-react";
-import { parseTimeInputMinutes } from "../app/core";
+import { parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
 export function DaylightChart({
   start,
   hours,
@@ -12,8 +12,8 @@ export function DaylightChart({
   sunset?: string;
 }) {
   const begin = parseTimeInputMinutes(start),
-    rise = parseTimeInputMinutes(sunrise || ""),
-    set = parseTimeInputMinutes(sunset || "");
+    rise = parseTimeInputMinutes(sunrise || "") ?? parseSolarClockMinutes(sunrise),
+    set = parseTimeInputMinutes(sunset || "") ?? parseSolarClockMinutes(sunset);
   if (begin === null || rise === null || set === null || set <= rise)
     return <p className="field-muted">Daylight timeline unavailable.</p>;
   const duration = begin + hours * 60 > 1440 ? 2880 : 1440;
