@@ -65,8 +65,10 @@ Keep host port 8104 loopback-only. Proxy `/mcp` and
 `/.well-known/oauth-protected-resource` to port 8104, preserving Host and disabling
 proxy buffering. Proxy `/.well-known/oauth-authorization-server` to backend
 `/api/auth/mcp/metadata` at port 3001. `/api/` already routes to that backend.
-Remove the old `/authorize` and `/oauth/token` routes after migration. Auth
-responses use `Cache-Control: no-store`. Do not log request bodies or callback
+Clients may cache OAuth metadata. Keep `/authorize` and `/oauth/token` as
+compatibility proxies to backend `/api/auth/mcp/authorize` and
+`/api/auth/mcp/token`; do not route them to the retired owner-login service.
+Disable access logs for both aliases and `/api/auth/mcp/`. Auth responses use `Cache-Control: no-store`. Do not log request bodies or callback
 query strings containing codes. The new consent page uses the website's existing
 login rather than an MCP-hosted password form.
 
