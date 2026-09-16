@@ -29,6 +29,10 @@ RUN mkdir -p /app/data && chown appuser:appgroup /app/data
 
 USER appuser
 
+# Use the installed versioned library without Debian development tooling.
+ENV ECMWFLIBS_USED_INSTALLED=1
+RUN python3 -c "import eccodes; print(eccodes.codes_get_api_version())"
+
 EXPOSE 3001
 
 # Docker health check targeting the /healthz endpoint.
