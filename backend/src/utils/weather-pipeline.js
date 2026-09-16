@@ -1,3 +1,4 @@
+const { buildPrecedingNight } = require('./weather-data');
 const { normalizeCoordKey, normalizeCoordDateKey } = require('./cache');
 const { withCircuitBreaker } = require('./http-client');
 const { FT_PER_METER } = require('./geo');
@@ -215,6 +216,11 @@ async function fetchWeatherPipeline({
         tempF: Number.isFinite(Number(p?.temperature)) ? Number(p.temperature) : null,
         isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
       }));
+    const precedingNight = buildPrecedingNight(periods.slice(Math.max(0, forecastStartIndex - 24), forecastStartIndex).map(p => ({
+      timeIso: p?.startTime || null,
+      tempF: p?.temperature,
+      isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
+    })));
     const temperatureContext24h = buildTemperatureContext24h({
       points: temperatureContextPoints,
       timeZone: pointsData?.properties?.timeZone || null,
@@ -315,6 +321,7 @@ async function fetchWeatherPipeline({
       dailyTempHighF: dailyTemperatureRange?.highF ?? null,
       dailyTempLowF: dailyTemperatureRange?.lowF ?? null,
       temperatureContext24h,
+      precedingNight,
       visibilityRisk: null,
       sourceDetails: {
         primary: 'NOAA',
@@ -363,6 +370,7 @@ async function fetchWeatherPipeline({
 
     // NOAA remains primary; supplement missing/noisy fields with Open-Meteo when needed.
     if (
+      !weatherData.precedingNight?.complete ||
       !weatherData.windDirection ||
       !weatherData.issuedTime ||
       weatherData.pressure === null ||

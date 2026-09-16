@@ -609,7 +609,7 @@ const makeWeatherData = (overrides = {}) => ({
 });
 
 describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
-  test('identifies corn-snow cycle with freeze-thaw temperature swing', () => {
+  test('future temperature swing alone cannot establish corn snow', () => {
     const condition = deriveTerrainCondition(
       makeWeatherData({
         description: 'Partly Sunny',
@@ -630,9 +630,8 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
       null,
     );
 
-    expect(condition.code).toBe('spring_snow');
-    expect(condition.label).toContain('Corn');
-    expect(condition.snowProfile.code).toBe('spring_snow');
+    expect(condition.code).toBe('snow_mixed');
+    expect(condition.snowProfile.meltFreeze.refreezeQuality).toBe('unknown');
   });
 
   test('combines refreeze, travel-window temperatures, cloud cover, and solar timing', () => {
@@ -643,8 +642,10 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
         precipChance: 5,
         cloudCover: 10,
         forecastStartTime: '2026-04-15T06:00:00-07:00',
+        precedingNight: { complete: true, minTempF: 24, freezingHours: 8, freezingDegreeHours: 48 },
         trend: [29, 31, 34, 38, 42, 45].map((temp, index) => ({
           temp,
+          timeIso: `2026-04-15T${String(6 + index).padStart(2, '0')}:00:00-07:00`,
           precipChance: 5,
           cloudCover: 10,
           condition: 'Sunny',
@@ -672,14 +673,14 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
     expect(condition.snowProfile.meltFreeze).toMatchObject({
       cycleDetected: true,
       refreezeQuality: 'strong',
-      solarInput: 'high',
+      solarInput: 'moderate',
       phase: 'transitioning',
     });
     expect(condition.snowProfile.meltFreeze.signals).toMatchObject({
       aboveFreezingHours: 2,
-      softeningStart: '08:00',
+      softeningStart: null,
     });
-    expect(condition.snowProfile.meltFreeze.summary).toMatch(/crosses a rough solar-softening onset/i);
+    expect(condition.snowProfile.meltFreeze.summary).toMatch(/no precise softening time/i);
   });
 
   test('classifies a late, sunny, warm start as wet-snow softening without requiring rain', () => {
@@ -690,7 +691,8 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
         precipChance: 5,
         cloudCover: 5,
         forecastStartTime: '2026-04-15T11:00:00-07:00',
-        trend: [44, 46, 48, 49].map((temp) => ({
+        trend: [44, 46, 48, 49].map((temp, index) => ({
+          timeIso: `2026-04-15T${11 + index}:00:00-07:00`,
           temp,
           precipChance: 5,
           cloudCover: 5,
@@ -718,17 +720,19 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
     expect(condition.code).toBe('wet_snow');
     expect(condition.snowProfile.meltFreeze.phase).toBe('wet_softening');
     expect(condition.snowProfile.meltFreeze.meltPotential).toBe('high');
-    expect(condition.recommendedTravel).toMatch(/declining supportability/i);
+    expect(condition.recommendedTravel).toMatch(/boot penetration|supportability/i);
   });
 
-  test('cloud cover reduces effective solar input and delays the estimated softening onset', () => {
+  test('cloud cover changes solar context without inventing a softening clock', () => {
     const makeCondition = (cloudCover) => deriveTerrainCondition(
       makeWeatherData({
         description: cloudCover > 80 ? 'Overcast' : 'Sunny',
         temp: 35,
         precipChance: 5,
         cloudCover,
-        trend: [35, 37, 39, 41].map((temp) => ({
+        forecastStartTime: '2026-04-15T08:30:00-07:00',
+        trend: [35, 37, 39, 41].map((temp, index) => ({
+          timeIso: `2026-04-15T${String(8 + index).padStart(2, '0')}:30:00-07:00`,
           temp,
           precipChance: 5,
           cloudCover,
@@ -758,8 +762,8 @@ describe('deriveTerrainCondition — spring_snow (corn-snow cycle)', () => {
 
     expect(clear.snowProfile.meltFreeze.solarInput).toBe('high');
     expect(overcast.snowProfile.meltFreeze.solarInput).toBe('low');
-    expect(clear.snowProfile.meltFreeze.signals.softeningStart).toBe('08:00');
-    expect(overcast.snowProfile.meltFreeze.signals.softeningStart).toBe('09:45');
+    expect(clear.snowProfile.meltFreeze.signals.softeningStart).toBeNull();
+    expect(overcast.snowProfile.meltFreeze.signals.softeningStart).toBeNull();
   });
 });
 
@@ -825,7 +829,7 @@ describe('deriveTerrainCondition — snow_ice (icy/firm snow)', () => {
 });
 
 describe('deriveTerrainCondition — cold_slick', () => {
-  test('identifies cold/slick trail from freeze-thaw temperature context without snowpack', () => {
+  test('identifies cold/slick trail with preceding-night freezing without broad snowpack', () => {
     // No snowpack data → no snow coverage, no snow weather signal (temp=33 but precip=10 < 35)
     // hasFreezeThawSignal: overnightLow=28 <= 31, daytimeHigh=42 >= 35 → true
     // cold_slick path is reached after dry_firm fails (temp=33 < 35)
@@ -833,6 +837,7 @@ describe('deriveTerrainCondition — cold_slick', () => {
       makeWeatherData({
         description: 'Clear',
         temp: 33,
+        precedingNight: { complete: true, minTempF: 28, freezingHours: 6, freezingDegreeHours: 20 },
         precipChance: 10,
         humidity: 60,
         temperatureContext24h: {
@@ -1004,8 +1009,8 @@ describe('deriveTerrainCondition — SNOTEL proximity gate', () => {
     );
 
     // With SNOTEL excluded and NOHRSC showing 0 depth/SWE, no snow coverage
-    // dry_firm should be selected
-    expect(condition.code).toBe('dry_firm');
+    // Missing precipitation evidence must not establish dry footing.
+    expect(condition.code).toBe('mixed_variable');
     // The distant SNOTEL note should appear in reasons
     expect(condition.reasons.join(' ')).toMatch(/km away/i);
   });

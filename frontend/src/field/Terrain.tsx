@@ -1,3 +1,4 @@
+import { SurfacePrediction } from "./SurfacePrediction";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Mountain, Minus, Plus, Satellite } from "lucide-react";
 import { Streamdown } from "streamdown";
@@ -177,6 +178,7 @@ export function Terrain({ workspace: w }: { workspace: Workspace }) {
           </div>
         </dl>
         <p>{w.terrainConditionDetails.summary}</p>
+        <SurfacePrediction condition={data.terrainCondition} />
         <Details
           title="Surface, freeze/thaw, and travel evidence"
           value={data.terrainCondition}

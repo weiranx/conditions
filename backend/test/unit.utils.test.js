@@ -739,9 +739,9 @@ describe('mmToInches', () => {
     expect(mmToInches(10)).toBeCloseTo(0.39, 2);
   });
 
-  test('returns 0 for null (coerces to 0); returns null for non-numeric strings', () => {
-    // Number(null) = 0 -> finite -> 0 inches
-    expect(mmToInches(null)).toBe(0);
+  test('preserves missing values and rejects non-numeric strings', () => {
+    // Missing amounts remain unavailable.
+    expect(mmToInches(null)).toBeNull();
     // NaN-producing inputs -> null
     expect(mmToInches('abc')).toBeNull();
     expect(mmToInches(undefined)).toBeNull();
@@ -754,9 +754,9 @@ describe('cmToInches', () => {
     expect(cmToInches(0)).toBe(0);
   });
 
-  test('returns 0 for null (coerces to 0); returns null for non-numeric strings', () => {
-    // Number(null) = 0 -> finite -> 0 inches
-    expect(cmToInches(null)).toBe(0);
+  test('preserves missing values and rejects non-numeric strings', () => {
+    // Missing amounts remain unavailable.
+    expect(cmToInches(null)).toBeNull();
     expect(cmToInches('abc')).toBeNull();
     expect(cmToInches(undefined)).toBeNull();
   });

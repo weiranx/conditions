@@ -6,7 +6,7 @@ const INCHES_PER_CM = 0.393701;
 const RAINFALL_CACHE_TTL_MS = 30 * 60 * 1000;
 
 const mmToInches = (valueMm) => {
-  const numeric = Number(valueMm);
+  const numeric = valueMm == null || valueMm === '' ? NaN : Number(valueMm);
   if (!Number.isFinite(numeric)) {
     return null;
   }
@@ -14,7 +14,7 @@ const mmToInches = (valueMm) => {
 };
 
 const cmToInches = (valueCm) => {
-  const numeric = Number(valueCm);
+  const numeric = valueCm == null || valueCm === '' ? NaN : Number(valueCm);
   if (!Number.isFinite(numeric)) {
     return null;
   }
@@ -53,15 +53,14 @@ const sumRollingAccumulation = (timeArray, valuesArray, anchorMs, lookbackHours)
     if (sampleMs === null || sampleMs > anchorMs || sampleMs <= lowerBoundMs) {
       continue;
     }
+    const raw = valuesArray[idx];
+    const value = raw == null || raw === '' ? NaN : Number(raw);
+    if (!Number.isFinite(value) || value < 0) return null;
     windowSampleCount += 1;
-    const value = Number(valuesArray[idx]);
-    if (!Number.isFinite(value) || value < 0) {
-      continue;
-    }
     total += value;
   }
 
-  return windowSampleCount > 0 ? Number(total.toFixed(1)) : null;
+  return windowSampleCount >= lookbackHours ? Number(total.toFixed(1)) : null;
 };
 
 const seriesHasFiniteValues = (series) => Array.isArray(series) && series.some((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
@@ -80,15 +79,14 @@ const sumForwardAccumulation = (timeArray, valuesArray, startMs, windowHours) =>
     if (sampleMs === null || sampleMs < startMs || sampleMs >= upperBoundMs) {
       continue;
     }
+    const raw = valuesArray[idx];
+    const value = raw == null || raw === '' ? NaN : Number(raw);
+    if (!Number.isFinite(value) || value < 0) return null;
     windowSampleCount += 1;
-    const value = Number(valuesArray[idx]);
-    if (!Number.isFinite(value) || value < 0) {
-      continue;
-    }
     total += value;
   }
 
-  return windowSampleCount > 0 ? Number(total.toFixed(1)) : null;
+  return windowSampleCount >= windowHours ? Number(total.toFixed(1)) : null;
 };
 
 const findFirstTimeIndexAtOrAfter = (timeArray, targetTimeMs) => {
@@ -418,6 +416,7 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     const rainPast12hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 12);
     const rainPast24hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 24);
     const rainPast48hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 48);
+    const rainPast72hMm = sumRollingAccumulation(timeArray, rainSeries, anchorMs, 72);
     const snowPast12hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 12);
     const snowPast24hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 24);
     const snowPast48hCm = sumRollingAccumulation(timeArray, snowfallArray, anchorMs, 48);
@@ -476,6 +475,8 @@ const createPrecipitationService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         rainPast12hMm,
         rainPast24hMm,
         rainPast48hMm,
+        rainPast72hMm,
+        rainPast72hIn: mmToInches(rainPast72hMm),
         rainPast12hIn: mmToInches(rainPast12hMm),
         rainPast24hIn: mmToInches(rainPast24hMm),
         rainPast48hIn: mmToInches(rainPast48hMm),

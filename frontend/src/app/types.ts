@@ -85,7 +85,7 @@ export interface MeltFreezeAnalysis {
   refreezeLabel: string;
   solarInput: 'none' | 'low' | 'moderate' | 'high' | 'unknown';
   solarInputLabel: string;
-  meltPotential: 'low' | 'moderate' | 'high';
+  meltPotential: 'low' | 'moderate' | 'high' | 'unknown';
   meltPotentialLabel: string;
   phase: 'no_snow' | 'firm_refrozen' | 'transitioning' | 'corn_window' | 'wet_softening' | 'mixed';
   phaseLabel: string;
@@ -613,6 +613,17 @@ export interface SafetyData {
   gear?: (string | { id?: string; title: string; detail: string; category: string; tone: string })[];
   trail?: string;
   terrainCondition?: {
+    confidenceReasons?: string[];
+    moisture?: { state: string; summary: string; retainedRainIn: number | null; lookbackHours: number | null };
+    outlook?: {
+      coverage: string;
+      state: string;
+      travelEffects: string[];
+      coverageHours: number;
+      requestedHours: number;
+      terrainLimitations: string;
+      timeline: Array<{ time: string; durationHours: number; state: string }>;
+    };
     code?: string;
     label?: string;
     impact?: 'low' | 'moderate' | 'high';

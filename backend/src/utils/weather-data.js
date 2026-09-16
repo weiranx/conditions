@@ -2,7 +2,7 @@ const { zonedForecastIso } = require('./report-evidence');
 const { computeFeelsLikeF, normalizePressureHpa } = require('./weather-normalizers');
 const { buildVisibilityRisk, buildElevationForecastBands } = require('./visibility-risk');
 const { estimateWindGustFromWindSpeed, findNearestCardinalFromDegreeSeries } = require('./wind');
-const { parseStartClock, clampTravelWindowHours } = require('./time');
+const { parseStartClock, clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
 const { deriveTrailStatus, deriveTerrainCondition } = require('./terrain-condition');
 const { createCache, normalizeCoordKey } = require('./cache');
 
@@ -115,10 +115,35 @@ const dateKeyInTimeZone = (value = new Date(), timeZone = null) => {
   return formatWithZone(normalizedTimeZone || null) || formatWithZone('UTC') || date.toISOString().slice(0, 10);
 };
 
+// Only the most recent night preceding departure can establish refreeze.
+const buildPrecedingNight = (points) => {
+  const rows = Array.isArray(points) ? points.slice(-24) : [];
+  let end = rows.length - 1;
+  while (end >= 0 && rows[end]?.isDaytime !== false) end -= 1;
+  const night = [];
+  let i = end;
+  for (; i >= 0 && rows[i]?.isDaytime === false; i -= 1) night.unshift(rows[i]);
+  const contiguous = night.every((p, index) => {
+    const at = parseIsoTimeToMs(p.timeIso);
+    return at !== null && (index === 0 || at - parseIsoTimeToMs(night[index - 1].timeIso) === 3600000);
+  });
+  const temps = night.filter(p => p.tempF != null && p.tempF !== '' && Number.isFinite(Number(p.tempF))).map(p => Number(p.tempF));
+  return {
+    sampleHours: temps.length,
+    expectedHours: night.length,
+    complete: i >= 0 && rows[i]?.isDaytime === true && contiguous && night.length >= 4 && temps.length === night.length,
+    minTempF: temps.length ? Math.min(...temps) : null,
+    freezingHours: temps.filter(t => t < 32).length,
+    freezingDegreeHours: temps.reduce((sum, t) => sum + Math.max(0, 32 - t), 0),
+    startTime: night[0]?.timeIso || null,
+    endTime: night[night.length - 1]?.timeIso || null,
+  };
+};
+
 const buildTemperatureContext24h = ({ points, timeZone = null, windowHours = 24 }) => {
   const normalizedWindow = Math.max(1, Math.round(Number(windowHours) || 24));
   const sourcePoints = Array.isArray(points) ? points.slice(0, normalizedWindow) : [];
-  const validPoints = sourcePoints.filter((point) => Number.isFinite(Number(point?.tempF)));
+  const validPoints = sourcePoints.filter((point) => point?.tempF != null && point.tempF !== '' && Number.isFinite(Number(point.tempF)));
   if (!validPoints.length) {
     return null;
   }
@@ -203,6 +228,12 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
 
   ['windDirection', 'issuedTime', 'timezone', 'forecastEndTime', 'dewPoint', 'dailyTempHighF', 'dailyTempLowF', 'temperatureContext24h', 'cloudCover', 'pressure'].forEach(tryFillField);
 
+  if (!merged.precedingNight?.complete && fallbackWeatherData.precedingNight?.complete) {
+    merged.precedingNight = fallbackWeatherData.precedingNight;
+    fieldSources.precedingNight = 'Open-Meteo';
+    supplementedFields.push('precedingNight');
+  }
+
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
   if (noaaTrend.length < 6 && fallbackTrend.length > noaaTrend.length) {
@@ -278,6 +309,7 @@ const buildOpenMeteoWeatherApiUrl = (host, lat, lon) => {
     longitude: String(lon),
     timezone: 'auto',
     forecast_days: '16',
+    past_days: '1',
     temperature_unit: 'fahrenheit',
     windspeed_unit: 'mph',
     hourly: OPEN_METEO_WEATHER_HOURLY_FIELDS,
@@ -480,6 +512,11 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         isDaytime: Number.isFinite(readHourlyValue('is_day', rowIndex)) ? readHourlyValue('is_day', rowIndex) >= 1 : null,
       });
     }
+    const precedingNight = buildPrecedingNight(hourlyTimes.slice(Math.max(0, selectedHourIndex - 24), selectedHourIndex).map((timeIso, offset) => {
+      const i = Math.max(0, selectedHourIndex - 24) + offset;
+      const day = readHourlyValue('is_day', i);
+      return { timeIso, tempF: readHourlyValue('temperature_2m', i, Number.NaN), isDaytime: Number.isFinite(day) ? day >= 1 : null };
+    }));
     const temperatureContext24h = buildTemperatureContext24h({
       points: temperatureContextPoints,
       timeZone: payload?.timezone || null,
@@ -551,6 +588,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       dailyTempHighF: dailyTemperatureRange?.highF ?? null,
       dailyTempLowF: dailyTemperatureRange?.lowF ?? null,
       temperatureContext24h,
+      precedingNight,
       visibilityRisk: null,
       sourceDetails: {
         primary: 'Open-Meteo',
@@ -611,6 +649,7 @@ module.exports = {
   localHourFromIso,
   dateKeyInTimeZone,
   buildTemperatureContext24h,
+  buildPrecedingNight,
   buildDailyTemperatureRange,
   isWeatherFieldMissing,
   blendNoaaWeatherWithFallback,

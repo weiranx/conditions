@@ -1,3 +1,4 @@
+import { SurfacePrediction } from "../src/field/SurfacePrediction";
 import { evaluateBackcountryDecision } from '../src/app/decision';
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -640,4 +641,14 @@ test('supplemental sources distinguish unavailable data, probabilities, zero smo
   for (const expected of [/Not configured/, /P10/, /Median/, /P90/, /0 mph/, /0 µg\/m³/, /0 mg\/m²/, /Regional forecaster context/, /&lt;script&gt;/, /do not change its safety score/]) assert.match(html, expected);
   assert.doesNotMatch(html, /<script>|NaN/);
   assert.equal(renderToStaticMarkup(<SupplementalEvidence />), '');
+});
+
+test('surface outlook exposes coverage, changing footing, and missing evidence', () => {
+  const html = renderToStaticMarkup(<SurfacePrediction condition={{
+    confidenceReasons: ['Preceding-night refreeze evidence is incomplete.'],
+    moisture: { state: 'unknown', summary: 'Drainage is unknown.', retainedRainIn: null, lookbackHours: null },
+    outlook: { coverage: 'snow_signal', state: 'snow_mixed', travelEffects: ['Slippery footing possible'], coverageHours: 2.5, requestedHours: 4, terrainLimitations: 'Route aspect is not measured.', timeline: [{ time: '8 AM', durationHours: 0.5, state: 'firm_or_frozen_possible' }, { time: '9 AM', durationHours: 1, state: 'softening_possible' }] },
+  }} />);
+  for (const text of ['2.5 of 4', 'Route aspect is not measured', 'firm or frozen possible', 'softening possible', 'Preceding-night', 'Drainage is unknown']) assert.ok(html.includes(text));
+  assert.equal(renderToStaticMarkup(<SurfacePrediction condition={{ label: 'Legacy surface' }} />), '');
 });

@@ -595,6 +595,8 @@ test('deriveTerrainCondition identifies dry firm trail when no snow or wet signa
   const condition = deriveTerrainCondition(
     {
       description: 'Sunny',
+      forecastStartTime: '2026-04-15T08:00:00-07:00',
+      elevation: 9000,
       precipChance: 8,
       humidity: 38,
       temp: 61,
@@ -603,7 +605,7 @@ test('deriveTerrainCondition identifies dry firm trail when no snow or wet signa
       trend: [{ precipChance: 10, condition: 'Sunny', temp: 60 }],
     },
     {
-      snotel: { snowDepthIn: 0, sweIn: 0, distanceKm: 7 },
+      snotel: { snowDepthIn: 0, sweIn: 0, distanceKm: 7, elevationFt: 9000, observedDate: '2026-04-15' },
       nohrsc: { snowDepthIn: 0, sweIn: 0 },
     },
     {
@@ -705,7 +707,7 @@ test('deriveTerrainCondition identifies icy hardpack profile', () => {
   expect(condition.snowProfile?.code).toBe('icy_hardpack');
 });
 
-test('deriveTerrainCondition identifies spring snow profile from freeze-thaw cycle', () => {
+test('deriveTerrainCondition does not establish spring snow from future temperature extremes', () => {
   const condition = deriveTerrainCondition(
     {
       description: 'Sunny',
@@ -728,12 +730,11 @@ test('deriveTerrainCondition identifies spring snow profile from freeze-thaw cyc
     },
   );
 
-  expect(condition.code).toBe('spring_snow');
-  expect(condition.label).toBe('🌤️ Corn-Snow Cycle');
-  expect(condition.snowProfile?.code).toBe('spring_snow');
+  expect(condition.code).toBe('snow_mixed');
+  expect(condition.snowProfile?.meltFreeze.refreezeQuality).toBe('unknown');
 });
 
-test('deriveTerrainCondition uses 24h local day/night temperature context for spring snow classification', () => {
+test('deriveTerrainCondition does not mistake the following night for the preceding night', () => {
   const condition = deriveTerrainCondition(
     {
       description: 'Partly cloudy',
@@ -767,10 +768,8 @@ test('deriveTerrainCondition uses 24h local day/night temperature context for sp
     },
   );
 
-  expect(condition.snowProfile?.code).toBe('spring_snow');
-  expect(condition.label).toBe('🌤️ Corn-Snow Cycle');
-  expect(`${condition.reasons.join(' ')} ${condition.snowProfile?.reasons?.join(' ') || ''}`)
-    .toMatch(/24h|24 hour|24-hour|next 24|next 24 hours|Freeze-thaw signal in next 24 hours/i);
+  expect(condition.snowProfile?.code).toBe('mixed_snow');
+  expect(condition.snowProfile?.meltFreeze.refreezeQuality).toBe('unknown');
 });
 
 test('deriveTerrainCondition marks weather unavailable when no usable signals exist', () => {
@@ -2394,8 +2393,8 @@ test('mmToInches converts millimeters to inches with 2 decimal places', () => {
 });
 
 test('mmToInches returns null for non-numeric input', () => {
-  // null → Number(null) = 0 → 0 inches (not null)
-  expect(mmToInches(null)).toBe(0);
+  // Missing accumulation must remain unavailable.
+  expect(mmToInches(null)).toBeNull();
   // 'a lot' → NaN → not finite → null
   expect(mmToInches('a lot')).toBeNull();
 });
@@ -2407,8 +2406,8 @@ test('cmToInches converts centimeters to inches', () => {
 });
 
 test('cmToInches returns null for non-numeric input', () => {
-  // null → Number(null) = 0 → 0 inches (not null)
-  expect(cmToInches(null)).toBe(0);
+  // Missing accumulation must remain unavailable.
+  expect(cmToInches(null)).toBeNull();
   // NaN → Number(NaN) = NaN → not finite → null
   expect(cmToInches(NaN)).toBeNull();
 });
