@@ -1,0 +1,19 @@
+services:
+  conditions-mcp:
+    build: .
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MCP_HOST: 0.0.0.0
+      PORT: 8104
+    ports:
+      - "127.0.0.1:8104:8104"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64

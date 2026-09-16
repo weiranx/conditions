@@ -20,3 +20,4 @@ This folder contains technical documentation for the web app's development and o
 6. `vps-setup.md`
 
 - [Supplemental report data sources](supplemental-data-sources.md): provider coverage, credentials, smoke decoder setup and validation.
+- [Conditions MCP](../mcp/README.md): Read-only MCP tools for forecasts, plan comparisons, saved reports, and objective watches.
