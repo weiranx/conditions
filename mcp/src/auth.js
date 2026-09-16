@@ -2,7 +2,7 @@
 // stores browser sessions nor issues shared owner credentials.
 export function installAuth(app, config) {
   const resource = `${config.publicUrl}/mcp`;
-  app.get('/.well-known/oauth-protected-resource', (_req,res)=>res.json({resource,authorization_servers:[config.publicUrl],scopes_supported:['conditions:read']}));
+  app.get(['/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'], (_req,res)=>res.json({resource,authorization_servers:[config.publicUrl],scopes_supported:['conditions:read']}));
   return async (req,res,next) => {
     const token = /^Bearer (cmcp_[A-Za-z0-9_-]{43})$/u.exec(req.headers.authorization || '')?.[1];
     const unauthorized = () => res.status(401).set('WWW-Authenticate',`Bearer resource_metadata="${config.publicUrl}/.well-known/oauth-protected-resource"`).json({error:'unauthorized'});

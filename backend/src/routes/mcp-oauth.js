@@ -1,4 +1,5 @@
 'use strict';
+const { describeCallback } = require('../auth/mcp-clients');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { createMcpOAuthService } = require('../auth/mcp-oauth');
@@ -39,8 +40,10 @@ function registerMcpOAuthRoutes({ app, database, accountService, env = process.e
   app.post('/api/auth/mcp/register',rateLimit({windowMs:3600000,limit:20,standardHeaders:true,legacyHeaders:false}),wrap(async(req,res)=>res.status(201).json(await auth.register(req.body))));
   app.get('/api/auth/mcp/authorize',wrap(async(req,res)=>res.redirect(303,await auth.start(req.query))));
   app.get('/api/auth/mcp/request/:request',requireBrowser,wrap(async(req,res)=>{
-    await auth.pending(req.params.request);
-    res.json({clientName:'ChatGPT',scope:'conditions:read',userId:req.oauthUser.id});
+    const pending=await auth.pending(req.params.request);
+    const client=describeCallback(pending.redirect_uri);
+    if (!client) return res.status(400).json({error:'invalid_redirect_uri'});
+    res.json({...client,scope:'conditions:read',userId:req.oauthUser.id});
   }));
   app.post('/api/auth/mcp/approve',requireBrowser,wrap(async(req,res)=>{
     if (typeof req.body?.allow !== 'boolean' || req.body.userId !== req.oauthUser.id) return res.status(409).json({error:'Account changed. Reload and review the connection.'});

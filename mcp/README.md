@@ -35,7 +35,7 @@ invalidate persistent grants. Refresh does not silently extend a grant forever.
 
 ## Configuration
 
-Run migrations `018_mcp_oauth.sql` and `019_mcp_oauth_clients.sql` through the normal backend migration runner.
+Run migrations `018_mcp_oauth.sql` and `019_mcp_oauth_clients.sql`, and `020_mcp_grant_callback.sql` through the normal backend migration runner.
 Add these private settings to the **backend** environment:
 
 ```dotenv
@@ -49,9 +49,11 @@ MCP_OAUTH_REDIRECT_URIS=EXACT_CHATGPT_CALLBACK_FROM_THE_CONNECTION_SETTINGS
 Client callbacks must be exact HTTPS URLs, without fragments or wildcards.
 Keep secrets out of Git. The website origin must already be in the API CORS
 allowlist. These settings preserve existing manually registered connections.
-New ChatGPT connections use the advertised `/api/auth/mcp/register` endpoint:
+New compatible MCP connections use the advertised `/api/auth/mcp/register` endpoint:
 leave client ID and secret blank in ChatGPT. Registration accepts only exact
-HTTPS ChatGPT callback addresses, stores generated secrets only as hashes, and
+HTTPS ChatGPT callbacks, the exact Claude callback
+`https://claude.ai/api/mcp/auth_callback`, and explicit-port HTTP loopback
+callbacks on `localhost`, `127.0.0.1`, or `[::1]`. It stores secrets only as hashes and
 supports public PKCE clients or generated credentials using secret-post/basic.
 Registration grants no account access; each user must sign in and consent.
 Codes, refresh tokens, and revocation are bound to the authenticated client.
@@ -70,7 +72,8 @@ docker compose -p conditions-mcp up -d --build
 ```
 
 Keep host port 8104 loopback-only. Proxy `/mcp` and
-`/.well-known/oauth-protected-resource` to port 8104, preserving Host and disabling
+`/.well-known/oauth-protected-resource` and
+`/.well-known/oauth-protected-resource/mcp` to port 8104, preserving Host and disabling
 proxy buffering. Proxy `/.well-known/oauth-authorization-server` to backend
 `/api/auth/mcp/metadata` at port 3001. `/api/` already routes to that backend.
 Clients may cache OAuth metadata. Keep `/authorize` and `/oauth/token` as
@@ -100,3 +103,21 @@ The health endpoint tests the MCP process; it does not prove backend availabilit
 
 The CI MCP job uses a disposable PostgreSQL service. Never point test settings at
 an untrusted database; test setup creates and removes a uniquely named schema.
+
+## Other AI clients
+
+Claude supports the same remote MCP URL through Customize → Connectors, with
+optional OAuth credentials left blank. Compatible desktop/CLI clients must
+support Streamable HTTP, DCR, and authorization-code PKCE with a loopback
+callback. Callbacks are matched exactly to each registration. Hosted callback
+domains other than ChatGPT and Claude and private URI schemes are rejected.
+
+Consent displays the actual callback and derives the app label from its destination,
+not caller-supplied names. Local-client identity is not verified: users should only
+approve a local flow they started on the same device. Connection management records
+the callback used for each grant. A missing requested scope defaults to the sole
+supported scope, `conditions:read`; other scopes remain rejected.
+
+Protocol regression coverage exercises registration, consent, code exchange and
+private account token resolution for Claude and IPv4/IPv6/localhost callbacks.
+This does not establish compatibility with every third-party app version.

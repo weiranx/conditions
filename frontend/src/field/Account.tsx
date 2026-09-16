@@ -159,8 +159,8 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
             </div>
           )}
           <section aria-labelledby="chatgpt-setup-heading">
-            <h3 id="chatgpt-setup-heading" className="field-subtitle">Use Conditions in ChatGPT</h3>
-            <p>Search objectives, compare forecasts, and read your saved reports and objective watches from ChatGPT.</p>
+            <h3 id="chatgpt-setup-heading" className="field-subtitle">Use Conditions with AI apps</h3>
+            <p>Search objectives, compare forecasts, and read your saved reports and objective watches from your connected AI app.</p>
             <details className="field-disclosure">
               <summary>Set up ChatGPT</summary>
               <p>Connect with your own Conditions account. ChatGPT registers the connection automatically—no client ID or secret to request or copy.</p>
@@ -175,8 +175,15 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
               <p>Already connected? Your existing connection still works. To switch a manually configured connection to automatic registration, create a new connection with both client fields blank.</p>
               <p>If custom apps or Developer mode are unavailable, check your ChatGPT account or workspace permissions. See the <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt" target="_blank" rel="noreferrer">official ChatGPT setup guide</a>.</p>
             </details>
-            <p>Access is read-only and limited to your account, including saved trip locations and dates. Signing out of Conditions or letting your sign-in expire ends access; reconnect in ChatGPT to renew it.</p>
-            <p><a href="/connect">Manage connected apps or disconnect ChatGPT</a></p>
+            <details className="field-disclosure">
+              <summary>Set up Claude or another MCP client</summary>
+              <p><strong>Claude:</strong> Open Customize → Connectors, add a custom connector named Conditions, and enter <code style={{overflowWrap:"anywhere"}}>https://apivps.conditions.weiranxiong.com/mcp</code>. Leave optional OAuth credentials blank, then connect and sign in to Conditions.</p>
+              <p><strong>Desktop and CLI apps:</strong> Add the same URL as a remote Streamable HTTP MCP server with OAuth. The client must support automatic registration, PKCE, and a local browser callback. Start the connection on this device and verify the return address on the consent page.</p>
+              <p>Supported return destinations are ChatGPT, Claude, and local callbacks on localhost, 127.0.0.1, or [::1]. Other hosted AI services and clients that only support API keys or local stdio are not supported by this connection flow.</p>
+              <p>Approve read access, return to your AI app, and try “Show my saved Conditions reports.” See <a href="https://claude.com/docs/connectors/building" target="_blank" rel="noreferrer">Claude’s connector guide</a> for client setup details.</p>
+            </details>
+            <p>Access is read-only and limited to your account, including saved trip locations and dates. Signing out of Conditions or letting your sign-in expire ends access; reconnect in your AI app to renew it.</p>
+            <p><a href="/connect">Manage or disconnect AI apps</a></p>
           </section>
           <h3 className="field-subtitle">Usage this month</h3>
           <div className="field-usage-grid">

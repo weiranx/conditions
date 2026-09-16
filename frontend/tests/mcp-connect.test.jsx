@@ -16,9 +16,10 @@ async function mount(t, search, handler) {
  return {render,calls};
 }
 test('consent requires sign-in and explicit user action',async t=>{
- const ui=await mount(t,'?request='+'a'.repeat(43),async()=>({userId:'alice'}));
+ const ui=await mount(t,'?request='+'a'.repeat(43),async()=>({userId:'alice',clientName:'Claude',callbackUri:'https://claude.ai/api/mcp/auth_callback'}));
  await ui.render(null);assert.match(document.body.textContent,/Sign in to your Conditions account/);assert.equal(ui.calls.length,0);
  await ui.render('alice');assert.match(document.body.textContent,/alice@example.com/);assert.match(document.body.textContent,/trip locations and dates/);
+ assert.match(document.body.textContent,/Allow Claude/);assert.match(document.body.textContent,/claude.ai/);
  assert.equal(ui.calls.length,1);assert.equal(ui.calls[0].options.method,undefined);
  assert.equal([...document.querySelectorAll('button')].find(b=>b.textContent==='Allow read access').disabled,false);
 });

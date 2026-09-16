@@ -5,7 +5,7 @@ import { GoogleAuth } from './GoogleAuth';
 import { getDefaultUserPreferences } from '../app/preferences';
 import './mcp-connect.css';
 
-type Connection = { id: string; created_at: string; expires_at: string };
+type Connection = { clientName?: string; id: string; created_at: string; expires_at: string };
 async function requestApi(path: string, body?: object) {
   const response = await fetch(buildApiUrl(`/api/auth/mcp/${path}`), {
     credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -22,6 +22,7 @@ export default function McpConnect() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [client, setClient] = useState<{clientName:string;callbackUri:string} | null>(null);
   const [reviewedUser, setReviewedUser] = useState<string | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loadedUser, setLoadedUser] = useState<string | null>(null);
@@ -36,7 +37,7 @@ export default function McpConnect() {
     requestApi(request ? `request/${encodeURIComponent(request)}` : 'connections')
       .then(data => {
         if (!active || currentUser.current !== id) return;
-        if (request) setReviewedUser(data.userId); else { setConnections(data.connections); setLoadedUser(id); }
+        if (request) { setReviewedUser(data.userId); setClient({clientName:data.clientName,callbackUri:data.callbackUri}); } else { setConnections(data.connections); setLoadedUser(id); }
       }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [userId, request]);
@@ -51,14 +52,16 @@ export default function McpConnect() {
     const data = await requestApi('approve', { request, allow, userId: id });
     if (currentUser.current !== id) throw new Error('Account changed. Please reconnect.');
     const redirect = new URL(data.redirect);
-    // The server validates the exact registered callback; also constrain the UI destination.
-    if (redirect.origin !== 'https://chatgpt.com' || !(redirect.pathname.startsWith('/connector/oauth/') || redirect.pathname === '/connector_platform_oauth_redirect')) throw new Error('Invalid return address.');
+    // Return only to the exact destination reviewed for this signed-in account.
+    const reviewed = client && new URL(client.callbackUri);
+    if (!reviewed || redirect.origin !== reviewed.origin || redirect.pathname !== reviewed.pathname
+      || redirect.username || redirect.password || redirect.hash) throw new Error('Invalid return address.');
     window.location.assign(redirect.href);
   }
   const pending = busy || account.busy || account.loading;
   return <main className="mcp-connect">
     <a href="/">Conditions</a>
-    <h1>{request ? 'Connect Conditions to ChatGPT' : 'Connected apps'}</h1>
+    <h1>{request ? 'Connect Conditions to an AI app' : 'Connected apps'}</h1>
     {error && <p role="alert">{error}</p>}
     {account.loading ? <p role="status">Checking your account…</p> : !account.user ? <>
       <p>Sign in to your Conditions account to continue.</p>
@@ -76,7 +79,9 @@ export default function McpConnect() {
       <p>Signed in as <strong>{account.user.email}</strong>.</p>
       <button disabled={pending} onClick={()=>void run(account.signOut)}>Use a different account</button>
       {request ? <>
-        <h2>Allow ChatGPT to read your Conditions data?</h2>
+        <h2>Allow {reviewedUser === userId ? client?.clientName || "this app" : "this app"} to read your Conditions data?</h2>
+        {reviewedUser === userId && client && <p>Return address: <code style={{overflowWrap:"anywhere"}}>{client.callbackUri}</code></p>}
+        {reviewedUser === userId && client?.clientName === "Local MCP client" && <p>Approve only if you started this connection in an app on this device. The local app’s identity is not verified.</p>}
         <ul><li>Search objectives and retrieve forecasts.</li><li>Compare trip plans.</li><li>Read your saved reports and objective watches, including trip locations and dates.</li></ul>
         <p>This connection cannot change reports, create watches, or send notifications.</p>
         <p>You can disconnect at any time in Connected apps. Access ends when this Conditions sign-in expires or you sign out.</p>
@@ -86,7 +91,7 @@ export default function McpConnect() {
         </div>
       </> : <>
         {loadedUser !== account.user.id ? (!error && <p role="status">Loading connections…</p>) : connections.length === 0 ? <p>No active connections.</p> : connections.map(connection => <section key={connection.id}>
-          <h2>ChatGPT</h2><p>Connected {new Date(connection.created_at).toLocaleDateString()} · expires {new Date(connection.expires_at).toLocaleDateString()}</p>
+          <h2>{connection.clientName || "MCP client"}</h2><p>Connected {new Date(connection.created_at).toLocaleDateString()} · expires {new Date(connection.expires_at).toLocaleDateString()}</p>
           <button disabled={pending} onClick={()=>void run(async()=>{
             const id = account.user!.id;
             await requestApi('disconnect',{id:connection.id,userId:id});

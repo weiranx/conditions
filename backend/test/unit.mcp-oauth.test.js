@@ -4,7 +4,7 @@ const { registerMcpOAuthRoutes } = require('../src/routes/mcp-oauth');
 const env={MCP_PUBLIC_URL:'https://api.example.com',MCP_FRONTEND_ORIGIN:'https://example.com',MCP_OAUTH_CLIENT_ID:'chatgpt',MCP_OAUTH_CLIENT_SECRET:'s'.repeat(32),MCP_OAUTH_REDIRECT_URIS:'https://chatgpt.com/connector/oauth/test'};
 function setup() {
  const app=express();app.use(express.json());
- const service={userForToken:jest.fn(async token=>token==='cmcp_alice'?{id:'alice'}:token==='cmcp_bob'?{id:'bob'}:null),list:jest.fn(async()=>[]),revoke:jest.fn(),pending:jest.fn(async()=>({})),approve:jest.fn(async()=>env.MCP_OAUTH_REDIRECT_URIS),authenticateClient:()=>false};
+ const service={userForToken:jest.fn(async token=>token==='cmcp_alice'?{id:'alice'}:token==='cmcp_bob'?{id:'bob'}:null),list:jest.fn(async()=>[]),revoke:jest.fn(),pending:jest.fn(async()=>({redirect_uri:'https://claude.ai/api/mcp/auth_callback'})),approve:jest.fn(async()=>env.MCP_OAUTH_REDIRECT_URIS),authenticateClient:()=>false};
  const accountService={getUserForSession:jest.fn(async token=>token==='alice-session'?{id:'alice'}:null)};
  registerMcpOAuthRoutes({app,env,service,accountService});
  app.get('/api/account/reports', (req,res)=>res.json({owner:req.mcpUser?.id}));
@@ -48,4 +48,15 @@ test('discovery advertises registration and token routes await client authentica
  service.authenticateClient.mockResolvedValue('registered-client');
  await request(app).post('/api/auth/mcp/token').type('form').send({client_id:'registered-client'}).expect(200);
  expect(service.exchange).toHaveBeenCalledWith({client_id:'registered-client'},'registered-client');
+});
+
+test('consent describes the actual callback destination',async()=>{
+ const {app}=setup();
+ const response=await request(app).get('/api/auth/mcp/request/request').set('Cookie','bc_session=alice-session').expect(200);
+ expect(response.body.clientName).toBe('Claude');
+ expect(response.body.callbackUri).toBe('https://claude.ai/api/mcp/auth_callback');
+});
+const {describeCallback}=require('../src/auth/mcp-clients');
+test('callback allowlist rejects lookalikes, private networks, credentials, fragments and unsafe schemes',()=>{
+ for(const uri of ['https://claude.ai.evil.com/api/mcp/auth_callback','https://claude.ai/api/mcp/auth_callback?next=evil','https://claude.ai/other','http://192.168.1.1:3000/callback','http://0.0.0.0:3000/callback','http://127.1:3000/callback','http://127.0.0.1.evil.com:3000/callback','http://user@localhost:3000/callback','http://localhost:3000/callback#x','http://localhost:99999/callback','javascript:alert(1)','file:///tmp/callback']) expect(describeCallback(uri)).toBeNull();
 });

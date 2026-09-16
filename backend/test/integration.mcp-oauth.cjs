@@ -19,6 +19,7 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
    CREATE TABLE user_sessions(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id),token_hash char(64),expires_at timestamptz);`);
   await pool.query(readFileSync(require('node:path').join(__dirname,'../migrations/018_mcp_oauth.sql'),'utf8'));
   await pool.query(readFileSync(require('node:path').join(__dirname,'../migrations/019_mcp_oauth_clients.sql'),'utf8'));
+  await pool.query(readFileSync(require('node:path').join(__dirname,'../migrations/020_mcp_grant_callback.sql'),'utf8'));
   const alice=randomUUID(),bob=randomUUID(),sessionA='alice-session',sessionB='bob-session';
   for(const [id,session] of [[alice,sessionA],[bob,sessionB]]){
    await pool.query('INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)',[id,id+'@example.com',id]);
@@ -98,6 +99,20 @@ test('persistent per-user OAuth: PKCE, rotation, replay, isolation, revocation, 
   const basic=await auth.register({redirect_uris:config.redirectUris});
   assert.equal(await auth.authenticateClient({},'Basic '+Buffer.from(basic.client_id+':'+basic.client_secret).toString('base64')),basic.client_id);
   assert.equal(await auth.authenticateClient({client_id:other.client_id},'Basic '+Buffer.from(basic.client_id+':'+basic.client_secret).toString('base64')),false);
+  for (const callback of ['https://claude.ai/api/mcp/auth_callback','http://127.0.0.1:49152/callback','http://localhost:54321/oauth/callback','http://[::1]:54321/callback']) {
+    const native=await auth.register({redirect_uris:[callback],token_endpoint_auth_method:'none',client_name:'ChatGPT'});
+    assert.notEqual(native.client_name,'ChatGPT');
+    const nq={...q,client_id:native.client_id,redirect_uri:callback};delete nq.scope;
+    const nr=new URL(await auth.start(nq)).searchParams.get('request');
+    await assert.rejects(auth.start({...nq,redirect_uri:callback+'/other'}));
+    const back=new URL(await auth.approve(nr,bob,sessionB,true));
+    assert.equal(back.origin,new URL(callback).origin);
+    const nt=await auth.exchange({...exchange,code:back.searchParams.get('code'),redirect_uri:callback},native.client_id);
+    assert.equal((await auth.userForToken(nt.access_token)).id,bob);
+    const grant=(await auth.list(bob)).find(g=>g.client_id===native.client_id);
+    assert.equal(grant.callbackUri,callback);
+    assert.equal(grant.clientName,callback.startsWith('https:')?'Claude':'Local MCP client');
+  }
   const logout=await auth.exchange({...exchange,code:await authorize(alice,sessionA)});
   await pool.query('DELETE FROM user_sessions WHERE user_id=$1',[alice]);
   assert.equal(await auth.userForToken(logout.access_token),null);
