@@ -1,0 +1,11 @@
+.mcp-connect { max-width: 600px; margin: 48px auto; padding: 24px; color: #202c28; background: #fff; font: 16px/1.6 system-ui,sans-serif; }
+.mcp-connect h1 { font-size: 28px; line-height: 1.2; }
+.mcp-connect h2 { font-size: 20px; }
+.mcp-connect label { display: block; margin: 16px 0; }
+.mcp-connect input { display: block; box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #74847d; border-radius: 4px; font: inherit; }
+.mcp-connect button { padding: 10px 16px; cursor: pointer; font: inherit; border: 1px solid #456b58; border-radius: 4px; background: #eef5f0; color: #173d28; }
+.mcp-connect button:disabled { opacity: .55; cursor: wait; }
+.mcp-connect a { color: #21613c; text-decoration: underline; }
+.mcp-connect [role=alert] { color: #992722; }
+.mcp-connect section { border-top: 1px solid #c8d1cb; margin-top: 20px; padding-top: 16px; }
+.mcp-connect-actions { display: flex; gap: 12px; flex-wrap: wrap; }

@@ -19,7 +19,7 @@ export const errorResult = error => result({ error: error instanceof ApiError ? 
 function sanitize(value) {
   if (Array.isArray(value)) return value.map(sanitize);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !['shareToken', 'share_token', 'shareUrl'].includes(key)).map(([key, item]) => [key, sanitize(item)]));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !['shareToken', 'share_token', 'shareUrl', 'share_url'].includes(key)).map(([key, item]) => [key, sanitize(item)]));
 }
 
 export function createServer(api) {
@@ -43,9 +43,9 @@ export function createServer(api) {
     return { comparisons };
   });
   if (api.hasAccount) {
-    register('list_saved_reports', 'List this configured Conditions account’s saved report summaries. Historical snapshots, not current forecasts. Follow nextCursor if supplied.', { query: z.string().max(200).optional(), cursor: z.string().uuid().optional() }, ({ query, cursor }) => api.get('/api/account/reports', { q: query, cursor }, true));
+    register('list_saved_reports', 'List your connected Conditions account’s saved report summaries. Historical snapshots, not current forecasts. Follow nextCursor if supplied.', { query: z.string().max(200).optional(), cursor: z.string().uuid().optional() }, ({ query, cursor }) => api.get('/api/account/reports', { q: query, cursor }, true));
     register('get_saved_report', 'Read a saved report by UUID from list_saved_reports. Its forecast and source timestamps may be stale; do not describe it as current.', { report_id: z.string().uuid() }, ({ report_id }) => api.get(`/api/account/reports/${report_id}`, {}, true));
-    register('list_objective_watches', 'Read objective watches and their last/next checks for the configured account. Does not create watches, send alerts, or trigger checks.', {}, () => api.get('/api/account/objective-watches', {}, true));
+    register('list_objective_watches', 'Read objective watches and their last/next checks for your connected account. Does not create watches, send alerts, or trigger checks.', {}, () => api.get('/api/account/objective-watches', {}, true));
   }
   return server;
 }

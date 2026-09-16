@@ -158,6 +158,7 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
               </div>
             </div>
           )}
+          <p><a href="/connect">Manage connected apps</a></p>
           <h3 className="field-subtitle">Usage this month</h3>
           <div className="field-usage-grid">
             <Usage

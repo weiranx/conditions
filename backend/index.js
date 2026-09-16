@@ -850,6 +850,7 @@ const accountService = registerAccountRoutes({
   multiDayUsageService: multiDayUsageLimitService,
   emailService,
 });
+require('./src/routes/mcp-oauth').registerMcpOAuthRoutes({ app, database, accountService });
 registerTripForecastRoutes({
   app,
   accountService,

@@ -2,7 +2,7 @@ export class ApiError extends Error {
   constructor(code, message, details = {}) { super(message); this.code = code; this.details = details; }
 }
 
-export function createApi({ baseUrl, session = '', fetchImpl = fetch, timeoutMs = 30000 }) {
+export function createApi({ baseUrl, session = '', accessToken = '', fetchImpl = fetch, timeoutMs = 30000 }) {
   const base = new URL(baseUrl);
   if (base.username || base.password || base.search || base.hash || base.pathname !== '/' ||
       (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)))) {
@@ -10,15 +10,15 @@ export function createApi({ baseUrl, session = '', fetchImpl = fetch, timeoutMs 
   }
   if (/[\s;,\r\n]/u.test(session)) throw new Error('Invalid Conditions session format.');
   return {
-    hasAccount: Boolean(session),
+    hasAccount: Boolean(session || accessToken),
     async get(path, query = {}, account = false) {
-      if (account && !session) throw new ApiError('ACCOUNT_NOT_CONFIGURED', 'Configure a Conditions account session to read private reports.');
+      if (account && !session && !accessToken) throw new ApiError('ACCOUNT_NOT_CONFIGURED', 'Connect your Conditions account to read private reports.');
       const url = new URL(path, base);
       if (url.origin !== base.origin || !path.startsWith('/api/')) throw new Error('Invalid API path');
       for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, String(value));
       try {
         const response = await fetchImpl(url, {
-          headers: { Accept: 'application/json', ...(session ? { Cookie: `bc_session=${session}` } : {}) },
+          headers: { Accept: 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : session ? { Cookie: `bc_session=${session}` } : {}) },
           redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
         });
         const reader = response.body.getReader();

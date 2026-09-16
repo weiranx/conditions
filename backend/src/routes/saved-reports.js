@@ -112,7 +112,7 @@ const registerSavedReportRoutes = ({
       return null;
     }
     try {
-      const user = await accountService.getUserForSession(readSessionToken(req));
+      const user = req.mcpUser || await accountService.getUserForSession(readSessionToken(req));
       if (!user) {
         res.status(401).json({ error: 'Sign in to view generated report history.', code: 'ACCOUNT_REQUIRED' });
         return null;

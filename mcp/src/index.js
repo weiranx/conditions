@@ -8,25 +8,19 @@ import { createServer } from './tools.js';
 import { installAuth } from './auth.js';
 
 export function readConfig(env = process.env) {
-  const config = { baseUrl: env.CONDITIONS_API_URL || 'https://apivps.conditions.weiranxiong.com', session: env.CONDITIONS_SESSION || '', bearerToken: env.MCP_BEARER_TOKEN || '', publicUrl: env.MCP_PUBLIC_URL || 'http://127.0.0.1:8104', host: env.MCP_HOST || '127.0.0.1', port: Number(env.PORT || 8104) };
-  const url = new URL(config.publicUrl);
-  if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)))) throw new Error('MCP_PUBLIC_URL must be an HTTPS origin, or loopback HTTP for local development.');
-  config.publicUrl = url.origin;
-  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) throw new Error('Invalid PORT.');
-  if (config.bearerToken && config.bearerToken.length < 32) throw new Error('MCP_BEARER_TOKEN must contain at least 32 characters.');
-  const fields = ['MCP_OAUTH_CLIENT_ID', 'MCP_OAUTH_CLIENT_SECRET', 'MCP_OWNER_PASSWORD', 'MCP_OAUTH_REDIRECT_URIS'];
-  if (fields.some(key => env[key])) {
-    if (!fields.every(key => env[key])) throw new Error('All four OAuth settings are required.');
-    const redirectUris = env.MCP_OAUTH_REDIRECT_URIS.split(',').map(s => s.trim());
-    for (const uri of redirectUris) { const u = new URL(uri); if (u.protocol !== 'https:' || u.username || u.password || u.hash) throw new Error('OAuth callback URLs must be exact HTTPS URLs without credentials or fragments.'); }
-    if (env.MCP_OAUTH_CLIENT_SECRET.length < 32 || env.MCP_OWNER_PASSWORD.length < 32) throw new Error('OAuth secrets must contain at least 32 characters.');
-    config.oauth = { clientId: env.MCP_OAUTH_CLIENT_ID, clientSecret: env.MCP_OAUTH_CLIENT_SECRET, ownerPassword: env.MCP_OWNER_PASSWORD, redirectUris };
+  if (env.CONDITIONS_SESSION || env.MCP_BEARER_TOKEN || env.MCP_OWNER_PASSWORD) throw new Error('Shared credentials are no longer supported. Connect a Conditions account with OAuth.');
+  const config = { baseUrl: env.CONDITIONS_API_URL || 'https://apivps.conditions.weiranxiong.com', publicUrl: env.MCP_PUBLIC_URL || 'http://127.0.0.1:8104', host: env.MCP_HOST || '127.0.0.1', port: Number(env.PORT || 8104) };
+  for (const value of [config.baseUrl, config.publicUrl]) {
+    const url = new URL(value);
+    if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1','localhost'].includes(url.hostname)))) throw new Error('MCP and API URLs must be HTTPS origins, or loopback HTTP for development.');
   }
+  config.baseUrl = new URL(config.baseUrl).origin;
+  config.publicUrl = new URL(config.publicUrl).origin;
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) throw new Error('Invalid PORT.');
   return config;
 }
 
-export function createHttpApp(config, api = createApi(config)) {
-  if (!config.bearerToken && !config.oauth) throw new Error('HTTP requires a bearer token or configured OAuth client.');
+export function createHttpApp(config, apiFactory = token => createApi({ ...config, accessToken: token })) {
   const app = express(); app.disable('x-powered-by');
   const allowedHosts = new Set([new URL(config.publicUrl).host, `127.0.0.1:${config.port}`, `localhost:${config.port}`]);
   app.use((req, res, next) => {
@@ -36,10 +30,10 @@ export function createHttpApp(config, api = createApi(config)) {
   });
   app.use(express.json({ limit: '32kb' }), express.urlencoded({ extended: false, limit: '8kb' }));
   const authenticate = installAuth(app, config);
-  app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'conditions-mcp', accountToolsConfigured: api.hasAccount, note: 'Process health only; verify upstream with a tool call.' }));
-  app.use('/mcp', authenticate, rateLimit({ windowMs: 60000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false }));
+  app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'conditions-mcp', accountToolsConfigured: true, note: 'Process health only; verify upstream with a tool call.' }));
+  app.use('/mcp', authenticate, rateLimit({ windowMs: 60000, limit: 60, keyGenerator: req => req.conditionsUserId, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.post('/mcp', async (req, res) => {
-    const server = createServer(api);
+    const server = createServer(apiFactory(req.conditionsToken));
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => { void transport.close(); void server.close(); });
     try { await server.connect(transport); await transport.handleRequest(req, res, req.body); }

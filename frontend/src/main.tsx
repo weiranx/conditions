@@ -5,6 +5,8 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
 import { AccountProvider } from './contexts/AccountProvider.tsx'
 
+const McpConnect = lazy(() => import('./field/McpConnect'));
+
 const MockControls = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? lazy(() => import('./field/MockControls')) : null;
 
 createRoot(document.getElementById('root')!).render(
@@ -20,7 +22,7 @@ createRoot(document.getElementById('root')!).render(
       >
         <FeatureFlagsProvider>
           <AccountProvider>
-            <App />
+            {window.location.pathname === '/connect' ? <McpConnect /> : <App />}
           </AccountProvider>
         </FeatureFlagsProvider>
       </Suspense>
