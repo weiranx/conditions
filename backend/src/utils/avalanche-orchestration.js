@@ -56,6 +56,8 @@ const parseForecastMonth = (dateValue) => {
 };
 
 const parseFiniteNumber = (value) => {
+  if (value === null || value === undefined || typeof value === 'boolean'
+    || (typeof value === 'string' && !value.trim())) return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 };
@@ -106,6 +108,8 @@ const evaluateSnowpackSignal = (snowpackData) => {
     (maxDepthIn !== null && maxDepthIn >= AVALANCHE_MEASURABLE_SNOW_DEPTH_IN) ||
     (maxSweIn !== null && maxSweIn >= AVALANCHE_MEASURABLE_SWE_IN);
 
+  const isSnowFree = maxDepthIn === 0 && (maxSweIn === null || maxSweIn === 0);
+
   const hasLowSnowpackSignal =
     (maxDepthIn !== null && maxDepthIn <= 1) &&
     (maxSweIn === null || maxSweIn <= 0.25);
@@ -147,6 +151,7 @@ const evaluateSnowpackSignal = (snowpackData) => {
       hasMaterialSignal: false,
       hasMeasurablePresence: false,
       hasNoSignal: true,
+      isSnowFree,
       hasObservedPresence: false,
       reason: `Snowpack Snapshot shows very low snow signal (${parts.join(', ')}).`,
     };
@@ -204,11 +209,24 @@ const evaluateAvalancheRelevance = ({ lat, selectedDate, weatherData, avalancheD
   const seasonUnknown = month === null;
   const snowpackSignal = evaluateSnowpackSignal(snowpackData);
 
-  const hasWintrySignal =
+  const hasWintryPrecipitationSignal =
     /snow|sleet|blizzard|ice|freezing|wintry|graupel|flurr|rime/.test(description) ||
-    (Number.isFinite(tempF) && tempF <= 34) ||
-    (Number.isFinite(feelsLikeF) && feelsLikeF <= 30) ||
+    (Number.isFinite(expectedSnowWindowIn) && expectedSnowWindowIn > 0) ||
     (Number.isFinite(precipChance) && precipChance >= 50 && Number.isFinite(tempF) && tempF <= 38);
+
+  // Cold air alone does not imply a snowpack. Keep missing observations unknown,
+  // and preserve forecast loading and official/stale bulletin checks above.
+  if (snowpackSignal.isSnowFree && !hasWintryPrecipitationSignal) {
+    return {
+      relevant: false,
+      reason: `${snowpackSignal.reason} Observed zero snow depth with no conflicting SWE or forecast snow signal; cold alone does not make avalanche forecasting relevant.`,
+    };
+  }
+
+  const hasWintrySignal =
+    hasWintryPrecipitationSignal ||
+    (Number.isFinite(tempF) && tempF <= 34) ||
+    (Number.isFinite(feelsLikeF) && feelsLikeF <= 30);
 
   if (hasWintrySignal) {
     return {
