@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import "./forecast.css";
 import { buildReportWeatherRows } from "./report-weather";
 import { weatherAppearance } from "./weather-appearance";
+import { bluebirdPercentage } from "../app/bluebird";
 import {
   buildWeatherTrendRows,
   buildWeatherTrendChartData,
@@ -76,6 +77,7 @@ export function Forecast({ report }: { report: PersistedReport }) {
     report.plan.travelWindowHours,
   );
   const rows = buildReportWeatherRows(report.safetyData, preferences, report.plan.travelWindowHours);
+  const bluebird = bluebirdPercentage(trend);
   const insight = buildTravelWindowInsights(rows, preferences.timeStyle);
   const selectedIndex = Math.min(hour, Math.max(0, trend.length - 1));
   const selected = trend[selectedIndex];
@@ -209,6 +211,10 @@ export function Forecast({ report }: { report: PersistedReport }) {
         </dl>
         <div className="forecast-context">
           <span>
+            Bluebird day <strong>{bluebird.percent === null ? "Unavailable" : `${bluebird.percent}%`}</strong>
+            {" "}of available daylight hours
+          </span>
+          <span>
             Humidity <strong>{selected.humidity ?? "—"}%</strong>
           </span>
           <span>
@@ -221,6 +227,19 @@ export function Forecast({ report }: { report: PersistedReport }) {
             Wind from <strong>{selected.windDirection || "—"}</strong>
           </span>
         </div>
+        <details className="forecast-context forecast-bluebird-details">
+          <summary>About the bluebird percentage</summary>
+          <p>
+            Share of available daylight forecast hours in this window with cloud cover ≤20%,
+            precipitation chance ≤10%, and no forecast rain, snow, fog, haze, smoke, or storms.
+            This estimates clear, dry hours; it is not the probability of a whole bluebird day.
+          </p>
+          <p>
+            {bluebird.completeHours}/{bluebird.daylightHours} daylight hours have cloud and precipitation readings.
+            {" "}{bluebird.reason || `${bluebird.bluebirdHours} meet the bluebird criteria.`}
+            {" "}Available forecast: {trend.length}/{report.plan.travelWindowHours} requested hours.
+          </p>
+        </details>
         <div className="forecast-hour-status">
           {selectedRow.pass ? <Check size={16} /> : <TriangleAlert size={16} />}
           <p>

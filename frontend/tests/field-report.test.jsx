@@ -1,3 +1,4 @@
+import { bluebirdPercentage } from "../src/app/bluebird";
 import { SurfacePrediction } from "../src/field/SurfacePrediction";
 import { evaluateBackcountryDecision } from '../src/app/decision';
 import assert from "node:assert/strict";
@@ -53,6 +54,40 @@ const weatherHour = {
   windDirection: "NW",
   isDaytime: true,
 };
+test("bluebird share excludes night and respects cloud, precipitation, and visibility limits", () => {
+  const result = bluebirdPercentage([
+    weatherHour,
+    { ...weatherHour, cloudCover: 20, precipChance: 10 },
+    { ...weatherHour, cloudCover: 21 },
+    { ...weatherHour, precipChance: 11 },
+    { ...weatherHour, condition: 'Fog' },
+    { ...weatherHour, condition: 'Snow showers' },
+    { ...weatherHour, isDaytime: false },
+  ]);
+  assert.equal(result.percent, 33);
+  assert.equal(result.daylightHours, 6);
+  assert.equal(result.bluebirdHours, 2);
+});
+test("bluebird share preserves missing evidence and genuine zeroes", () => {
+  for (const value of [null, undefined, NaN, Infinity, -1, 101]) {
+    assert.equal(bluebirdPercentage([{ ...weatherHour, cloudCover: value }]).percent, null);
+    assert.equal(bluebirdPercentage([{ ...weatherHour, precipChance: value }]).percent, null);
+  }
+  assert.equal(bluebirdPercentage([]).percent, null);
+  assert.equal(bluebirdPercentage([{ ...weatherHour, isDaytime: false }]).percent, null);
+  assert.equal(bluebirdPercentage([weatherHour, { ...weatherHour, isDaytime: null }]).percent, null);
+  assert.equal(bluebirdPercentage([{ ...weatherHour, cloudCover: 100 }]).percent, 0);
+  assert.equal(bluebirdPercentage([{ ...weatherHour, cloudCover: 0, precipChance: 0 }]).percent, 100);
+});
+test("forecast explains bluebird percentage and partial coverage", () => {
+  const html = renderToStaticMarkup(<Forecast report={report([weatherHour])} />);
+  assert.match(html, /Bluebird day <strong>100%/);
+  assert.match(html, /1\/1 daylight hours/);
+  assert.match(html, /Available forecast: 1\/3 requested hours/);
+  assert.match(html, /not the probability of a whole bluebird day/);
+  const missing = renderToStaticMarkup(<Forecast report={report([{ ...weatherHour, cloudCover: null }])} />);
+  assert.match(missing, /Bluebird day <strong>Unavailable/);
+});
 function report(trend, customPreferences = preferences) {
   return buildPersistedReport(
     {

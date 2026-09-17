@@ -366,6 +366,16 @@ html[data-theme="dark"] .forecast-sky.is-night {
   margin-left: 5px;
   color: white;
 }
+.forecast-bluebird-details {
+  display: block;
+  line-height: 1.6;
+}
+.forecast-bluebird-details summary {
+  cursor: pointer;
+}
+.forecast-bluebird-details p {
+  margin-top: 8px;
+}
 .forecast-hour-status {
   margin-top: 15px;
 }
