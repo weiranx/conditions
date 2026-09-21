@@ -81,6 +81,13 @@
 .field-sidebar .field-brand small {
   letter-spacing: .2em;
 }
+.field-sidebar-label {
+  font-size: 10px;
+  font-weight: 550;
+}
+.field-sidebar button > svg {
+  flex-shrink: 0;
+}
 
 .field-app .field-topbar {
   background: transparent;
@@ -144,6 +151,25 @@
   font-size: 36px;
 }
 .field-recent-brief .field-recent-row > svg { flex: none; }
+.field-recent-brief .field-recent-row:hover {
+  background: var(--f-soft);
+}
+.field-workspace-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  padding-block: 28px;
+  border-block: 1px solid var(--f-line);
+  font-size: 13px;
+}
+.field-workspace-empty strong {
+  color: var(--f-ink);
+  font-size: 16px;
+  font-weight: 550;
+}
 
 .field-comparison .field-compare-intro {
   align-items: stretch;
@@ -337,6 +363,7 @@
 .field-plan-utilities {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .field-location-status {
@@ -362,14 +389,80 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.field-plan-form .field-input-grid {
+.field-plan-form .field-plan-schedule {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
+  gap: 16px 12px;
+}
+.field-plan-form .field-plan-schedule > label {
+  min-width: 0;
+  grid-column: auto;
+}
+.field-plan-form .field-plan-schedule > .field-plan-duration {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.field-plan-schedule .field-duration-control {
+  width: 132px;
+  margin-top: 0;
+}
+.field-plan-form .field-plan-schedule > .field-plan-activity {
+  grid-column: 1 / -1;
+}
+.field-plan-form .field-form-divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  margin-bottom: 12px;
+  min-height: 52px;
+}
+.field-form-divider .field-text-button {
+  gap: 6px;
+  flex-shrink: 0;
+}
+.field-plan-form .field-plan-schedule :is(input, select) {
+  font-variant-numeric: tabular-nums;
+  padding-inline: 10px;
+}
+.field-duration-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin-top: 8px;
+  border: 1px solid var(--f-line);
+  border-radius: var(--f-control-radius);
+  background: var(--f-paper);
+}
+.field-plan-form .field-duration-control input {
+  border: 0;
+  margin: 0;
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
 }
 .field-duration-unit {
   color: var(--f-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
+  padding-right: 12px;
+}
+.field-duration-control:focus-within {
+  outline: 3px solid var(--f-green);
+  outline-offset: 4px;
+}
+.field-duration-control input:focus-visible {
+  outline: none;
+}
+@media (min-width: 1201px) {
+  .field-planner-grid {
+    grid-template-columns: 400px minmax(0, 1fr);
+  }
 }
 .field-settings-shortcuts {
   display: flex;

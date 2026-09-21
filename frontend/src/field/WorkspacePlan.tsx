@@ -213,8 +213,8 @@ export function WorkspacePlan({
           role="status"
         >
           {selected ? (
-            <><Check size={14} aria-hidden="true" /> Location selected. Review your date and time below.</>
-          ) : "Choose a search result, use your location, or pick a point on the map."}
+            <><Check size={14} aria-hidden="true" /> Location selected.</>
+          ) : "Select a search result or a point on the map."}
         </p>
         {w.importedGpxRoute && (
           <div className="field-route-import">
@@ -252,14 +252,26 @@ export function WorkspacePlan({
           </div>
         )}
         <div className="field-form-divider">
-          <span className="field-kicker">Date and time</span>
+          <span className="field-kicker">Schedule & activity</span>
+          {!comparison && (
+            <button
+              className="field-text-button"
+              type="button"
+              title="Use local time now"
+              aria-label="Use local time now"
+              onClick={w.handleUseNowConditions}
+            >
+              <Clock3 size={14} />
+              Use now
+            </button>
+          )}
         </div>
         <p className="field-plan-timezone" id={`${id}-timezone`}>
           {w.hasObjective
             ? `Local time · ${w.objectiveTimezone || "the objective"}`
             : "Choose a location to set the local time zone."}
         </p>
-        <div className="field-input-grid">
+        <div className="field-input-grid field-plan-schedule">
           <label>
             Date
             <input
@@ -316,22 +328,43 @@ export function WorkspacePlan({
               }}
             />
           </label>
-          <label>
+          <label className="field-plan-duration">
             Duration
-            <input
-              aria-label="Duration in hours"
-              type="number"
-              min="1"
-              max="24"
-              required
-              value={w.travelWindowHoursDraft}
+            <span className="field-duration-control">
+              <input
+                aria-label="Duration in hours"
+                type="number"
+                min="1"
+                max="24"
+                required
+                value={w.travelWindowHoursDraft}
+                onChange={(event) => {
+                  if (!comparison && w.safetyData) w.handleEditPlan();
+                  w.handleTravelWindowHoursDraftChange(event);
+                }}
+                onBlur={w.handleTravelWindowHoursDraftBlur}
+              />
+              <span className="field-duration-unit" aria-hidden="true">hours</span>
+            </span>
+          </label>
+          <label className="field-plan-activity">
+            Activity
+            <select
+              value={w.preferences.defaultActivity}
               onChange={(event) => {
                 if (!comparison && w.safetyData) w.handleEditPlan();
-                w.handleTravelWindowHoursDraftChange(event);
+                w.updatePreferences({
+                  defaultActivity: event.target
+                    .value as typeof w.preferences.defaultActivity,
+                });
               }}
-              onBlur={w.handleTravelWindowHoursDraftBlur}
-            />
-            <span className="field-duration-unit">hours</span>
+            >
+              {ACTIVITY_PROFILE_ORDER.map((key) => (
+                <option key={key} value={key}>
+                  {ACTIVITY_PROFILES[key].label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         {comparison ? (
@@ -351,35 +384,7 @@ export function WorkspacePlan({
               ))}
             </select>
           </label>
-        ) : (
-          <button
-            className="field-text-button"
-            type="button"
-            onClick={w.handleUseNowConditions}
-          >
-            <Clock3 size={14} />
-            Use local time now
-          </button>
-        )}
-        <label className="field-activity">
-          Activity
-          <select
-            value={w.preferences.defaultActivity}
-            onChange={(event) => {
-              if (!comparison && w.safetyData) w.handleEditPlan();
-              w.updatePreferences({
-                defaultActivity: event.target
-                  .value as typeof w.preferences.defaultActivity,
-              });
-            }}
-          >
-            {ACTIVITY_PROFILE_ORDER.map((key) => (
-              <option key={key} value={key}>
-                {ACTIVITY_PROFILES[key].label}
-              </option>
-            ))}
-          </select>
-        </label>
+        ) : null}
         <button
           className="field-button field-button-primary field-form-submit"
           type="submit"

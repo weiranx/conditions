@@ -19,6 +19,12 @@
     min-width: 0;
     padding-inline: 1px;
     overflow-wrap: normal;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .field-app .field-topbar > span {
+    font-size: 11px;
   }
 
   /* Native date/time controls must not set the grid's minimum width. */
@@ -37,7 +43,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .field-app .field-input-grid > label:last-child {
+  .field-app .field-input-grid:not(.field-plan-schedule) > label:last-child {
     grid-column: 1 / -1;
   }
 
@@ -119,7 +125,8 @@
     padding: 18px;
   }
 
-  .field-app .field-input-grid {
+  .field-app .field-input-grid,
+  .field-app .field-plan-schedule {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -338,9 +338,11 @@ export default function FieldApp() {
                         <ArrowUpRight size={17} />
                       </button>
                     ) : (
-                      <p className="field-workspace-empty">
-                        Your most recent conditions brief will appear here.
-                      </p>
+                      <div className="field-workspace-empty">
+                        <BookOpen size={22} strokeWidth={1.5} aria-hidden="true" />
+                        <strong>Your next outing starts here</strong>
+                        <p>Create a conditions brief to keep weather, terrain, and daylight in one place.</p>
+                      </div>
                     )}
                     <p className="field-muted">
                       Reports are planning aids. Check source freshness and
