@@ -362,9 +362,36 @@
 }
 .field-plan-utilities {
   display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0 16px;
+}
+.field-plan-form,
+.field-planner-map {
+  scroll-margin-top: 16px;
+}
+.field-app .field-planner-map > .field-planner-map-heading {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px 16px;
+}
+.field-planner-map-heading > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.field-planner-map-heading [role="status"] {
+  color: var(--f-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.field-planner-map-heading > button {
+  min-height: 44px;
+  flex-shrink: 0;
 }
 .field-location-status {
   display: flex;
@@ -556,7 +583,8 @@
   }
 }
 .field-plan-utilities button {
-  font-size: 11px;
+  min-height: 44px;
+  font-size: 12px;
   gap: 6px;
 }
 .field-route-import {

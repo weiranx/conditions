@@ -1,0 +1,95 @@
+.report-section-navigation {
+  position: sticky;
+  top: var(--field-sticky-top, env(safe-area-inset-top, 0px));
+  z-index: 15;
+  margin-bottom: 24px;
+  padding-top: 12px;
+  background: var(--f-bg);
+  border-bottom: 1px solid var(--f-line);
+  scroll-margin-top: var(--field-sticky-top, env(safe-area-inset-top, 0px));
+}
+
+.report-section-navigation .report-reading-controls {
+  margin-bottom: 8px;
+  padding-top: 0;
+}
+
+.report-section-navigation .report-reading-controls > button {
+  min-height: 44px;
+}
+
+.field-report .report-section-navigation .field-chapters {
+  margin: 0;
+  border-bottom: 0;
+  gap: 4px;
+}
+
+.field-report .report-section-navigation .field-chapters button {
+  min-height: 48px;
+  padding-inline: 10px;
+}
+
+.field-report .report-section-navigation .field-chapters button:focus-visible {
+  outline-offset: -3px;
+}
+
+.report-section-picker {
+  display: none;
+}
+
+.field-report .field-chapter-content h2[tabindex="-1"]:focus {
+  outline: 2px solid var(--f-green);
+  outline-offset: 5px;
+  border-radius: 2px;
+}
+
+@media screen and (max-width: 850px) {
+  .report-section-navigation {
+    margin-bottom: 18px;
+    padding-block: 10px;
+  }
+
+  .report-section-navigation .report-reading-controls {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+    padding: 0;
+  }
+
+  .report-section-navigation .report-reading-controls > button,
+  .field-report .report-section-navigation .field-chapters {
+    display: none;
+  }
+
+  .report-section-picker {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    color: var(--f-muted);
+    font-size: 12px;
+  }
+
+  .report-section-picker select {
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 12px;
+    border: 1px solid var(--f-line);
+    border-radius: 6px;
+    background: var(--f-paper);
+    color: var(--f-ink);
+    font: inherit;
+    font-size: 16px;
+    cursor: pointer;
+  }
+}
+
+@media print {
+  .report-section-navigation {
+    display: none;
+  }
+}

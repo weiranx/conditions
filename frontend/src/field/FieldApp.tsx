@@ -1,6 +1,7 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import L from "leaflet";
 import {
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Bell,
@@ -52,6 +53,7 @@ export default function FieldApp() {
   const account = useAccount();
   const [feedback, setFeedback] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
   const plan: Plan = {
     name: w.objectiveName,
     lat: w.hasObjective ? w.position.lat : null,
@@ -154,15 +156,41 @@ export default function FieldApp() {
       setActionBusy(false);
     }
   }
+  function chooseOnMap() {
+    w.setShowSuggestions(false);
+    mapRef.current?.focus({ preventScroll: true });
+    mapRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }
+  function returnToPlan() {
+    const search = w.searchInputRef.current;
+    const form = search?.form;
+    const target = w.hasObjective && !w.objectiveDraftDirty
+      ? form?.querySelector<HTMLInputElement>('input[type="date"]')
+      : search;
+    target?.focus({ preventScroll: true });
+    form?.scrollIntoView({ block: "start", behavior: "instant" });
+  }
   const map = (
-    <div className="field-planner-map">
-      <div>
-        <span className="field-kicker">Objective map</span>
-        <span>
-          {plan.lat === null
-            ? "Choose a location on the map"
-            : `${plan.lat.toFixed(4)}°, ${plan.lon?.toFixed(4)}°`}
-        </span>
+    <div
+      className="field-planner-map"
+      ref={mapRef}
+      role="region"
+      aria-labelledby="field-objective-map-title"
+      tabIndex={-1}
+    >
+      <div className="field-planner-map-heading">
+        <div>
+          <span className="field-kicker" id="field-objective-map-title">Objective map</span>
+          <span role="status">
+            {plan.lat === null
+              ? "Choose a location on the map"
+              : `${plan.lat.toFixed(4)}°, ${plan.lon?.toFixed(4)}° selected`}
+          </span>
+        </div>
+        <button type="button" className="field-text-button" onClick={returnToPlan}>
+          <ArrowLeft size={15} aria-hidden="true" />
+          Back to plan
+        </button>
       </div>
       <Suspense
         fallback={<div className="field-map-loading">Loading map…</div>}
@@ -178,7 +206,7 @@ export default function FieldApp() {
       <div className="field-map-note">
         <Layers size={16} />
         <p>
-          Select a point or search for an objective. Switch map layers for
+          Select a point, then return to your plan. Switch map layers for
           terrain, roads, or satellite imagery.
         </p>
       </div>
@@ -288,7 +316,7 @@ export default function FieldApp() {
                   </div>
                 </header>
                 <div className="field-planner-grid">
-                  <WorkspacePlan workspace={w} />
+                  <WorkspacePlan workspace={w} onChooseMap={chooseOnMap} />
                   {map}
                 </div>
                 <div className="field-workspace-bottom">
@@ -409,7 +437,7 @@ export default function FieldApp() {
                     <p>Set an objective, departure time, and duration.</p>
                   </header>
                   <div className="field-planner-grid">
-                    <WorkspacePlan workspace={w} />
+                    <WorkspacePlan workspace={w} onChooseMap={chooseOnMap} />
                     {map}
                   </div>
                 </section>

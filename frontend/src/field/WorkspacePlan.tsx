@@ -1,8 +1,9 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
   Clock3,
+  LoaderCircle,
   LocateFixed,
   MapPin,
   Search,
@@ -19,17 +20,33 @@ import { parseGpxFile } from "../lib/gpx";
 export function WorkspacePlan({
   workspace: w,
   comparison = false,
+  onChooseMap,
 }: {
   workspace: Workspace;
   comparison?: boolean;
+  onChooseMap?: () => void;
 }) {
   const { searchWrapperRef, searchInputRef } = w;
   const id = useId();
   const file = useRef<HTMLInputElement>(null);
+  const results = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [selectingLocation, setSelectingLocation] = useState(false);
   const busy = comparison ? w.tripForecastLoading : w.loading;
   const selected = w.hasObjective && !w.objectiveDraftDirty;
+  useEffect(() => {
+    const list = results.current;
+    if (!w.showSuggestions || w.activeSuggestionIndex < 0 || !list) return;
+    const option = list.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!option) return;
+    const listTop = list.getBoundingClientRect().top + list.clientTop;
+    const listBottom = listTop + list.clientHeight;
+    const optionBounds = option.getBoundingClientRect();
+    // Keep keyboard navigation inside the results, without moving the page.
+    if (optionBounds.top < listTop) list.scrollTop += optionBounds.top - listTop;
+    else if (optionBounds.bottom > listBottom)
+      list.scrollTop += optionBounds.bottom - listBottom;
+  }, [w.activeSuggestionIndex, w.showSuggestions, w.suggestions]);
   return (
     <form
       className="field-plan-form"
@@ -46,7 +63,9 @@ export function WorkspacePlan({
               searchInputRef.current?.focus({ preventScroll: true });
             }
           } catch {
-            setError("Could not select this location. Try a search result or pick a point on the map.");
+            setError(onChooseMap
+              ? "Could not select this location. Try a search result or choose a point on the map."
+              : "Could not select this location. Try a search result or enter latitude, longitude.");
           } finally {
             setSelectingLocation(false);
           }
@@ -78,7 +97,9 @@ export function WorkspacePlan({
             Mountain, trail, or coordinates
           </label>
           <div className="field-input-icon">
-            <Search size={17} aria-hidden="true" />
+            {w.searchLoading
+              ? <LoaderCircle size={17} className="field-spin" aria-hidden="true" />
+              : <Search size={17} aria-hidden="true" />}
             <input
               id={`${id}-search`}
               ref={searchInputRef}
@@ -90,8 +111,8 @@ export function WorkspacePlan({
               aria-autocomplete="list"
               aria-describedby={`${id}-location-status`}
               aria-activedescendant={
-                w.showSuggestions && w.activeSuggestionIndex >= 0
-                  ? `suggestion-${w.activeSuggestionIndex}`
+                w.showSuggestions && w.suggestions[w.activeSuggestionIndex]
+                  ? `${id}-suggestion-${w.activeSuggestionIndex}`
                   : undefined
               }
               autoComplete="off"
@@ -121,48 +142,68 @@ export function WorkspacePlan({
           {w.showSuggestions && (
             <div
               className="field-search-results"
-              id={`${id}-results`}
-              role="listbox"
-              aria-label="Location results"
+              ref={results}
             >
-              {w.parsedTypedCoordinates && (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected="false"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => w.handleUseTypedCoordinates(w.searchQuery)}
-                >
-                  <MapPin size={15} />
-                  Use these coordinates
-                </button>
-              )}
-              {w.suggestions.map((item, index) => (
-                <button
-                  id={`suggestion-${index}`}
-                  key={`${item.name}-${item.lat}-${index}`}
-                  type="button"
-                  role="option"
-                  aria-selected={w.activeSuggestionIndex === index}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => w.selectSuggestion(item)}
-                >
-                  <MapPin size={15} />
-                  <span>{item.name}</span>
-                  <ArrowRight size={14} />
-                </button>
-              ))}
-              {!w.suggestions.length && (
-                <p>
+              <div
+                id={`${id}-results`}
+                role="listbox"
+                aria-label="Location results"
+                aria-busy={w.searchLoading}
+              >
+                {w.parsedTypedCoordinates && (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected="false"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => w.handleUseTypedCoordinates(w.searchQuery)}
+                  >
+                    <MapPin size={15} />
+                    Use these coordinates
+                  </button>
+                )}
+                {w.suggestions.map((item, index) => (
+                  <button
+                    id={`${id}-suggestion-${index}`}
+                    key={`${item.name}-${item.lat}-${index}`}
+                    type="button"
+                    role="option"
+                    aria-selected={w.activeSuggestionIndex === index}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => w.selectSuggestion(item)}
+                  >
+                    <MapPin size={15} />
+                    <span>{item.name}</span>
+                    <ArrowRight size={14} />
+                  </button>
+                ))}
+              </div>
+              {(w.searchLoading || (!w.suggestions.length && !w.parsedTypedCoordinates)) && (
+                <p role="status">
                   {w.searchLoading
-                    ? "Searching…"
-                    : "Search for a place, or enter latitude, longitude."}
+                    ? "Searching for places…"
+                    : w.searchQuery.trim().length >= 2
+                      ? "No matching places. Try a nearby place or enter latitude, longitude."
+                      : "Search for a place, or enter latitude, longitude."}
                 </p>
               )}
             </div>
           )}
         </div>
         <div className="field-plan-utilities">
+          {onChooseMap && (
+            <button
+              className="field-text-button"
+              type="button"
+              onClick={() => {
+                w.setShowSuggestions(false);
+                onChooseMap();
+              }}
+            >
+              <MapPin size={14} aria-hidden="true" />
+              Choose on map
+            </button>
+          )}
           <button
             className="field-text-button"
             type="button"
@@ -214,7 +255,9 @@ export function WorkspacePlan({
         >
           {selected ? (
             <><Check size={14} aria-hidden="true" /> Location selected.</>
-          ) : "Select a search result or a point on the map."}
+          ) : onChooseMap
+            ? "Select a search result or choose a point on the map."
+            : "Select a search result or enter latitude, longitude."}
         </p>
         {w.importedGpxRoute && (
           <div className="field-route-import">

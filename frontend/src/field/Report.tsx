@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -24,6 +24,7 @@ import { ReportVerdict } from "./ReportVerdict";
 import { ReportInsights } from "./ReportInsights";
 import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
+import "./report-navigation.css";
 import { AiExplanation } from "./AiExplanation";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
@@ -92,6 +93,10 @@ export function Report({
 }) {
   const [chapter, setChapter] = useState<Chapter>(chapterFromHash);
   const [fullReport, setFullReport] = useState(false);
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const requestedChapter = useRef<Chapter | null>(null);
+  const [detailRequest, setDetailRequest] = useState(0);
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
@@ -107,12 +112,46 @@ export function Report({
   const activeChapter = visibleChapters.some((c) => c.id === chapter)
     ? chapter
     : "forecast";
+  const activeChapterLabel = visibleChapters.find((c) => c.id === activeChapter)!.label;
   useEffect(() => {
-    const listener = () => setChapter(chapterFromHash());
+    const listener = () => {
+      requestedChapter.current = null;
+      setChapter(chapterFromHash());
+    };
     window.addEventListener("hashchange", listener);
     return () => window.removeEventListener("hashchange", listener);
   }, []);
+  useEffect(() => {
+    // Only an overview shortcut requests a jump. Loading a report, changing
+    // chapters, and syncing the URL must not move the reader's position.
+    if (requestedChapter.current !== activeChapter) return;
+    requestedChapter.current = null;
+    const detail = detailRef.current;
+    if (!detail) return;
+    const focusHeading = () => {
+      const heading = Array.from(detail.querySelectorAll<HTMLHeadingElement>("h2"))
+        .find((element) => element.getClientRects().length > 0);
+      if (!heading) return false;
+      navigationRef.current?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+      });
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+      return true;
+    };
+    if (focusHeading()) return;
+    // Wait for the selected section when its lazy module is still loading.
+    const observer = new MutationObserver(() => {
+      if (focusHeading()) observer.disconnect();
+    });
+    observer.observe(detail, { childList: true, subtree: true, attributes: true });
+    return () => observer.disconnect();
+  }, [activeChapter, detailRequest, fullReport]);
   function selectChapter(next: Chapter) {
+    requestedChapter.current = null;
     setFullReport(false);
     setChapter(next);
     window.history.replaceState(
@@ -120,6 +159,11 @@ export function Report({
       "",
       `${window.location.pathname}${window.location.search}${buildReportSectionHash(`planner-section-${next}`)}`,
     );
+  }
+  function openChapter(next: Chapter) {
+    selectChapter(next);
+    requestedChapter.current = next;
+    setDetailRequest((request) => request + 1);
   }
   function download() {
     const url = URL.createObjectURL(
@@ -223,7 +267,7 @@ export function Report({
                 <ArrowDown size={16} />
                 Export report data
               </button>
-              <button onClick={() => window.print()}>Print view</button>
+              <button onClick={() => window.print()}>Print current view</button>
             </div>
           </details>
         </div>
@@ -292,45 +336,61 @@ export function Report({
           primaryReason={w.fieldBriefPrimaryReason}
           freshnessWarning={w.hasFreshnessWarning ? w.freshnessWarningSummary : null}
           preferences={w.preferences}
-          onSources={() => selectChapter("sources")}
+          onSources={() => openChapter("sources")}
         />
-        <ReportSummary workspace={w} onOpen={selectChapter} />
+        <ReportSummary workspace={w} onOpen={openChapter} />
       </div>
-      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => selectChapter("sources")} />
+      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => openChapter("sources")} />
       <div className="field-report-layout">
-        <div className="report-reading-controls">
-          <div>
-            <h2>Report sections</h2>
-            <p role="status">
-              {fullReport ? "All sections in one view" : "Weather, timing, terrain, and source evidence."}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="field-button"
-            aria-pressed={fullReport}
-            aria-controls="field-report-detail"
-            onClick={() => setFullReport((value) => !value)}
-          >
-            <BookOpen size={16} aria-hidden="true" />
-            {fullReport ? "Back to chapters" : "Read full report"}
-          </button>
-        </div>
-        <nav className="field-chapters" aria-label="Briefing chapters">
-          {visibleChapters.map((c) => (
+        <div className="report-section-navigation" ref={navigationRef}>
+          <div className="report-reading-controls">
+            <div>
+              <h2>Report sections</h2>
+              <p role="status" aria-live="polite" aria-atomic="true">
+                {fullReport ? "All sections in one view" : `Viewing ${activeChapterLabel}`}
+              </p>
+            </div>
             <button
-              key={c.id}
-              aria-current={!fullReport && activeChapter === c.id ? "page" : undefined}
+              type="button"
+              className="field-button"
+              aria-pressed={fullReport}
               aria-controls="field-report-detail"
-              onClick={() => selectChapter(c.id)}
+              onClick={() => setFullReport((value) => !value)}
             >
-              <c.icon size={17} />
-              <strong>{c.label}</strong>
-              <ArrowRight size={14} />
+              <BookOpen size={16} aria-hidden="true" />
+              {fullReport ? "Back to chapters" : "Read full report"}
             </button>
-          ))}
-        </nav>
-        <div className="field-chapter-content" id="field-report-detail">
+          </div>
+          <label className="report-section-picker">
+            <span>Report section</span>
+            <select
+              value={fullReport ? "all" : activeChapter}
+              aria-controls="field-report-detail"
+              onChange={(event) => {
+                if (event.target.value === "all") setFullReport(true);
+                else selectChapter(event.target.value as Chapter);
+              }}
+            >
+              {visibleChapters.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              <option value="all">All sections</option>
+            </select>
+          </label>
+          <nav className="field-chapters" aria-label="Briefing chapters">
+            {visibleChapters.map((c) => (
+              <button
+                key={c.id}
+                aria-current={!fullReport && activeChapter === c.id ? "page" : undefined}
+                aria-controls="field-report-detail"
+                onClick={() => selectChapter(c.id)}
+              >
+                <c.icon size={17} aria-hidden="true" />
+                <strong>{c.label}</strong>
+                <ArrowRight size={14} aria-hidden="true" />
+              </button>
+            ))}
+          </nav>
+        </div>
+        <div className="field-chapter-content" id="field-report-detail" ref={detailRef}>
           <Suspense
             fallback={
               <p className="field-loading" role="status">
