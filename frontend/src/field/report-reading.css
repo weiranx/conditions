@@ -8,7 +8,7 @@
 .field-report .field-report-head {
   align-items: center;
   padding-bottom: 0;
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 .field-report .field-report-head h1 {
   font-family: var(--f-font);
@@ -16,7 +16,7 @@
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.035em;
-  margin: 10px 0 12px;
+  margin: 8px 0 10px;
 }
 .field-report-head .field-kicker {
   color: var(--f-accent);
@@ -33,7 +33,7 @@
 }
 .field-report .field-report-toolbar {
   gap: 16px;
-  padding: 0 0 22px;
+  padding: 0;
   margin-bottom: 0;
   align-items: center;
 }
@@ -48,7 +48,7 @@
 }
 .field-report .field-report-toolbar button,
 .report-actions-menu > summary {
-  min-height: 40px;
+  min-height: 44px;
   padding: 9px 12px;
   font-size: 13px;
   line-height: 1.3;
@@ -84,7 +84,7 @@
   padding: 7px;
   background: var(--f-paper);
   border: 1px solid var(--f-line);
-  border-radius: 14px;
+  border-radius: 10px;
   box-shadow: 0 12px 36px #18283d24;
 }
 .field-report .report-actions-popover button {
@@ -99,14 +99,14 @@
 .report-overview {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: 18px;
+  gap: 20px;
   align-items: start;
-  margin: 26px 0 32px;
+  margin: 24px 0 28px;
 }
 .field-report .field-verdict {
   grid-template-columns: 88px minmax(0, 1fr);
   grid-template-rows: 1fr auto;
-  padding: 30px;
+  padding: 24px;
   margin: 0;
   gap: 16px 22px;
   border-radius: var(--f-radius);
@@ -150,7 +150,7 @@
   font-family: inherit;
   font-size: 22px;
   line-height: 1.4;
-  font-weight: 550;
+  font-weight: 600;
   letter-spacing: -0.03em;
   margin: 12px 0 10px;
   text-wrap: pretty;
@@ -202,12 +202,12 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin-bottom: 13px;
+  margin-bottom: 16px;
 }
 .report-plan-summary > header h2 {
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 550;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.4;
 }
 .report-plan-summary > header > span:last-child {
@@ -243,7 +243,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--f-muted);
 }
 .report-summary-label svg {
@@ -265,7 +265,7 @@
   letter-spacing: -0.025em;
 }
 .report-summary-grid > button > span:last-child {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--f-muted);
   display: flex;
   align-items: center;
@@ -286,8 +286,8 @@
 }
 .report-reading-controls h2 {
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 550;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.4;
 }
 .report-reading-controls p {
@@ -305,8 +305,8 @@
   border-radius: 0;
   background: transparent;
   padding: 0;
-  gap: 12px;
-  margin: 0 0 28px;
+  gap: 4px;
+  margin: 0 0 24px;
   box-shadow: none;
 }
 .field-report .field-chapters button {
@@ -315,28 +315,31 @@
   min-height: 48px;
   padding: 10px 12px;
   border: 0;
-  border-radius: 0;
+  border-radius: 6px 6px 0 0;
   gap: 8px;
   font-size: 13px;
   white-space: nowrap;
 }
 .field-report .field-chapters button[aria-current="page"] {
-  background: transparent;
+  background: var(--f-wash);
   color: var(--f-green);
   box-shadow: inset 0 -2px var(--f-green);
+}
+.field-report .field-chapters button[aria-current="page"] strong {
+  font-weight: 600;
 }
 .field-report .field-chapters button > svg:last-child {
   display: none;
 }
 .field-report .field-chapter-heading {
-  margin: 0 0 21px;
-  padding-top: 12px;
+  margin: 0 0 20px;
+  padding: 0;
 }
 .field-report .field-chapter-heading h2 {
   font-family: inherit;
-  font-size: 25px;
+  font-size: 24px;
   letter-spacing: -0.025em;
-  font-weight: 550;
+  font-weight: 600;
   margin-bottom: 7px;
 }
 .field-report .field-chapter-heading p {
@@ -347,11 +350,12 @@
 }
 .field-report .field-panel {
   border-radius: var(--f-radius);
-  padding: 26px;
+  padding: 24px;
   box-shadow: none;
 }
 .field-report .field-panel h2 {
-  font-size: 23px;
+  font-size: 22px;
+  font-weight: 600;
   line-height: 1.3;
   letter-spacing: -0.025em;
 }
@@ -380,13 +384,13 @@
   font-weight: 500;
 }
 .field-report .field-detail-grid small {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.65;
   letter-spacing: 0;
   font-weight: 400;
 }
 .field-report .field-data-table {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }
@@ -411,16 +415,16 @@
 }
 .field-report .field-detail-disclosure > summary {
   color: var(--f-green);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.65;
-  min-height: 34px;
+  min-height: 44px;
   font-weight: 500;
 }
 .field-report .field-detail-disclosure[open] > summary {
   margin-bottom: 12px;
 }
 .field-report .field-record {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   margin: 0;
   background: var(--f-soft);
@@ -436,9 +440,10 @@
   border-top: 0;
 }
 .field-report .field-record dd {
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0;
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 .field-report .field-record summary {
   min-height: 28px;
@@ -457,7 +462,7 @@
   min-height: 36px;
 }
 .field-report .field-warning {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   padding: 15px 19px;
   border-radius: var(--f-radius);
@@ -485,9 +490,12 @@
   font-size: 32px;
 }
 .field-report .forecast-metrics small,
-.field-report .forecast-context,
+.field-report .forecast-context {
+  font-size: 13px;
+  line-height: 1.7;
+}
 .field-report .forecast-hour-status p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.7;
 }
 .field-report .forecast-timeline {
@@ -500,7 +508,7 @@
 }
 .field-report .forecast-timeline-heading select {
   font-size: 13px;
-  min-height: 40px;
+  min-height: 44px;
 }
 .field-report .forecast-hours {
   gap: 8px;
@@ -521,7 +529,7 @@
   font-size: 10px;
 }
 .field-report .field-window-summary {
-  padding: 20px 3px 26px;
+  padding: 20px 0 24px;
   margin-bottom: 0;
   align-items: start;
 }
@@ -531,12 +539,12 @@
   margin-bottom: 4px;
 }
 .field-report .field-window-summary p {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   color: var(--f-muted);
 }
 .field-report .report-conditions-heading {
-  margin: 34px 0 20px;
+  margin: 28px 0 20px;
 }
 .field-report .field-condition-grid {
   display: grid;
@@ -669,7 +677,7 @@
   .field-report .field-report-toolbar {
     align-items: flex-start;
     gap: 12px;
-    padding-bottom: 17px;
+    padding-bottom: 0;
   }
   .field-report .field-report-toolbar > span {
     font-size: 11px;
@@ -693,11 +701,11 @@
     width: 215px;
   }
   .report-overview {
-    gap: 14px;
-    margin: 18px 0 22px;
+    gap: 16px;
+    margin: 20px 0 24px;
   }
   .field-report .field-verdict {
-    padding: 21px;
+    padding: 20px;
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
@@ -737,7 +745,7 @@
     font-size: 23px;
   }
   .field-report .field-verdict-story p {
-    font-size: 13px;
+    font-size: 14px;
   }
   .field-report .field-verdict-aside {
     flex-wrap: wrap;
@@ -747,10 +755,10 @@
     font-size: 11px;
   }
   .report-plan-summary {
-    padding: 19px;
+    padding: 20px;
   }
   .report-plan-summary > header > span:last-child {
-    font-size: 11px;
+    font-size: 12px;
   }
   .report-summary-grid {
     grid-template-columns: 1fr 1fr;
@@ -765,15 +773,17 @@
     font-size: 19px;
   }
   .report-summary-grid > button > span:last-child {
-    font-size: 11px;
+    font-size: 12px;
   }
   .field-report .field-chapters {
-    margin-bottom: 23px;
+    margin-bottom: 24px;
+    gap: 4px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .field-report .field-chapters button {
     font-size: 12px;
     min-height: 44px;
+    border-radius: var(--f-control-radius);
   }
   .report-reading-controls {
     align-items: flex-start;
@@ -784,10 +794,10 @@
     font-size: 23px;
   }
   .field-report .field-chapter-heading p {
-    font-size: 13px;
+    font-size: 14px;
   }
   .field-report .field-panel {
-    padding: 21px;
+    padding: 20px;
   }
   .field-report .field-panel > p,
   .field-report .field-prose-list {
@@ -798,7 +808,7 @@
     gap: 14px;
   }
   .field-report .field-condition-grid .field-panel {
-    padding: 22px;
+    padding: 20px;
   }
   .field-report .field-record > div {
     grid-template-columns: minmax(85px, 0.7fr) minmax(0, 1fr);
@@ -837,16 +847,16 @@
     font-size: 16px;
   }
   .field-report .forecast-timeline-heading select {
-    font-size: 12px;
+    font-size: 16px;
   }
   .field-report .forecast-hours button {
     min-width: 82px;
   }
   .field-report .field-data-table {
-    font-size: 12px;
+    font-size: 13px;
   }
   .field-report .field-data-table th {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 @media (prefers-contrast: more) {
@@ -1311,7 +1321,7 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--f-line);
-  border-radius: 16px;
+  border-radius: 10px;
   margin: 20px 0;
   background: var(--f-line);
 }
@@ -1381,12 +1391,12 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
 }
 .report-decision-detail {
   margin-top: 13px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .report-decision-detail summary {
   cursor: pointer;
   color: var(--f-muted);
-  min-height: 30px;
+  min-height: 44px;
   align-content: center;
 }
 .departure-cards {
@@ -1398,7 +1408,7 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
 .departure-card {
   padding: 19px;
   border: 1px solid var(--f-line);
-  border-radius: 13px;
+  border-radius: 10px;
   display: flex;
   align-items: flex-start;
   flex-direction: column;
@@ -1500,7 +1510,7 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
   grid-column: 1 / -1;
   border-top: 1px solid var(--f-line);
   padding-top: 14px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -1550,11 +1560,11 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
   background: repeating-linear-gradient(135deg, var(--f-line) 0 3px, var(--f-paper) 3px 6px);
   border: 1px solid var(--f-muted);
 }
-.report-window-note { color: var(--f-muted); font-size: 12px; line-height: 1.6; }
+.report-window-note { color: var(--f-muted); font-size: 13px; line-height: 1.6; }
 .report-window-summary.needs-review > strong { color: var(--f-warn); }
 .report-score-heading { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
 .report-score-heading h2 { margin: 6px 0 10px; }
-.report-score-heading p, .report-score-method { color: var(--f-muted); font-size: 13px; line-height: 1.7; max-width: 64ch; }
+.report-score-heading p, .report-score-method { color: var(--f-muted); font-size: 14px; line-height: 1.7; max-width: 64ch; }
 .report-score-total { min-width: 95px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .report-score-total strong { font-size: 40px; font-weight: 500; letter-spacing: -0.04em; }
 .report-score-total > span { color: var(--f-muted); font-size: 13px; }
@@ -1570,7 +1580,7 @@ html[data-theme="dark"] .field-report .condition-card.is-comfort {
 .report-confidence-explanation > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
 .report-confidence-explanation h3 { font-size: 15px; font-weight: 550; }
 .report-confidence-explanation > div > strong { font-size: 22px; font-weight: 550; }
-.report-confidence-explanation p, .report-confidence-explanation li { font-size: 13px; line-height: 1.7; }
+.report-confidence-explanation p, .report-confidence-explanation li { font-size: 14px; line-height: 1.7; }
 .report-confidence-explanation > p { color: var(--f-muted); margin: 8px 0; }
 .report-confidence-explanation ul { padding-left: 18px; margin: 12px 0 0; }
 .report-confidence-explanation li + li { margin-top: 7px; }

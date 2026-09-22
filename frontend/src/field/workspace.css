@@ -15,7 +15,7 @@
 .field-workspace .field-workspace-heading {
   min-height: 0;
   margin: 0;
-  padding: 36px 0 28px;
+  padding: 32px 0 28px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -25,7 +25,7 @@
 
 .field-workspace .field-workspace-heading h1 {
   margin: 0 0 10px;
-  font: 600 clamp(28px, 3vw, 36px) / 1.2 var(--f-font);
+  font: 650 clamp(28px, 3vw, 36px) / 1.2 var(--f-font);
   letter-spacing: -.035em;
   text-wrap: balance;
 }
@@ -33,7 +33,7 @@
 .field-workspace .field-workspace-heading p {
   max-width: 58ch;
   color: var(--f-muted);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -44,7 +44,7 @@
 }
 
 .field-form-title h2 {
-  margin-top: 5px;
+  margin-top: 0;
   font-family: inherit;
   font-size: 20px;
   font-weight: 600;
@@ -85,6 +85,25 @@
   font-size: 10px;
   font-weight: 550;
 }
+.field-sidebar .field-sidebar-label {
+  color: var(--f-rail-muted);
+  letter-spacing: .1em;
+}
+.field-sidebar .field-sidebar-bottom {
+  border-color: var(--f-rail-line);
+}
+.field-sidebar button:hover {
+  background: var(--f-rail-hover);
+  color: var(--f-rail-ink);
+}
+.field-sidebar button[aria-current="page"] {
+  background: var(--f-rail-selected);
+  color: var(--f-rail-ink);
+  font-weight: 600;
+}
+.field-sidebar :is(button, a):focus-visible {
+  outline-color: var(--f-rail-ink);
+}
 .field-sidebar button > svg {
   flex-shrink: 0;
 }
@@ -96,6 +115,14 @@
 .field-topbar > span {
   color: var(--f-muted);
 }
+.field-topbar .field-breadcrumb-current {
+  color: var(--f-ink);
+  font-weight: 600;
+}
+.field-topbar button:hover {
+  border-color: var(--f-green);
+  background: var(--f-wash);
+}
 
 .field-workspace-bottom > section {
   padding: 26px;
@@ -104,8 +131,8 @@
 }
 .field-workspace-bottom h2 {
   font-family: inherit;
-  font-size: 16px;
-  font-weight: 550;
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.3;
   letter-spacing: -.02em;
   margin-bottom: 18px;
@@ -115,12 +142,14 @@
   color: var(--f-accent);
 }
 .field-quick-locations .field-location-row {
-  padding: 15px 0;
+  padding: 16px 8px;
   border-top: 1px solid var(--f-line);
   border-radius: 0;
   background: transparent;
 }
 .field-quick-locations .field-location-row > svg:first-child {
+  width: 20px;
+  height: 20px;
   padding: 0;
   background: transparent;
   border-radius: 0;
@@ -161,7 +190,7 @@
   justify-content: center;
   align-items: flex-start;
   gap: 8px;
-  padding-block: 28px;
+  padding-block: 24px;
   border-block: 1px solid var(--f-line);
   font-size: 13px;
 }
@@ -225,6 +254,10 @@
   box-shadow: none;
 }
 
+.field-plan-form {
+  container: plan / inline-size;
+}
+
 .field-plan-form .field-input-icon,
 .field-plan-form input:not([type="file"]),
 .field-plan-form select {
@@ -232,6 +265,7 @@
 }
 .field-plan-form .field-input-icon input {
   border: 0;
+  background: transparent;
 }
 .field-plan-form .field-input-icon:focus-within {
   border-color: var(--f-green);
@@ -252,7 +286,9 @@
 
 @media (max-width: 850px) {
   .field-sidebar nav button[aria-current="page"] {
-    box-shadow: inset 0 -2px var(--f-green);
+    box-shadow: inset 0 -2px var(--f-rail-ink);
+    background: var(--f-rail-selected);
+    color: var(--f-rail-ink);
   }
 }
 
@@ -419,33 +455,30 @@
 .field-plan-form .field-plan-schedule {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 16px 12px;
+  gap: 18px 14px;
 }
 .field-plan-form .field-plan-schedule > label {
   min-width: 0;
   grid-column: auto;
 }
 .field-plan-form .field-plan-schedule > .field-plan-duration {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  grid-column: auto;
+  display: block;
 }
 .field-plan-schedule .field-duration-control {
-  width: 132px;
-  margin-top: 0;
+  width: 100%;
+  margin-top: 8px;
 }
 .field-plan-form .field-plan-schedule > .field-plan-activity {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 .field-plan-form .field-form-divider {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 12px;
-  margin-bottom: 12px;
+  padding-top: 8px;
+  margin-bottom: 8px;
   min-height: 52px;
 }
 .field-form-divider .field-text-button {
@@ -463,13 +496,13 @@
   margin-top: 8px;
   border: 1px solid var(--f-line);
   border-radius: var(--f-control-radius);
-  background: var(--f-paper);
+  background: var(--f-soft);
 }
 .field-plan-form .field-duration-control input {
   border: 0;
   margin: 0;
   width: 100%;
-  min-height: 44px;
+  min-height: 46px;
   background: transparent;
 }
 .field-duration-unit {
@@ -486,6 +519,39 @@
 .field-duration-control input:focus-visible {
   outline: none;
 }
+/* Keep long activity names readable in narrow planner and comparison panels. */
+@container plan (max-width: 330px) {
+  .field-plan-form .field-plan-schedule > .field-plan-duration,
+  .field-plan-form .field-plan-schedule > .field-plan-activity {
+    grid-column: 1 / -1;
+  }
+  .field-plan-form .field-plan-schedule > .field-plan-duration {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .field-plan-schedule .field-duration-control {
+    width: 132px;
+    margin-top: 0;
+  }
+}
+@media screen and (max-width: 650px) {
+  .field-plan-form .field-plan-schedule > .field-plan-duration,
+  .field-plan-form .field-plan-schedule > .field-plan-activity {
+    grid-column: 1 / -1;
+  }
+  .field-plan-form .field-plan-schedule > .field-plan-duration {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .field-plan-schedule .field-duration-control {
+    width: 132px;
+    margin-top: 0;
+  }
+}
 @media (min-width: 1201px) {
   .field-planner-grid {
     grid-template-columns: 400px minmax(0, 1fr);
@@ -501,7 +567,7 @@
   min-height: 44px;
   padding: 10px 15px;
   border: 1px solid var(--f-line);
-  border-radius: 10px;
+  border-radius: var(--f-control-radius);
   background: var(--f-paper);
   color: var(--f-ink);
   font-size: 13px;
@@ -706,25 +772,31 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 0 18px 14px;
   border-bottom: 1px solid var(--f-line);
   background: var(--f-paper);
 }
 .field-map-tools > div {
   display: flex;
-  gap: 5px;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--f-line);
+  border-radius: var(--f-control-radius);
+  background: var(--f-soft);
 }
 .field-map-tools button {
   border: 0;
   background: transparent;
-  border-radius: 7px;
+  border-radius: 5px;
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: 12px;
   min-height: 36px;
 }
 .field-map-tools button[aria-pressed="true"] {
-  background: var(--f-wash);
+  background: var(--f-paper);
   color: var(--f-green);
+  box-shadow: 0 1px 3px #14241b18;
+  font-weight: 600;
 }
 .field-map-tools button:hover {
   background: var(--f-soft);

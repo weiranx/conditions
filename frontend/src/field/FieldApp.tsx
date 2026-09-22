@@ -280,7 +280,9 @@ export default function FieldApp() {
         <div className="field-content">
           <header className="field-topbar">
             <span>
-              BACKCOUNTRY / {pageLabel}
+              <span>Backcountry</span>
+              <span aria-hidden="true">/</span>
+              <span className="field-breadcrumb-current">{pageLabel}</span>
             </span>
             <div>
               <span>{dateLabel(w.todayDate)}</span>

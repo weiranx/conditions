@@ -6,35 +6,45 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --f-bg: #f7f8f6;
-  --f-paper: #ffffff;
-  --f-soft: #eff2ef;
-  --f-line: #d9dfda;
-  --f-ink: #252d28;
-  --f-muted: #626e65;
-  --f-green: #32604d;
+  --f-bg: #f5f4ef;
+  --f-paper: #fffefa;
+  --f-soft: #f0f1eb;
+  --f-line: #d9ddd3;
+  --f-ink: #24382c;
+  --f-muted: #626d60;
+  --f-green: #356047;
   --f-on: #ffffff;
-  --f-wash: #e8efe9;
+  --f-wash: #e8eee2;
+  --f-rail: #20382b;
+  --f-rail-ink: #f2f5ed;
+  --f-rail-muted: #bdcdbf;
+  --f-rail-hover: #2b4434;
+  --f-rail-selected: #38523f;
+  --f-rail-line: #405647;
   --f-warn: #8b501e;
   --f-warn-bg: #f8eddb;
   --f-red: #9e3d35;
   --f-serif: var(--f-font);
-  --f-primary: #294f40;
-  --f-primary-hover: #1e4033;
+  --f-primary: #2f583e;
+  --f-primary-hover: #234830;
   --f-primary-ink: #ffffff;
   --f-accent: var(--f-muted);
   --f-shadow: none;
-  --f-radius: 8px;
-  --f-control-radius: 6px;
+  --f-radius: 10px;
+  --f-control-radius: 8px;
   color-scheme: light;
 }
 html[data-theme="dark"] {
-  --f-bg: #171b19;
-  --f-paper: #1e2421;
-  --f-soft: #282f2a;
-  --f-line: #3c473f;
-  --f-ink: #edf1ec;
-  --f-muted: #aab7ac;
+  --f-bg: #191e1a;
+  --f-paper: #222a23;
+  --f-soft: #2b342c;
+  --f-line: #435044;
+  --f-ink: #eef2e9;
+  --f-muted: #b0bcad;
+  --f-rail: #14241b;
+  --f-rail-hover: #22392a;
+  --f-rail-selected: #314b37;
+  --f-rail-line: #354a3b;
   --f-green: #b2ceb5;
   --f-on: #18261e;
   --f-wash: #2c3d30;
@@ -1391,7 +1401,7 @@ em {
 .field-settings-layout {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
-  gap: 30px;
+  gap: 24px;
   align-items: start;
   padding-bottom: 35px;
 }
@@ -1412,8 +1422,8 @@ em {
 }
 .field-settings-panel > p,
 .field-account-panel > p {
-  font-size: 11px;
-  line-height: 1.9;
+  font-size: 13px;
+  line-height: 1.65;
   color: var(--f-muted);
   margin: 12px 0 22px;
 }
@@ -1426,16 +1436,17 @@ em {
   padding: 19px 0;
 }
 .field-setting-row h3 {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 550;
 }
 .field-setting-row p {
-  font-size: 10px;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--f-muted);
   margin-top: 4px;
 }
 .field-setting-row select {
-  max-width: 160px;
+  max-width: 180px;
   margin: 0;
   font-size: 11px;
 }
@@ -1499,7 +1510,7 @@ em {
   gap: 18px;
 }
 .field-account-panel form p {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--f-muted);
   line-height: 1.8;
 }
@@ -3154,11 +3165,13 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
 
 /* Shared application shell and controls. Theme tokens are defined above. */
 .field-app {
-  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
 }
 .field-sidebar {
-  padding: 28px 16px 20px;
-  background: color-mix(in srgb, var(--f-paper) 65%, var(--f-bg));
+  padding: 30px 18px 20px;
+  background: var(--f-rail);
+  color: var(--f-rail-ink);
+  border-color: var(--f-rail-line);
 }
 .field-brand {
   padding-inline: 6px;
@@ -3167,18 +3180,18 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
 .field-brand > span {
   width: 38px;
   height: 38px;
-  color: var(--f-green);
+  color: var(--f-rail-ink);
   border: 0;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
 }
 .field-brand strong {
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: -0.025em;
 }
 .field-brand small {
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.16em;
   margin-top: 1px;
 }
@@ -3194,14 +3207,15 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
 .field-sidebar nav button,
 .field-sidebar-bottom button {
   font-size: 13px;
+  color: var(--f-rail-muted);
   gap: 11px;
-  min-height: 44px;
+  min-height: 46px;
   border-radius: var(--f-control-radius);
   padding: 11px 12px;
 }
 .field-sidebar nav button[aria-current="page"] {
-  background: var(--f-wash);
-  color: var(--f-green);
+  background: var(--f-rail-selected);
+  color: var(--f-rail-ink);
   box-shadow: none;
   font-weight: 550;
 }
@@ -3225,9 +3239,9 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   padding-inline: 13px;
   min-height: 34px;
   border: 1px solid var(--f-line);
-  border-radius: 8px;
+  border-radius: var(--f-control-radius);
   background: var(--f-paper);
-  box-shadow: 0 1px 2px #20395804;
+  box-shadow: none;
 }
 #field-main {
   padding-inline: 36px;
@@ -3279,7 +3293,7 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   padding: 26px;
 }
 .field-form-title {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 .field-form-title h2 {
   font-size: 22px;
@@ -3294,24 +3308,24 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   background: var(--f-wash);
 }
 .field-plan-form label {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 550;
 }
 .field-plan-form input,
 .field-plan-form select,
 .field-account-panel input,
 .field-settings select {
-  min-height: 46px;
+  min-height: 48px;
   border-radius: var(--f-control-radius);
-  font-size: 13px;
-  background: var(--f-paper);
+  font-size: 14px;
+  background: var(--f-soft);
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
 }
 .field-input-icon {
   border-radius: var(--f-control-radius);
-  background: var(--f-paper);
+  background: var(--f-soft);
 }
 .field-input-icon input {
   background: transparent;
@@ -3382,8 +3396,8 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   flex-direction: column;
 }
 .field-planner-map > div:first-child {
-  padding: 20px 22px;
-  font-size: 11px;
+  padding: 18px 22px 12px;
+  font-size: 12px;
   align-items: center;
 }
 .field-planner-map .field-map {
@@ -3420,8 +3434,8 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   font-size: 9px;
 }
 .field-map-note {
-  padding: 17px 22px;
-  font-size: 11px;
+  padding: 16px 22px;
+  font-size: 12px;
   line-height: 1.7;
 }
 .field-workspace-bottom {
@@ -3456,7 +3470,7 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   border-radius: 9px;
 }
 .field-location-row small {
-  font-size: 11px;
+  font-size: 12px;
 }
 .field-recent-row {
   padding: 15px 8px;
@@ -3474,7 +3488,7 @@ html[data-theme="dark"] .field-hour-detail :is(p, .field-kicker, dt) {
   font-size: 12px;
 }
 .field-footer {
-  font-size: 9px;
+  font-size: 11px;
   padding: 26px 36px;
 }
 
