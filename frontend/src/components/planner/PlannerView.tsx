@@ -1,5 +1,5 @@
 import React from 'react';
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 import {
   Eye,
 } from 'lucide-react';
@@ -101,11 +101,11 @@ export interface PlannerViewProps {
   handleCopyLink: () => void;
 
   // Map
-  position: L.LatLng;
+  position: LatLngLiteral;
   activeBasemap: { url: string; attribution: string };
   preferences: UserPreferences;
   updatePreferences: (patch: Partial<UserPreferences>) => void;
-  updateObjectivePosition: (pos: L.LatLng, label?: string) => void;
+  updateObjectivePosition: (pos: LatLngLiteral, label?: string) => void;
   mapFocusNonce: number;
   mapStyle: string;
   setMapStyle: React.Dispatch<React.SetStateAction<MapStyle>>;

@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import L from "leaflet";
+import type { LatLngLiteral } from "leaflet";
 import { buildPlannedReportWeatherRows } from "../report-weather";
 import {
   DATE_FMT,
@@ -262,7 +262,7 @@ export function useWorkspace() {
     return {
       ...parsedInitialLinkState,
       view: "planner" as const,
-      position: new L.LatLng(plan.lat, plan.lon),
+      position: { lat: plan.lat, lng: plan.lon },
       hasObjective: true,
       objectiveName: plan.objectiveName,
       searchQuery: plan.searchQuery,
@@ -364,7 +364,7 @@ export function useWorkspace() {
     [accountUser?.id],
   );
   const activity: ActivityType = preferences.defaultActivity;
-  const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
+  const [position, setPosition] = useState<LatLngLiteral>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(
     initialLinkState.hasObjective,
   );
@@ -631,7 +631,7 @@ export function useWorkspace() {
   );
 
   const updateObjectivePosition = useCallback(
-    (nextPosition: L.LatLng, label?: string) => {
+    (nextPosition: LatLngLiteral, label?: string) => {
       clearWakeRetry();
       resetSavedReportTracking();
       setViewingHistoryReport(false);
@@ -728,7 +728,7 @@ export function useWorkspace() {
         route.fileName.replace(/\.gpx$/i, "") ||
         "Imported GPX route";
 
-      updateObjectivePosition(new L.LatLng(anchor.lat, anchor.lon), label);
+      updateObjectivePosition({ lat: anchor.lat, lng: anchor.lon }, label);
       setImportedGpxRoute(route);
       setSearchInputValue(label);
       setCommittedSearchQuery(label);
@@ -1171,7 +1171,7 @@ export function useWorkspace() {
   // same label + search-box sync that handleUseCurrentLocation already does below, so the
   // change is obvious rather than silent.
   const handleMapPositionChange = useCallback(
-    (nextPosition: L.LatLng) => {
+    (nextPosition: LatLngLiteral) => {
       const coordinateLabel = `${nextPosition.lat.toFixed(4)}, ${nextPosition.lng.toFixed(4)}`;
       updateObjectivePosition(nextPosition, "Dropped pin");
       setSearchInputValue(coordinateLabel);
@@ -1205,7 +1205,7 @@ export function useWorkspace() {
           return;
         }
 
-        const nextPosition = new L.LatLng(lat, lon);
+        const nextPosition = { lat, lng: lon };
         updateObjectivePosition(nextPosition, "Current location");
         const coordinateLabel = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
         setSearchInputValue(coordinateLabel);
@@ -1486,7 +1486,7 @@ export function useWorkspace() {
       historyReportPreferencesRef.current = reportPreferences;
       setPreferences(reportPreferences);
 
-      setPosition(new L.LatLng(report.plan.lat, report.plan.lon));
+      setPosition({ lat: report.plan.lat, lng: report.plan.lon });
       setMapFocusNonce((value) => value + 1);
       setHasObjective(true);
       setObjectiveName(report.plan.objectiveName);
@@ -1673,6 +1673,12 @@ export function useWorkspace() {
 
   const handleOpenObjectiveWatch = useCallback(
     (plan: PersistedReportPlan) => {
+      const lat = Number(plan.lat);
+      const lon = Number(plan.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        setError("This watched objective has invalid coordinates.");
+        return;
+      }
       sharedReportResolvedTokenRef.current = null;
       setSharedReportToken(null);
       setSharedReportLoading(false);
@@ -1682,7 +1688,7 @@ export function useWorkspace() {
       setPreviousSafetyData(null);
       setPastStartPrompt(null);
       updateObjectivePosition(
-        new L.LatLng(plan.lat, plan.lon),
+        { lat, lng: lon },
         plan.objectiveName || "Watched objective",
       );
       const searchLabel =
@@ -1702,6 +1708,7 @@ export function useWorkspace() {
       navigateToView("planner");
     },
     [
+      setError,
       setPendingAutoGenerate,
       clearLastLoadedKey,
       setActiveSuggestionIndex,

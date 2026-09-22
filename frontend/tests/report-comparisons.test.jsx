@@ -57,6 +57,90 @@ async function respondAll(requests, status = 200) {
   });
 }
 
+test('departure comparisons reuse the current report and fetch only added times on expansion', async t => {
+  const input = props();
+  const h = await mountHook(t, useStartTimeScenarios, input);
+  assert.deepEqual(h.requests.map(request => request.url.searchParams.get('start')), ['04:00', '08:00']);
+  await respondAll(h.requests);
+  assert.equal(h.current.comparison.scenarios.length, 3);
+  assert.equal(h.current.comparison.scenarios.find(scenario => scenario.startTime === plan.start).data, input.sourceReport);
+  const originalScenarios = new Map(h.current.comparison.scenarios.map(scenario => [scenario.startTime, scenario.data]));
+  await act(async () => h.current.generateMore());
+  assert.deepEqual(h.requests.slice(2).map(request => request.url.searchParams.get('start')), ['03:00', '05:00', '06:00', '09:00', '10:00']);
+  await respondAll(h.requests.slice(2));
+  assert.equal(h.current.comparison.scenarios.length, 8);
+  assert.equal(h.current.error, null);
+  for (const [startTime, data] of originalScenarios) {
+    assert.equal(h.current.comparison.scenarios.find(scenario => scenario.startTime === startTime).data, data);
+  }
+});
+
+for (const identity of ['date', 'location', 'start', 'duration', 'missing start', 'missing duration']) {
+  test(`the current departure is fetched when its source has ${identity} identity uncertainty`, async t => {
+    const input = props();
+    if (identity === 'date') input.sourceReport.forecast.selectedDate = '2026-09-05';
+    if (identity === 'location') input.sourceReport.location.lat += 1;
+    if (identity === 'start') input.sourceReport.forecast.requestedStartTime = '13:30';
+    if (identity === 'duration') input.sourceReport.rainfall.expected.travelWindowHours = 2;
+    if (identity === 'missing start') {
+      delete input.sourceReport.forecast.requestedStartTime;
+      input.sourceReport.forecast.selectedStartTime = `${plan.date}T07:00:00-07:00`;
+    }
+    if (identity === 'missing duration') delete input.sourceReport.rainfall.expected.travelWindowHours;
+    const h = await mountHook(t, useStartTimeScenarios, input);
+    assert.equal(h.requests.length, 3);
+    assert.ok(h.requests.some(request => request.url.searchParams.get('start') === plan.start));
+    await respondAll(h.requests);
+    assert.equal(h.current.comparison.scenarios.length, 3);
+    assert.notEqual(h.current.comparison.scenarios.find(scenario => scenario.startTime === plan.start).data, input.sourceReport);
+  });
+}
+
+for (const failure of ['request failure', 'mismatched response']) {
+  test(`expansion retries a departure after ${failure} and retains successful departures`, async t => {
+    const h = await mountHook(t, useStartTimeScenarios, props());
+    const failedRequest = h.requests[0];
+    await act(async () => {
+      const data = makeReport(Object.fromEntries(failedRequest.url.searchParams), 'clear');
+      if (failure === 'mismatched response') data.forecast.requestedStartTime = '23:00';
+      failedRequest.respond(data, failure === 'request failure' ? 400 : 200);
+    });
+    await respondAll(h.requests.slice(1));
+    assert.equal(h.current.comparison.scenarios.length, 2);
+    assert.match(h.current.error, /could not be evaluated/);
+    await act(async () => h.current.generateMore());
+    const added = h.requests.slice(2);
+    assert.equal(added.length, 6);
+    assert.ok(added.some(request => request.url.searchParams.get('start') === '04:00'));
+    assert.ok(added.every(request => request.url.searchParams.get('start') !== '08:00'));
+    await respondAll(added);
+    assert.equal(h.current.comparison.scenarios.length, 8);
+    assert.equal(h.current.error, null);
+  });
+}
+
+test('late aborted responses do not replace a departure fetched after expansion', async t => {
+  const h = await mountHook(t, useStartTimeScenarios, props());
+  const oldRequests = [...h.requests];
+  await act(async () => h.current.generateMore());
+  assert.ok(oldRequests.every(request => request.init.signal.aborted));
+  await respondAll(h.requests.slice(oldRequests.length));
+  const comparison = h.current.comparison;
+  await act(async () => {
+    for (const request of oldRequests) request.respond(makeReport(Object.fromEntries(request.url.searchParams), 'storm'));
+  });
+  assert.equal(h.current.comparison, comparison);
+  const count = h.requests.length;
+  const sourceReport = comparison.scenarios.find(scenario => scenario.startTime === plan.start).data;
+  const input = props({ sourceReport });
+  await h.render({ ...input, enabled: false });
+  await h.render(input);
+  assert.equal(h.requests.length, count);
+  for (const scenario of h.current.comparison.scenarios) {
+    assert.equal(scenario.data, comparison.scenarios.find(previous => previous.startTime === scenario.startTime).data);
+  }
+});
+
 test('previous-day comparisons preserve the selected local start and duration', async t => {
   const source = makeReport({ ...plan, start: '13:30', travel_window_hours: 7 }, 'clear');
   const input = { hasObjective: true, view: 'planner', safetyData: source, forecastDate: plan.date,
@@ -87,10 +171,11 @@ for (const [label, change] of [
   await respondAll(h.requests);
   assert.ok(h.current.comparison);
   const firstNewRender = h.renders.length;
+  const previousRequestCount = h.requests.length;
   await h.render({ ...input, ...change });
   assert.equal(h.renders[firstNewRender].comparison, null);
   assert.equal(h.current.loading, true);
-  await respondAll(h.requests.slice(3));
+  await respondAll(h.requests.slice(previousRequestCount));
   assert.ok(h.current.comparison);
 });
 
@@ -100,7 +185,7 @@ test('late departure responses cannot replace the current plan', async t => {
   const oldRequests = [...h.requests];
   await h.render({ ...input, forecastDate: '2026-09-07' });
   assert.ok(oldRequests.every(req => req.init.signal.aborted));
-  await respondAll(h.requests.slice(3));
+  await respondAll(h.requests.slice(oldRequests.length));
   const current = h.current.comparison;
   assert.equal(current.scenarios[0].data.forecast.selectedDate, '2026-09-07');
   await respondAll(oldRequests);
@@ -111,10 +196,11 @@ test('refresh, expansion, disabling, and failed requests never expose stale depa
   const input = props();
   const h = await mountHook(t, useStartTimeScenarios, input);
   await respondAll(h.requests);
+  const initialRequestCount = h.requests.length;
   await act(async () => h.current.generateMore());
   assert.equal(h.current.comparison, null);
   assert.equal(h.current.loading, true);
-  await respondAll(h.requests.slice(3));
+  await respondAll(h.requests.slice(initialRequestCount));
   assert.equal(h.current.comparison.scenarios.length, 8);
   const newInput = { ...input, sourceReport: { ...input.sourceReport } };
   const count = h.requests.length;
@@ -122,7 +208,8 @@ test('refresh, expansion, disabling, and failed requests never expose stale depa
   assert.equal(h.current.comparison, null);
   await respondAll(h.requests.slice(count), 400);
   assert.equal(h.current.loading, false);
-  assert.equal(h.current.comparison, null);
+  assert.equal(h.current.comparison.scenarios.length, 1);
+  assert.equal(h.current.comparison.scenarios[0].data, newInput.sourceReport);
   assert.match(h.current.error, /could not be evaluated/);
   await h.render({ ...newInput, enabled: false });
   assert.equal(h.current.comparison, null);
@@ -139,7 +226,7 @@ test('saved snapshots and a report being regenerated do not trigger comparisons'
   await h.render({ ...input, viewingHistoryReport: false, loading: true });
   assert.equal(h.requests.length, 0);
   await h.render({ ...input, viewingHistoryReport: false });
-  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests.length, 3);
 });
 
 test('report generation respects access checks and does not run on draft edits', async t => {
@@ -208,7 +295,7 @@ test('comparison coordination rejects a draft that no longer matches its report'
   await h.render({ ...input, preferences: { ...preferences, travelWindowHours: 3 } });
   assert.equal(h.requests.length, 0);
   await h.render(input);
-  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests.length, 3);
 });
 
 test('late previous-day responses do not overwrite a newly selected report', async t => {
@@ -415,12 +502,12 @@ test('comparison coordination uses the requested clock instead of the forecast p
   const input = { ...base, hasObjective: true, view: 'planner', safetyData: base.sourceReport,
     viewingHistoryReport: false, loading: false, startTimeComparisonsEnabled: true };
   const h = await mountHook(t, useReportComparisons, input);
-  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests.length, 3);
   assert.equal(h.requests[0].url.searchParams.get('start'), '13:30');
   await respondAll(h.requests);
   assert.equal(h.current.dayOverDay.startTime, '13:30');
   await h.render({ ...input, currentStartTime: '14:00' });
-  assert.equal(h.requests.length, 4, 'editing departure hides comparisons until a new report exists');
+  assert.equal(h.requests.length, 3, 'editing departure hides comparisons until a new report exists');
   assert.equal(h.current.dayOverDay, null);
   assert.equal(h.current.startTimeScenarios.comparison, null);
 });
@@ -495,7 +582,8 @@ for (const mismatch of ['date', 'location', 'start', 'duration']) {
       }
     });
     assert.equal(h.current.dayOverDay, null);
-    assert.equal(h.current.startTimeScenarios.comparison, null);
+    assert.equal(h.current.startTimeScenarios.comparison.scenarios.length, 1);
+    assert.equal(h.current.startTimeScenarios.comparison.scenarios[0].data, base.sourceReport);
     assert.match(h.current.startTimeScenarios.error, /could not be evaluated/);
   });
 }

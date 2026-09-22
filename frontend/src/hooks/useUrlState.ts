@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 import type { UserPreferences } from '../app/types';
 import { parseLinkState, buildShareQuery } from '../app/url-state';
 import { buildReportSectionHash, parseReportSectionHash } from '../app/report-sections';
@@ -122,7 +122,7 @@ export function useUrlState({
 export function useSyncUrlEffect(params: {
   view: AppView;
   hasObjective: boolean;
-  position: L.LatLng;
+  position: LatLngLiteral;
   objectiveName: string;
   committedSearchQuery: string;
   forecastDate: string;

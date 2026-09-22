@@ -34,7 +34,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
     accountKey: w.accountUserId || 'guest',
     onUsageUpdated: w.handleMultiDayUsageUpdated, onUsageLimitReached: w.handleMultiDayUsageLimitReached,
   });
-  const add = useCallback((position: L.LatLng, name?: string) => {
+  const add = useCallback((position: L.LatLngLiteral, name?: string) => {
     const objective = objectiveFrom({ lat: position.lat, lon: position.lng, name: name || `${position.lat}, ${position.lng}` });
     if (!objective || comparison.loading) return;
     if (state.objectives.some(o => o.id === objective.id)) { setFeedback('That location is already on your shortlist.'); return; }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AttributionControl, MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 import {
   Wind,
   Check,
@@ -34,10 +34,10 @@ import type { ParsedGpxRoute } from '../../lib/gpx';
 import type { RouteAnalysisResult } from '../../hooks/useRouteAnalysis';
 
 export interface PlannerMapSectionProps {
-  position: L.LatLng;
+  position: LatLngLiteral;
   activeBasemap: { url: string; attribution: string; maxNativeZoom?: number };
   preferences: UserPreferences;
-  updateObjectivePosition: (pos: L.LatLng, label?: string) => void;
+  updateObjectivePosition: (pos: LatLngLiteral, label?: string) => void;
   mapFocusNonce: number;
   mapStyle: string;
   setMapStyle: React.Dispatch<React.SetStateAction<MapStyle>>;

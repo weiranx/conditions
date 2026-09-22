@@ -1,9 +1,9 @@
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 import { buildApiUrl } from '../lib/api-client';
 import type { MapStyle } from './types';
 
 export const DATE_FMT = /^\d{4}-\d{2}-\d{2}$/;
-export const DEFAULT_CENTER = new L.LatLng(39.8283, -98.5795);
+export const DEFAULT_CENTER: LatLngLiteral = { lat: 39.8283, lng: -98.5795 };
 const localDataPrefix = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? 'summitsafe:mock:' : 'summitsafe:';
 export const USER_PREFERENCES_KEY = `${localDataPrefix}user-preferences:v1`;
 export const PERSISTED_REPORT_KEY = `${localDataPrefix}persisted-report:v1`;

@@ -26,7 +26,7 @@ export interface SupplementalSource {
   text?: string;
 }
 
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
 export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'snow-climbing' | 'ski-touring' | 'trail-running';
@@ -766,7 +766,7 @@ export interface LinkState {
   view: 'home' | 'planner' | 'watches' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
   sharedReportToken: string | null;
   activity: ActivityType;
-  position: L.LatLng;
+  position: LatLngLiteral;
   hasObjective: boolean;
   objectiveName: string;
   searchQuery: string;

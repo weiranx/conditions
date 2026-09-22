@@ -15,14 +15,14 @@ import {
   mergeSuggestionBuckets,
   filterSuggestionBucket,
 } from '../app/suggestion-storage';
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 
 const RECENT_SEARCHES_STORAGE_KEY = 'summitsafe-recent-searches';
 const MAX_RECENT_SEARCHES = 8;
 
 export interface UseSearchSuggestionsParams {
   initialSearchQuery: string;
-  updateObjectivePosition: (nextPosition: L.LatLng, label?: string) => void;
+  updateObjectivePosition: (nextPosition: LatLngLiteral, label?: string) => void;
 }
 
 export interface UseSearchSuggestionsReturn {
@@ -206,7 +206,7 @@ export function useSearchSuggestions({
       setCommittedSearchQuery(label);
       setShowSuggestions(false);
       setActiveSuggestionIndex(-1);
-      updateObjectivePosition(new L.LatLng(lat, lon), label);
+      updateObjectivePosition({ lat, lng: lon }, label);
       recordRecentSuggestion({ ...s, name: s.name, lat, lon, class: 'recent' });
     },
     [recordRecentSuggestion, setSearchQuery, updateObjectivePosition],
@@ -220,7 +220,7 @@ export function useSearchSuggestions({
       }
       setSearchQuery(value);
       setCommittedSearchQuery(value);
-      updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
+      updateObjectivePosition({ lat: parsed.lat, lng: parsed.lon }, 'Dropped pin');
       setShowSuggestions(false);
       setActiveSuggestionIndex(-1);
       recordRecentSuggestion({
@@ -245,7 +245,7 @@ export function useSearchSuggestions({
       if (parsed) {
         setSearchQuery(query);
         setCommittedSearchQuery(query);
-        updateObjectivePosition(new L.LatLng(parsed.lat, parsed.lon), 'Dropped pin');
+        updateObjectivePosition({ lat: parsed.lat, lng: parsed.lon }, 'Dropped pin');
         setShowSuggestions(false);
         setActiveSuggestionIndex(-1);
         recordRecentSuggestion({

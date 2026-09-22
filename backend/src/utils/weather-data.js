@@ -430,12 +430,15 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         throw lastError || new Error('Open-Meteo forecast failed');
       }
 
-      return { payload, payloadIssuedTime };
+      // Local-clock conversion depends only on the provider payload and its
+      // timezone. Reuse it across date/start comparisons while deriving the
+      // selected forecast separately for every report.
+      const hourlyTimes = payload.hourly.time.map((time) => zonedForecastIso(time, payload.timezone));
+      return { payload, payloadIssuedTime, hourlyTimes };
     });
-    const { payload, payloadIssuedTime } = cachedForecast;
+    const { payload, payloadIssuedTime, hourlyTimes } = cachedForecast;
 
     const hourly = payload?.hourly;
-    const hourlyTimes = Array.isArray(hourly?.time) ? hourly.time.map(time => zonedForecastIso(time, payload?.timezone)) : [];
     if (!hourlyTimes.length) {
       throw new Error('Open-Meteo forecast response did not include hourly time series.');
     }

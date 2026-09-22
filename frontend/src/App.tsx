@@ -330,7 +330,7 @@ function App() {
     if (preferenceSyncTimerRef.current) clearTimeout(preferenceSyncTimerRef.current);
   }, [accountUser?.id]);
   const activity: ActivityType = preferences.defaultActivity;
-  const [position, setPosition] = useState<L.LatLng>(initialLinkState.position);
+  const [position, setPosition] = useState<L.LatLngLiteral>(initialLinkState.position);
   const [hasObjective, setHasObjective] = useState(initialLinkState.hasObjective);
   const [objectiveName, setObjectiveName] = useState(initialLinkState.objectiveName);
   const objectiveNameRef = useRef(initialLinkState.objectiveName);
@@ -531,7 +531,7 @@ function App() {
     setTripStartTime(startTime);
   }, [setTripStartDate, setTripStartTime]);
 
-  const updateObjectivePosition = useCallback((nextPosition: L.LatLng, label?: string) => {
+  const updateObjectivePosition = useCallback((nextPosition: L.LatLngLiteral, label?: string) => {
     clearWakeRetry();
     resetSavedReportTracking();
     setViewingHistoryReport(false);
@@ -1021,7 +1021,7 @@ function App() {
   // the report silently reloads for a completely different, unrelated location. Mirror the
   // same label + search-box sync that handleUseCurrentLocation already does below, so the
   // change is obvious rather than silent.
-  const handleMapPositionChange = useCallback((nextPosition: L.LatLng) => {
+  const handleMapPositionChange = useCallback((nextPosition: L.LatLngLiteral) => {
     const coordinateLabel = `${nextPosition.lat.toFixed(4)}, ${nextPosition.lng.toFixed(4)}`;
     updateObjectivePosition(nextPosition, 'Dropped pin');
     setSearchInputValue(coordinateLabel);

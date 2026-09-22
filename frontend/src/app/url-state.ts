@@ -1,4 +1,4 @@
-import L from 'leaflet';
+import type { LatLngLiteral } from 'leaflet';
 import type { LinkState, UserPreferences } from './types';
 import { DEFAULT_CENTER } from './constants';
 import {
@@ -121,7 +121,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
                         : 'home',
     sharedReportToken,
     activity: normalizeActivity(params.get('activity') || preferences.defaultActivity),
-    position: hasCoords ? new L.LatLng(lat, lon) : DEFAULT_CENTER,
+    position: hasCoords ? { lat, lng: lon } : DEFAULT_CENTER,
     hasObjective: hasCoords,
     objectiveName,
     searchQuery,
@@ -137,7 +137,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
 export function buildShareQuery(state: {
   view: 'home' | 'planner' | 'watches' | 'history' | 'settings' | 'account' | 'status' | 'trip' | 'admin' | 'privacy' | 'terms' | 'not-found';
   hasObjective: boolean;
-  position: L.LatLng;
+  position: LatLngLiteral;
   objectiveName: string;
   searchQuery: string;
   forecastDate: string;

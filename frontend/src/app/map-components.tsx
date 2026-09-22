@@ -8,7 +8,7 @@ import L from 'leaflet';
 import type { ParsedGpxRoute } from '../lib/gpx';
 import type { RouteAnalysisResult } from '../hooks/useRouteAnalysis';
 
-export function LocationMarker({ position, setPosition, locked = false }: { position: L.LatLng; setPosition: (p: L.LatLng) => void; locked?: boolean }) {
+export function LocationMarker({ position, setPosition, locked = false }: { position: L.LatLngLiteral; setPosition: (p: L.LatLngLiteral) => void; locked?: boolean }) {
   const markerRef = useRef<L.Marker | null>(null);
   const eventHandlers = useMemo(
     () => ({
@@ -33,7 +33,7 @@ export function LocationMarker({ position, setPosition, locked = false }: { posi
   return <Marker draggable={!locked} eventHandlers={eventHandlers} position={position} ref={markerRef} />;
 }
 
-export function MapUpdater({ position, zoom, focusKey }: { position: L.LatLng; zoom: number; focusKey: number }) {
+export function MapUpdater({ position, zoom, focusKey }: { position: L.LatLngLiteral; zoom: number; focusKey: number }) {
   const map = useMap();
   void focusKey;
   useEffect(() => {

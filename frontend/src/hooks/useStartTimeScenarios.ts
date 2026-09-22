@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SafetyData, UserPreferences } from '../app/types';
 import { evaluateBackcountryDecision } from '../app/decision';
 import {
@@ -9,7 +9,7 @@ import {
   includeUserStartTimeScenario,
   type StartTimeScenario,
 } from '../app/start-time-scenarios';
-import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours } from '../app/comparison-request';
+import { comparisonReportMatches, comparisonRequestUrl, comparisonTravelHours, reportRequestedStartTime } from '../app/comparison-request';
 import { fetchApi } from '../lib/api-client';
 
 interface UseStartTimeScenariosParams {
@@ -35,6 +35,11 @@ export function useStartTimeScenarios({
     payloads: Array<{ startTime: string; data: SafetyData }>;
     error: string | null;
   } | null>(null);
+  const scenarioCache = useRef<{
+    planKey: string;
+    source: SafetyData | null;
+    payloads: Map<string, SafetyData>;
+  } | null>(null);
   const travelWindowHours = comparisonTravelHours(preferences.travelWindowHours);
   const planKey = comparisonRequestUrl(position.lat, position.lng, forecastDate, currentStartTime, travelWindowHours);
   const [expandedPlanKey, setExpandedPlanKey] = useState<string | null>(null);
@@ -51,15 +56,32 @@ export function useStartTimeScenarios({
   const currentResult = enabled && result?.key === requestKey && result.source === sourceReport ? result : null;
 
   useEffect(() => {
+    // Reuse validated departures only within this report generation and plan.
+    // Refreshing the report must fetch fresh alternatives even if its values match.
+    if (scenarioCache.current?.planKey !== planKey || scenarioCache.current.source !== sourceReport) {
+      scenarioCache.current = { planKey, source: sourceReport, payloads: new Map() };
+    }
     if (!enabled) {
       return;
     }
 
+    const cache = scenarioCache.current;
     const controller = new AbortController();
     let cancelled = false;
     (async () => {
       const results = await Promise.all(
         scenarioTimes.map(async (startTime) => {
+          const cached = cache.payloads.get(startTime);
+          if (cached) return { startTime, data: cached };
+          // Older snapshots may omit request identity. They remain fetchable,
+          // but cannot safely replace a request for a specific departure.
+          if (startTime === currentStartTime && sourceReport
+            && reportRequestedStartTime(sourceReport) === startTime
+            && sourceReport.rainfall?.expected?.travelWindowHours === travelWindowHours
+            && comparisonReportMatches(sourceReport, position.lat, position.lng, forecastDate, startTime, travelWindowHours)) {
+            cache.payloads.set(startTime, sourceReport);
+            return { startTime, data: sourceReport };
+          }
           try {
             const { response, payload } = await fetchApi(
               comparisonRequestUrl(position.lat, position.lng, forecastDate, startTime, travelWindowHours),
@@ -67,6 +89,8 @@ export function useStartTimeScenarios({
             );
             if (!response.ok || !payload || typeof payload !== 'object') return null;
             if (!comparisonReportMatches(payload as SafetyData, position.lat, position.lng, forecastDate, startTime, travelWindowHours)) return null;
+            if (cancelled) return null;
+            cache.payloads.set(startTime, payload as SafetyData);
             return { startTime, data: payload as SafetyData };
           } catch {
             return null;
@@ -90,6 +114,8 @@ export function useStartTimeScenarios({
     };
   }, [
     enabled,
+    planKey,
+    currentStartTime,
     forecastDate,
     position.lat,
     position.lng,

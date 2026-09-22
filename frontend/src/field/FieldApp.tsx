@@ -1,5 +1,4 @@
 import { lazy, Suspense, useRef, useState } from "react";
-import L from "leaflet";
 import {
   ArrowLeft,
   ArrowRight,
@@ -32,8 +31,6 @@ import {
 } from "../app/report-storage";
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
-import { Settings } from "./Settings";
-import { Library } from "./Library";
 import { Dialog } from "./Dialog";
 import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
@@ -47,6 +44,13 @@ const Legal = lazy(() => import("./Legal"));
 const Compare = lazy(() => import("./Compare"));
 const Operations = lazy(() => import("./Operations"));
 const Administration = lazy(() => import("./Administration"));
+
+const Settings = lazy(() =>
+  import("./Settings").then((module) => ({ default: module.Settings })),
+);
+const Library = lazy(() =>
+  import("./Library").then((module) => ({ default: module.Library })),
+);
 
 export default function FieldApp() {
   const w = useWorkspace();
@@ -199,7 +203,7 @@ export default function FieldApp() {
           plan={plan}
           workspace={w}
           onPick={(lat, lon) =>
-            w.handleMapPositionChange(new L.LatLng(lat, lon))
+            w.handleMapPositionChange({ lat, lng: lon })
           }
         />
       </Suspense>
@@ -450,22 +454,26 @@ export default function FieldApp() {
               </Suspense>
             )}
             {(w.view === "history" || w.view === "watches") && (
-              <Library
-                key={`${w.view}-${account.user?.id}`}
-                kind={w.view}
-                localReport={loadPersistedReport()}
-                onOpen={openReport}
-                workspace={w}
-                navigate={(page) => navigate(page as AppView)}
-              />
+              <Suspense fallback={<p role="status">Loading saved plans…</p>}>
+                <Library
+                  key={`${w.view}-${account.user?.id}`}
+                  kind={w.view}
+                  localReport={loadPersistedReport()}
+                  onOpen={openReport}
+                  workspace={w}
+                  navigate={(page) => navigate(page as AppView)}
+                />
+              </Suspense>
             )}
             {(w.view === "settings" || w.view === "account") && (
-              <Settings
-                preferences={w.preferences}
-                onChange={(preferences) => w.updatePreferences(preferences)}
-                accountOnly={w.view === "account"}
-                workspace={w}
-              />
+              <Suspense fallback={<p role="status">Loading preferences…</p>}>
+                <Settings
+                  preferences={w.preferences}
+                  onChange={(preferences) => w.updatePreferences(preferences)}
+                  accountOnly={w.view === "account"}
+                  workspace={w}
+                />
+              </Suspense>
             )}
             {(w.view === "privacy" || w.view === "terms") && (
               <Suspense fallback={<p>Loading policy…</p>}>
@@ -579,12 +587,14 @@ export default function FieldApp() {
                 account. Monthly limits reset automatically.
               </p>
             )}
-            <Settings
-              preferences={w.preferences}
-              onChange={(p) => w.updatePreferences(p)}
-              accountOnly
-              workspace={w}
-            />
+            <Suspense fallback={<p role="status">Loading account…</p>}>
+              <Settings
+                preferences={w.preferences}
+                onChange={(p) => w.updatePreferences(p)}
+                accountOnly
+                workspace={w}
+              />
+            </Suspense>
           </Dialog>
         )}
       </div>
