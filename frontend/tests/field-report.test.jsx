@@ -538,7 +538,8 @@ test('summary distinguishes missing hours from passing hours and highlights a re
   assert.match(html, /1 of 3 hours within limits/);
   assert.match(html, /1 of 3 hours have complete weather readings/);
   assert.match(html, /Return is after sunset/);
-  assert.match(html, /40 mph/);
+  assert.match(html, /15 mph/);
+  assert.doesNotMatch(html, /40 mph/);
   assert.equal((html.match(/class="is-missing"/g) || []).length, 2);
   assert.doesNotMatch(html, /NaN|Infinity/);
 });
@@ -562,6 +563,37 @@ test('report weather coverage preserves zero measurements and excludes hazards o
 
 function weatherData(trend) { return { weather: { trend } }; }
 const plannedWindow = { start: '06:00', date: '2026-09-06' };
+test('summary peak gust follows the planned interval including the final partial hour', () => {
+  const data = weatherData([5, 6, 7, 8, 9, 10].map(hour => ({ ...weatherHour,
+    time: `${hour}:00`, gust: hour === 5 || hour === 10 ? 100 : hour === 9 ? 65 : 5,
+  })));
+  data.weather.windGust = 95;
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:30' })} onOpen={() => {}} />);
+  assert.match(html, /<strong>65 mph<\/strong>/);
+  assert.doesNotMatch(html, /<strong>(?:5|95|100) mph<\/strong>/);
+});
+
+test('summary peak gust stays unavailable without measured gusts inside the plan', () => {
+  for (const trend of [[], [{ ...weatherHour, time: '05:00', gust: 90 }],
+    [{ ...weatherHour, time: '06:00', gust: null }]]) {
+    const data = weatherData(trend);
+    data.weather.windGust = 95;
+    const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00' })} onOpen={() => {}} />);
+    assert.match(html, /<strong>—<\/strong>/);
+    assert.doesNotMatch(html, /<strong>\d+ mph<\/strong>/);
+  }
+  const data = weatherData([{ ...weatherHour, time: '06:00', gust: 0 }]);
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00' })} onOpen={() => {}} />);
+  assert.match(html, /<strong>0 mph<\/strong>/);
+});
+
+test('summary keeps a known gust warning visible alongside missing coverage', () => {
+  const data = weatherData([{ ...weatherHour, time: '07:00', gust: 90, precipChance: null }]);
+  const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00' })} onOpen={() => {}} />);
+  assert.match(html, /0 of 3 hours have complete weather readings/);
+  assert.match(html, /First threshold concern at 07:00: gust 90/);
+});
+
 test('summary rejects complete forecast readings outside the planned window', () => {
   const data = weatherData([9, 10, 11].map(hour => ({ ...weatherHour, time: `${hour}:00` })));
   const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00' })} onOpen={() => {}} />);

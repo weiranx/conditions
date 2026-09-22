@@ -36,6 +36,19 @@ const normalizeReportCount = (value) => {
   return count;
 };
 
+const parseFiniteNumber = (value) => {
+  if ((typeof value !== 'number' && typeof value !== 'string')
+    || (typeof value === 'string' && !value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isValidCalendarDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+};
+
 const normalizeSavedReport = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new SavedReportValidationError('Provide a valid report snapshot.');
@@ -63,9 +76,7 @@ const mapSavedReportSummary = (row) => ({
   objectiveName: row.objective_name || row.title,
   forecastDate: row.forecast_date || null,
   alpineStartTime: row.alpine_start_time || null,
-  score: row.score !== null && row.score !== undefined && row.score !== '' && Number.isFinite(Number(row.score))
-    ? Number(row.score)
-    : null,
+  score: parseFiniteNumber(row.score),
   hasAi: Boolean(row.has_ai),
   generatedAt: normalizeTimestamp(row.generated_at),
   createdAt: normalizeTimestamp(row.created_at),
@@ -295,15 +306,16 @@ const registerSavedReportRoutes = ({
   app.get('/api/account/reports/comparison-baseline', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
-    const lat = Number(req.query.lat);
-    const lon = Number(req.query.lon);
-    const forecastDate = String(req.query.forecastDate || '');
-    const alpineStartTime = String(req.query.alpineStartTime || '');
+    const lat = parseFiniteNumber(req.query.lat);
+    const lon = parseFiniteNumber(req.query.lon);
+    const forecastDate = req.query.forecastDate;
+    const alpineStartTime = req.query.alpineStartTime;
     const excludeReportId = req.query.excludeReportId ? String(req.query.excludeReportId) : null;
     if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
       return res.status(400).json({ error: 'Provide valid objective coordinates.' });
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/u.test(forecastDate) || !/^\d{2}:\d{2}$/u.test(alpineStartTime)) {
+    if (!isValidCalendarDate(forecastDate)
+      || typeof alpineStartTime !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(alpineStartTime)) {
       return res.status(400).json({ error: 'Provide a valid forecast date and start time.' });
     }
     if (excludeReportId && !UUID_PATTERN.test(excludeReportId)) {

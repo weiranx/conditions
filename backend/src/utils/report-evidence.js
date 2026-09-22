@@ -10,8 +10,11 @@ const selectForecastIntervals = (rows, startIso, hours) => {
   const entries = (Array.isArray(rows) ? rows : []).map((row) => {
     const from = parseIsoTimeToMs(row?.timeIso);
     const explicitEnd = parseIsoTimeToMs(row?.endTimeIso);
-    return { row, from, to: explicitEnd ?? (from === null ? null : from + HOUR) };
-  }).filter(({ from, to }) => from !== null && to > from && from < end && to > start)
+    // Hourly providers can omit an end, but an invalid supplied end cannot
+    // establish coverage by silently becoming a full hour.
+    const hasExplicitEnd = row?.endTimeIso !== null && row?.endTimeIso !== undefined;
+    return { row, from, to: hasExplicitEnd ? explicitEnd : (from === null ? null : from + HOUR) };
+  }).filter(({ from, to }) => from !== null && to !== null && to > from && from < end && to > start)
     .sort((a, b) => b.from - a.from);
   const bounds = [...new Set([start, end, ...entries.flatMap(({ from, to }) => [Math.max(start, from), Math.min(end, to)])])].sort((a, b) => a - b);
   const result = [];

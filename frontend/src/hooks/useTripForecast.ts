@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { fetchApi } from '../lib/api-client';
 import type { UserPreferences } from '../app/types';
 import { buildTripForecastDays, type MultiDayTripForecastDay } from '../app/trip-forecast';
@@ -53,14 +53,34 @@ export function useTripForecast({
   const [tripStartDate, setTripStartDate] = useState(initialStartDate);
   const [tripStartTime, setTripStartTime] = useState(initialStartTime);
   const [tripDurationDays, setTripDurationDays] = useState(7);
-  const [tripForecastRows, setTripForecastRows] = useState<MultiDayTripForecastDay[]>([]);
+  const [tripForecastRows, setTripForecastRowsState] = useState<MultiDayTripForecastDay[]>([]);
   const [tripForecastLoading, setTripForecastLoading] = useState(false);
   const [tripForecastError, setTripForecastError] = useState<string | null>(null);
   const [tripForecastNote, setTripForecastNote] = useState<string | null>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
+
+  const cancelTripForecast = useCallback(() => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    setTripForecastLoading(false);
+  }, []);
+
+  // Callers clear these rows when the objective or trip inputs change. Invalidate
+  // the pending request too, so its late response cannot restore the old plan.
+  const setTripForecastRows = useCallback((rows: MultiDayTripForecastDay[]) => {
+    cancelTripForecast();
+    setTripForecastRowsState(rows);
+  }, [cancelTripForecast]);
+
+  useEffect(() => () => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+  }, []);
 
   const runTripForecast = useCallback(async () => {
+    cancelTripForecast();
     if (!hasObjective) {
-      setTripForecastRows([]);
+      setTripForecastRowsState([]);
       setTripForecastError('Select an objective first in Planner to run multi-day trip forecasts.');
       setTripForecastNote(null);
       return;
@@ -94,12 +114,14 @@ export function useTripForecast({
     }
 
     if (dates.length < 2) {
-      setTripForecastRows([]);
+      setTripForecastRowsState([]);
       setTripForecastError('At least two forecast dates are required. Choose an earlier start date.');
       setTripForecastNote(null);
       return;
     }
 
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
     setTripForecastLoading(true);
     setTripForecastError(null);
     setTripForecastNote(null);
@@ -107,6 +129,7 @@ export function useTripForecast({
     try {
       const { response, payload } = await fetchApi('/api/trip-forecasts', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': crypto.randomUUID(),
@@ -121,6 +144,7 @@ export function useTripForecast({
           objectiveName,
         }),
       });
+      if (activeRequestRef.current !== controller) return;
       const responseRecord = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : null;
@@ -135,7 +159,7 @@ export function useTripForecast({
         const message = typeof responseRecord?.error === 'string'
           ? responseRecord.error
           : 'Could not load multi-day forecasts right now. Try again in a moment.';
-        setTripForecastRows([]);
+        setTripForecastRowsState([]);
         setTripForecastError(message);
         setTripForecastNote(null);
         return;
@@ -144,13 +168,13 @@ export function useTripForecast({
       const rows = buildTripForecastDays(serverDays, dates, safeStartTime, safeTravelWindowHours, preferences);
       const failedCount = dates.length - rows.length;
       if (rows.length === 0) {
-        setTripForecastRows([]);
+        setTripForecastRowsState([]);
         setTripForecastError('Could not load multi-day forecasts right now. Try again in a moment.');
         setTripForecastNote(null);
         return;
       }
 
-      setTripForecastRows(rows);
+      setTripForecastRowsState(rows);
       if (failedCount > 0) {
         setTripForecastNote(`${failedCount} day(s) could not be loaded and were skipped.`);
       } else if (rows.length < safeDurationDays) {
@@ -159,11 +183,15 @@ export function useTripForecast({
         setTripForecastNote(null);
       }
     } catch {
-      setTripForecastRows([]);
+      if (activeRequestRef.current !== controller) return;
+      setTripForecastRowsState([]);
       setTripForecastError('Could not load multi-day forecasts right now. Try again in a moment.');
       setTripForecastNote(null);
     } finally {
-      setTripForecastLoading(false);
+      if (activeRequestRef.current === controller) {
+        activeRequestRef.current = null;
+        setTripForecastLoading(false);
+      }
     }
   }, [
     hasObjective,
@@ -178,6 +206,7 @@ export function useTripForecast({
     objectiveName,
     onUsageLimitReached,
     onUsageUpdated,
+    cancelTripForecast,
   ]);
 
   return {

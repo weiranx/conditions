@@ -12,22 +12,19 @@ export function ReportSummary({
 }) {
   const data = w.safetyData!;
   const flags = resolveReportFeatureFlags(data.featureFlags);
-  const gusts = (data.weather.trend || [])
-    .slice(0, w.travelWindowHours)
-    .map((hour) => hour.gust)
-    .filter((value) => typeof value === "number" && Number.isFinite(value));
-  const knownGusts = [...gusts, data.weather.windGust].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate });
+  const knownGusts = hours.map(hour => hour.gust).filter(Number.isFinite);
   const peakGust = knownGusts.length ? Math.max(...knownGusts) : null;
   const returnAfterSunset = flags.daylightTimeline && w.returnMinutes != null && w.sunsetMinutesForPlan != null
     && w.returnMinutes > w.sunsetMinutesForPlan;
-  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate });
   const completeHours = hours.filter((hour) => hour.complete);
   const withinLimits = completeHours.filter((hour) => hour.pass).length;
   const coverageMissing = completeHours.length < w.travelWindowHours;
-  const firstConcern = hours.find((hour) => !hour.pass);
-  const windowNote = coverageMissing ? `${completeHours.length} of ${w.travelWindowHours} hours have complete weather readings.`
-    : firstConcern ? `First threshold concern at ${w.formatClockForStyle(firstConcern.time, w.preferences.timeStyle)}: ${firstConcern.reasonSummary}`
-    : "Hourly thresholds only. Daylight, source freshness, and field warnings still apply.";
+  const firstConcern = hours.find((hour) => hour.failedRules.length > 0);
+  const windowNote = [
+    coverageMissing ? `${completeHours.length} of ${w.travelWindowHours} hours have complete weather readings.` : "",
+    firstConcern ? `First threshold concern at ${w.formatClockForStyle(firstConcern.time, w.preferences.timeStyle)}: ${firstConcern.failedRules.join(" • ")}` : "",
+  ].filter(Boolean).join(" ") || "Hourly thresholds only. Daylight, source freshness, and field warnings still apply.";
   const surface =
     data.terrainCondition?.label?.replace(
       /^[\p{Extended_Pictographic}\uFE0F\s]+/u,
@@ -47,7 +44,7 @@ export function ReportSummary({
           </span>
           <strong>{w.formatWindDisplay(peakGust)}</strong>
           <span>
-            Across the forecast window
+            In the planned travel window
             <ArrowUpRight size={14} />
           </span>
         </button>

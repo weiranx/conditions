@@ -25,6 +25,8 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
     });
     return {
       ...row,
+      // Do not let the legacy row's zero fallback become a measured calm gust.
+      gust: measured(point.gust) ? point.gust : NaN,
       complete,
       pass: complete && row.pass,
       failedRules: knownFailures.map(failure => failure.reason),
@@ -103,10 +105,11 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
     const coldest = contributing.reduce((a, b) => a.feelsLike < b.feelsLike ? a : b);
     const hottest = contributing.reduce((a, b) => a.feelsLike > b.feelsLike ? a : b);
     const thermal = coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest;
+    const knownGusts = contributing.map(row => row.gust).filter(Number.isFinite);
     return {
       ...thermal, time, complete, pass, failedRules, failedRuleLabels,
       wind: Math.max(...contributing.map(row => row.wind)),
-      gust: Math.max(...contributing.map(row => row.gust)),
+      gust: knownGusts.length ? Math.max(...knownGusts) : NaN,
       precipChance: Math.max(...contributing.map(row => row.precipChance)),
       lightningRisk: contributing.some(row => row.lightningRisk),
       condition: [...new Set(contributing.map(row => row.condition))].join(" / "),

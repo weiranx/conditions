@@ -14,7 +14,10 @@ function buildReportInsights(report) {
   const flags = report.featureFlags || {};
   const enabled = key => flags[key] !== false;
   const generated = stamp(report.generatedAt);
-  const start = stamp(buildPlannedStartIso({ selectedDate: report.forecast?.selectedDate, startClock: report.forecast?.requestedStartTime, referenceIso: report.forecast?.selectedStartTime || report.weather?.forecastStartTime }));
+  // A requested local clock needs a known offset. The general-purpose helper
+  // defaults to UTC without a reference, which cannot establish comparability.
+  const referenceIso = [report.forecast?.selectedStartTime, report.weather?.forecastStartTime].find(value => stamp(value) !== null);
+  const start = referenceIso ? stamp(buildPlannedStartIso({ selectedDate: report.forecast?.selectedDate, startClock: report.forecast?.requestedStartTime, referenceIso })) : null;
   const nearDeparture = generated !== null && start !== null && Math.abs(start - generated) <= 2 * HOUR;
   const fresh = (time, hours) => generated !== null && stamp(time) !== null && generated - stamp(time) >= -300000 && generated - stamp(time) <= hours * HOUR;
   const items = [];

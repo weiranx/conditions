@@ -177,6 +177,12 @@ export function useSafetyData({
         backendHealthy = false;
       }
 
+      // Clearing or replacing a retry also invalidates a health check that was
+      // already in flight, including one for the same objective and time.
+      if (wakeRetryStateRef.current !== state) {
+        return;
+      }
+
       if (backendHealthy) {
         clearWakeRetry();
         const fetchFn = fetchSafetyDataRef.current;
