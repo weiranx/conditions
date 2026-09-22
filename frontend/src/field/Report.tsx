@@ -340,7 +340,6 @@ export function Report({
         />
         <ReportSummary workspace={w} onOpen={openChapter} />
       </div>
-      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => openChapter("sources")} />
       <div className="field-report-layout">
         <div className="report-section-navigation" ref={navigationRef}>
           <div className="report-reading-controls">
@@ -473,6 +472,7 @@ export function Report({
           />
         </Suspense>
       )}
+      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => openChapter("sources")} />
       <p className="field-muted">
         Backcountry Conditions is a planning aid, not a safety guarantee. Verify
         official forecasts and make final decisions from field observations and
