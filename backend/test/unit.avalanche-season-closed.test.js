@@ -54,6 +54,10 @@ test.each([
   expect(process(reported(times)).coverageStatus).not.toBe('no_active_forecast');
 });
 
-test('a bulletin with no usable times is left alone', () => {
-  expect(process(reported({ publishedTime: null, expiresTime: null })).coverageStatus).toBe('reported');
+test.each([
+  ['no usable times', { publishedTime: null, expiresTime: null }],
+  ['an old publish time but no expiry', { publishedTime: isoDaysAgo(21), expiresTime: null }],
+  ['an old expiry but no publish time', { publishedTime: null, expiresTime: isoDaysAgo(20) }],
+])('a bulletin with %s is not declared off-season', (_label, times) => {
+  expect(process(reported(times)).coverageStatus).not.toBe('no_active_forecast');
 });

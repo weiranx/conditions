@@ -582,8 +582,9 @@ function markSeasonClosedIfLastBulletinIsOld(avalancheData, nowMs = Date.now()) 
   if (avalancheData?.coverageStatus !== 'reported') return avalancheData;
   const publishedMs = parseIsoTimeToMs(avalancheData.publishedTime);
   const expiresMs = parseIsoTimeToMsWithReference(avalancheData.expiresTime, avalancheData.publishedTime);
-  const lastCoveredMs = Math.max(publishedMs ?? -Infinity, expiresMs ?? -Infinity);
-  if (!Number.isFinite(lastCoveredMs) || nowMs - lastCoveredMs <= AVALANCHE_SEASON_CLOSED_AFTER_MS) {
+  // One missing timestamp may be a feed problem mid-season, so keep the stale handling.
+  if (publishedMs === null || expiresMs === null) return avalancheData;
+  if (nowMs - Math.max(publishedMs, expiresMs) <= AVALANCHE_SEASON_CLOSED_AFTER_MS) {
     return avalancheData;
   }
   const offSeason = createUnknownAvalancheData('no_active_forecast');
