@@ -6,9 +6,35 @@ import { dateTimeInputsFor } from "../app/date-time-inputs";
 
 const clockMinutes = (value: string) => parseTimeInputMinutes(value) ?? parseHourLabelToMinutes(value);
 
+// Shift each reading of a trend that starts at the planned start to the
+// party's estimated elevation for that hour.
+function adjustTrendForApproach(data: SafetyData, trend: WeatherTrendPoint[], approach: ApproachProfile, start: string) {
+  const startMinute = clockMinutes(start);
+  const sunriseMinutes = parseSolarClockMinutes(data.solar?.sunrise);
+  const sunsetMinutes = parseSolarClockMinutes(data.solar?.sunset);
+  return trend.map((point, index) => {
+    const pointMinute = clockMinutes(point.time);
+    let offset = index * 60;
+    if (startMinute !== null && pointMinute !== null) {
+      const diff = pointMinute - startMinute;
+      offset = Math.max(0, diff < -60 ? diff + 1440 : diff);
+    }
+    const elevationFt = highestElevationBetween(approach, offset, offset + 60);
+    return adjustPointToElevation(point, approach.objectiveElevationFt, elevationFt, {
+      minuteOfDay: startMinute !== null ? startMinute + offset : pointMinute ?? offset,
+      sunriseMinutes,
+      sunsetMinutes,
+    });
+  });
+}
+
 // Use the original readings for coverage: legacy travel rows normalize gaps to zero.
-export function buildReportWeatherRows(data: SafetyData, preferences: UserPreferences, hours: number) {
-  const trend = (data.weather.trend || []).slice(0, hours);
+// With an approach, readings are checked at the party's elevation for that hour.
+export function buildReportWeatherRows(data: SafetyData, preferences: UserPreferences, hours: number,
+  approach?: { profile: ApproachProfile; start: string } | null) {
+  const rawTrend = (data.weather.trend || []).slice(0, hours);
+  const adjustedTrend = approach ? adjustTrendForApproach(data, rawTrend, approach.profile, approach.start) : null;
+  const trend: WeatherTrendPoint[] = adjustedTrend ?? rawTrend;
   const rows = buildTravelWindowRows(trend, preferences, {
     snowDepthIn: data.terrainCondition?.signals?.maxSnowDepthIn
       ?? data.snowpack?.snotel?.snowDepthIn ?? data.snowpack?.nohrsc?.snowDepthIn ?? null,
@@ -24,8 +50,14 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
         : true;
       return known ? [{ label, reason: row.failedRules[index] }] : [];
     });
+    const adjusted = adjustedTrend?.[index];
     return {
       ...row,
+      ...(adjusted && approach ? {
+        elevationFt: adjusted.elevationFt,
+        approachAdjusted: adjusted.elevationFt < approach.profile.objectiveElevationFt,
+        inversionRisk: adjusted.inversionRisk,
+      } : {}),
       // Do not let the legacy row's zero fallback become a measured calm gust.
       gust: measured(point.gust) ? point.gust : NaN,
       complete,

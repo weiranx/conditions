@@ -129,6 +129,9 @@ export function evaluateBackcountryDecision(
   let peakGustHour = '';
   let peakPrecipHour = '';
   let coldestFeelsLikeHour = '';
+  // True when the coldest hour is cold because a valley inversion is likely on the approach.
+  const hasInversion = (point: WeatherTrendPoint) => Boolean((point as { inversionRisk?: boolean }).inversionRisk);
+  let coldestIsInversion = Boolean(approach) && hasInversion(startPoint);
   let stormSignalHour = '';
   const windowTrend = (data.weather.trend || [])
     .slice(0, preferences.travelWindowHours)
@@ -141,7 +144,7 @@ export function evaluateBackcountryDecision(
     const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
     const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
     const wfl = computeFeelsLikeF(wt, ww);
-    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; }
+    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
     if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
       hasStormSignal = true;
       stormSignalHour = wpt.time || '';
@@ -279,7 +282,7 @@ export function evaluateBackcountryDecision(
   if (feelsLike !== null && feelsLike >= 95) {
     addBlocker(`Apparent temperature reaches about ${formatTemp(feelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
   } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
-    addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
+    addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}${coldestIsInversion ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit` : ''}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }
 
   if (alertsRelevantForSelectedStart && hasActiveAlertCount && activeAlertCount > 0) {

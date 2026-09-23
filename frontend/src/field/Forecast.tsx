@@ -28,6 +28,8 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { PersistedReport } from "../app/report-storage";
+import { summarizeApproachHours, type ApproachProfile } from "../app/approach-elevation";
+import { computeFeelsLikeF } from "../app/planner-helpers";
 import type { WeatherTrendPoint } from "../app/types";
 import { buildTravelWindowInsights } from "../app/travel-window";
 import {
@@ -62,13 +64,33 @@ const METRICS: WeatherTrendMetricKey[] = ["temp", "feelsLike", "gust", "wind", "
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
-export function Forecast({ report }: { report: PersistedReport }) {
+export function Forecast({ report, approach = null, elevation = (ft) => `${ft} ft` }: {
+  report: PersistedReport;
+  /** When set, hours are checked at the party's estimated elevation, matching the brief. */
+  approach?: ApproachProfile | null;
+  elevation?: (ft: number) => string;
+}) {
   const [hour, setHour] = useState(0);
   const [metric, setMetric] = useState<WeatherTrendMetricKey>("temp");
   const flags = resolveReportFeatureFlags(report.safetyData.featureFlags);
   const preferences = report.preferences!;
   const trend = (report.safetyData.weather.trend || []).slice(0, report.plan.travelWindowHours);
-  const rows = buildReportWeatherRows(report.safetyData, preferences, report.plan.travelWindowHours);
+  const rows = buildReportWeatherRows(report.safetyData, preferences, report.plan.travelWindowHours,
+    approach ? { profile: approach, start: report.plan.alpineStartTime } : null);
+  const approachSummary = summarizeApproachHours(rows);
+  const nearFt = (ft: number | undefined) => elevation(Math.round((ft ?? 0) / 100) * 100);
+  // The values a row was actually checked against: the party's elevation on the approach.
+  const checkedPoint = (index: number) => {
+    const point = trend[index];
+    const row = rows[index];
+    if (!row?.approachAdjusted) return point;
+    return {
+      ...point,
+      temp: finite(point.temp) ? row.temp : point.temp,
+      wind: finite(point.wind) ? row.wind : point.wind,
+      gust: row.gust,
+    };
+  };
   const bluebird = bluebirdPercentage(trend);
   const insight = buildTravelWindowInsights(rows, preferences.timeStyle);
   const selectedIndex = Math.min(hour, Math.max(0, trend.length - 1));
@@ -137,7 +159,9 @@ export function Forecast({ report }: { report: PersistedReport }) {
 
   const appearance = weatherAppearance(selected);
   const tone = tones[selectedIndex];
-  const feelsLike = finite(selected.temp) && finite(selected.wind) ? selectedRow.feelsLike : null;
+  // The readout shows the objective forecast; approach hours add what was checked below it.
+  const feelsLike = finite(selected.temp) && finite(selected.wind) ? computeFeelsLikeF(selected.temp, selected.wind) : null;
+  const selectedAdjusted = Boolean(selectedRow?.approachAdjusted);
 
   return (
     <div className="forecast sky-weather">
@@ -152,6 +176,13 @@ export function Forecast({ report }: { report: PersistedReport }) {
         {(peakGust !== null || peakRain !== null) && ". "}
         {temperatures.length > 0 && <>The low is <strong>{temp(low)}</strong> at {clock(trend[lowAt].time)}. </>}
         <span className="sky-lead-note">{insight.conditionTrendSummary}</span>
+        {approachSummary && (
+          <span className="sky-lead-note">
+            {" "}{approachSummary.adjustedHours} h {approachSummary.adjustedHours === 1 ? "is" : "are"} checked at your
+            estimated elevation ({approachSummary.lowFt === approachSummary.highFt ? `~${nearFt(approachSummary.lowFt)}` : `~${nearFt(approachSummary.lowFt)}–${nearFt(approachSummary.highFt)}`}),
+            not the summit; the chart shows the summit forecast.
+          </span>
+        )}
       </p>
 
       <section className="sky-section" aria-labelledby="sky-weather-hours">
@@ -192,7 +223,7 @@ export function Forecast({ report }: { report: PersistedReport }) {
             <dl className="forecast-readout-grid">
               <div><dt>Feels like</dt><dd>{temp(feelsLike)}</dd></div>
               <div><dt>Wind</dt><dd>{wind(selected.wind)}</dd></div>
-              <div><dt>Gusts</dt><dd className={selectedRow.failedRuleLabels.includes("Gust above limit") ? "is-over" : undefined}>{wind(selected.gust)}</dd></div>
+              <div><dt>Gusts</dt><dd className={!selectedAdjusted && selectedRow.failedRuleLabels.includes("Gust above limit") ? "is-over" : undefined}>{wind(selected.gust)}</dd></div>
               <div><dt>Rain chance</dt><dd className={selectedRow.failedRuleLabels.includes("Precip above limit") ? "is-over" : undefined}>{selected.precipChance ?? "—"}%</dd></div>
               <div><dt>Cloud cover</dt><dd>{selected.cloudCover ?? "—"}%</dd></div>
               <div><dt>Humidity</dt><dd>{selected.humidity ?? "—"}%</dd></div>
@@ -200,6 +231,13 @@ export function Forecast({ report }: { report: PersistedReport }) {
               <div><dt>Pressure</dt><dd>{selected.pressure ?? "—"} hPa</dd></div>
               <div><dt>Wind from</dt><dd>{selected.windDirection || "—"}</dd></div>
             </dl>
+            {selectedAdjusted && (
+              <p className="forecast-readout-approach">
+                Checked near {nearFt(selectedRow.elevationFt)} on the approach: feels like{" "}
+                {finite(selected.temp) && finite(selected.wind) ? temp(selectedRow.feelsLike) : "—"}, gusts {wind(selectedRow.gust)}.
+                {selectedRow.inversionRisk ? " Clear, calm conditions: the trailhead may be colder than the summit." : ""}
+              </p>
+            )}
             <p className={`forecast-readout-status is-${tone}`}>
               {tone === "within" ? <Check size={16} aria-hidden="true" /> : tone === "over" ? <TriangleAlert size={16} aria-hidden="true" /> : <CircleHelp size={16} aria-hidden="true" />}
               <span>{selectedRow.pass ? "Within your weather limits at this hour." : plainReason(selectedRow.reasonSummary, selectedRow.failedRules)}</span>
@@ -228,7 +266,7 @@ export function Forecast({ report }: { report: PersistedReport }) {
             </thead>
             <tbody>
               {rows.map((row, index) => {
-                const point = trend[index];
+                const point = checkedPoint(index);
                 const t = tones[index];
                 const gustOver = row.failedRuleLabels.includes("Gust above limit");
                 const rainOver = row.failedRuleLabels.includes("Precip above limit");
@@ -237,9 +275,14 @@ export function Forecast({ report }: { report: PersistedReport }) {
                   <tr key={`${row.time}-${index}`} className={`is-${t}${index === selectedIndex ? " is-selected" : ""}`}>
                     <th scope="row">
                       <button type="button" aria-pressed={index === selectedIndex} onClick={() => setHour(index)}
-                        aria-label={`${clock(row.time)}: ${row.pass ? "within thresholds" : row.reasonSummary}`}>
+                        aria-label={`${clock(row.time)}${row.approachAdjusted ? `, checked near ${nearFt(row.elevationFt)}` : ""}: ${row.pass ? "within thresholds" : row.reasonSummary}`}>
                         {clock(row.time)}
                       </button>
+                      {row.approachAdjusted && (
+                        <small className="sky-approach-tag" aria-hidden="true">
+                          ~{nearFt(row.elevationFt)}{row.inversionRisk ? " · inversion" : ""}
+                        </small>
+                      )}
                     </th>
                     <td className="is-sky"><WeatherSymbol point={point} size={18} /></td>
                     <td className={`is-num${finite(point.temp) && point.temp <= 32 ? " is-cold" : ""}`}>{temp(point.temp)}</td>

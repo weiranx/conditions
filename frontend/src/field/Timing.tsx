@@ -8,6 +8,7 @@ import { buildPlannedReportWeatherRows } from "./report-weather";
 import { buildSkyHours, isOverHour, type SkyHour } from "./sky/sky-model";
 import { StartTimeline, type TimelineRow } from "./sky/StartTimeline";
 import { durationLabel } from "./sky/status";
+import { summarizeApproachHours, type ApproachSummary } from "../app/approach-elevation";
 
 const LEVEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
@@ -21,6 +22,11 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
   const clock = (minute: number) =>
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   const clockText = (value: string) => w.formatClockForStyle(value, w.preferences.timeStyle);
+  const approachRange = ({ lowFt, highFt }: ApproachSummary) => {
+    const low = Math.round(lowFt / 100) * 100;
+    const high = Math.round(highFt / 100) * 100;
+    return low === high ? `~${w.formatElevationDisplay(low)}` : `~${w.formatElevationDisplay(low)}–${w.formatElevationDisplay(high)}`;
+  };
   const applyStart = (startTime: string) => {
     if (w.handleEditPlan()) w.setAlpineStartTime(startTime);
   };
@@ -33,6 +39,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
     const over = rowHours.filter(isOverHour).length;
     const missing = rowHours.filter((h) => h.tone === "missing").length;
     const dark = rowHours.filter((h) => h.night).length;
+    const approach = summarizeApproachHours(rowHours);
     const daylightText = opts.daylight === null ? "daylight at return unknown"
       : opts.daylight < 0 ? `back ${duration(-opts.daylight)} after sunset` : `back ${duration(opts.daylight)} before sunset`;
     return {
@@ -49,7 +56,10 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
         <span>
           {opts.decision && <strong className="sky-timeline-level">{LEVEL[opts.decision] || opts.decision}</strong>}
           <strong>{over > 0 ? `${over} h over your limits` : missing > 0 ? `${missing} h with incomplete readings` : "Within your limits"}</strong>
-          <small>{daylightText}{dark > 0 ? ` · ${dark} h in the dark` : ""}</small>
+          <small>
+            {daylightText}{dark > 0 ? ` · ${dark} h in the dark` : ""}
+            {approach ? ` · ${approach.adjustedHours} h checked at ${approachRange(approach)}` : ""}
+          </small>
         </span>
       ),
       action: !opts.current && !w.viewingHistoryReport ? (

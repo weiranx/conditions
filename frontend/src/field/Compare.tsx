@@ -413,7 +413,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
           <h2 className="field-subtitle">
             Hourly detail · {dateLabel(selected.date)}
           </h2>
-          <Forecast key={selected.date} report={snapshot} />
+          <Forecast key={selected.date} report={snapshot} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
         </section>
       )}
       {days.length > 0 && available.reportChat && (

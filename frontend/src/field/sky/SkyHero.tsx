@@ -15,7 +15,7 @@ type Formatters = {
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level, headline, reason, bridge, actions, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level, headline, reason, bridge, note, actions, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -26,6 +26,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
   headline: string;
   reason: string;
   bridge?: string;
+  /** Extra context under the reason, e.g. hours checked below the summit. */
+  note?: ReactNode;
   actions?: ReactNode;
   format: Formatters;
 }) {
@@ -106,7 +108,10 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
     `${format.clock(h.minute)}: ${Number.isFinite(h.temp) ? format.temp(h.temp) : "temperature unavailable"}, ` +
     `gust ${Number.isFinite(h.gust) ? format.wind(h.gust) : "unavailable"}, ` +
     `rain chance ${Number.isFinite(h.precipChance) ? `${h.precipChance}%` : "unavailable"}` +
-    (isOverHour(h) ? `, over your limits: ${h.failedRules.map(plainRule).join("; ")}` : h.tone === "missing" ? ", readings incomplete" : ", within your limits");
+    (isOverHour(h) ? `, over your limits: ${h.failedRules.map(plainRule).join("; ")}` : h.tone === "missing" ? ", readings incomplete" : ", within your limits") +
+    (h.approachAdjusted && Number.isFinite(h.elevationFt)
+      ? `, checked near ${format.elevation ? format.elevation(h.elevationFt as number) : `${h.elevationFt} ft`}${h.inversionRisk ? " with a possible valley inversion" : ""}`
+      : "");
   const callout = overRuns.length === 1
     ? `Outside your limits · ${spanLabel(hours, overRuns[0], format.clock)}`
     : overRuns.length > 1 ? `${overRuns.length} periods outside your limits`
@@ -220,6 +225,9 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
                     fill={over ? `url(#${gradientId}p)` : h.tone === "missing" ? "none" : "rgba(255,255,255,.22)"}
                     stroke={over ? "#FF9A4D" : h.tone === "missing" ? "rgba(255,255,255,.6)" : "none"}
                     strokeWidth="1.2" strokeDasharray={h.tone === "missing" && !over ? "3 3" : undefined} />
+                  {h.approachAdjusted && (
+                    <rect className="sky-approach-mark" x={x(i) + 1.5} y={stripY + 12} width={Math.max(1, cw - 3)} height="2" rx="1" fill="rgba(255,255,255,.6)" />
+                  )}
                   {showTick && <text x={x(i + 0.5)} y={stripY + 32} textAnchor="middle" className="sky-temp" fill={cold ? "#9fd0ff" : "#fff"}>
                     {Number.isFinite(h.temp) ? `${Math.round(h.temp)}°` : "—"}
                   </text>}
@@ -253,6 +261,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
         <h2 id="field-verdict-title">{headline}</h2>
         <p className="sky-lede">{reason}</p>
         {bridge && <p className="sky-lede sky-bridge">{bridge}</p>}
+        {note}
         </div>
         {hour && (
           <div className="sky-readout" aria-live="polite">

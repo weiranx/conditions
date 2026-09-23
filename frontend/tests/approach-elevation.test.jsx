@@ -11,6 +11,14 @@ import { buildPlannedReportWeatherRows } from '../src/field/report-weather';
 import { evaluateBackcountryDecision } from '../src/app/decision';
 import { getDefaultUserPreferences, normalizeUserPreferences } from '../src/app/preferences';
 import { buildShareQuery } from '../src/app/url-state';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { buildReportWeatherRows } from '../src/field/report-weather';
+import { buildSkyHours } from '../src/field/sky/sky-model';
+import { ApproachNote } from '../src/field/sky/ApproachNote';
+import { DayStrip } from '../src/field/sky/DayStrip';
+import { Forecast } from '../src/field/Forecast';
+import { buildPersistedReport } from '../src/app/report-storage';
+import { summarizeApproachHours } from '../src/app/approach-elevation';
 import { parsePersistedReport } from '../src/app/report-storage';
 
 const timing = { paceMinutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 0 };
@@ -195,4 +203,96 @@ test('a typed trailhead travels with share links and saved plans, and is omitted
   });
   assert.equal(saved({ trailheadElevationInput: '7200' })?.plan.trailheadElevationInput, '7200');
   assert.equal(saved({})?.plan.trailheadElevationInput, undefined);
+});
+
+const clock = (minute) => {
+  const h = Math.floor((((minute % 1440) + 1440) % 1440) / 60);
+  return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
+};
+const elevation = (ft) => `${ft.toLocaleString('en-US')} ft`;
+
+function approachScenario() {
+  // Clear and calm before dawn (inversion), then a gusty overcast summit.
+  const trend = [
+    { time: '05:00', temp: 20, wind: 4, gust: 8, precipChance: 0, cloudCover: 5, condition: 'Clear' },
+    { ...hour, time: '06:00' },
+    { ...hour, time: '07:00' },
+    { ...hour, time: '08:00' },
+  ];
+  const data = safetyData(trend);
+  const approach = buildApproachProfile({ objectiveElevationFt: 11000, elevationBands: bands, timing });
+  const plan = { start: '05:00', date: '2026-09-23', approach };
+  const rows = buildPlannedReportWeatherRows(data, preferences, 4, plan);
+  const hours = buildSkyHours(rows, { start: '05:00', sunriseMinutes: 390, sunsetMinutes: 1170 });
+  return { data, approach, rows, hours };
+}
+
+test('the approach summary lists adjusted spans, elevation range and inversion hours', () => {
+  const { hours } = approachScenario();
+  const summary = summarizeApproachHours(hours);
+  assert.equal(summary.adjustedHours, 2);
+  assert.deepEqual(summary.adjustedRuns, [{ start: 0, end: 1 }]);
+  assert.deepEqual(summary.inversionRuns, [{ start: 0, end: 0 }]);
+  assert.equal(summarizeApproachHours([{ approachAdjusted: false, elevationFt: 11000 }]), null);
+});
+
+test('the brief note says which hours were checked below the summit and how to change it', () => {
+  const { hours } = approachScenario();
+  const html = renderToStaticMarkup(
+    <ApproachNote hours={hours} source="estimated" clock={clock} elevation={elevation} onEdit={() => {}} />,
+  );
+  assert.match(html, /5 AM–7 AM checked at your estimated elevation/);
+  assert.match(html, /~9,500 ft–10,900 ft/);
+  assert.match(html, /trailhead estimated/);
+  assert.match(html, /Set trailhead/);
+  assert.match(html, /Clear, calm conditions: 5 AM–6 AM may be colder at the trailhead than at the summit/);
+
+  const manual = renderToStaticMarkup(<ApproachNote hours={hours} source="manual" clock={clock} elevation={elevation} onEdit={() => {}} />);
+  assert.match(manual, /Edit approach/);
+  assert.doesNotMatch(renderToStaticMarkup(<ApproachNote hours={hours} source="gpx" clock={clock} elevation={elevation} />), /<button/);
+  const summit = buildSkyHours(buildPlannedReportWeatherRows(safetyData([{ ...hour, time: '05:00' }]), preferences, 1, { start: '05:00', date: '2026-09-23' }),
+    { start: '05:00', sunriseMinutes: 390, sunsetMinutes: 1170 });
+  assert.equal(renderToStaticMarkup(<ApproachNote hours={summit} source="estimated" clock={clock} elevation={elevation} />), '');
+});
+
+test('the day strip marks approach hours visually and for screen readers', () => {
+  const { hours } = approachScenario();
+  const html = renderToStaticMarkup(<DayStrip hours={hours} clock={clock} elevation={elevation} />);
+  assert.equal((html.match(/is-approach/g) || []).length, 2);
+  assert.match(html, /5 AM–7 AM checked at your estimated elevation, not the summit/);
+  assert.match(html, /title="5 AM · checked near 9,500 ft"/);
+});
+
+test('the Forecast chapter checks the same hours as the brief and tags them', () => {
+  const { data, approach, rows } = approachScenario();
+  const forecastRows = buildReportWeatherRows(data, preferences, 4, { profile: approach, start: '05:00' });
+  assert.deepEqual(forecastRows.map((row) => row.pass), rows.map((row) => row.pass));
+  assert.deepEqual(forecastRows.map((row) => row.elevationFt), rows.map((row) => row.elevationFt));
+
+  const report = buildPersistedReport(
+    { lat: 40, lon: -105, objectiveName: 'Peak', searchQuery: '', forecastDate: '2026-09-23', alpineStartTime: '05:00', travelWindowHours: 4, targetElevationInput: '' },
+    { ...data, location: { lat: 40, lon: -105 }, capabilities: { ai: false } },
+    { aiBriefNarrative: null, snowVisionAnalysis: null, snowVisionImage: null },
+    { preferences },
+  );
+  const adjusted = renderToStaticMarkup(<Forecast report={report} approach={approach} elevation={elevation} />);
+  assert.match(adjusted, /3 of 4 hours<\/strong> cross your limits, starting 6:00 AM/);
+  assert.match(adjusted, /2 h are checked at your[\s\S]*not the summit; the chart shows the summit forecast/);
+  assert.match(adjusted, /sky-approach-tag[^>]*>~9,500 ft · inversion/);
+  assert.match(adjusted, /Checked near 9,500 ft on the approach/);
+
+  const summit = renderToStaticMarkup(<Forecast report={report} elevation={elevation} />);
+  assert.match(summit, /3 of 4 hours<\/strong> cross your limits/);
+  assert.doesNotMatch(summit, /checked at your/);
+  assert.doesNotMatch(summit, /sky-approach-tag/);
+});
+
+test('a cold caution caused by a likely inversion says so', () => {
+  const trend = [{ time: '4 AM', temp: 8, wind: 2, gust: 5, precipChance: 0, cloudCover: 5, condition: 'Clear' }];
+  const data = safetyData(trend);
+  const approach = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, timing });
+  const caution = (decision) => decision.cautions.find((item) => /Apparent temperature/.test(item)) || '';
+  assert.equal(caution(evaluateBackcountryDecision(data, '04:00', preferences)), '');
+  assert.match(caution(evaluateBackcountryDecision(data, '04:00', preferences, { approach })),
+    /near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit/);
 });

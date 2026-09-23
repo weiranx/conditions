@@ -36,6 +36,8 @@ html[data-theme="dark"] .sky-timeline-hour.is-within { background: #6d7772; }
 .sky-timeline-hour.is-night { background: #26304a; }
 html[data-theme="dark"] .sky-timeline-hour.is-night { background: #56648a; }
 .sky-timeline-hour.is-over { background: repeating-linear-gradient(-45deg, var(--sky-caution) 0 2px, transparent 2px 5px), var(--sky-caution-fill); box-shadow: inset 0 0 0 1.5px var(--sky-caution); }
+/* Checked below the summit: a baseline under the tile. */
+.sky-timeline-hour.is-approach::after { content: ""; position: absolute; left: 1px; right: 1px; bottom: -4px; height: 2px; border-radius: 1px; background: var(--sky-secondary); }
 .sky-timeline-hour.is-missing { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sky-missing); border-style: dashed; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; box-shadow: none; }
 .sky-timeline-summit { top: -2px; width: 0; height: 0; margin-left: -6px; border: 6px solid transparent; border-bottom: 9px solid var(--sky-label); border-top: 0; }
 .sky-timeline-summit.is-legend { position: static; display: inline-block; margin: 0 2px 0 0; }

@@ -1,16 +1,24 @@
+import { summarizeApproachHours } from "../../app/approach-elevation";
 import { isOverHour, skyRuns, spanLabel, type SkyHour } from "./sky-model";
 
 /** A compact version of the Brief's sky, one tile per planned hour. */
-export function DayStrip({ hours, clock }: { hours: SkyHour[]; clock: (minute: number) => string }) {
+export function DayStrip({ hours, clock, elevation = (ft) => `${ft} ft` }: {
+  hours: SkyHour[];
+  clock: (minute: number) => string;
+  elevation?: (ft: number) => string;
+}) {
   if (!hours.length) return null;
   const over = skyRuns(hours).filter((run) => run.tone === "over");
+  const approach = summarizeApproachHours(hours);
   const label = `Your day, ${clock(hours[0].minute)} to ${clock(hours[hours.length - 1].minute + 60)}. ` +
-    (over.length ? `Over your limits ${over.map((run) => spanLabel(hours, run, clock)).join(" and ")}.` : "No hours over your limits.");
+    (over.length ? `Over your limits ${over.map((run) => spanLabel(hours, run, clock)).join(" and ")}.` : "No hours over your limits.") +
+    (approach ? ` ${approach.adjustedRuns.map((run) => spanLabel(hours, run, clock)).join(" and ")} checked at your estimated elevation, not the summit.` : "");
   return (
     <div className="sky-daystrip" role="img" aria-label={label}>
       {hours.map((hour) => (
         <i key={hour.index}
-          className={isOverHour(hour) ? "is-over" : hour.tone === "missing" ? "is-missing" : undefined}
+          className={[isOverHour(hour) ? "is-over" : hour.tone === "missing" ? "is-missing" : "", hour.approachAdjusted ? "is-approach" : ""].filter(Boolean).join(" ") || undefined}
+          title={hour.approachAdjusted && Number.isFinite(hour.elevationFt) ? `${clock(hour.minute)} · checked near ${elevation(Math.round((hour.elevationFt as number) / 100) * 100)}` : undefined}
           style={{ ["--z" as string]: hour.zenith, ["--h" as string]: hour.horizon }} />
       ))}
       <span>{clock(hours[0].minute)}</span>

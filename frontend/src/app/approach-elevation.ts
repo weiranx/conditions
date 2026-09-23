@@ -210,3 +210,51 @@ export function adjustPointToElevation(
     inversionRisk,
   };
 }
+
+export interface ApproachHourFlags {
+  approachAdjusted?: boolean;
+  elevationFt?: number;
+  inversionRisk?: boolean;
+}
+
+export interface ApproachSummary {
+  /** Number of hours scored below the objective. */
+  adjustedHours: number;
+  lowFt: number;
+  highFt: number;
+  /** Contiguous index runs of adjusted hours, inclusive. */
+  adjustedRuns: Array<{ start: number; end: number }>;
+  /** Contiguous index runs of hours where an inversion makes the approach colder. */
+  inversionRuns: Array<{ start: number; end: number }>;
+}
+
+function indexRuns(flags: boolean[]): Array<{ start: number; end: number }> {
+  const runs: Array<{ start: number; end: number }> = [];
+  flags.forEach((flag, index) => {
+    if (!flag) return;
+    const last = runs[runs.length - 1];
+    if (last && last.end === index - 1) last.end = index;
+    else runs.push({ start: index, end: index });
+  });
+  return runs;
+}
+
+/** What the approach adjustment changed, for plain-language notes; null when nothing was adjusted. */
+export function summarizeApproachHours(hours: ApproachHourFlags[]): ApproachSummary | null {
+  const adjusted = hours.map((hour) => Boolean(hour.approachAdjusted && finite(hour.elevationFt)));
+  const elevations = hours.filter((_, index) => adjusted[index]).map((hour) => hour.elevationFt as number);
+  if (!elevations.length) return null;
+  return {
+    adjustedHours: elevations.length,
+    lowFt: Math.min(...elevations),
+    highFt: Math.max(...elevations),
+    adjustedRuns: indexRuns(adjusted),
+    inversionRuns: indexRuns(hours.map((hour, index) => adjusted[index] && Boolean(hour.inversionRisk))),
+  };
+}
+
+export const APPROACH_SOURCE_LABEL: Record<ApproachElevationSource, string> = {
+  gpx: 'from your GPX track',
+  manual: 'from your trailhead',
+  estimated: 'trailhead estimated',
+};
