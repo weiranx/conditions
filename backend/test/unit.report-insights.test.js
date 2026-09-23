@@ -33,3 +33,32 @@ test('zero smoke does not mean clean air',()=>{const d=report();d.supplementalEv
 test('regional negation remains quoted context',()=>{const d=report();d.supplementalEvidence.discussion={available:true,issuedTime:time,text:'.KEY MESSAGES...\n- No thunderstorms expected today.\n&&\n.SHORT TERM...\nWind elsewhere.'};const i=find(d,'forecaster-context');expect(i.tone).toBe('context');expect(i.evidence[0].detail).toContain('No thunderstorms');expect(i.evidence[0].detail).not.toContain('Wind elsewhere');});
 test('filtering rebuilds insights and removes client-injected and disabled content',()=>{const d=report();d.localConditions.wildfire={available:true,nearbyIncidentCount:1};d.reportInsights={items:[{title:'Injected'}]};const f=sanitizeReportForFeatureFlags(d,{fieldObservations:false,weatherContextDetails:false,airQualityDetails:false});expect(f.reportInsights?.items||[]).toEqual([]);const g=sanitizeReportForFeatureFlags(d,{fireRiskDetails:false});expect(g.reportInsights.items.some(i=>i.id==='fire-access')).toBe(false);expect(JSON.stringify(g.reportInsights)).not.toContain('Injected');});
 test('AI fallback carries access actions while retaining NO-GO',()=>{const d=report();d.localConditions.access.closedRoadCount=1;d.reportInsights=buildReportInsights(d);expect(deterministicBrief(d,'CAUTION')).toContain('Match the road names');expect(deterministicBrief(d,'NO-GO')).toContain('Postpone or change');});
+describe('fire-access proximity', () => {
+  const withFire = wildfire => { const d = report(); d.localConditions.wildfire = { available: true, ...wildfire }; return d; };
+  test('fire near the objective sets the decision and reports distance in miles', () => {
+    const i = find(withFire({ nearbyIncidentCount: 2, incidents: [{ name: 'Near Fire', distanceKm: 12 }, { name: 'Far Fire', distanceKm: 120 }] }), 'fire-access');
+    expect(i.tone).toBe('caution');
+    expect(i.decisionRelevant).toBe(true);
+    expect(i.meaning).toContain('1 fire incident and 0 satellite detections were returned within about 19 mi');
+    expect(i.meaning).toContain('nearest about 7 mi');
+    expect(i.evidence[0].detail).toContain('Near Fire (about 7 mi)');
+  });
+  test('distant fire and hotspots stay context without changing the decision', () => {
+    const i = find(withFire({ nearbyIncidentCount: 1, incidents: [{ name: 'Far Fire', distanceKm: 90, acres: 200 }], firmsDetectionCount: 2, firmsDetections: [{ distanceKm: 60 }, { distanceKm: 140 }] }), 'fire-access');
+    expect(i.tone).toBe('context');
+    expect(i.decisionRelevant).toBe(false);
+    expect(i.meaning).toContain('1 fire incident and 2 satellite detections');
+    expect(i.meaning).toContain('none within about 19 mi');
+    expect(buildReportInsights(withFire({ incidents: [{ name: 'Far Fire', distanceKm: 90 }] })).summary).not.toContain('Check fire locations');
+  });
+  test('a large fire counts from its likely edge, not its ignition point', () => {
+    // 100,000 acres ≈ 405 km², equal-area radius ≈ 11.4 km, doubled ≈ 22.7 km.
+    expect(find(withFire({ incidents: [{ name: 'Big Fire', distanceKm: 50, acres: 100000 }] }), 'fire-access').decisionRelevant).toBe(true);
+    expect(find(withFire({ incidents: [{ name: 'Small Fire', distanceKm: 50, acres: 50 }] }), 'fire-access').decisionRelevant).toBe(false);
+  });
+  test('unknown distances are treated as near', () => {
+    expect(find(withFire({ nearbyIncidentCount: 1 }), 'fire-access').decisionRelevant).toBe(true);
+    expect(find(withFire({ incidents: [{ name: 'Unplaced', distanceKm: null }] }), 'fire-access').decisionRelevant).toBe(true);
+    expect(find(withFire({ firmsDetectionCount: 3 }), 'fire-access').decisionRelevant).toBe(true);
+  });
+});

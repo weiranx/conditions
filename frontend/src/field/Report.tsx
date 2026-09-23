@@ -356,6 +356,7 @@ export function Report({
           headline={decision.headline}
           reason={copy.reason}
           bridge={copy.bridge}
+          limitingChecks={copy.limitingChecks}
           actions={actions}
           format={{
             temp: (f) => w.formatTempDisplay(f),
@@ -418,6 +419,11 @@ export function Report({
               <h2 id="sky-full-verdict">{decision.headline}</h2>
               <p className="sky-verdict-reason">{copy.reason}</p>
               {copy.bridge && <p className="sky-cap">{copy.bridge}</p>}
+              {copy.limitingChecks.length > 0 && (
+                <ul className="sky-limiting" aria-label="Checks setting the decision">
+                  {copy.limitingChecks.map((check) => <li key={check}>{check}</li>)}
+                </ul>
+              )}
               <p className="sky-cap">{subtitle}</p>
             </section>
             <BriefSections

@@ -39,6 +39,11 @@
 .sky-hero h2 { margin: 12px 0 0; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.015em; max-width: 26ch; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); outline: none; }
 .sky-lede { margin: 10px 0 0; font-size: 15px; line-height: 1.5; color: rgba(255, 255, 255, 0.92); max-width: 58ch; }
 .sky-bridge { opacity: 0.9; }
+/* The checks behind a Caution or No-go, named instead of counted. */
+.sky-limiting { margin: 10px 0 0; padding: 0; list-style: none; max-width: 58ch; display: grid; gap: 6px; }
+.sky-limiting li { position: relative; padding-left: 18px; font-size: 15px; line-height: 1.45; }
+.sky-limiting li::before { content: ""; position: absolute; left: 2px; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.75; }
+.sky-hero .sky-limiting { color: rgba(255, 255, 255, 0.92); }
 .sky-hint { position: absolute; right: 24px; bottom: calc(var(--sky-ridge) + 8px); font-size: 12px; color: rgba(255, 255, 255, 0.8); pointer-events: none; }
 .sky-temp { font: 600 16px var(--f-font); }
 .sky-hour { font: 500 12px var(--f-font); }
@@ -241,7 +246,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-hero { color: #000; background: none; }
   .sky-canvas, .sky-hero-actions, .sky-chapter-tabs, .sky-pager, .sky-hint { display: none; }
   .sky-hero-in { padding-bottom: 0; }
-  .sky-hero :is(h1, h2, .sky-lede, .sky-subtitle, .sky-kicker) { color: #000; text-shadow: none; }
+  .sky-hero :is(h1, h2, .sky-lede, .sky-limiting, .sky-subtitle, .sky-kicker) { color: #000; text-shadow: none; }
 }
 
 /* Elevation ladder in the Terrain check: highest band first. */

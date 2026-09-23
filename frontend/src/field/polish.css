@@ -141,3 +141,9 @@ html .field-app .report-decision-bridge {
   line-height: 1.55;
   color: var(--f-muted);
 }
+html .field-app .report-decision-limiting {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
