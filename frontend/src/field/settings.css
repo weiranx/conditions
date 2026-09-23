@@ -1,0 +1,94 @@
+/* Preferences in the Sky design: grouped rows like iOS Settings, with the
+   label on the left and its control on the right. The limits editor
+   (.sky-thresholds) is shared with the report's Timing chapter. */
+.sky-settings-body { display: grid; gap: 36px; max-width: 760px; padding-bottom: 40px; }
+.field-app .sky-settings .field-settings-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 28px; }
+.sky-setting-section { display: grid; gap: 0; min-width: 0; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); }
+.sky-setting-section:focus { outline: none; }
+.sky-setting-section:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 8px; border-radius: 12px; }
+.sky-setting-section > h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--sky-label); }
+.sky-setting-subhead { margin: 26px 0 8px; padding: 0 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sky-secondary); }
+
+/* A grouped card of rows */
+.sky-setting-group {
+  display: grid; margin: 0; padding: 0 0 0 18px; border-radius: var(--sky-radius);
+  background: var(--sky-surface); box-shadow: var(--sky-elevation);
+}
+.sky-setting-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 56px; padding: 8px 16px 8px 0; border-bottom: 1px solid var(--sky-separator);
+}
+.sky-setting-row:last-child { border-bottom: 0; }
+.sky-setting-label { display: grid; gap: 2px; min-width: 0; }
+.sky-setting-label :is(label, span) { font-size: 16px; font-weight: 500; color: var(--sky-label); }
+.sky-setting-label small { font-size: 13px; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-setting-control { display: flex; align-items: center; justify-content: flex-end; flex-shrink: 0; min-width: 0; }
+.sky-setting-footnote { margin: 8px 0 0; padding: 0 4px; font-size: 13px; line-height: 1.5; color: var(--sky-secondary); }
+.sky-setting-footnote.is-above { margin: 0 0 10px; }
+
+/* Segmented choices sit inside a row, so they carry no outer margin. */
+.sky-segmented.sky-setting-segmented { margin: 0; overflow: visible; }
+.sky-setting-segmented button { flex: 0 0 auto; min-width: 64px; min-height: 32px; padding: 0 12px; }
+
+/* Number and time inputs: right-aligned value, unit after it. */
+.sky-number-field {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px 0 4px;
+  border-radius: 11px; background: var(--sky-fill); color: var(--sky-secondary); font-size: 14px;
+}
+.field-app .sky-number-field input {
+  width: 72px; min-height: 40px; padding: 0 4px 0 8px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums;
+  appearance: textfield; -moz-appearance: textfield;
+}
+.sky-number-field input::-webkit-outer-spin-button,
+.sky-number-field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sky-number-field:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky-accent) 45%, transparent); }
+.field-app .sky-number-field input:focus { outline: none; }
+.sky-number-field > span { white-space: nowrap; }
+.field-app .sky-time-field {
+  min-height: 40px; padding: 0 12px; border: 0; border-radius: 11px; background: var(--sky-fill);
+  color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.field-app .sky-time-field:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky-accent) 45%, transparent); }
+
+/* Limits: presets, then the four values */
+.sky-thresholds { display: grid; gap: 12px; min-width: 0; }
+.field-app .sky-thresholds .sky-preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.field-app .sky-thresholds .sky-preset-row button { min-height: 36px; padding: 0 14px; font-size: 14px; }
+.sky-thresholds .sky-setting-footnote { margin-top: -4px; }
+
+/* Activity profiles */
+.field-app .sky-profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 0; }
+.field-app .sky-profile-grid button {
+  display: grid; align-content: start; gap: 4px; min-height: 120px; padding: 16px; border: 0; border-radius: 16px;
+  background: var(--sky-surface); box-shadow: var(--sky-elevation); color: var(--sky-label);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.field-app .sky-profile-grid button:hover { background: color-mix(in srgb, var(--sky-fill) 40%, var(--sky-surface)); }
+.field-app .sky-profile-grid button[aria-pressed="true"] { box-shadow: var(--sky-elevation), inset 0 0 0 2px var(--sky-accent); background: var(--sky-surface); }
+.field-app .sky-profile-grid button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
+.sky-profile-grid button > svg { margin-bottom: 6px; color: var(--sky-secondary); }
+.sky-profile-grid button[aria-pressed="true"] > svg { color: var(--sky-accent); }
+.field-app .sky-profile-grid strong { font-size: 16px; font-weight: 650; }
+.field-app .sky-profile-grid small { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sky-secondary); }
+
+/* Save */
+.sky-save-card { display: grid; gap: 12px; }
+.sky-save-card .sky-notice { margin: 0; }
+
+@media (max-width: 650px) {
+  .sky-settings-body { gap: 30px; }
+  .sky-setting-group { padding-left: 14px; }
+  .sky-setting-row { flex-wrap: wrap; padding-right: 12px; }
+  .sky-setting-row { gap: 8px 12px; }
+  .sky-setting-control { margin-left: auto; }
+  .sky-setting-segmented button { min-width: 52px; min-height: 36px; padding: 0 10px; }
+  .field-app .sky-number-field input, .field-app .sky-time-field { font-size: 17px; }
+  .field-app .sky-profile-grid { grid-template-columns: 1fr 1fr; }
+  .field-app .sky-profile-grid button { min-height: 0; padding: 14px; }
+  .field-app .sky-profile-grid small { display: none; }
+  .field-app .sky-settings .field-settings-shortcuts { flex-wrap: nowrap; margin: 0 -16px 20px; padding: 8px 16px; }
+}
+@media (max-width: 380px) {
+  .field-app .sky-profile-grid { grid-template-columns: 1fr; }
+}

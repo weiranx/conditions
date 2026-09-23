@@ -73,10 +73,10 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
     { label: 'Most hours within your limits', metric: (day: MultiDayTripForecastDay) => day.travelTotalHours > 0 ? day.travelPassHours : null,
       value: (day: MultiDayTripForecastDay) => `${day.travelPassHours} of ${day.travelTotalHours} forecast hours` },
   ];
-  return <section className="objective-shortlist" aria-label="Objective shortlist">
+  return <section className="objective-shortlist sky-compare" aria-label="Objective shortlist">
     <div className="shortlist-layout">
       <div className="field-plan-form shortlist-controls">
-        <h2>Your shortlist <small>{state.objectives.length}/5</small></h2>
+        <h2 className="sky-plan-step shortlist-title">Your shortlist <span className="sky-chip">{state.objectives.length} of 5</span></h2>
         <p className="field-muted">Choose mountains, trails, or coordinates. Each comparison checks the selected point.</p>
         <fieldset disabled={comparison.loading || state.objectives.length >= 5}>
           <div className="field-search" ref={searchWrapperRef} onBlur={event => {
@@ -134,15 +134,15 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
           {comparison.loading && <button className="field-text-button" type="button" onClick={comparison.cancel}>Stop comparison</button>}
           <p className="shortlist-allowance">Uses one multi-day comparison per objective. Your existing allowance applies.</p>
         </form>
-        {feedback && <p role="status" className="field-feedback">{feedback}</p>}
-        {storageError && <p role="alert" className="field-warning">Browser storage is unavailable. This shortlist will not survive a reload.</p>}
+        {feedback && <p role="status" className="sky-notice is-info">{feedback}</p>}
+        {storageError && <p role="alert" className="sky-notice is-caution">Browser storage is unavailable. This shortlist will not survive a reload.</p>}
       </div>
       <div className="shortlist-content">
         <div className="shortlist-saved" aria-label="Saved plans">
           {(['planA', 'planB'] as const).map(slot => {
             const choice = state[slot], objective = state.objectives.find(o => o.id === choice?.objectiveId);
-            return <section className="field-panel" key={slot}>
-              <span className="field-kicker">{slot === 'planA' ? 'Plan A' : 'Plan B'}</span>
+            return <section className={`sky-card shortlist-plan${choice && objective ? ' is-set' : ''}`} key={slot}>
+              <span className="sky-card-head"><span>{slot === 'planA' ? 'Plan A' : 'Plan B'}</span>{choice && objective && <span className="sky-status is-ok">Saved</span>}</span>
               {choice && objective ? <><h3>{objective.name}</h3><p>{dateLabel(choice.date)} · {choice.startTime} local · {choice.hours} hours</p>
                 <div className="field-action-row"><button className="field-text-button" onClick={() => open(objective, choice)}>Open in planner <ArrowRight size={14} /></button>
                   <button className="field-text-button" aria-label={`Clear ${slot === 'planA' ? 'Plan A' : 'Plan B'}`} onClick={() => setState(current => ({ ...current, [slot]: null }))}>Clear</button></div></>
@@ -151,9 +151,9 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
           })}
         </div>
         <p className="shortlist-caption">Saved on this browser. Opening a plan lets you review details and generate a fresh full report.</p>
-        {comparison.needsRefresh && <p className="field-feedback" role="status">Plan details or preferences changed. Compare again for matching forecasts.</p>}
-        {comparison.loading && <p className="field-feedback" role="status">Comparing objectives · {comparison.results.length} of {state.objectives.length} checked.</p>}
-        {!comparison.results.length && !comparison.loading && <div className="field-empty-state shortlist-intro">
+        {comparison.needsRefresh && <p className="sky-notice is-info" role="status">Plan details or preferences changed. Compare again for matching forecasts.</p>}
+        {comparison.loading && <p className="sky-notice is-info" role="status">Comparing objectives · {comparison.results.length} of {state.objectives.length} checked.</p>}
+        {!comparison.results.length && !comparison.loading && <div className="sky-card sky-compare-empty shortlist-intro">
           <MapPin size={30} aria-hidden="true" /><h2>Where should you go?</h2>
           <p>Add 2–5 objectives and choose your available dates. Compare hazards, weather windows, views, and comfort before saving your first choice and a backup.</p>
           <button className="field-button" onClick={() => setState(current => ({ ...current, startDate: (() => {
@@ -161,28 +161,29 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
           })(), durationDays: 2 }))}>Use this weekend</button>
         </div>}
         {!!comparison.results.length && <>
-          {!comparison.loading && <section className="field-panel shortlist-recommendation">
-            <span className="field-kicker">Comparison outlook</span>
+          {!comparison.loading && <section className="sky-verdict-card shortlist-recommendation">
+            <span className="sky-muted">Comparison outlook</span>
             <h2>{!best ? 'More evidence needed' : best.day.decisionLevel === 'NO-GO' ? 'No recommended option among ranked results' : best.day.decisionLevel === 'CAUTION' ? 'Leading option still needs caution' : 'Most favorable reported conditions'}</h2>
             {best && bestObjective ? <><p><strong>{bestObjective.name} · {dateLabel(best.day.date)}</strong></p><p>{best.day.decisionHeadline}</p>
               {ties > 1 && <p>{ties} options share this rank. Compare the tradeoffs below.</p>}</> : <p>No complete, scored hourly forecast is available to rank. Review missing evidence below.</p>}
             <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by hazard decision, then the existing report score. Comfort does not affect ranking. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
           </section>}
-          <div className="compare-highlights" aria-label="Objective weather tradeoffs" role="group">
+          <div className="sky-trio sky-section compare-highlights" aria-label="Objective weather tradeoffs" role="group">
             {highlights.map(highlight => {
               const candidates = comparison.results.flatMap(r => r.days.map(day => ({ objectiveId: r.objectiveId, day }))).filter(r => highlight.metric(r.day) !== null);
               const maximum = Math.max(...candidates.map(r => highlight.metric(r.day)!));
               const winners = candidates.filter(r => highlight.metric(r.day) === maximum);
               const first = winners[0], objective = state.objectives.find(o => o.id === first?.objectiveId);
-              return <div key={highlight.label}><span className="field-kicker">{highlight.label}</span>
-                {first && objective ? <><p>{highlight.value(first.day)}</p><small>{winners.length > 1 ? `${winners.length} options tied` : `${objective.name} · ${dateLabel(first.day.date)}`}</small><small>Weather tradeoff only; check each option’s hazards.</small></> : <p>Unavailable</p>}
+              return <div className="sky-card" key={highlight.label}><span className="sky-card-head"><span>{highlight.label}</span></span>
+                {first && objective ? <><span className="sky-big is-small">{highlight.value(first.day)}</span><p className="sky-cap">{winners.length > 1 ? `${winners.length} options tied` : `${objective.name} · ${dateLabel(first.day.date)}`}</p><p className="sky-cap">Weather tradeoff only; check each option’s hazards.</p></> : <span className="sky-big is-small">Unavailable</span>}
               </div>;
             })}
           </div>
-          <h2 className="shortlist-grid-heading">Objectives × dates</h2>
-          <p className="shortlist-caption">Select a result for details and Plan A / Plan B. Scroll across for more dates. Gusts, rain / snow chance, and cloud cover are departure readings.</p>
+          <div className="sky-sh sky-section"><h2 className="shortlist-grid-heading">Objectives × dates</h2><p>Select a result for details and Plan A / Plan B.</p></div>
+          <p className="sky-cap shortlist-caption">Scroll across for more dates. Gusts, rain / snow chance, and cloud cover are departure readings.</p>
+          <div className="sky-card sky-table-card">
           <div className="compare-table-scroll" role="region" tabIndex={0} aria-label="Objective and date comparison">
-            <table className="compare-table shortlist-table"><caption>Conditions at each objective and date, departing {state.startTime} local for {state.hours} hours</caption>
+            <table className="sky-table compare-table shortlist-table"><caption className="sr-only">Conditions at each objective and date, departing {state.startTime} local for {state.hours} hours</caption>
               <thead><tr><th scope="col">Objective</th>{dates.map(date => <th scope="col" key={date}>{dateLabel(date)}</th>)}</tr></thead>
               <tbody>{state.objectives.map(objective => {
                 const result = comparison.results.find(r => r.objectiveId === objective.id);
@@ -209,11 +210,14 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               })}</tbody>
             </table>
           </div>
-          {selectedDay && selectedObjective && <section className="field-panel shortlist-detail" aria-label="Selected objective details">
-            <div className="field-panel-heading"><div><span className="field-kicker">Selected option</span><h2>{selectedObjective.name}</h2><p>{dateLabel(selectedDay.date)} · {state.startTime} local · {state.hours} hours</p></div><span className={`compare-decision is-${tone(selectedDay)}`}>{selectedDay.decisionLevel}</span></div>
-            <p>{selectedDay.decisionHeadline}</p>
-            {selectedDay.apiWarning && <p className="field-warning">{selectedDay.apiWarning}</p>}
-            <dl className="shortlist-details">
+          </div>
+          {selectedDay && selectedObjective && <section className="sky-card sky-section shortlist-detail" aria-label="Selected objective details">
+            <span className="sky-card-head"><span>Selected option</span><span className={`compare-decision is-${tone(selectedDay)}`}>{selectedDay.decisionLevel}</span></span>
+            <h2 className="sky-card-lede">{selectedObjective.name}</h2>
+            <p className="sky-cap">{dateLabel(selectedDay.date)} · {state.startTime} local · {state.hours} hours</p>
+            <p className="sky-cap is-body">{selectedDay.decisionHeadline}</p>
+            {selectedDay.apiWarning && <p className="sky-notice is-caution">{selectedDay.apiWarning}</p>}
+            <dl className="sky-list shortlist-details">
               <div><dt>Weather window</dt><dd>{selectedDay.travelTotalHours ? `${selectedDay.travelPassHours} of ${selectedDay.travelTotalHours} forecast hours within your limits` : 'Hourly forecast unavailable'}</dd></div>
               <div><dt>Views</dt><dd>{selectedDay.visibilitySummary || 'Visibility outlook unavailable'}{finite(selectedDay.cloudCoverPct) && ` · ${selectedDay.cloudCoverPct}% cloud cover at departure`}</dd></div>
               <div><dt>Comfort · separate from hazards</dt><dd>{finite(selectedDay.safetyData.pleasantness?.score) ? `${selectedDay.safetyData.pleasantness!.score}/100 · ${selectedDay.safetyData.pleasantness!.label}` : 'Comfort unavailable'}</dd></div>
@@ -222,7 +226,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
               <div><dt>Active alerts</dt><dd>{selectedDay.alertCount}</dd></div>
             </dl>
             {!!selectedDay.safetyData.safety.confidenceReasons?.length && <p className="shortlist-caption">{selectedDay.safetyData.safety.confidenceReasons.join(' ')}</p>}
-            <div className="field-action-row">
+            <div className="field-action-row shortlist-actions">
               <button className="field-button" aria-pressed={sameChoice(state.planA, choiceFor(selectedObjective.id, selectedDay.date))} onClick={() => save('planA', choiceFor(selectedObjective.id, selectedDay.date))}>Save as Plan A</button>
               <button className="field-button" aria-pressed={sameChoice(state.planB, choiceFor(selectedObjective.id, selectedDay.date))} onClick={() => save('planB', choiceFor(selectedObjective.id, selectedDay.date))}>Save as Plan B</button>
               <button className="field-button field-button-primary" onClick={() => open(selectedObjective, choiceFor(selectedObjective.id, selectedDay.date))}>Open in planner <ArrowRight size={15} /></button>

@@ -16,14 +16,14 @@ export function AdminNotice({
   message: string | null | undefined;
 }) {
   return message ? (
-    <p className="field-warning" role="status">
+    <p className="sky-notice is-caution" role="status">
       {message}
     </p>
   ) : null;
 }
 export function AdminStats({ a }: { a: Model }) {
   return (
-    <div className="field-admin-stats">
+    <div className="field-admin-stats sky-admin-stats">
       {[
         [
           "Reports",
@@ -60,8 +60,8 @@ export function AdminStats({ a }: { a: Model }) {
           !!a.aiUsageError,
         ],
       ].map(([label, value, detail, unavailable]) => (
-        <article className="field-panel" key={String(label)}>
-          <span className="field-kicker">{label}</span>
+        <article className="sky-card sky-admin-stat" key={String(label)}>
+          <span className="sky-admin-stat-label">{label}</span>
           <strong>{a.loading || unavailable ? "—" : value}</strong>
           <small>
             {a.loading ? "Loading…" : unavailable ? "Data unavailable" : detail}
@@ -75,61 +75,65 @@ export default function Administration() {
   const a = useAdministration();
   const { dashboardContentRef } = a;
   return (
-    <section className="field-administration">
+    <section className="field-administration sky-screen sky-admin">
       <header className="field-page-heading">
         <span className="field-kicker">Platform workspace</span>
         <h1>Administration</h1>
-        <p>Service health, account access, and product performance.</p>
+        <p className="sky-lead">
+          <span className="sky-lead-note">
+            Service health, account access, and product performance.
+          </span>
+        </p>
       </header>
-      <div className="field-action-row admin-toolbar">
-        <label className="field-form-label">
-          Analytics period
-          <select
-            value={a.analyticsRange}
-            onChange={(e) =>
-              a.setAnalyticsRange(e.target.value as typeof a.analyticsRange)
-            }
-          >
-            {a.ANALYTICS_RANGES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="field-button"
-          onClick={() => void a.fetchAdminData(true)}
-          disabled={a.refreshing || a.loading}
-        >
-          <RefreshCw size={16} aria-hidden="true" />
-          {a.refreshing || a.loading ? "Refreshing…" : "Refresh data"}
-        </button>
-        <label className="admin-auto-refresh">
+      <div className="sky-card sky-admin-toolbar admin-toolbar">
+        <div className="sky-segmented sky-admin-range" role="group" aria-label="Analytics period">
+          {a.ANALYTICS_RANGES.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              aria-pressed={a.analyticsRange === r.value}
+              onClick={() => a.setAnalyticsRange(r.value)}
+            >
+              {r.label.replace(/^Last /, "")}
+            </button>
+          ))}
+        </div>
+        <label className="sky-switch admin-auto-refresh">
           <input
             type="checkbox"
             checked={a.autoRefresh}
             onChange={(e) => a.setAutoRefresh(e.target.checked)}
-          />{" "}
-          Refresh every 30 seconds
+          />
+          <span aria-hidden="true" />
+          Auto-refresh every 30 s
         </label>
-        <button
-          className="field-button"
-          disabled={a.loading || !a.lastRefreshed}
-          onClick={a.downloadOperationsSnapshot}
-        >
-          <Download size={16} aria-hidden="true" />
-          Export snapshot
-        </button>
         <small className="admin-updated">
           {a.lastRefreshed
-            ? `Report logs updated ${a.lastRefreshed.toLocaleTimeString()}`
+            ? `Updated ${a.lastRefreshed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
             : "Waiting for data"}
         </small>
+        <div className="sky-toolbar-actions">
+          <button
+            className="field-button"
+            onClick={() => void a.fetchAdminData(true)}
+            disabled={a.refreshing || a.loading}
+          >
+            <RefreshCw size={16} aria-hidden="true" className={a.refreshing ? "field-spin" : undefined} />
+            {a.refreshing || a.loading ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            className="field-button"
+            disabled={a.loading || !a.lastRefreshed}
+            onClick={a.downloadOperationsSnapshot}
+          >
+            <Download size={16} aria-hidden="true" />
+            Export snapshot
+          </button>
+        </div>
       </div>
       <AdminNotice message={a.error} />
       <AdminNotice message={a.aiUsageError} />
-      <nav className="field-chapter-nav" aria-label="Administration sections">
+      <nav className="field-chapter-nav sky-admin-tabs" aria-label="Administration sections">
         {a.ADMIN_SECTIONS.map((section) => (
           <button
             key={section.value}
@@ -138,11 +142,11 @@ export default function Administration() {
             }
             onClick={() => a.setActiveSection(section.value)}
           >
-            <section.icon size={16} aria-hidden="true" />
+            <section.icon size={17} aria-hidden="true" />
             {section.label}
             {!a.loading && a.sectionCounts[section.value] > 0 && (
               <span
-                className="admin-nav-count"
+                className="admin-nav-count sky-count"
                 aria-label={a.sectionCountTitle(
                   section.value,
                   a.sectionCounts[section.value],
@@ -162,7 +166,7 @@ export default function Administration() {
         {a.activeSection === "activity" && (
           <section className="field-panel">
             <h2>Audit trail</h2>
-            <div className="field-action-row">
+            <div className="field-action-row admin-filters">
               <label className="field-form-label">
                 Search activity
                 <input
@@ -248,7 +252,9 @@ export default function Administration() {
                 <DetailValues value={entry} />
               </details>
             ))}
-            {!a.filteredAuditEntries.length && <p>No matching activity.</p>}
+            {!a.filteredAuditEntries.length && (
+              <p className="sky-empty">No matching activity.</p>
+            )}
           </section>
         )}
       </div>
@@ -258,7 +264,7 @@ export default function Administration() {
           onClose={() => a.resolveAdminConfirmation(false)}
         >
           <p>{a.confirmation.description}</p>
-          <div className="field-action-row">
+          <div className="sky-toolbar-actions admin-confirm-actions">
             <button
               className="field-button"
               onClick={() => a.resolveAdminConfirmation(false)}
