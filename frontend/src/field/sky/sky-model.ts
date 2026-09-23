@@ -15,6 +15,7 @@ export type SkyHour = {
   tone: SkyTone;
   temp: number;
   feelsLike: number;
+  wind: number;
   gust: number;
   precipChance: number;
   failedRules: string[];
@@ -98,6 +99,7 @@ export function buildSkyHours(rows: PlannedRow[], plan: {
       tone: !row.complete ? "missing" : row.pass ? "within" : "over",
       temp: row.temp,
       feelsLike: row.feelsLike,
+      wind: row.wind,
       gust: row.gust,
       precipChance: row.precipChance,
       failedRules: row.failedRules,

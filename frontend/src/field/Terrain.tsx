@@ -12,7 +12,8 @@ import { AiExplanationSkeleton, SnowAnalysis } from "./AiExplanation";
 import { MountainSection } from "./sky/MountainSection";
 import { StatusTag } from "./sky/BriefSections";
 import { knownFeet, surfaceLabel, terrainStatus } from "./sky/status";
-import type { SkyHour } from "./sky/sky-model";
+import { shortHour, type SkyHour } from "./sky/sky-model";
+import { estimateAtElevation, rebaseElevationBands } from "../app/elevation-forecast";
 const FieldMap = lazy(() => import("./FieldMap"));
 
 function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
@@ -144,7 +145,20 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
   const data = w.safetyData!;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const available = useAiAvailability(data.capabilities);
-  const target = w.targetElevationForecast;
+  // Hour of the travel window the elevation forecast shows; 0 is the planned start.
+  const [forecastHour, setForecastHour] = useState(0);
+  const hourIndex = forecastHour < hours.length ? forecastHour : 0;
+  const selectedHour = hourIndex > 0 ? hours[hourIndex] : null;
+  const bands = useMemo(
+    () => selectedHour
+      ? rebaseElevationBands(w.elevationForecastBands, { temp: selectedHour.temp, wind: selectedHour.wind, gust: selectedHour.gust })
+      : w.elevationForecastBands,
+    [selectedHour, w.elevationForecastBands],
+  );
+  const target = selectedHour && w.targetElevationForecast
+    ? estimateAtElevation({ temp: selectedHour.temp, wind: selectedHour.wind, gust: selectedHour.gust }, w.targetElevationForecast.deltaFt)
+    : w.targetElevationForecast;
+  const hourLabel = (hour: SkyHour) => w.formatClockForStyle(hour.time, w.preferences.timeStyle);
   const surface = surfaceLabel(data);
   const status = terrainStatus(data);
   const objectiveFt = knownFeet(data.weather.elevation);
@@ -154,7 +168,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
     ...(Number.isFinite(freezing) && freezing > 0 ? [{ label: "Freezing level", ft: freezing, tone: "cold" as const }] : []),
     ...(Number.isFinite(snowLevel) && snowLevel > 0 ? [{ label: "Snow level", ft: snowLevel, tone: "snow" as const }] : []),
   ];
-  const objectiveBand = w.elevationForecastBands.find((b) => objectiveFt !== null && Math.abs(b.elevationFt - objectiveFt) < 150);
+  const objectiveBand = bands.find((b) => objectiveFt !== null && Math.abs(b.elevationFt - objectiveFt) < 150);
   const avalancheLevel = w.overallAvalancheLevel as number | null;
   const snowDepth = data.snowpack?.snotel?.snowDepthIn == null
     ? "Unavailable"
@@ -181,21 +195,38 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
       {flags.elevationForecast && (
         <section className="sky-section" aria-labelledby="sky-terrain-mountain">
           <div className="sky-sh">
-            <h2 id="sky-terrain-mountain">The mountain at your start</h2>
+            <h2 id="sky-terrain-mountain">
+              {selectedHour ? <>The mountain at {hourLabel(selectedHour)}</> : "The mountain at your start"}
+            </h2>
             <p>Forecast by elevation. Heights are to scale; the ridge is illustrative.</p>
           </div>
           <div className="sky-card sky-mountain-card">
-            {w.elevationForecastBands.length > 0 ? (
+            {hours.length > 1 && w.elevationForecastBands.length > 0 && (
+              <div className="sky-segmented sky-mountain-hours" role="group" aria-label="Elevation forecast time">
+                {hours.map((hour, i) => {
+                  const usable = i === 0 || (hour.tone !== "missing" && Number.isFinite(hour.temp) && Number.isFinite(hour.wind));
+                  return (
+                    <button key={hour.index} type="button" aria-pressed={i === hourIndex} disabled={!usable}
+                      aria-label={`${i === 0 ? "Start, " : ""}${hourLabel(hour)}${usable ? "" : ", forecast unavailable"}`}
+                      onClick={() => setForecastHour(i)}>
+                      {i === 0 ? "Start" : shortHour(hour.minute, w.preferences.timeStyle)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {bands.length > 0 ? (
               <MountainSection
-                bands={w.elevationForecastBands}
+                bands={bands}
                 objectiveFt={objectiveFt}
                 objectiveLabel={objectiveBand ? `Objective · ${w.formatTempDisplay(objectiveBand.temp)}` : "Objective"}
                 target={w.hasTargetElevation && target && Number.isFinite(w.targetElevationFt) && Math.abs(w.targetElevationFt - (objectiveFt ?? -1e9)) > 100
                   ? { ft: w.targetElevationFt, label: `${w.formatElevationDisplay(w.targetElevationFt)} · ${w.formatTempDisplay(target.temp)}` }
                   : null}
                 levels={levels}
-                sky={hours[0] ? { zenith: hours[0].zenith, horizon: hours[0].horizon } : null}
+                sky={hours[hourIndex] ? { zenith: hours[hourIndex].zenith, horizon: hours[hourIndex].horizon } : null}
                 format={{ elevation: (ft) => w.formatElevationDisplay(ft), temp: (f) => w.formatTempDisplay(f), wind: (mph) => w.formatWindDisplay(mph) }}
+                when={selectedHour ? `at ${hourLabel(selectedHour)}` : undefined}
               />
             ) : (
               <p className="sky-empty">Elevation bands are unavailable for this plan.</p>

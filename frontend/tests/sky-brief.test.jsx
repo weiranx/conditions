@@ -234,3 +234,31 @@ test("MountainSection band labels never overlap when bands are 500 ft apart", ()
   ys.sort((a, b) => a - b);
   for (let i = 1; i < ys.length; i += 1) assert.ok(ys[i] - ys[i - 1] >= 38, `labels ${ys[i - 1]} and ${ys[i]} overlap`);
 });
+
+test("elevation bands re-derive from a later hour's readings with the start-hour lapse model", async () => {
+  const { rebaseElevationBands, estimateAtElevation } = await import("../src/app/elevation-forecast");
+  const bands = [
+    { label: "Lower Terrain", elevationFt: 7000, deltaFromObjectiveFt: -2000, temp: 40, feelsLike: 36, windSpeed: 6, windGust: 15 },
+    { label: "Objective Elevation", elevationFt: 9000, deltaFromObjectiveFt: 0, temp: 33, feelsLike: 26, windSpeed: 10, windGust: 20 },
+  ];
+  const later = rebaseElevationBands(bands, { temp: 50, wind: 12, gust: 25 });
+  assert.deepEqual(later.map((b) => [b.elevationFt, b.temp, b.windSpeed, b.windGust]), [[7000, 57, 8, 20], [9000, 50, 12, 25]]);
+  assert.equal(later[0].label, "Lower Terrain");
+  assert.equal(rebaseElevationBands(bands, { temp: NaN, wind: 5, gust: 10 }), bands, "missing readings keep the start-hour bands");
+  const above = estimateAtElevation({ temp: 20, wind: 15, gust: NaN }, 1000);
+  assert.deepEqual([above.temp, above.windSpeed, above.windGust], [17, 17, 17]);
+  assert.ok(above.feelsLike < above.temp);
+  const [hour] = buildSkyHours([row({ wind: 9 })], plan);
+  assert.equal(hour.wind, 9);
+});
+
+test("MountainSection names the selected forecast time for screen readers", async () => {
+  const { MountainSection } = await import("../src/field/sky/MountainSection");
+  const props = {
+    bands: [{ label: "Objective Elevation", elevationFt: 9000, deltaFromObjectiveFt: 0, temp: 33, feelsLike: 26, windSpeed: 10, windGust: 20 }],
+    objectiveFt: 9000, objectiveLabel: "Objective", target: null, levels: [], sky: null,
+    format: { elevation: (ft) => `${ft} ft`, temp: (f) => `${f}°F`, wind: (m) => `${m} mph` },
+  };
+  assert.match(renderToStaticMarkup(<MountainSection {...props} />), /Conditions by elevation at your start/);
+  assert.match(renderToStaticMarkup(<MountainSection {...props} when="at 11:00 AM" />), /Conditions by elevation at 11:00 AM/);
+});

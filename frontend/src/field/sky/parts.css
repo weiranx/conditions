@@ -29,6 +29,7 @@
   background: var(--sky-surface); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
 }
 html[data-theme="dark"] .sky-segmented button[aria-pressed="true"] { background: #3a403d; }
+.sky-segmented button:disabled { color: var(--sky-secondary); opacity: 0.5; cursor: not-allowed; }
 .sky-segmented button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
 
 /* Hour chart */
