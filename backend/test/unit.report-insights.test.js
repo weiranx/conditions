@@ -39,7 +39,7 @@ describe('fire-access proximity', () => {
     const i = find(withFire({ nearbyIncidentCount: 2, incidents: [{ name: 'Near Fire', distanceKm: 12 }, { name: 'Far Fire', distanceKm: 120 }] }), 'fire-access');
     expect(i.tone).toBe('caution');
     expect(i.decisionRelevant).toBe(true);
-    expect(i.meaning).toContain('1 fire incident and 0 satellite detections were returned within about 19 mi');
+    expect(i.meaning).toContain('1 fire incident and 0 satellite detections were returned within about 31 mi');
     expect(i.meaning).toContain('nearest about 7 mi');
     expect(i.evidence[0].detail).toContain('Near Fire (about 7 mi)');
   });
@@ -48,17 +48,24 @@ describe('fire-access proximity', () => {
     expect(i.tone).toBe('context');
     expect(i.decisionRelevant).toBe(false);
     expect(i.meaning).toContain('1 fire incident and 2 satellite detections');
-    expect(i.meaning).toContain('none within about 19 mi');
+    expect(i.meaning).toContain('none within about 31 mi');
     expect(buildReportInsights(withFire({ incidents: [{ name: 'Far Fire', distanceKm: 90 }] })).summary).not.toContain('Check fire locations');
   });
   test('a large fire counts from its likely edge, not its ignition point', () => {
     // 100,000 acres ≈ 405 km², equal-area radius ≈ 11.4 km, doubled ≈ 22.7 km.
-    expect(find(withFire({ incidents: [{ name: 'Big Fire', distanceKm: 50, acres: 100000 }] }), 'fire-access').decisionRelevant).toBe(true);
-    expect(find(withFire({ incidents: [{ name: 'Small Fire', distanceKm: 50, acres: 50 }] }), 'fire-access').decisionRelevant).toBe(false);
+    expect(find(withFire({ incidents: [{ name: 'Big Fire', distanceKm: 70, acres: 100000 }] }), 'fire-access').decisionRelevant).toBe(true);
+    expect(find(withFire({ incidents: [{ name: 'Small Fire', distanceKm: 70, acres: 50 }] }), 'fire-access').decisionRelevant).toBe(false);
   });
   test('unknown distances are treated as near', () => {
     expect(find(withFire({ nearbyIncidentCount: 1 }), 'fire-access').decisionRelevant).toBe(true);
     expect(find(withFire({ incidents: [{ name: 'Unplaced', distanceKm: null }] }), 'fire-access').decisionRelevant).toBe(true);
     expect(find(withFire({ firmsDetectionCount: 3 }), 'fire-access').decisionRelevant).toBe(true);
+  });
+  test('the quoted nearest distance comes only from fires that qualify as near', () => {
+    const unplaced = find(withFire({ incidents: [{ name: 'Unplaced', distanceKm: null }, { name: 'Far Fire', distanceKm: 90 }] }), 'fire-access');
+    expect(unplaced.meaning).toContain('1 fire incident and 0 satellite detections were returned within about 31 mi of the objective (distance not reported, so treated as near)');
+    expect(unplaced.meaning).not.toContain('56 mi');
+    const placed = find(withFire({ incidents: [{ name: 'Near Fire', distanceKm: 20 }, { name: 'Far Fire', distanceKm: 90 }], firmsDetections: [{ distanceKm: 5 }] }), 'fire-access');
+    expect(placed.meaning).toContain('(nearest about 3 mi)');
   });
 });

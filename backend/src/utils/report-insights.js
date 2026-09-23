@@ -1,8 +1,6 @@
 const { buildPlannedStartIso } = require('./time');
+const { FIRE_NEAR_KM, MI_PER_KM, fireEdgeKm, isNearFire } = require('./fire-proximity');
 const HOUR = 3600000;
-const FIRE_NEAR_KM = 30;
-const KM2_PER_ACRE = 0.00404686;
-const MI_PER_KM = 0.621371;
 const number = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const stamp = value => typeof value === 'string' && /(?:Z|[+-]\d\d:\d\d)$/i.test(value) && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null;
 const clean = value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 500);
@@ -115,26 +113,23 @@ function buildReportInsights(report) {
       'If your route crosses unbridged water, identify a bridge or alternate route and reassess at the crossing; do not infer crossing safety from discharge alone.',
       [evidence(water.source || 'USGS', `${water.siteName || water.siteId || 'Nearby gauge'}: ${number(water.dischargeCfs) === null ? 'discharge unavailable' : `${water.dischargeCfs} cfs`}; trend ${water.trend || 'unknown'}`, water.observedTime)], fieldFeatures, rising && nearDeparture);
   }
-  // The feed searches ~93 mi; only fire near the objective sets the decision.
-  // Incident distance is to the ignition point, so subtract twice the radius of
-  // a circle with the fire's area to allow for an elongated perimeter. Fire
-  // with no usable distance counts as near.
+  // The feed searches ~93 mi; only fire near the objective (see
+  // fire-proximity.js) sets the decision.
   const fire = local.wildfire;
   const incidentList = fire?.available && Array.isArray(fire.incidents) ? fire.incidents : [];
   const detectionList = fire?.available && Array.isArray(fire.firmsDetections) ? fire.firmsDetections : [];
   const incidents = fire?.available ? Math.max(number(fire.nearbyIncidentCount) || 0, incidentList.length) : 0;
   const detections = fire?.available ? Math.max(0, number(fire.firmsDetectionCount) || 0, detectionList.length) : 0;
-  const fireEdgeKm = item => {
-    const distance = number(item?.distanceKm);
-    if (distance === null || distance < 0) return null;
-    const acres = number(item.acres);
-    return Math.max(0, distance - (acres !== null && acres > 0 ? 2 * Math.sqrt(acres * KM2_PER_ACRE / Math.PI) : 0));
+  const nearIncidents = incidentList.length ? incidentList.filter(isNearFire).length : incidents;
+  const nearDetections = detectionList.length ? detectionList.filter(isNearFire).length : detections;
+  const nearestMi = items => {
+    const edges = items.map(fireEdgeKm).filter(value => value !== null);
+    return edges.length ? Math.round(Math.min(...edges) * MI_PER_KM) : null;
   };
-  const nearFire = item => { const edge = fireEdgeKm(item); return edge === null || edge <= FIRE_NEAR_KM; };
-  const nearIncidents = incidentList.length ? incidentList.filter(nearFire).length : incidents;
-  const nearDetections = detectionList.length ? detectionList.filter(nearFire).length : detections;
-  const edges = [...incidentList, ...detectionList].map(fireEdgeKm).filter(value => value !== null);
-  const nearestMi = edges.length ? Math.round(Math.min(...edges) * MI_PER_KM) : null;
+  // Quote a distance only from the fires that qualify; a near fire may have none.
+  const nearNearestMi = nearestMi([...incidentList, ...detectionList].filter(isNearFire));
+  const nearDistance = nearNearestMi !== null ? ` (nearest about ${nearNearestMi} mi)` : ' (distance not reported, so treated as near)';
+  const farNearestMi = nearestMi([...incidentList, ...detectionList]);
   const fireCounts = (incidentCount, detectionCount) => `${incidentCount} fire incident${incidentCount === 1 ? '' : 's'} and ${detectionCount} satellite detection${detectionCount === 1 ? '' : 's'}`;
   const fireEvidence = () => [evidence(fire.source || 'Fire observations', incidentList.slice(0, 3).map(i => {
     const edge = fireEdgeKm(i);
@@ -142,11 +137,11 @@ function buildReportInsights(report) {
   }).filter(Boolean).join('; ') || 'Satellite detections in the search area', null, fire.sourceLink)];
   const nearMi = Math.round(FIRE_NEAR_KM * MI_PER_KM);
   if (nearIncidents || nearDetections) add('fire-access', 'caution', 'Check fire locations against your approach and escape routes',
-    `${fireCounts(nearIncidents, nearDetections)} were returned within about ${nearMi} mi of the objective${nearestMi !== null ? ` (nearest about ${nearestMi} mi)` : ''}. Proximity does not establish that the route is affected, and these feeds can lag changing conditions.`,
+    `${fireCounts(nearIncidents, nearDetections)} were returned within about ${nearMi} mi of the objective${nearDistance}. Proximity does not establish that the route is affected, and these feeds can lag changing conditions.`,
     'Compare current fire perimeters and official restrictions with the route and road access before choosing an approach.',
     fireEvidence(), ['fieldObservations', 'fireRiskDetails'], true);
   else if (incidents || detections) add('fire-access', 'context', 'Fire activity is in the wider area, not near the objective',
-    `${fireCounts(incidents, detections)} were returned in the wider search area, none within about ${nearMi} mi of the objective${nearestMi !== null ? ` (nearest about ${nearestMi} mi)` : ''}. They do not change the trip decision, but smoke and road access can still be affected.`,
+    `${fireCounts(incidents, detections)} were returned in the wider search area, none within about ${nearMi} mi of the objective${farNearestMi !== null ? ` (nearest about ${farNearestMi} mi)` : ''}. They do not change the trip decision, but smoke and road access can still be affected.`,
     'Recheck fire perimeters, smoke, and road access before departure; wind shifts and new starts can change this quickly.',
     fireEvidence(), ['fieldObservations', 'fireRiskDetails']);
 
