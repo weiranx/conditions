@@ -279,13 +279,19 @@ test("compact charts distinguish gaps and unavailable values from real zero", ()
     />,
   );
   assert.doesNotMatch(html, /NaN|Infinity/);
-  assert.match(html, /M\s*8/);
-  assert.match(html, /M\s*292/);
+  // The missing middle hour splits the line into two separate runs.
+  assert.equal((html.match(/class="condition-line"/g) || []).length, 2);
   const missing = renderToStaticMarkup(
     <ConditionScale label="AQI" value={null} maximum={500} />,
   );
   assert.match(missing, /unavailable/i);
   assert.doesNotMatch(missing, /0 on a scale/);
+  const banded = renderToStaticMarkup(
+    <ConditionScale label="AQI" value={33} maximum={500}
+      bands={[{ from: 0, label: "Good" }, { from: 51, label: "Moderate" }, { from: 101, label: "Sensitive" }]} />,
+  );
+  assert.match(banded, /in the Good range \(0 to 51\)/);
+  assert.equal((banded.match(/condition-band-seg is-active/g) || []).length, 1);
   const zero = renderToStaticMarkup(
     <AccumulationBars
       label="Rain"

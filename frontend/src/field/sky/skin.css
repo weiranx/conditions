@@ -57,7 +57,45 @@
 .field-app .sky-report :is(.condition-trend, .condition-scale, .condition-accumulation) { --condition-color: var(--sky-label); margin: 2px 0 4px; color: var(--sky-label); }
 .field-app .sky-report :is(.condition-trend, .condition-scale) figcaption { font-size: 12px; color: var(--sky-secondary); margin-bottom: 4px; }
 .field-app .sky-report :is(.condition-trend, .condition-scale) figcaption strong { color: var(--sky-label); font-weight: 600; }
-.field-app .sky-report .condition-trend svg { height: 58px; }
+.field-app .sky-report .condition-trend svg { width: 100%; height: auto; }
+.field-app .sky-report .condition-trend text { font-family: var(--f-font); font-variant-numeric: tabular-nums; pointer-events: none; }
+.field-app .sky-report .condition-chart-baseline { stroke: var(--sky-separator); stroke-dasharray: none; }
+.field-app .sky-report .condition-line { fill: none; stroke: var(--sky-label); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1; animation: condition-draw 800ms cubic-bezier(.2,.7,.2,1) both; }
+.field-app .sky-report .condition-area { animation: condition-fade 800ms ease-out both; }
+.field-app .sky-report .condition-dot { fill: var(--sky-label); }
+.field-app .sky-report .condition-dot.is-marked { fill: var(--sky-surface); stroke: var(--sky-label); stroke-width: 2; }
+.field-app .sky-report .condition-value { font-size: 12px; font-weight: 700; fill: var(--sky-label); paint-order: stroke; stroke: var(--sky-surface); stroke-width: 3px; stroke-linejoin: round; }
+.field-app .sky-report .condition-tick { font-size: 11px; fill: var(--sky-secondary); }
+.field-app .sky-report .condition-band rect { opacity: 0.8; }
+.field-app .sky-report .condition-band text { font-size: 10px; font-weight: 600; letter-spacing: 0.02em; }
+.field-app .sky-report .condition-band.is-caution rect { fill: var(--sky-caution-fill); }
+.field-app .sky-report .condition-band.is-caution text { fill: var(--sky-caution); }
+.field-app .sky-report .condition-band.is-cold rect { fill: var(--sky-cold-fill); }
+.field-app .sky-report .condition-band.is-cold text { fill: var(--sky-cold); }
+.field-app .sky-report .condition-bar-track { fill: var(--sky-fill); opacity: 0.7; }
+.field-app .sky-report .condition-bar { fill: var(--sky-label); opacity: 0.8; transform-box: fill-box; transform-origin: bottom; animation: condition-grow 500ms cubic-bezier(.2,.7,.2,1) both; }
+/* Banded scale: equal-width category segments with the current one called out. */
+.field-app .sky-report .condition-bands { margin: 14px 2px 2px; }
+.field-app .sky-report .condition-bands-track { position: relative; display: grid; gap: 3px; height: 10px; }
+.field-app .sky-report .condition-band-seg { background: var(--sky-fill); border-radius: 3px; }
+.field-app .sky-report .condition-band-seg:first-child { border-radius: 10px 3px 3px 10px; }
+.field-app .sky-report .condition-band-seg:last-of-type { border-radius: 3px 10px 10px 3px; }
+.field-app .sky-report .condition-band-seg.is-passed { background: color-mix(in srgb, var(--sky-label) 28%, var(--sky-fill)); }
+.field-app .sky-report .condition-band-seg.is-active { background: var(--sky-label); }
+.field-app .sky-report .condition-bands .condition-scale-marker { top: 50%; width: 18px; height: 18px; border-width: 3px; }
+.field-app .sky-report .condition-bands-labels { display: grid; gap: 3px; margin-top: 10px; }
+.field-app .sky-report .condition-bands-labels span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.field-app .sky-report .condition-bands-labels small { font-size: 10.5px; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+/* Only the current category is named; it may run under its neighbours, which carry no name. */
+.field-app .sky-report .condition-bands-labels b { font-size: 13px; font-weight: 700; color: var(--sky-label); white-space: nowrap; }
+.field-app .sky-report .condition-bands-labels .is-end b { align-self: flex-end; }
+@keyframes condition-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes condition-fade { from { opacity: 0; } }
+@keyframes condition-grow { from { transform: scaleY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .field-app .sky-report :is(.condition-line, .condition-area, .condition-bar) { animation: none; }
+}
 .field-app .sky-report .condition-chart-times { font-size: 11px; color: var(--sky-secondary); }
 .field-app .sky-report .condition-scale-track { background: var(--sky-fill); }
 .field-app .sky-report .condition-scale-fill { background: var(--sky-label); }
@@ -127,3 +165,11 @@
   .field-app .sky-report .field-panel { padding: 16px; }
   .field-app :is(.sky-report, .sky-screen) .field-record > div { grid-template-columns: 1fr; gap: 2px; }
 }
+/* Label takes what it needs; the value keeps short readings like "12,500 ft" on one line. */
+.field-app .sky-report .sky-list.is-compact.report-atmosphere-facts > div { grid-template-columns: auto minmax(0, 1fr); }
+.field-app .sky-report .sky-list.is-compact.report-atmosphere-facts dd { max-width: none; text-align: right; }
+.field-app .sky-report .condition-reference { fill: none; stroke: var(--sky-secondary); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.8; }
+.field-app .sky-report .condition-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 4px; font-size: 11.5px; color: var(--sky-secondary); }
+.field-app .sky-report .condition-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.field-app .sky-report .condition-legend span::before { content: ""; width: 16px; border-top: 2.25px solid var(--sky-label); }
+.field-app .sky-report .condition-legend .is-reference::before { border-top: 1.5px dashed var(--sky-secondary); }
