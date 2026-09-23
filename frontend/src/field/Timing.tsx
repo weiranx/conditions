@@ -251,11 +251,11 @@ export function Timing({ workspace: w }: { workspace: Workspace }) {
         <Thresholds workspace={w} />
       </details>
       <section className="field-panel">
-        <h2>Window assessment</h2>
+        <h2>Hour-by-hour limits</h2>
         <p>{w.travelWindowSummary}</p>
         {w.peakCriticalWindow && (
           <p className="field-feedback">
-            Highest critical weather signal:{" "}
+            Most severe weather:{" "}
             {w.formatClockForStyle(
               w.peakCriticalWindow.time,
               w.preferences.timeStyle,
