@@ -1,139 +1,218 @@
+/* AI brief panel: header, empty/loading states and the parsed explanation.
+   Accent marks only the recommended move; every other section stays neutral. */
+.ai-brief,
 .ai-explanation {
-  margin-top: 23px;
-  --ai-accent: var(--f-green);
+  --ai-label: var(--sky-label, var(--f-ink));
+  --ai-secondary: var(--sky-secondary, var(--f-muted));
+  --ai-fill: var(--sky-fill, var(--f-wash));
+  --ai-accent: var(--sky-accent, var(--f-green));
+  --ai-separator: var(--sky-separator, var(--f-line));
 }
-.ai-explanation-primary,
-.ai-explanation-supporting {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
+.ai-brief-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
-.ai-explanation-primary {
-  align-items: stretch;
+.ai-brief-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.ai-explanation-card {
-  border: 1px solid var(--f-line);
-  border-radius: 14px;
-  padding: 23px 25px;
-  background: var(--f-soft);
-  min-width: 0;
+.ai-brief-kicker svg {
+  color: var(--ai-accent);
 }
-.ai-explanation-card.is-action {
-  background: var(--f-wash);
-  border-color: color-mix(in srgb, var(--f-green) 24%, var(--f-line));
+.field-app .field-panel.ai-brief .ai-brief-heading h2 {
+  margin-bottom: 0;
 }
-.ai-explanation-card:only-child {
-  grid-column: 1/-1;
+.field-app .ai-brief .ai-brief-regenerate {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
 }
-.ai-explanation-card.is-note .ai-explanation-copy {
-  max-width: 78ch;
+.ai-brief .field-button[aria-disabled="true"] {
+  cursor: progress;
+  opacity: 0.7;
 }
-.ai-explanation-card > header,
-.ai-explanation-detail > summary {
+.ai-brief-regenerate svg.is-spinning {
+  animation: ai-brief-spin 1s linear infinite;
+}
+.ai-brief-empty {
   display: flex;
   align-items: center;
-  gap: 11px;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--ai-fill);
 }
-.ai-explanation-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  color: var(--ai-accent);
-  background: color-mix(in srgb, var(--ai-accent) 10%, transparent);
-  flex-shrink: 0;
-}
-.field-report .ai-explanation h3 {
-  font-size: 16px;
-  line-height: 1.4;
-  letter-spacing: -0.015em;
+.ai-brief-empty p {
   margin: 0;
-  font-weight: 600;
+  max-width: 56ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ai-secondary);
 }
-.field-report .ai-explanation-copy {
-  font-size: 15px;
-  line-height: 1.75;
-  color: var(--f-ink);
-  overflow-wrap: anywhere;
+.ai-brief-empty .field-button {
+  flex: none;
+}
+.field-app .field-panel.ai-brief > .field-warning {
   margin-top: 14px;
 }
+.field-app .field-panel.ai-brief > .ai-brief-footnote {
+  display: flex;
+  max-width: none;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--ai-separator);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ai-secondary);
+}
+.ai-brief-footnote svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.ai-explanation {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
+  transition: opacity 0.2s ease;
+}
+.ai-explanation.is-stale {
+  opacity: 0.5;
+}
+.ai-explanation-section {
+  min-width: 0;
+}
+.ai-explanation-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ai-secondary);
+}
+.ai-explanation-heading svg {
+  flex: none;
+}
+.field-app .ai-explanation .ai-explanation-section .ai-explanation-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: var(--ai-label);
+}
+.ai-explanation-tag {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ai-fill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ai-explanation-copy {
+  margin-top: 5px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ai-label);
+  overflow-wrap: anywhere;
+}
 .ai-explanation-copy p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 .ai-explanation-copy p:last-child {
   margin-bottom: 0;
 }
+/* The overall picture reads as the lead paragraph. */
+.ai-explanation-section:is(.is-overview, .is-note) .ai-explanation-copy {
+  max-width: 72ch;
+  font-size: 17px;
+  line-height: 1.55;
+}
+/* The recommended move is the one thing to act on. */
+.ai-explanation-section.is-action {
+  padding: 14px 16px 15px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ai-accent) 9%, var(--sky-surface, var(--f-paper)));
+  box-shadow: inset 4px 0 0 var(--ai-accent);
+}
+.ai-explanation-section.is-action .ai-explanation-heading,
+.field-app .ai-explanation .is-action .ai-explanation-heading h3 {
+  color: var(--ai-accent);
+}
 .ai-explanation-supporting {
-  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ai-separator);
 }
-.ai-explanation-detail {
-  border: 1px solid var(--f-line);
-  border-radius: 12px;
-  min-width: 0;
-  overflow: hidden;
+.ai-explanation-supporting .ai-explanation-copy {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ai-secondary);
 }
-.ai-explanation-detail > summary {
-  padding: 15px 19px;
-  min-height: 62px;
-  list-style: none;
-  cursor: pointer;
+
+.ai-explanation-skeleton {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
 }
-.ai-explanation-detail > summary::-webkit-details-marker {
-  display: none;
+.ai-explanation-skeleton span {
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--ai-fill) 30%, color-mix(in srgb, var(--ai-fill) 40%, transparent) 50%, var(--ai-fill) 70%) 0 0 / 300% 100%;
+  animation: ai-brief-shimmer 1.4s ease-in-out infinite;
 }
-.ai-explanation-detail > summary:hover {
-  background: var(--f-soft);
+.ai-explanation-skeleton span:nth-child(2) { width: 94%; }
+.ai-explanation-skeleton span:nth-child(3) { width: 72%; }
+.ai-explanation-skeleton span.is-block { height: 64px; margin-top: 8px; border-radius: 14px; }
+.ai-explanation-skeleton span.is-short { width: 48%; }
+@keyframes ai-brief-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
 }
-.ai-explanation-detail > .ai-explanation-copy {
-  padding: 0 21px 21px;
-  margin-top: 0;
+@keyframes ai-brief-spin {
+  to { transform: rotate(360deg); }
 }
-.ai-explanation-chevron {
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-right: 1.5px solid var(--f-muted);
-  border-bottom: 1.5px solid var(--f-muted);
-  transform: rotate(45deg);
-  margin-left: auto;
-  margin-right: 3px;
+@media (prefers-reduced-motion: reduce) {
+  .ai-explanation-skeleton span,
+  .ai-brief-regenerate svg.is-spinning {
+    animation: none;
+  }
 }
-.ai-explanation-detail[open] .ai-explanation-chevron {
-  transform: rotate(225deg);
-}
-.ai-explanation .is-watch {
-  --ai-accent: var(--f-warn);
-}
-.ai-explanation .is-confidence {
-  --ai-accent: #638d91;
-}
-.ai-explanation .is-comfort {
-  --ai-accent: var(--f-warn);
-}
-@media (max-width: 800px) {
-  .ai-explanation-primary,
+@media (max-width: 650px) {
+  .ai-brief-empty {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .ai-explanation-supporting {
     grid-template-columns: 1fr;
   }
-  .ai-explanation-card {
-    padding: 20px;
-  }
-  .field-report .ai-explanation-copy {
-    font-size: 14px;
-    line-height: 1.75;
+  .ai-explanation-section:is(.is-overview, .is-note) .ai-explanation-copy {
+    font-size: 16px;
   }
 }
 @media print {
-  .ai-explanation-detail::details-content {
-    content-visibility: visible;
+  .ai-brief-regenerate,
+  .ai-brief-empty {
+    display: none !important;
   }
-  .ai-explanation-detail > .ai-explanation-copy {
-    display: block;
+  .ai-explanation.is-stale {
+    opacity: 1;
   }
-  .ai-explanation-card,
-  .ai-explanation-detail {
+  .ai-explanation-section {
     break-inside: avoid;
+  }
+  .ai-explanation-section.is-action {
+    box-shadow: none;
+    border-left: 4px solid var(--ai-accent);
   }
 }

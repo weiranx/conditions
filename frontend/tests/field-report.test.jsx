@@ -386,7 +386,13 @@ test("AI explanation splits inline labels without losing long continuation parag
   assert.match(html, /<h3>Big picture<\/h3>/);
   assert.match(html, /<h3>Best move<\/h3>/);
   assert.match(html, /Choose sheltered terrain/);
-  assert.match(html, /ai-explanation-detail is-watch[^>]*open/);
+  // Inverted pyramid: overview, then the recommended move, then support in brief order.
+  assert.deepEqual(
+    [...html.matchAll(/ai-explanation-section is-(\w+)/g)].map((m) => m[1]),
+    ["overview", "action", "evidence", "watch", "confidence", "comfort"],
+  );
+  assert.doesNotMatch(html, /<details/);
+  assert.match(html, /Not a safety factor/);
   assert.doesNotMatch(html, /BIG PICTURE:/);
 });
 test("AI explanation retains legacy text, preambles, markdown labels and unknown sections", () => {
