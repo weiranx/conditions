@@ -472,9 +472,12 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       // Step 2: Estimate arrival times, then evaluate each checkpoint at its ETA
       // instead of applying the trailhead start time to every point on the route.
       // Fill missing elevations first so climbing and descent can weight timing.
+      // AI-generated elevations are unverified and may not match the geocoded or
+      // pinned coordinates, so a terrain lookup replaces them when it succeeds.
+      const replaceElevations = routeSource === 'generated';
       if (typeof fetchElevationFt === 'function') {
         await Promise.all(waypointsCopy.map(async (wp) => {
-          if (knownElevation(wp.elev_ft) !== null) return;
+          if (!replaceElevations && knownElevation(wp.elev_ft) !== null) return;
           try {
             const { elevationFt } = await withTimeout(Promise.resolve(fetchElevationFt(wp.lat, wp.lon)), 10000, 'Checkpoint elevation') || {};
             if (Number.isFinite(elevationFt)) wp.elev_ft = Math.round(elevationFt);

@@ -250,3 +250,18 @@ test('six-part briefings split into sections, free text stays as written', () =>
   assert.equal(doc.querySelector('.sky-route-bottom p').textContent, 'Go early.');
   assert.deepEqual([...doc.querySelectorAll('.sky-route-gear li')].map((li) => li.textContent), ['Shell', 'headlamp']);
 });
+
+test('no stop is called the high point when every elevation is unknown', () => {
+  const analysis = result([
+    point({ elev_ft: null, etaTime: '06:00' }),
+    point({ name: 'Summit', elev_ft: null, etaTime: '11:00' }),
+    point({ name: 'Return to Trailhead', leg: 'return', elev_ft: null, etaTime: '16:00' }),
+  ]);
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: analysis })} />);
+  const doc = new JSDOM(html).window.document;
+  assert.doesNotMatch(doc.querySelector('.sky-lead').textContent, /high point/);
+  const facts = [...doc.querySelectorAll('.sky-stat-strip dt')].map((dt) => dt.textContent);
+  assert.ok(!facts.includes('Top out'));
+  assert.ok(!facts.includes('High point'));
+  assert.ok(facts.includes('Back at start'));
+});

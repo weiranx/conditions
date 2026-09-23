@@ -465,3 +465,56 @@ test('AI-disabled named routes fail before waypoint generation when no mapped tr
   expect(askAI).not.toHaveBeenCalled();
   expect(invokeSafetyHandler).not.toHaveBeenCalled();
 });
+
+test('AI-generated elevations are replaced by terrain lookups before ETAs are weighted', async () => {
+  const app = express();
+  app.use(express.json());
+  const terrain = { '37.7329': 4000, '37.7459': 8800 };
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async (prompt, options) => (options.feature === 'route-waypoints'
+      ? '[{"name":"Happy Isles Trailhead","lat":37.7329,"lon":-119.5587,"elev_ft":9000},{"name":"Vernal Fall Footbridge","lat":37.7275,"lon":-119.5431,"elev_ft":4400},{"name":"Half Dome","lat":37.7459,"lon":-119.5332,"elev_ft":1000}]'
+      : 'Named route briefing'),
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45, windGust: 18 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async () => ({ ok: false })),
+    fetchHeaders: {},
+    // The footbridge lookup fails, so its generated elevation is kept.
+    fetchElevationFt: async (lat) => ({ elevationFt: terrain[lat.toFixed(4)] ?? null }),
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({ peak: 'Half Dome Terrain Lookup Test', route: 'Mist Trail', lat: 37.7459, lon: -119.5332, date: '2026-07-12', start: '06:00' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([4000, 4400, 8800, 4000]);
+  expect(response.body.timing.basis).toBe('distance-and-vert');
+});
+
+test('GPX elevations are kept rather than replaced by terrain lookups', async () => {
+  const app = express();
+  app.use(express.json());
+  const fetchElevationFt = jest.fn(async () => ({ elevationFt: 1 }));
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => 'GPX route briefing',
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(),
+    fetchHeaders: {},
+    fetchElevationFt,
+  });
+
+  const response = await request(app)
+    .post('/api/route-analysis')
+    .send({
+      peak: 'Mount Rainier', route: 'Imported track', lat: 46.85, lon: -121.76, date: '2026-07-10', start: '06:00',
+      waypoints: [
+        { name: 'Route start', lat: 46.8, lon: -121.7, elev_ft: 5400, distance_miles: 0, progress_percent: 0 },
+        { name: 'Route finish', lat: 46.85, lon: -121.76, distance_miles: 5.2, progress_percent: 100 },
+      ],
+    });
+
+  expect(response.status).toBe(200);
+  expect(response.body.waypoints.map((waypoint) => waypoint.elev_ft)).toEqual([5400, 1]);
+  expect(fetchElevationFt).toHaveBeenCalledTimes(1);
+});

@@ -43,9 +43,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const overStops = stops.filter((stop) => stop.tone === "over").length;
   const missingStops = stops.filter((stop) => stop.tone === "missing").length;
   const darkStops = stops.filter((stop) => stop.dark).length;
-  const highIndex = result && result.summaries.length
-    ? result.summaries.reduce((best, p, i, all) => (hasRouteNumber(p.elev_ft) && (!hasRouteNumber(all[best].elev_ft) || p.elev_ft > all[best].elev_ft) ? i : best), 0)
-    : -1;
+  // -1 when no checkpoint elevation is known, so no stop is named the high point.
+  const highIndex = (result?.summaries ?? []).reduce((best, p, i, all) =>
+    (hasRouteNumber(p.elev_ft) && (best < 0 || p.elev_ft > (all[best].elev_ft ?? -Infinity)) ? i : best), -1);
   const meta = result?.routeMetadata || (gpx ? { distanceMiles: gpx.distanceMiles, elevationGainFt: gpx.elevationGainFt, maxElevationFt: gpx.maxElevationFt } : null);
   const lastDistance = result?.summaries.at(-1)?.distance_miles;
   const distance = hasRouteNumber(meta?.distanceMiles) ? meta.distanceMiles : hasRouteNumber(lastDistance) ? lastDistance : null;
