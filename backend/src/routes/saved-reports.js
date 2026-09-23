@@ -4,7 +4,7 @@ const { createHash, randomBytes } = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { readSessionToken } = require('../auth/account-access');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
-const { createReportUsageLimitService } = require('../auth/report-usage-limit');
+const { REPORT_GENERATION_FEATURE_KEY, createReportUsageLimitService } = require('../auth/report-usage-limit');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
 
 const MAX_SAVED_REPORT_BYTES = 4 * 1024 * 1024;
@@ -378,12 +378,24 @@ const registerSavedReportRoutes = ({
     }
   });
 
-  app.post('/api/account/reports', async (req, res) => {
-    if (!requireFeature(res, ensureReportHistoryEnabled, 'Saving new reports is unavailable.')) return;
+  const countSavedReports = async (query, userId) => {
+    const countResult = await query(`
+      SELECT COUNT(*)::bigint AS report_count
+      FROM saved_reports
+      WHERE user_id = $1
+    `, [userId]);
+    return normalizeReportCount(countResult?.rows?.[0]?.report_count);
+  };
+
+  // Meters one generated report against the monthly allowance without storing it.
+  app.post('/api/account/reports/generations', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user || !ensureDatabase(res)) return;
+    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+    if (!/^[A-Za-z0-9_-]{8,64}$/u.test(idempotencyKey)) {
+      return res.status(400).json({ error: 'A valid idempotencyKey is required.' });
+    }
     try {
-      const normalized = normalizeSavedReport(req.body?.report);
       if (!reportUsageService?.available || typeof reportUsageService.consumeReportSlot !== 'function') {
         return res.status(503).json({
           error: 'Report usage is temporarily unavailable. Please try again later.',
@@ -391,28 +403,53 @@ const registerSavedReportRoutes = ({
         });
       }
       const accountTier = await getAccountTier(req, user);
-      const shareToken = createShareToken();
       const { result, reportUsage } = await reportUsageService.consumeReportSlot(
         user.id,
         accountTier.key,
         async (query) => {
-          const createdReport = await query(`
-            INSERT INTO saved_reports (user_id, share_token, title, report)
-            VALUES ($1, $2, $3, $4::jsonb)
-            RETURNING id, share_token, title, created_at, updated_at
-          `, [user.id, shareToken, normalized.title, normalized.serialized]);
-          const countResult = await query(`
-            SELECT COUNT(*)::bigint AS report_count
-            FROM saved_reports
-            WHERE user_id = $1
-          `, [user.id]);
-          return {
-            createdReport,
-            reportCount: normalizeReportCount(countResult?.rows?.[0]?.report_count),
-          };
+          const inserted = await query(`
+            INSERT INTO feature_usage_events (idempotency_key, user_id, feature_key, status)
+            VALUES ($1, $2, $3, 'succeeded')
+            ON CONFLICT (feature_key, idempotency_key) DO NOTHING
+          `, [`${user.id}:${idempotencyKey}`, user.id, REPORT_GENERATION_FEATURE_KEY]);
+          return { inserted: inserted.rowCount > 0, reportCount: await countSavedReports(query, user.id) };
         },
       );
-      const row = result.createdReport.rows[0];
+      return res.status(result.inserted ? 201 : 200).json({
+        reportCount: result.reportCount,
+        // A retried key was already counted, so report the stored usage instead.
+        reportUsage: result.inserted
+          ? reportUsage
+          : await reportUsageService.getUserUsage(user.id, accountTier.key),
+      });
+    } catch (error) {
+      return handleError(req, res, error);
+    }
+  });
+
+  app.post('/api/account/reports', async (req, res) => {
+    if (!requireFeature(res, ensureReportHistoryEnabled, 'Saving new reports is unavailable.')) return;
+    const user = await requireUser(req, res);
+    if (!user || !ensureDatabase(res)) return;
+    try {
+      const normalized = normalizeSavedReport(req.body?.report);
+      if (!reportUsageService?.available || typeof reportUsageService.getUserUsage !== 'function') {
+        return res.status(503).json({
+          error: 'Report usage is temporarily unavailable. Please try again later.',
+          code: 'REPORT_USAGE_UNAVAILABLE',
+        });
+      }
+      const accountTier = await getAccountTier(req, user);
+      const shareToken = createShareToken();
+      // Saving is not metered: the allowance was charged when the report was generated.
+      const createdReport = await database.query(`
+        INSERT INTO saved_reports (user_id, share_token, title, report)
+        VALUES ($1, $2, $3, $4::jsonb)
+        RETURNING id, share_token, title, created_at, updated_at
+      `, [user.id, shareToken, normalized.title, normalized.serialized]);
+      const reportCount = await countSavedReports(database.query, user.id);
+      const reportUsage = await reportUsageService.getUserUsage(user.id, accountTier.key);
+      const row = createdReport.rows[0];
       return res.status(201).json({
         report: {
           id: row.id,
@@ -421,7 +458,7 @@ const registerSavedReportRoutes = ({
           createdAt: normalizeTimestamp(row.created_at),
           updatedAt: normalizeTimestamp(row.updated_at),
         },
-        reportCount: result.reportCount,
+        reportCount,
         reportUsage,
       });
     } catch (error) {

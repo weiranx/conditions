@@ -400,10 +400,12 @@ test('late manual saves from the old account cannot attach to the new one', asyn
   assert.equal(h.current.reportSaveIntentRef.current, 'browser-only');
 });
 
+const usageSyncs = [];
 function useSyncedSession(input) {
   const session = useSavedReportSession(input);
   const noOp = () => {};
   useSavedReportSync(session, { ...input, hasObjective: true, viewingHistoryReport: false,
+    syncGeneratedReportUsage: (...args) => usageSyncs.push(args),
     setReportChatMessages: noOp, resetRouteState: noOp, setReportChatSessionKey: noOp });
   return session;
 }
@@ -412,16 +414,33 @@ function savedTestSnapshot() {
   return buildPersistedReport({lat:plan.lat,lon:plan.lon,objectiveName:'Test',searchQuery:'',forecastDate:plan.date,
     alpineStartTime:plan.start,targetElevationInput:'',travelWindowHours:10},safetyData,{}, {preferences});
 }
-test('generated reports are not saved to the account until the user saves them', async t => {
+test('generated reports are metered after account hydration but never saved', async t => {
+  usageSyncs.length = 0;
   const input={accountLoading:true,accountUserId:undefined,safetyData:null,reportSnapshot:null};
   const h=await mountHook(t,useSyncedSession,input,true);
   await act(async()=>h.current.beginSavedReportGeneration());
   const snapshot=savedTestSnapshot();
   await h.render({...input,safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  assert.equal(h.requests.length,0);
   await h.render({...input,accountLoading:false,accountUserId:'account-A',safetyData:snapshot.safetyData,reportSnapshot:snapshot});
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,450));});
+  assert.equal(h.requests.length,1);
+  assert.equal(h.requests[0].url.pathname,'/api/account/reports/generations');
+  const {idempotencyKey}=JSON.parse(h.requests[0].init.body);
+  assert.match(idempotencyKey,/^[A-Za-z0-9_-]{8,64}$/);
+  await act(async()=>h.requests[0].respond({reportCount:2,reportUsage:manualSaveUsage}));
+  assert.deepEqual(usageSyncs,[['account-A',2,manualSaveUsage]]);
+  assert.equal(h.current.activeSavedReportId,null,'metering does not create a saved report');
+});
+
+test('signed-out generations are not metered or saved', async t => {
+  const input={accountLoading:false,accountUserId:undefined,safetyData:null,reportSnapshot:null};
+  const h=await mountHook(t,useSyncedSession,input);
+  await act(async()=>h.current.beginSavedReportGeneration());
+  const snapshot=savedTestSnapshot();
+  await h.render({...input,safetyData:snapshot.safetyData,reportSnapshot:snapshot});
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,450));});
   assert.equal(h.requests.length,0);
-  assert.equal(h.current.activeSavedReportId,null);
 });
 
 test('account changes cancel queued updates to a saved report', async t => {
@@ -433,7 +452,7 @@ test('account changes cancel queued updates to a saved report', async t => {
   await act(async()=>h.current.setActiveSavedReportId('owned-by-B'));
   await h.render({...input,accountUserId:'account-C',safetyData:snapshot.safetyData,reportSnapshot:snapshot});
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,450));});
-  assert.equal(h.requests.length,0,'no queued update is sent with the next account session');
+  assert.ok(h.requests.every(req=>req.url.pathname==='/api/account/reports/generations'),'no queued update is sent with the next account session');
 });
 
 for (const legacy of [false, true]) {

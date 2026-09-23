@@ -304,6 +304,9 @@ export function createMockApi({ databasePath } = {}) {
           : null,
       });
     }
+    if (p === "/api/account/reports/generations" && method === "POST") {
+      return ok({ reportCount: db.reports.length, reportUsage: usage("Reports") });
+    }
     if (p === "/api/account/reports/email") {
       db.outbox.push({
         type: "report",

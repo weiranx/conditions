@@ -150,6 +150,8 @@ export default function FieldApp() {
         let token = kind === "save"
           ? w.activeSavedReportShareToken
           : w.sharedReportToken || w.activeSavedReportShareToken;
+        // Emailing links to a saved copy, so an unsaved report is saved first.
+        const savedForEmail = !token;
         if (!token) {
           const saved = await w.saveReportSnapshot(report, (result) => {
             account.syncGeneratedReportUsage(account.user!.id, result.reportCount, result.reportUsage);
@@ -157,7 +159,10 @@ export default function FieldApp() {
           if (!saved) return;
           token = saved.shareToken;
         }
-        if (kind === "email") setFeedback(await sendReportEmail(report, token));
+        if (kind === "email") {
+          const sent = await sendReportEmail(report, token);
+          setFeedback(savedForEmail ? `Report saved to your account. ${sent}` : sent);
+        }
         else {
           setFeedback("Report saved to your account.");
         }
