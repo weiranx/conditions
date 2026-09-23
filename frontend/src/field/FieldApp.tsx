@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,6 +23,7 @@ import {
   sendReportEmail,
 } from "../lib/saved-reports";
 import { copyTextToClipboard } from "../app/clipboard";
+import { markLandingSeen } from "../app/landing-gate";
 import { saveObjectiveWatch } from "../lib/objective-watches";
 import {
   loadPersistedReport,
@@ -61,6 +62,8 @@ export default function FieldApp() {
   const [feedback, setFeedback] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
+  // Anyone who has opened the planner goes straight back to it from `/`.
+  useEffect(markLandingSeen, []);
   const plan: Plan = {
     name: w.objectiveName,
     lat: w.hasObjective ? w.position.lat : null,
@@ -515,6 +518,7 @@ export default function FieldApp() {
             </span>
             <p>A planning aid. Verify conditions in the field.</p>
             <div>
+              <a href="/welcome">About</a>
               <a
                 href="/status"
                 onClick={(e) => {
