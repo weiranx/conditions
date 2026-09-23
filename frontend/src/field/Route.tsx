@@ -1,12 +1,22 @@
 import { formatSnowDepthForElevationUnit } from "../app/core";
 import { useRef, useState } from "react";
-import { ArrowRight, Mountain, Upload } from "lucide-react";
+import { ArrowRight, CircleDashed, Clock, CloudRain, Info, Moon, Mountain, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Upload, Wind } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type { Workspace } from "./model/useWorkspace";
 import { parseGpxFile } from "../lib/gpx";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
-import { buildCheckpointProfile, checkpointTone, describeRouteTiming, hasRouteNumber } from "./route-planning";
+import {
+  buildCheckpointProfile,
+  buildProfileTicks,
+  buildRouteLegs,
+  checkpointTone,
+  describeRouteTiming,
+  formatEtaDate,
+  formatLegDuration,
+  hasRouteNumber,
+  splitRouteBriefing,
+} from "./route-planning";
 import "./route-planning.css";
 import { RouteProfile, type ProfileStop } from "./sky/RouteProfile";
 
@@ -28,9 +38,11 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
     name: p.name,
     eta: p.etaTime || "",
     tone: checkpointTone(p, w.preferences),
+    dark: p.daylight === "dark",
   }));
   const overStops = stops.filter((stop) => stop.tone === "over").length;
   const missingStops = stops.filter((stop) => stop.tone === "missing").length;
+  const darkStops = stops.filter((stop) => stop.dark).length;
   const highIndex = result && result.summaries.length
     ? result.summaries.reduce((best, p, i, all) => (hasRouteNumber(p.elev_ft) && (!hasRouteNumber(all[best].elev_ft) || p.elev_ft > all[best].elev_ft) ? i : best), 0)
     : -1;
@@ -40,6 +52,23 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const gain = hasRouteNumber(meta?.elevationGainFt) ? meta.elevationGainFt : null;
   const highPoint = hasRouteNumber(meta?.maxElevationFt) ? meta.maxElevationFt : profile ? profile.high : null;
   const returnStop = result?.summaries.at(-1)?.leg === "return" ? result.summaries.at(-1) : undefined;
+  const lastStop = result?.summaries.at(-1);
+  const legs = buildRouteLegs(result?.summaries ?? []);
+  const profileTicks = profile
+    ? buildProfileTicks(profile.low, profile.high).map((tick) => ({ y: tick.y, label: w.formatElevationDisplay(tick.feet) }))
+    : [];
+  const briefing = splitRouteBriefing(result?.analysis);
+  const bottomLine = briefing?.find((part) => part.key === "bottom-line");
+  const facts: { label: string; value: string; note?: string }[] = [
+    ...(distance !== null ? [{ label: "Distance", value: w.formatDistanceDisplay(distance) }] : []),
+    ...(gain !== null ? [{ label: "Gain", value: w.formatElevationDeltaDisplay(gain) }] : []),
+    ...(highPoint !== null ? [{ label: "High point", value: w.formatElevationDisplay(highPoint) }] : []),
+    ...(highIndex >= 0 && result?.summaries[highIndex]?.etaTime && highIndex !== (result?.summaries.length ?? 0) - 1
+      ? [{ label: "Top out", value: result.summaries[highIndex].etaTime as string }] : []),
+    ...(lastStop?.etaTime
+      ? [{ label: returnStop ? "Back at start" : "Finish", value: lastStop.etaTime, ...(lastStop.daylight === "dark" ? { note: "After dark" } : {}) }] : []),
+    { label: "Planned time", value: `${w.travelWindowHours} h` },
+  ];
   function analyze(name: string, useGpx = false) {
     if (!name.trim() || readOnly || w.routeLoading || !available.routeAnalysis) return;
     w.handleFetchRouteAnalysis(
@@ -267,12 +296,15 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
       )}
       {result && (
         <>
-          {(distance !== null || gain !== null || highPoint !== null) && (
+          {facts.length > 0 && (
             <dl className="sky-stat-strip sky-section">
-              <div><dt>Distance</dt><dd>{distance !== null ? w.formatDistanceDisplay(distance) : "—"}</dd></div>
-              <div><dt>Gain</dt><dd>{gain !== null ? w.formatElevationDeltaDisplay(gain) : "—"}</dd></div>
-              <div><dt>High point</dt><dd>{highPoint !== null ? w.formatElevationDisplay(highPoint) : "—"}</dd></div>
-              <div><dt>Planned time</dt><dd>{w.travelWindowHours} h</dd></div>
+              {facts.map((fact) => (
+                <div key={fact.label}>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                  {fact.note && <small>{fact.note}</small>}
+                </div>
+              ))}
             </dl>
           )}
           <section className="sky-section" aria-labelledby="sky-route-along">
@@ -281,142 +313,209 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               <p>Colored by the forecast at the time you reach each point.</p>
             </div>
             <div className="sky-card sky-route-card">
-            <span className="sky-card-head">
-              <span>
-                {result.routeSourceDetails?.sourceLabel ||
-                  (result.routeSource === "generated" ? "Generated route" : result.routeSource === "gpx" ? "Your GPX track" : result.routeSource === "nps" ? "National Park Service route" : result.routeSource === "openstreetmap" ? "OpenStreetMap route" : "Route analysis")}
+              <span className="sky-card-head">
+                <span className="sky-route-source">
+                  <RouteIcon size={15} aria-hidden="true" />
+                  {result.routeSourceDetails?.sourceLabel ||
+                    (result.routeSource === "generated" ? "Generated route" : result.routeSource === "gpx" ? "Your GPX track" : result.routeSource === "nps" ? "National Park Service route" : result.routeSource === "openstreetmap" ? "OpenStreetMap route" : "Route analysis")}
+                </span>
+                <span className={`sky-chip${returned < result.summaries.length ? " is-missing" : ""}`}>
+                  {returned} of {result.summaries.length} forecasts returned
+                </span>
               </span>
-              <span className={`sky-chip${returned < result.summaries.length ? " is-missing" : ""}`}>
-                {returned} of {result.summaries.length} forecasts returned
-              </span>
-            </span>
-            {result.routeSource === "generated" && (
-              <p className="sky-notice is-info">Estimated checkpoints · Route geometry is generated and has not been verified against a mapped trail.</p>
-            )}
-            {(result.partialData || returned < result.summaries.length) && (
-              <p className="sky-notice is-missing">
-                Some checkpoints have incomplete source data. Review each
-                forecast before relying on this analysis.
-              </p>
-            )}
-            {profile && (
-              <RouteProfile points={points} stops={stops} selected={selectedIndex} onSelect={setCheckpoint}
-                caption="Elevation profile across route checkpoints" />
-            )}
-            {profile && (
-              <p className="field-route-profile-caption">
-                {w.formatElevationDisplay(profile.low)}–{w.formatElevationDisplay(profile.high)} · {profile.axis === "distance"
-                  ? "Spaced by route distance"
-                  : profile.axis === "progress" ? "Spaced by estimated route progress" : "Checkpoint order; distance unavailable"}
-              </p>
-            )}
-            <div className="sky-route-itinerary-head">
-              <div>
-                <h3>Checkpoint itinerary</h3>
-                <p className="field-muted">{describeRouteTiming(result.timing)} Times are local to the objective.</p>
-              </div>
-            </div>
-            {result.summaries.length === 0 ? (
-              <p className="field-feedback">No checkpoint forecasts were returned. Try another route or import a GPX track.</p>
-            ) : (
-              <ol className="field-route-itinerary" aria-label="Checkpoint itinerary">
-                {result.summaries.map((point, i) => (
-                  <li key={i}>
-                    <button
-                      type="button"
-                      className="field-route-stop"
-                      aria-pressed={selectedIndex === i}
-                      aria-controls="field-route-checkpoint-detail"
-                      onClick={() => setCheckpoint(i)}
-                    >
-                      <span className={`field-route-stop-number is-${stops[i]?.tone}`} aria-hidden="true">{i + 1}</span>
-                      <span className="field-route-stop-place">
-                        <strong>{point.name}</strong>
-                        <small>{displayNumber(point.elev_ft, w.formatElevationDisplay)} · {hasRouteNumber(point.distance_miles) ? `${w.formatDistanceDisplay(point.distance_miles)} along route` : "Distance unavailable"}</small>
-                      </span>
-                      <span>
-                        <strong>{point.etaTime || "Time unavailable"}</strong>
-                        <small>{point.etaDate || "Date unavailable"}{point.daylight === "dark" ? " · After dark" : ""}</small>
-                      </span>
-                      <span>
-                        <strong>{point.dataAvailable ? displayNumber(point.weather.temp, w.formatTempDisplay) : "Unavailable"}</strong>
-                        <small>Gust {point.dataAvailable ? displayNumber(point.weather.windGust, w.formatWindDisplay) : "unavailable"}</small>
-                      </span>
-                      <span className="field-route-stop-evidence">
-                        <strong>{point.dataAvailable ? "Forecast returned" : "Missing forecast"}</strong>
-                        <small>{point.dataAvailable && hasRouteNumber(point.activeAlerts) && point.activeAlerts > 0
-                          ? `${point.activeAlerts} active alerts` : "View checkpoint details"}</small>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {selected && (
-              <div className="field-checkpoint" id="field-route-checkpoint-detail" role="region" aria-label="Selected checkpoint" aria-live="polite">
-                <h3>{selected.name}</h3>
-                <p>
-                  {displayNumber(selected.elev_ft, w.formatElevationDisplay)} ·{" "}
-                  {hasRouteNumber(selected.distance_miles) ? `${w.formatDistanceDisplay(selected.distance_miles)} along route` : "Distance unavailable"} · Arrive{" "}
-                  {selected.etaDate || ""}{" "}
-                  {selected.etaTime || "Time unavailable"}
-                  {selected.daylight === "dark" ? " · after dark" : ""}
+              {result.routeSource === "generated" && (
+                <p className="sky-notice is-info"><Info size={18} aria-hidden="true" /><span>Estimated checkpoints · Route geometry is generated and has not been verified against a mapped trail.</span></p>
+              )}
+              {(result.partialData || returned < result.summaries.length) && (
+                <p className="sky-notice is-missing">
+                  <CircleDashed size={18} aria-hidden="true" />
+                  <span>
+                    Some checkpoints have incomplete source data. Review each
+                    forecast before relying on this analysis.
+                  </span>
                 </p>
-                <dl className="sky-stat-grid">
-                  <div>
-                    <dt>Planning score</dt>
-                    <dd>{selected.dataAvailable ? displayNumber(selected.score, (n) => `${n}/100`) : "Unavailable"}</dd>
-                    <small>
-                      {selected.dataAvailable
-                        ? "Forecast available"
-                        : "Missing data"}
-                    </small>
-                  </div>
-                  <div>
-                    <dt>Weather</dt>
-                    <dd>{selected.dataAvailable ? displayNumber(selected.weather.temp, w.formatTempDisplay) : "Unavailable"}</dd>
-                    <small>{selected.dataAvailable ? selected.weather.description : "Forecast did not load"}</small>
-                  </div>
-                  <div>
-                    <dt>Wind gust</dt>
-                    <dd>{selected.dataAvailable ? displayNumber(selected.weather.windGust, w.formatWindDisplay) : "Unavailable"}</dd>
-                    <small>
-                      Feels like{" "}
-                      {selected.dataAvailable ? displayNumber(selected.weather.feelsLike, w.formatTempDisplay) : "unavailable"}
-                    </small>
-                  </div>
-                  <div>
-                    <dt>Precipitation</dt>
-                    <dd>{selected.dataAvailable ? displayNumber(selected.weather.precipChance, (n) => `${n}%`) : "Unavailable"}</dd>
-                  </div>
-                  <div>
-                    <dt>Avalanche</dt>
-                    <dd>{(selected.dataAvailable && selected.avalanche?.risk) || "Unavailable"}</dd>
-                  </div>
-                  <div>
-                    <dt>Alerts / snow depth</dt>
-                    <dd>
-                      {selected.dataAvailable ? displayNumber(selected.activeAlerts, (n) => `${n} alerts`) : "Alerts unavailable"} ·{" "}
-                      {formatSnowDepthForElevationUnit(
-                        selected.dataAvailable ? selected.snowDepthIn : null,
-                        w.preferences.elevationUnit,
-                      )}
-                    </dd>
-                  </div>
-                </dl>
+              )}
+              {profile && (
+                <RouteProfile points={points} stops={stops} selected={selectedIndex} onSelect={setCheckpoint}
+                  ticks={profileTicks} caption="Elevation profile across route checkpoints" />
+              )}
+              {profile && (
+                <div className="sky-route-legend">
+                  <p className="field-route-profile-caption">
+                    {profile.axis === "distance"
+                      ? "Spaced by route distance"
+                      : profile.axis === "progress" ? "Spaced by estimated route progress" : "Checkpoint order; distance unavailable"}
+                  </p>
+                  <ul aria-label="Profile key">
+                    {overStops > 0 && <li><span className="sky-swatch is-over" aria-hidden="true" />Over your limits</li>}
+                    {missingStops > 0 && <li><span className="sky-swatch is-missing" aria-hidden="true" />Can't check every limit</li>}
+                    {darkStops > 0 && <li><span className="sky-swatch is-night" aria-hidden="true" />After dark</li>}
+                  </ul>
+                </div>
+              )}
+              <div className="sky-route-itinerary-head">
+                <h3>Checkpoint itinerary</h3>
+                <p>{describeRouteTiming(result.timing)} Times are local to the objective.</p>
               </div>
-            )}
+              {result.summaries.length === 0 ? (
+                <p className="field-feedback">No checkpoint forecasts were returned. Try another route or import a GPX track.</p>
+              ) : (
+                <ol className="field-route-itinerary" aria-label="Checkpoint itinerary">
+                  {result.summaries.map((point, i) => {
+                    const leg = legs[i];
+                    const showDate = i === 0 || point.etaDate !== result.summaries[i - 1].etaDate;
+                    return (
+                      <li key={i} className={`is-${stops[i]?.tone}${point.leg === "return" ? " is-return" : ""}`}>
+                        <button
+                          type="button"
+                          className="field-route-stop"
+                          aria-pressed={selectedIndex === i}
+                          aria-controls="field-route-checkpoint-detail"
+                          onClick={() => setCheckpoint(i)}
+                        >
+                          <span className={`field-route-stop-number is-${stops[i]?.tone}`} aria-hidden="true">{i + 1}</span>
+                          <span className="field-route-stop-place">
+                            <strong>{point.name}</strong>
+                            <small>
+                              {hasRouteNumber(point.elev_ft) ? w.formatElevationDisplay(point.elev_ft) : "Elevation unavailable"}
+                              {hasRouteNumber(point.distance_miles) ? ` · ${w.formatDistanceDisplay(point.distance_miles)} along route` : ""}
+                            </small>
+                          </span>
+                          <span className="field-route-stop-time">
+                            <strong>{point.etaTime || "Time unavailable"}</strong>
+                            <small>{showDate ? formatEtaDate(point.etaDate) || "Date unavailable" : " "}</small>
+                          </span>
+                          <span className="field-route-stop-wx">
+                            {point.dataAvailable ? (
+                              <>
+                                {hasRouteNumber(point.weather.temp) && <span className="sky-route-pill"><Thermometer size={13} aria-hidden="true" />{w.formatTempDisplay(point.weather.temp)}</span>}
+                                {hasRouteNumber(point.weather.windGust) && <span className="sky-route-pill"><Wind size={13} aria-hidden="true" />Gust {w.formatWindDisplay(point.weather.windGust)}</span>}
+                                {hasRouteNumber(point.weather.precipChance) && <span className="sky-route-pill"><CloudRain size={13} aria-hidden="true" />{point.weather.precipChance}%</span>}
+                                {hasRouteNumber(point.activeAlerts) && point.activeAlerts > 0 && (
+                                  <span className="sky-route-pill is-over"><TriangleAlert size={13} aria-hidden="true" />{point.activeAlerts} {point.activeAlerts === 1 ? "alert" : "alerts"}</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="sky-route-pill is-missing">Missing forecast</span>
+                            )}
+                            {point.daylight === "dark" && <span className="sky-route-pill is-night"><Moon size={13} aria-hidden="true" />After dark</span>}
+                          </span>
+                        </button>
+                        {leg && (leg.minutes !== null || leg.elevationDeltaFt !== null || leg.distanceMiles !== null) && (
+                          <p className="field-route-leg">
+                            {leg.minutes !== null && <span><Clock size={13} aria-hidden="true" />{formatLegDuration(leg.minutes)}</span>}
+                            {leg.elevationDeltaFt !== null && (
+                              Math.abs(leg.elevationDeltaFt) < 10
+                                ? <span><MoveRight size={13} aria-hidden="true" />Level</span>
+                                : leg.elevationDeltaFt > 0
+                                  ? <span><TrendingUp size={13} aria-hidden="true" />{w.formatElevationDeltaDisplay(leg.elevationDeltaFt)}</span>
+                                  : <span><TrendingDown size={13} aria-hidden="true" />{w.formatElevationDeltaDisplay(leg.elevationDeltaFt)}</span>
+                            )}
+                            {leg.distanceMiles !== null && <span>{w.formatDistanceDisplay(leg.distanceMiles)}</span>}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+              {selected && (
+                <div className="field-checkpoint" id="field-route-checkpoint-detail" role="region" aria-label="Selected checkpoint" aria-live="polite">
+                  <div className="field-checkpoint-head">
+                    <div>
+                      <h3>{selected.name}</h3>
+                      <p>
+                        {displayNumber(selected.elev_ft, w.formatElevationDisplay)}
+                        {hasRouteNumber(selected.distance_miles) ? ` · ${w.formatDistanceDisplay(selected.distance_miles)} along route` : ""}
+                        {" · "}Arrive {selected.etaDate ? `${formatEtaDate(selected.etaDate)} ` : ""}
+                        {selected.etaTime || "Time unavailable"}
+                        {selected.daylight === "dark" ? " · after dark" : ""}
+                      </p>
+                    </div>
+                    <span className={`sky-chip is-${stops[selectedIndex]?.tone}`}>
+                      {stops[selectedIndex]?.tone === "over" ? "Over a limit" : stops[selectedIndex]?.tone === "missing" ? "Can't check every limit" : "Within your limits"}
+                    </span>
+                  </div>
+                  <dl className="sky-stat-grid">
+                    <div>
+                      <dt>Planning score</dt>
+                      <dd>{selected.dataAvailable ? displayNumber(selected.score, (n) => `${n}/100`) : "Unavailable"}</dd>
+                      <small>
+                        {selected.dataAvailable
+                          ? "Forecast available"
+                          : "Missing data"}
+                      </small>
+                    </div>
+                    <div>
+                      <dt>Weather</dt>
+                      <dd>{selected.dataAvailable ? displayNumber(selected.weather.temp, w.formatTempDisplay) : "Unavailable"}</dd>
+                      <small>{selected.dataAvailable ? selected.weather.description : "Forecast did not load"}</small>
+                    </div>
+                    <div>
+                      <dt>Wind gust</dt>
+                      <dd>{selected.dataAvailable ? displayNumber(selected.weather.windGust, w.formatWindDisplay) : "Unavailable"}</dd>
+                      <small>
+                        Feels like{" "}
+                        {selected.dataAvailable ? displayNumber(selected.weather.feelsLike, w.formatTempDisplay) : "unavailable"}
+                      </small>
+                    </div>
+                    <div>
+                      <dt>Precipitation</dt>
+                      <dd>{selected.dataAvailable ? displayNumber(selected.weather.precipChance, (n) => `${n}%`) : "Unavailable"}</dd>
+                    </div>
+                    <div>
+                      <dt>Avalanche</dt>
+                      <dd>{(selected.dataAvailable && selected.avalanche?.risk) || "Unavailable"}</dd>
+                    </div>
+                    <div>
+                      <dt>Alerts / snow depth</dt>
+                      <dd>
+                        {selected.dataAvailable ? displayNumber(selected.activeAlerts, (n) => `${n} alerts`) : "Alerts unavailable"} ·{" "}
+                        {formatSnowDepthForElevationUnit(
+                          selected.dataAvailable ? selected.snowDepthIn : null,
+                          w.preferences.elevationUnit,
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
             </div>
           </section>
-          <section className="sky-card sky-section">
+          <section className="sky-card sky-section sky-route-brief">
             <span className="sky-card-head">
               {result.analysisSource === "ai"
                 ? "AI route explanation"
                 : "Route explanation"}
             </span>
-            <div className="field-markdown">
-              <Streamdown>{result.analysis}</Streamdown>
-            </div>
+            {briefing ? (
+              <>
+                {bottomLine && (
+                  <div className="sky-route-bottom">
+                    <span className="field-kicker">Bottom line</span>
+                    <p>{bottomLine.text}</p>
+                  </div>
+                )}
+                <div className="sky-route-brief-grid">
+                  {briefing.filter((part) => part !== bottomLine).map((part) => (
+                    <div key={part.key} className={`sky-route-brief-part is-${part.key}`}>
+                      <h3>{part.label}</h3>
+                      {part.key === "gear-check" ? (
+                        <ul className="sky-route-gear">
+                          {part.text.split(/;\s*/).map((item) => item.trim().replace(/\.$/, "")).filter(Boolean).map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                      ) : (
+                        <p>{part.text}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="field-markdown">
+                <Streamdown>{result.analysis}</Streamdown>
+              </div>
+            )}
           </section>
           <Details
             title="Terrain sampling and route provenance"

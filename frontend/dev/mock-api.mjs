@@ -471,6 +471,13 @@ export function createMockApi({ databasePath } = {}) {
           progress_percent: 0,
         },
         {
+          name: "Demo saddle",
+          lat: Number(body.lat) + 0.005,
+          lon: Number(body.lon) + 0.004,
+          elev_ft: 8200,
+          progress_percent: 22,
+        },
+        {
           name: "Demo summit",
           lat: Number(body.lat) + 0.01,
           lon: Number(body.lon) + 0.01,
@@ -492,7 +499,7 @@ export function createMockApi({ databasePath } = {}) {
         const total = (startHour * 60 + startMinute + offset) % (24 * 60);
         return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
       };
-      const offsets = [0, Math.round(windowMinutes * 0.6), windowMinutes];
+      const offsets = [0, Math.round(windowMinutes * 0.3), Math.round(windowMinutes * 0.6), windowMinutes];
       return ok({
         waypoints,
         timing: {
@@ -507,13 +514,20 @@ export function createMockApi({ databasePath } = {}) {
           etaDate: body.date,
           etaTime: clock(offsets[i]),
           offsetMinutes: offsets[i],
+          daylight: startHour * 60 + startMinute + offsets[i] >= 19 * 60 ? "dark" : "day",
           dataAvailable: true,
           score: report.safety.score,
-          weather: report.weather,
-          activeAlerts: 0,
+          weather: i === 2 ? { ...report.weather, windGust: 38 } : report.weather,
+          activeAlerts: i === 2 ? 1 : 0,
         })),
-        analysis:
-          "Synthetic route assessment. Upper terrain is exposed to wind.",
+        analysis: [
+          "HAZARD ZONES: Synthetic data. Wind builds above Demo saddle and peaks on the summit ridge around midday.",
+          "WEATHER WINDOW: The morning is the calmest part of the window; gusts ease after mid-afternoon.",
+          "OTHER CONCERNS: The return reaches the trailhead near dusk, so descent pace matters.",
+          "DECISION POINTS: Reassess at Demo saddle; turn around if gusts make footing unsteady.",
+          "GEAR CHECK: Windproof shell; headlamp with spare batteries; offline map; emergency communication.",
+          "BOTTOM LINE: Go with caution on an early start, and treat the saddle as a firm turnaround gate.",
+        ].join("\n"),
         analysisSource: "deterministic",
         partialData: false,
         routeSource: "generated",

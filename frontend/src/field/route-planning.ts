@@ -66,3 +66,71 @@ export function describeRouteTiming(timing: RouteTiming | undefined): string {
         : `Arrivals are spaced evenly across ${window} because route distances are unknown.`;
   return timing.roundTrip ? `${spread} The route is treated as an out-and-back, so the last checkpoint is your return to the start.` : spread;
 }
+
+/** "2026-09-09" → "Wed, Sep 9", read as a calendar date rather than a UTC instant. */
+export function formatEtaDate(isoDate: string | undefined): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  if (!match) return isoDate || "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
+}
+
+export function formatLegDuration(minutes: number): string {
+  const rounded = Math.max(0, Math.round(minutes / 5) * 5);
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+export type RouteLegSummary = {
+  minutes: number | null;
+  elevationDeltaFt: number | null;
+  distanceMiles: number | null;
+};
+
+/** Time, elevation change and distance between consecutive checkpoints; unknowns stay null. */
+export function buildRouteLegs(summaries: RouteWaypointSummary[]): RouteLegSummary[] {
+  return summaries.slice(1).map((next, i) => {
+    const previous = summaries[i];
+    const minutes = hasRouteNumber(next.offsetMinutes) && hasRouteNumber(previous.offsetMinutes)
+      ? next.offsetMinutes - previous.offsetMinutes : null;
+    const elevationDeltaFt = hasRouteNumber(next.elev_ft) && hasRouteNumber(previous.elev_ft)
+      ? next.elev_ft - previous.elev_ft : null;
+    const distanceMiles = next.leg !== "return" && hasRouteNumber(next.distance_miles) && hasRouteNumber(previous.distance_miles)
+      && next.distance_miles >= previous.distance_miles ? next.distance_miles - previous.distance_miles : null;
+    return { minutes: minutes !== null && minutes >= 0 ? minutes : null, elevationDeltaFt, distanceMiles };
+  });
+}
+
+/** Rounded elevation gridlines for the profile, in its 30–155 frame units. */
+export function buildProfileTicks(low: number, high: number): { y: number; feet: number }[] {
+  const span = Math.max(100, high - low);
+  const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000].find((s) => span / s <= 4) ?? 5000;
+  const ticks: { y: number; feet: number }[] = [];
+  for (let feet = Math.ceil(low / step) * step; feet <= high; feet += step) {
+    ticks.push({ feet, y: 155 - ((feet - low) / span) * 125 });
+  }
+  return ticks;
+}
+
+export type RouteBriefingSection = { key: string; label: string; text: string };
+
+const BRIEFING_LABELS = ["Hazard zones", "Weather window", "Other concerns", "Decision points", "Gear check", "Bottom line"];
+
+/**
+ * Split a six-part route briefing ("HAZARD ZONES: …") into its sections. Returns
+ * null for free-form text so it can be shown as written.
+ */
+export function splitRouteBriefing(text: string | null | undefined): RouteBriefingSection[] | null {
+  if (!text) return null;
+  const pattern = new RegExp(`(?:^|\\s)(${BRIEFING_LABELS.join("|")})\\s*:\\s*`, "gi");
+  const matches = [...text.matchAll(pattern)];
+  if (matches.length < 2) return null;
+  return matches.map((match, i) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index ?? text.length : text.length;
+    const label = BRIEFING_LABELS.find((l) => l.toLowerCase() === match[1].toLowerCase()) ?? match[1];
+    return { key: label.toLowerCase().replace(/\s+/g, "-"), label, text: text.slice(start, end).trim() };
+  }).filter((section) => section.text);
+}
