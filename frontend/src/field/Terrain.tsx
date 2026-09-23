@@ -235,6 +235,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
                   : null}
                 levels={levels}
                 sky={hours[hourIndex] ? { zenith: hours[hourIndex].zenith, horizon: hours[hourIndex].horizon } : null}
+                weather={hours[hourIndex] ?? null}
                 format={{ elevation: (ft) => w.formatElevationDisplay(ft), temp: (f) => w.formatTempDisplay(f), wind: (mph) => w.formatWindDisplay(mph) }}
                 when={selectedHour ? `at ${hourLabel(selectedHour)}` : undefined}
               />

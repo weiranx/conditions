@@ -266,6 +266,30 @@ test("MountainSection names the selected forecast time for screen readers", asyn
   assert.match(renderToStaticMarkup(<MountainSection {...props} when="at 11:00 AM" />), /Conditions by elevation at 11:00 AM/);
 });
 
+test("MountainSection draws the hour's weather: snow above the snow level, rain below", async () => {
+  const { MountainSection } = await import("../src/field/sky/MountainSection");
+  const props = {
+    bands: [
+      { label: "Approach Terrain", elevationFt: 6000, deltaFromObjectiveFt: -4000, temp: 40, feelsLike: 36, windSpeed: 6, windGust: 15 },
+      { label: "Objective Elevation", elevationFt: 10000, deltaFromObjectiveFt: 0, temp: 28, feelsLike: 20, windSpeed: 10, windGust: 20 },
+    ],
+    objectiveFt: 10000, objectiveLabel: "Objective", target: null,
+    levels: [{ label: "Snow level", ft: 8000, tone: "snow" }], sky: null,
+    format: { elevation: (ft) => `${ft} ft`, temp: (f) => `${f}°F`, wind: (m) => `${m} mph` },
+  };
+  const wet = renderToStaticMarkup(<MountainSection {...props} weather={{ kind: "rain", condition: "Rain Showers Likely", precipChance: 70, night: false }} />);
+  assert.match(wet, /class="mt-condition"[^>]*>Rain Showers Likely · 70% precip</);
+  assert.match(wet, /mt-flake/, "snow falls above the snow level");
+  assert.match(wet, /mt-drop/, "rain falls below the snow level");
+  assert.match(wet, /mt-cloud is-heavy/);
+  assert.match(wet, /aria-label="Conditions by elevation at your start\. Rain Showers Likely · 70% precip\./);
+  const clear = renderToStaticMarkup(<MountainSection {...props} weather={{ kind: "clear", condition: "Sunny", precipChance: 0, night: false }} />);
+  assert.match(clear, /mt-sun/);
+  assert.doesNotMatch(clear, /mt-cloud|mt-drop|mt-flake/);
+  assert.match(clear, />Sunny</);
+  assert.doesNotMatch(renderToStaticMarkup(<MountainSection {...props} />), /mt-weather|mt-condition/);
+});
+
 test("an hour missing only precipitation still has elevation inputs; a missing temperature does not", async () => {
   const { buildPlannedReportWeatherRows } = await import("../src/field/report-weather");
   const data = { weather: { temp: 40, windSpeed: 5, windGust: 10, trend: [

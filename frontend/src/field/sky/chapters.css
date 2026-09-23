@@ -265,3 +265,18 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-stat-grid dd { margin: 2px 0 0; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .sky-stat-grid small { display: block; font-size: 12px; color: var(--sky-secondary); }
 @media (max-width: 850px) { .sky-stat-grid { grid-template-columns: 1fr 1fr; } }
+.sky-mountain .mt-condition { font-size: 12px; font-weight: 650; fill: var(--sky-label); paint-order: stroke; stroke: var(--sky-surface); stroke-width: 4px; stroke-linejoin: round; }
+.sky-mountain .mt-sun circle { fill: #ffd66b; }
+.sky-mountain .mt-sun line { stroke: #ffd66b; stroke-width: 2.5; stroke-linecap: round; }
+.sky-mountain .mt-moon { fill: #f1ecd6; }
+.sky-mountain .mt-star { fill: #fff; opacity: 0.8; }
+.sky-mountain .mt-cloud { fill: #fff; opacity: 0.88; }
+.sky-mountain .mt-cloud.is-heavy { fill: #8d99a5; opacity: 0.92; }
+.sky-mountain .mt-drop { stroke: #3f78b5; stroke-width: 1.6; stroke-linecap: round; opacity: 0.7; }
+.sky-mountain .mt-flake { fill: #fff; stroke: #6f869c; stroke-width: 0.8; }
+.sky-mountain .mt-bolt { fill: #ffd23f; stroke: #b88a00; stroke-width: 0.8; stroke-linejoin: round; }
+.sky-mountain .mt-fog rect { fill: #eef1f3; opacity: 0.55; }
+html[data-theme="dark"] .sky-mountain .mt-cloud { fill: #c9d1d9; opacity: 0.75; }
+html[data-theme="dark"] .sky-mountain .mt-cloud.is-heavy { fill: #5c6772; }
+html[data-theme="dark"] .sky-mountain .mt-drop { stroke: #8fb8e0; }
+html[data-theme="dark"] .sky-mountain .mt-fog rect { fill: #aab4bd; opacity: 0.35; }
