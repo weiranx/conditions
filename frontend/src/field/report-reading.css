@@ -104,7 +104,7 @@
   margin: 24px 0 28px;
 }
 .field-report .field-verdict {
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 104px minmax(0, 1fr);
   grid-template-rows: 1fr auto;
   padding: 24px;
   margin: 0;

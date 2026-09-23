@@ -709,6 +709,17 @@ test('insufficient report evidence suppresses the score and cannot produce GO', 
   assert.doesNotMatch(html, /95%|>99</);
 });
 
+test('verdict explains a high score under a stricter decision only when they disagree', () => {
+  const data = makeReport({}, 'clear');
+  data.safety = { ...data.safety, score: 91, assessmentStatus: undefined };
+  const render = (decision) => renderToStaticMarkup(<ReportVerdict data={data} decision={{ headline: 'Headline', blockers: [], cautions: [], checks: [], ...decision }} primaryReason="" freshnessWarning={null} preferences={preferences} onSources={() => {}} />);
+  assert.match(render({ level: 'CAUTION', cautions: ['Cold', 'Wind'] }), /Score 91 rates conditions overall\. This decision is set by 2 checks that need attention\./);
+  assert.match(render({ level: 'NO-GO', blockers: ['Storm'] }), /This decision is set by a blocking check\./);
+  assert.doesNotMatch(render({ level: 'GO' }), /report-decision-bridge/);
+  data.safety.score = 78;
+  assert.doesNotMatch(render({ level: 'CAUTION', cautions: ['Cold'] }), /report-decision-bridge/);
+});
+
 test('supplemental sources distinguish unavailable data, probabilities, zero smoke and regional text', async () => {
   const { SupplementalEvidence } = await import('../src/field/SupplementalEvidence');
   const html = renderToStaticMarkup(<SupplementalEvidence evidence={{
