@@ -64,6 +64,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   function select(index: number) {
     const next = Math.max(0, Math.min(hours.length - 1, index));
     setSelected(next);
+    // A committed choice (keyboard or pointer) replaces any hover preview.
+    setHovered(null);
     const h = hours[next];
     setSunT(h ? sunProgress(h.minute + 30, sunrise, sunset) : null);
   }
@@ -153,7 +155,6 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
             event.currentTarget.focus({ preventScroll: true });
           }
           event.currentTarget.setPointerCapture?.(event.pointerId);
-          setHovered(null);
           select(indexAt(event));
         }}
         onPointerMove={(event) => {
