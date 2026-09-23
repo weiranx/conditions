@@ -11,7 +11,7 @@ import { WindCompass } from "./WindCompass";
 import { Details, SourceLink } from "./Details";
 import { MountainSection } from "./sky/MountainSection";
 import { StatusTag } from "./sky/BriefSections";
-import { surfaceLabel, terrainStatus } from "./sky/status";
+import { knownFeet, surfaceLabel, terrainStatus } from "./sky/status";
 import type { SkyHour } from "./sky/sky-model";
 const FieldMap = lazy(() => import("./FieldMap"));
 
@@ -147,9 +147,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
   const target = w.targetElevationForecast;
   const surface = surfaceLabel(data);
   const status = terrainStatus(data);
-  const objectiveFt = Number.isFinite(Number(data.weather.elevation)) ? Number(data.weather.elevation) : null;
-  const freezing = Number(data.atmosphere?.freezingLevelFt);
-  const snowLevel = Number(data.atmosphere?.snowLevelFt);
+  const objectiveFt = knownFeet(data.weather.elevation);
+  const freezing = knownFeet(data.atmosphere?.freezingLevelFt) ?? NaN;
+  const snowLevel = knownFeet(data.atmosphere?.snowLevelFt) ?? NaN;
   const levels = [
     ...(Number.isFinite(freezing) && freezing > 0 ? [{ label: "Freezing level", ft: freezing, tone: "cold" as const }] : []),
     ...(Number.isFinite(snowLevel) && snowLevel > 0 ? [{ label: "Snow level", ft: snowLevel, tone: "snow" as const }] : []),

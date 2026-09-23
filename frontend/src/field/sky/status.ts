@@ -55,3 +55,10 @@ export function durationLabel(minutes: number): string {
   if (h === 0) return `${m} min`;
   return m ? `${h} h ${m} min` : `${h} h`;
 }
+
+/** A finite elevation in feet, or null. Guards against Number(null) turning a missing value into 0 ft. */
+export function knownFeet(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}

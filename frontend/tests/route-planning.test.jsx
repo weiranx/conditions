@@ -148,3 +148,32 @@ test('checkpoint selection updates detail and clamps when a shorter saved route 
   assert.equal(document.querySelector('.field-route-stop').getAttribute('aria-pressed'), 'true');
   assert.equal(document.querySelector('#field-route-checkpoint-detail h3').textContent, 'Replacement checkpoint');
 });
+
+import { checkpointTone } from '../src/field/route-planning';
+import { knownFeet } from '../src/field/sky/status';
+
+const limits = { maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5, maxFeelsLikeF: 95 };
+
+test('checkpoints are within limits only when every limit can be checked', () => {
+  const full = { temp: 40, windSpeed: 5, windGust: 20, precipChance: 10, feelsLike: 38 };
+  assert.equal(checkpointTone(point({ weather: full }), limits), 'within');
+  assert.equal(checkpointTone(point({ weather: { ...full, windGust: undefined } }), limits), 'missing');
+  assert.equal(checkpointTone(point({ weather: { ...full, precipChance: undefined } }), limits), 'missing');
+  assert.equal(checkpointTone(point({ weather: { temp: 40, windGust: 20, precipChance: 10 } }), limits), 'missing');
+  assert.equal(checkpointTone(point({ weather: { temp: 40, windSpeed: 5, windGust: 20, precipChance: 10 } }), limits), 'within');
+  assert.equal(checkpointTone(point({ dataAvailable: false, weather: full }), limits), 'missing');
+});
+
+test('a known breach outranks missing readings, including the heat ceiling', () => {
+  assert.equal(checkpointTone(point({ weather: { windGust: 31 } }), limits), 'over');
+  assert.equal(checkpointTone(point({ weather: { temp: 100, windSpeed: 2, windGust: 5, precipChance: 0, feelsLike: 101 } }), limits), 'over');
+  assert.equal(checkpointTone(point({ weather: { windGust: 5, precipChance: 0, feelsLike: -2 } }), limits), 'over');
+});
+
+test('a missing elevation stays missing instead of becoming 0 ft', () => {
+  assert.equal(knownFeet(null), null);
+  assert.equal(knownFeet(undefined), null);
+  assert.equal(knownFeet(''), null);
+  assert.equal(knownFeet('10738'), 10738);
+  assert.equal(knownFeet(0), 0);
+});

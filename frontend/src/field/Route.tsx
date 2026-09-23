@@ -6,7 +6,7 @@ import type { Workspace } from "./model/useWorkspace";
 import { parseGpxFile } from "../lib/gpx";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
-import { buildCheckpointProfile, hasRouteNumber } from "./route-planning";
+import { buildCheckpointProfile, checkpointTone, hasRouteNumber } from "./route-planning";
 import "./route-planning.css";
 import { RouteProfile, type ProfileStop } from "./sky/RouteProfile";
 
@@ -24,17 +24,13 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const returned = result?.summaries.filter((p) => p.dataAvailable).length ?? 0;
   const displayNumber = (value: unknown, format: (n: number) => string) =>
     hasRouteNumber(value) ? format(value) : "Unavailable";
-  const limits = w.preferences;
   const stops: ProfileStop[] = (result?.summaries ?? []).map((p) => ({
     name: p.name,
     eta: p.etaTime || "",
-    tone: !p.dataAvailable ? "missing"
-      : (hasRouteNumber(p.weather.windGust) && p.weather.windGust > limits.maxWindGustMph)
-        || (hasRouteNumber(p.weather.precipChance) && p.weather.precipChance > limits.maxPrecipChance)
-        || (hasRouteNumber(p.weather.feelsLike) && p.weather.feelsLike < limits.minFeelsLikeF)
-        ? "over" : "within",
+    tone: checkpointTone(p, w.preferences),
   }));
   const overStops = stops.filter((stop) => stop.tone === "over").length;
+  const missingStops = stops.filter((stop) => stop.tone === "missing").length;
   const highIndex = result && result.summaries.length
     ? result.summaries.reduce((best, p, i, all) => (hasRouteNumber(p.elev_ft) && (!hasRouteNumber(all[best].elev_ft) || p.elev_ft > all[best].elev_ft) ? i : best), 0)
     : -1;
@@ -83,8 +79,8 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
             )}
             {overStops > 0
               ? <strong className="is-over">{overStops} {overStops === 1 ? "checkpoint crosses" : "checkpoints cross"} your limits.</strong>
-              : returned < result.summaries.length
-                ? <strong className="is-missing">{result.summaries.length - returned} checkpoint {result.summaries.length - returned === 1 ? "forecast is" : "forecasts are"} missing.</strong>
+              : missingStops > 0
+                ? <strong className="is-missing">{missingStops} checkpoint {missingStops === 1 ? "forecast is" : "forecasts are"} missing or incomplete, so {missingStops === 1 ? "it" : "they"} can't be checked against every limit.</strong>
                 : "Every checkpoint forecast is within your limits."}
           </>
         ) : (
