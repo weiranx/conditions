@@ -1,0 +1,44 @@
+<div class="phead"><div><h1>Plan an outing</h1><div class="sub">Where, when, and how you're moving. The brief does the rest.</div></div></div>
+<div class="plan">
+ <div class="form">
+  <section class="step">
+   <div class="sh"><h3><span class="k">1</span>Where</h3></div>
+   <div class="card">
+    <label class="search"><svg class="sym"><use href="#s-search"/></svg><input value="Mount Shasta" aria-label="Mountain, trail, or coordinates"><svg class="sym ok"><use href="#s-check"/></svg></label>
+    <div class="found num"><svg class="sym"><use href="#s-pin"/></svg><span><b>Mount Shasta</b> · California · 10,738 ft</span></div>
+    <div class="alts"><button><svg class="sym"><use href="#s-map"/></svg>Choose on map</button><button><svg class="sym"><use href="#s-locate"/></svg>Use my location</button><button><svg class="sym"><use href="#s-upload"/></svg>Import GPX</button></div>
+   </div>
+  </section>
+
+  <section class="step">
+   <div class="sh"><h3><span class="k">2</span>When</h3><p>7-day outlook for this spot</p></div>
+   <div class="days" id="days" role="radiogroup" aria-label="Date"></div>
+   <div class="card" style="margin-top:12px">
+    <div class="hd">Your hours<span class="num" id="rng" style="color:var(--label)"></span></div>
+    <svg class="viz" id="track" role="img"></svg>
+    <div class="ctl num">
+     <div class="stp"><span>Start</span><button aria-label="Start 30 minutes earlier" data-d="-.5"><svg class="sym"><use href="#s-minus"/></svg></button><b id="st"></b><button aria-label="Start 30 minutes later" data-d=".5"><svg class="sym"><use href="#s-plus"/></svg></button></div>
+     <div class="stp"><span>Duration</span><button aria-label="One hour shorter" data-u="-1"><svg class="sym"><use href="#s-minus"/></svg></button><b id="du"></b><button aria-label="One hour longer" data-u="1"><svg class="sym"><use href="#s-plus"/></svg></button></div>
+    </div>
+   </div>
+  </section>
+
+  <section class="step">
+   <div class="sh"><h3><span class="k">3</span>How</h3></div>
+   <div class="acts" role="radiogroup" aria-label="Activity" id="acts"></div>
+  </section>
+ </div>
+
+ <aside class="preview">
+  <div class="card" style="padding:0;overflow:hidden"><svg class="viz" id="pmap" viewBox="0 0 400 220" style="margin:0" role="img" aria-label="Map preview with a pin on Mount Shasta."></svg></div>
+  <div class="card">
+   <div class="hd">Your day</div>
+   <div class="pv-t num" id="pvt"></div>
+   <div class="daystrip" data-daystrip="-1" style="width:100%"></div>
+   <div class="cap" id="pvn"></div>
+   <button class="cta">Create conditions brief</button>
+   <div class="cap" style="text-align:center">Takes about 10 seconds · 14 sources</div>
+  </div>
+ </aside>
+</div>
+<div class="mcta"><button class="cta">Create conditions brief</button></div>

@@ -1,0 +1,9 @@
+.hours{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;padding:10px 12px 12px;background:var(--surface)}
+.hours button{min-height:44px;border-radius:8px;font-size:13px;font-weight:500;color:var(--secondary);display:grid;place-items:center;line-height:1.1}
+.hours button.over{color:var(--caution);font-weight:600}
+.hours button[aria-checked="true"]{background:var(--label);color:var(--bg)}
+.conf{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--secondary);margin-top:4px}
+.conf i{width:22px;height:6px;border-radius:3px;background:var(--fill)}.conf i.on{background:var(--label)}
+.conf b{color:var(--label);margin-left:4px}
+.why{margin:8px 0 0 18px;display:grid;gap:6px;font-size:14px;color:var(--secondary)}
+@media (max-width:760px){.hours button{font-size:11px;min-height:40px}}

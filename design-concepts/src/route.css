@@ -1,0 +1,9 @@
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:22px;background:var(--separator);border-radius:16px;overflow:hidden}
+.stats div{background:var(--surface);padding:14px 16px;display:grid;gap:2px}
+.stats span{font-size:13px;color:var(--secondary)}
+.stats b{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.routegrid{grid-template-columns:1fr 1.2fr}
+.num-dot{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--label);color:var(--bg);font-size:12px;font-weight:700;margin-right:8px}
+@media (max-width:760px){.stats{grid-template-columns:1fr 1fr}.stats b{font-size:20px}.routegrid{grid-template-columns:1fr}}
+
+.mapcard{min-height:260px}.mapcard svg{position:absolute;inset:0;width:100%;height:100%}

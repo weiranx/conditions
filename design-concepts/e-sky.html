@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Sky</title>
+<style>
+/* Inter stands in for the platform font only where none exists (Linux screenshots). */
+@font-face{font-family:InterLocal;font-weight:400;src:url(fonts/inter-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:InterLocal;font-weight:500;src:url(fonts/inter-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:InterLocal;font-weight:600;src:url(fonts/inter-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:InterLocal;font-weight:700;src:url(fonts/inter-latin-700-normal.woff2) format("woff2")}
+
+/* Semantic tokens. One color, one meaning:
+   accent  = brand + primary action only
+   caution = over a limit (always paired with a triangle glyph or hatch)
+   cold    = precipitation and below-freezing
+   missing = data we could not load (paired with a dashed outline)
+   Contrast vs surface (light / dark): label 16.6/14.4, secondary 6.4/7.2, accent 8.1/8.5,
+   caution 5.9/7.9, cold 6.1/7.5, missing 6.2/7.4. */
+:root{
+ --bg:#F2F3F1;--surface:#FFFFFF;--fill:#E7E9E6;--separator:rgba(24,32,28,.12);
+ --label:#18201C;--secondary:#58615C;
+ --accent:#1E5A43;--on-accent:#FFFFFF;
+ --caution:#A8470A;--caution-fill:rgba(168,71,10,.14);
+ --cold:#1A64A8;--cold-fill:rgba(26,100,168,.16);
+ --missing:#5C6360;
+ --ok-fill:#D5DAD6;
+ --bar:rgba(242,243,241,.78);
+ --font:-apple-system,BlinkMacSystemFont,"Segoe UI",InterLocal,Roboto,sans-serif;
+ --r:14px;
+}
+@media (prefers-color-scheme:dark){:root{
+ --bg:#0F1211;--surface:#1B1F1D;--fill:#262B29;--separator:rgba(236,239,237,.12);
+ --label:#ECEFED;--secondary:#A3ADA8;
+ --accent:#7FC8A4;--on-accent:#0F1211;
+ --caution:#FF9A4D;--caution-fill:rgba(255,154,77,.18);
+ --cold:#72B4F0;--cold-fill:rgba(114,180,240,.2);
+ --missing:#A7AFAB;--ok-fill:#343A37;
+ --bar:rgba(15,18,17,.72)}}
+@media (prefers-contrast:more){:root{--separator:rgba(24,32,28,.4);--ok-fill:#B9C0BB}}
+@media (prefers-reduced-transparency:reduce){:root{--bar:var(--bg)}}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--label);font:400 1rem/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+.num{font-variant-numeric:tabular-nums}
+.sym{width:1.1em;height:1.1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.15em}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* App frame: sidebar on regular width, tab bar on compact */
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.sidebar{padding:20px 12px;border-right:1px solid var(--separator);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;padding:6px 10px 18px}
+.brand svg{width:22px;height:22px;color:var(--accent)}
+.sidebar a{display:flex;align-items:center;gap:10px;padding:0 10px;min-height:36px;border-radius:9px;font-size:14px;color:var(--secondary)}
+.sidebar a.on{background:var(--fill);color:var(--label);font-weight:600}
+.sidebar a.on .sym{color:var(--accent)}
+.sidebar .sp{flex:1}
+
+.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:10px 32px;min-height:56px;background:var(--bar);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);border-bottom:1px solid transparent}
+.toolbar .crumb{font-size:14px;color:var(--secondary);flex:1}
+.tbtn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;font-size:14px;font-weight:500;color:var(--label);background:var(--fill)}
+.tbtn.prominent{background:var(--accent);color:var(--on-accent);font-weight:600}
+
+.content{max-width:820px;padding:8px 32px 64px}
+.title{padding:16px 0 20px}
+h1{font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.subtitle{margin-top:6px;color:var(--secondary);font-size:15px}
+
+/* Verdict */
+.verdict{display:grid;gap:10px}
+.status{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:15px;color:var(--caution)}
+.status .sym{width:18px;height:18px}
+.verdict h2{font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-.01em;max-width:30ch}
+.verdict p{color:var(--secondary);font-size:15px;max-width:62ch}
+
+/* Signature: the day band */
+.day{margin-top:24px;background:var(--surface);border-radius:var(--r);padding:16px 16px 12px}
+.readout{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;min-height:28px}
+.readout .t{font-weight:600;font-size:17px}
+.readout .v{font-size:15px;color:var(--secondary)}
+.readout .v b{color:var(--label);font-weight:600}
+.readout .v b.over{color:var(--caution)}
+.readout .flag{margin-left:auto;font-size:13px;font-weight:600;color:var(--caution);display:inline-flex;gap:5px;align-items:center}
+.band{position:relative;margin-top:14px;touch-action:none;cursor:ew-resize;padding:22px 0 6px}
+.band .track{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;height:44px}
+.band .seg{border-radius:6px;background:var(--ok-fill);position:relative}
+.band .seg.over{background:var(--caution-fill);background-image:repeating-linear-gradient(-45deg,var(--caution) 0 1.5px,transparent 1.5px 7px);box-shadow:inset 0 0 0 1.5px var(--caution)}
+.band .seg.sel{outline:2.5px solid var(--label);outline-offset:2px}
+.band .rain{height:5px;margin-top:5px;display:grid;grid-template-columns:repeat(12,1fr);gap:3px;pointer-events:none}
+.band .rain i{border-radius:3px;background:var(--cold)}
+.band .ticks{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:8px;font-size:12px;color:var(--secondary);text-align:center}
+.band .ticks .over{color:var(--caution);font-weight:600}
+.band .mark{position:absolute;top:0;font-size:12px;color:var(--secondary);transform:translateX(-50%);white-space:nowrap;display:flex;align-items:center;gap:4px}
+.band .mark:after{content:"";position:absolute;left:50%;top:16px;height:52px;border-left:1.5px dashed var(--secondary);opacity:.6}
+.band .callout{position:absolute;top:0;font-size:12px;font-weight:600;color:var(--caution);transform:translateX(-50%);white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:4px;font-size:12px;color:var(--secondary)}
+.legend i{display:inline-block;width:18px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* Missing data notice: inline, not an alert */
+.notice{margin-top:12px;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--r);background:var(--surface);outline:1.5px dashed var(--missing);outline-offset:-1.5px}
+.notice .sym{color:var(--missing);width:20px;height:20px}
+.notice div{flex:1;font-size:15px}
+.notice div span{color:var(--secondary)}
+.notice a{font-size:15px;font-weight:600;color:var(--accent);white-space:nowrap;min-height:44px;display:inline-flex;align-items:center}
+
+/* Grouped lists (familiar pattern) */
+section{margin-top:32px}
+.sh{display:flex;justify-content:space-between;align-items:baseline;padding:0 16px 8px}
+.sh h3{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.sh span{font-size:13px;color:var(--secondary)}
+.group{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 16px;position:relative}
+.row+.row:before{content:"";position:absolute;top:0;left:16px;right:0;border-top:1px solid var(--separator)}
+.row .k{flex:1;min-width:0}
+.row .k small{display:block;color:var(--secondary);font-size:13px;margin-top:1px}
+.row .val{font-weight:600;text-align:right;white-space:nowrap}
+.row .val.over{color:var(--caution)}
+.row .val small{font-weight:400;color:var(--secondary)}
+.row .chev{width:14px;height:14px;color:var(--secondary);opacity:.7}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:600;white-space:nowrap}
+.st .sym{width:16px;height:16px}
+.st.ok{color:var(--secondary)}
+.st.over{color:var(--caution)}
+.st.missing{color:var(--missing)}
+a.row:hover{background:color-mix(in srgb,var(--fill) 55%,transparent)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.two section{margin-top:32px}
+
+.check{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--secondary);flex:none;display:grid;place-items:center}
+.check.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.check.on .sym{width:14px;height:14px;stroke-width:3}
+.row.done .k{color:var(--secondary);text-decoration:line-through}
+
+.foot{margin-top:28px;padding:0 16px;font-size:13px;color:var(--secondary)}
+.foot b{font-weight:600;color:var(--label)}
+
+.tabbar{display:none}
+.inline-title{display:none}
+
+@media (max-width:1000px){.two{grid-template-columns:1fr;gap:0}}
+@media (max-width:760px){
+ body{font-size:17px}
+ .app{grid-template-columns:1fr}
+ .sidebar{display:none}
+ .toolbar{padding:6px 12px;min-height:52px;padding-top:max(6px,env(safe-area-inset-top))}
+ .toolbar .crumb{display:none}
+ .toolbar .sp{flex:1}
+ .inline-title{display:block;position:absolute;left:16px;max-width:calc(100% - 250px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:17px;opacity:0;transition:opacity .15s}
+ .toolbar.scrolled{border-bottom-color:var(--separator)}
+ .toolbar.scrolled .inline-title{opacity:1}
+ .tbtn{min-height:44px;min-width:44px;justify-content:center;padding:0 14px}
+ .tbtn .lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+ .tbtn.prominent .lbl{position:static;width:auto;height:auto;clip:auto}
+ .content{padding:0 16px 120px}
+ .title{padding:4px 0 16px}
+ h1{font-size:34px}
+ .subtitle{font-size:15px}
+ .verdict h2{font-size:22px}
+ .verdict p,.notice div,.notice a{font-size:15px}
+ .day{margin-left:-4px;margin-right:-4px;padding:14px 12px 10px}
+ .readout .flag{margin-left:0;width:100%}
+ .band .track{height:52px;gap:2px}
+ .band .ticks,.band .rain{gap:2px}
+ .band .ticks span:nth-child(even){visibility:hidden}
+ .notice{display:grid;grid-template-columns:20px 1fr;gap:4px 12px;align-items:start}
+ .notice .sym{margin-top:2px}
+ .notice a{grid-column:2;min-height:36px}
+ .sh{padding:0 16px 6px}
+ .row{min-height:52px}
+ .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;padding:6px 8px max(8px,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);border-top:1px solid var(--separator)}
+ .tabbar a{display:grid;justify-items:center;gap:2px;min-height:49px;align-content:center;font-size:11px;font-weight:500;color:var(--secondary)}
+ .tabbar a .sym{width:24px;height:24px}
+ .tabbar a.on{color:var(--accent)}
+}
+@media (prefers-reduced-motion:no-preference){.band .seg{transition:outline-color .12s}}
+/* ===== E: the sky hero ===== */
+.hero{position:relative;color:#fff;margin-top:-56px;overflow:hidden;background:#3d6f9f;isolation:isolate}
+.hero svg.sky{position:absolute;inset:0;width:100%;height:100%;z-index:-1;display:block;touch-action:none}
+.hero .in{position:relative;max-width:820px;padding:92px 32px calc(var(--scene) + var(--ridge));pointer-events:none}
+.hero .in a,.hero .in button{pointer-events:auto}
+:root{--scene:190px;--ridge:112px}
+.hero h1{font-size:44px;line-height:1.05;font-weight:700;letter-spacing:-.025em;text-shadow:0 1px 12px rgba(0,20,40,.25)}
+.hero .subtitle{color:rgba(255,255,255,.9);margin-top:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;margin-top:22px;padding:6px 12px 6px 10px;border-radius:999px;background:#fff;color:#A8470A;font-weight:600;font-size:15px}
+.pill .sym{width:17px;height:17px}
+.hero h2{margin-top:12px;font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.015em;max-width:24ch;text-shadow:0 1px 12px rgba(0,20,40,.25)}
+.hero p.lede{margin-top:10px;font-size:15px;color:rgba(255,255,255,.92);max-width:56ch}
+.readout2{position:absolute;top:92px;right:32px;width:260px;padding:14px 16px;border-radius:16px;background:rgba(10,22,34,.62);color:#fff;pointer-events:none}
+.readout2 .t{font-size:13px;color:rgba(255,255,255,.75);font-weight:500}
+.readout2 .big{font-size:34px;font-weight:600;letter-spacing:-.02em;line-height:1.1;margin-top:2px}
+.readout2 .rows{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin-top:10px;font-size:14px;color:rgba(255,255,255,.8)}
+.readout2 .rows b{color:#fff;font-weight:600;text-align:right}
+.readout2 .rows b.over{color:#FFB27A}
+.readout2 .flag{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.18);font-size:13px;font-weight:600;color:#FFB27A;display:flex;gap:6px;align-items:center}
+.readout2 .flag.ok{color:rgba(255,255,255,.8);font-weight:500}
+.hint{position:absolute;right:32px;bottom:calc(var(--ridge) + 10px);font-size:12px;color:rgba(255,255,255,.8);pointer-events:none}
+@media (prefers-reduced-motion:no-preference){
+ .rain line{animation:fall .9s linear infinite}
+ @keyframes fall{to{stroke-dashoffset:-32}}
+ .cloud{animation:drift 14s ease-in-out infinite alternate}
+ @keyframes drift{to{transform:translateX(10px)}}
+}
+/* toolbar floats over the sky until you scroll past it */
+.toolbar.over-hero{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;color:#fff}
+.toolbar.over-hero .crumb{color:rgba(255,255,255,.85)}
+.toolbar.over-hero .tbtn{background:rgba(255,255,255,.2);color:#fff}
+.toolbar.over-hero .tbtn.prominent{background:#fff;color:#1E5A43}
+.content-e{max-width:820px;padding:20px 32px 64px}
+.content-e .notice{margin-top:0}
+@media (prefers-color-scheme:dark){.hero svg.sky{filter:brightness(.82) saturate(.95)}}
+@media (max-width:760px){
+ :root{--scene:170px;--ridge:104px}
+ .hero{margin-top:-52px}
+ .hero .in{padding:76px 16px calc(var(--scene) + var(--ridge))}
+ .hero h1{font-size:38px}
+ .hero h2{font-size:24px}
+ .readout2{position:relative;top:auto;right:auto;width:auto;margin-top:16px;display:grid;grid-template-columns:auto 1fr;gap:0 16px;align-items:center}
+ .readout2 .big{font-size:30px}
+ .readout2 .rows{margin-top:0;grid-template-columns:auto auto;gap:2px 10px;justify-content:start}
+ .readout2 .flag{grid-column:1/-1}
+ .hint{display:none}
+ .content-e{padding:16px 16px 120px}
+}
+/* ===== E2: sections carry the sky's idea — every visual is drawn from data ===== */
+.content-e{max-width:1040px}
+.content-e section{margin-top:36px}
+.content-e .sh{padding:0 4px 12px}
+.content-e .sh h3{font-size:22px}
+.content-e .sh p{font-size:14px;color:var(--secondary);margin-top:2px}
+.card{background:var(--surface);border-radius:20px;padding:16px 18px 16px;position:relative;display:flex;flex-direction:column;gap:6px;min-width:0}
+a.card{transition:transform .15s ease,box-shadow .15s ease}
+a.card:hover{box-shadow:0 6px 20px -10px rgba(10,30,20,.35)}
+@media (prefers-reduced-motion:no-preference){a.card:active{transform:scale(.985)}}
+.card .hd{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;font-weight:600;color:var(--secondary)}
+.card .hd .st{font-size:13px}
+.card .big{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.card .big small{font-size:15px;font-weight:600;color:var(--secondary);margin-left:2px}
+.card .big.over{color:var(--caution)}
+.card .cap{font-size:13px;color:var(--secondary)}
+a.card .cap{padding-right:22px}
+.card svg.viz{display:block;width:100%;height:auto;margin-top:4px;overflow:visible}
+.card .chev{position:absolute;right:14px;bottom:16px}
+.viz text{font-family:var(--font);font-size:11px;fill:var(--secondary)}
+.viz .ink{fill:var(--label)} .viz .inks{stroke:var(--label)}
+.viz .ok{fill:var(--ok-fill)} .viz .okS{stroke:var(--ok-fill)}
+.viz .cau{fill:var(--caution)} .viz .cauS{stroke:var(--caution)} .viz text.cau{fill:var(--caution);font-weight:600}
+.viz .cold{fill:var(--cold)} .viz .coldS{stroke:var(--cold)} .viz text.cold{fill:var(--cold);font-weight:600}
+.viz .sec{fill:var(--secondary)} .viz .secS{stroke:var(--secondary)}
+.viz .surf{fill:var(--surface)} .viz .fillc{fill:var(--fill)}
+.viz .acc{fill:var(--accent)} .viz .accS{stroke:var(--accent)}
+.viz .mtn{fill:#6f8378} .viz .snow{fill:#fff;stroke:#b9c6cf;stroke-width:1}
+@media (prefers-color-scheme:dark){.viz .mtn{fill:#50625a}.viz .snow{fill:#e9eef2;stroke:none}}
+
+.nums{display:grid;grid-template-columns:1.1fr 1fr 1.15fr;gap:14px}
+.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pack{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+
+.card.missing{background:transparent;outline:2px dashed var(--missing);outline-offset:-2px}
+.card.missing .empty{flex:1;display:grid;place-items:center;min-height:64px;border-radius:12px;background:repeating-linear-gradient(-45deg,transparent 0 8px,var(--fill) 8px 16px);color:var(--missing);font-size:13px;font-weight:600}
+.card.missing a.cta{margin-top:4px;font-size:14px;font-weight:600;color:var(--accent);min-height:32px;display:inline-flex;align-items:center}
+
+.item{cursor:pointer}
+.item .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--fill);color:var(--label)}
+.item .ic .sym{width:26px;height:26px;stroke-width:1.7}
+.item .name{font-weight:600;font-size:16px;margin-top:6px}
+.item .why{font-size:13px;color:var(--secondary)}
+.item .why b{font-weight:600}
+.item .why b.cau{color:var(--caution)} .item .why b.cold{color:var(--cold)} .item .why b.miss{color:var(--missing)}
+.item .tick{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--secondary);display:grid;place-items:center}
+.item.done .tick{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.item.done .tick .sym{width:15px;height:15px;stroke-width:3}
+.item.done .name{color:var(--secondary)}
+.item input{position:absolute;opacity:0;inset:0;cursor:pointer}
+
+@media (max-width:1000px){.checks{grid-template-columns:repeat(2,1fr)}.pack{grid-template-columns:repeat(2,1fr)}.nums{grid-template-columns:1fr 1fr}.nums .score{grid-column:1/-1}}
+@media (max-width:760px){
+ .content-e section{margin-top:28px}
+ .nums,.checks,.pack{gap:10px}
+ .nums{grid-template-columns:1fr}
+ .checks{grid-template-columns:1fr}
+ .checks svg.viz:not(#wx){max-width:280px}
+ .content-e .sh{display:block}
+ .card{padding:14px 14px 14px;border-radius:18px}
+ .card .big{font-size:26px}
+ .checks .card .cap{font-size:12.5px}
+}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="s-mtn" viewBox="0 0 24 24"><path d="M3 19l6.5-12 4 7 2.5-3.5L21 19z"/></symbol>
+ <symbol id="s-doc" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></symbol>
+ <symbol id="s-plan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+ <symbol id="s-cmp" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></symbol>
+ <symbol id="s-saved" viewBox="0 0 24 24"><path d="M7 3.5h10v17l-5-3.5-5 3.5z"/></symbol>
+ <symbol id="s-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9M10 20a2 2 0 0 0 4 0"/></symbol>
+ <symbol id="s-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+ <symbol id="s-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M6 11H5v9.5h14V11h-1"/></symbol>
+ <symbol id="s-tri" viewBox="0 0 24 24"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.1"/></symbol>
+ <symbol id="s-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+ <symbol id="s-q" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="3 2.4"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5M12 16.6v.1"/></symbol>
+ <symbol id="s-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+ <symbol id="s-sun" viewBox="0 0 24 24"><path d="M4 17h16M8 17a4 4 0 0 1 8 0M12 7v2.5M6.3 11.3l1.6 1.6M17.7 11.3l-1.6 1.6"/></symbol>
+<symbol id="s-jacket" viewBox="0 0 24 24"><path d="M9 3h6l2 2 4 3-2 5-2-1v9H7v-9l-2 1-2-5 4-3z"/><path d="M12 5v16M9 3l3 3 3-3"/></symbol>
+ <symbol id="s-spikes" viewBox="0 0 24 24"><path d="M4 14c0-3 3-5 8-5s8 2 8 5v2H4z"/><path d="M6 16l-1 4M10 16l-1 4M14 16l1 4M18 16l1 4"/></symbol>
+ <symbol id="s-layer" viewBox="0 0 24 24"><path d="M8 3h8l4 4-2 3-2-1v12H8V9l-2 1-2-3z"/><path d="M8 13h8M8 17h8"/></symbol>
+ <symbol id="s-lamp" viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="7" rx="2"/><path d="M4 11.5h4M16 11.5h4M12 4v2M6 6l1.5 1.5M18 6l-1.5 1.5"/></symbol>
+</svg>
+
+<div class="app">
+ <nav class="sidebar" aria-label="Main">
+  <div class="brand"><svg class="sym"><use href="#s-mtn"/></svg>Backcountry Conditions</div>
+  <a class="on" aria-current="page"><svg class="sym"><use href="#s-doc"/></svg>Brief</a>
+  <a href="e-plan.html"><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
+  <a><svg class="sym"><use href="#s-cmp"/></svg>Compare</a>
+  <a><svg class="sym"><use href="#s-saved"/></svg>Saved</a>
+  <a><svg class="sym"><use href="#s-bell"/></svg>Watchlist</a>
+  <span class="sp"></span>
+  <a><svg class="sym"><use href="#s-gear"/></svg>Settings</a>
+ </nav>
+
+ <div>
+  <div class="toolbar">
+   <span class="crumb">Brief</span><span class="inline-title" id="it" aria-hidden="true">Mount Shasta</span><span class="sp"></span>
+   <button class="tbtn" aria-label="Share"><svg class="sym"><use href="#s-share"/></svg><span class="lbl">Share</span></button>
+   <button class="tbtn" aria-label="Watch for changes"><svg class="sym"><use href="#s-bell"/></svg><span class="lbl">Watch</span></button>
+   <a class="tbtn prominent" href="e-plan.html"><span class="lbl">Edit plan</span></a>
+  </div>
+
+  <header class="hero" id="hero">
+   <svg class="sky" id="sky" role="slider" tabindex="0" aria-label="Hour of your trip" aria-valuemin="0" aria-valuemax="11" aria-valuenow="5"></svg>
+   <div class="in">
+    <h1>Mount Shasta</h1>
+    <div class="subtitle num">Wed, Sep 23 · 7:00 AM start · 12 hours · 10,738 ft</div>
+    <span class="pill"><svg class="sym"><use href="#s-tri"/></svg>Caution</span>
+    <h2>Clear morning, wet midday. Be off exposed ground by noon.</h2>
+    <p class="lede num">Rain chance reaches 80% at 12 PM with gusts to 31 mph, and it's below freezing from 2 to 4 PM. It clears after 4 PM, and you're back 30 minutes before sunset.</p>
+    <div class="readout2 num" id="readout" aria-live="polite"></div>
+   </div>
+   <span class="hint">Drag across the sky to check any hour</span>
+   <p class="sr">Twelve hours from 7 AM to 6 PM. Within your limits from 7 to 11 AM and 4 to 6 PM. Over your limits from 12 PM to 3 PM: gusts 26 to 31 mph against a 25 mph limit, and rain chance 60 to 80 percent against a 60 percent limit.</p>
+  </header>
+
+  <main class="content-e">
+   <div class="notice" role="note">
+    <svg class="sym"><use href="#s-q"/></svg>
+    <div>NWS alerts didn't load. <span>This brief may be missing an active warning.</span></div>
+    <a href="#">Open weather.gov</a>
+   </div>
+
+   <section>
+    <div class="sh"><h3>The numbers</h3><p>What your limits are up against.</p></div>
+    <div class="nums num">
+     <div class="card">
+      <div class="hd">Peak gust<span class="st over"><svg class="sym"><use href="#s-tri"/></svg>Over</span></div>
+      <div class="big over">31<small>mph</small></div>
+      <svg class="viz" viewBox="0 0 240 54" role="img" aria-label="Peak gust 31 miles per hour at 12 PM; your limit is 25.">
+       <rect x="0" y="18" width="240" height="12" rx="6" class="fillc"/>
+       <rect x="0" y="18" width="150" height="12" rx="6" class="sec" opacity=".45"/>
+       <rect x="150" y="18" width="36" height="12" class="cau"/>
+       <rect x="180" y="18" width="6" height="12" rx="3" class="cau"/>
+       <line x1="150" y1="10" x2="150" y2="38" class="inks" stroke-width="2"/>
+       <text x="150" y="8" text-anchor="middle" class="ink" style="font-weight:600">your limit 25</text>
+       <text x="0" y="50">0</text><text x="186" y="50" text-anchor="middle" class="cau">31 at 12 PM</text><text x="240" y="50" text-anchor="end">40</text>
+      </svg>
+     </div>
+     <div class="card">
+      <div class="hd">Rain and snow<span class="st ok">12-hour totals</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px;align-items:end">
+       <div style="display:flex;gap:10px;align-items:flex-end">
+        <svg class="viz" viewBox="0 0 26 72" style="width:26px;flex:none" role="img" aria-label="Rain 0.07 inches on a 0 to 0.5 inch gauge."><rect x="1" y="1" width="24" height="70" rx="8" class="fillc"/><rect x="1" y="61" width="24" height="10" rx="5" class="cold"/></svg>
+        <div><div class="big" style="font-size:24px">0.07<small>in</small></div><div class="cap">rain</div></div>
+       </div>
+       <div style="display:flex;gap:10px;align-items:flex-end">
+        <svg class="viz" viewBox="0 0 26 72" style="width:26px;flex:none" role="img" aria-label="Snow 0.8 inches on a 0 to 4 inch gauge."><rect x="1" y="1" width="24" height="70" rx="8" class="fillc"/><rect x="1" y="57" width="24" height="14" rx="6" class="coldS" style="fill:var(--cold-fill)" stroke-width="1.5"/></svg>
+        <div><div class="big" style="font-size:24px">0.8<small>in</small></div><div class="cap">snow up high</div></div>
+       </div>
+      </div>
+     </div>
+     <div class="card score">
+      <div class="hd">Safety score<span class="st ok">hazards only</span></div>
+      <div style="display:flex;gap:14px;align-items:center">
+       <svg class="viz" viewBox="0 0 88 88" style="width:88px;flex:none" role="img" aria-label="Safety score 74 of 100.">
+        <circle cx="44" cy="44" r="36" fill="none" class="okS" stroke-width="10"/>
+        <circle cx="44" cy="44" r="36" fill="none" class="accS" stroke-width="10" stroke-linecap="round" stroke-dasharray="167.4 226.2" transform="rotate(-90 44 44)"/>
+        <text x="44" y="50" text-anchor="middle" class="ink" style="font-size:22px;font-weight:700">74</text>
+       </svg>
+       <div class="cap" style="font-size:14px">Hazards alone rate <b style="color:var(--label)">74 of 100</b>. The call is Caution because <b style="color:var(--caution)">4 hours cross your limits</b>.</div>
+      </div>
+     </div>
+    </div>
+   </section>
+
+   <section>
+    <div class="sh"><h3>Checks</h3><p>Open any card for the full evidence.</p></div>
+    <div class="checks">
+     <a class="card" href="e-weather.html">
+      <div class="hd">Weather<span class="st over"><svg class="sym"><use href="#s-tri"/></svg>Over 12–4 PM</span></div>
+      <svg class="viz" id="wx" viewBox="0 0 240 64" role="img" aria-label="Hourly rain chance, 7 AM to 6 PM; hours 12 to 3 PM exceed your limits."></svg>
+      <div class="cap">Rain peaks at 80% and gusts at 31 mph at noon.</div>
+      <svg class="sym chev"><use href="#s-chev"/></svg>
+     </a>
+     <div class="card missing">
+      <div class="hd">Alerts<span class="st missing"><svg class="sym"><use href="#s-q"/></svg>Not loaded</span></div>
+      <div class="empty">No response from NWS</div>
+      <a class="cta" href="#">Open weather.gov</a>
+     </div>
+     <a class="card" href="e-timing.html">
+      <div class="hd">Daylight<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>30 min spare</span></div>
+      <svg class="viz" viewBox="0 0 240 70" role="img" aria-label="Sunrise 6:52 AM, sunset 7:30 PM. You start at 7 AM and return at 7 PM, 30 minutes before sunset.">
+       <line x1="6" y1="58" x2="234" y2="58" class="secS" stroke-opacity=".35"/>
+       <path d="M10 58 Q120 -30 230 58" fill="none" class="secS" stroke-opacity=".35" stroke-dasharray="2 5" stroke-linecap="round"/>
+       <path d="M13 54 Q120 -26 213 44" fill="none" class="accS" stroke-width="4" stroke-linecap="round"/>
+       <circle cx="213" cy="44" r="5" class="acc"/><circle cx="230" cy="58" r="7" style="fill:#f4b25c"/>
+       <text x="10" y="70">6:52</text><text x="200" y="60" text-anchor="end" class="ink" style="font-weight:600">back 7:00</text><text x="236" y="70" text-anchor="end">7:30</text>
+      </svg>
+      <div class="cap">Back at 7:00 PM, sunset 7:30 PM.</div>
+      <svg class="sym chev"><use href="#s-chev"/></svg>
+     </a>
+     <a class="card" href="e-terrain.html">
+      <div class="hd">Terrain &amp; snow<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Mostly dry</span></div>
+      <svg class="viz" viewBox="0 0 240 70" role="img" aria-label="Snow line near 12,000 feet; your objective at 10,738 feet is below it.">
+       <path d="M0 68 L70 34 L96 42 L132 8 L170 38 L196 30 L240 68Z" class="mtn"/>
+       <path d="M112 26 L132 8 L150 24 L142 22 L132 28 L122 22Z" class="snow"/>
+       <line x1="0" y1="26" x2="240" y2="26" class="coldS" stroke-dasharray="3 3"/>
+       <text x="0" y="21" class="cold">snow line 12,000 ft</text>
+       <circle cx="98" cy="42" r="4.5" class="ink"/><text x="92" y="58" text-anchor="end" style="fill:#fff;font-weight:600">you 10.7k</text>
+      </svg>
+      <div class="cap">Dry below the snow line; fresh snow up high.</div>
+      <svg class="sym chev"><use href="#s-chev"/></svg>
+     </a>
+     <a class="card" href="e-terrain.html">
+      <div class="hd">Avalanche<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>No bulletin</span></div>
+      <svg class="viz" viewBox="0 0 240 56" role="img" aria-label="No avalanche danger rating is issued for this date.">
+       <g><rect x="0" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="49" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="98" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="147" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="196" y="14" width="44" height="18" rx="5" class="fillc"/></g>
+       <text x="22" y="48" text-anchor="middle">Low</text><text x="71" y="48" text-anchor="middle">Mod</text><text x="120" y="48" text-anchor="middle">Consid</text><text x="169" y="48" text-anchor="middle">High</text><text x="218" y="48" text-anchor="middle">Extreme</text>
+       <text x="120" y="10" text-anchor="middle" class="ink" style="font-weight:600">no rating issued · off-season</text>
+      </svg>
+      <div class="cap">No avalanche forecast is issued for this date.</div>
+      <svg class="sym chev"><use href="#s-chev"/></svg>
+     </a>
+     <a class="card" href="e-weather.html">
+      <div class="hd">Air &amp; fire<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Low risk</span></div>
+      <svg class="viz" viewBox="0 0 240 70" role="img" aria-label="Air quality index 32, good. Fire risk low.">
+       <path d="M40 64 A56 56 0 0 1 152 64" fill="none" class="okS" stroke-width="10" stroke-linecap="round"/>
+       <path d="M40 64 A56 56 0 0 1 58 23" fill="none" class="accS" stroke-width="10" stroke-linecap="round"/>
+       <text x="96" y="60" text-anchor="middle" class="ink" style="font-size:22px;font-weight:700">32</text>
+       <text x="96" y="30" text-anchor="middle">AQI · good</text>
+       <text x="170" y="42" class="ink" style="font-weight:600">Fire</text><text x="170" y="58">low</text>
+      </svg>
+      <div class="cap">Good air quality; fire risk low.</div>
+      <svg class="sym chev"><use href="#s-chev"/></svg>
+     </a>
+    </div>
+   </section>
+
+   <section>
+    <div class="sh"><h3>Pack for this day</h3><p>Each item is here because of the forecast.</p></div>
+    <div class="pack">
+     <label class="card item done"><input type="checkbox" checked aria-label="Rain shell"><span class="tick"><svg class="sym"><use href="#s-check"/></svg></span><span class="ic"><svg class="sym"><use href="#s-jacket"/></svg></span><span class="name">Rain shell</span><span class="why"><b class="cold">80% rain</b> at 12 PM</span></label>
+     <label class="card item"><input type="checkbox" aria-label="Traction"><span class="tick"></span><span class="ic"><svg class="sym"><use href="#s-spikes"/></svg></span><span class="name">Traction</span><span class="why"><b class="cold">25°F</b> after wet hours, at 2 PM</span></label>
+     <label class="card item"><input type="checkbox" aria-label="Warm layer"><span class="tick"></span><span class="ic"><svg class="sym"><use href="#s-layer"/></svg></span><span class="name">Warm layer</span><span class="why">Low of <b class="cold">25°F</b></span></label>
+     <label class="card item"><input type="checkbox" aria-label="Headlamp"><span class="tick"></span><span class="ic"><svg class="sym"><use href="#s-lamp"/></svg></span><span class="name">Headlamp</span><span class="why">Only <b>30 min</b> of daylight spare</span></label>
+    </div>
+   </section>
+   <section>
+    <div class="sh"><h3>More in this brief</h3></div>
+    <div class="group">
+     <a class="row" href="e-route.html"><span class="k">Route<small>11.8 mi · 3,790 ft gain · 7 checkpoints</small></span><span class="st over"><svg class="sym"><use href="#s-tri"/></svg>2 in storm</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+     <a class="row" href="e-sources.html"><span class="k">Checks &amp; sources<small>5 of 8 current · what changed since yesterday</small></span><span class="st missing"><svg class="sym"><use href="#s-q"/></svg>1 failed</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+     <a class="row" href="e-gear.html"><span class="k">Gear &amp; actions<small>What to pack and when you'll need it</small></span><span class="st ok">1 of 8 packed</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+    </div>
+   </section>
+  </main>
+ </div>
+</div>
+
+<nav class="tabbar" aria-label="Main">
+ <a class="on" aria-current="page"><svg class="sym"><use href="#s-doc"/></svg>Brief</a>
+ <a href="e-plan.html"><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
+ <a><svg class="sym"><use href="#s-cmp"/></svg>Compare</a>
+ <a><svg class="sym"><use href="#s-saved"/></svg>Saved</a>
+ <a><svg class="sym"><use href="#s-bell"/></svg>Watchlist</a>
+</nav>
+
+<script src="shared.js"></script>
+<script>
+const H=window.HOURS,N=H.length,LIM={g:25,p:60},full=['7 AM','8 AM','9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM','6 PM'];
+// Sky colours per hour, driven by time of day and cloud/rain: [zenith, horizon]
+const SKY=[['#4f7fbf','#f2c49c'],['#3f7fc8','#c9dcee'],['#357fd0','#d3e5f5'],['#3a78bf','#c5d6e4'],['#4a6f94','#aebcc7'],
+ ['#3c4753','#7e8a95'],['#3a4450','#78848f'],['#39434f','#7a8691'],['#415061','#8d99a4'],['#3d77bd','#cadced'],['#3c6fb4','#f0d3aa'],['#3f5f9f','#f3a86f']];
+function hx(c){return[1,3,5].map(i=>parseInt(c.slice(i,i+2),16))}
+function mix(a,b,c){return'#'+a.map((v,i)=>Math.round((v+2*b[i]+c[i])/4).toString(16).padStart(2,'0')).join('')}
+for(let pass=0;pass<2;pass++)for(const k of[0,1]){const src=SKY.map(r=>hx(r[k]));SKY.forEach((r,i)=>r[k]=mix(src[Math.max(0,i-1)],src[i],src[Math.min(src.length-1,i+1)]))}
+const sky=document.getElementById('sky'),hero=document.getElementById('hero'),out=document.getElementById('readout');
+const first=H.findIndex(h=>!h.ok),last=N-1-[...H].reverse().findIndex(h=>!h.ok);
+let sel=first,sunT=sel+.5,W,Hh,pad,cw,horizon,peak;
+const x=t=>pad+t*cw, TR=-.13, TS=12.5; // sunrise 6:52 AM, sunset 7:30 PM, hours after 7 AM
+const sunY=t=>horizon-Math.sin(Math.PI*Math.min(1,Math.max(0,(t-TR)/(TS-TR))))*(horizon-peak);
+function geom(){
+ const r=hero.getBoundingClientRect(),cs=getComputedStyle(document.documentElement);
+ W=r.width;Hh=r.height;pad=innerWidth<760?16:32;cw=(W-pad*2)/N;
+ const ridge=parseFloat(cs.getPropertyValue('--ridge')),scene=parseFloat(cs.getPropertyValue('--scene'));
+ horizon=Hh-ridge+18;peak=Hh-ridge-scene+26;
+}
+function draw(){
+ geom();
+ const stop=(arr,k)=>arr.map((c,i)=>`<stop offset="${((pad+(i+.5)*cw)/W).toFixed(4)}" stop-color="${c[k]}"/>`).join('');
+ let s=`<defs><linearGradient id="zen" x1="0" x2="1">${stop(SKY,0)}</linearGradient><linearGradient id="hor" x1="0" x2="1">${stop(SKY,1)}</linearGradient>
+ <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="1"/></linearGradient>
+ <mask id="m"><rect width="${W}" height="${Hh}" fill="url(#fade)"/></mask>
+ <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#061423" stop-opacity=".5"/><stop offset=".5" stop-color="#061423" stop-opacity=".4"/><stop offset=".72" stop-color="#061423" stop-opacity="0"/></linearGradient>
+ <radialGradient id="glow"><stop offset="0" stop-color="#fff6d8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6d8" stop-opacity="0"/></radialGradient>
+ <filter id="soft"><feGaussianBlur stdDeviation="2.2"/></filter>
+ <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="6" height="6" fill="rgba(255,154,77,.25)"/><line x1="0" y1="0" x2="0" y2="6" stroke="#FF9A4D" stroke-width="1.6"/></pattern></defs>
+ <rect width="${W}" height="${Hh}" fill="url(#zen)"/><rect width="${W}" height="${Hh}" fill="url(#hor)" mask="url(#m)"/>
+ <rect width="${W}" height="${Hh}" fill="url(#scrim)"/>`;
+ // sun path + selected column
+ const arc=[];for(let t=TR;t<=TS;t+=.1)arc.push(`${x(t).toFixed(1)},${sunY(t).toFixed(1)}`);
+ s+=`<polyline points="${arc.join(' ')}" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="2 6" stroke-linecap="round"/>`;
+ // sun (drawn before clouds so storms can hide it)
+ const sx=x(sunT),sy=sunY(sunT);
+ s+=`<g id="sun"><circle cx="${sx}" cy="${sy}" r="46" fill="url(#glow)"/><circle cx="${sx}" cy="${sy}" r="15" fill="#fff4cf"/></g>`;
+ // clouds + rain, only where the forecast has them
+ H.forEach((h,i)=>{if(h.p<20)return;const cx=x(i+.5),cy=peak+18+(i%2)*10,k=Math.min(1.25,.55+h.p/100),storm=h.p>=60,col=storm?'#aab3bb':'#eef2f5';
+  if(h.p>=20){const n=Math.max(2,Math.round(h.p/100*cw/9));for(let j=0;j<n;j++){const rx=cx-cw*.35+(j/(n-1||1))*cw*.7,ry=cy+18;s+=`<g class="rain"><line x1="${rx}" y1="${ry}" x2="${rx-10}" y2="${horizon-6}" stroke="#d6e6f5" stroke-opacity="${.25+h.p/200}" stroke-width="1.4" stroke-dasharray="7 9" stroke-dashoffset="${j*5}"/></g>`}}
+  s+=`<g class="cloud" filter="url(#soft)" opacity="${storm?.95:.8}"><ellipse cx="${cx-cw*.28*k}" cy="${cy+6}" rx="${cw*.36*k}" ry="${15*k}" fill="${col}"/><ellipse cx="${cx+cw*.05}" cy="${cy-6*k}" rx="${cw*.42*k}" ry="${22*k}" fill="${col}"/><ellipse cx="${cx+cw*.34*k}" cy="${cy+7}" rx="${cw*.32*k}" ry="${13*k}" fill="${col}"/></g>`;});
+ // ridgeline: the ground the hour labels stand on
+ let rp=`M0 ${horizon+8}`;const seg=24;for(let i=0;i<=seg;i++){const xx=W*i/seg,yy=horizon+6-Math.abs(Math.sin(i*1.7)*16)-(i==11?14:0)-(i==12?22:0)-(i==13?10:0);rp+=` L${xx.toFixed(1)} ${yy.toFixed(1)}`}
+ s+=`<path d="${rp} L${W} ${Hh} L0 ${Hh}Z" fill="#17221d"/>`;
+ // limits strip + hour/temperature labels on the ridge
+ const sy0=horizon+26;
+ H.forEach((h,i)=>{const x0=x(i)+1.5,w=cw-3;s+=`<rect x="${x0}" y="${sy0}" width="${w}" height="8" rx="4" fill="${h.ok?'rgba(255,255,255,.22)':'url(#hatch)'}" ${h.ok?'':'stroke="#FF9A4D" stroke-width="1.2"'}/>`;
+  const c=x(i+.5),on=i===sel;
+  s+=`<text x="${c}" y="${sy0+32}" text-anchor="middle" font-size="${innerWidth<760?13:16}" font-weight="600" fill="${h.t<32?'#9fd0ff':'#fff'}" font-family="var(--font)">${h.t}°</text>`;
+  s+=`<text x="${c}" y="${sy0+52}" text-anchor="middle" font-size="12" font-weight="${h.ok?500:700}" fill="${h.ok?'rgba(255,255,255,.72)':'#FF9A4D'}" font-family="var(--font)">${h.h}</text>`;
+  if(on)s+=`<rect x="${x(i)+2}" y="${sy0-8}" width="${cw-4}" height="68" rx="10" fill="none" stroke="#fff" stroke-width="2"/>`;});
+ s+=`<text x="${x((first+last+1)/2)}" y="${sy0-8}" text-anchor="middle" font-size="12" font-weight="700" fill="#FF9A4D" font-family="var(--font)">▲ Outside your limits · 12–4 PM</text>`;
+ sky.setAttribute('viewBox',`0 0 ${W} ${Hh}`);sky.innerHTML=s;
+}
+function readout(){
+ const h=H[sel],g=h.g>LIM.g,p=h.p>=LIM.p;
+ out.innerHTML=`<div><div class="t">${full[sel]}</div><div class="big">${h.t}°F</div></div>
+ <div class="rows"><span>Gust</span><b class="${g?'over':''}">${h.g} mph</b><span>Rain chance</span><b class="${p?'over':''}">${h.p}%</b></div>
+ <div class="flag ${h.ok?'ok':''}">${h.ok?'<svg class="sym"><use href="#s-check"/></svg>Within your limits':'<svg class="sym"><use href="#s-tri"/></svg>'+[g&&'Gust over 25 mph',p&&'Rain over 60%'].filter(Boolean).join(' · ')}</div>`;
+ sky.setAttribute('aria-valuenow',sel);sky.setAttribute('aria-valuetext',`${full[sel]}, ${h.t} degrees, gust ${h.g} miles per hour, rain chance ${h.p} percent${h.ok?', within your limits':', over your limits'}`);
+}
+function setSel(i){sel=Math.max(0,Math.min(N-1,i));sunT=sel+.5;draw();readout();}
+function pick(e){const r=sky.getBoundingClientRect();setSel(Math.floor((e.clientX-r.left-pad)/cw));}
+sky.addEventListener('pointerdown',e=>{sky.setPointerCapture(e.pointerId);pick(e)});
+sky.addEventListener('pointermove',e=>{if(e.buttons)pick(e)});
+sky.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){setSel(sel+1);e.preventDefault()}if(e.key==='ArrowLeft'){setSel(sel-1);e.preventDefault()}});
+addEventListener('resize',draw);
+readout();
+const wx=document.getElementById('wx');if(wx){let t='';const bw=240/12;H.forEach((h,i)=>{const bh=Math.max(3,h.p/100*44),x0=i*bw+2,w=bw-4;t+=`<rect x="${x0}" y="${48-bh}" width="${w}" height="${bh}" rx="3" class="${h.ok?'ok':'cau'}"/>`;if(i%3===0)t+=`<text x="${x0+w/2}" y="62" text-anchor="middle">${h.h}</text>`;});t+=`<line x1="0" y1="${48-.6*44}" x2="240" y2="${48-.6*44}" class="secS" stroke-dasharray="3 3"/><text x="240" y="${48-.6*44-4}" text-anchor="end">60% limit</text>`;wx.innerHTML=t;}
+// one defining moment: the sun rises and travels to the first hour that needs attention
+if(matchMedia('(prefers-reduced-motion: reduce)').matches||location.hash==='#still'){draw();}
+else{const t0=performance.now(),end=sel+.5;(function f(now){const k=Math.min(1,(now-t0)/1400),e=1-Math.pow(1-k,3);sunT=TR+(end-TR)*e;draw();if(k<1)requestAnimationFrame(f)})(t0);}
+if(document.fonts)document.fonts.ready.then(draw);
+// toolbar over the sky, then a normal bar
+const tb=document.querySelector('.toolbar'),h1=document.querySelector('h1');
+function bar(){const hb=hero.getBoundingClientRect().bottom;tb.classList.toggle('over-hero',hb>tb.offsetHeight+4);tb.classList.toggle('scrolled',h1.getBoundingClientRect().bottom<tb.offsetHeight&&hb<=tb.offsetHeight+4);}
+addEventListener('scroll',bar,{passive:true});bar();
+function tuck(){hero.style.marginTop=-tb.offsetHeight+'px';draw()}addEventListener('resize',tuck);tuck();
+document.querySelectorAll('.item input').forEach(i=>i.addEventListener('change',()=>i.closest('.item').classList.toggle('done',i.checked)));
+</script>
+</body></html>

@@ -1,0 +1,28 @@
+.acts3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.act{gap:6px;padding-top:18px}
+.act .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;background:var(--fill)}
+.act .n.cau{background:var(--caution-fill);color:var(--caution)}
+.act .n.miss{outline:2px dashed var(--missing);outline-offset:-2px;background:none;color:var(--missing)}
+.act .t{font-weight:600;font-size:17px;margin-top:4px}
+.btn2{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;background:var(--fill);color:var(--accent);font-weight:600;font-size:14px}
+.gt-head,.gi{display:grid;grid-template-columns:230px 1fr;gap:14px;align-items:center}
+.daystrip.wide{width:100%;height:22px;padding-bottom:16px}
+.gi{min-height:56px;padding:6px 4px;border-top:1px solid var(--separator);cursor:pointer;position:relative}
+.gi input{position:absolute;opacity:0;width:1px;height:1px}
+.gi .who{display:flex;align-items:center;gap:10px}
+.gi .box{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--secondary);flex:none;display:grid;place-items:center}
+.gi.done .box{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.gi .box .sym{width:15px;height:15px;stroke-width:3;opacity:0}.gi.done .box .sym{opacity:1}
+.gi .ic{color:var(--secondary)}.gi .ic .sym{width:24px;height:24px;stroke-width:1.7}
+.gi .nm{font-weight:600;font-size:15px;line-height:1.2}
+.gi .rs{font-size:12.5px;color:var(--secondary)}
+.gi.done .nm{color:var(--secondary);text-decoration:line-through}
+.gi input:focus-visible+.who .box{outline:3px solid var(--accent);outline-offset:2px}
+.lane{position:relative;height:26px;display:grid;grid-template-columns:repeat(12,1fr);gap:2px}
+.lane i{border-radius:4px;background:var(--fill)}
+.lane i.on{background:var(--label)}
+.lane i.on.cold{background:var(--cold)}
+.lane i.on.cau{background:var(--caution)}
+.lane i.on.soft{background:var(--secondary);opacity:.55}
+@media (max-width:1000px){.acts3{grid-template-columns:1fr}}
+@media (max-width:760px){.gt-head,.gi{grid-template-columns:1fr;gap:6px}.gt-head span{display:none}.gi{padding:10px 2px}}

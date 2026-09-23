@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
-  ArrowRight,
+  ArrowLeft,
   ArrowUpRight,
   Bell,
   BookOpen,
@@ -26,6 +26,14 @@ import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
 import "./report-navigation.css";
 import { AiExplanation } from "./AiExplanation";
+import { SkyHero } from "./sky/SkyHero";
+import { DayStrip } from "./sky/DayStrip";
+import { BriefSections } from "./sky/BriefSections";
+import { buildSkyHours } from "./sky/sky-model";
+import { verdictCopy } from "./verdict-copy";
+import { buildPlannedReportWeatherRows } from "./report-weather";
+import { minutesToTwentyFourHourClock } from "../app/core";
+import "./sky/sky.css";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
@@ -58,8 +66,14 @@ const chapters = [
   { id: "gear", label: "Gear & actions", icon: Check },
 ] as const;
 type Chapter = (typeof chapters)[number]["id"];
-function chapterFromHash(): Chapter {
+type View = Chapter | "brief" | "all";
+function viewFromHash(): View {
   const hash = parseReportSectionHash(window.location.hash) || "";
+  if (!hash) return "brief";
+  if (hash === "planner-section-all") return "all";
+  return chapterFromHash(hash);
+}
+function chapterFromHash(hash: string): Chapter {
   if (/route/.test(hash)) return "route";
   if (/terrain|snow|avalanche|wind-loading|elevation/.test(hash))
     return "terrain";
@@ -91,12 +105,11 @@ export function Report({
   actionBusy: boolean;
   feedback: string;
 }) {
-  const [chapter, setChapter] = useState<Chapter>(chapterFromHash);
-  const [fullReport, setFullReport] = useState(false);
-  const navigationRef = useRef<HTMLDivElement>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
-  const requestedChapter = useRef<Chapter | null>(null);
-  const [detailRequest, setDetailRequest] = useState(0);
+  const [view, setView] = useState<View>(viewFromHash);
+  const topRef = useRef<HTMLDivElement>(null);
+  const briefScroll = useRef(0);
+  const focusRequest = useRef<"chapter" | "brief" | null>(null);
+  const [navigation, setNavigation] = useState(0);
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
@@ -109,61 +122,58 @@ export function Report({
   const visibleChapters = chapters
     .filter((c) => c.id !== "route" || flags.routeAnalysis)
     .filter((c) => c.id !== "gear" || flags.gearRecommendations);
-  const activeChapter = visibleChapters.some((c) => c.id === chapter)
-    ? chapter
+  const activeView: View = view === "brief" || view === "all" || visibleChapters.some((c) => c.id === view)
+    ? view
     : "forecast";
-  const activeChapterLabel = visibleChapters.find((c) => c.id === activeChapter)!.label;
+  const chapterIndex = visibleChapters.findIndex((c) => c.id === activeView);
+  const activeChapter = chapterIndex >= 0 ? visibleChapters[chapterIndex] : null;
+  const fullReport = activeView === "all";
+
+  // The planned day, as the sky and day strip draw it.
+  const plannedRows = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, {
+    start: w.alpineStartTime,
+    date: w.forecastDate,
+  });
+  const skyHours = buildSkyHours(plannedRows, {
+    start: w.alpineStartTime,
+    sunriseMinutes: w.sunriseMinutesForPlan,
+    sunsetMinutes: w.sunsetMinutesForPlan,
+  });
+  const clock = (minute: number) =>
+    w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
+  const copy = verdictCopy({ data, decision, primaryReason: w.fieldBriefPrimaryReason, preferences: w.preferences });
+
   useEffect(() => {
-    const listener = () => {
-      requestedChapter.current = null;
-      setChapter(chapterFromHash());
-    };
+    const listener = () => setView(viewFromHash());
     window.addEventListener("hashchange", listener);
     return () => window.removeEventListener("hashchange", listener);
   }, []);
   useEffect(() => {
-    // Only an overview shortcut requests a jump. Loading a report, changing
-    // chapters, and syncing the URL must not move the reader's position.
-    if (requestedChapter.current !== activeChapter) return;
-    requestedChapter.current = null;
-    const detail = detailRef.current;
-    if (!detail) return;
-    const focusHeading = () => {
-      const heading = Array.from(detail.querySelectorAll<HTMLHeadingElement>("h2"))
-        .find((element) => element.getClientRects().length > 0);
-      if (!heading) return false;
-      navigationRef.current?.scrollIntoView({
-        block: "start",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "instant"
-          : "smooth",
-      });
-      heading.tabIndex = -1;
-      heading.focus({ preventScroll: true });
-      return true;
-    };
-    if (focusHeading()) return;
-    // Wait for the selected section when its lazy module is still loading.
-    const observer = new MutationObserver(() => {
-      if (focusHeading()) observer.disconnect();
-    });
-    observer.observe(detail, { childList: true, subtree: true, attributes: true });
-    return () => observer.disconnect();
-  }, [activeChapter, detailRequest, fullReport]);
-  function selectChapter(next: Chapter) {
-    requestedChapter.current = null;
-    setFullReport(false);
-    setChapter(next);
+    // Only an explicit navigation moves focus; loading a report must not.
+    const request = focusRequest.current;
+    focusRequest.current = null;
+    if (!request) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (request === "brief") {
+      window.scrollTo({ top: briefScroll.current, behavior: "instant" });
+      topRef.current?.querySelector<HTMLElement>("#field-verdict-title")?.focus({ preventScroll: true });
+      return;
+    }
+    topRef.current?.scrollIntoView({ block: "start", behavior: reduced ? "instant" : "smooth" });
+    const heading = topRef.current?.querySelector<HTMLElement>(".sky-chapter-head h1");
+    heading?.focus({ preventScroll: true });
+  }, [navigation]);
+  function go(next: View) {
+    if (activeView === "brief") briefScroll.current = window.scrollY;
+    focusRequest.current = next === "brief" ? "brief" : "chapter";
+    setView(next);
+    setNavigation((n) => n + 1);
+    const hash = next === "brief" ? "" : buildReportSectionHash(`planner-section-${next}`);
     window.history.replaceState(
       window.history.state,
       "",
-      `${window.location.pathname}${window.location.search}${buildReportSectionHash(`planner-section-${next}`)}`,
+      `${window.location.pathname}${window.location.search}${hash}`,
     );
-  }
-  function openChapter(next: Chapter) {
-    selectChapter(next);
-    requestedChapter.current = next;
-    setDetailRequest((request) => request + 1);
   }
   function download() {
     const url = URL.createObjectURL(
@@ -175,109 +185,128 @@ export function Report({
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return (
-    <div className="field-report">
-      <header className="field-report-head">
-        <div>
-          <span className="field-kicker">
-            {w.viewingHistoryReport
-              ? "Saved conditions report"
-              : "Conditions report"}{" "}
-            / {dateLabel(report.plan.forecastDate)}
-          </span>
-          <h1>{report.plan.objectiveName}</h1>
-          <p>
-            {w.displayStartTime} start <span>·</span>{" "}
-            {report.plan.travelWindowHours} hours outside <span>·</span>{" "}
-            {w.formatElevationDisplay(
-              data.weather.elevation == null
-                ? null
-                : Number(data.weather.elevation),
-            )}
-          </p>
-        </div>
-        <button className="field-button" onClick={onEdit}>
-          Edit plan
-          <ArrowUpRight size={16} />
+  const actions = (
+    <div className="field-report-actions">
+      {flags.reportHistory && (
+        <button disabled={actionBusy || Boolean(w.activeSavedReportId)} onClick={onSave}>
+          {w.activeSavedReportId ? <Check size={14} /> : <Download size={14} />}
+          <span className="sky-action-label">{w.activeSavedReportId ? "Saved" : "Save"}</span>
         </button>
-      </header>
+      )}
+      {flags.reportSharing && (
+        <button disabled={actionBusy} onClick={onShare}>
+          <Link size={14} />
+          <span className="sky-action-label">{w.copiedLink ? "Copied" : "Share"}</span>
+        </button>
+      )}
+      {flags.objectiveWatch && (
+        <button disabled={actionBusy} onClick={onWatch}>
+          <Bell size={14} />
+          <span className="sky-action-label">Watch</span>
+        </button>
+      )}
+      <details
+        className="report-actions-menu"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector("summary")?.focus();
+          }
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget))
+            event.currentTarget.open = false;
+        }}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("button")) {
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector("summary")?.focus({ preventScroll: true });
+          }
+        }}
+      >
+        <summary>
+          <Ellipsis size={18} />
+          <span className="sr-only">More actions</span>
+        </summary>
+        <div className="report-actions-popover">
+          <button disabled={actionBusy} onClick={onEmail}>
+            <Mail size={16} />
+            Email report
+          </button>
+          <button onClick={w.handleRetryFetch}>
+            <RefreshCw size={16} />
+            Refresh conditions
+          </button>
+          <button onClick={download}>
+            <ArrowDown size={16} />
+            Export report data
+          </button>
+          <button onClick={() => window.print()}>Print current view</button>
+        </div>
+      </details>
+      <button className="is-prominent" onClick={onEdit}>
+        Edit plan
+        <ArrowUpRight size={16} />
+      </button>
+    </div>
+  );
+  const notices = (
+    <>
       {w.viewingHistoryReport && (
-        <aside className="field-feedback" aria-label="Saved report snapshot">
-          This is a saved snapshot. It shows conditions from when it was generated
-          and won’t update. For current conditions, edit the plan and generate a new report.
+        <aside className="sky-notice" aria-label="Saved report snapshot">
+          <BookOpen size={20} aria-hidden="true" />
+          <div>This is a saved snapshot. It shows conditions from when it was generated
+            and won’t update. For current conditions, edit the plan and generate a new report.</div>
         </aside>
       )}
-      <div className="field-report-toolbar">
-        <span>
-          Generated {ageLabel(data.generatedAt)} ·{" "}
-          {w.objectiveTimezone || "Objective local time"}
-        </span>
-        <div>
-          {flags.reportHistory && (
-            <button disabled={actionBusy || Boolean(w.activeSavedReportId)} onClick={onSave}>
-              {w.activeSavedReportId ? <Check size={14} /> : <Download size={14} />}
-              {w.activeSavedReportId ? "Saved" : "Save"}
-            </button>
-          )}
-          {flags.reportSharing && (
-            <button disabled={actionBusy} onClick={onShare}>
-              <Link size={14} />
-              {w.copiedLink ? "Copied" : "Share"}
-            </button>
-          )}
-          {flags.objectiveWatch && (
-            <button disabled={actionBusy} onClick={onWatch}>
-              <Bell size={14} />
-              Watch
-            </button>
-          )}
-          <details
-            className="report-actions-menu"
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.currentTarget.open = false;
-                event.currentTarget.querySelector("summary")?.focus();
-              }
-            }}
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget))
-                event.currentTarget.open = false;
-            }}
-            onClick={(event) => {
-              if ((event.target as HTMLElement).closest("button")) {
-                event.currentTarget.open = false;
-                event.currentTarget.querySelector("summary")?.focus({ preventScroll: true });
-              }
-            }}
-          >
-            <summary>
-              <Ellipsis size={18} />
-              More actions
-            </summary>
-            <div className="report-actions-popover">
-              <button disabled={actionBusy} onClick={onEmail}>
-                <Mail size={16} />
-                Email report
-              </button>
-              <button onClick={w.handleRetryFetch}>
-                <RefreshCw size={16} />
-                Refresh conditions
-              </button>
-              <button onClick={download}>
-                <ArrowDown size={16} />
-                Export report data
-              </button>
-              <button onClick={() => window.print()}>Print current view</button>
-            </div>
-          </details>
+      {feedback && (
+        <p className="sky-notice is-info" role="status">
+          {feedback}
+        </p>
+      )}
+      {(data.partialData || data.apiWarning || w.hasFreshnessWarning) && (
+        <div className="sky-notice is-missing" role="status">
+          <TriangleAlert size={20} aria-hidden="true" />
+          <div>
+            {data.apiWarning ||
+              w.freshnessWarningSummary ||
+              "Some sources returned incomplete data. Check the official forecasts before committing."}
+          </div>
+          <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>
         </div>
-      </div>
+      )}
+      {(copy.warnings.length > 0 || copy.missing.length > 0) && (
+        <div className="sky-notice is-caution" aria-label="Warnings and evidence gaps">
+          <TriangleAlert size={20} aria-hidden="true" />
+          <div>
+            {copy.warnings.length > 0 && <>
+              <strong>Field reports to check.</strong>{" "}
+              {copy.warnings.map((signal) => `${signal.title}: ${signal.detail}`).join(" · ")}{" "}
+              Check when each report was made and whether it applies to your route.
+            </>}
+            {copy.missing.length > 0 && <span> {copy.missing.map((signal) => signal.title).join(" · ")}. Missing data does not mean conditions are clear.</span>}
+          </div>
+        </div>
+      )}
+      {passed && (
+        <div className="sky-notice is-caution">
+          <TriangleAlert size={20} aria-hidden="true" />
+          <div>
+            <strong>This report’s planned start has passed.</strong>{" "}
+            The forecast below is kept for reference. Pick a new start to get current conditions.
+            <div className="field-action-row">
+              <button className="field-button" onClick={w.handleUseNowAfterPastStart}>
+                Start now
+              </button>
+              <button className="field-button" onClick={w.handleUseTomorrowAfterPastStart}>
+                Start tomorrow
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {w.tripForecastRows.length > 0 && (
-        <div
-          className="field-preset-list"
-          role="group"
-          aria-label="Days from your comparison"
-        >
+        <div className="field-preset-list" role="group" aria-label="Days from your comparison">
           {w.tripForecastRows.map((day) => (
             <button
               key={day.date}
@@ -289,107 +318,111 @@ export function Report({
           ))}
         </div>
       )}
-      {feedback && (
-        <p className="field-feedback" role="status">
-          {feedback}
-        </p>
-      )}
-      {(data.partialData || data.apiWarning || w.hasFreshnessWarning) && (
-        <div className="field-warning" role="status">
-          <TriangleAlert size={18} />
-          <span>
-            {data.apiWarning ||
-              w.freshnessWarningSummary ||
-              "Some sources returned incomplete data. Check the official forecasts before committing."}
-          </span>
+    </>
+  );
+  const subtitle = (
+    <>
+      {dateLabel(report.plan.forecastDate)} · {w.displayStartTime} start · {report.plan.travelWindowHours} hours
+      {data.weather.elevation != null && <> · {w.formatElevationDisplay(Number(data.weather.elevation))}</>}
+      <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
+    </>
+  );
+  const chapterContent = (id: Chapter) => {
+    if (id === "forecast") return (
+      <section key="forecast">
+        <div className="field-chapter-heading">
+          <h2>Weather through your day</h2>
         </div>
-      )}
-      {passed && (
-        <div className="field-warning">
-          <div>
-            <strong>This report’s planned start has passed.</strong>
-            <p>
-              The forecast below is kept for reference. Pick a new start to get
-              current conditions.
-            </p>
-            <div className="field-action-row">
-              <button
-                className="field-button"
-                onClick={w.handleUseNowAfterPastStart}
-              >
-                Start now
-              </button>
-              <button
-                className="field-button"
-                onClick={w.handleUseTomorrowAfterPastStart}
-              >
-                Start tomorrow
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="report-overview">
-        <ReportVerdict
-          data={data}
-          decision={decision}
-          primaryReason={w.fieldBriefPrimaryReason}
-          freshnessWarning={w.hasFreshnessWarning ? w.freshnessWarningSummary : null}
-          preferences={w.preferences}
-          onSources={() => openChapter("sources")}
+        <Forecast report={report} />
+        <Conditions workspace={w} />
+      </section>
+    );
+    if (id === "timing") return <Timing key="timing" workspace={w} />;
+    if (id === "terrain") return <Terrain key="terrain" workspace={w} />;
+    if (id === "sources") return <Sources key="sources" workspace={w} />;
+    if (id === "route" && flags.routeAnalysis) return <Route key="route" workspace={w} />;
+    return null;
+  };
+  return (
+    <div className={`field-report sky-report is-${activeView === "brief" ? "brief" : "chapter"}`} ref={topRef}>
+      {activeView === "brief" ? (
+        <SkyHero
+          hours={skyHours}
+          sunrise={w.sunriseMinutesForPlan}
+          sunset={w.sunsetMinutesForPlan}
+          kicker={w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"}
+          title={report.plan.objectiveName}
+          subtitle={subtitle}
+          level={decision.level}
+          headline={decision.headline}
+          reason={copy.reason}
+          bridge={copy.bridge}
+          actions={actions}
+          format={{
+            temp: (f) => w.formatTempDisplay(f),
+            wind: (mph) => w.formatWindDisplay(mph),
+            clock,
+            timeStyle: w.preferences.timeStyle,
+          }}
         />
-        <ReportSummary workspace={w} onOpen={openChapter} />
-      </div>
-      <div className="field-report-layout">
-        <div className="report-section-navigation" ref={navigationRef}>
-          <div className="report-reading-controls">
-            <div>
-              <h2>Report sections</h2>
-              <p role="status" aria-live="polite" aria-atomic="true">
-                {fullReport ? "All sections in one view" : `Viewing ${activeChapterLabel}`}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="field-button"
-              aria-pressed={fullReport}
-              aria-controls="field-report-detail"
-              onClick={() => setFullReport((value) => !value)}
-            >
-              <BookOpen size={16} aria-hidden="true" />
-              {fullReport ? "Back to sections" : "Read full report"}
+      ) : (
+        <header className="sky-chapter-head">
+          <div className="sky-chapter-bar">
+            <button type="button" className="sky-back" onClick={() => go("brief")}>
+              <ArrowLeft size={18} aria-hidden="true" />
+              Brief
             </button>
+            {actions}
           </div>
-          <label className="report-section-picker">
-            <span>Report section</span>
-            <select
-              value={fullReport ? "all" : activeChapter}
-              aria-controls="field-report-detail"
-              onChange={(event) => {
-                if (event.target.value === "all") setFullReport(true);
-                else selectChapter(event.target.value as Chapter);
-              }}
-            >
-              {visibleChapters.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-              <option value="all">All sections</option>
-            </select>
-          </label>
-          <nav className="field-chapters" aria-label="Report sections">
-            {visibleChapters.map((c) => (
-              <button
-                key={c.id}
-                aria-current={!fullReport && activeChapter === c.id ? "page" : undefined}
-                aria-controls="field-report-detail"
-                onClick={() => selectChapter(c.id)}
-              >
-                <c.icon size={17} aria-hidden="true" />
-                <strong>{c.label}</strong>
-                <ArrowRight size={14} aria-hidden="true" />
-              </button>
-            ))}
-          </nav>
-        </div>
-        <div className="field-chapter-content" id="field-report-detail" ref={detailRef}>
+          <div className="sky-chapter-title">
+            <div>
+              <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
+              <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
+            </div>
+            <DayStrip hours={skyHours} clock={clock} />
+          </div>
+          {!fullReport && (
+            <nav className="sky-chapter-tabs" aria-label="Report sections">
+              {visibleChapters.map((c) => (
+                <button key={c.id} type="button" aria-current={activeView === c.id ? "page" : undefined} onClick={() => go(c.id)}>
+                  {c.label}
+                </button>
+              ))}
+              <button type="button" onClick={() => go("all")}>All sections</button>
+            </nav>
+          )}
+        </header>
+      )}
+      <div className="sky-body">
+        {notices}
+        {activeView === "brief" && (
+          <BriefSections
+            w={w}
+            hours={skyHours}
+            clock={clock}
+            scoreValue={copy.scoreValue}
+            insufficient={copy.insufficient}
+            bridge={copy.bridge}
+            onOpen={(next) => go(next)}
+            onReadAll={() => go("all")}
+            routeEnabled={flags.routeAnalysis}
+            gearEnabled={flags.gearRecommendations}
+          />
+        )}
+        {fullReport && (
+          <div className="report-overview">
+            <ReportVerdict
+              data={data}
+              decision={decision}
+              primaryReason={w.fieldBriefPrimaryReason}
+              freshnessWarning={w.hasFreshnessWarning ? w.freshnessWarningSummary : null}
+              preferences={w.preferences}
+              onSources={() => go("sources")}
+            />
+            <ReportSummary workspace={w} onOpen={(next) => go(next)} />
+          </div>
+        )}
+        <div className="field-chapter-content" id="field-report-detail">
           <Suspense
             fallback={
               <p className="field-loading" role="status">
@@ -397,87 +430,90 @@ export function Report({
               </p>
             }
           >
-            {(fullReport || activeChapter === "forecast") && (
-              <section>
-                <div className="field-chapter-heading">
-                  <h2>Weather through your day</h2>
-                </div>
-                <Forecast report={report} />
-                <Conditions workspace={w} />
-              </section>
-            )}
-            {(fullReport || activeChapter === "timing") && (
-              <Timing workspace={w} />
-            )}
-            {(fullReport || activeChapter === "terrain") && (
-              <Terrain workspace={w} />
-            )}
-            {(fullReport || activeChapter === "sources") && (
-              <Sources workspace={w} />
-            )}
-            {(fullReport || activeChapter === "route") &&
-              flags.routeAnalysis && <Route workspace={w} />}
+            {fullReport
+              ? visibleChapters.map((c) => chapterContent(c.id))
+              : activeChapter && chapterContent(activeChapter.id)}
             {flags.gearRecommendations && (
               <GearActions
                 key={JSON.stringify([report.plan, data.generatedAt, data.gear])}
-                hidden={!fullReport && activeChapter !== "gear"}
+                hidden={!fullReport && activeView !== "gear"}
                 recommendations={w.gearRecommendations}
                 decision={decision}
                 actionLine={w.decisionActionLine}
-                onSources={() => selectChapter("sources")}
+                onSources={() => go("sources")}
               />
             )}
           </Suspense>
         </div>
-      </div>
-      {(ai.aiBrief || w.aiBriefNarrative) && (
-        <section className="field-panel">
-          <div className="field-panel-heading">
-            <div>
-              <span className="field-kicker">AI explanation</span>
-              <h2>The report in context</h2>
-            </div>
-            {!w.viewingHistoryReport && (
-              <button
-                className="field-button"
-                disabled={w.aiBriefLoading || !ai.aiBrief}
-                onClick={w.handleRequestAiBriefAction}
-              >
-                <Sparkles size={16} />
-                {w.aiBriefLoading
-                  ? "Writing explanation…"
-                  : w.aiBriefNarrative
-                    ? "Regenerate explanation"
-                    : "Explain this report"}
+        {activeChapter && (
+          <nav className="sky-pager" aria-label="Chapters">
+            {chapterIndex > 0 ? (
+              <button type="button" onClick={() => go(visibleChapters[chapterIndex - 1].id)}>
+                <span>Previous</span><strong>‹ {visibleChapters[chapterIndex - 1].label}</strong>
               </button>
+            ) : (
+              <button type="button" onClick={() => go("brief")}><span>Back to</span><strong>‹ Brief</strong></button>
             )}
-          </div>
-          {w.aiBriefError && (
-            <p className="field-warning" role="alert">
-              {w.aiBriefError}
-            </p>
-          )}
-          {w.aiBriefNarrative && <AiExplanation text={w.aiBriefNarrative} />}
-        </section>
-      )}
-      {(ai.reportChat || w.reportChatMessages.length > 0) && (
-        <Suspense fallback={<p>Loading report assistant…</p>}>
-          <Chat
-            key={w.reportChatSessionKey}
-            reportPayload={w.rawReportPayload}
-            contextLabel={`${report.plan.objectiveName} · ${dateLabel(report.plan.forecastDate)}`}
-            initialMessages={w.reportChatMessages}
-            onMessagesChange={w.setReportChatMessages}
-            readOnly={w.viewingHistoryReport}
-          />
-        </Suspense>
-      )}
-      <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => openChapter("sources")} />
-      <p className="field-muted">
-        Backcountry Conditions is a planning aid, not a guarantee of safety. Check
-        official forecasts, and make the final call from what you see in the field
-        and your team’s judgment.
-      </p>
+            {chapterIndex < visibleChapters.length - 1 ? (
+              <button type="button" className="is-next" onClick={() => go(visibleChapters[chapterIndex + 1].id)}>
+                <span>Next</span><strong>{visibleChapters[chapterIndex + 1].label} ›</strong>
+              </button>
+            ) : (
+              <button type="button" className="is-next" onClick={() => go("brief")}><span>Done</span><strong>Brief ›</strong></button>
+            )}
+          </nav>
+        )}
+        {activeView === "brief" && (ai.aiBrief || w.aiBriefNarrative) && (
+          <section className="field-panel">
+            <div className="field-panel-heading">
+              <div>
+                <span className="field-kicker">AI explanation</span>
+                <h2>The report in context</h2>
+              </div>
+              {!w.viewingHistoryReport && (
+                <button
+                  className="field-button"
+                  disabled={w.aiBriefLoading || !ai.aiBrief}
+                  onClick={w.handleRequestAiBriefAction}
+                >
+                  <Sparkles size={16} />
+                  {w.aiBriefLoading
+                    ? "Writing explanation…"
+                    : w.aiBriefNarrative
+                      ? "Regenerate explanation"
+                      : "Explain this report"}
+                </button>
+              )}
+            </div>
+            {w.aiBriefError && (
+              <p className="field-warning" role="alert">
+                {w.aiBriefError}
+              </p>
+            )}
+            {w.aiBriefNarrative && <AiExplanation text={w.aiBriefNarrative} />}
+          </section>
+        )}
+        {activeView === "brief" && (ai.reportChat || w.reportChatMessages.length > 0) && (
+          <Suspense fallback={<p>Loading report assistant…</p>}>
+            <Chat
+              key={w.reportChatSessionKey}
+              reportPayload={w.rawReportPayload}
+              contextLabel={`${report.plan.objectiveName} · ${dateLabel(report.plan.forecastDate)}`}
+              initialMessages={w.reportChatMessages}
+              onMessagesChange={w.setReportChatMessages}
+              readOnly={w.viewingHistoryReport}
+            />
+          </Suspense>
+        )}
+        {(activeView === "brief" || fullReport) && (
+          <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} />
+        )}
+        <p className="field-muted">
+          Backcountry Conditions is a planning aid, not a guarantee of safety. Check
+          official forecasts, and make the final call from what you see in the field
+          and your team’s judgment.
+        </p>
+      </div>
     </div>
   );
 }

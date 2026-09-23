@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Field Sheet</title>
+<style>
+@font-face{font-family:Archivo;font-weight:400;src:url(fonts/archivo-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:Archivo;font-weight:500;src:url(fonts/archivo-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:Archivo;font-weight:600;src:url(fonts/archivo-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:Archivo;font-weight:700;src:url(fonts/archivo-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"Archivo Narrow";font-weight:500;src:url(fonts/archivo-narrow-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"Archivo Narrow";font-weight:600;src:url(fonts/archivo-narrow-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Archivo Narrow";font-weight:700;src:url(fonts/archivo-narrow-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:500;src:url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:600;src:url(fonts/ibm-plex-mono-latin-600-normal.woff2) format("woff2")}
+:root{
+ --paper:#fbfaf6;--ink:#161616;--ink2:#474540;--mute:#7a776f;--rule:#dcd8ce;--rule2:#ebe8e0;
+ --red:#c43d1c;--red-wash:rgba(196,61,28,.07);--blue:#2566a8;--green:#3c6b35;
+ --sans:Archivo,'Liberation Sans',Arial,sans-serif;
+ --narrow:"Archivo Narrow",'Liberation Sans Narrow','Liberation Sans',Arial,sans-serif;
+ --mono:"IBM Plex Mono",'Liberation Mono',monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --paper:#141413;--ink:#ecebe6;--ink2:#bdbab2;--mute:#8d8a82;--rule:#34332f;--rule2:#262523;
+ --red:#f06a45;--red-wash:rgba(240,106,69,.09);--blue:#6fa8e0;--green:#86b87c}}
+:root[data-theme="dark"]{
+ --paper:#141413;--ink:#ecebe6;--ink2:#bdbab2;--mute:#8d8a82;--rule:#34332f;--rule2:#262523;
+ --red:#f06a45;--red-wash:rgba(240,106,69,.09);--blue:#6fa8e0;--green:#86b87c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.label{font:600 12px/1 var(--narrow);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.hatch{background-image:repeating-linear-gradient(-45deg,currentColor 0 1px,transparent 1px 5px)}
+
+.page{max-width:1160px;margin:0 auto;padding:0 32px}
+header .page{display:flex;align-items:baseline;gap:32px;padding-top:18px;padding-bottom:14px;background:linear-gradient(var(--ink),var(--ink)) bottom center/calc(100% - 64px) 2px no-repeat}
+.wordmark{font:700 15px var(--narrow);letter-spacing:.1em;text-transform:uppercase}
+header nav{display:flex;gap:22px;font-size:14px;color:var(--mute)}
+header nav a.on{color:var(--ink);font-weight:600}
+header .sp{flex:1}
+header .acct{font-size:14px;color:var(--mute)}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:0 48px;padding-top:28px;padding-bottom:80px}
+main{min-width:0}
+
+.meta{font:500 12px var(--mono);letter-spacing:.02em;color:var(--mute);display:flex;flex-wrap:wrap;gap:4px 0}
+.meta span+span:before{content:"·";margin:0 10px;color:var(--rule)}
+h1{font:600 64px/1 var(--sans);letter-spacing:-.035em;margin:14px 0 28px}
+
+.verdict{display:grid;grid-template-columns:272px minmax(0,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--rule)}
+.call{padding:20px 24px 22px 0;border-right:1px solid var(--rule)}
+.call .word{font:700 64px/.9 var(--narrow);letter-spacing:-.01em;color:var(--red);text-transform:uppercase}
+.call .score{margin-top:18px;display:flex;align-items:baseline;gap:8px}
+.call .score b{font:500 30px/1 var(--mono)}
+.call .score span{font-size:13px;color:var(--mute)}
+.call .scale{position:relative;height:6px;margin-top:10px;background:linear-gradient(90deg,var(--red),#d99a2b 50%,var(--green))}
+.call .scale i{position:absolute;left:74%;top:-5px;width:2px;height:16px;background:var(--ink)}
+.call .ends{display:flex;justify-content:space-between;margin-top:6px;font:500 10px var(--mono);color:var(--mute)}
+.why{padding:20px 0 22px 28px}
+.why h2{font:500 26px/1.22 var(--sans);letter-spacing:-.015em;text-wrap:balance}
+.why p{margin-top:10px;color:var(--ink2);max-width:62ch}
+.limits{margin-top:18px;display:grid;grid-template-columns:repeat(3,auto);justify-content:start;border-top:1px solid var(--rule2)}
+.limits div{padding:10px 28px 0 0}
+.limits div+div{padding-left:20px;border-left:1px solid var(--rule2)}
+.limits dd{font:500 17px var(--mono);margin-top:5px}
+.limits dd s{text-decoration:none;color:var(--mute);font-size:13px}
+.limits .over dd{color:var(--red)}
+
+.incomplete{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--rule)}
+.incomplete .bar{align-self:stretch;color:var(--ink);opacity:.55}
+.incomplete b{font:700 13px var(--narrow);letter-spacing:.08em;text-transform:uppercase;margin-right:8px}
+.incomplete span{color:var(--ink2);font-size:14px}
+.incomplete a{font-size:14px;font-weight:600;border-bottom:1px solid var(--ink);white-space:nowrap}
+
+.tabs{display:flex;gap:26px;margin-top:40px;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none;position:sticky;top:0;background:var(--paper);z-index:3}
+.tabs a{flex:none;padding:10px 0;font-size:14px;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a.on{color:var(--ink);font-weight:600;border-color:var(--ink)}
+
+section{margin-top:34px}
+.sh{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:14px}
+.sh h3{font:700 15px var(--narrow);letter-spacing:.08em;text-transform:uppercase}
+.sh span{font-size:13px;color:var(--mute)}
+
+#meteo svg{display:block;width:100%;height:auto}
+.key{display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:10px;font-size:12px;color:var(--mute)}
+.key i{display:inline-block;width:14px;height:10px;margin-right:6px;vertical-align:-1px}
+
+.totals{display:grid;grid-template-columns:repeat(5,1fr);margin-top:22px;border-top:1px solid var(--ink);border-bottom:1px solid var(--rule)}
+.totals div{padding:12px 14px 14px 0}
+.totals div+div{padding-left:14px;border-left:1px solid var(--rule2)}
+.totals dd{font:500 22px/1.1 var(--mono);margin-top:7px}
+.totals dd small{font-size:12px;color:var(--mute);margin-left:3px}
+.totals p{font-size:12px;color:var(--mute);margin-top:4px}
+.totals .over dd{color:var(--red)}
+
+.checks{border-top:1px solid var(--ink)}
+.checks>div{display:grid;grid-template-columns:120px minmax(0,1fr) 84px;gap:16px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--rule2)}
+.checks dt{font:600 13px var(--narrow);letter-spacing:.06em;text-transform:uppercase}
+.checks dd{color:var(--ink2);font-size:14px}
+.checks .st{font:600 11px var(--mono);letter-spacing:.06em;text-align:right}
+.checks .ok .st{color:var(--green)}
+.checks .over .st{color:var(--red)}
+.checks .missing .st{color:var(--ink)}
+.checks .missing .st span{padding:2px 5px;outline:1px solid var(--ink)}
+
+aside{border-left:1px solid var(--rule);padding-left:24px;display:grid;gap:30px;align-content:start}
+.acts{display:grid;gap:8px}
+.btn{width:100%;padding:11px 14px;font-size:14px;font-weight:600;border:1px solid var(--ink);border-radius:2px;display:flex;justify-content:space-between;align-items:center}
+.btn.p{background:var(--ink);color:var(--paper)}
+.btn span{font:400 12px var(--mono);opacity:.6}
+.note h4{margin-bottom:10px}
+.note p{font-size:13.5px;color:var(--ink2)}
+.list{list-style:none}
+.list li{display:grid;grid-template-columns:16px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--rule2);font-size:13.5px;color:var(--ink2)}
+.list li:first-child{border-top:0;padding-top:0}
+.box{width:14px;height:14px;border:1.5px solid var(--ink);margin-top:3px;position:relative}
+.box.x:after{content:"";position:absolute;inset:2px;background:var(--ink)}
+.list li.done{color:var(--mute);text-decoration:line-through}
+.src{font:400 12px/1.7 var(--mono);color:var(--mute)}
+.src .gone{color:var(--red)}
+
+.mbar{display:none}
+
+@media (max-width:900px){
+ .grid{grid-template-columns:minmax(0,1fr)}
+ aside{border-left:0;padding-left:0;border-top:2px solid var(--ink);padding-top:22px;margin-top:40px}
+ aside .acts{display:none}
+ .mbar{display:grid}
+ body{padding-bottom:84px}
+}
+@media (max-width:640px){
+ .page{padding:0 16px}
+ header .page{background-size:calc(100% - 32px) 2px}
+ .meta{gap:2px 14px}.meta span+span:before{display:none}
+ .sh span{display:none}
+ header nav{display:none}
+ .grid{padding-top:18px}
+ h1{font-size:44px;margin:10px 0 20px}
+ .meta{font-size:11px}
+ .verdict{grid-template-columns:1fr}
+ .call{border-right:0;border-bottom:1px solid var(--rule2);padding:16px 0;display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:end}
+ .call .word{font-size:52px;grid-row:1/3}
+ .call .score{margin-top:0}
+ .call .score b{font-size:24px}
+ .call .ends{display:none}
+ .call .scale{margin:0 0 6px}
+ .why{padding:16px 0 18px}
+ .why h2{font-size:22px}
+ .limits{grid-template-columns:1fr 1fr 1fr}
+ .limits div,.limits div+div{padding:10px 8px 0 0}
+ .limits div+div{padding-left:10px}
+ .limits dd{font-size:14px}
+ .incomplete{grid-template-columns:10px minmax(0,1fr)}
+ .incomplete a{grid-column:2;justify-self:start}
+ .totals{grid-template-columns:1fr 1fr}
+ .totals div,.totals div+div{padding:12px 0;border-left:0;border-bottom:1px solid var(--rule2)}
+ .totals div:nth-child(even){padding-left:14px;border-left:1px solid var(--rule2)}
+ .totals div:last-child{grid-column:1/-1;border-bottom:0}
+ .checks>div{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+ .checks dd{grid-column:1/-1;grid-row:2}
+ .mbar{position:fixed;left:0;right:0;bottom:0;z-index:6;grid-template-columns:1fr 1fr 1.4fr;gap:8px;padding:10px 16px 20px;background:var(--paper);border-top:2px solid var(--ink)}
+ .mbar .btn{justify-content:center}
+}
+</style></head><body>
+<header><div class="page">
+ <span class="wordmark">Backcountry Conditions</span>
+ <nav><a class="on">Brief</a><a>Plan</a><a>Compare</a><a>Saved</a><a>Watchlist</a></nav>
+ <span class="sp"></span><a class="acct">Account</a>
+</div></header>
+
+<div class="page grid">
+ <main>
+  <div class="meta"><span>WED 23 SEP</span><span>7:00 AM – 7:00 PM</span><span>12 H</span><span>10,738 FT</span><span>MOUNTAIN HIKING</span><span>UPDATED &lt;1 H AGO</span></div>
+  <h1>Mount Shasta</h1>
+
+  <div class="verdict">
+   <div class="call">
+    <div class="word">Caution</div>
+    <div class="score"><b>74</b><span>/ 100 safety score</span></div>
+    <div class="scale" role="img" aria-label="74 of 100"><i></i></div>
+    <div class="ends"><span>HIGH RISK</span><span>LOW RISK</span></div>
+   </div>
+   <div class="why">
+    <h2>Clear morning, wet midday. Adjust timing before committing.</h2>
+    <p>Rain chances reach 80% at noon with gusts to 31 mph, and it drops below freezing from 2 to 4 PM. Conditions ease after 4 PM. You're back 30 minutes before sunset.</p>
+    <dl class="limits">
+     <div class="over"><dt class="label">First limit crossed</dt><dd class="mono">12:00 PM</dd></div>
+     <div class="over"><dt class="label">Gust</dt><dd class="mono">31 <s>/ 25 mph</s></dd></div>
+     <div class="over"><dt class="label">Precip</dt><dd class="mono">80 <s>/ 60%</s></dd></div>
+    </dl>
+   </div>
+  </div>
+
+  <div class="incomplete" role="note">
+   <span class="bar hatch"></span>
+   <div><b>Incomplete</b><span>NWS alerts did not load and source confidence was not assessed. Verify before you leave.</span></div>
+   <a>Checks &amp; sources</a>
+  </div>
+
+  <nav class="tabs" aria-label="Report sections"><a class="on">Weather</a><a>Timing</a><a>Terrain &amp; snow</a><a>Route</a><a>Checks &amp; sources</a><a>Gear &amp; actions</a></nav>
+
+  <section>
+   <div class="sh"><h3>The day, hour by hour</h3><span>Limits: gust 25 mph · precip 60%</span></div>
+   <div id="meteo"></div>
+   <div class="key"><span><i style="background:var(--red-wash);border:1px solid var(--red)"></i>Over a limit</span><span><i style="background:var(--blue)"></i>Rain chance</span><span><i style="border-top:1.5px dashed var(--blue);height:0;vertical-align:3px"></i>Freezing</span></div>
+
+   <dl class="totals">
+    <div class="over"><dt class="label">Peak gust</dt><dd class="mono">31<small>mph</small></dd><p>12:00 PM</p></div>
+    <div><dt class="label">Rain</dt><dd class="mono">0.07<small>in</small></dd><p>12 h total</p></div>
+    <div><dt class="label">Snow</dt><dd class="mono">0.8<small>in</small></dd><p>12 h total</p></div>
+    <div><dt class="label">Return</dt><dd class="mono">7:00<small>PM</small></dd><p>sunset 7:30 PM</p></div>
+    <div class="over"><dt class="label">Within limits</dt><dd class="mono">8<small>of 12 h</small></dd><p>12–4 PM over</p></div>
+   </dl>
+  </section>
+
+  <section>
+   <div class="sh"><h3>What we checked</h3><span>Open a row for the evidence</span></div>
+   <dl class="checks">
+    <div class="over"><dt>Weather</dt><dd>Over limits 12–4 PM. Gust 31 mph, precip 80%.</dd><span class="st">OVER</span></div>
+    <div class="missing"><dt>Alerts</dt><dd>NWS alert feed did not respond. Check weather.gov.</dd><span class="st"><span>MISSING</span></span></div>
+    <div class="ok"><dt>Daylight</dt><dd>Return 7:00 PM, sunset 7:30 PM. 30 min margin.</dd><span class="st">OK</span></div>
+    <div class="ok"><dt>Surface</dt><dd>Mostly dry. Fresh snow possible up high.</dd><span class="st">OK</span></div>
+    <div class="ok"><dt>Avalanche</dt><dd>No active bulletin for this date.</dd><span class="st">OK</span></div>
+    <div class="ok"><dt>Air &amp; fire</dt><dd>Air quality good. Fire risk low.</dd><span class="st">OK</span></div>
+   </dl>
+  </section>
+ </main>
+
+ <aside>
+  <div class="acts">
+   <button class="btn p">Edit plan</button>
+   <button class="btn">Share</button>
+   <button class="btn">Watch for changes</button>
+  </div>
+  <div class="note">
+   <h4 class="label">Score vs. decision</h4>
+   <p>74 rates the hazards on their own. The decision also checks them against your limits and timing, and 4 hours cross them.</p>
+  </div>
+  <div class="note">
+   <h4 class="label">Before you go · 1/4</h4>
+   <ul class="list">
+    <li class="done"><span class="box x"></span>Rain shell and warm layer</li>
+    <li><span class="box"></span>Traction for icy footing after 2 PM</li>
+    <li><span class="box"></span>Check NWS alerts</li>
+    <li><span class="box"></span>Headlamp</li>
+   </ul>
+  </div>
+  <div class="note">
+   <h4 class="label">Sources</h4>
+   <div class="src">NOAA/NWS forecast<br>Open-Meteo<br>Avalanche.org<br>sunrisesunset.io<br><span class="gone">NWS alerts: no response</span></div>
+  </div>
+ </aside>
+</div>
+
+<div class="mbar"><button class="btn">Share</button><button class="btn">Watch</button><button class="btn p">Edit plan</button></div>
+
+<script src="shared.js"></script>
+<script>
+function draw(){
+ const el=document.getElementById('meteo'),css=getComputedStyle(document.documentElement),v=k=>css.getPropertyValue(k).trim();
+ const H=window.HOURS,n=H.length,W=el.clientWidth,narrow=W<560;
+ const pl=narrow?44:64,cw=(W-pl)/n,x=i=>pl+cw*i+cw/2;
+ const rows={status:[24,14],temp:[38,narrow?124:150],gust:[0,28],rain:[0,narrow?54:64]};
+ rows.gust[0]=rows.temp[0]+rows.temp[1];rows.rain[0]=rows.gust[0]+rows.gust[1];
+ const Ht=rows.rain[0]+rows.rain[1]+1,mono='IBM Plex Mono,Liberation Mono,monospace',nar='Archivo Narrow,Liberation Sans,Arial';
+ const fs=narrow?10:11;
+ const tMin=20,tMax=70,tp=20,yT=t=>rows.temp[0]+tp+(1-(t-tMin)/(tMax-tMin))*(rows.temp[1]-tp*2);
+ let s=`<svg viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}" role="img" aria-label="Meteogram, 7 AM to 6 PM">
+ <defs><pattern id="h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="6" height="6" fill="${v('--red-wash')}"/><line x1="0" y1="0" x2="0" y2="6" stroke="${v('--red')}" stroke-opacity=".2"/></pattern></defs>`;
+ H.forEach((h,i)=>{if(!h.ok)s+=`<rect x="${pl+cw*i}" y="${rows.status[0]}" width="${cw}" height="${Ht-rows.status[0]}" fill="url(#h)"/>`});
+ const lab=(r,t,c)=>s+=`<text x="0" y="${rows[r][0]+(r==='temp'?18:rows[r][1]/2+4)}" font-family="${nar}" font-weight="600" font-size="11" letter-spacing=".08em" fill="${c||v('--mute')}">${t}</text>`;
+ ['status','temp','gust','rain'].forEach(r=>s+=`<line x1="0" x2="${W}" y1="${rows[r][0]}" y2="${rows[r][0]}" stroke="${r==='status'?v('--ink'):v('--rule')}"/>`);
+ s+=`<line x1="0" x2="${W}" y1="${Ht-.5}" y2="${Ht-.5}" stroke="${v('--rule')}"/>`;
+ lab('temp','TEMP °F');lab('gust','GUST');lab('rain','RAIN %',v('--blue'));lab('status','LIMITS');
+ for(let i=1;i<n;i++)s+=`<line x1="${pl+cw*i}" x2="${pl+cw*i}" y1="${rows.status[0]}" y2="${Ht}" stroke="${v('--rule2')}"/>`;
+ H.forEach((h,i)=>s+=`<text x="${x(i)}" y="16" text-anchor="middle" font-family="${mono}" font-size="${fs}" font-weight="${h.ok?400:600}" fill="${h.ok?v('--mute'):v('--red')}">${h.h}</text>`);
+ let st=0;for(let i=1;i<=n;i++){if(i==n||H[i].ok!=H[st].ok){const ok=H[st].ok;s+=`<rect x="${pl+cw*st}" y="${rows.status[0]+4}" width="${cw*(i-st)}" height="6" fill="${ok?v('--green'):v('--red')}"/>`;st=i;}}
+ s+=`<line x1="${pl}" x2="${W}" y1="${yT(32)}" y2="${yT(32)}" stroke="${v('--blue')}" stroke-dasharray="4 3"/><text x="${pl-6}" y="${yT(32)+4}" text-anchor="end" font-family="${mono}" font-size="10" fill="${v('--blue')}">32</text>`;
+ s+=`<polyline points="${H.map((h,i)=>x(i)+','+yT(h.t)).join(' ')}" fill="none" stroke="${v('--ink')}" stroke-width="1.75" stroke-linejoin="round"/>`;
+ H.forEach((h,i)=>{const cold=h.t<32,c=cold?v('--blue'):v('--ink');s+=`<rect x="${x(i)-3}" y="${yT(h.t)-3}" width="6" height="6" fill="${cold?c:v('--paper')}" stroke="${c}" stroke-width="1.5"/>`;
+  s+=`<text x="${x(i)}" y="${cold?yT(h.t)+18:yT(h.t)-9}" text-anchor="middle" font-family="${mono}" font-size="${fs}" font-weight="500" fill="${c}">${h.t}</text>`});
+ H.forEach((h,i)=>{const o=h.g>25;s+=`<text x="${x(i)}" y="${rows.gust[0]+18}" text-anchor="middle" font-family="${mono}" font-size="${fs+1}" font-weight="${o?600:400}" fill="${o?v('--red'):v('--ink2')}">${h.g}</text>`});
+ const rb=rows.rain[0]+rows.rain[1]-1,rh=rows.rain[1]-18;
+ H.forEach((h,i)=>{const bh=h.p/100*rh,bw=Math.min(cw*.5,22),hi=h.p>=60;if(h.p>0)s+=`<rect x="${x(i)-bw/2}" y="${rb-bh}" width="${bw}" height="${bh}" fill="${v('--blue')}" opacity="${hi?1:.5}"/>`;
+  s+=`<text x="${x(i)}" y="${rb-bh-4}" text-anchor="middle" font-family="${mono}" font-size="${fs-1}" fill="${hi?v('--blue'):v('--mute')}" font-weight="${hi?600:400}">${h.p}</text>`});
+ s+='</svg>';el.innerHTML=s;
+}
+draw();addEventListener('resize',draw);matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+if(document.fonts)document.fonts.ready.then(draw);
+</script>
+</body></html>

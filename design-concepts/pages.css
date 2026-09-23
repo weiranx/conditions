@@ -1,0 +1,58 @@
+/* Shared styles for Sky detail pages and Plan */
+.toolbar.detail{justify-content:flex-start}
+.toolbar.scrolled{border-bottom-color:var(--separator)}
+.back{display:inline-flex;align-items:center;gap:2px;min-height:44px;padding:0 8px 0 2px;margin-left:-6px;color:var(--accent);font-size:16px;font-weight:500;border-radius:10px}
+.back .sym{width:20px;height:20px;transform:scaleX(-1);stroke-width:2.4}
+.toolbar .ttl{font-weight:600;font-size:16px}
+.page{max-width:1040px;padding:8px 32px 72px}
+.phead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:12px 0 8px}
+.phead h1{font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.phead .sub{color:var(--secondary);font-size:15px;margin-top:6px}
+.daystrip{position:relative;display:grid;grid-template-columns:repeat(12,1fr);gap:2px;width:min(360px,100%);height:34px;padding-bottom:16px;box-sizing:content-box}
+.daystrip i{border-radius:5px;background:linear-gradient(var(--z),var(--h))}
+.daystrip i.over{background-image:repeating-linear-gradient(-45deg,rgba(255,154,77,.95) 0 1.5px,transparent 1.5px 6px),linear-gradient(var(--z),var(--h));box-shadow:inset 0 0 0 1.5px var(--caution)}
+.daystrip i.sel{outline:2px solid var(--label);outline-offset:1px}
+.daystrip .lbl{position:absolute;bottom:0;left:0;font-size:11px;color:var(--secondary)}
+.daystrip .lbl.r{left:auto;right:0}
+.page section{margin-top:36px}
+.page .sh{padding:0 4px 12px;display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.page .sh h3{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.page .sh p{font-size:14px;color:var(--secondary);margin-top:2px}
+.lead{font-size:17px;max-width:62ch;margin-top:10px}
+.lead b{font-weight:600}
+.lead .cau{color:var(--caution);font-weight:600}
+.seg{display:inline-grid;grid-auto-flow:column;gap:2px;padding:2px;border-radius:10px;background:var(--fill);max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg button{min-height:32px;padding:0 12px;border-radius:8px;font-size:14px;font-weight:500;color:var(--secondary);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--label);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pager{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:40px}
+.pager a{background:var(--surface);border-radius:16px;padding:14px 16px;display:grid;gap:2px}
+.pager a span{font-size:13px;color:var(--secondary)}
+.pager a b{font-size:17px;font-weight:600}
+.pager a.next{text-align:right}
+.tbl{width:100%;border-collapse:collapse;font-size:15px}
+.tbl th{font-size:12px;font-weight:600;color:var(--secondary);text-align:right;padding:8px 10px;border-bottom:1px solid var(--separator)}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl td{padding:10px;text-align:right;border-bottom:1px solid var(--separator);white-space:nowrap}
+.tbl tr:last-child td{border-bottom:0}
+.tbl.wrap td{white-space:normal}
+.tbl tr.over td{background:var(--caution-fill)}
+.tbl .over-v{color:var(--caution);font-weight:600}
+.tbl .cold-v{color:var(--cold);font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--fill);color:var(--secondary)}
+.chip.cau{background:var(--caution-fill);color:var(--caution)} .chip.cold{background:var(--cold-fill);color:var(--cold)}
+.chip .sym{width:13px;height:13px}
+@media (max-width:1000px){.g3{grid-template-columns:1fr 1fr}}
+.app>div{min-width:0}
+@media (max-width:760px){
+ .app{grid-template-columns:minmax(0,1fr)}
+ .page{padding:4px 16px 120px}
+ .phead h1{font-size:30px}
+ .g2,.g3{grid-template-columns:1fr;gap:10px}
+ .toolbar .ttl{position:absolute;left:50%;transform:translateX(-50%)}
+ .pager{gap:10px}
+ .tbl{font-size:14px}
+ .page .sh{display:block}
+ .tbl .hide-m{display:none}
+ .tbl .st .t{display:none}.tbl td,.tbl th{padding:9px 6px}
+}

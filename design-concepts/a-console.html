@@ -1,0 +1,159 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Summit Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d1214;--panel:#141b1e;--panel2:#1a2327;--line:#26333a;--ink:#e8eef0;--mute:#8a9aa2;--go:#4fd18b;--warn:#f2b441;--stop:#ef5d5d;--accent:#7cc4ff}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,sans-serif;
+ background-image:radial-gradient(circle at 80% -10%,#1d2b30 0,transparent 55%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.035'%3E%3Cpath d='M-50 420 Q150 300 300 380 T650 330'/%3E%3Cpath d='M-50 460 Q150 340 300 420 T650 370'/%3E%3Cpath d='M-50 380 Q160 250 300 340 T650 290'/%3E%3Cpath d='M-50 340 Q170 200 300 300 T650 250'/%3E%3Cpath d='M-50 300 Q180 150 300 260 T650 210'/%3E%3C/g%3E%3C/svg%3E")}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:grid;grid-template-columns:64px 1fr;min-height:100vh}
+.rail{border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:18px;padding:18px 0}
+.rail i{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--mute)}
+.rail i.on{background:#1f2c31;color:var(--ink);box-shadow:inset 0 0 0 1px #2e3e45}
+.rail svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8}
+main{padding:22px 28px;display:grid;gap:16px;max-width:1360px}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.chip{font:600 11px/1 Inter,'Liberation Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);border:1px solid var(--line);padding:6px 9px;border-radius:999px}
+.top .sp{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);padding:8px 12px;border-radius:9px;font-weight:600;font-size:13px}
+.btn.pri{background:var(--ink);color:#0d1214;border-color:var(--ink)}
+.grid{display:grid;grid-template-columns:320px 1fr;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+.lbl{font:600 11px/1 Inter,'Liberation Sans',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.verdict{background:linear-gradient(160deg,#2a2413,#141b1e 60%);border-color:#4a3c17}
+.gauge{position:relative;width:180px;height:100px;margin:16px auto 6px}
+.gauge .n{position:absolute;inset:auto 0 0;text-align:center;font:700 44px/1 'JetBrains Mono','DejaVu Sans Mono',monospace}
+.gauge .n small{font-size:14px;color:var(--mute)}
+.call{margin-top:10px;display:flex;align-items:center;gap:10px}
+.call b{font:800 22px/1 Inter,'Liberation Sans',sans-serif;color:var(--warn);letter-spacing:.02em}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 5px #f2b44122}
+.verdict p{color:#cfd8dc;margin-top:10px}
+.why{margin-top:14px;display:grid;gap:8px}
+.why div{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#cfd8dc}
+.why span{flex:none;font:700 11px/18px 'JetBrains Mono','DejaVu Sans Mono',monospace;color:var(--warn)}
+.ribbonhead{display:flex;justify-content:space-between;align-items:end;margin-bottom:14px}
+.ribbonhead h2{font-size:17px;font-weight:700}
+.legend{display:flex;gap:14px;color:var(--mute);font-size:12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.ribbon{display:grid;grid-template-columns:70px repeat(12,1fr);gap:4px;align-items:center}
+.ribbon .rl{font-size:11px;color:var(--mute);font-weight:600}
+.cell{height:30px;border-radius:6px;display:grid;place-items:center;font:600 11px 'JetBrains Mono','DejaVu Sans Mono',monospace;color:#0d1214}
+.hh{text-align:center;font:600 11px 'JetBrains Mono','DejaVu Sans Mono',monospace;color:var(--mute)}
+.bars{height:120px;display:flex;align-items:flex-end}
+.bars div{width:100%;border-radius:4px 4px 0 0;background:#2f6ea3}
+.now{outline:2px solid var(--ink);outline-offset:1px}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.tile:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.tile .v{font:700 24px/1.1 'JetBrains Mono','DejaVu Sans Mono',monospace;margin:10px 0 4px}
+.tile .v small{font-size:12px;color:var(--mute);font-weight:500}
+.tile .s{font-size:12px;color:var(--mute)}
+.tile .st{position:absolute;right:12px;top:12px;font:700 10px 'JetBrains Mono','DejaVu Sans Mono',monospace;color:var(--c)}
+.bottom{display:grid;align-items:start;grid-template-columns:1.3fr 1fr;gap:16px}
+.timeline{position:relative;height:56px;margin-top:18px}
+.timeline .track{position:absolute;left:0;right:0;top:24px;height:8px;border-radius:4px;background:linear-gradient(90deg,#2b3a41 0,#f7d27b 4%,#f7d27b 88%,#e58c4a 94%,#2b3a41 100%)}
+.timeline .trip{position:absolute;left:6%;right:12%;top:18px;height:20px;border:2px solid var(--ink);border-radius:6px}
+.timeline span{position:absolute;top:44px;font:600 11px 'JetBrains Mono','DejaVu Sans Mono',monospace;color:var(--mute);transform:translateX(-50%)}
+.timeline em{position:absolute;top:0;font:600 11px Inter,'Liberation Sans',sans-serif;font-style:normal;color:var(--ink);transform:translateX(-50%)}
+.list{display:grid;gap:10px;margin-top:12px}
+.list div{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--panel2);border-radius:10px;font-size:13px}
+.list input{accent-color:var(--go);width:16px;height:16px}
+.mtab{display:none}
+main,.grid>*,.bottom>*,.card{min-width:0}
+@media (max-width:700px){
+ .app{grid-template-columns:1fr}.rail{display:none}
+ main{padding:14px 14px 90px;gap:12px}
+ .top h1{font-size:22px}.top .btn:not(.pri),.top .chip.d{display:none}
+ .grid,.bottom{grid-template-columns:1fr}
+ .tiles{grid-template-columns:repeat(2,1fr)}
+ .ribbon{grid-template-columns:44px repeat(12,minmax(22px,1fr));overflow-x:auto}
+ .cell{height:24px;font-size:9px}.hh{font-size:9px}.bars{height:48px}
+ .legend{display:none}
+ .gauge{width:150px;height:84px}.gauge .n{font-size:36px}
+ .mtab{display:flex;position:fixed;left:0;right:0;bottom:0;background:#0d1214ee;border-top:1px solid var(--line);justify-content:space-around;padding:10px 0 22px;backdrop-filter:blur(8px)}
+ .mtab i{color:var(--mute);font:600 10px Inter,'Liberation Sans',sans-serif;font-style:normal;display:grid;justify-items:center;gap:4px}.mtab i.on{color:var(--ink)}
+ .mtab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+}
+</style></head><body>
+<div class="app">
+ <nav class="rail">
+  <i class="on"><svg viewBox="0 0 24 24"><path d="M3 20l6-11 4 6 3-4 5 9z"/></svg></i>
+  <i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 5-4 1 2-5z"/></svg></i>
+  <i><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></i>
+  <i><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></i>
+  <i><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 004 0"/></svg></i>
+ </nav>
+ <main>
+  <div class="top">
+   <h1>Mount Shasta</h1>
+   <span class="chip mono">Wed Sep 23 · 7:00a → 7:00p</span>
+   <span class="chip d mono">10,738 ft · 12 h outside</span>
+   <span class="sp"></span>
+   <button class="btn">Share</button><button class="btn">Watch</button><button class="btn pri">Edit plan</button>
+  </div>
+
+  <div class="grid">
+   <section class="card verdict">
+    <div class="lbl">Trip call</div>
+    <div class="gauge">
+     <svg viewBox="0 0 180 100" width="100%" height="100%"><path d="M15 95 A75 75 0 0 1 165 95" stroke="#26333a" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M15 95 A75 75 0 0 1 145 40" stroke="url(#g)" stroke-width="12" fill="none" stroke-linecap="round"/><defs><linearGradient id="g"><stop offset="0" stop-color="#ef5d5d"/><stop offset=".5" stop-color="#f2b441"/><stop offset="1" stop-color="#4fd18b"/></linearGradient></defs></svg>
+     <div class="n">74<small>/100</small></div>
+    </div>
+    <div class="call"><span class="dot"></span><b>GO WITH CAUTION</b></div>
+    <p>Storm cell midday. Top out before 11:30a or wait it out below 9,000 ft.</p>
+    <div class="why">
+     <div><span>12P</span>Precip peaks at 80% with gusts to 31 mph</div>
+     <div><span>2P</span>Temps drop to 25°F — wet layers will freeze</div>
+     <div><span>7P</span>Return 30 min before sunset</div>
+    </div>
+   </section>
+
+   <section class="card">
+    <div class="ribbonhead"><div><div class="lbl">Travel window</div><h2>8 of 12 hours inside your limits</h2></div>
+     <div class="legend"><span><i style="background:var(--go)"></i>Go</span><span><i style="background:var(--warn)"></i>Review</span><span><i style="background:var(--stop)"></i>Stop</span></div></div>
+    <div class="ribbon" id="rib"></div>
+   </section>
+  </div>
+
+  <div class="tiles">
+   <div class="tile" style="--c:var(--warn)"><span class="st">REVIEW</span><div class="lbl">Weather</div><div class="v">31<small> mph gust</small></div><div class="s">80% precip at noon</div></div>
+   <div class="tile" style="--c:var(--go)"><span class="st">OK</span><div class="lbl">Avalanche</div><div class="v">—</div><div class="s">Off-season · no bulletin</div></div>
+   <div class="tile" style="--c:var(--go)"><span class="st">OK</span><div class="lbl">Daylight</div><div class="v">+30<small> min</small></div><div class="s">Sunset 7:30p</div></div>
+   <div class="tile" style="--c:var(--go)"><span class="st">OK</span><div class="lbl">Surface</div><div class="v">Dry</div><div class="s">Snow above 12k ft</div></div>
+   <div class="tile" style="--c:var(--go)"><span class="st">OK</span><div class="lbl">Air</div><div class="v">32<small> AQI</small></div><div class="s">Fire risk low</div></div>
+   <div class="tile" style="--c:var(--mute)"><span class="st">GAP</span><div class="lbl">Alerts</div><div class="v">?</div><div class="s">NWS feed missing</div></div>
+  </div>
+
+  <div class="bottom">
+   <section class="card"><div class="lbl">Daylight vs. plan</div>
+    <div class="timeline"><div class="track"></div><div class="trip"></div>
+     <em style="left:6%">Start 7:00a</em><em style="left:88%">Return 7:00p</em>
+     <span style="left:4%">6:52a</span><span style="left:50%">1:11p</span><span style="left:94%">7:30p</span></div>
+   </section>
+   <section class="card"><div class="lbl">Before you go</div>
+    <div class="list"><div><input type="checkbox" checked>Hard shell + insulated layer</div><div><input type="checkbox">Microspikes / crampons above 12k</div><div><input type="checkbox">Set turnaround: 11:30a</div></div>
+   </section>
+  </div>
+ </main>
+</div>
+<nav class="mtab">
+ <i class="on"><svg viewBox="0 0 24 24"><path d="M3 20l6-11 4 6 3-4 5 9z"/></svg>Report</i>
+ <i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 5-4 1 2-5z"/></svg>Plan</i>
+ <i><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>Compare</i>
+ <i><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Saved</i>
+</nav>
+<script src="shared.js"></script>
+<script>
+const r=document.getElementById('rib');const H=window.HOURS;
+const col=v=>v?'var(--go)':'var(--warn)';
+let s='<div></div>'+H.map(x=>`<div class="hh">${x.h}</div>`).join('');
+s+='<div class="rl">Status</div>'+H.map((x,i)=>`<div class="cell ${i==0?'now':''}" style="background:${col(x.ok)}">${x.ok?'GO':'!'}</div>`).join('');
+s+='<div class="rl">Temp °F</div>'+H.map(x=>`<div class="hh" style="color:${x.t<32?'var(--accent)':'var(--ink)'}">${x.t}</div>`).join('');
+s+='<div class="rl">Gust</div>'+H.map(x=>`<div class="cell" style="background:rgba(242,180,65,${Math.max(.08,(x.g-10)/25)});color:var(--ink)">${x.g}</div>`).join('');
+s+='<div class="rl">Precip</div>'+H.map(x=>`<div class="bars"><div style="height:${Math.max(3,x.p)}%;opacity:${.4+x.p/160}"></div></div>`).join('');
+r.innerHTML=s;
+</script>
+</body></html>

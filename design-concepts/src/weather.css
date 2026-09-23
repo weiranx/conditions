@@ -1,0 +1,3 @@
+#chart{margin-top:14px}
+.tbl .glyph .sym{width:20px;height:20px;color:var(--secondary)}
+.tbl .glyph .sym.rain{color:var(--cold)}
