@@ -37,8 +37,11 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   const firstAttention = hours.findIndex((hour) => hour.tone !== "within");
   const [selected, setSelected] = useState(Math.max(0, firstAttention));
   const [sunT, setSunT] = useState<number | null>(null);
+  // Mouse hover previews an hour in the readout without committing it.
+  const [hovered, setHovered] = useState<number | null>(null);
   const safeSelected = Math.min(selected, Math.max(0, hours.length - 1));
-  const hour = hours[safeSelected];
+  const preview = hovered !== null && hovered < hours.length ? hovered : null;
+  const hour = hours[preview ?? safeSelected];
 
   // One defining moment: the sun rises and travels to the hour that needs attention.
   useEffect(() => {
@@ -73,6 +76,11 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   const cw = (width - pad * 2) / count;
   const x = (i: number) => pad + cw * i;
   const hasHours = hours.length > 0;
+  const indexAt = (event: { clientX: number; currentTarget: Element }) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    const index = Math.floor(((event.clientX - box.left) / (box.width || 1) * width - pad) / cw);
+    return Math.max(0, Math.min(hours.length - 1, index));
+  };
 
   // Geometry is measured from the bottom so the text block above can grow freely.
   const [heroHeight, setHeroHeight] = useState(640);
@@ -130,7 +138,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         aria-valuemin={hasHours ? 0 : undefined}
         aria-valuemax={hasHours ? hours.length - 1 : undefined}
         aria-valuenow={hasHours ? safeSelected : undefined}
-        aria-valuetext={hour ? describe(hour) : undefined}
+        aria-valuetext={hours[safeSelected] ? describe(hours[safeSelected]) : undefined}
         onKeyDown={(event) => {
           if (event.key === "ArrowRight" || event.key === "ArrowUp") { select(safeSelected + 1); event.preventDefault(); }
           if (event.key === "ArrowLeft" || event.key === "ArrowDown") { select(safeSelected - 1); event.preventDefault(); }
@@ -138,16 +146,22 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
           if (event.key === "End") { select(hours.length - 1); event.preventDefault(); }
         }}
         onPointerDown={(event) => {
-          if (!hasHours) return;
-          (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
-          const box = event.currentTarget.getBoundingClientRect();
-          select(Math.floor(((event.clientX - box.left) / box.width * width - pad) / cw));
+          if (!hasHours || event.button !== 0) return;
+          if (event.pointerType === "mouse") {
+            // Stop the drag from starting a text selection across the labels; keep keyboard focus.
+            event.preventDefault();
+            event.currentTarget.focus({ preventScroll: true });
+          }
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+          setHovered(null);
+          select(indexAt(event));
         }}
         onPointerMove={(event) => {
-          if (!event.buttons || !hasHours) return;
-          const box = event.currentTarget.getBoundingClientRect();
-          select(Math.floor(((event.clientX - box.left) / box.width * width - pad) / cw));
+          if (!hasHours) return;
+          if (event.buttons) { select(indexAt(event)); return; }
+          if (event.pointerType === "mouse") setHovered(indexAt(event));
         }}
+        onPointerLeave={() => setHovered(null)}
       >
         <defs>
           <linearGradient id={`${gradientId}z`} x1="0" x2="1">
@@ -236,6 +250,10 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
               fill={overRuns.length ? "#FF9A4D" : "rgba(255,255,255,.85)"}>
               {overRuns.length ? "▲ " : ""}{callout}
             </text>
+            {preview !== null && preview !== safeSelected && (
+              <rect x={x(preview) + 2} y={stripY - 8} width={Math.max(4, cw - 4)} height="68" rx="10"
+                fill="rgba(255,255,255,.08)" stroke="#fff" strokeOpacity=".55" strokeWidth="1.5" strokeDasharray="4 4" />
+            )}
             <rect x={x(safeSelected) + 2} y={stripY - 8} width={Math.max(4, cw - 4)} height="68" rx="10" fill="none" stroke="#fff" strokeWidth="2" />
           </g>
         ) : (
@@ -275,7 +293,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         )}
         </div>
       </div>
-      {hasHours && <span className="sky-hint" aria-hidden="true">Drag across the sky to check any hour</span>}
+      {hasHours && <span className="sky-hint" aria-hidden="true">Hover or drag across the sky to check any hour</span>}
     </header>
   );
 }

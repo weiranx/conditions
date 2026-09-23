@@ -147,7 +147,7 @@ export default function Landing() {
             />
           </div>
           <figcaption>
-            The top of a real report, running on sample data. Drag across the sky or use the arrow keys to read any hour.
+            The top of a real report, running on sample data. Hover, click or drag across the sky, or use the arrow keys, to read any hour.
           </figcaption>
         </figure>
 
