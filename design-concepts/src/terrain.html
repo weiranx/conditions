@@ -1,0 +1,54 @@
+<div class="phead"><div><h1>Terrain &amp; snow</h1><div class="sub">Objective 10,738 ft · snow line near 12,000 ft</div></div><div class="daystrip" data-daystrip="-1"></div></div>
+<p class="lead num">Your objective is <b>below the snow line and mostly dry</b>, but the freezing level falls to <span style="color:var(--cold);font-weight:600">10,500 ft at 2 PM</span>, just under you. Wet rock will ice over.</p>
+
+<section>
+ <div class="sh"><h3>The mountain through the day</h3><p>Choose an hour to see temperature and wind by elevation.</p></div>
+ <div class="card" style="padding:0;overflow:hidden">
+  <svg class="viz" id="xsec" role="img" style="margin:0"></svg>
+  <div class="hours" id="hrs" role="radiogroup" aria-label="Hour"></div>
+ </div>
+</section>
+
+<section>
+ <div class="g2">
+  <div class="card">
+   <div class="hd">Surface<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Mostly dry</span></div>
+   <div class="conf"><span>Confidence</span><i class="on"></i><i class="on"></i><i></i><b>Medium</b></div>
+   <ul class="why">
+    <li>No rain in the last 48 hours below 11,000 ft.</li>
+    <li>0.8 in of new snow expected above 12,000 ft today.</li>
+    <li><b style="color:var(--cold)">Ice likely after 2 PM</b> where rock is wet from the midday rain.</li>
+   </ul>
+  </div>
+  <div class="card">
+   <div class="hd">Wind loading<span class="chip">From SW</span></div>
+   <div style="display:flex;gap:16px;align-items:center">
+    <svg class="viz" id="rose" viewBox="0 0 120 120" style="width:120px;flex:none" role="img" aria-label="Southwest wind loads northeast-facing slopes most, and north and east slopes less."></svg>
+    <div class="cap" style="font-size:14px">SW gusts to <b style="color:var(--caution)">31 mph</b> can load <b style="color:var(--label)">NE</b> slopes, and <b style="color:var(--label)">N</b> and <b style="color:var(--label)">E</b> less, above 12,000 ft where new snow falls.</div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section>
+ <div class="sh"><h3>Snow observations</h3><p>Nearest stations and the model estimate.</p></div>
+ <div class="card" style="padding:4px 8px;overflow-x:auto">
+  <table class="tbl num">
+   <thead><tr><th>Source</th><th class="hide-m">Distance</th><th>Elevation</th><th>Depth</th><th class="hide-m">Snow water</th></tr></thead>
+   <tbody>
+    <tr><td><b>SNOTEL</b> station</td><td class="hide-m">6.1 mi</td><td>7,900 ft</td><td>0 in</td><td class="hide-m">0.0 in</td></tr>
+    <tr><td><b>CDEC</b> station</td><td class="hide-m">11.4 mi</td><td>5,900 ft</td><td>0 in</td><td class="hide-m">0.0 in</td></tr>
+    <tr><td><b>NOHRSC</b> model</td><td class="hide-m">at objective</td><td>10,738 ft</td><td>0 in</td><td class="hide-m">0.0 in</td></tr>
+    <tr><td><b>NOHRSC</b> model</td><td class="hide-m">upper mountain</td><td>12,500 ft</td><td class="cold-v">2 in</td><td class="hide-m">0.3 in</td></tr>
+   </tbody>
+  </table>
+ </div>
+</section>
+
+<section>
+ <a class="card" href="#" style="flex-direction:row;align-items:center;gap:16px">
+  <svg class="viz" viewBox="0 0 150 34" style="width:150px;flex:none" role="img" aria-label="Avalanche danger: no rating issued."><rect x="0" y="4" width="26" height="16" rx="4" class="fillc"/><rect x="31" y="4" width="26" height="16" rx="4" class="fillc"/><rect x="62" y="4" width="26" height="16" rx="4" class="fillc"/><rect x="93" y="4" width="26" height="16" rx="4" class="fillc"/><rect x="124" y="4" width="26" height="16" rx="4" class="fillc"/><text x="0" y="32">Low</text><text x="150" y="32" text-anchor="end">Extreme</text></svg>
+  <div style="flex:1"><div style="font-weight:600">Avalanche outlook</div><div class="cap">No bulletin for Sep 23. The regional center hasn't started its season.</div></div>
+  <svg class="sym chev" style="position:static"><use href="#s-chev"/></svg>
+ </a>
+</section>

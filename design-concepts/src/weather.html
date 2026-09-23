@@ -1,0 +1,26 @@
+<div class="phead"><div><h1>Weather</h1><div class="sub">Mount Shasta · Wed, Sep 23 · 7 AM – 7 PM</div></div><div class="daystrip" data-daystrip="-1"></div></div>
+<p class="lead num">Four hours cross your limits, <span class="cau">12 to 4 PM</span>. Gusts peak at <b>31 mph</b> and rain chance at <b>80%</b> at noon, and it falls to <b>25°F</b> by 2 PM.</p>
+
+<section>
+ <div class="sh"><h3>Hour by hour</h3><p>Pick a measurement. Hatched hours cross a limit.</p></div>
+ <div class="card">
+  <div class="seg" id="metric" role="group" aria-label="Measurement">
+   <button data-m="temp" aria-pressed="true">Temp</button><button data-m="feels">Feels like</button><button data-m="gust">Gust</button><button data-m="rain">Rain</button><button data-m="cloud">Cloud</button>
+  </div>
+  <svg class="viz" id="chart" role="img"></svg>
+  <div class="cap" id="note"></div>
+ </div>
+</section>
+
+<section>
+ <div class="card" style="padding:4px 8px;overflow-x:auto"><table class="tbl num" id="hours"></table></div>
+</section>
+
+<section>
+ <div class="sh"><h3>Beyond the weather</h3><p>What changes on the mountain as the day goes on.</p></div>
+ <div class="g3">
+  <div class="card"><div class="hd">Freezing level<span class="chip cold">Below you 2 PM</span></div><svg class="viz" id="fz" viewBox="0 0 240 110"></svg><div class="cap">Drops to <b style="color:var(--cold)">10,500 ft</b> at 2 PM, under your 10,738 ft objective.</div></div>
+  <div class="card"><div class="hd">UV index<span class="chip">Peak 5</span></div><svg class="viz" id="uv" viewBox="0 0 240 110"></svg><div class="cap">Moderate before the clouds arrive; sunscreen for the climb.</div></div>
+  <div class="card"><div class="hd">Visibility<span class="chip cau"><svg class="sym"><use href="#s-tri"/></svg>1 mi at 1 PM</span></div><svg class="viz" id="vis" viewBox="0 0 240 110"></svg><div class="cap">Cloud on the upper mountain; route-finding gets harder midday.</div></div>
+ </div>
+</section>
