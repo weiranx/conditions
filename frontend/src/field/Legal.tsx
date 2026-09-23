@@ -1,3 +1,7 @@
+import { useCallback, useState } from "react";
+import { FileText, ShieldCheck } from "lucide-react";
+import "./legal.css";
+
 function PrivacyPolicy() {
   return (
     <>
@@ -271,15 +275,45 @@ function TermsOfUse() {
 }
 
 export default function Legal({ kind }: { kind: "privacy" | "terms" }) {
+  const [contents, setContents] = useState<{ id: string; title: string }[]>([]);
+  // Give each section heading an anchor once the document is in the page, and list them.
+  const collect = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    const headings = [...node.querySelectorAll("section > h2")];
+    setContents(
+      headings.map((heading, index) => {
+        heading.id = `${kind}-${index + 1}`;
+        return { id: heading.id, title: heading.textContent || "" };
+      }),
+    );
+  }, [kind]);
+  const other = kind === "privacy" ? { href: "/terms", label: "Terms of use" } : { href: "/privacy", label: "Privacy policy" };
+  const Icon = kind === "privacy" ? ShieldCheck : FileText;
   return (
-    <article className="field-legal">
+    <article className="sky-screen sky-legal">
       <header className="field-page-heading">
-        <span className="field-kicker">
-          Backcountry Conditions / Effective July 13, 2026
-        </span>
-        <h1>{kind === "privacy" ? "Privacy policy." : "Terms of use."}</h1>
+        <span className="field-kicker">Backcountry Conditions</span>
+        <h1>{kind === "privacy" ? "Privacy policy" : "Terms of use"}</h1>
+        <p className="sky-lead">
+          <span className="sky-lead-note">Effective July 13, 2026 · </span>
+          <a href={other.href}>{other.label}</a>
+        </p>
       </header>
-      {kind === "privacy" ? <PrivacyPolicy /> : <TermsOfUse />}
+      <div className="sky-legal-layout">
+        {contents.length > 0 && (
+          <nav className="sky-legal-contents" aria-label="On this page">
+            <span><Icon size={16} aria-hidden="true" /> On this page</span>
+            <ol>
+              {contents.map((item) => (
+                <li key={item.id}><a href={`#${item.id}`}>{item.title}</a></li>
+              ))}
+            </ol>
+          </nav>
+        )}
+        <div className="sky-card sky-legal-doc" ref={collect}>
+          {kind === "privacy" ? <PrivacyPolicy /> : <TermsOfUse />}
+        </div>
+      </div>
     </article>
   );
 }

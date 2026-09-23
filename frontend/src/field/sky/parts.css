@@ -111,4 +111,4 @@ html[data-theme="dark"] .sky-segmented button[aria-pressed="true"] { background:
 /* The older disclosure style draws its own chevron; Sky disclosures use one on the right. */
 .field-app details.sky-details > summary::before { content: none; display: none; }
 /* Visually hidden text for chapter parts that also appear outside the report (Compare uses Forecast). */
-:where(.sky-weather, .sky-timeline, .sky-gear, .sky-fresh) .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:where(.sky-weather, .sky-timeline, .sky-gear, .sky-fresh, .sky-compare, .sky-screen) .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

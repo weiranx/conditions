@@ -4,21 +4,14 @@ import {
   Check,
   Clock3,
   Compass,
-  Footprints,
-  Hand,
   LoaderCircle,
   LocateFixed,
   MapPin,
   Minus,
-  Mountain,
-  MountainSnow,
   Plus,
   Search,
-  Snowflake,
-  Timer,
   Upload,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import {
@@ -27,16 +20,8 @@ import {
 } from "../app/activity-profiles";
 import { parseGpxFile } from "../lib/gpx";
 import "./sky/plan.css";
+import { ACTIVITY_ICONS } from "./sky/activity-icons";
 
-const ACTIVITY_ICONS: Record<string, LucideIcon> = {
-  hiking: Footprints,
-  scrambling: Hand,
-  "alpine-climbing": Mountain,
-  "snow-climbing": MountainSnow,
-  "ski-touring": Snowflake,
-  "trail-running": Timer,
-  backcountry: Compass,
-};
 
 export function WorkspacePlan({
   workspace: w,

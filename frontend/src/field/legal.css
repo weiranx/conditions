@@ -1,0 +1,38 @@
+/* Privacy and terms in the Sky design: a readable document card with
+   a contents list beside it on wide screens. */
+.sky-legal { padding-bottom: 48px; color: var(--sky-label); }
+.sky-legal .sky-lead a { color: var(--sky-accent); font-weight: 600; text-decoration: none; }
+.sky-legal .sky-lead a:hover { text-decoration: underline; }
+.sky-legal-layout { display: grid; grid-template-columns: 220px minmax(0, 760px); gap: 32px; align-items: start; }
+.sky-legal-layout > :only-child { grid-column: 2; }
+
+.sky-legal-contents { position: sticky; top: calc(var(--field-sticky-top, 0px) + 24px); display: grid; gap: 10px; }
+.sky-legal-contents > span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.sky-legal-contents ol { list-style: none; margin: 0; padding: 0 0 0 12px; border-left: 1px solid var(--sky-separator); display: grid; gap: 2px; }
+.sky-legal-contents a { display: block; padding: 5px 0; font-size: 14px; line-height: 1.35; color: var(--sky-secondary); text-decoration: none; }
+.sky-legal-contents a:hover { color: var(--sky-label); }
+.sky-legal-contents a:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; border-radius: 4px; }
+
+.sky-legal-doc { display: block; padding: 8px 36px; }
+.sky-legal-doc section { padding: 26px 0; border-bottom: 1px solid var(--sky-separator); }
+.sky-legal-doc section:last-child { border-bottom: 0; }
+.sky-legal-doc h2 { margin: 0 0 12px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 24px); }
+.sky-legal-doc h3 { margin: 20px 0 6px; font-size: 16px; font-weight: 650; }
+.sky-legal-doc :is(p, li) { max-width: 68ch; margin: 0 0 12px; font-size: 16px; line-height: 1.65; color: color-mix(in srgb, var(--sky-label) 82%, var(--sky-secondary)); }
+.sky-legal-doc :is(p, li):last-child { margin-bottom: 0; }
+.sky-legal-doc ul, .sky-legal-doc ol { margin: 0 0 12px; padding-left: 22px; }
+.sky-legal-doc li { margin-bottom: 6px; }
+.sky-legal-doc a { color: var(--sky-accent); }
+
+@media (max-width: 1100px) {
+  .sky-legal-layout { grid-template-columns: minmax(0, 1fr); }
+  .sky-legal-layout > :only-child { grid-column: auto; }
+  .sky-legal-contents { position: static; padding: 16px 18px; border-radius: var(--sky-radius); background: var(--sky-surface); box-shadow: var(--sky-elevation); }
+  .sky-legal-contents ol { columns: 2; column-gap: 24px; display: block; }
+}
+@media (max-width: 650px) {
+  .sky-legal-doc { padding: 4px 18px; }
+  .sky-legal-doc h2 { font-size: 20px; }
+  .sky-legal-doc :is(p, li) { font-size: 15px; }
+  .sky-legal-contents ol { columns: 1; }
+}

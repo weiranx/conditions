@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowUpRight, BookOpen, Check, Link, LoaderCircle, RefreshCw, Search, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, Link, LoaderCircle, RefreshCw, Search, Sparkles, X } from 'lucide-react';
 import { parsePersistedReport, type PersistedReport } from '../app/report-storage';
 import { copyTextToClipboard } from '../app/clipboard';
 import { useAccount } from '../hooks/useAccount';
@@ -129,105 +129,136 @@ export function ReportHistory({ localReport, onOpen, navigate, sharingEnabled }:
   function clearFilters() { setSearch(''); setQuery(''); setAiOnly(false); }
   const localScore = localReport?.safetyData.safety.assessmentStatus === 'insufficient_evidence' ? null : localReport?.safetyData.safety.score;
 
-  return <section className="field-library field-report-history">
+  const monthOf = (value: string | null | undefined) => {
+    const date = new Date(value || '');
+    return Number.isNaN(date.getTime()) ? 'Earlier' : date.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  };
+  const badge = (value: string | null) => {
+    const date = value ? new Date(`${value.slice(0, 10)}T12:00:00`) : null;
+    if (!date || Number.isNaN(date.getTime())) return <span className="sky-date-badge is-missing" aria-hidden="true"><small>—</small><strong>?</strong></span>;
+    return <span className="sky-date-badge" aria-hidden="true">
+      <small>{date.toLocaleDateString([], { month: 'short' })}</small><strong>{date.getDate()}</strong>
+    </span>;
+  };
+  const scoreTone = (score: number | null | undefined) => !Number.isFinite(score) ? 'is-missing' : '';
+  const newest = reports[0];
+
+  return <section className="field-library field-report-history sky-screen">
     <header className="field-page-heading">
       <span className="field-kicker">Library</span>
       <h1>Saved reports</h1>
-      <p>Revisit your conditions, route analysis, and AI conversations. Saved reports show a snapshot from when they were generated.</p>
+      <p className="sky-lead">
+        {userId && !loading && reports.length > 0 && !filtered
+          ? <><strong>{reports.length}{nextCursor ? '+' : ''} {reports.length === 1 && !nextCursor ? 'report' : 'reports'}</strong> saved to your account. The newest is <strong>{newest.objectiveName || newest.title}</strong> for {planDate(newest.forecastDate)}. </>
+          : null}
+        <span className="sky-lead-note">Each one is a snapshot from when it was generated, with its route analysis and AI conversation.</span>
+      </p>
     </header>
 
-    {localReport && <section className="field-history-device" aria-label="Report on this device">
-      <div><h2>On this device</h2><p>Your most recent browser snapshot. It may also be saved to your account.</p></div>
-      <button className="field-journal-entry" disabled={Boolean(pending)} onClick={() => onOpen(localReport)}>
-        <span className="field-journal-icon"><BookOpen size={22} aria-hidden="true" /></span>
-        <span>
-          <small>{planDate(localReport.plan.forecastDate)} · {localReport.plan.alpineStartTime} start</small>
-          <strong>{localReport.plan.objectiveName}</strong>
-          <span>Generated {timestamp(localReport.safetyData.generatedAt)}</span>
-        </span>
-        <b aria-label={`Snapshot score ${Number.isFinite(localScore) ? Math.round(localScore!) : 'unavailable'}`}>
-          {Number.isFinite(localScore) ? Math.round(localScore!) : '—'}<small>/100</small>
-        </b>
-        <ArrowUpRight size={18} aria-hidden="true" />
-      </button>
+    {localReport && <section className="sky-section field-history-device" aria-label="Report on this device">
+      <div className="sky-sh"><h2>On this device</h2><p>Your most recent browser snapshot. It may also be saved to your account.</p></div>
+      <div className="sky-card sky-row-list">
+        <button className="field-journal-entry sky-report-row" disabled={Boolean(pending)} onClick={() => onOpen(localReport)}>
+          {badge(localReport.plan.forecastDate)}
+          <span className="sky-report-copy">
+            <strong>{localReport.plan.objectiveName}</strong>
+            <small>{planDate(localReport.plan.forecastDate)} · {localReport.plan.alpineStartTime} start</small>
+            <small>Generated {timestamp(localReport.safetyData.generatedAt)}</small>
+          </span>
+          <b className={`sky-score-chip ${scoreTone(localScore)}`} aria-label={`Snapshot score ${Number.isFinite(localScore) ? Math.round(localScore!) : 'unavailable'}`}>
+            {Number.isFinite(localScore) ? Math.round(localScore!) : '—'}<small>/100</small>
+          </b>
+          <ArrowUpRight size={18} aria-hidden="true" />
+        </button>
+      </div>
     </section>}
 
-    <div className="field-library-bar">
-      <h2>Account history</h2>
-      <div className="field-action-row">
-        {userId && <button className="field-button" disabled={loading || loadingMore} onClick={() => setRevision(n => n + 1)}>
-          <RefreshCw size={15} aria-hidden="true" /> Refresh
-        </button>}
-        <button className="field-button" onClick={() => navigate('planner')}>Plan an outing <ArrowUpRight size={15} aria-hidden="true" /></button>
-      </div>
-    </div>
-
-    {userId && <div className="field-history-filters">
-      <div className="field-library-search">
-        <label htmlFor={searchId}>Search all account reports</label>
-        <div className="field-input-icon">
-          <Search size={17} aria-hidden="true" />
-          <input id={searchId} type="search" maxLength={200} placeholder="Objective or date (YYYY-MM-DD)" value={search} onChange={event => setSearch(event.target.value)} />
-          {search && <button className="field-icon-button" aria-label="Clear search" onClick={() => {
-            setSearch(''); setQuery(''); document.getElementById(searchId)?.focus({ preventScroll: true });
-          }}><X size={16} aria-hidden="true" /></button>}
+    <section className="sky-section" aria-labelledby={`${searchId}-history`}>
+      <div className="sky-sh field-library-bar">
+        <h2 id={`${searchId}-history`}>Account history</h2>
+        <div className="sky-toolbar-actions">
+          {userId && <button className="field-button" disabled={loading || loadingMore} onClick={() => setRevision(n => n + 1)}>
+            <RefreshCw size={15} aria-hidden="true" /> Refresh
+          </button>}
+          <button className="field-button field-button-primary" onClick={() => navigate('planner')}>Plan an outing <ArrowUpRight size={15} aria-hidden="true" /></button>
         </div>
       </div>
-      <label className="field-toggle"><input type="checkbox" checked={aiOnly} onChange={event => setAiOnly(event.target.checked)} />With AI content</label>
-    </div>}
 
-    {actionError && <p className="field-warning" role="alert">{actionError}</p>}
-    {notice && <p className="field-feedback" role="status">{notice}</p>}
-    {loadError && <div className="field-warning" role="alert">
-      <p>{loadError}</p>
-      <button className="field-button" disabled={loading || loadingMore} onClick={() => nextCursor ? void loadMore() : setRevision(n => n + 1)}>Try again</button>
-    </div>}
-    <p className="field-history-count" role="status">
-      {loading || searching ? 'Loading report history…' : userId && !loadError
-        ? `${reports.length}${nextCursor ? '+' : ''} ${filtered ? 'matching ' : ''}account ${reports.length === 1 && !nextCursor ? 'report' : 'reports'} · Newest saved first`
-        : ''}
-    </p>
+      {userId && <div className="sky-card sky-filter-bar field-history-filters">
+        <div className="field-library-search">
+          <label htmlFor={searchId} className="sr-only">Search all account reports</label>
+          <div className="field-input-icon sky-search">
+            <Search size={17} aria-hidden="true" />
+            <input id={searchId} type="search" maxLength={200} placeholder="Search objective or date (YYYY-MM-DD)" value={search} onChange={event => setSearch(event.target.value)} />
+            {search && <button className="field-icon-button" aria-label="Clear search" onClick={() => {
+              setSearch(''); setQuery(''); document.getElementById(searchId)?.focus({ preventScroll: true });
+            }}><X size={16} aria-hidden="true" /></button>}
+          </div>
+        </div>
+        <label className="sky-switch"><input type="checkbox" checked={aiOnly} onChange={event => setAiOnly(event.target.checked)} /><span aria-hidden="true" />With AI content</label>
+      </div>}
 
-    {!loading && !searching && reports.map(report => <article className="field-library-entry" key={report.id}>
-      <button className="field-journal-entry" disabled={Boolean(pending)} onClick={() => void run(report.id, async signal => {
-        const snapshot = parsePersistedReport(await getSavedReport(report.id, signal));
-        if (signal.aborted) return;
-        if (!snapshot) throw new Error('This saved report is incomplete or no longer compatible.');
-        onOpen(snapshot, report.shareToken, report.id);
-      })}>
-        <span className="field-journal-icon"><BookOpen size={22} aria-hidden="true" /></span>
-        <span>
-          <small>{planDate(report.forecastDate)}{report.alpineStartTime && ` · ${report.alpineStartTime} start`}</small>
-          <strong>{report.objectiveName || report.title}</strong>
-          <span>Generated {timestamp(report.generatedAt)}</span>
-          <span>Saved {timestamp(report.createdAt)}{report.hasAi && ' · Includes AI content'}</span>
-        </span>
-        <b aria-label={`Snapshot score ${report.score === null ? 'unavailable' : Math.round(report.score)}`}>
-          {report.score === null ? '—' : Math.round(report.score)}<small>/100</small>
-        </b>
-        {pending === report.id ? <LoaderCircle className="field-history-spinner" size={18} aria-label="Opening report" /> : <ArrowUpRight size={18} aria-hidden="true" />}
-      </button>
-      {sharingEnabled && <button className="field-text-button" disabled={Boolean(pending)} aria-label={`Copy report link for ${report.objectiveName || report.title}`} onClick={() => void run(`share-${report.id}`, async signal => {
-        const success = await copyTextToClipboard(buildSavedReportShareUrl(report.shareToken));
-        if (signal.aborted) return;
-        if (!success) throw new Error('Could not copy this report link. Please try again.');
-        setCopied(report.id); setNotice(`Report link copied for ${report.objectiveName || report.title}.`);
-      })}>{copied === report.id ? <Check size={14} aria-hidden="true" /> : <Link size={14} aria-hidden="true" />}{copied === report.id ? 'Link copied' : 'Copy report link'}</button>}
-    </article>)}
+      {actionError && <p className="sky-notice is-caution" role="alert">{actionError}</p>}
+      {notice && <p className="sky-notice is-info" role="status">{notice}</p>}
+      {loadError && <div className="sky-notice is-caution" role="alert">
+        <div><p>{loadError}</p></div>
+        <button className="field-button" disabled={loading || loadingMore} onClick={() => nextCursor ? void loadMore() : setRevision(n => n + 1)}>Try again</button>
+      </div>}
+      <p className="sky-cap field-history-count" role="status">
+        {loading || searching ? 'Loading report history…' : userId && !loadError
+          ? `${reports.length}${nextCursor ? '+' : ''} ${filtered ? 'matching ' : ''}account ${reports.length === 1 && !nextCursor ? 'report' : 'reports'} · Newest saved first`
+          : ''}
+      </p>
 
-    {!loading && !searching && nextCursor && <div className="field-history-more">
-      <button className="field-button" disabled={loadingMore} onClick={() => void loadMore()}>
-        {loadingMore ? 'Loading older reports…' : 'Load older reports'}
-      </button>
-    </div>}
-    {!loading && !searching && !loadError && (!userId || reports.length === 0) && <div className="field-empty-state">
-      {filtered && userId ? <Search size={32} aria-hidden="true" /> : <BookOpen size={32} aria-hidden="true" />}
-      <h3>{!userId ? 'Take your reports with you' : filtered ? 'No matching reports' : 'No account reports yet'}</h3>
-      <p>{!userId ? 'Sign in to save reports and revisit them across your devices.' : filtered
-        ? 'Try a different objective or date, or clear your filters.' : 'Reports generated while signed in are saved here automatically. You can also save a report from its toolbar.'}</p>
-      <button className="field-button" onClick={() => !userId ? navigate('account') : filtered ? clearFilters() : navigate('planner')}>
-        {!userId ? 'Open your account' : filtered ? 'Clear filters' : 'Create a report'}
-      </button>
-    </div>}
+      {!loading && !searching && reports.length > 0 && <div className="sky-card sky-row-list">
+        {reports.map((report, index) => {
+          const month = monthOf(report.createdAt);
+          const showMonth = index === 0 || monthOf(reports[index - 1].createdAt) !== month;
+          return <div key={report.id} className="sky-row-group">
+            {showMonth && <h3 className="sky-row-month">{month}</h3>}
+            <article className="field-library-entry">
+              <button className="field-journal-entry sky-report-row" disabled={Boolean(pending)} onClick={() => void run(report.id, async signal => {
+                const snapshot = parsePersistedReport(await getSavedReport(report.id, signal));
+                if (signal.aborted) return;
+                if (!snapshot) throw new Error('This saved report is incomplete or no longer compatible.');
+                onOpen(snapshot, report.shareToken, report.id);
+              })}>
+                {badge(report.forecastDate)}
+                <span className="sky-report-copy">
+                  <strong>{report.objectiveName || report.title}</strong>
+                  <small>{planDate(report.forecastDate)}{report.alpineStartTime && ` · ${report.alpineStartTime} start`}{report.hasAi && <span className="sky-ai-tag"> · <Sparkles size={12} aria-hidden="true" /> AI</span>}</small>
+                  <small>Generated {timestamp(report.generatedAt)} · Saved {timestamp(report.createdAt)}{report.hasAi && ' · Includes AI content'}</small>
+                </span>
+                <b className={`sky-score-chip ${scoreTone(report.score)}`} aria-label={`Snapshot score ${report.score === null ? 'unavailable' : Math.round(report.score)}`}>
+                  {report.score === null ? '—' : Math.round(report.score)}<small>/100</small>
+                </b>
+                {pending === report.id ? <LoaderCircle className="field-history-spinner" size={18} aria-label="Opening report" /> : <ArrowUpRight size={18} aria-hidden="true" />}
+              </button>
+              {sharingEnabled && <button className="sky-row-action" disabled={Boolean(pending)} aria-label={`Copy report link for ${report.objectiveName || report.title}`} onClick={() => void run(`share-${report.id}`, async signal => {
+                const success = await copyTextToClipboard(buildSavedReportShareUrl(report.shareToken));
+                if (signal.aborted) return;
+                if (!success) throw new Error('Could not copy this report link. Please try again.');
+                setCopied(report.id); setNotice(`Report link copied for ${report.objectiveName || report.title}.`);
+              })}>{copied === report.id ? <Check size={15} aria-hidden="true" /> : <Link size={15} aria-hidden="true" />}<span>{copied === report.id ? 'Link copied' : 'Copy link'}</span></button>}
+            </article>
+          </div>;
+        })}
+      </div>}
+
+      {!loading && !searching && nextCursor && <div className="field-history-more">
+        <button className="field-button" disabled={loadingMore} onClick={() => void loadMore()}>
+          {loadingMore ? 'Loading older reports…' : 'Load older reports'}
+        </button>
+      </div>}
+      {!loading && !searching && !loadError && (!userId || reports.length === 0) && <div className="sky-card sky-empty-card field-empty-state">
+        {filtered && userId ? <Search size={30} aria-hidden="true" /> : <BookOpen size={30} aria-hidden="true" />}
+        <h3>{!userId ? 'Take your reports with you' : filtered ? 'No matching reports' : 'No account reports yet'}</h3>
+        <p>{!userId ? 'Sign in to save reports and revisit them across your devices.' : filtered
+          ? 'Try a different objective or date, or clear your filters.' : 'Reports generated while signed in are saved here automatically. You can also save a report from its toolbar.'}</p>
+        <button className="field-button field-button-primary" onClick={() => !userId ? navigate('account') : filtered ? clearFilters() : navigate('planner')}>
+          {!userId ? 'Open your account' : filtered ? 'Clear filters' : 'Create a report'}
+        </button>
+      </div>}
+    </section>
   </section>;
 }
