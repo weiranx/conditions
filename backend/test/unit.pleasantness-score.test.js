@@ -250,7 +250,8 @@ test('unavailable weather returns an explicit unknown score', () => {
 });
 
 test('supplied hourly feels-like readings drive temperature comfort, including zero', () => {
-  const supplied = calculatePleasantnessScore(idealInput({ trend: trend({ feelsLike: 0 }) }));
+  // Overcast isolates the supplied reading from the solar-load adjustment.
+  const supplied = calculatePleasantnessScore(idealInput({ trend: trend({ feelsLike: 0, cloudCover: 100, condition: 'Overcast' }) }));
   const derived = calculatePleasantnessScore(idealInput());
   expect(supplied.factors.find((factor) => factor.factor === 'Temperature')).toMatchObject({ score: 10 });
   expect(supplied.score).toBeLessThan(derived.score);
@@ -344,7 +345,7 @@ test('normalized factor deductions explain the weighted score when AQI is absent
   const result = calculatePleasantnessScore({ ...idealInput({ trend: trend({ wind: 20, gust: 28 }) }), airQualityData: null });
   expect(Math.abs(100 - result.factors.reduce((sum, factor) => sum + factor.impact, 0) - result.weightedScore)).toBeLessThan(1);
   expect(result.weightedScore).toBeGreaterThan(result.score);
-  expect(result.adjustments).toContainEqual({ maximumScore: 74, reason: 'Wind limits overall comfort to Mixed (74/100).' });
+  expect(result.adjustments).toContainEqual({ maximumScore: 75, reason: 'Wind limits overall comfort to Pleasant (75/100).' });
 });
 
 const timedRow = (hour, overrides = {}) => ({ ...trend(overrides, 1)[0], timeIso: `2026-09-08T${hour}:00-07:00` });
@@ -393,4 +394,77 @@ test('timed coverage honors UTC offsets across midnight', () => {
   });
   expect(result.coverage.completeHours).toBe(2);
   expect(result.score).toBeLessThanOrEqual(59);
+});
+
+test('component limits are continuous, so a one-point wind change cannot jump a full label', () => {
+  // Effective wind 12.4 vs 12.6 mph straddles the old 85-point step.
+  const score = (wind) => calculatePleasantnessScore(idealInput({ trend: trend({ wind, gust: 0 }) })).score;
+  expect(Math.abs(score(12.4) - score(12.6))).toBeLessThanOrEqual(1);
+  expect(score(10)).toBeGreaterThan(score(15));
+  expect(score(15)).toBeGreaterThan(score(20));
+});
+
+test('partial coverage limits scale with coverage instead of stepping at 75%', () => {
+  const limit = (hours) => calculatePleasantnessScore({ ...idealInput({ trend: trend({}, hours) }), selectedTravelWindowHours: 12 })
+    .adjustments.find((adjustment) => /readings cover/.test(adjustment.reason))?.maximumScore;
+  expect(limit(8)).toBe(74);
+  expect(limit(9)).toBeGreaterThan(limit(8));
+  expect(limit(11)).toBeGreaterThan(limit(9));
+  expect(limit(11)).toBeLessThan(90);
+});
+
+const bands = (lowTemp, lowWind = 3, lowGust = 6) => [
+  { label: 'Lower Terrain', deltaFromObjectiveFt: -3000, elevationFt: 7000, temp: lowTemp, windSpeed: lowWind, windGust: lowGust },
+  { label: 'Objective Elevation', deltaFromObjectiveFt: 0, elevationFt: 10000, temp: 58, windSpeed: 5, windGust: 9 },
+];
+
+test('a hot trailhead lowers temperature comfort even when the objective is ideal', () => {
+  const summitOnly = calculatePleasantnessScore(idealInput());
+  const withRoute = calculatePleasantnessScore(idealInput({ elevationForecast: bands(80) }));
+  const temperature = withRoute.factors.find((factor) => factor.factor === 'Temperature');
+  expect(temperature.score).toBeLessThan(summitOnly.factors.find((factor) => factor.factor === 'Temperature').score);
+  expect(temperature.message).toMatch(/58–80°F between the objective and 7,000 ft/);
+  expect(withRoute.label).not.toBe('Excellent');
+});
+
+test('windier lower terrain lowers wind comfort, while benign bands leave the score unchanged', () => {
+  const calm = calculatePleasantnessScore(idealInput({ elevationForecast: bands(58, 5, 9) }));
+  expect(calm.score).toBe(calculatePleasantnessScore(idealInput()).score);
+  const gusty = calculatePleasantnessScore(idealInput({ elevationForecast: bands(58, 25, 40) }));
+  expect(gusty.factors.find((factor) => factor.factor === 'Wind').score).toBeLessThan(60);
+});
+
+test('incomplete elevation bands are ignored', () => {
+  const result = calculatePleasantnessScore(idealInput({ elevationForecast: [{ deltaFromObjectiveFt: 0, temp: 58 }] }));
+  expect(result.score).toBe(calculatePleasantnessScore(idealInput()).score);
+});
+
+test('the ideal band suits moving uphill: 50°F beats 70°F', () => {
+  const temperature = (temp) => calculatePleasantnessScore(idealInput({ trend: trend({ temp, wind: 0, gust: 0, cloudCover: 100, condition: 'Overcast' }) }))
+    .factors.find((factor) => factor.factor === 'Temperature').score;
+  expect(temperature(50)).toBe(100);
+  expect(temperature(70)).toBeLessThan(90);
+  expect(temperature(50)).toBeGreaterThan(temperature(70));
+});
+
+test('midday sun makes warm air less comfortable and cool air more comfortable', () => {
+  const temperature = (temp, cloudCover, hour) => calculatePleasantnessScore({
+    ...idealInput({ trend: [timedRow(hour, { temp, cloudCover })] }),
+    selectedStartTime: `2026-09-08T${hour}:00-07:00`,
+    selectedTravelWindowHours: 1,
+  }).factors.find((factor) => factor.factor === 'Temperature');
+  expect(temperature(74, 0, '13').score).toBeLessThan(temperature(74, 100, '13').score);
+  expect(temperature(74, 0, '13').score).toBeLessThan(temperature(74, 0, '07').score);
+  expect(temperature(74, 0, '13').message).toMatch(/direct sun adds up to 8°F/);
+  expect(temperature(36, 0, '13').score).toBeGreaterThan(temperature(36, 100, '13').score);
+});
+
+test('pre-dawn alpine-start hours cost less than finishing after dark', () => {
+  const views = (rows) => calculatePleasantnessScore(idealInput({ trend: rows }))
+    .factors.find((factor) => factor.factor === 'Views & daylight').score;
+  const alpineStart = views([...trend({ isDaytime: false }, 3), ...trend({}, 5)]);
+  const lateFinish = views([...trend({}, 5), ...trend({ isDaytime: false }, 3)]);
+  expect(alpineStart).toBeGreaterThan(lateFinish);
+  expect(alpineStart).toBeGreaterThanOrEqual(90);
+  expect(views(trend({ isDaytime: false }))).toBeLessThan(lateFinish);
 });
