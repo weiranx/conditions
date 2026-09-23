@@ -69,7 +69,7 @@ export function StartTimeline({ rows, sunrise, sunset, clock, caption }: {
               {nights.map((n, i) => <i key={i} className="sky-timeline-night" style={n} />)}
               <i className="sky-timeline-base" style={{ left: pct(row.start), width: width(row.hours.length * 60) }} />
               {row.hours.map((h) => (
-                <i key={h.index} className={`sky-timeline-hour is-${isOverHour(h) ? "over" : h.tone}${h.night ? " is-night" : ""}`}
+                <i key={h.index} className={`sky-timeline-hour is-${isOverHour(h) ? "over" : h.tone}${h.night ? " is-night" : ""}${h.approachAdjusted ? " is-approach" : ""}`}
                   style={{ left: pct(row.start + h.index * 60), width: width(60) }} />
               ))}
               {row.summit !== null && <b className="sky-timeline-summit" style={{ left: pct(row.summit) }} />}

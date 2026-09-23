@@ -275,6 +275,18 @@ export function Settings({
           <section id={`${sectionId}-weather`} tabIndex={-1} aria-labelledby={`${sectionId}-weather-h`} className="sky-setting-section">
             <h2 id={`${sectionId}-weather-h`}>Weather limits</h2>
             <Thresholds workspace={w} />
+            <h3 className="sky-setting-subhead">Approach</h3>
+            <div className="sky-setting-group">
+              <Row label="Check the approach at trailhead elevation"
+                hint="The forecast is for the objective. While you climb from the trailhead, your limits are checked at your estimated elevation. Rain and storm signals are never adjusted; clear, calm mornings treat the valley as colder in case of an inversion.">
+                <label className="sky-switch">
+                  <input type="checkbox" aria-label="Check the approach at trailhead elevation"
+                    checked={p.approachElevationAdjustment}
+                    onChange={(e) => w.updatePreferences({ approachElevationAdjustment: e.target.checked })} />
+                  <span aria-hidden="true" />
+                </label>
+              </Row>
+            </div>
             <h3 className="sky-setting-subhead">On a sample hour</h3>
             <div className="sky-setting-group">
               {sample.map((row) => (

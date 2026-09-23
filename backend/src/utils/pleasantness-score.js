@@ -1,11 +1,13 @@
 const { computeFeelsLikeF } = require('./weather-normalizers');
 const { clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
+const { adjustPointToElevation, highestElevationBetween } = require('./approach-elevation');
 
 // Pleasantness is intentionally independent from the safety score. It describes
 // forecast comfort across the selected travel window; it must never be used as a
 // go/no-go signal or allowed to offset a hazard.
 const PLEASANTNESS_CONFIG = {
-  scoreVersion: '1.4.0',
+  // 1.5.0: approach hours can be scored at the party's elevation.
+  scoreVersion: '1.5.0',
   weights: {
     temperature: 30,
     wind: 25,
@@ -235,6 +237,39 @@ const routeVariants = (sample, spread) => {
   }];
 };
 
+// Local clock minutes of an hourly timestamp. Offsets and naive local times
+// carry the objective's clock; a bare UTC "Z" stamp does not.
+const localClockMinutes = (timeIso) => {
+  const match = /T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?([+-]\d{2}:?\d{2})?$/.exec(String(timeIso || ''));
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+};
+
+// With an approach profile, each hour is scored where the party is expected to
+// be (trailhead, climb or objective) instead of at both ends of the route.
+const buildPartySamples = (trend, approach, windowStartMs) => {
+  const profile = approach?.profile;
+  if (!profile) return null;
+  return trend.map((sample, index) => {
+    const sampleMs = parseIsoTimeToMs(sample?.timeIso);
+    const offset = sampleMs !== null && windowStartMs !== null
+      ? Math.max(0, (sampleMs - windowStartMs) / 60000)
+      : index * 60;
+    const elevationFt = highestElevationBetween(profile, offset, offset + 60 * (sample?.hours || 1));
+    const adjusted = adjustPointToElevation(sample, profile.objectiveElevationFt, elevationFt, {
+      minuteOfDay: localClockMinutes(sample?.timeIso),
+      sunriseMinutes: approach.sunriseMinutes ?? null,
+      sunsetMinutes: approach.sunsetMinutes ?? null,
+    });
+    const moved = adjusted.elevationFt < profile.objectiveElevationFt;
+    const temp = finiteNumber(adjusted.temp);
+    return {
+      ...adjusted,
+      feelsLike: !moved ? sample?.feelsLike : temp === null ? null : computeFeelsLikeF(temp, inRange(adjusted.wind, 0) ?? 0),
+      moved,
+    };
+  });
+};
+
 // Continuous caps: a weak component limits the overall score in proportion to
 // how weak it is, so a one-point change cannot swing the rating by a full label.
 const componentCap = (score, core) => Math.round(Math.min(100, core ? (0.75 * score) + 30 : (0.5 * score) + 60));
@@ -305,6 +340,8 @@ const calculatePleasantnessScore = ({
   selectedTravelWindowHours = null,
   selectedStartTime = null,
   scoreFeatures = null,
+  // { profile, sunriseMinutes, sunsetMinutes } from approach-elevation.js; null keeps both-ends scoring.
+  approach = null,
 }) => {
   const scoreFeatureEnabled = (key) => scoreFeatures?.[key] !== false;
   const airQualityEnabled = scoreFeatureEnabled('airQualityDetails');
@@ -322,12 +359,18 @@ const calculatePleasantnessScore = ({
     ?? (pointTemp !== null ? computeFeelsLikeF(pointTemp, pointWind ?? 0) : null);
 
   const spread = elevationSpread(weatherData);
+  const windowStartMs = parseIsoTimeToMs(selectedStartTime ?? weatherData?.forecastStartTime
+    ?? (Array.isArray(weatherData?.trend) ? weatherData.trend.find((row) => row?.timeIso)?.timeIso : null));
+  const partySamples = buildPartySamples(trend, approach, windowStartMs);
+  const variantsFor = (sample, index) => (partySamples && Number.isInteger(index) && partySamples[index]
+    ? [partySamples[index]]
+    : routeVariants(sample, spread));
 
   // Score each hour at the objective and at the bottom of the route, keeping
   // the less comfortable end. Sun adds radiant warmth to both.
-  const temperatureSample = (sample) => {
+  const temperatureSample = (sample, index) => {
     const solarLoad = solarLoadF(sample);
-    const variants = routeVariants(sample, spread).map((variant) => {
+    const variants = variantsFor(sample, index).map((variant) => {
       const temp = finiteNumber(variant.temp);
       const feelsLike = finiteNumber(variant.feelsLike)
         ?? (temp === null ? null : computeFeelsLikeF(temp, inRange(variant.wind, 0) ?? 0));
@@ -380,8 +423,8 @@ const calculatePleasantnessScore = ({
   const dewPointValues = temperatureRows.map((row) => row.dewPoint).filter(Number.isFinite);
   const humidityValues = temperatureRows.map((row) => row.humidity).filter(Number.isFinite);
 
-  const windSample = (sample) => {
-    const scores = routeVariants(sample, spread).map((variant) => {
+  const windSample = (sample, index) => {
+    const scores = variantsFor(sample, index).map((variant) => {
       const sustained = inRange(variant.wind, 0);
       const gust = inRange(variant.gust, 0) ?? sustained;
       if (sustained === null && gust === null) return null;
@@ -389,7 +432,7 @@ const calculatePleasantnessScore = ({
     }).filter((score) => score !== null);
     return scores.length ? { score: Math.min(...scores), hours: sample.hours } : null;
   };
-  const windRows = trend.map((row) => windSample({ ...row, wind: inRange(row?.wind, 0), gust: inRange(row?.gust, 0) }))
+  const windRows = trend.map((row, index) => windSample({ ...row, wind: inRange(row?.wind, 0), gust: inRange(row?.gust, 0) }, index))
     .filter(Boolean);
   const windHours = coveredHours(windRows);
   const pointGust = inRange(weatherData?.windGust, 0);
@@ -451,9 +494,16 @@ const calculatePleasantnessScore = ({
       message: (() => {
         const range = formatRange(feelsLikeValues, '°F');
         if (!range) return 'Temperature comfort is unavailable.';
-        const where = spread && spread.elevationFt !== null
-          ? ` between the objective and ${Math.round(spread.elevationFt).toLocaleString('en-US')} ft`
-          : ' during the selected window';
+        const lowestPartyFt = partySamples?.some((sample) => sample.moved)
+          ? Math.min(...partySamples.filter((sample) => sample.moved).map((sample) => sample.elevationFt))
+          : null;
+        const where = lowestPartyFt !== null
+          ? ` along your route, from about ${(Math.round(lowestPartyFt / 100) * 100).toLocaleString('en-US')} ft on the approach to the objective`
+          : partySamples
+            ? ' at the objective during the selected window'
+            : spread && spread.elevationFt !== null
+              ? ` between the objective and ${Math.round(spread.elevationFt).toLocaleString('en-US')} ft`
+              : ' during the selected window';
         const details = [];
         if (peakSolarLoad >= 2) details.push(`direct sun adds up to ${peakSolarLoad}°F`);
         if (peakMoisturePenalty > 0) {
@@ -627,6 +677,16 @@ const calculatePleasantnessScore = ({
     label,
     summary,
     factors,
+    ...(approach?.profile ? {
+      approach: {
+        source: approach.profile.source,
+        trailheadElevationFt: Math.round(approach.profile.trailheadElevationFt),
+        adjustedHours: coveredHours((partySamples || []).filter((sample) => sample.moved)),
+        inversionHours: coveredHours((partySamples || []).filter((sample) => sample.moved && sample.inversionRisk)),
+        // Lets a client tell whether its current plan would be scored the same way.
+        timeline: approach.profile.timeline.map((entry) => `${Math.round(entry.minute)}:${Math.round(entry.elevationFt)}`).join(','),
+      },
+    } : {}),
     disclaimer: 'Weather comfort only; this score does not change the safety score or go/no-go decision.',
   };
 };

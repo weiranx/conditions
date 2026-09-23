@@ -413,7 +413,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
       {snapshot && w.featureFlags.hourlyWeatherCharts && (
         <section className="sky-section sky-compare-hourly" aria-label={`Hourly detail for ${dateLabel(selected.date)}`}>
           <h2 className="sky-chapter-name">Hourly detail · {dateLabel(selected.date)}</h2>
-          <Forecast key={selected.date} report={snapshot} />
+          <Forecast key={selected.date} report={snapshot} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
         </section>
       )}
       {days.length > 0 && available.reportChat && (

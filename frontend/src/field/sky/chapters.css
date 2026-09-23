@@ -36,6 +36,8 @@ html[data-theme="dark"] .sky-timeline-hour.is-within { background: #6d7772; }
 .sky-timeline-hour.is-night { background: #26304a; }
 html[data-theme="dark"] .sky-timeline-hour.is-night { background: #56648a; }
 .sky-timeline-hour.is-over { background: repeating-linear-gradient(-45deg, var(--sky-caution) 0 2px, transparent 2px 5px), var(--sky-caution-fill); box-shadow: inset 0 0 0 1.5px var(--sky-caution); }
+/* Checked below the summit: a baseline under the tile. */
+.sky-timeline-hour.is-approach::after { content: ""; position: absolute; left: 1px; right: 1px; bottom: -4px; height: 2px; border-radius: 1px; background: var(--sky-secondary); }
 .sky-timeline-hour.is-missing { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sky-missing); border-style: dashed; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; box-shadow: none; }
 .sky-timeline-summit { top: -2px; width: 0; height: 0; margin-left: -6px; border: 6px solid transparent; border-bottom: 9px solid var(--sky-label); border-top: 0; }
 .sky-timeline-summit.is-legend { position: static; display: inline-block; margin: 0 2px 0 0; }
@@ -119,6 +121,9 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-stepper-row { display: inline-grid; grid-template-columns: 44px 7ch 44px; align-items: center; border-radius: 12px; background: var(--sky-fill); }
 .sky-stepper-row input { min-width: 0; height: 44px; border: 0; background: transparent; color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 650; text-align: center; font-variant-numeric: tabular-nums; }
 .sky-stepper-row input:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; border-radius: 8px; }
+.sky-approach-input { width: 12ch; height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sky-approach-input:disabled { opacity: 0.55; }
+.sky-approach-input:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 0; }
 
 /* Wind loading */
 .sky-wind-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: center; }

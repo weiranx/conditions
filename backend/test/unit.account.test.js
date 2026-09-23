@@ -120,6 +120,14 @@ describe('password accounts', () => {
       .toThrow(AccountValidationError);
   });
 
+  test('accepts the optional approach elevation toggle only as a boolean', () => {
+    expect(validateAccountPreferences(PREFERENCES)).not.toHaveProperty('approachElevationAdjustment');
+    expect(validateAccountPreferences({ ...PREFERENCES, approachElevationAdjustment: false }))
+      .toEqual({ ...PREFERENCES, approachElevationAdjustment: false });
+    expect(() => validateAccountPreferences({ ...PREFERENCES, approachElevationAdjustment: 'yes' }))
+      .toThrow(AccountValidationError);
+  });
+
   test('creates a user, credentials, session, and hashed verification token in one database statement', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [{ ...USER_ROW, verification_token_id: '4df4041e-5ff1-441d-b62f-81283f372489' }],

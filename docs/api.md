@@ -23,11 +23,16 @@ Returns a synthesized planning report for a coordinate, date, start time, and tr
 | `start` | string | No | `HH:mm` 24-hour start time — defaults to first available NOAA period |
 | `travel_window_hours` | integer | No | Travel window length (`1`–`24`, default `12`) |
 | `travelWindowHours` | integer | No | camelCase alias for `travel_window_hours` |
+| `approach` | string | No | `off` scores every comfort hour at the objective and at the lowest elevation band (the pre-1.5.0 behavior) |
+| `trailhead_ft` | number | No | Trailhead elevation in feet for approach scoring |
+| `ascent_min_per_kft` | number | No | Ascent rate from the trailhead, minutes per 1,000 ft (`1`–`120`, default `45`) |
+| `approach_route` | string | No | Elevation over time from an imported route: up to 64 `minute:feet` pairs, e.g. `0:7500,278:11000,398:7500` |
 
 **Behavior notes:**
 - `forecast.requestedStartTime` echoes the validated local departure clock (`HH:mm`, or `null` if omitted/invalid). `forecast.selectedStartTime` is the provider's forecast-period timestamp and may differ from the requested departure.
 - If `start` is missing or invalid, the backend selects the first available NOAA hourly forecast period for the selected date.
 - `travel_window_hours` values are rounded and clamped to `1`–`24`; invalid values fall back to `12`.
+- Approach scoring (comfort model `1.5.0`+): unless `approach=off`, the comfort score checks each hour at the party's estimated elevation. That elevation comes from `approach_route` if sent, otherwise `trailhead_ft` plus the ascent rate, otherwise the lowest forecast elevation band. Clear, calm nights and early mornings are scored colder near the trailhead, allowing for a likely inversion. Invalid approach values are ignored, not rejected. When an approach was used, `pleasantness.approach` reports its `source`, `trailheadElevationFt`, `adjustedHours`, `inversionHours` and the scored `timeline` (`minute:feet` pairs).
 
 ### HTTP Status Codes
 
@@ -422,10 +427,13 @@ visible. `reportCount` remains the lifetime generated total.
     "travelWindowHours": 12,
     "runnerPaceMinutesPerMile": 30,
     "runnerAscentMinutesPer1000Ft": 45,
-    "runnerStopBufferMinutes": 45
+    "runnerStopBufferMinutes": 45,
+    "approachElevationAdjustment": true
   }
 }
 ```
+
+`approachElevationAdjustment` is optional; when present it must be a boolean.
 
 Returns `201` and the signed-in account. Password accounts start with `emailVerified: false`; when email delivery
 is configured, the response also reports whether the initial verification message was accepted for delivery.

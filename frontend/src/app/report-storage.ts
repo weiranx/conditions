@@ -21,6 +21,8 @@ export interface PersistedReportPlan {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
+  /** Optional trailhead elevation in display units; absent when estimated. */
+  trailheadElevationInput?: string;
   travelWindowHours: number;
 }
 
@@ -225,6 +227,9 @@ export function parsePersistedReport(value: unknown): PersistedReport | null {
       forecastDate,
       alpineStartTime,
       targetElevationInput: typeof plan.targetElevationInput === 'string' ? plan.targetElevationInput : '',
+      ...(typeof plan.trailheadElevationInput === 'string' && plan.trailheadElevationInput
+        ? { trailheadElevationInput: plan.trailheadElevationInput }
+        : {}),
       travelWindowHours,
     },
     preferences: hasStoredUserPreferences(value.preferences)

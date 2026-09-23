@@ -130,6 +130,7 @@ export function parseLinkState(todayDate: string, maxForecastDate: string, prefe
       : initialForecastDate,
     alpineStartTime: normalizeTimeOrFallback(params.get('start'), preferences.defaultStartTime),
     targetElevationInput: normalizeElevationInput(params.get('elev')),
+    ...(normalizeElevationInput(params.get('th')) ? { trailheadElevationInput: normalizeElevationInput(params.get('th')) } : {}),
     travelWindowHours: params.has('tw') && Number.isFinite(Number(params.get('tw'))) && Number(params.get('tw')) >= 1 && Number(params.get('tw')) <= 24 ? Number(params.get('tw')) : null,
   };
 }
@@ -143,6 +144,7 @@ export function buildShareQuery(state: {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
+  trailheadElevationInput?: string;
   travelWindowHours?: number;
   activity?: UserPreferences['defaultActivity'];
 }): string {
@@ -168,6 +170,9 @@ export function buildShareQuery(state: {
   }
   if (state.targetElevationInput.trim()) {
     params.set('elev', state.targetElevationInput.trim());
+  }
+  if (state.trailheadElevationInput?.trim()) {
+    params.set('th', state.trailheadElevationInput.trim());
   }
   if (state.travelWindowHours != null && state.travelWindowHours !== 12) {
     params.set('tw', String(state.travelWindowHours));

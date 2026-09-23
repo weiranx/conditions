@@ -21,6 +21,12 @@ export type SkyHour = {
   thermalComplete: boolean;
   precipChance: number;
   failedRules: string[];
+  /** Estimated party elevation when the hour was scored below the objective. */
+  elevationFt?: number;
+  approachAdjusted?: boolean;
+  inversionRisk?: boolean;
+  /** Objective-elevation reading when temp/wind/gust were shifted to the approach. */
+  objectiveReading?: { temp: number; wind: number; gust: number };
   kind: ReturnType<typeof weatherAppearance>["condition"];
   night: boolean;
   zenith: string;
@@ -106,6 +112,10 @@ export function buildSkyHours(rows: PlannedRow[], plan: {
       thermalComplete: row.thermalComplete ?? row.complete,
       precipChance: row.precipChance,
       failedRules: row.failedRules,
+      elevationFt: row.elevationFt,
+      approachAdjusted: row.approachAdjusted,
+      inversionRisk: row.inversionRisk,
+      objectiveReading: row.objectiveReading,
       kind: appearance.condition,
       night,
       zenith: colors[0],

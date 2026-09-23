@@ -7,6 +7,7 @@ import { isOverHour, shortHour, skyRuns, spanLabel, sunProgress, type SkyHour } 
 type Formatters = {
   temp: (f: number) => string;
   wind: (mph: number) => string;
+  elevation?: (ft: number) => string;
   clock: (minute: number) => string;
   timeStyle: string;
 };
@@ -14,7 +15,7 @@ type Formatters = {
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, level, headline, reason, bridge, limitingChecks = [], actions, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, level, headline, reason, bridge, limitingChecks = [], note, actions, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -28,6 +29,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   reason: string;
   bridge?: string;
   limitingChecks?: string[];
+  /** Extra context under the reason, e.g. hours checked below the summit. */
+  note?: ReactNode;
   actions?: ReactNode;
   format: Formatters;
 }) {
@@ -118,7 +121,10 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
     `${format.clock(h.minute)}: ${Number.isFinite(h.temp) ? format.temp(h.temp) : "temperature unavailable"}, ` +
     `gust ${Number.isFinite(h.gust) ? format.wind(h.gust) : "unavailable"}, ` +
     `rain chance ${Number.isFinite(h.precipChance) ? `${h.precipChance}%` : "unavailable"}` +
-    (isOverHour(h) ? `, over your limits: ${h.failedRules.map(plainRule).join("; ")}` : h.tone === "missing" ? ", readings incomplete" : ", within your limits");
+    (isOverHour(h) ? `, over your limits: ${h.failedRules.map(plainRule).join("; ")}` : h.tone === "missing" ? ", readings incomplete" : ", within your limits") +
+    (h.approachAdjusted && Number.isFinite(h.elevationFt)
+      ? `, checked near ${format.elevation ? format.elevation(h.elevationFt as number) : `${h.elevationFt} ft`}${h.inversionRisk ? " with a possible valley inversion" : ""}`
+      : "");
   const callout = overRuns.length === 1
     ? `Outside your limits · ${spanLabel(hours, overRuns[0], format.clock)}`
     : overRuns.length > 1 ? `${overRuns.length} periods outside your limits`
@@ -239,6 +245,9 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
                     fill={over ? `url(#${gradientId}p)` : h.tone === "missing" ? "none" : "rgba(255,255,255,.22)"}
                     stroke={over ? "#FF9A4D" : h.tone === "missing" ? "rgba(255,255,255,.6)" : "none"}
                     strokeWidth="1.2" strokeDasharray={h.tone === "missing" && !over ? "3 3" : undefined} />
+                  {h.approachAdjusted && (
+                    <rect className="sky-approach-mark" x={x(i) + 1.5} y={stripY + 12} width={Math.max(1, cw - 3)} height="2" rx="1" fill="rgba(255,255,255,.6)" />
+                  )}
                   {showTick && <text x={x(i + 0.5)} y={stripY + 32} textAnchor="middle" className="sky-temp" fill={cold ? "#9fd0ff" : "#fff"}>
                     {Number.isFinite(h.temp) ? `${Math.round(h.temp)}°` : "—"}
                   </text>}
@@ -281,6 +290,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
             {limitingChecks.map((check) => <li key={check}>{check}</li>)}
           </ul>
         )}
+        {note}
         </div>
         {hour && (
           <div className="sky-readout" aria-live="polite">
@@ -292,6 +302,12 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
               <dt>Gust</dt><dd className={hour.failedRules.some((r) => /gust|wind/i.test(r)) ? "is-over" : undefined}>{Number.isFinite(hour.gust) ? format.wind(hour.gust) : "—"}</dd>
               <dt>Rain chance</dt><dd className={hour.failedRules.some((r) => /precip|rain/i.test(r)) ? "is-over" : undefined}>{Number.isFinite(hour.precipChance) ? `${hour.precipChance}%` : "—"}</dd>
             </dl>
+            {hour.approachAdjusted && Number.isFinite(hour.elevationFt) && (
+              <p className="sky-readout-approach">
+                On the approach, near {format.elevation ? format.elevation(hour.elevationFt as number) : `${hour.elevationFt} ft`}
+                {hour.inversionRisk ? " · possible valley inversion, colder than the objective" : ""}
+              </p>
+            )}
             <p className={`sky-readout-flag is-${isOverHour(hour) ? "over" : hour.tone}`}>
               {isOverHour(hour) ? <TriangleAlert size={15} aria-hidden="true" /> : hour.tone === "missing" ? <CircleHelp size={15} aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
               {isOverHour(hour) ? hour.failedRules.map(plainRule).join(" · ") : hour.tone === "missing" ? "Readings incomplete for this hour" : "Within your limits"}

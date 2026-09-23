@@ -195,7 +195,8 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
             </ExposureCard>
           )}
           {data.pleasantness && (
-            <ComfortScore comfort={data.pleasantness} localize={w.localizeUnitText} />
+            <ComfortScore comfort={data.pleasantness} localize={w.localizeUnitText}
+              approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
           )}
         </div>
       </section>

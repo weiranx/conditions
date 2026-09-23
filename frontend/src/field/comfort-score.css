@@ -58,3 +58,6 @@
   margin-top: 1rem;
   font-size: 0.85rem;
 }
+
+.comfort-approach { margin: 6px 0 0; }
+.comfort-approach.is-stale { color: var(--sky-caution); font-weight: 600; }

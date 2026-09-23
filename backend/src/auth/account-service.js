@@ -112,6 +112,14 @@ const validatePreferenceNumber = (preferences, field, minimum, maximum, { intege
   return integer ? Math.round(value) : Math.round(value * 100) / 100;
 };
 
+const validatePreferenceBoolean = (preferences, field) => {
+  const value = preferences[field];
+  if (typeof value !== 'boolean') {
+    throw new AccountValidationError(`${field} must be true or false.`, `preferences.${field}`);
+  }
+  return value;
+};
+
 const validateAccountPreferences = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new AccountValidationError('Provide valid account preferences.', 'preferences');
@@ -155,6 +163,10 @@ const validateAccountPreferences = (value) => {
       240,
       { integer: true },
     ),
+    // Optional so clients from before this preference existed keep saving.
+    ...(preferences.approachElevationAdjustment === undefined
+      ? {}
+      : { approachElevationAdjustment: validatePreferenceBoolean(preferences, 'approachElevationAdjustment') }),
   };
 };
 

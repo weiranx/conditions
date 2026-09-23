@@ -2,6 +2,7 @@ import { ArrowUpRight, Clock3, Droplets, Mountain, Wind } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
+import { summarizeApproachHours } from "../app/approach-elevation";
 
 export function ReportSummary({
   workspace: w,
@@ -12,7 +13,7 @@ export function ReportSummary({
 }) {
   const data = w.safetyData!;
   const flags = resolveReportFeatureFlags(data.featureFlags);
-  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate });
+  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate, approach: w.approachProfile });
   const knownGusts = hours.map(hour => hour.gust).filter(Number.isFinite);
   const peakGust = knownGusts.length ? Math.max(...knownGusts) : null;
   const returnAfterSunset = flags.daylightTimeline && w.returnMinutes != null && w.sunsetMinutesForPlan != null
@@ -21,7 +22,9 @@ export function ReportSummary({
   const withinLimits = completeHours.filter((hour) => hour.pass).length;
   const coverageMissing = completeHours.length < w.travelWindowHours;
   const firstConcern = hours.find((hour) => hour.failedRules.length > 0);
+  const approach = summarizeApproachHours(hours);
   const windowNote = [
+    approach ? `${approach.adjustedHours} h checked at your estimated elevation (~${w.formatElevationDisplay(Math.round(approach.lowFt / 100) * 100)} and up), not the summit.` : "",
     coverageMissing ? `Complete weather data for ${completeHours.length} of ${w.travelWindowHours} hours.` : "",
     firstConcern ? `First hour outside your limits: ${w.formatClockForStyle(firstConcern.time, w.preferences.timeStyle)} (${firstConcern.failedRules.join(" • ")}).` : "",
   ].filter(Boolean).join(" ") || "Checks your hourly weather limits only. Daylight, source age, and field reports are assessed separately.";

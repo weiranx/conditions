@@ -4,6 +4,7 @@ import type {
   SafetyData,
   SummitDecision,
   UserPreferences,
+  WeatherTrendPoint,
 } from './types';
 import { alertSeverityRank } from './alert-utils';
 import {
@@ -19,10 +20,13 @@ import {
   resolveSelectedTravelWindowMs,
 } from './core';
 import { computeFeelsLikeF, normalizeDangerLevel } from './planner-helpers';
+import { adjustReadingForApproach, type ApproachProfile } from './approach-elevation';
 
 export type DecisionEvaluationOptions = {
   ignoreAvalancheForDecision?: boolean;
   turnaroundTime?: string;
+  /** Score approach hours at the party's estimated elevation instead of the objective's. */
+  approach?: ApproachProfile | null;
 };
 
 export function decisionLevelRank(level: DecisionLevel | null | undefined): number {
@@ -82,10 +86,34 @@ export function evaluateBackcountryDecision(
 
   const avalanche = data.avalanche;
   const danger = avalanche?.dangerLevel || 0;
-  let gust = data.weather.windGust ?? 0;
-  let precip = data.weather.precipChance ?? 0;
-  let feelsLike: number | null = data.weather.feelsLike ?? data.weather.temp ?? null;
   const description = data.weather.description || '';
+  // Each reading is placed by its own clock time: a 05:30 start's trend opens
+  // with the 05:00 reading, which covers only the trip's first 30 minutes.
+  const approach = options.approach ?? null;
+  const approachStartMinute = parseTimeInputMinutes(cutoffTime);
+  const approachSolar = {
+    sunriseMinutes: parseSolarClockMinutes(data.solar?.sunrise),
+    sunsetMinutes: parseSolarClockMinutes(data.solar?.sunset),
+  };
+  const atPartyElevation = (point: WeatherTrendPoint, index: number): WeatherTrendPoint => {
+    if (!approach || approachStartMinute === null) return point;
+    return adjustReadingForApproach(point, index, approach, { start: cutoffTime, ...approachSolar });
+  };
+  const startPoint = atPartyElevation({
+    time: cutoffTime,
+    temp: data.weather.temp,
+    wind: data.weather.windSpeed,
+    gust: data.weather.windGust,
+    precipChance: data.weather.precipChance,
+    cloudCover: data.weather.cloudCover ?? null,
+    isDaytime: data.weather.isDaytime ?? null,
+    condition: description,
+  }, 0);
+  let gust = (approach ? startPoint.gust : data.weather.windGust) ?? 0;
+  let precip = data.weather.precipChance ?? 0;
+  let feelsLike: number | null = approach && Number.isFinite(startPoint.temp)
+    ? computeFeelsLikeF(startPoint.temp, Number.isFinite(startPoint.wind) ? startPoint.wind : 0)
+    : data.weather.feelsLike ?? data.weather.temp ?? null;
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
   if (weatherUnavailable) {
@@ -98,8 +126,13 @@ export function evaluateBackcountryDecision(
   let peakGustHour = '';
   let peakPrecipHour = '';
   let coldestFeelsLikeHour = '';
+  // True when the coldest hour is cold because a valley inversion is likely on the approach.
+  const hasInversion = (point: WeatherTrendPoint) => Boolean((point as { inversionRisk?: boolean }).inversionRisk);
+  let coldestIsInversion = Boolean(approach) && hasInversion(startPoint);
   let stormSignalHour = '';
-  const windowTrend = (data.weather.trend || []).slice(0, preferences.travelWindowHours);
+  const windowTrend = (data.weather.trend || [])
+    .slice(0, preferences.travelWindowHours)
+    .map((point, index) => atPartyElevation(point, index));
   for (const wpt of windowTrend) {
     const wg = Number.isFinite(Number(wpt.gust)) ? Number(wpt.gust) : 0;
     if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }
@@ -108,7 +141,7 @@ export function evaluateBackcountryDecision(
     const wt = Number.isFinite(Number(wpt.temp)) ? Number(wpt.temp) : 0;
     const ww = Number.isFinite(Number(wpt.wind)) ? Number(wpt.wind) : 0;
     const wfl = computeFeelsLikeF(wt, ww);
-    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; }
+    if (feelsLike === null || wfl < feelsLike) { feelsLike = wfl; coldestFeelsLikeHour = wpt.time || ''; coldestIsInversion = hasInversion(wpt); }
     if (!hasStormSignal && /thunder|storm|lightning|hail|blizzard/i.test(String(wpt.condition || ''))) {
       hasStormSignal = true;
       stormSignalHour = wpt.time || '';
@@ -246,7 +279,7 @@ export function evaluateBackcountryDecision(
   if (feelsLike !== null && feelsLike >= 95) {
     addBlocker(`Apparent temperature reaches about ${formatTemp(feelsLike)}. Move to cooler hours or a cooler objective; do not commit without reliable water, shade, and an early exit.`);
   } else if (feelsLike !== null && feelsLike <= minFeelsLikeThreshold) {
-    addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
+    addCaution(`Apparent temperature falls near ${formatTemp(feelsLike)}${coldestIsInversion ? `${coldestFeelsLikeHour ? ` at ${coldestFeelsLikeHour}` : ''} near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit` : ''}. Add insulation and hand protection, reduce exposed time, and set a warming or turnaround checkpoint.`);
   }
 
   if (alertsRelevantForSelectedStart && hasActiveAlertCount && activeAlertCount > 0) {

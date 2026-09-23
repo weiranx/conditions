@@ -19,6 +19,7 @@
 .forecast-readout-grid dt { font-size: 13px; color: var(--sky-secondary); }
 .forecast-readout-grid dd { margin: 1px 0 0; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .forecast-readout-grid dd.is-over { color: var(--sky-caution); }
+.forecast-readout-approach { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--sky-secondary); }
 .forecast-readout-status {
   grid-column: 1 / -1; display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 0; padding-top: 12px;
   border-top: 1px solid var(--sky-separator); font-size: 14px; line-height: 1.45;
@@ -32,3 +33,6 @@
   .forecast-readout { grid-template-columns: 1fr; }
   .forecast-readout-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Hours checked below the summit: elevation under the hour label. */
+.sky-approach-tag { display: block; font-size: 11px; font-weight: 500; color: var(--sky-secondary); white-space: nowrap; }

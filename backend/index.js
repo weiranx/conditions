@@ -82,6 +82,7 @@ const POPULAR_PEAKS = require('./peaks.json');
 // Extracted modules
 const { calculateSafetyScore } = require('./src/utils/safety-score');
 const { calculatePleasantnessScore } = require('./src/utils/pleasantness-score');
+const { parseApproachQuery, resolveApproach } = require('./src/utils/approach-elevation');
 const {
   createUnknownAvalancheData,
   evaluateAvalancheRelevance,
@@ -361,6 +362,8 @@ const safetyHandler = async (req, res) => {
     typeof travelWindowHoursRaw === 'string' ? travelWindowHoursRaw : typeof travelWindowHours === 'string' ? travelWindowHours : null,
     12,
   );
+  // Optional: where the party starts, so comfort scores the approach hours there.
+  const approachRequest = parseApproachQuery(req.query);
 
   // Pre-initialize everything to avoid "access before initialization" errors
   let avalancheData = createUnknownAvalancheData("no_center_coverage");
@@ -636,6 +639,7 @@ const safetyHandler = async (req, res) => {
       selectedStartTime: alertTargetTimeIso,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
+      approach: resolveApproach({ approachRequest, weatherData, solarData }),
     });
     const todayDate = new Date().toISOString().slice(0, 10);
     const responseGeneratedAt = new Date().toISOString();
@@ -758,6 +762,7 @@ const safetyHandler = async (req, res) => {
       }),
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
+      approach: resolveApproach({ approachRequest, weatherData: safeWeatherData, solarData }),
     });
     const safeGearSuggestions = buildLayeringGearSuggestions({
       weatherData: safeWeatherData,

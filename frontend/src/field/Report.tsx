@@ -27,6 +27,7 @@ import "./report-navigation.css";
 import { AiExplanation, AiExplanationSkeleton } from "./AiExplanation";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
+import { ApproachNote } from "./sky/ApproachNote";
 import { BriefSections } from "./sky/BriefSections";
 import { buildSkyHours } from "./sky/sky-model";
 import { verdictCopy } from "./verdict-copy";
@@ -110,7 +111,8 @@ export function Report({
   const [view, setView] = useState<View>(viewFromHash);
   const topRef = useRef<HTMLDivElement>(null);
   const briefScroll = useRef(0);
-  const focusRequest = useRef<"chapter" | "brief" | null>(null);
+  // An anchor asks to land on a specific part of a (possibly lazy) chapter.
+  const focusRequest = useRef<"chapter" | "brief" | { anchor: string } | null>(null);
   const [navigation, setNavigation] = useState(0);
   const data = report.safetyData;
   const flags = resolveReportFeatureFlags(data.featureFlags);
@@ -135,6 +137,7 @@ export function Report({
   const plannedRows = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, {
     start: w.alpineStartTime,
     date: w.forecastDate,
+    approach: w.approachProfile,
   });
   const skyHours = buildSkyHours(plannedRows, {
     start: w.alpineStartTime,
@@ -161,13 +164,32 @@ export function Report({
       topRef.current?.querySelector<HTMLElement>("#field-verdict-title")?.focus({ preventScroll: true });
       return;
     }
+    if (typeof request === "object") {
+      const root = topRef.current;
+      if (!root) return;
+      const land = () => {
+        const target = root.querySelector<HTMLElement>(`#${request.anchor}`);
+        if (!target) return false;
+        target.scrollIntoView({ block: "start", behavior: reduced ? "instant" : "smooth" });
+        const section = target.closest("section") ?? target;
+        (section.querySelector<HTMLElement>("input:not(:disabled)") ?? target).focus({ preventScroll: true });
+        return true;
+      };
+      if (land()) return;
+      // The chapter may still be loading; land as soon as it renders.
+      const observer = new MutationObserver(() => { if (land()) stop(); });
+      const timer = window.setTimeout(() => stop(), 5000);
+      const stop = () => { observer.disconnect(); window.clearTimeout(timer); };
+      observer.observe(root, { childList: true, subtree: true });
+      return stop;
+    }
     topRef.current?.scrollIntoView({ block: "start", behavior: reduced ? "instant" : "smooth" });
     const heading = topRef.current?.querySelector<HTMLElement>(".sky-chapter-head h1");
     heading?.focus({ preventScroll: true });
   }, [navigation]);
-  function go(next: View) {
+  function go(next: View, anchor?: string) {
     if (activeView === "brief") briefScroll.current = window.scrollY;
-    focusRequest.current = next === "brief" ? "brief" : "chapter";
+    focusRequest.current = next === "brief" ? "brief" : anchor ? { anchor } : "chapter";
     setView(next);
     setNavigation((n) => n + 1);
     const hash = next === "brief" ? "" : buildReportSectionHash(`planner-section-${next}`);
@@ -329,10 +351,19 @@ export function Report({
       <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
     </>
   );
+  const approachNote = (
+    <ApproachNote
+      hours={skyHours}
+      source={w.approachProfile?.source ?? null}
+      clock={clock}
+      elevation={(ft) => w.formatElevationDisplay(ft)}
+      onEdit={w.viewingHistoryReport ? undefined : () => go("terrain", "sky-terrain-approach")}
+    />
+  );
   const chapterContent = (id: Chapter) => {
     if (id === "forecast") return (
       <section key="forecast" className="sky-chapter" aria-label="Weather">
-        <Forecast report={report} />
+        <Forecast report={report} approach={w.approachProfile} elevation={(ft) => w.formatElevationDisplay(ft)} />
         <Conditions workspace={w} />
       </section>
     );
@@ -357,10 +388,12 @@ export function Report({
           reason={copy.reason}
           bridge={copy.bridge}
           limitingChecks={copy.limitingChecks}
+          note={approachNote}
           actions={actions}
           format={{
             temp: (f) => w.formatTempDisplay(f),
             wind: (mph) => w.formatWindDisplay(mph),
+            elevation: (ft) => w.formatElevationDisplay(ft),
             clock,
             timeStyle: w.preferences.timeStyle,
           }}
@@ -379,7 +412,7 @@ export function Report({
               <span className="sky-kicker">{report.plan.objectiveName} · {dateLabel(report.plan.forecastDate)}</span>
               <h1 tabIndex={-1}>{fullReport ? "Full report" : activeChapter?.label}</h1>
             </div>
-            <DayStrip hours={skyHours} clock={clock} />
+            <DayStrip hours={skyHours} clock={clock} elevation={(ft) => w.formatElevationDisplay(ft)} />
           </div>
           {!fullReport && (
             <nav className="sky-chapter-tabs" aria-label="Report sections">
@@ -424,6 +457,7 @@ export function Report({
                   {copy.limitingChecks.map((check) => <li key={check}>{check}</li>)}
                 </ul>
               )}
+              {approachNote}
               <p className="sky-cap">{subtitle}</p>
             </section>
             <BriefSections

@@ -751,6 +751,15 @@ export interface SafetyData {
       impact: number;
       message: string;
     }>;
+    /** Present when approach hours were scored at the party's estimated elevation (model 1.5.0+). */
+    approach?: {
+      source: 'gpx' | 'manual' | 'estimated';
+      trailheadElevationFt: number;
+      adjustedHours: number;
+      inversionHours: number;
+      /** "minute:feet,…" elevation timeline that was scored. */
+      timeline?: string;
+    };
     disclaimer?: string;
   };
   safety: {
@@ -823,6 +832,8 @@ export interface LinkState {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
+  /** Optional trailhead elevation in display units; empty when estimated. */
+  trailheadElevationInput?: string;
   travelWindowHours?: number | null;
 }
 
@@ -842,6 +853,8 @@ export interface UserPreferences {
   runnerPaceMinutesPerMile: number;
   runnerAscentMinutesPer1000Ft: number;
   runnerStopBufferMinutes: number;
+  /** Score approach hours at the estimated trailhead/approach elevation rather than the objective's. */
+  approachElevationAdjustment: boolean;
 }
 
 export type FreshnessState = 'fresh' | 'aging' | 'stale' | 'missing';
@@ -937,6 +950,14 @@ export interface TravelWindowRow {
   exposureRunLength?: number;
   /** How long a runner would be exposed to this breach: brief (1h), short (2h), sustained (3h+). */
   exposureClass?: 'brief' | 'short' | 'sustained';
+  /** Estimated elevation of the party during this hour, when an approach profile is in use. */
+  elevationFt?: number;
+  /** True when temperature and wind were shifted from the objective to elevationFt. */
+  approachAdjusted?: boolean;
+  /** True when clear, calm conditions make a colder valley (temperature inversion) likely. */
+  inversionRisk?: boolean;
+  /** The unadjusted objective reading for an approach hour (temp/wind/gust above are at elevationFt). */
+  objectiveReading?: { temp: number; wind: number; gust: number };
 }
 
 export interface TravelWindowSpan {

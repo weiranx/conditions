@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SafetyData, UserPreferences } from '../app/types';
 import { evaluateBackcountryDecision } from '../app/decision';
+import type { ApproachProfile } from '../app/approach-elevation';
 import {
   EXTENDED_START_TIME_SCENARIO_TIMES,
   START_TIME_SCENARIO_TIMES,
@@ -19,6 +20,7 @@ interface UseStartTimeScenariosParams {
   currentStartTime: string;
   position: { lat: number; lng: number };
   preferences: UserPreferences;
+  approach?: ApproachProfile | null;
 }
 
 export function useStartTimeScenarios({
@@ -28,6 +30,7 @@ export function useStartTimeScenarios({
   currentStartTime,
   position,
   preferences,
+  approach = null,
 }: UseStartTimeScenariosParams) {
   const [result, setResult] = useState<{
     key: string;
@@ -129,9 +132,9 @@ export function useStartTimeScenarios({
     const startMinutes = (Number.parseInt(startTime.slice(0, 2), 10) * 60) + Number.parseInt(startTime.slice(3, 5), 10);
     const returnMinutes = startMinutes + travelWindowHours * 60;
     const turnaroundTime = `${String(Math.floor((returnMinutes % 1440) / 60)).padStart(2, '0')}:${String(returnMinutes % 60).padStart(2, '0')}`;
-    const decision = evaluateBackcountryDecision(data, startTime, preferences, { turnaroundTime });
+    const decision = evaluateBackcountryDecision(data, startTime, preferences, { turnaroundTime, approach });
     return buildStartTimeScenario(startTime, data, decision, preferences);
-  }), [currentResult, preferences, travelWindowHours]);
+  }), [currentResult, preferences, travelWindowHours, approach]);
 
   const comparison = useMemo(
     () => compareStartTimeScenarios(scenarios, preferences),

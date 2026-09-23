@@ -128,6 +128,7 @@ export function useSyncUrlEffect(params: {
   forecastDate: string;
   alpineStartTime: string;
   targetElevationInput: string;
+  trailheadElevationInput?: string;
   travelWindowHours?: number;
   activity: UserPreferences['defaultActivity'];
   sharedReportToken?: string | null;
@@ -136,7 +137,7 @@ export function useSyncUrlEffect(params: {
 }) {
   const {
     view, hasObjective, position, objectiveName, committedSearchQuery,
-    forecastDate, alpineStartTime, targetElevationInput, travelWindowHours, activity, sharedReportToken,
+    forecastDate, alpineStartTime, targetElevationInput, trailheadElevationInput, travelWindowHours, activity, sharedReportToken,
     isApplyingPopStateRef, hasInitializedHistoryRef,
   } = params;
 
@@ -165,6 +166,7 @@ export function useSyncUrlEffect(params: {
           forecastDate,
           alpineStartTime,
           targetElevationInput,
+          trailheadElevationInput,
           travelWindowHours,
           activity,
         })
@@ -197,6 +199,7 @@ export function useSyncUrlEffect(params: {
     forecastDate,
     alpineStartTime,
     targetElevationInput,
+    trailheadElevationInput,
     travelWindowHours,
     activity,
     sharedReportToken,
