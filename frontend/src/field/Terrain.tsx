@@ -1,7 +1,6 @@
 import { SurfacePrediction } from "./SurfacePrediction";
 import { lazy, Suspense, useMemo, useState } from "react";
-import { Mountain, Minus, Plus, Satellite } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { Info, Mountain, Minus, Plus, RefreshCw, Satellite, Sparkles } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { buildTerrainWindow } from "../app/terrain-window";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
@@ -9,6 +8,7 @@ import { useAiAvailability } from "../hooks/useAiAvailability";
 import { planFromReport } from "./data";
 import { WindCompass } from "./WindCompass";
 import { Details, SourceLink } from "./Details";
+import { AiExplanationSkeleton, SnowAnalysis } from "./AiExplanation";
 import { MountainSection } from "./sky/MountainSection";
 import { StatusTag } from "./sky/BriefSections";
 import { knownFeet, surfaceLabel, terrainStatus } from "./sky/status";
@@ -390,32 +390,73 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
       )}
 
       {flags.satelliteImagery && flags.snowpackDetails && (
-        <section className="sky-card sky-section" aria-labelledby="sky-terrain-satellite">
-          <span className="sky-card-head">
-            <span id="sky-terrain-satellite">Satellite snow imagery</span>
-            <Satellite size={18} aria-hidden="true" />
-          </span>
-          <p className="sky-cap is-body">Imagery can lag current conditions; interpret it alongside observations.</p>
-          {!w.viewingHistoryReport && (
-            <button
-              className="field-button"
-              disabled={w.snowVisionLoading || !available.snowVision}
-              onClick={w.handleRequestSnowVisionAction}
-            >
-              {w.snowVisionLoading ? "Analyzing imagery…" : "Analyze snow imagery"}
-            </button>
-          )}
+        <section
+          className="sky-card sky-section ai-panel"
+          aria-labelledby="sky-terrain-satellite"
+          aria-busy={w.snowVisionLoading}
+        >
+          <div className="ai-panel-head">
+            <span className="sky-card-head">
+              <span id="sky-terrain-satellite">Satellite snow imagery</span>
+              <span className="ai-panel-badge"><Sparkles size={11} aria-hidden="true" />AI</span>
+            </span>
+            {w.snowVisionAnalysis && !w.viewingHistoryReport ? (
+              <button
+                className="field-button ai-brief-regenerate"
+                disabled={!available.snowVision}
+                aria-disabled={w.snowVisionLoading || undefined}
+                onClick={w.handleRequestSnowVisionAction}
+              >
+                <RefreshCw
+                  size={14}
+                  aria-hidden="true"
+                  className={w.snowVisionLoading ? "is-spinning" : undefined}
+                />
+                {w.snowVisionLoading ? "Re-analyzing…" : "Re-analyze"}
+              </button>
+            ) : (
+              <Satellite size={18} aria-hidden="true" className="sky-muted" />
+            )}
+          </div>
           {w.snowVisionError && <p className="sky-notice is-caution" role="alert">{w.snowVisionError}</p>}
-          {w.snowVisionImage && (
-            <img className="field-satellite-image" src={w.snowVisionImage} alt="Satellite imagery used for the snow analysis" />
-          )}
-          {w.snowVisionAnalysis && (
-            <div className="field-markdown">
-              <Streamdown>{w.snowVisionAnalysis}</Streamdown>
-            </div>
-          )}
-          {!available.snowVision && !w.snowVisionAnalysis && (
-            <p className="sky-cap">Satellite analysis is unavailable on this server.</p>
+          {w.snowVisionAnalysis ? (
+            <>
+              <SnowAnalysis
+                text={w.snowVisionAnalysis}
+                image={w.snowVisionImage}
+                stale={w.snowVisionLoading}
+              />
+              <p className="ai-brief-footnote">
+                <Info size={13} aria-hidden="true" />
+                Written by AI from satellite imagery and nearby snow stations. It
+                can’t see cornices, ice or surface firmness; verify in the field.
+              </p>
+            </>
+          ) : !w.viewingHistoryReport && available.snowVision ? (
+            <>
+              <div className="ai-brief-empty">
+                <p>
+                  An AI read of recent Sentinel-2 imagery around your objective,
+                  checked against nearby snow stations. Imagery can lag current
+                  conditions by days.
+                </p>
+                <button
+                  className="field-button field-button-primary"
+                  aria-disabled={w.snowVisionLoading || undefined}
+                  onClick={w.handleRequestSnowVisionAction}
+                >
+                  <Sparkles size={16} aria-hidden="true" />
+                  {w.snowVisionLoading ? "Analyzing imagery…" : "Analyze snow imagery"}
+                </button>
+              </div>
+              {w.snowVisionLoading && <AiExplanationSkeleton />}
+            </>
+          ) : (
+            <p className="sky-cap is-body">
+              {w.viewingHistoryReport
+                ? "No snow analysis was saved with this report."
+                : "Satellite analysis is unavailable on this server."}
+            </p>
           )}
         </section>
       )}

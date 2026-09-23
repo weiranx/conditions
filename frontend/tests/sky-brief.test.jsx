@@ -204,3 +204,33 @@ test("a source without a timestamp is drawn as missing, never current", () => {
   assert.match(html, /Weather[^]*Current/);
   assert.doesNotMatch(html, /NaN|Infinity/);
 });
+
+import { MountainSection } from "../src/field/sky/MountainSection";
+import { spreadLabels } from "../src/field/sky/spread-labels";
+
+test("spreadLabels keeps order, spacing and bounds", () => {
+  assert.deepEqual(spreadLabels([100, 300], 38, 20, 400), [100, 300]);
+  const ys = spreadLabels([200, 180, 190], 38, 20, 400);
+  const sorted = [...ys].sort((a, b) => a - b);
+  assert.deepEqual(ys.map((v) => sorted.indexOf(v)), [2, 0, 1]);
+  assert.ok(sorted[1] - sorted[0] >= 38 && sorted[2] - sorted[1] >= 38);
+  assert.ok(Math.abs((sorted[0] + sorted[2]) / 2 - 190) < 1e-9);
+  assert.deepEqual(spreadLabels([5, 10], 38, 20, 400), [20, 58]);
+  assert.deepEqual(spreadLabels([395, 398], 38, 20, 400), [362, 400]);
+});
+
+test("MountainSection band labels never overlap when bands are 500 ft apart", () => {
+  const band = (label, elevationFt, temp, windGust) => ({ label, elevationFt, temp, feelsLike: temp, windSpeed: 0, windGust });
+  const html = renderToStaticMarkup(
+    <MountainSection
+      bands={[band("Lower Terrain", 4274, 44, 97), band("Mid Terrain", 5074, 41, 99), band("Near Objective", 5774, 39, 101), band("Objective Elevation", 6274, 37, 102)]}
+      objectiveFt={6274} objectiveLabel="Objective" target={null}
+      levels={[{ label: "Freezing level", ft: 10072, tone: "cold" }]} sky={null}
+      format={{ elevation: (ft) => `${ft} ft`, temp: (f) => `${f}°F`, wind: (m) => `${m} mph` }}
+    />,
+  );
+  const ys = [...html.matchAll(/y="([\d.-]+)" class="mt-band-name"/g)].map((m) => Number(m[1]));
+  assert.equal(ys.length, 4);
+  ys.sort((a, b) => a - b);
+  for (let i = 1; i < ys.length; i += 1) assert.ok(ys[i] - ys[i - 1] >= 38, `labels ${ys[i - 1]} and ${ys[i]} overlap`);
+});

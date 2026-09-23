@@ -386,7 +386,13 @@ test("AI explanation splits inline labels without losing long continuation parag
   assert.match(html, /<h3>Big picture<\/h3>/);
   assert.match(html, /<h3>Best move<\/h3>/);
   assert.match(html, /Choose sheltered terrain/);
-  assert.match(html, /ai-explanation-detail is-watch[^>]*open/);
+  // Inverted pyramid: overview, then the recommended move, then support in brief order.
+  assert.deepEqual(
+    [...html.matchAll(/ai-explanation-section is-(\w+)/g)].map((m) => m[1]),
+    ["overview", "action", "evidence", "watch", "confidence", "comfort"],
+  );
+  assert.doesNotMatch(html, /<details/);
+  assert.match(html, /Not a safety factor/);
   assert.doesNotMatch(html, /BIG PICTURE:/);
 });
 test("AI explanation retains legacy text, preambles, markdown labels and unknown sections", () => {
@@ -403,6 +409,32 @@ test("AI explanation retains legacy text, preambles, markdown labels and unknown
     "Turn back before noon.\nOTHER NOTES: Keep this too.",
   );
   assert.deepEqual(parseExplanation("  "), []);
+});
+
+import { parseSnowAnalysis } from "../src/field/ai-explanation";
+import { SnowAnalysis } from "../src/field/AiExplanation";
+test("snow analysis splits upper-case labels only and leads with coverage and takeaway", () => {
+  const text =
+    "SNOW COVERAGE: About 60% snow above 7,500 ft. TERRAIN PATTERN: Continuous in the upper basin; the main uncertainty: shadow on north aspects. GROUND CHECK: Paradise reports 38 in. UNCERTAINTY: Imagery is 9 days old. TRAVEL TAKEAWAY: Expect a transition near 7,000 ft.";
+  const sections = parseSnowAnalysis(text);
+  assert.deepEqual(
+    sections.map((s) => s.kind),
+    ["coverage", "terrain", "ground", "uncertainty", "takeaway"],
+  );
+  assert.match(sections[1].text, /the main uncertainty: shadow on north aspects/);
+  assert.deepEqual(parseSnowAnalysis("Legacy **snow** notes."), [
+    { kind: "note", title: "Snow analysis", text: "Legacy **snow** notes." },
+  ]);
+  const html = renderToStaticMarkup(
+    <SnowAnalysis text={text} image="data:image/png;base64,AA==" />,
+  );
+  assert.deepEqual(
+    [...html.matchAll(/ai-explanation-section is-(\w+)/g)].map((m) => m[1]),
+    ["coverage", "takeaway", "terrain", "ground", "uncertainty"],
+  );
+  assert.match(html, /ai-explanation-supporting is-three/);
+  assert.match(html, /<figcaption>Sentinel-2/);
+  assert.doesNotMatch(renderToStaticMarkup(<SnowAnalysis text={text} />), /<figure/);
 });
 
 import {

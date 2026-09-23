@@ -116,8 +116,7 @@
 .field-app .sky-report .report-insight.is-caution > .field-kicker { color: var(--sky-caution); }
 
 /* ---------- AI brief and chat ---------- */
-.field-app .sky-report .ai-explanation, .field-app .sky-report .field-chat { border: 0; border-radius: var(--sky-radius); background: var(--sky-surface); box-shadow: var(--sky-elevation); }
-.field-app .sky-report .ai-explanation-card { border: 0; border-radius: 14px; background: var(--sky-fill); }
+.field-app .sky-report .field-chat { border: 0; border-radius: var(--sky-radius); background: var(--sky-surface); box-shadow: var(--sky-elevation); }
 
 @media (max-width: 1000px) {
   .sky-exposure-grid { grid-template-columns: 1fr 1fr; }
