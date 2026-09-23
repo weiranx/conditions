@@ -1,0 +1,130 @@
+/* Sky finish for the report's remaining components (evidence cards, score explanation,
+   supplemental sources, insights, AI brief, daylight chart, raw data disclosures).
+   Scoped under .sky-report so the older stylesheets still apply elsewhere. */
+
+/* ---------- Cards and rhythm ---------- */
+.field-app .sky-report .field-panel {
+  margin: 0; padding: 18px 20px; border: 0; border-radius: var(--sky-radius); background: var(--sky-surface);
+  box-shadow: var(--sky-elevation); color: var(--sky-label);
+}
+.field-app .sky-report .field-panel + .field-panel { margin-top: 14px; }
+.field-app .sky-report .field-panel h2 { margin: 2px 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
+.field-app .sky-report .field-panel h3 { font-size: 16px; font-weight: 650; letter-spacing: 0; }
+.field-app .sky-report .field-panel > p, .field-app .sky-report .field-muted { font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
+.field-app .sky-report .field-kicker { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--sky-secondary); }
+.field-app .sky-report .field-chapter-heading { margin: 36px 0 12px; padding: 0 4px; }
+.field-app .sky-report .field-chapter-heading h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.field-app .sky-report .field-chapter-heading p { margin: 4px 0 0; font-size: 14px; color: var(--sky-secondary); }
+.field-app .sky-report .field-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--sky-fill); color: var(--sky-label); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.field-app .sky-report .field-badge.is-watch { background: var(--sky-caution-fill); color: var(--sky-caution); }
+.field-app .sky-report .field-warning { display: block; margin: 0; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--sky-surface); box-shadow: inset 4px 0 0 var(--sky-caution); color: var(--sky-label); font-size: 14px; }
+.field-app .sky-report .field-feedback { margin: 0; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--sky-fill); color: var(--sky-label); font-size: 14px; }
+
+/* ---------- Tables ---------- */
+.field-app .sky-report .field-data-table { width: 100%; border-collapse: collapse; border: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.field-app .sky-report .field-data-table :is(th, td) { padding: 9px 10px; border: 0; border-bottom: 1px solid var(--sky-separator); background: none; text-align: left; }
+.field-app .sky-report .field-data-table thead th { font-size: 12px; font-weight: 600; color: var(--sky-secondary); text-transform: none; letter-spacing: 0; }
+.field-app .sky-report .field-data-table tbody tr:last-child > * { border-bottom: 0; }
+.field-app .sky-report .field-data-table small { display: block; font-size: 12px; color: var(--sky-secondary); }
+
+/* ---------- Evidence disclosures: quiet rows at the foot of a card ---------- */
+.sky-evidence { display: grid; margin-top: auto; padding-top: 6px; border-top: 1px solid var(--sky-separator); }
+.sky-evidence.is-list { margin-top: 4px; }
+.field-app .sky-report :is(.field-detail-disclosure, .sky-evidence-details) { margin: 0; padding: 0; border: 0; }
+.field-app .sky-report :is(.sky-evidence, .sky-card, .field-panel) details.field-detail-disclosure + details.field-detail-disclosure { border-top: 1px solid var(--sky-separator); }
+.field-app .sky-report details.field-detail-disclosure > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0; cursor: pointer; list-style: none;
+  font-size: 14px; font-weight: 600; color: var(--sky-accent);
+}
+.field-app .sky-report .sky-evidence details.field-detail-disclosure > summary { font-size: 13px; font-weight: 550; color: var(--sky-secondary); }
+.field-app .sky-report .sky-evidence details.field-detail-disclosure > summary:hover { color: var(--sky-label); }
+.field-app .sky-report details.field-detail-disclosure[open] > summary { color: var(--sky-label); }
+.field-app .sky-report details.field-detail-disclosure > :not(summary) { font-size: 13px; }
+.field-app .sky-report .field-record { display: grid; gap: 0; margin: 0 0 10px; padding: 4px 12px; border-radius: 12px; background: var(--sky-fill); }
+.field-app .sky-report .field-record > div { display: grid; grid-template-columns: minmax(120px, 38%) minmax(0, 1fr); gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--sky-separator); }
+.field-app .sky-report .field-record > div:last-child { border-bottom: 0; }
+.field-app .sky-report .field-record dt { color: var(--sky-secondary); font-size: 12px; }
+.field-app .sky-report .field-record dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.field-app .sky-report .field-record .field-record { background: var(--sky-surface); }
+.field-app .sky-report .field-raw-report { max-height: 360px; overflow: auto; padding: 12px; border-radius: 12px; background: var(--sky-fill); font-size: 12px; }
+
+/* ---------- Exposure grid and neutral mini charts ---------- */
+.sky-exposure-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.sky-exposure-title { display: inline-flex; align-items: center; gap: 7px; }
+.sky-exposure-title svg { color: var(--sky-secondary); }
+.field-app .sky-report .sky-exposure { gap: 8px; }
+.field-app .sky-report .sky-exposure .sky-big { font-size: 26px; }
+.field-app .sky-report :is(.condition-trend, .condition-scale, .condition-accumulation) { --condition-color: var(--sky-label); margin: 2px 0 4px; color: var(--sky-label); }
+.field-app .sky-report :is(.condition-trend, .condition-scale) figcaption { font-size: 12px; color: var(--sky-secondary); margin-bottom: 4px; }
+.field-app .sky-report :is(.condition-trend, .condition-scale) figcaption strong { color: var(--sky-label); font-weight: 600; }
+.field-app .sky-report .condition-trend svg { height: 58px; }
+.field-app .sky-report .condition-chart-times { font-size: 11px; color: var(--sky-secondary); }
+.field-app .sky-report .condition-scale-track { background: var(--sky-fill); }
+.field-app .sky-report .condition-scale-fill { background: var(--sky-label); }
+.field-app .sky-report .condition-scale-marker { background: var(--sky-surface); border-color: var(--sky-label); }
+.field-app .sky-report .report-precip-panel .condition-accumulation, .field-app .sky-report .condition-accumulation { --condition-color: var(--sky-cold); }
+.field-app .sky-report .report-precip-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0; }
+.sky-list.is-compact > div { padding: 7px 0; }
+.sky-list.is-compact :is(dt, dd) { font-size: 14px; }
+.sky-list.is-compact dd { max-width: 60%; }
+
+.sky-signal-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sky-signal-list li { display: flex; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--sky-caution-fill); }
+.sky-signal-list svg { flex: none; margin-top: 2px; color: var(--sky-caution); }
+.sky-signal-list strong { font-size: 15px; }
+.sky-signal-list p { margin: 2px 0 0; font-size: 14px; line-height: 1.45; color: var(--sky-secondary); }
+.sky-missing-line { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 14px; line-height: 1.45; color: var(--sky-secondary); }
+.sky-missing-line svg { flex: none; margin-top: 2px; color: var(--sky-missing); }
+
+/* ---------- Comfort score ---------- */
+.field-app .sky-report .comfort-score .comfort-evidence { padding: 12px; border-radius: 12px; background: var(--sky-fill); font-size: 13px; }
+.field-app .sky-report .comfort-score .comfort-evidence > div { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.field-app .sky-report .comfort-score .comfort-evidence p, .field-app .sky-report .comfort-score .comfort-evidence small { color: var(--sky-secondary); }
+.field-app .sky-report .comfort-factor-track { background: var(--sky-fill); }
+.field-app .sky-report .comfort-factor-track span { background: var(--sky-label); }
+
+/* ---------- Daylight chart ---------- */
+.field-app .sky-report .daylight-chart { margin: 4px 0; }
+.field-app .sky-report .daylight-chart figcaption { font-size: 13px; color: var(--sky-secondary); }
+.field-app .sky-report .daylight-chart svg { color: var(--sky-secondary); }
+.field-app .sky-report .daylight-track { height: 40px; margin-top: 10px; border-radius: 12px; background: #26304a; box-shadow: none; }
+.field-app .sky-report .daylight-sun { background: linear-gradient(90deg, #f2c49c, #d3e5f5 22%, #d3e5f5 78%, #f3a86f); }
+.field-app .sky-report .daylight-trip { top: 14px; height: 12px; border: 0; border-radius: 6px; background: var(--sky-accent); box-shadow: 0 0 0 2px #fff; }
+.field-app .sky-report .daylight-legend { gap: 16px; margin-top: 8px; font-size: 12px; color: var(--sky-secondary); }
+.field-app .sky-report .daylight-legend span::before { background: #d3e5f5; border-radius: 3px; }
+.field-app .sky-report .daylight-legend span:last-child::before { background: var(--sky-accent); border: 0; }
+.field-app .sky-report .daylight-axis { font-size: 11px; color: var(--sky-secondary); }
+
+/* ---------- Score explanation ---------- */
+.field-app .sky-report .report-score-explanation .report-score-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.field-app .sky-report .report-score-total strong, .field-app .sky-report .report-score-total { color: var(--sky-label); }
+.field-app .sky-report .report-deduction-track { background: var(--sky-fill); }
+.field-app .sky-report .report-deduction-track span { background: var(--sky-caution); }
+.field-app .sky-report .report-confidence-explanation { border: 0; border-radius: 14px; background: var(--sky-fill); }
+
+/* ---------- Supplemental evidence ---------- */
+.field-app .sky-report .supplemental-evidence article { padding: 14px 0; border-top: 1px solid var(--sky-separator); }
+.field-app .sky-report .supplemental-evidence-heading > span { display: inline-flex; align-items: center; min-height: 22px; padding: 0 9px; border-radius: 999px; background: var(--sky-fill); font-size: 12px; font-weight: 600; }
+.field-app .sky-report .supplemental-evidence :is(th, td) { border-color: var(--sky-separator); }
+
+/* ---------- Insights ---------- */
+.field-app .sky-report .report-insights { margin: 36px 0 0; }
+.field-app .sky-report .report-insight { padding: 14px 0; border-top: 1px solid var(--sky-separator); }
+.field-app .sky-report .report-insight:first-child { border-top: 0; }
+.field-app .sky-report .report-insight h3 { margin: 2px 0 4px; font-size: 16px; font-weight: 650; }
+.field-app .sky-report .report-insight p { font-size: 14px; color: var(--sky-secondary); }
+.field-app .sky-report .report-insight.is-caution > .field-kicker { color: var(--sky-caution); }
+
+/* ---------- AI brief and chat ---------- */
+.field-app .sky-report .ai-explanation, .field-app .sky-report .field-chat { border: 0; border-radius: var(--sky-radius); background: var(--sky-surface); box-shadow: var(--sky-elevation); }
+.field-app .sky-report .ai-explanation-card { border: 0; border-radius: 14px; background: var(--sky-fill); }
+
+@media (max-width: 1000px) {
+  .sky-exposure-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 650px) {
+  .sky-exposure-grid { grid-template-columns: 1fr; gap: 10px; }
+  .field-app .sky-report .report-precip-charts { grid-template-columns: 1fr; }
+  .field-app .sky-report .field-panel { padding: 16px; }
+  .field-app .sky-report .field-record > div { grid-template-columns: 1fr; gap: 2px; }
+}

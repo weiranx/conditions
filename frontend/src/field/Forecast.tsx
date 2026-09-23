@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+import { useState } from "react";
+import "./sky/sky.css";
+import "./sky/parts.css";
 import "./forecast.css";
 import { buildReportWeatherRows } from "./report-weather";
 import { weatherAppearance } from "./weather-appearance";
@@ -13,6 +15,7 @@ import { windDirectionFromDegrees } from "../app/wind-analysis";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import {
   Check,
+  CircleHelp,
   Cloud,
   CloudFog,
   CloudLightning,
@@ -20,116 +23,60 @@ import {
   CloudRain,
   CloudSnow,
   CloudSun,
-  Droplets,
   Moon,
   Sun,
-  Sunrise,
-  Thermometer,
   TriangleAlert,
-  Wind,
 } from "lucide-react";
 import type { PersistedReport } from "../app/report-storage";
 import type { WeatherTrendPoint } from "../app/types";
-import {
-  buildTravelWindowInsights,
-} from "../app/travel-window";
+import { buildTravelWindowInsights } from "../app/travel-window";
 import {
   formatClockForStyle,
   formatTemperatureForUnit,
   formatWindForUnit,
+  parseHourLabelToMinutes,
+  parseSolarClockMinutes,
+  parseTimeInputMinutes,
 } from "../app/core";
+import { HourChart, type HourGuide, type HourTone } from "./sky/HourChart";
+import { buildSkyHours, shortHour, type PlannedRow } from "./sky/sky-model";
+import { plainReason } from "./sky/status";
 
-function WeatherSymbol({ point }: { point: WeatherTrendPoint }) {
-  const condition = point.condition.toLowerCase();
-  if (/thunder|storm|lightning/.test(condition))
-    return <CloudLightning size={64} strokeWidth={1.2} aria-hidden="true" />;
-  if (/snow|sleet|ice|freezing/.test(condition))
-    return <CloudSnow size={64} strokeWidth={1.2} aria-hidden="true" />;
-  if (/rain|shower|drizzle/.test(condition))
-    return <CloudRain size={64} strokeWidth={1.2} aria-hidden="true" />;
-  if (/fog|mist|haze|smoke/.test(condition))
-    return <CloudFog size={64} strokeWidth={1.2} aria-hidden="true" />;
+function WeatherSymbol({ point, size = 22 }: { point: Pick<WeatherTrendPoint, "condition" | "isDaytime">; size?: number }) {
+  const condition = (point.condition || "").toLowerCase();
+  const props = { size, strokeWidth: 1.6, "aria-hidden": true } as const;
+  if (/thunder|storm|lightning/.test(condition)) return <CloudLightning {...props} />;
+  if (/snow|sleet|ice|freezing/.test(condition)) return <CloudSnow {...props} />;
+  if (/rain|shower|drizzle/.test(condition)) return <CloudRain {...props} />;
+  if (/fog|mist|haze|smoke/.test(condition)) return <CloudFog {...props} />;
   if (/partly|mostly sunny|mostly clear/.test(condition))
-    return point.isDaytime === false ? (
-      <CloudMoon size={64} strokeWidth={1.2} />
-    ) : (
-      <CloudSun size={64} strokeWidth={1.2} />
-    );
-  if (/cloud|overcast/.test(condition))
-    return <Cloud size={64} strokeWidth={1.2} aria-hidden="true" />;
+    return point.isDaytime === false ? <CloudMoon {...props} /> : <CloudSun {...props} />;
+  if (/cloud|overcast/.test(condition)) return <Cloud {...props} />;
   if (/sun|clear|fair/.test(condition))
-    return point.isDaytime === false ? (
-      <Moon size={64} strokeWidth={1.2} />
-    ) : (
-      <Sun size={64} strokeWidth={1.2} />
-    );
-  return <Cloud size={64} strokeWidth={1.2} aria-hidden="true" />;
+    return point.isDaytime === false ? <Moon {...props} /> : <Sun {...props} />;
+  return <Cloud {...props} />;
 }
+
+// The measurements a traveller picks between first; the rest follow.
+const METRICS: WeatherTrendMetricKey[] = ["temp", "feelsLike", "gust", "wind", "precipChance", "cloudCover", "humidity", "dewPoint", "pressure", "windDirection"];
+
+const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
 export function Forecast({ report }: { report: PersistedReport }) {
   const [hour, setHour] = useState(0);
   const [metric, setMetric] = useState<WeatherTrendMetricKey>("temp");
   const flags = resolveReportFeatureFlags(report.safetyData.featureFlags);
-  const gradientId = useId();
   const preferences = report.preferences!;
-  const trend = (report.safetyData.weather.trend || []).slice(
-    0,
-    report.plan.travelWindowHours,
-  );
+  const trend = (report.safetyData.weather.trend || []).slice(0, report.plan.travelWindowHours);
   const rows = buildReportWeatherRows(report.safetyData, preferences, report.plan.travelWindowHours);
   const bluebird = bluebirdPercentage(trend);
   const insight = buildTravelWindowInsights(rows, preferences.timeStyle);
   const selectedIndex = Math.min(hour, Math.max(0, trend.length - 1));
   const selected = trend[selectedIndex];
   const selectedRow = rows[selectedIndex];
-  const temp = (value: number | null | undefined) =>
-    formatTemperatureForUnit(value, preferences.temperatureUnit);
-  const wind = (value: number | null | undefined) =>
-    formatWindForUnit(value, preferences.windSpeedUnit);
-  const clock = (value: string) =>
-    formatClockForStyle(value, preferences.timeStyle);
-  const temperatures = trend.map((point) => point.temp).filter(Number.isFinite);
-  const low = Math.min(...temperatures);
-  const high = Math.max(...temperatures);
-  const chart = buildWeatherTrendChartData(
-    buildWeatherTrendRows(trend, preferences.timeStyle),
-    metric,
-  ).map((point) => ({
-    ...point,
-    value: Number.isFinite(point.value) ? point.value : null,
-  }));
-  const chartValues = chart
-    .map((point) => point.value)
-    .filter(
-      (value): value is number => value !== null && Number.isFinite(value),
-    );
-  const chartLow = Math.min(...chartValues);
-  const chartHigh = Math.max(...chartValues);
-  const metricValue = (value: number | null) =>
-    value === null
-      ? "Unavailable"
-      : ["temp", "feelsLike", "dewPoint"].includes(metric)
-        ? temp(value)
-        : ["wind", "gust"].includes(metric)
-          ? wind(value)
-          : metric === "windDirection"
-            ? windDirectionFromDegrees(value)
-            : `${Math.round(value * 10) / 10}${metric === "pressure" ? " hPa" : "%"}`;
-  const points = chart.map((point, index) => ({
-    x: 20 + (index * 960) / Math.max(1, trend.length - 1),
-    y:
-      point.value === null
-        ? null
-        : 95 -
-          ((point.value - chartLow) / Math.max(1, chartHigh - chartLow)) * 65,
-  }));
-  const chartPath = points
-    .map((point, index) =>
-      point.y === null
-        ? ""
-        : `${index === 0 || points[index - 1].y === null ? "M" : "L"} ${point.x},${point.y}`,
-    )
-    .join(" ");
+  const temp = (value: number | null | undefined) => formatTemperatureForUnit(value, preferences.temperatureUnit);
+  const wind = (value: number | null | undefined) => formatWindForUnit(value, preferences.windSpeedUnit);
+  const clock = (value: string) => formatClockForStyle(value, preferences.timeStyle);
 
   if (!selected)
     return (
@@ -143,273 +90,213 @@ export function Forecast({ report }: { report: PersistedReport }) {
       </div>
     );
 
-  const appearance = weatherAppearance(selected);
-  return (
-    <div className="forecast">
-      <div
-        className={`forecast-sky weather-${appearance.condition} ${appearance.night ? "weather-night" : "weather-day"}`}
-        aria-live="polite"
-      >
-        <div className="forecast-atmosphere" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
-        <div className="forecast-current">
-          <span className="forecast-eyebrow">
-            Forecast at {clock(selected.time)}
-          </span>
-          <div className="forecast-temperature">
-            <strong>{temp(selected.temp)}</strong>
-            <WeatherSymbol point={selected} />
-          </div>
-          <h3>{selected.condition || "Forecast unavailable"}</h3>
-          {temperatures.length > 0 && (
-            <p className="forecast-range">
-              Window high {temp(high)} <span>·</span> Low {temp(low)}
-            </p>
-          )}
-        </div>
-        <dl className="forecast-metrics">
-          <div>
-            <dt>
-              <Wind size={16} /> Wind
-            </dt>
-            <dd>{wind(selected.wind)}</dd>
-            <small>Gusts {wind(selected.gust)}</small>
-          </div>
-          <div>
-            <dt>
-              <Droplets size={16} /> Precipitation
-            </dt>
-            <dd>
-              {selected.precipChance ?? "—"}
-              <span>%</span>
-            </dd>
-          </div>
-          <div>
-            <dt>
-              <Cloud size={16} /> Cloud cover
-            </dt>
-            <dd>
-              {selected.cloudCover ?? "—"}
-              <span>%</span>
-            </dd>
-          </div>
-          <div>
-            <dt>
-              <Thermometer size={16} /> Feels like
-            </dt>
-            <dd>
-              {temp(
-                Number.isFinite(selected.temp) && Number.isFinite(selected.wind)
-                  ? selectedRow.feelsLike
-                  : null,
-              )}
-            </dd>
-          </div>
-        </dl>
-        <div className="forecast-context">
-          <span>
-            Bluebird day <strong>{bluebird.percent === null ? "Unavailable" : `${bluebird.percent}%`}</strong>
-            {" "}of available daylight hours
-          </span>
-          <span>
-            Humidity <strong>{selected.humidity ?? "—"}%</strong>
-          </span>
-          <span>
-            Dew point <strong>{temp(selected.dewPoint)}</strong>
-          </span>
-          <span>
-            Pressure <strong>{selected.pressure ?? "—"} hPa</strong>
-          </span>
-          <span>
-            Wind from <strong>{selected.windDirection || "—"}</strong>
-          </span>
-        </div>
-        <details className="forecast-context forecast-bluebird-details">
-          <summary>About the bluebird percentage</summary>
-          <p>
-            Share of available daylight forecast hours in this window with cloud cover ≤20%,
-            precipitation chance ≤10%, and no forecast rain, snow, fog, haze, smoke, or storms.
-            This estimates clear, dry hours; it is not the probability of a whole bluebird day.
-          </p>
-          <p>
-            {bluebird.completeHours}/{bluebird.daylightHours} daylight hours have cloud and precipitation readings.
-            {" "}{bluebird.reason || `${bluebird.bluebirdHours} meet the bluebird criteria.`}
-            {" "}Available forecast: {trend.length}/{report.plan.travelWindowHours} requested hours.
-          </p>
-        </details>
-        <div className="forecast-hour-status">
-          {selectedRow.pass ? <Check size={16} /> : <TriangleAlert size={16} />}
-          <p>
-            {selectedRow.pass
-              ? "Within your weather limits at this hour."
-              : selectedRow.reasonSummary}
-          </p>
-        </div>
-      </div>
+  const temperatures = trend.map((point) => point.temp).filter(finite);
+  const low = Math.min(...temperatures);
+  const high = Math.max(...temperatures);
+  const tones: HourTone[] = rows.map((row) => row.failedRules.length > 0 ? "over" : !row.complete ? "missing" : row.pass ? "within" : "over");
+  const minutes = trend.map((point) => parseTimeInputMinutes(point.time) ?? parseHourLabelToMinutes(point.time) ?? NaN);
+  const labels = minutes.map((m, i) => Number.isFinite(m) ? shortHour(m, preferences.timeStyle === "24h" ? "24h" : "12h") : clock(trend[i].time));
+  const sky = buildSkyHours(rows as PlannedRow[], {
+    start: trend[0].time,
+    sunriseMinutes: parseSolarClockMinutes(report.safetyData.solar?.sunrise),
+    sunsetMinutes: parseSolarClockMinutes(report.safetyData.solar?.sunset),
+  });
+  const tints = sky.map((h) => `${h.horizon}66`);
 
-      {flags.hourlyWeatherCharts && (
-        <div className="forecast-timeline">
-          <div className="forecast-timeline-heading">
-            <h3>
-              <Thermometer size={16} /> Hour by hour
-            </h3>
-            <select
-              aria-label="Hourly chart metric"
-              value={metric}
-              onChange={(e) =>
-                setMetric(e.target.value as WeatherTrendMetricKey)
-              }
-            >
-              {Object.entries(WEATHER_TREND_METRIC_LABELS).map(
-                ([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ),
-              )}
-            </select>
-          </div>
-          {chartValues.length > 0 ? (
-            <div className="forecast-chart">
-              <div className="forecast-chart-readout">
-                <strong>{metricValue(chart[selectedIndex].value)}</strong>
-                <span>
-                  Range {metricValue(chartLow)} – {metricValue(chartHigh)}
-                </span>
-              </div>
-              <svg
-                viewBox="0 0 1000 120"
-                preserveAspectRatio="none"
-                role="img"
-                aria-label={`${WEATHER_TREND_METRIC_LABELS[metric]} ranges from ${metricValue(chartLow)} to ${metricValue(chartHigh)} across ${trend.length} forecast hours.`}
-              >
-                <defs>
-                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop
-                      offset="0%"
-                      stopColor="currentColor"
-                      stopOpacity=".16"
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor="currentColor"
-                      stopOpacity="0"
-                    />
-                  </linearGradient>
-                </defs>
-                <line
-                  x1="20"
-                  y1="30"
-                  x2="980"
-                  y2="30"
-                  className="forecast-chart-grid"
-                />
-                <line
-                  x1="20"
-                  y1="95"
-                  x2="980"
-                  y2="95"
-                  className="forecast-chart-grid"
-                />
-                {points.every((p) => p.y !== null) && (
-                  <path
-                    d={`${chartPath} L ${points[points.length - 1].x},115 L ${points[0].x},115 Z`}
-                    fill={`url(#${gradientId})`}
-                  />
-                )}
-                <path d={chartPath} className="forecast-chart-line" />
-                <line
-                  x1={points[selectedIndex].x}
-                  y1="15"
-                  x2={points[selectedIndex].x}
-                  y2="115"
-                  className="forecast-chart-selection"
-                />
-                {points.map((point, index) => (
-                  <g
-                    key={index}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`${clock(trend[index].time)}, ${metricValue(chart[index].value)}`}
-                    onClick={() => setHour(index)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setHour(index);
-                      }
-                    }}
-                  >
-                    {point.y !== null && (
-                      <circle
-                        cx={point.x}
-                        cy={point.y}
-                        r={index === selectedIndex ? 5 : 2.5}
-                        className={
-                          index === selectedIndex ? "is-active" : undefined
-                        }
-                      />
-                    )}
-                    <rect
-                      x={point.x - 20}
-                      y="0"
-                      width="40"
-                      height="120"
-                      fill="transparent"
-                    />
-                  </g>
+  const chart = buildWeatherTrendChartData(buildWeatherTrendRows(trend, preferences.timeStyle), metric)
+    .map((point) => (finite(point.value) ? point.value : null));
+  const isTemp = ["temp", "feelsLike", "dewPoint"].includes(metric);
+  const isWind = ["wind", "gust"].includes(metric);
+  const metricValue = (value: number) =>
+    isTemp ? temp(value)
+        : isWind ? wind(value)
+          : metric === "windDirection" ? windDirectionFromDegrees(value)
+            : `${Math.round(value * 10) / 10}${metric === "pressure" ? " hPa" : "%"}`;
+  const compactValue = (value: number) =>
+    isTemp ? formatTemperatureForUnit(value, preferences.temperatureUnit, { includeUnit: false })
+      : isWind ? formatWindForUnit(value, preferences.windSpeedUnit).replace(/\s*[a-z/]+$/i, "")
+        : metric === "windDirection" ? windDirectionFromDegrees(value)
+          : metric === "pressure" ? `${Math.round(value)}` : `${Math.round(value)}%`;
+  const guides: HourGuide[] = isTemp
+    ? [{ value: 32, label: `freezing ${temp(32)}`, tone: "cold" },
+      ...(metric === "feelsLike" ? [{ value: preferences.minFeelsLikeF, label: `your floor ${temp(preferences.minFeelsLikeF)}`, tone: "caution" as const }] : [])]
+    : metric === "gust" ? [{ value: preferences.maxWindGustMph, label: `your limit ${wind(preferences.maxWindGustMph)}`, tone: "caution" }]
+      : metric === "precipChance" ? [{ value: preferences.maxPrecipChance, label: `your limit ${preferences.maxPrecipChance}%`, tone: "caution" }]
+        : [];
+
+  // Lead: what the traveller needs from this chapter in two sentences.
+  const overIdx = tones.flatMap((t, i) => (t === "over" ? [i] : []));
+  const missingCount = tones.filter((t) => t === "missing").length;
+  const gusts = trend.map((p) => p.gust).filter(finite);
+  const peakGust = gusts.length ? Math.max(...gusts) : null;
+  const peakGustAt = peakGust === null ? -1 : trend.findIndex((p) => p.gust === peakGust);
+  const rains = trend.map((p) => p.precipChance).filter(finite);
+  const peakRain = rains.length ? Math.max(...rains) : null;
+  const peakRainAt = peakRain === null ? -1 : trend.findIndex((p) => p.precipChance === peakRain);
+  const lowAt = temperatures.length ? trend.findIndex((p) => p.temp === low) : -1;
+
+  const appearance = weatherAppearance(selected);
+  const tone = tones[selectedIndex];
+  const feelsLike = finite(selected.temp) && finite(selected.wind) ? selectedRow.feelsLike : null;
+
+  return (
+    <div className="forecast sky-weather">
+      <p className="sky-lead">
+        {overIdx.length > 0
+          ? <><strong className="is-over">{overIdx.length} of {rows.length} hours</strong> cross your limits, starting {clock(trend[overIdx[0]].time)}. </>
+          : missingCount > 0
+            ? <><strong className="is-missing">{missingCount} of {rows.length} hours</strong> have incomplete readings; the rest are within your limits. </>
+            : <><strong>All {rows.length} hours</strong> are within your limits. </>}
+        {peakGust !== null && <>Gusts peak at <strong>{wind(peakGust)}</strong> at {clock(trend[peakGustAt].time)}</>}
+        {peakRain !== null && <>{peakGust !== null ? " and rain chance at " : "Rain chance peaks at "}<strong>{peakRain}%</strong> at {clock(trend[peakRainAt].time)}</>}
+        {(peakGust !== null || peakRain !== null) && ". "}
+        {temperatures.length > 0 && <>The low is <strong>{temp(low)}</strong> at {clock(trend[lowAt].time)}. </>}
+        <span className="sky-lead-note">{insight.conditionTrendSummary}</span>
+      </p>
+
+      <section className="sky-section" aria-labelledby="sky-weather-hours">
+        <div className="sky-sh">
+          <h2 id="sky-weather-hours">Hour by hour</h2>
+          <p>Pick a measurement. Hatched hours cross a limit.</p>
+        </div>
+        <div className="sky-card sky-hour-card">
+          {flags.hourlyWeatherCharts && (
+            <>
+              <div className="sky-segmented" role="group" aria-label="Hourly chart metric">
+                {METRICS.map((key) => (
+                  <button key={key} type="button" aria-pressed={metric === key} onClick={() => setMetric(key)}>
+                    {WEATHER_TREND_METRIC_LABELS[key]}
+                  </button>
                 ))}
-              </svg>
-              <div className="forecast-chart-labels">
-                <span>{clock(trend[0].time)}</span>
-                <span>{clock(trend[trend.length - 1].time)}</span>
               </div>
-            </div>
-          ) : (
-            <p className="field-muted">
-              No hourly {WEATHER_TREND_METRIC_LABELS[metric].toLowerCase()}{" "}
-              data is available.
-            </p>
+              {chart.some((v) => v !== null) ? (
+                <HourChart labels={labels} values={chart} tones={tones} tints={tints} guides={guides}
+                  format={compactValue} describe={metricValue} selected={selectedIndex} onSelect={setHour}
+                  label={`${WEATHER_TREND_METRIC_LABELS[metric]} by hour. Use the arrow keys to move between hours.`} />
+              ) : (
+                <p className="sky-empty">
+                  No hourly {WEATHER_TREND_METRIC_LABELS[metric].toLowerCase()} data is available.
+                </p>
+              )}
+            </>
           )}
-          <div
-            className="forecast-hours"
-            role="group"
-            aria-label="Select a forecast hour"
-          >
-            {rows.map((row, index) => {
-              return (
-                <button
-                  key={`${row.time}-${index}`}
-                  className={index === selectedIndex ? "is-selected" : ""}
-                  aria-pressed={index === selectedIndex}
-                  aria-label={`${clock(row.time)}: ${row.pass ? "within thresholds" : row.reasonSummary}`}
-                  onClick={() => setHour(index)}
-                >
-                  <span>{clock(row.time)}</span>
-                  <WeatherSymbol point={trend[index]} />
-                  <strong>{temp(trend[index].temp)}</strong>
-                  <small className={row.pass ? "is-clear" : "is-caution"}>
-                    <i />
-                    {row.pass ? "Within limits" : "Review"}
-                  </small>
-                </button>
-              );
-            })}
+          <div className={`forecast-readout weather-${appearance.condition} ${appearance.night ? "weather-night" : "weather-day"} is-${tone}`} aria-live="polite">
+            <div className="forecast-readout-main">
+              <span className="sky-muted">Forecast at {clock(selected.time)}</span>
+              <div className="forecast-readout-temp">
+                <strong>{temp(selected.temp)}</strong>
+                <WeatherSymbol point={selected} size={34} />
+              </div>
+              <span>{selected.condition || "Forecast unavailable"}</span>
+            </div>
+            <dl className="forecast-readout-grid">
+              <div><dt>Feels like</dt><dd>{temp(feelsLike)}</dd></div>
+              <div><dt>Wind</dt><dd>{wind(selected.wind)}</dd></div>
+              <div><dt>Gusts</dt><dd className={selectedRow.failedRuleLabels.includes("Gust above limit") ? "is-over" : undefined}>{wind(selected.gust)}</dd></div>
+              <div><dt>Rain chance</dt><dd className={selectedRow.failedRuleLabels.includes("Precip above limit") ? "is-over" : undefined}>{selected.precipChance ?? "—"}%</dd></div>
+              <div><dt>Cloud cover</dt><dd>{selected.cloudCover ?? "—"}%</dd></div>
+              <div><dt>Humidity</dt><dd>{selected.humidity ?? "—"}%</dd></div>
+              <div><dt>Dew point</dt><dd>{temp(selected.dewPoint)}</dd></div>
+              <div><dt>Pressure</dt><dd>{selected.pressure ?? "—"} hPa</dd></div>
+              <div><dt>Wind from</dt><dd>{selected.windDirection || "—"}</dd></div>
+            </dl>
+            <p className={`forecast-readout-status is-${tone}`}>
+              {tone === "within" ? <Check size={16} aria-hidden="true" /> : tone === "over" ? <TriangleAlert size={16} aria-hidden="true" /> : <CircleHelp size={16} aria-hidden="true" />}
+              <span>{selectedRow.pass ? "Within your weather limits at this hour." : plainReason(selectedRow.reasonSummary, selectedRow.failedRules)}</span>
+            </p>
           </div>
         </div>
-      )}
-      <div className="field-window-summary">
-        <Sunrise size={23} />
-        <div>
-          <h3>
-            {rows.filter((row) => row.pass).length} of {rows.length} forecast
-            hours within limits
-          </h3>
-          <p>{insight.conditionTrendSummary}</p>
+      </section>
+
+      <section className="sky-section" aria-labelledby="sky-weather-table">
+        <div className="sky-sh">
+          <h2 id="sky-weather-table">Every hour against your limits</h2>
+          <p>Select an hour to see all of its readings above.</p>
         </div>
-      </div>
+        <div className="sky-card sky-table-card">
+          <table className="sky-table">
+            <thead>
+              <tr>
+                <th scope="col">Hour</th>
+                <th scope="col" className="is-sky"><span className="sr-only">Sky</span></th>
+                <th scope="col" className="is-num">Temp</th>
+                <th scope="col" className="is-num">Feels</th>
+                <th scope="col" className="is-num">Gust</th>
+                <th scope="col" className="is-num">Rain</th>
+                <th scope="col" className="is-end">Limits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const point = trend[index];
+                const t = tones[index];
+                const gustOver = row.failedRuleLabels.includes("Gust above limit");
+                const rainOver = row.failedRuleLabels.includes("Precip above limit");
+                const coldOver = row.failedRuleLabels.includes("Feels-like below limit") || row.failedRuleLabels.includes("Heat above limit");
+                return (
+                  <tr key={`${row.time}-${index}`} className={`is-${t}${index === selectedIndex ? " is-selected" : ""}`}>
+                    <th scope="row">
+                      <button type="button" aria-pressed={index === selectedIndex} onClick={() => setHour(index)}
+                        aria-label={`${clock(row.time)}: ${row.pass ? "within thresholds" : row.reasonSummary}`}>
+                        {clock(row.time)}
+                      </button>
+                    </th>
+                    <td className="is-sky"><WeatherSymbol point={point} size={18} /></td>
+                    <td className={`is-num${finite(point.temp) && point.temp <= 32 ? " is-cold" : ""}`}>{temp(point.temp)}</td>
+                    <td className={`is-num${coldOver ? " is-over" : finite(row.feelsLike) && row.feelsLike <= 32 ? " is-cold" : ""}`}>{finite(point.temp) && finite(point.wind) ? temp(row.feelsLike) : "—"}</td>
+                    <td className={`is-num${gustOver ? " is-over" : ""}`}>{wind(point.gust)}</td>
+                    <td className={`is-num${rainOver ? " is-over" : ""}`}>{finite(point.precipChance) ? `${point.precipChance}%` : "—"}</td>
+                    <td className="is-end">
+                      <span className={`sky-status is-${t === "within" ? "ok" : t}`}>
+                        {t === "within" ? <Check size={14} aria-hidden="true" /> : t === "over" ? <TriangleAlert size={14} aria-hidden="true" /> : <CircleHelp size={14} aria-hidden="true" />}
+                        <span className="sky-status-word">{t === "within" ? "Within" : t === "over" ? "Over" : "Incomplete"}</span>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="sky-section" aria-labelledby="sky-weather-window">
+        <div className="sky-sh"><h2 id="sky-weather-window">Across your window</h2></div>
+        <div className="sky-trio">
+          <div className="sky-card">
+            <span className="sky-card-head"><span>Temperature range</span></span>
+            {temperatures.length > 0 ? (
+              <>
+                <span className="sky-big">{temp(low)} <span className="sky-big-sep">to</span> {temp(high)}</span>
+                <p className="sky-cap">Window high {temp(high)} · Low {temp(low)}</p>
+              </>
+            ) : <span className="sky-big is-small">Unavailable</span>}
+          </div>
+          <div className="sky-card">
+            <span className="sky-card-head"><span>Clear, dry daylight</span></span>
+            <span className="sky-big">{bluebird.percent === null ? "—" : `${bluebird.percent}%`}</span>
+            <p className="sky-cap">Bluebird day <strong>{bluebird.percent === null ? "Unavailable" : `${bluebird.percent}%`}</strong> of available daylight hours</p>
+            <details className="sky-details forecast-bluebird-details">
+              <summary>About this percentage</summary>
+              <p>
+                Share of available daylight forecast hours in this window with cloud cover ≤20%,
+                precipitation chance ≤10%, and no forecast rain, snow, fog, haze, smoke, or storms.
+                This estimates clear, dry hours; it is not the probability of a whole bluebird day.
+              </p>
+              <p>
+                {bluebird.completeHours}/{bluebird.daylightHours} daylight hours have cloud and precipitation readings.
+                {" "}{bluebird.reason || `${bluebird.bluebirdHours} meet the bluebird criteria.`}
+                {" "}Available forecast: {trend.length}/{report.plan.travelWindowHours} requested hours.
+              </p>
+            </details>
+          </div>
+          <div className="sky-card">
+            <span className="sky-card-head"><span>Hours within limits</span></span>
+            <span className="sky-big">{rows.filter((row) => row.pass).length}<span className="sky-big-unit"> of {rows.length}</span></span>
+            <p className="sky-cap">{insight.conditionTrendLabel}</p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

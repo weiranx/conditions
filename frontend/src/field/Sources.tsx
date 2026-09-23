@@ -10,6 +10,7 @@ import { parsePersistedReport } from "../app/report-storage";
 import { ScoreExplanation } from "./ScoreExplanation";
 import { Details, SourceLink } from "./Details";
 import { dateLabel } from "./data";
+import { FreshnessChart } from "./sky/FreshnessChart";
 
 export function Sources({ workspace: w }: { workspace: Workspace }) {
   const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
@@ -37,177 +38,166 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
       });
     return () => controller.abort();
   }, [report, w.activeSavedReportId, w.accountUserId]);
+  const checks = [...(w.decision?.checks || [])].sort((a, b) => Number(a.ok) - Number(b.ok));
+  const review = checks.filter((check) => !check.ok);
+  const states = w.sourceFreshnessRows.map((row) => row.stateOverride || freshnessClass(row.issued, row.staleHours));
+  const current = states.filter((state) => state === "fresh" || state === "aging").length;
+  const missing = w.sourceFreshnessRows.filter((_, i) => states[i] === "missing").map((row) => row.label);
   return (
-    <section>
-      <div className="field-chapter-heading">
-        <h2>Checks and source evidence</h2>
-      </div>
-      <div className="report-check-summary">
-        <div>
-          <strong>
-            {w.decision?.checks.filter((check) => check.ok).length || 0}
-          </strong>
-          <span>checks passed</span>
+    <div className="sky-sources">
+      <p className="sky-lead">
+        <strong>{checks.length - review.length} of {checks.length} checks</strong> pass
+        {review.length > 0 && <>; <strong className="is-over">{review.length} need review</strong></>}.{" "}
+        <strong>{current} of {w.sourceFreshnessRows.length} sources</strong> are current
+        {missing.length > 0 && <>, and <strong className="is-missing">{missing.join(", ")}</strong> didn't load, so this report can't rule out what {missing.length === 1 ? "it covers" : "they cover"}</>}.{" "}
+        <span className="sky-lead-note">Evidence quality: {w.safetyData?.safety.evidenceQuality || "not assessed"}.</span>
+      </p>
+
+      <section className="sky-section" aria-labelledby="sky-sources-checks">
+        <div className="sky-sh">
+          <h2 id="sky-sources-checks">Checks</h2>
+          <p>Items that need review are open.</p>
         </div>
-        <div>
-          <strong>
-            {w.decision?.checks.filter((check) => !check.ok).length || 0}
-          </strong>
-          <span>need review</span>
+        <div className="sky-card sky-check-list">
+          {checks.map((check, i) => (
+            <details key={check.key || i} open={!check.ok} className={check.ok ? "is-ok" : "is-over"}>
+              <summary>
+                <span className={`sky-check-icon ${check.ok ? "field-pass" : "field-fail"}`}>
+                  {check.ok ? <Check size={16} aria-hidden="true" /> : <TriangleAlert size={16} aria-hidden="true" />}
+                </span>
+                <span className="sky-check-label">{check.label}</span>
+                <span className={`sky-status is-${check.ok ? "ok" : "over"}`}>{check.ok ? "Pass" : "Review"}</span>
+              </summary>
+              <div className="sky-check-body">
+                <p>{check.detail}</p>
+                {check.action && (
+                  <p>
+                    <strong>Action:</strong> {check.action}
+                  </p>
+                )}
+              </div>
+            </details>
+          ))}
+          {checks.length === 0 && <p className="sky-empty">No decision checks are available for this report.</p>}
         </div>
-        <div>
-          <strong>
-            {w.safetyData?.safety.evidenceQuality || "Not assessed"}
-          </strong>
-          <span>evidence quality</span>
+      </section>
+
+      <section className="sky-section" aria-labelledby="sky-sources-fresh">
+        <div className="sky-sh">
+          <h2 id="sky-sources-fresh">How fresh is each source</h2>
+          <p>When it was issued or observed.</p>
         </div>
-      </div>
-      <div className="field-checks">
-        {[...(w.decision?.checks || [])].sort((a, b) => Number(a.ok) - Number(b.ok)).map((check, i) => (
-          <details key={check.key || i} open={!check.ok}>
-            <summary>
-              <span className={check.ok ? "field-pass" : "field-fail"}>
-                {check.ok ? <Check size={17} /> : <TriangleAlert size={17} />}
-              </span>
-              {check.label}
-              <span>{check.ok ? "Pass" : "Review"}</span>
-            </summary>
-            <p>{check.detail}</p>
-            {check.action && (
-              <p>
-                <strong>Action:</strong> {check.action}
-              </p>
+        <div className="sky-card">
+          {w.hasFreshnessWarning && <p className="sky-notice is-missing">{w.freshnessWarningSummary}</p>}
+          <FreshnessChart rows={w.sourceFreshnessRows} age={(issued) => w.formatAgeFromNow(issued)} stamp={(issued) => w.formatPubTime(issued)} />
+          <div className="sky-link-row">
+            <SourceLink url={w.safeWeatherLink}>Weather forecast</SourceLink>
+            {flags.avalancheDetails && <SourceLink url={w.safeAvalancheLink}>Avalanche center</SourceLink>}
+            <SourceLink url={w.safeRainfallLink}>Precipitation source</SourceLink>
+            {flags.snowpackDetails && (
+              <>
+                <SourceLink url={w.safeSnotelLink}>SNOTEL</SourceLink>
+                <SourceLink url={w.safeNohrscLink}>NOHRSC</SourceLink>
+                <SourceLink url={w.safeCdecLink}>CDEC</SourceLink>
+              </>
             )}
-          </details>
-        ))}
-      </div>
+          </div>
+        </div>
+      </section>
+
+      {(comparison || comparisonError || w.dayOverDay) && (
+        <div className="sky-duo sky-section">
+          {comparison && (
+            <section className="sky-card" aria-labelledby="sky-sources-since">
+              <span className="sky-card-head"><span id="sky-sources-since">Since the previous matching report</span></span>
+              <strong className="sky-card-lede">{comparison.headline}</strong>
+              <p className="sky-cap">Baseline {dateLabel(comparison.baselineAt)}</p>
+              <ul className="sky-bullets">
+                {comparison.changes.map((change) => (
+                  <li key={change.key}>{w.localizeUnitText(change.summary)}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {comparisonError && <p className="sky-cap">{comparisonError}</p>}
+          {w.dayOverDay && (
+            <section className="sky-card" aria-labelledby="sky-sources-prior">
+              <span className="sky-card-head">
+                <span id="sky-sources-prior">Change from the prior day</span>
+                <span className="sky-chip">{w.dayOverDay.delta > 0 ? "+" : ""}{w.dayOverDay.delta} pts</span>
+              </span>
+              <p className="sky-cap is-body">
+                {w.dayOverDay.delta > 0 ? "+" : ""}
+                {w.dayOverDay.delta} score points compared with{" "}
+                {dateLabel(w.dayOverDay.previousDate)}.
+              </p>
+              <p className="sky-cap">
+                Both days use a {w.formatClockForStyle(w.dayOverDay.startTime, w.preferences.timeStyle)} local start
+                and a {w.dayOverDay.travelWindowHours}-hour travel window.
+              </p>
+              <Details title="What changed" value={w.dayOverDay.changes} open />
+            </section>
+          )}
+        </div>
+      )}
+
       {flags.scoreBreakdown && w.safetyData && (
-        <ScoreExplanation safety={w.safetyData.safety} localize={w.localizeUnitText} />
+        <div className="sky-section">
+          <ScoreExplanation safety={w.safetyData.safety} localize={w.localizeUnitText} />
+        </div>
       )}
-      <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} />
-      {comparison && (
-        <section className="field-panel">
-          <span className="field-kicker">
-            Since the previous matching report
+      <div className="sky-section">
+        <SupplementalEvidence evidence={w.safetyData?.supplementalEvidence} localize={w.localizeUnitText} />
+      </div>
+
+      <div className="sky-duo sky-section">
+        <section className="sky-card" aria-labelledby="sky-sources-alerts">
+          <span className="sky-card-head">
+            <span id="sky-sources-alerts">Official alerts</span>
+            <span className={`sky-chip${w.nwsAlertCount > 0 ? " is-over" : ""}`}>{w.nwsAlertCount} for your time</span>
           </span>
-          <h2>{comparison.headline}</h2>
-          <p>Baseline {dateLabel(comparison.baselineAt)}</p>
-          <ul className="field-prose-list">
-            {comparison.changes.map((change) => (
-              <li key={change.key}>{w.localizeUnitText(change.summary)}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {comparisonError && <p className="field-muted">{comparisonError}</p>}
-      {w.dayOverDay && (
-        <section className="field-panel">
-          <h2>Change from the prior day</h2>
-          <p>
-            {w.dayOverDay.delta > 0 ? "+" : ""}
-            {w.dayOverDay.delta} score points compared with{" "}
-            {dateLabel(w.dayOverDay.previousDate)}.
+          <p className="sky-cap is-body">
+            {w.nwsAlertCount} {w.nwsAlertCount === 1 ? "alert applies" : "alerts apply"} to your start time ·{" "}
+            {w.nwsTotalAlertCount} in the full feed.
           </p>
-          <p className="field-muted">
-            Both days use a {w.formatClockForStyle(w.dayOverDay.startTime, w.preferences.timeStyle)} local start
-            and a {w.dayOverDay.travelWindowHours}-hour travel window.
-          </p>
-          <Details title="What changed" value={w.dayOverDay.changes} open />
+          {w.nwsAlerts.map((alert, i) => (
+            <Details
+              key={i}
+              title={`${alert.event || "Official alert"} · ${alert.severity || "Severity unavailable"}`}
+              value={alert}
+            />
+          ))}
+          {!w.nwsAlerts.length && (
+            <p className="sky-cap">
+              {w.safetyData?.alerts?.note ||
+                "No alerts were returned. That does not mean there are no hazards."}
+            </p>
+          )}
         </section>
-      )}
-      <section className="field-panel">
-        <h2>Source freshness</h2>
-        {w.hasFreshnessWarning && (
-          <p className="field-warning">{w.freshnessWarningSummary}</p>
-        )}
-        <div className="field-table-scroll">
-          <table className="field-data-table">
-            <thead>
-              <tr>
-                <th>Source</th>
-                <th>Freshness</th>
-                <th>Issued / observed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {w.sourceFreshnessRows.map((source) => (
-                <tr key={source.label}>
-                  <th>{source.label}</th>
-                  <td>
-                    {source.stateOverride ||
-                      freshnessClass(source.issued, source.staleHours)}
-                  </td>
-                  <td>
-                    {source.displayValue || w.formatAgeFromNow(source.issued)}
-                    <small>
-                      {source.issued
-                        ? w.formatPubTime(source.issued)
-                        : "Timestamp unavailable"}
-                    </small>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="field-action-row">
-          <SourceLink url={w.safeWeatherLink}>Weather forecast</SourceLink>
-          {flags.avalancheDetails && (
-            <SourceLink url={w.safeAvalancheLink}>Avalanche center</SourceLink>
-          )}
-          <SourceLink url={w.safeRainfallLink}>Precipitation source</SourceLink>
-          {flags.snowpackDetails && (
-            <>
-              <SourceLink url={w.safeSnotelLink}>SNOTEL</SourceLink>
-              <SourceLink url={w.safeNohrscLink}>NOHRSC</SourceLink>
-              <SourceLink url={w.safeCdecLink}>CDEC</SourceLink>
-            </>
-          )}
-        </div>
-      </section>
-      <section className="field-panel">
-        <h2>Official alerts</h2>
-        <p>
-          {w.nwsAlertCount} {w.nwsAlertCount === 1 ? "alert applies" : "alerts apply"} to your start time ·{" "}
-          {w.nwsTotalAlertCount} in the full feed.
-        </p>
-        {w.nwsAlerts.map((alert, i) => (
+        <section className="sky-card" aria-labelledby="sky-sources-provenance">
+          <span className="sky-card-head"><span id="sky-sources-provenance">Forecast provenance</span></span>
+          <p className="sky-cap is-body">{w.weatherSourceDisplay}</p>
           <Details
-            key={i}
-            title={`${alert.event || "Official alert"} · ${alert.severity || "Severity unavailable"}`}
-            value={alert}
+            title="Weather field sources and forecast context"
+            value={{
+              sources: w.safetyData?.weather.sourceDetails,
+              evidence: w.safetyData?.safety.weatherProvenance,
+              forecast: w.safetyData?.forecast,
+              timeZone: w.objectiveTimezone,
+            }}
           />
-        ))}
-        {!w.nwsAlerts.length && (
-          <p className="field-muted">
-            {w.safetyData?.alerts?.note ||
-              "No alerts were returned. That does not mean there are no hazards."}
-          </p>
-        )}
-      </section>
-      <section className="field-panel">
-        <h2>Forecast provenance</h2>
-        <p>{w.weatherSourceDisplay}</p>
-        <Details
-          title="Weather field sources and forecast context"
-          value={{
-            sources: w.safetyData?.weather.sourceDetails,
-            evidence: w.safetyData?.safety.weatherProvenance,
-            forecast: w.safetyData?.forecast,
-            timeZone: w.objectiveTimezone,
-          }}
-        />
-        <details className="field-detail-disclosure">
-          <summary>Complete report data</summary>
-          <button
-            className="field-text-button"
-            onClick={w.handleCopyRawPayload}
-          >
-            {w.copiedRawPayload ? "Copied" : "Copy report data"}
-          </button>
-          <pre className="field-raw-report">{w.rawReportPayload}</pre>
-        </details>
-      </section>
-    </section>
+          <details className="field-detail-disclosure">
+            <summary>Complete report data</summary>
+            <button
+              className="field-text-button"
+              onClick={w.handleCopyRawPayload}
+            >
+              {w.copiedRawPayload ? "Copied" : "Copy report data"}
+            </button>
+            <pre className="field-raw-report">{w.rawReportPayload}</pre>
+          </details>
+        </section>
+      </div>
+    </div>
   );
 }

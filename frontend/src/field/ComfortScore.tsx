@@ -16,11 +16,11 @@ export function ComfortScore({ comfort, localize = (text) => text }: {
   const reasons = comfort.confidenceReasons || [];
   const adjustments = comfort.adjustments || [];
   return (
-    <section className="field-panel condition-card is-comfort comfort-score" aria-label="Weather comfort">
-      <span className="field-kicker condition-label"><Smile size={18} aria-hidden="true" />Weather comfort</span>
-      <h2>{score === null ? "Unknown" : comfort.label}</h2>
+    <section className="sky-card sky-exposure condition-card is-comfort comfort-score" aria-label="Weather comfort">
+      <span className="sky-card-head"><span className="sky-exposure-title"><Smile size={16} aria-hidden="true" />Weather comfort</span></span>
+      <span className="sky-big">{score === null ? "Unknown" : comfort.label}</span>
       <ConditionScale label="Weather comfort score" value={score} maximum={100} format={(value) => `${Math.round(value)}/100`} />
-      <p className="comfort-outlook">{localize(comfort.summary || "A weather-comfort outlook for this outing.")}</p>
+      <p className="comfort-outlook sky-cap is-body">{localize(comfort.summary || "A weather-comfort outlook for this outing.")}</p>
       <div className="comfort-evidence">
         <div><strong>Evidence coverage</strong><span>{coverage ? `${coverage.completeHours}/${coverage.requestedHours} hours` : "Unknown"}</span></div>
         <p>{coverage
@@ -32,7 +32,7 @@ export function ComfortScore({ comfort, localize = (text) => text }: {
           <ul>{reasons.map((reason, index) => <li key={index}>{localize(reason)}</li>)}</ul>
         </details>}
       </div>
-      <details className="field-detail-disclosure comfort-breakdown">
+      <details className="field-detail-disclosure comfort-breakdown sky-evidence-details">
         <summary>What shapes this score</summary>
         {factors.length > 0 ? <ul className="comfort-factor-list">
           {factors.map((factor, index) => <li key={`${factor.factor}-${index}`}>
@@ -48,7 +48,7 @@ export function ComfortScore({ comfort, localize = (text) => text }: {
         {adjustments.length > 0 && <ul>{adjustments.map((adjustment, index) => <li key={index}>{localize(adjustment.reason)}</li>)}</ul>}
         {comfort.scoreVersion && <small>Comfort model {comfort.scoreVersion} · Saved reports retain their original assessment.</small>}
       </details>
-      <p className="field-muted comfort-disclaimer">{comfort.disclaimer || "Weather comfort only; this score does not change the safety score or go/no-go decision."}</p>
+      <p className="sky-cap comfort-disclaimer">{comfort.disclaimer || "Weather comfort only; this score does not change the safety score or go/no-go decision."}</p>
     </section>
   );
 }

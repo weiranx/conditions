@@ -20,9 +20,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { GearActions } from "./GearActions";
-import { ReportVerdict } from "./ReportVerdict";
 import { ReportInsights } from "./ReportInsights";
-import { ReportSummary } from "./ReportSummary";
 import "./report-reading.css";
 import "./report-navigation.css";
 import { AiExplanation } from "./AiExplanation";
@@ -34,6 +32,9 @@ import { verdictCopy } from "./verdict-copy";
 import { buildPlannedReportWeatherRows } from "./report-weather";
 import { minutesToTwentyFourHourClock } from "../app/core";
 import "./sky/sky.css";
+import "./sky/parts.css";
+import "./sky/chapters.css";
+import "./sky/skin.css";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
@@ -329,16 +330,13 @@ export function Report({
   );
   const chapterContent = (id: Chapter) => {
     if (id === "forecast") return (
-      <section key="forecast">
-        <div className="field-chapter-heading">
-          <h2>Weather through your day</h2>
-        </div>
+      <section key="forecast" className="sky-chapter" aria-label="Weather">
         <Forecast report={report} />
         <Conditions workspace={w} />
       </section>
     );
-    if (id === "timing") return <Timing key="timing" workspace={w} />;
-    if (id === "terrain") return <Terrain key="terrain" workspace={w} />;
+    if (id === "timing") return <Timing key="timing" workspace={w} hours={skyHours} />;
+    if (id === "terrain") return <Terrain key="terrain" workspace={w} hours={skyHours} />;
     if (id === "sources") return <Sources key="sources" workspace={w} />;
     if (id === "route" && flags.routeAnalysis) return <Route key="route" workspace={w} />;
     return null;
@@ -410,16 +408,30 @@ export function Report({
           />
         )}
         {fullReport && (
-          <div className="report-overview">
-            <ReportVerdict
-              data={data}
-              decision={decision}
-              primaryReason={w.fieldBriefPrimaryReason}
-              freshnessWarning={w.hasFreshnessWarning ? w.freshnessWarningSummary : null}
-              preferences={w.preferences}
-              onSources={() => go("sources")}
+          <div className="report-overview sky-full-summary">
+            <section className={`sky-verdict-card is-${copy.tone}`} aria-labelledby="sky-full-verdict">
+              <span className={`sky-pill is-${copy.tone}`}>
+                {copy.tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
+                <span><span className="sr-only">Trip decision: </span>{decision.level === "GO" ? "Go" : decision.level === "NO-GO" ? "No-go" : "Caution"}</span>
+              </span>
+              <h2 id="sky-full-verdict">{decision.headline}</h2>
+              <p className="sky-verdict-reason">{copy.reason}</p>
+              {copy.bridge && <p className="sky-cap">{copy.bridge}</p>}
+              <p className="sky-cap">{subtitle}</p>
+            </section>
+            <BriefSections
+              w={w}
+              hours={skyHours}
+              clock={clock}
+              scoreValue={copy.scoreValue}
+              insufficient={copy.insufficient}
+              bridge={copy.bridge}
+              onOpen={(next) => go(next)}
+              onReadAll={() => go("all")}
+              routeEnabled={flags.routeAnalysis}
+              gearEnabled={flags.gearRecommendations}
+              showMore={false}
             />
-            <ReportSummary workspace={w} onOpen={(next) => go(next)} />
           </div>
         )}
         <div className="field-chapter-content" id="field-report-detail">
@@ -431,8 +443,16 @@ export function Report({
             }
           >
             {fullReport
-              ? visibleChapters.map((c) => chapterContent(c.id))
+              ? visibleChapters.filter((c) => c.id !== "gear").map((c) => (
+                <section key={c.id} className="sky-chapter-block" aria-labelledby={`sky-chapter-${c.id}`}>
+                  <h2 className="sky-chapter-name" id={`sky-chapter-${c.id}`}>{c.label}</h2>
+                  {chapterContent(c.id)}
+                </section>
+              ))
               : activeChapter && chapterContent(activeChapter.id)}
+            {fullReport && flags.gearRecommendations && (
+              <h2 className="sky-chapter-name sky-chapter-block">Gear &amp; actions</h2>
+            )}
             {flags.gearRecommendations && (
               <GearActions
                 key={JSON.stringify([report.plan, data.generatedAt, data.gear])}

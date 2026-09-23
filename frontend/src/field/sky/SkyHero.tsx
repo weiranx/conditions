@@ -1,4 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { useWidth } from "./useWidth";
+import { plainRule } from "./status";
 import { Check, CircleHelp, TriangleAlert } from "lucide-react";
 import { isOverHour, shortHour, skyRuns, spanLabel, sunProgress, type SkyHour } from "./sky-model";
 
@@ -10,19 +12,6 @@ type Formatters = {
 };
 
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
-
-function useWidth<T extends HTMLElement>(fallback: number) {
-  const ref = useRef<T>(null);
-  const [width, setWidth] = useState(fallback);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width] as const;
-}
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
 export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level, headline, reason, bridge, actions, format }: {
@@ -116,7 +105,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
     `${format.clock(h.minute)}: ${Number.isFinite(h.temp) ? format.temp(h.temp) : "temperature unavailable"}, ` +
     `gust ${Number.isFinite(h.gust) ? format.wind(h.gust) : "unavailable"}, ` +
     `rain chance ${Number.isFinite(h.precipChance) ? `${h.precipChance}%` : "unavailable"}` +
-    (isOverHour(h) ? `, over your limits: ${h.failedRules.join("; ")}` : h.tone === "missing" ? ", readings incomplete" : ", within your limits");
+    (isOverHour(h) ? `, over your limits: ${h.failedRules.map(plainRule).join("; ")}` : h.tone === "missing" ? ", readings incomplete" : ", within your limits");
   const callout = overRuns.length === 1
     ? `Outside your limits · ${spanLabel(hours, overRuns[0], format.clock)}`
     : overRuns.length > 1 ? `${overRuns.length} periods outside your limits`
@@ -276,7 +265,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
             </dl>
             <p className={`sky-readout-flag is-${isOverHour(hour) ? "over" : hour.tone}`}>
               {isOverHour(hour) ? <TriangleAlert size={15} aria-hidden="true" /> : hour.tone === "missing" ? <CircleHelp size={15} aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
-              {isOverHour(hour) ? hour.failedRules.join(" · ") : hour.tone === "missing" ? "Readings incomplete for this hour" : "Within your limits"}
+              {isOverHour(hour) ? hour.failedRules.map(plainRule).join(" · ") : hour.tone === "missing" ? "Readings incomplete for this hour" : "Within your limits"}
             </p>
           </div>
         )}
