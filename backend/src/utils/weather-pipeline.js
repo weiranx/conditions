@@ -19,6 +19,7 @@ const {
 } = require('./weather-data');
 const { deriveTerrainCondition } = require('./terrain-condition');
 const { logger } = require('./logger');
+const { AFTER_WINDOW_HOURS } = require('./contingency');
 
 class ForecastDateOutOfRangeError extends Error {
   constructor(requestedDate, forecastDateRange) {
@@ -228,41 +229,46 @@ async function fetchWeatherPipeline({
     });
 
     const forecastTrendHours = clampTravelWindowHours(requestedTravelWindowHours, 12);
-    // Build trend window from selected hour using user-selected travel window length (up to 24h).
-    const hourlyTrend = periods
-      .slice(forecastStartIndex, forecastStartIndex + forecastTrendHours + (requestedStartClock && !requestedStartClock.endsWith(':00') ? 1 : 0))
-      .map((p, offset) => {
-        const rowIndex = forecastStartIndex + offset;
-        const windSpeedValue = parseWindMph(p.windSpeed, Number.NaN);
-        const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
-        const trendTemp = Number.isFinite(p.temperature) ? p.temperature : null;
-        const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value)
-          ? p.probabilityOfPrecipitation.value
-          : null;
-        const trendHumidity = Number.isFinite(p?.relativeHumidity?.value)
-          ? p.relativeHumidity.value
-          : null;
-        const trendDewPoint = normalizeNoaaDewPointF(p?.dewpoint);
-        const trendCloudCover = resolveNoaaCloudCover(p).value;
-        const trendPressure = normalizeNoaaPressureHpa(p?.barometricPressure);
+    const toTrendRow = (p, rowIndex) => {
+      const windSpeedValue = parseWindMph(p.windSpeed, Number.NaN);
+      const { gustMph: windGustValue } = inferWindGustFromPeriods(periods, rowIndex, windSpeedValue);
+      const trendTemp = Number.isFinite(p.temperature) ? p.temperature : null;
+      const trendPrecip = Number.isFinite(p?.probabilityOfPrecipitation?.value)
+        ? p.probabilityOfPrecipitation.value
+        : null;
+      const trendHumidity = Number.isFinite(p?.relativeHumidity?.value)
+        ? p.relativeHumidity.value
+        : null;
+      const trendDewPoint = normalizeNoaaDewPointF(p?.dewpoint);
+      const trendCloudCover = resolveNoaaCloudCover(p).value;
+      const trendPressure = normalizeNoaaPressureHpa(p?.barometricPressure);
 
-        return {
-          time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
-          timeIso: p.startTime || null,
-          endTimeIso: p.endTime || null,
-          temp: trendTemp,
-          wind: windSpeedValue,
-          gust: Number.isFinite(windSpeedValue) ? windGustValue : parseWindMph(p.windGust, null),
-          windDirection: findNearestWindDirection(periods, rowIndex),
-          precipChance: trendPrecip,
-          humidity: trendHumidity,
-          dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
-          cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
-          pressure: trendPressure,
-          condition: p.shortForecast || 'Unknown',
-          isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
-        };
-      });
+      return {
+        time: hourLabelFromIso(p.startTime, pointsData?.properties?.timeZone || null),
+        timeIso: p.startTime || null,
+        endTimeIso: p.endTime || null,
+        temp: trendTemp,
+        wind: windSpeedValue,
+        gust: Number.isFinite(windSpeedValue) ? windGustValue : parseWindMph(p.windGust, null),
+        windDirection: findNearestWindDirection(periods, rowIndex),
+        precipChance: trendPrecip,
+        humidity: trendHumidity,
+        dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
+        cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
+        pressure: trendPressure,
+        condition: p.shortForecast || 'Unknown',
+        isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
+      };
+    };
+    // Build trend window from selected hour using user-selected travel window length (up to 24h).
+    const trendEndIndex = forecastStartIndex + forecastTrendHours + (requestedStartClock && !requestedStartClock.endsWith(':00') ? 1 : 0);
+    const hourlyTrend = periods
+      .slice(forecastStartIndex, trendEndIndex)
+      .map((p, offset) => toTrendRow(p, forecastStartIndex + offset));
+    // Hours past the planned return, for late-return and overnight scenarios only.
+    const afterWindowTrend = periods
+      .slice(trendEndIndex, trendEndIndex + AFTER_WINDOW_HOURS)
+      .map((p, offset) => toTrendRow(p, trendEndIndex + offset));
 
     const currentWindSpeed = parseWindMph(selectedForecastPeriod?.windSpeed, Number.NaN);
     const inferredCurrentGust = inferWindGustFromPeriods(
@@ -318,6 +324,7 @@ async function fetchWeatherPipeline({
       forecastEndTime: selectedForecastPeriod?.endTime || null,
       forecastDate: selectedForecastDate,
       trend: hourlyTrend,
+      afterWindowTrend,
       dailyTempHighF: dailyTemperatureRange?.highF ?? null,
       dailyTempLowF: dailyTemperatureRange?.lowF ?? null,
       temperatureContext24h,

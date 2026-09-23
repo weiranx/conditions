@@ -31,6 +31,7 @@ const featureKeys = [
   "gearRecommendations",
   "windLoadingDetails",
   "daylightTimeline",
+  "contingencyPlanning",
   "scoreBreakdown",
   "weatherContextDetails",
   "avalancheDetails",
