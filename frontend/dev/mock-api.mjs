@@ -438,7 +438,7 @@ export function createMockApi({ databasePath } = {}) {
     if (p === "/api/snow-vision")
       return ok({
         analysis:
-          "**Demo snow analysis.** Sample snow coverage is concentrated on upper slopes. This fixture does not inspect satellite imagery.",
+          "SNOW COVERAGE: Demo analysis. Sample snow coverage is concentrated on upper slopes and patchy lower down. TERRAIN PATTERN: This fixture does not inspect satellite imagery, so it makes no aspect or elevation claim. GROUND CHECK: No station data was compared; the values are synthetic. UNCERTAINTY: All of this text is mocked for layout testing. TRAVEL TAKEAWAY: Use a real report and field observations before relying on snow coverage.",
         image: null,
         zoom: 12,
         generatedAt: now(),

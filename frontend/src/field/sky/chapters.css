@@ -104,7 +104,7 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-mountain .mt-level.is-cold text { fill: var(--sky-cold); }
 .sky-mountain .mt-level.is-snow line { stroke: var(--sky-secondary); }
 .sky-mountain .mt-level.is-snow text { fill: var(--sky-label); }
-.sky-mountain .mt-band line { stroke: var(--sky-label); stroke-opacity: 0.35; stroke-dasharray: 2 3; }
+.sky-mountain .mt-band polyline { fill: none; stroke: var(--sky-label); stroke-opacity: 0.35; stroke-dasharray: 2 3; }
 .sky-mountain .mt-band-name { font-size: 12px; fill: var(--sky-secondary); }
 .sky-mountain .mt-band-temp { font-size: 14px; font-weight: 650; fill: var(--sky-label); font-variant-numeric: tabular-nums; }
 .sky-mountain .mt-band-temp.is-cold { fill: var(--sky-cold); }

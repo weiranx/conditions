@@ -86,11 +86,14 @@ test('latest message scrolls only the conversation region', async t => {
   const h = await mount(t, { initialMessages: [{ id: 'question', role: 'user', parts: [{ type: 'text', text: 'Question' }] }] });
   const region = document.querySelector('.field-chat-messages');
   Object.defineProperty(region, 'scrollHeight', { value: 2000 });
+  assert.equal(document.querySelector('.field-chat-latest'), null);
+  await act(async () => region.dispatchEvent(new h.dom.window.Event('scroll')));
   let pageScrolled = false;
   h.dom.window.HTMLElement.prototype.scrollIntoView = () => { pageScrolled = true; };
   await act(async () => document.querySelector('.field-chat-latest').click());
   assert.equal(region.scrollTop, 2000);
   assert.equal(pageScrolled, false);
+  assert.equal(document.querySelector('.field-chat-latest'), null);
 });
 
 test('retry keeps one user question and sends the same report context', async t => {

@@ -17,13 +17,14 @@ import {
   ShieldCheck,
   Sparkles,
   Sunrise,
+  Info,
   TriangleAlert,
 } from "lucide-react";
 import { GearActions } from "./GearActions";
 import { ReportInsights } from "./ReportInsights";
 import "./report-reading.css";
 import "./report-navigation.css";
-import { AiExplanation } from "./AiExplanation";
+import { AiExplanation, AiExplanationSkeleton } from "./AiExplanation";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
 import { BriefSections } from "./sky/BriefSections";
@@ -483,25 +484,33 @@ export function Report({
             )}
           </nav>
         )}
-        {activeView === "brief" && (ai.aiBrief || w.aiBriefNarrative) && (
-          <section className="field-panel">
-            <div className="field-panel-heading">
+        {activeView === "brief" && (w.aiBriefNarrative || (ai.aiBrief && !w.viewingHistoryReport)) && (
+          <section
+            className="field-panel ai-brief"
+            aria-labelledby="ai-brief-title"
+            aria-busy={w.aiBriefLoading}
+          >
+            <div className="ai-brief-heading">
               <div>
-                <span className="field-kicker">AI explanation</span>
-                <h2>The report in context</h2>
+                <span className="field-kicker ai-brief-kicker">
+                  <Sparkles size={14} aria-hidden="true" />
+                  AI explanation
+                </span>
+                <h2 id="ai-brief-title">The report, explained</h2>
               </div>
-              {!w.viewingHistoryReport && (
+              {w.aiBriefNarrative && !w.viewingHistoryReport && (
                 <button
-                  className="field-button"
-                  disabled={w.aiBriefLoading || !ai.aiBrief}
+                  className="field-button ai-brief-regenerate"
+                  disabled={!ai.aiBrief}
+                  aria-disabled={w.aiBriefLoading || undefined}
                   onClick={w.handleRequestAiBriefAction}
                 >
-                  <Sparkles size={16} />
-                  {w.aiBriefLoading
-                    ? "Writing explanation…"
-                    : w.aiBriefNarrative
-                      ? "Regenerate explanation"
-                      : "Explain this report"}
+                  <RefreshCw
+                    size={14}
+                    aria-hidden="true"
+                    className={w.aiBriefLoading ? "is-spinning" : undefined}
+                  />
+                  {w.aiBriefLoading ? "Rewriting…" : "Regenerate"}
                 </button>
               )}
             </div>
@@ -510,7 +519,34 @@ export function Report({
                 {w.aiBriefError}
               </p>
             )}
-            {w.aiBriefNarrative && <AiExplanation text={w.aiBriefNarrative} />}
+            {w.aiBriefNarrative ? (
+              <>
+                <AiExplanation text={w.aiBriefNarrative} stale={w.aiBriefLoading} />
+                <p className="ai-brief-footnote">
+                  <Info size={13} aria-hidden="true" />
+                  Written by AI from this report’s data and can be wrong. It never
+                  changes the decision or score.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="ai-brief-empty">
+                  <p>
+                    A plain-language read of this report: what drives the decision,
+                    what to watch, and the best move for your plan.
+                  </p>
+                  <button
+                    className="field-button field-button-primary"
+                    aria-disabled={w.aiBriefLoading || undefined}
+                    onClick={w.handleRequestAiBriefAction}
+                  >
+                    <Sparkles size={16} aria-hidden="true" />
+                    {w.aiBriefLoading ? "Writing explanation…" : "Explain this report"}
+                  </button>
+                </div>
+                {w.aiBriefLoading && <AiExplanationSkeleton />}
+              </>
+            )}
           </section>
         )}
         {activeView === "brief" && (ai.reportChat || w.reportChatMessages.length > 0) && (
