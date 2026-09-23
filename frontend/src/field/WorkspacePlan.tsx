@@ -1,14 +1,24 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowRight,
   Check,
   Clock3,
+  Compass,
+  Footprints,
+  Hand,
   LoaderCircle,
   LocateFixed,
   MapPin,
+  Minus,
+  Mountain,
+  MountainSnow,
+  Plus,
   Search,
+  Snowflake,
+  Timer,
   Upload,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import {
@@ -16,6 +26,17 @@ import {
   ACTIVITY_PROFILE_ORDER,
 } from "../app/activity-profiles";
 import { parseGpxFile } from "../lib/gpx";
+import "./sky/plan.css";
+
+const ACTIVITY_ICONS: Record<string, LucideIcon> = {
+  hiking: Footprints,
+  scrambling: Hand,
+  "alpine-climbing": Mountain,
+  "snow-climbing": MountainSnow,
+  "ski-touring": Snowflake,
+  "trail-running": Timer,
+  backcountry: Compass,
+};
 
 export function WorkspacePlan({
   workspace: w,
@@ -34,6 +55,14 @@ export function WorkspacePlan({
   const [selectingLocation, setSelectingLocation] = useState(false);
   const busy = comparison ? w.tripForecastLoading : w.loading;
   const selected = w.hasObjective && !w.objectiveDraftDirty;
+  function setDuration(hours: number) {
+    if (!Number.isFinite(hours)) return;
+    if (!comparison && w.safetyData) w.handleEditPlan();
+    // The draft handler clamps and commits, exactly as typing does.
+    w.handleTravelWindowHoursDraftChange({
+      target: { value: String(Math.max(1, Math.min(24, Math.round(hours)))) },
+    } as ChangeEvent<HTMLInputElement>);
+  }
   useEffect(() => {
     const list = results.current;
     if (!w.showSuggestions || w.activeSuggestionIndex < 0 || !list) return;
@@ -49,7 +78,7 @@ export function WorkspacePlan({
   }, [w.activeSuggestionIndex, w.showSuggestions, w.suggestions]);
   return (
     <form
-      className="field-plan-form"
+      className="field-plan-form sky-plan"
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy || selectingLocation) return;
@@ -85,6 +114,7 @@ export function WorkspacePlan({
         </div>
       </div>
       <fieldset disabled={busy}>
+        <h3 className="sky-plan-step"><span aria-hidden="true">1</span>Where</h3>
         <div
           className="field-search"
           ref={searchWrapperRef}
@@ -295,7 +325,7 @@ export function WorkspacePlan({
           </div>
         )}
         <div className="field-form-divider">
-          <span className="field-kicker">Schedule & activity</span>
+          <h3 className="sky-plan-step"><span aria-hidden="true">2</span>When</h3>
           {!comparison && (
             <button
               className="field-text-button"
@@ -371,9 +401,18 @@ export function WorkspacePlan({
               }}
             />
           </label>
-          <label className="field-plan-duration">
-            Duration
+          <div className="field-plan-duration">
+            <span aria-hidden="true">Duration (hours)</span>
             <span className="field-duration-control">
+              <button
+                type="button"
+                className="sky-stepper"
+                aria-label="One hour shorter"
+                disabled={Number(w.travelWindowHoursDraft) <= 1}
+                onClick={() => setDuration(Number(w.travelWindowHoursDraft) - 1)}
+              >
+                <Minus size={16} aria-hidden="true" />
+              </button>
               <input
                 aria-label="Duration in hours"
                 type="number"
@@ -388,28 +427,43 @@ export function WorkspacePlan({
                 onBlur={w.handleTravelWindowHoursDraftBlur}
               />
               <span className="field-duration-unit" aria-hidden="true">hours</span>
+              <button
+                type="button"
+                className="sky-stepper"
+                aria-label="One hour longer"
+                disabled={Number(w.travelWindowHoursDraft) >= 24}
+                onClick={() => setDuration(Number(w.travelWindowHoursDraft) + 1)}
+              >
+                <Plus size={16} aria-hidden="true" />
+              </button>
             </span>
-          </label>
-          <label className="field-plan-activity">
-            Activity
-            <select
-              value={w.preferences.defaultActivity}
-              onChange={(event) => {
-                if (!comparison && w.safetyData) w.handleEditPlan();
-                w.updatePreferences({
-                  defaultActivity: event.target
-                    .value as typeof w.preferences.defaultActivity,
-                });
-              }}
-            >
-              {ACTIVITY_PROFILE_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {ACTIVITY_PROFILES[key].label}
-                </option>
-              ))}
-            </select>
-          </label>
+          </div>
         </div>
+        <fieldset className="sky-plan-activities">
+          <legend className="sky-plan-step"><span aria-hidden="true">3</span>How</legend>
+          <div className="sky-activity-grid" role="radiogroup" aria-label="Activity">
+            {ACTIVITY_PROFILE_ORDER.map((key) => {
+              const Icon = ACTIVITY_ICONS[key] || Compass;
+              const checked = w.preferences.defaultActivity === key;
+              return (
+                <label key={key} className={`sky-activity${checked ? " is-checked" : ""}`}>
+                  <input
+                    type="radio"
+                    name={`${id}-activity`}
+                    value={key}
+                    checked={checked}
+                    onChange={() => {
+                      if (!comparison && w.safetyData) w.handleEditPlan();
+                      w.updatePreferences({ defaultActivity: key });
+                    }}
+                  />
+                  <Icon size={24} strokeWidth={1.7} aria-hidden="true" />
+                  <span>{ACTIVITY_PROFILES[key].label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
         {comparison ? (
           <label className="field-activity">
             Days to compare

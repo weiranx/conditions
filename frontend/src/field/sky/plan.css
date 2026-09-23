@@ -1,0 +1,47 @@
+/* Plan form in the Sky design: three steps (Where, When, How), activity cards and a duration stepper. */
+.field-plan-form.sky-plan .field-form-title { display: none; }
+.field-plan-form.sky-plan .sky-plan-step {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0;
+  font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--sky-label, var(--f-ink));
+}
+.field-plan-form.sky-plan .sky-plan-step > span {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--sky-label, var(--f-ink)); color: var(--sky-bg, var(--f-bg)); font-size: 14px; font-weight: 700;
+}
+.field-plan-form.sky-plan .field-form-divider { border-top: 0; margin-top: 28px; padding-top: 0; }
+.field-plan-form.sky-plan .field-form-divider .sky-plan-step { margin: 0; }
+
+.field-plan-form.sky-plan .field-plan-duration { min-width: 0; font-size: 13px; font-weight: 550; }
+.field-plan-form.sky-plan .field-duration-control { grid-template-columns: 44px minmax(3ch, 1fr) 44px; }
+.field-plan-form.sky-plan .field-duration-control .field-duration-unit { display: none; }
+.field-plan-form.sky-plan .field-duration-control input {
+  text-align: center; padding: 0 2px; min-width: 2.5ch; font-size: 16px; font-weight: 600; appearance: textfield; -moz-appearance: textfield;
+}
+.field-plan-form.sky-plan .field-duration-control input::-webkit-outer-spin-button,
+.field-plan-form.sky-plan .field-duration-control input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sky-stepper {
+  display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--sky-label, var(--f-ink)); cursor: pointer;
+}
+.sky-stepper:hover:not(:disabled) { background: var(--sky-fill, var(--f-wash)); }
+.sky-stepper:disabled { opacity: 0.4; cursor: default; }
+.sky-stepper:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: -3px; }
+
+.sky-plan-activities { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; }
+.sky-plan-activities > legend { float: left; width: 100%; }
+.sky-activity-grid { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.field-plan-form.sky-plan label.sky-activity {
+  position: relative; display: grid; gap: 8px; align-content: start; min-height: 88px; padding: 14px;
+  border-radius: 16px; background: var(--sky-surface, var(--f-paper)); border: 1px solid var(--sky-separator, var(--f-line));
+  color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
+.sky-activity svg { color: var(--sky-secondary, var(--f-muted)); }
+.sky-activity.is-checked { border-color: transparent; outline: 2.5px solid var(--sky-accent, var(--f-primary)); outline-offset: -2.5px; }
+.sky-activity.is-checked svg { color: var(--sky-accent, var(--f-primary)); }
+.sky-activity:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--sky-accent, var(--f-primary)); }
+.field-plan-form.sky-plan .field-form-submit { margin-top: 24px; min-height: 52px; border-radius: 14px; font-size: 17px; }
+
+@media (max-width: 650px) {
+  .sky-activity-grid { grid-template-columns: 1fr 1fr; }
+}
