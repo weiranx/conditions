@@ -6,6 +6,7 @@ import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
 import { AccountProvider } from './contexts/AccountProvider.tsx'
 
 const McpConnect = lazy(() => import('./field/McpConnect'));
+const Landing = lazy(() => import('./field/Landing'));
 
 const MockControls = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? lazy(() => import('./field/MockControls')) : null;
 
@@ -22,7 +23,7 @@ createRoot(document.getElementById('root')!).render(
       >
         <FeatureFlagsProvider>
           <AccountProvider>
-            {window.location.pathname === '/connect' ? <McpConnect /> : <App />}
+            {window.location.pathname === '/connect' ? <McpConnect /> : /^\/welcome\/?$/.test(window.location.pathname) ? <Landing /> : <App />}
           </AccountProvider>
         </FeatureFlagsProvider>
       </Suspense>

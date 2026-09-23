@@ -515,6 +515,7 @@ export default function FieldApp() {
             </span>
             <p>A planning aid. Verify conditions in the field.</p>
             <div>
+              <a href="/welcome">About</a>
               <a
                 href="/status"
                 onClick={(e) => {
