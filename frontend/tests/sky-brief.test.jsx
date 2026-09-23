@@ -262,3 +262,16 @@ test("MountainSection names the selected forecast time for screen readers", asyn
   assert.match(renderToStaticMarkup(<MountainSection {...props} />), /Conditions by elevation at your start/);
   assert.match(renderToStaticMarkup(<MountainSection {...props} when="at 11:00 AM" />), /Conditions by elevation at 11:00 AM/);
 });
+
+test("an hour missing only precipitation still has elevation inputs; a missing temperature does not", async () => {
+  const { buildPlannedReportWeatherRows } = await import("../src/field/report-weather");
+  const data = { weather: { temp: 40, windSpeed: 5, windGust: 10, trend: [
+    { time: "07:00", temp: 40, wind: 5, gust: 10, precipChance: 10, condition: "Clear" },
+    { time: "08:00", temp: 42, wind: 6, gust: 12, precipChance: null, condition: "Clear" },
+    { time: "09:00", temp: null, wind: 6, gust: 12, precipChance: 10, condition: "Clear" },
+  ] } };
+  const rows = buildPlannedReportWeatherRows(data, getDefaultUserPreferences(), 4, { start: "07:00", date: "2026-09-23" });
+  const hours = buildSkyHours(rows, plan);
+  assert.deepEqual(hours.map((h) => h.tone === "missing"), [false, true, true, true]);
+  assert.deepEqual(hours.map((h) => h.thermalComplete), [true, true, false, false]);
+});

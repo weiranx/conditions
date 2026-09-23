@@ -204,7 +204,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
             {hours.length > 1 && w.elevationForecastBands.length > 0 && (
               <div className="sky-segmented sky-mountain-hours" role="group" aria-label="Elevation forecast time">
                 {hours.map((hour, i) => {
-                  const usable = i === 0 || (hour.tone !== "missing" && Number.isFinite(hour.temp) && Number.isFinite(hour.wind));
+                  const usable = i === 0 || (hour.thermalComplete && Number.isFinite(hour.temp) && Number.isFinite(hour.wind));
                   return (
                     <button key={hour.index} type="button" aria-pressed={i === hourIndex} disabled={!usable}
                       aria-label={`${i === 0 ? "Start, " : ""}${hourLabel(hour)}${usable ? "" : ", forecast unavailable"}`}

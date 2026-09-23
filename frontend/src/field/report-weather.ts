@@ -28,6 +28,8 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
       // Do not let the legacy row's zero fallback become a measured calm gust.
       gust: measured(point.gust) ? point.gust : NaN,
       complete,
+      // Temperature and wind were measured (the legacy row reads a gap as zero).
+      thermalComplete: measured(point.temp) && measured(point.wind),
       pass: complete && row.pass,
       failedRules: knownFailures.map(failure => failure.reason),
       failedRuleLabels: [...knownFailures.map(failure => failure.label), ...(!complete ? ["Incomplete hourly evidence"] : [])],
@@ -94,6 +96,7 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
       return { ...row, reasonSummary: "No hourly forecast covers this planned time. Verify conditions before departure." };
     }
     const complete = covered && contributing.every(row => row.complete);
+    const thermalComplete = covered && contributing.every(row => row.thermalComplete);
     const pass = complete && contributing.every(row => row.pass);
     const failedRules = [...new Set(contributing.flatMap(row => row.failedRules))];
     const failedRuleLabels = [...new Set([
@@ -107,7 +110,7 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
     const thermal = coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest;
     const knownGusts = contributing.map(row => row.gust).filter(Number.isFinite);
     return {
-      ...thermal, time, complete, pass, failedRules, failedRuleLabels,
+      ...thermal, time, complete, thermalComplete, pass, failedRules, failedRuleLabels,
       wind: Math.max(...contributing.map(row => row.wind)),
       gust: knownGusts.length ? Math.max(...knownGusts) : NaN,
       precipChance: Math.max(...contributing.map(row => row.precipChance)),
