@@ -124,7 +124,7 @@ import { sanitizeExternalUrl, parseLinkState } from "../../app/url-state";
 import { readAccountLinkAction } from "../../app/account-links";
 import type { MultiDayUsage } from "../../app/multi-day-usage";
 import { evaluateBackcountryDecision } from "../../app/decision";
-import { buildApproachProfile } from "../../app/approach-elevation";
+import { buildApproachProfile, buildApproachRequestParams } from "../../app/approach-elevation";
 import { buildReportCardOrder } from "../../app/card-ordering";
 import { buildWindLoadingDisplay } from "../../app/wind-loading-display";
 import { buildRainfallDisplay } from "../../app/rainfall-display";
@@ -452,11 +452,15 @@ export function useWorkspace() {
     restoreRouteState,
   } = useRouteAnalysis(initialRestoredReport?.route);
 
+  // Approach inputs sent with each report so the backend comfort score checks
+  // approach hours at the same elevation as the brief. Kept current below.
+  const approachQueryRef = useRef("");
   const safetyHook = useSafetyData({
     todayDate,
     preferences,
     isProductionBuild,
     objectiveNameRef,
+    extraQueryRef: approachQueryRef,
     onNewReportGenerated: handleNewReportGenerated,
     initialSafetyData: initialRestoredReport?.safetyData,
     initialAiBriefNarrative: initialRestoredReport?.ai.aiBriefNarrative,
@@ -1426,6 +1430,41 @@ export function useWorkspace() {
     }
   };
 
+  const parsedTrailheadElevation =
+    parseOptionalElevationInput(trailheadElevationInput);
+  const trailheadElevationFt =
+    parsedTrailheadElevation === null
+      ? null
+      : convertDisplayElevationToFeet(
+          parsedTrailheadElevation,
+          preferences.elevationUnit,
+        );
+  const approachQuery = useMemo(
+    () =>
+      new URLSearchParams(
+        buildApproachRequestParams({
+          enabled: preferences.approachElevationAdjustment,
+          trailheadElevationFt,
+          gpxRoute: importedGpxRoute,
+          timing: {
+            paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
+            ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+            stopBufferMinutes: preferences.runnerStopBufferMinutes,
+          },
+        }),
+      ).toString(),
+    [
+      trailheadElevationFt,
+      importedGpxRoute,
+      preferences.approachElevationAdjustment,
+      preferences.runnerPaceMinutesPerMile,
+      preferences.runnerAscentMinutesPer1000Ft,
+      preferences.runnerStopBufferMinutes,
+    ],
+  );
+  useEffect(() => {
+    approachQueryRef.current = approachQuery;
+  }, [approachQuery]);
   const { handleRetryFetch, handleGenerateReport, pendingAutoGenerate, setPendingAutoGenerate } = useReportGeneration({
     autoGenerateInitially: initialLinkState.hasObjective && !initialRestoredReport,
     hasObjective, forecastDate, alpineStartTime, objectiveTimezone,
@@ -2002,15 +2041,6 @@ export function useWorkspace() {
     returnMinutes !== null
       ? minutesToTwentyFourHourClock(returnMinutes % 1440)
       : null;
-  const parsedTrailheadElevation =
-    parseOptionalElevationInput(trailheadElevationInput);
-  const trailheadElevationFt =
-    parsedTrailheadElevation === null
-      ? null
-      : convertDisplayElevationToFeet(
-          parsedTrailheadElevation,
-          preferences.elevationUnit,
-        );
   // Where the party is at each planned hour; null scores every hour at the objective.
   const approachProfile = useMemo(
     () =>

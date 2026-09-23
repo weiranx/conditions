@@ -701,6 +701,13 @@ export interface SafetyData {
       impact: number;
       message: string;
     }>;
+    /** Present when approach hours were scored at the party's estimated elevation (model 1.5.0+). */
+    approach?: {
+      source: 'gpx' | 'manual' | 'estimated';
+      trailheadElevationFt: number;
+      adjustedHours: number;
+      inversionHours: number;
+    };
     disclaimer?: string;
   };
   safety: {

@@ -202,7 +202,7 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(res.body.safety).toBeTruthy();
     expect(typeof res.body.safety.score).toBe('number');
     expect(res.body.pleasantness).toMatchObject({
-      scoreVersion: '1.4.0',
+      scoreVersion: '1.5.0',
       coverage: { requestedHours: expect.any(Number), completeHours: expect.any(Number) },
       confidenceReasons: expect.any(Array),
       weightedScore: expect.any(Number),

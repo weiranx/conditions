@@ -18,7 +18,8 @@ import { ApproachNote } from '../src/field/sky/ApproachNote';
 import { DayStrip } from '../src/field/sky/DayStrip';
 import { Forecast } from '../src/field/Forecast';
 import { buildPersistedReport } from '../src/app/report-storage';
-import { summarizeApproachHours } from '../src/app/approach-elevation';
+import { buildApproachRequestParams, comfortApproachIsStale, summarizeApproachHours } from '../src/app/approach-elevation';
+import { ComfortScore } from '../src/field/ComfortScore';
 import { parsePersistedReport } from '../src/app/report-storage';
 
 const timing = { paceMinutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 0 };
@@ -295,4 +296,40 @@ test('a cold caution caused by a likely inversion says so', () => {
   assert.equal(caution(evaluateBackcountryDecision(data, '04:00', preferences)), '');
   assert.match(caution(evaluateBackcountryDecision(data, '04:00', preferences, { approach })),
     /near the trailhead: clear, calm conditions can pool colder air in the valley than at the summit/);
+});
+
+test('approach inputs are sent to the backend for comfort scoring', () => {
+  assert.deepEqual(buildApproachRequestParams({ enabled: false, trailheadElevationFt: 7000, timing }), { approach: 'off' });
+  assert.deepEqual(buildApproachRequestParams({ enabled: true, timing }), { ascent_min_per_kft: '45' });
+  assert.deepEqual(buildApproachRequestParams({ enabled: true, trailheadElevationFt: 7210.4, timing }), { trailhead_ft: '7210', ascent_min_per_kft: '45' });
+
+  // A long GPX track is thinned to the backend limit but keeps both ends and the summit.
+  const displayTrack = Array.from({ length: 201 }, (_, i) => ({
+    lat: 0, lon: 0, progress_percent: i / 2, elev_ft: i === 137 ? 11500 : 7000 + Math.min(i, 200 - i) * 30,
+  }));
+  const params = buildApproachRequestParams({ enabled: true, trailheadElevationFt: 6000, gpxRoute: { distanceMiles: 10, displayTrack }, timing });
+  assert.equal(params.trailhead_ft, undefined, 'the route wins over a typed trailhead');
+  const pairs = params.approach_route.split(',').map((pair) => pair.split(':').map(Number));
+  assert.ok(pairs.length <= 64);
+  assert.deepEqual(pairs[0], [0, 7000]);
+  assert.ok(pairs.some(([, ft]) => ft === 11500));
+  assert.equal(pairs[pairs.length - 1][1], 7000);
+  assert.ok(pairs.every(([minute], i) => i === 0 || minute >= pairs[i - 1][0]));
+});
+
+test('a comfort score from a different approach is flagged as out of date', () => {
+  const approach = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, timing });
+  const comfort = (extra) => ({ score: 80, label: 'Pleasant', summary: '', scoreVersion: '1.5.0', ...extra });
+  const scored = { source: 'manual', trailheadElevationFt: 7000, adjustedHours: 2, inversionHours: 1 };
+  assert.equal(comfortApproachIsStale(comfort({ approach: scored }), approach), false);
+  assert.equal(comfortApproachIsStale(comfort({ approach: { ...scored, trailheadElevationFt: 8000 } }), approach), true);
+  assert.equal(comfortApproachIsStale(comfort({}), approach), true, 'scored at the objective, plan now has an approach');
+  assert.equal(comfortApproachIsStale(comfort({ approach: scored }), null), true, 'approach turned off since');
+  assert.equal(comfortApproachIsStale(comfort({ scoreVersion: '1.4.0' }), approach), false, 'older models are left alone');
+
+  const html = renderToStaticMarkup(<ComfortScore comfort={comfort({ approach: scored })} approach={approach} elevation={elevation} />);
+  assert.match(html, /2 h scored at your estimated elevation on the approach, from[\s\S]*7,000 ft \(from your trailhead\); 1 h scored colder for a likely valley inversion/);
+  assert.doesNotMatch(html, /different approach/);
+  const stale = renderToStaticMarkup(<ComfortScore comfort={comfort({ approach: { ...scored, trailheadElevationFt: 8000 } })} approach={approach} elevation={elevation} />);
+  assert.match(stale, /Comfort was scored for a different approach than your current plan/);
 });

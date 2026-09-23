@@ -16,6 +16,8 @@ export interface UseSafetyDataParams {
   preferences: UserPreferences;
   isProductionBuild: boolean;
   objectiveNameRef: React.RefObject<string>;
+  /** Extra query string (without a leading "&"), e.g. the approach inputs for comfort scoring. */
+  extraQueryRef?: React.RefObject<string>;
   onNewReportGenerated?: () => void;
   initialSafetyData?: SafetyData | null;
   initialAiBriefNarrative?: string | null;
@@ -69,6 +71,7 @@ export function useSafetyData({
   preferences,
   isProductionBuild,
   objectiveNameRef,
+  extraQueryRef,
   onNewReportGenerated,
   initialSafetyData = null,
   initialAiBriefNarrative = null,
@@ -244,7 +247,9 @@ export function useSafetyData({
         const { response, payload, requestId } = await fetchApi(
           `/api/safety?lat=${lat}&lon=${lon}&date=${encodeURIComponent(safeDate)}&start=${encodeURIComponent(
             safeStartTime,
-          )}&travel_window_hours=${safeTravelWindowHours}&name=${encodeURIComponent(objectiveNameRef.current)}`,
+          )}&travel_window_hours=${safeTravelWindowHours}&name=${encodeURIComponent(objectiveNameRef.current)}${
+            extraQueryRef?.current ? `&${extraQueryRef.current}` : ''
+          }`,
           { signal: controller.signal },
         );
 
@@ -323,7 +328,7 @@ export function useSafetyData({
         }
       }
     },
-    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, onNewReportGenerated],
+    [todayDate, preferences.defaultStartTime, preferences.travelWindowHours, isRetriableWakeupError, scheduleWakeRetry, clearWakeRetry, objectiveNameRef, extraQueryRef, onNewReportGenerated],
   );
 
   useEffect(() => {

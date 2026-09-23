@@ -1,4 +1,4 @@
-import type { ElevationForecastBand, WeatherTrendPoint } from './types';
+import type { ElevationForecastBand, SafetyData, WeatherTrendPoint } from './types';
 import type { ParsedGpxRoute, RouteTimingProfile } from '../lib/gpx';
 import {
   GUST_INCREASE_MPH_PER_1000FT,
@@ -56,7 +56,8 @@ export interface ApproachProfileInput {
 
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
-function gpxTimeline(
+/** Elevation over time along a GPX track, using the route timing preferences. */
+export function buildGpxElevationTimeline(
   route: Pick<ParsedGpxRoute, 'distanceMiles' | 'displayTrack'>,
   timing: RouteTimingProfile,
 ): ApproachProfile['timeline'] | null {
@@ -90,7 +91,7 @@ export function buildApproachProfile(input: ApproachProfileInput): ApproachProfi
   const objective = Number(input.objectiveElevationFt);
   if (!finite(objective) || objective <= 0) return null;
 
-  const track = input.gpxRoute ? gpxTimeline(input.gpxRoute, input.timing) : null;
+  const track = input.gpxRoute ? buildGpxElevationTimeline(input.gpxRoute, input.timing) : null;
   if (track) {
     const trailhead = track[0].elevationFt;
     if (objective - Math.min(...track.map((entry) => entry.elevationFt)) < MIN_APPROACH_DROP_FT) return null;
@@ -258,3 +259,60 @@ export const APPROACH_SOURCE_LABEL: Record<ApproachElevationSource, string> = {
   manual: 'from your trailhead',
   estimated: 'trailhead estimated',
 };
+
+/** Most route points the backend accepts; keep in step with backend/src/utils/approach-elevation.js. */
+export const MAX_APPROACH_ROUTE_POINTS = 64;
+
+/** Evenly thin a timeline, always keeping both ends and the high point. */
+function thinTimeline(timeline: ApproachProfile['timeline'], limit: number): ApproachProfile['timeline'] {
+  if (timeline.length <= limit) return timeline;
+  const high = timeline.reduce((best, entry, index) => (entry.elevationFt > timeline[best].elevationFt ? index : best), 0);
+  const keep = new Set([0, timeline.length - 1, high]);
+  const slots = limit - keep.size;
+  for (let i = 1; i <= slots; i += 1) keep.add(Math.round((i * (timeline.length - 1)) / (slots + 1)));
+  return [...keep].sort((a, b) => a - b).slice(0, limit).map((index) => timeline[index]);
+}
+
+/**
+ * Query parameters that tell /api/safety where the party starts, so the
+ * backend comfort score checks approach hours at the same elevation as the
+ * brief. The estimated trailhead needs the forecast bands, so the backend
+ * derives it itself when no trailhead or route is sent.
+ */
+export function buildApproachRequestParams(input: {
+  enabled: boolean;
+  trailheadElevationFt?: number | null;
+  gpxRoute?: Pick<ParsedGpxRoute, 'distanceMiles' | 'displayTrack'> | null;
+  timing: RouteTimingProfile;
+}): Record<string, string> {
+  if (!input.enabled) return { approach: 'off' };
+  const params: Record<string, string> = {};
+  const track = input.gpxRoute ? buildGpxElevationTimeline(input.gpxRoute, input.timing) : null;
+  if (track) {
+    params.approach_route = thinTimeline(track, MAX_APPROACH_ROUTE_POINTS)
+      .map((entry) => `${Math.round(entry.minute)}:${Math.round(entry.elevationFt)}`)
+      .join(',');
+  } else if (finite(input.trailheadElevationFt) && input.trailheadElevationFt >= 0) {
+    params.trailhead_ft = String(Math.round(input.trailheadElevationFt));
+  }
+  if (input.timing.ascentMinutesPer1000Ft > 0) params.ascent_min_per_kft = String(Math.round(input.timing.ascentMinutesPer1000Ft));
+  return params;
+}
+
+// Models before 1.5.0 always scored both ends of the route, so a missing
+// approach there says nothing about the plan.
+const scoresApproach = (version: string | undefined) => {
+  const [major = 0, minor = 0] = String(version || '').split('.').map(Number);
+  return major > 1 || (major === 1 && minor >= 5);
+};
+
+/** True when the comfort score was computed for a different approach than the current plan. */
+export function comfortApproachIsStale(
+  comfort: NonNullable<SafetyData['pleasantness']>,
+  current: ApproachProfile | null | undefined,
+): boolean {
+  if (!scoresApproach(comfort.scoreVersion)) return false;
+  const scored = comfort.approach ?? null;
+  if (!scored || !current) return Boolean(scored) !== Boolean(current);
+  return scored.source !== current.source || Math.abs(scored.trailheadElevationFt - current.trailheadElevationFt) > 50;
+}
