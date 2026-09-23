@@ -484,6 +484,7 @@ test("model selector exposes the full catalog and retains configured models", ()
 
 import { JSDOM } from 'jsdom';
 import { ReportVerdict } from '../src/field/ReportVerdict';
+import { verdictCopy, checkSummary } from '../src/field/verdict-copy';
 import { makeReport } from '../dev/mock-data.mjs';
 test('verdict keeps caution, stale evidence, and field warnings visible beside the score', () => {
   const data = makeReport({}, 'field-alerts');
@@ -750,6 +751,34 @@ test('verdict explains a high score under a stricter decision only when they dis
   assert.doesNotMatch(render({ level: 'GO' }), /report-decision-bridge/);
   data.safety.score = 78;
   assert.doesNotMatch(render({ level: 'CAUTION', cautions: ['Cold'] }), /report-decision-bridge/);
+});
+
+test('verdict names the checks behind the decision instead of only counting them', () => {
+  const data = makeReport({}, 'clear');
+  data.safety = { ...data.safety, score: 97.8, assessmentStatus: undefined };
+  const copy = (decision) => verdictCopy({ data, decision: { headline: 'Headline', blockers: [], cautions: [], checks: [], ...decision }, primaryReason: '', preferences });
+  const cautions = [
+    'Fire danger is elevated (Moderate). Check closures and incident updates, avoid ignition sources, and keep a clear exit route.',
+    'Check fire locations against your approach and escape routes. Compare current fire perimeters and official restrictions with the route and road access before choosing an approach.',
+  ];
+  assert.deepEqual(copy({ level: 'CAUTION', cautions }).limitingChecks, ['Fire danger is elevated (Moderate)', 'Check fire locations against your approach and escape routes']);
+  // A single limiting check under a high score is named only when the reason is something else.
+  assert.deepEqual(copy({ level: 'CAUTION', cautions: ['Wind gusts reach about 31 mph. Shorten ridge exposure.'] }).limitingChecks, []);
+  assert.deepEqual(verdictCopy({ data, decision: { level: 'CAUTION', headline: 'Headline', blockers: [], cautions: ['Wind gusts reach about 31 mph. Shorten ridge exposure.'], checks: [] }, primaryReason: 'Cold start at the trailhead.', preferences }).limitingChecks, ['Wind gusts reach about 31 mph']);
+  // No-go lists blockers, not the cautions beside them.
+  assert.deepEqual(copy({ level: 'NO-GO', blockers: ['Storm. Delay.', 'Heat. Move.'], cautions: ['Cold'] }).limitingChecks, ['Storm', 'Heat']);
+  assert.deepEqual(copy({ level: 'GO', cautions: ['Cold'] }).limitingChecks, []);
+  data.safety.score = 60;
+  assert.deepEqual(copy({ level: 'CAUTION', cautions: ['Cold. Layer up.'] }).limitingChecks, [], 'one check with no bridge is already the reason');
+  const html = renderToStaticMarkup(<ReportVerdict data={{ ...data, safety: { ...data.safety, score: 97.8 } }} decision={{ level: 'CAUTION', headline: 'Headline', blockers: [], cautions, checks: [] }} primaryReason="" freshnessWarning={null} preferences={preferences} onSources={() => {}} />);
+  assert.match(html, /aria-label="Checks setting the decision"><li>Fire danger is elevated \(Moderate\)<\/li><li>Check fire locations against your approach and escape routes<\/li><\/ul>/);
+});
+
+test('check summaries keep decimals and parentheses in the lead sentence', () => {
+  assert.equal(checkSummary('Wind gusts reach about 12.5 m/s. Shorten ridge exposure.'), 'Wind gusts reach about 12.5 m/s');
+  assert.equal(checkSummary('Air quality is moderate (AQI 58). Sensitive members should ease off.'), 'Air quality is moderate (AQI 58)');
+  assert.equal(checkSummary('Some sources are out of date or missing timestamps (weather, alerts). Refresh.'), 'Some sources are out of date or missing timestamps (weather, alerts)');
+  assert.equal(checkSummary('No trailing period'), 'No trailing period');
 });
 
 test('supplemental sources distinguish unavailable data, probabilities, zero smoke and regional text', async () => {

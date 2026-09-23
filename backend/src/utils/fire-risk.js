@@ -1,3 +1,5 @@
+const { FIRE_NEAR_KM, MI_PER_KM, fireEdgeKm } = require('./fire-proximity');
+
 const createUnavailableFireRiskData = (status = 'unavailable') => ({
   source: 'Derived from NOAA weather, NWS alerts, and air-quality signals',
   status,
@@ -65,18 +67,28 @@ const buildFireRiskData = ({ weatherData, alertsData, airQualityData, localCondi
     reasons.push('Moderate AQI could affect exertion tolerance in exposed terrain.');
   }
 
-  const nearestIncident = nearbyIncidents.find((incident) => Number.isFinite(Number(incident?.distanceKm))) || nearbyIncidents[0];
-  const nearestIncidentKm = Number(nearestIncident?.distanceKm);
-  const nearestDetectionKm = Number(firmsDetections.find((detection) => Number.isFinite(Number(detection?.distanceKm)))?.distanceKm);
+  // Measure incidents to their likely edge; see fire-proximity.js. Incidents
+  // beyond FIRE_NEAR_KM are noted but do not raise the level to a caution.
+  const knownIncidents = nearbyIncidents
+    .map((incident) => ({ incident, edgeKm: fireEdgeKm(incident) }))
+    .filter((entry) => entry.edgeKm !== null)
+    .sort((a, b) => a.edgeKm - b.edgeKm);
+  const nearestIncident = knownIncidents[0]?.incident;
+  const nearestIncidentKm = knownIncidents.length ? knownIncidents[0].edgeKm : NaN;
+  const unplacedIncidents = nearbyIncidents.length - knownIncidents.length;
+  const nearestDetectionKm = Math.min(...firmsDetections.map(fireEdgeKm).filter((value) => value !== null));
   if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= 15) {
     level = Math.max(level, 4);
-    reasons.push(`Current WFIGS fire perimeter/incident is approximately ${Math.round(nearestIncidentKm)} km away (${nearestIncident?.name || 'unnamed incident'}).`);
-  } else if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= 50) {
+    reasons.push(`Current WFIGS fire perimeter/incident is approximately ${Math.round(nearestIncidentKm)} km (${Math.round(nearestIncidentKm * MI_PER_KM)} mi) away (${nearestIncident?.name || 'unnamed incident'}).`);
+  } else if (Number.isFinite(nearestIncidentKm) && nearestIncidentKm <= FIRE_NEAR_KM) {
     level = Math.max(level, 3);
-    reasons.push(`Current WFIGS fire activity is approximately ${Math.round(nearestIncidentKm)} km away (${nearestIncident?.name || 'unnamed incident'}).`);
-  } else if (nearbyIncidents.length > 0) {
+    reasons.push(`Current WFIGS fire activity is approximately ${Math.round(nearestIncidentKm)} km (${Math.round(nearestIncidentKm * MI_PER_KM)} mi) away (${nearestIncident?.name || 'unnamed incident'}).`);
+  } else if (unplacedIncidents > 0) {
     level = Math.max(level, 2);
-    reasons.push(`${nearbyIncidents.length} current WFIGS fire incident/perimeter signal(s) are within 150 km.`);
+    reasons.push(`${unplacedIncidents} current WFIGS fire incident/perimeter signal(s) within 150 km have no reported location, so they are treated as nearby.`);
+  } else if (nearbyIncidents.length > 0) {
+    level = Math.max(level, 1);
+    reasons.push(`${nearbyIncidents.length} current WFIGS fire incident/perimeter signal(s) are within 150 km, the nearest approximately ${Math.round(nearestIncidentKm)} km (${Math.round(nearestIncidentKm * MI_PER_KM)} mi) away; none are within ${FIRE_NEAR_KM} km.`);
   }
   if (Number.isFinite(nearestDetectionKm) && nearestDetectionKm <= 25) {
     level = Math.max(level, 3);

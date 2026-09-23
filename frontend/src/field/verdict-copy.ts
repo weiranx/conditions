@@ -5,6 +5,13 @@ import { fieldSignals } from "./field-signals";
 
 export type VerdictTone = "go" | "watch" | "stop";
 
+/** The lead sentence of a check message, without its closing period. */
+export function checkSummary(message: string): string {
+  const text = message.trim();
+  const lead = text.match(/^.*?[.!?](?=\s+[A-Z(]|$)/)?.[0] ?? text;
+  return lead.replace(/\.$/, "");
+}
+
 /** Shared wording for the trip decision, used by the verdict and the Brief's sky. */
 export function verdictCopy({ data, decision, primaryReason, preferences }: {
   data: SafetyData;
@@ -39,6 +46,10 @@ export function verdictCopy({ data, decision, primaryReason, preferences }: {
     ? `The score of ${Number(score.toFixed(1))} rates conditions overall. The decision is set by ${limitingLabel}.`
     : "";
   const reason = decision.blockers[0] || (review ? `${review.title}. ${review.action}` : "") || primaryReason || decision.cautions[0] || "Nothing in the available forecast crosses your limits. Keep reassessing once you are in the field.";
+  // Name the limiting checks when the count alone would leave them unclear;
+  // a lone check the reason already states needs no list.
+  const limitingSummaries = decision.level === "GO" ? [] : (decision.level === "NO-GO" ? decision.blockers : decision.cautions).map(checkSummary).filter(Boolean);
+  const limitingChecks = limitingSummaries.length > 1 || (bridge && limitingSummaries.length === 1 && !reason.startsWith(limitingSummaries[0])) ? limitingSummaries : [];
   const scoreValue = !insufficient && Number.isFinite(data.safety.score) ? Number(data.safety.score.toFixed(1)) : null;
-  return { insufficient, tone, reason, bridge, warnings, missing, scoreValue };
+  return { insufficient, tone, reason, bridge, limitingChecks, warnings, missing, scoreValue };
 }

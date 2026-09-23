@@ -244,6 +244,7 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-verdict-card h2 { margin: 12px 0 0; max-width: 34ch; font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
 .sky-verdict-reason { margin: 8px 0 0; max-width: 64ch; font-size: 17px; line-height: 1.5; color: var(--sky-label); }
 .sky-verdict-card .sky-cap { margin: 8px 0 0; }
+.sky-verdict-card .sky-limiting { color: var(--sky-label); }
 .sky-chapter-block { margin-top: 64px; }
 .sky-chapter-name { margin: 0; padding-top: 20px; border-top: 1px solid var(--sky-separator); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
 .sky-chapter-block > .sky-chapter-name { margin-bottom: 0; }

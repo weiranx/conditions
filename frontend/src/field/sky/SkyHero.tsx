@@ -14,7 +14,7 @@ type Formatters = {
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, level, headline, reason, bridge, actions, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, level, headline, reason, bridge, limitingChecks = [], actions, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -27,6 +27,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   headline: string;
   reason: string;
   bridge?: string;
+  limitingChecks?: string[];
   actions?: ReactNode;
   format: Formatters;
 }) {
@@ -256,6 +257,11 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         <h2 id="field-verdict-title">{headline}</h2>
         <p className="sky-lede">{reason}</p>
         {bridge && <p className="sky-lede sky-bridge">{bridge}</p>}
+        {limitingChecks.length > 0 && (
+          <ul className="sky-limiting" aria-label="Checks setting the decision">
+            {limitingChecks.map((check) => <li key={check}>{check}</li>)}
+          </ul>
+        )}
         </div>
         {hour && (
           <div className="sky-readout" aria-live="polite">

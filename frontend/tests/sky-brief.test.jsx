@@ -78,6 +78,9 @@ test("the sky names the over-limit window and starts on the first hour that need
   assert.match(html, /over your limits: Gust 31 mph above 25 mph/);
   assert.match(html, /Trip decision: <\/span>Caution/);
   assert.doesNotMatch(html, /NaN|Infinity|undefined/);
+  assert.doesNotMatch(html, /sky-limiting/);
+  assert.match(hero(hours, { limitingChecks: ["Fire danger is elevated (Moderate)", "Check fire locations"] }),
+    /<ul class="sky-limiting" aria-label="Checks setting the decision"><li>Fire danger is elevated \(Moderate\)<\/li><li>Check fire locations<\/li><\/ul>/);
 });
 
 test("missing hours are never described as within limits", () => {
