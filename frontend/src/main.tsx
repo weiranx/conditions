@@ -1,6 +1,5 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './field/FieldApp.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsProvider.tsx'
 import { AccountProvider } from './contexts/AccountProvider.tsx'
@@ -8,7 +7,12 @@ import { readLocalStorage, shouldShowLanding } from './app/landing-gate.ts'
 
 const McpConnect = lazy(() => import('./field/McpConnect'));
 const Landing = lazy(() => import('./field/Landing'));
-const showLanding = shouldShowLanding(window.location, readLocalStorage());
+const isConnect = window.location.pathname === '/connect';
+const showLanding = !isConnect && shouldShowLanding(window.location, readLocalStorage());
+// The planner loads on demand so landing-page visitors don't download it; for
+// planner visits the import starts here, before React renders.
+const appModule = isConnect || showLanding ? null : import('./field/FieldApp.tsx');
+const App = lazy(() => appModule ?? import('./field/FieldApp.tsx'));
 
 const MockControls = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? lazy(() => import('./field/MockControls')) : null;
 
@@ -23,11 +27,16 @@ createRoot(document.getElementById('root')!).render(
           </main>
         )}
       >
-        <FeatureFlagsProvider>
-          <AccountProvider>
-            {window.location.pathname === '/connect' ? <McpConnect /> : showLanding ? <Landing /> : <App />}
-          </AccountProvider>
-        </FeatureFlagsProvider>
+        {showLanding ? (
+          // The landing page needs no account or feature flags, so it skips their requests and polling.
+          <Landing />
+        ) : (
+          <FeatureFlagsProvider>
+            <AccountProvider>
+              {isConnect ? <McpConnect /> : <App />}
+            </AccountProvider>
+          </FeatureFlagsProvider>
+        )}
       </Suspense>
     </ErrorBoundary>
   </StrictMode>,

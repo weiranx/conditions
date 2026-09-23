@@ -55,7 +55,11 @@ test('landing page keeps the planning-aid message', async (t) => {
 });
 
 const at = (pathname, search = '', hash = '') => ({ pathname, search, hash });
-const storageWith = (entries = {}) => ({ getItem: (key) => (key in entries ? entries[key] : null) });
+const storageWith = (entries = {}) => ({
+  getItem: (key) => (key in entries ? entries[key] : null),
+  setItem: (key, value) => { entries[key] = value; },
+  removeItem: (key) => { delete entries[key]; },
+});
 
 test('first-time visitors to / see the landing page', () => {
   assert.equal(shouldShowLanding(at('/'), storageWith()), true);
@@ -76,7 +80,15 @@ test('returning visitors and links go straight to the planner', () => {
 
 test('unreadable storage never traps a visitor on the landing page', () => {
   assert.equal(shouldShowLanding(at('/'), null), false);
-  assert.equal(shouldShowLanding(at('/'), { getItem: () => { throw new Error('blocked'); } }), false);
+  assert.equal(shouldShowLanding(at('/'), { ...storageWith(), getItem: () => { throw new Error('blocked'); } }), false);
+  // Readable but full or read-only: the visit could not be remembered, so the landing page would loop.
+  assert.equal(shouldShowLanding(at('/'), { ...storageWith(), setItem: () => { throw new Error('quota'); } }), false);
+});
+
+test('the writability probe leaves nothing behind', () => {
+  const entries = {};
+  assert.equal(shouldShowLanding(at('/'), storageWith(entries)), true);
+  assert.deepEqual(entries, {});
 });
 
 test('viewing the landing page remembers the visit', async (t) => {
