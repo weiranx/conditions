@@ -73,13 +73,19 @@ export function dateLabel(date: string | null | undefined) {
         weekday: "short",
       });
 }
+// Lowercase so it reads naturally mid-sentence ("Generated 3 hours ago");
+// standalone uses capitalize it with sentenceCase.
 export function ageLabel(date: string | null | undefined) {
   if (!date || !Number.isFinite(Date.parse(date)))
-    return "Timestamp unavailable";
+    return "time unavailable";
   const hours = Math.max(0, (Date.now() - Date.parse(date)) / 3600000);
+  const count = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} ago`;
   return hours < 1
-    ? "Within the last hour"
+    ? "within the last hour"
     : hours < 24
-      ? `${Math.floor(hours)} hours ago`
-      : `${Math.floor(hours / 24)} days ago`;
+      ? count(Math.floor(hours), "hour")
+      : count(Math.floor(hours / 24), "day");
+}
+export function sentenceCase(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

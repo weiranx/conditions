@@ -24,6 +24,19 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
   const warnings = [...attention.filter((signal) => signal.key === 'lightning'), ...attention.filter((signal) => signal.key !== 'lightning')];
   const missing = signals.filter((signal) => signal.tone === 'unavailable');
   const review = reportInsightItems(data).find(item => item.decisionRelevant);
+  // The score rates conditions overall, while the decision is set by the most
+  // limiting check. Explain when the score looks better than the decision
+  // (Low-risk score under Caution, or Caution-or-better score under No-go).
+  const score = Number(data.safety.score);
+  const scoreOutranksDecision = !insufficient && Number.isFinite(score)
+    && ((decision.level === 'CAUTION' && score >= 85) || (decision.level === 'NO-GO' && score >= 70));
+  const limiting = decision.level === 'NO-GO' ? decision.blockers.length : decision.cautions.length;
+  const limitingLabel = decision.level === 'NO-GO'
+    ? (limiting > 1 ? `${limiting} blocking checks` : 'a blocking check')
+    : (limiting > 1 ? `${limiting} checks that need attention` : 'a check that needs attention');
+  const bridge = scoreOutranksDecision
+    ? `Score ${Number(score.toFixed(1))} rates conditions overall. This decision is set by ${limitingLabel}.`
+    : '';
   const reason = decision.blockers[0] || (review ? `${review.title}. ${review.action}` : '') || primaryReason || decision.cautions[0] || 'No critical threshold failures in the available forecast. Reassess conditions in the field.';
   return (
     <section className={`field-verdict is-${tone}`} aria-labelledby="field-verdict-title">
@@ -36,10 +49,11 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
         <span className="report-decision-label">Trip decision</span><span className={`field-badge is-${tone}`}>{decision.level}</span>
         <h2 id="field-verdict-title">{decision.headline}</h2>
         <p className="report-decision-reason">{reason}</p>
+        {bridge && <p className="report-decision-bridge">{bridge}</p>}
       </div>
       <div className="field-verdict-aside">
         <span className="field-kicker">Evidence quality</span>
-        <strong>{data.safety.evidenceQuality || 'Not assessed'}</strong>
+        <strong className={data.safety.evidenceQuality ? undefined : 'is-unassessed'}>{data.safety.evidenceQuality || 'Not assessed'}</strong>
         {data.safety.coverage && <span>{data.safety.coverage.completeHours} of {data.safety.coverage.requestedHours} hours covered</span>}
         <button onClick={onSources}>Checks &amp; sources<ArrowRight size={14} /></button>
       </div>

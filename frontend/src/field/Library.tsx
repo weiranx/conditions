@@ -28,7 +28,7 @@ import { ReportHistory } from "./ReportHistory";
 import { useAccount } from "../hooks/useAccount";
 import type { PersistedReport } from "../app/report-storage";
 import type { Workspace } from "./model/useWorkspace";
-import { ageLabel, dateLabel, type Page } from "./data";
+import { ageLabel, dateLabel, sentenceCase, type Page } from "./data";
 import { Dialog } from "./Dialog";
 import { Details } from "./Details";
 
@@ -86,7 +86,7 @@ function WatchHistory({ id }: { id: string }) {
           <span className="field-kicker">
             {check.checkType === "manual" ? "Manual check" : "Automatic check"} · {watchCheckLabel(check.status)}
           </span>
-          <h3>{ageLabel(check.checkedAt)}</h3>
+          <h3>{sentenceCase(ageLabel(check.checkedAt))}</h3>
           <p>{watchCheckDetail(check)}</p>
           {check.error && <p className="field-warning">{check.error}</p>}
           <Details title="Check measurements" value={check.summary} />

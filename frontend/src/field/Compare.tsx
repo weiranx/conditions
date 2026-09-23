@@ -6,7 +6,7 @@ import type { Workspace } from "./model/useWorkspace";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { Forecast } from "./Forecast";
 import { buildPersistedReport } from "../app/report-storage";
-import { emptyAi, dateLabel, ageLabel } from "./data";
+import { emptyAi, dateLabel, ageLabel, sentenceCase } from "./data";
 import { Chat } from "./Chat";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import type { MultiDayTripForecastDay } from "../hooks/useTripForecast";
@@ -375,7 +375,7 @@ function CompareDays({ workspace: w }: { workspace: Workspace }) {
                     </div>
                     <div>
                       <dt>Source freshness</dt>
-                      <dd>{ageLabel(selected.sourceIssuedTime)}</dd>
+                      <dd>{sentenceCase(ageLabel(selected.sourceIssuedTime))}</dd>
                       <small>
                         {selected.partialData
                           ? "Partial data. Verify current sources."

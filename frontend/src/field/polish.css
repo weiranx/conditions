@@ -56,3 +56,88 @@ html .field-app .forecast-sky {
     transition: none;
   }
 }
+
+/* A missing evidence grade is a gap, not a finding: keep it quiet so it does
+   not compete with the trip decision. */
+html .field-app .field-verdict-aside > strong.is-unassessed {
+  font-size: 14px;
+  font-weight: 450;
+  color: var(--f-muted);
+}
+
+/* Phones: get the verdict closer to the first screen. The title row keeps
+   a compact Edit plan button beside the name, and the four report actions
+   share one row of compact icon-over-label tiles instead of a 2x2 grid. */
+@media (max-width: 650px) {
+  html .field-app .field-report .field-report-head {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+  html .field-app .field-report .field-report-head > .field-button {
+    flex: none;
+    width: auto;
+    min-height: 40px;
+    padding: 0 12px;
+    gap: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  html .field-app .field-report .field-report-toolbar {
+    display: grid;
+    gap: 10px;
+    padding-bottom: 14px;
+  }
+  html .field-app .field-report .field-report-toolbar > div {
+    display: grid;
+    grid-template-columns: none;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 6px;
+    width: 100%;
+  }
+  html .field-app .field-report .field-report-toolbar > div > button,
+  html .field-app .field-report .field-report-toolbar > div > details > summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    min-height: 54px;
+    padding: 6px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+  }
+  html .field-app .field-report .field-report-toolbar > div > button svg,
+  html .field-app .field-report .field-report-toolbar > div > details > summary svg {
+    width: 16px;
+    height: 16px;
+  }
+  html .field-app .field-report .field-report-toolbar > div > details {
+    min-width: 0;
+  }
+  html .field-app .field-report .field-verdict-aside {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  html .field-app .field-report .field-verdict-aside :is(.field-kicker, strong, button) {
+    white-space: nowrap;
+  }
+  html .field-app .field-report .field-verdict-aside button {
+    margin-left: auto;
+  }
+}
+
+/* Explains a high score beside a Caution or No-go decision. */
+html .field-app .report-decision-bridge {
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--f-muted);
+}
