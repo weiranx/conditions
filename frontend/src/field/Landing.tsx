@@ -1,270 +1,220 @@
-import { useEffect, type CSSProperties } from "react";
-import {
-  ArrowRight,
-  Bell,
-  CalendarRange,
-  CloudSun,
-  Flame,
-  Mountain,
-  Route,
-  ShieldAlert,
-  Snowflake,
-  Sunrise,
-  TriangleAlert,
-  Wind,
-  type LucideIcon,
-} from "lucide-react";
+import { useEffect } from "react";
+import { ArrowRight, Mountain } from "lucide-react";
 import { markLandingSeen } from "../app/landing-gate";
+import { loadUserPreferences } from "../app/preferences";
+import { SkyHero } from "./sky/SkyHero";
+import { buildSkyHours, type PlannedRow } from "./sky/sky-model";
+import "./sky/tokens.css";
+import "./sky/sky.css";
 import "./landing.css";
 
-type Signal = { icon: LucideIcon; name: string; source: string };
-
-const SIGNALS: Signal[] = [
-  { icon: CloudSun, name: "Weather", source: "NOAA / NWS, Open-Meteo" },
-  { icon: ShieldAlert, name: "Avalanche", source: "Avalanche.org centers" },
-  { icon: Snowflake, name: "Snowpack", source: "SNOTEL, NOHRSC" },
-  { icon: TriangleAlert, name: "Alerts", source: "NWS watches & warnings" },
-  { icon: Wind, name: "Air quality", source: "AQI and smoke" },
-  { icon: Flame, name: "Fire & heat", source: "Fire weather, heat risk" },
-  { icon: Sunrise, name: "Daylight", source: "Sunrise, sunset, twilight" },
-  { icon: Mountain, name: "Terrain", source: "Elevation and surface" },
+/* Sample day for the live report header: a clear, calm morning on Rainier,
+   then gusts over a 25 mph limit and snow showers from noon. */
+const SAMPLE_START = "05:00";
+const SAMPLE_SUNRISE = 6 * 60 + 52;
+const SAMPLE_SUNSET = 19 * 60 + 10;
+const SAMPLE: [string, number, string, number, number][] = [
+  ["5:00 AM", 22, "Clear", 12, 0],
+  ["6:00 AM", 21, "Clear", 14, 0],
+  ["7:00 AM", 24, "Sunny", 15, 0],
+  ["8:00 AM", 28, "Mostly sunny", 17, 5],
+  ["9:00 AM", 31, "Partly cloudy", 19, 10],
+  ["10:00 AM", 33, "Partly cloudy", 22, 15],
+  ["11:00 AM", 34, "Mostly cloudy", 24, 25],
+  ["12:00 PM", 33, "Cloudy", 29, 35],
+  ["1:00 PM", 31, "Snow showers", 33, 55],
+  ["2:00 PM", 29, "Snow showers", 35, 70],
+  ["3:00 PM", 28, "Snow showers", 31, 60],
+  ["4:00 PM", 30, "Mostly cloudy", 24, 30],
 ];
+const GUST_LIMIT = 25;
+const PRECIP_LIMIT = 60;
 
-const STEPS = [
-  {
-    title: "Pick your objective",
-    body: "Search a peak or trailhead, drop a pin on the map, or import a GPX route.",
-  },
-  {
-    title: "Set your window",
-    body: "Choose the date, your start time, and how many hours you expect to be out.",
-  },
-  {
-    title: "Read the brief",
-    body: "Get Go, Caution, or No-go with the reasons, hour by hour, and the sources behind them.",
-  },
-];
-
-const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
-  {
-    icon: CalendarRange,
-    title: "Compare days and objectives",
-    body: "Rank the next week, or line up several peaks against the same dates to find your Plan A and Plan B.",
-  },
-  {
-    icon: Route,
-    title: "Route-aware",
-    body: "Import a GPX track to check conditions at each checkpoint along the elevation profile.",
-  },
-  {
-    icon: Bell,
-    title: "Watch an objective",
-    body: "Save a trip to your watchlist and get notified when the forecast for it changes.",
-  },
-];
-
-const QUICK_STARTS = [
-  { name: "Mount Rainier", lat: 46.8523, lon: -121.7603 },
-  { name: "Grand Teton", lat: 43.7417, lon: -110.8024 },
-  { name: "Mount Whitney", lat: 36.5785, lon: -118.2923 },
-];
-
-/* Illustrative hours for the sample brief: wind builds after midday. */
-const SAMPLE_HOURS = [
-  { h: "4a", wind: 12 }, { h: "5a", wind: 13 }, { h: "6a", wind: 14 },
-  { h: "7a", wind: 15 }, { h: "8a", wind: 17 }, { h: "9a", wind: 19 },
-  { h: "10a", wind: 22 }, { h: "11a", wind: 26 }, { h: "12p", wind: 31 },
-  { h: "1p", wind: 36 }, { h: "2p", wind: 38 }, { h: "3p", wind: 35 },
-];
-const WIND_LIMIT = 30;
-
-function plannerLink(peak: { name: string; lat: number; lon: number }) {
-  const params = new URLSearchParams({ lat: String(peak.lat), lon: String(peak.lon), name: peak.name });
-  return `/planner?${params.toString()}`;
+function sampleRows(): PlannedRow[] {
+  return SAMPLE.map(([time, temp, condition, gust, precipChance]) => {
+    const failedRules = [
+      ...(gust > GUST_LIMIT ? [`gust ${gust}>${GUST_LIMIT} mph`] : []),
+      ...(precipChance > PRECIP_LIMIT ? [`precip ${precipChance}%>${PRECIP_LIMIT}%`] : []),
+    ];
+    return {
+      time, temp, condition, gust, precipChance, failedRules,
+      feelsLike: temp - Math.round(gust / 3),
+      wind: Math.round(gust * 0.6),
+      pass: failedRules.length === 0,
+      reasonSummary: "",
+      failedRuleLabels: [],
+      complete: true,
+    };
+  });
 }
 
-function BrandMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg viewBox="80 120 328 220" width={size} height={size * 0.67} aria-hidden="true">
-      <path
-        d="M96 322 L196 178 L232 218 L292 138 L392 322"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="30"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+const SAMPLE_HOURS = buildSkyHours(sampleRows(), {
+  start: SAMPLE_START,
+  sunriseMinutes: SAMPLE_SUNRISE,
+  sunsetMinutes: SAMPLE_SUNSET,
+});
+
+function clock(minute: number) {
+  const m = ((minute % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  return `${h % 12 || 12}:${String(m % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
-function SampleBrief() {
-  const max = 40;
-  return (
-    <figure className="landing-brief" aria-label="Sample conditions brief">
-      <div className="landing-brief-head">
-        <div>
-          <span className="landing-mono">Sample brief · Sat 4:00 AM · 11 hr</span>
-          <strong>Mount Rainier via Camp Muir</strong>
-        </div>
-        <span className="landing-verdict">
-          <TriangleAlert size={14} aria-hidden="true" />
-          Caution
-        </span>
-      </div>
-      <p className="landing-brief-headline">
-        Good morning window. Summit wind passes your limit after noon, so plan to turn around by 11:30 AM.
-      </p>
-      <div className="landing-brief-chart" role="img" aria-label="Wind gusts rise from 12 to 38 mph, crossing the 30 mph limit at noon">
-        <div className="landing-brief-chart-label">
-          <span className="landing-mono">Gusts, mph</span>
-          <span className="landing-mono landing-limit-key">Limit {WIND_LIMIT}</span>
-        </div>
-        <div className="landing-bars">
-          <span className="landing-limit" style={{ bottom: `${(WIND_LIMIT / max) * 100}%` }} />
-          {SAMPLE_HOURS.map((hour, index) => (
-            <span key={hour.h} className="landing-bar" style={{ "--i": index } as CSSProperties}>
-              <span
-                className={hour.wind > WIND_LIMIT ? "is-over" : undefined}
-                style={{ height: `${(hour.wind / max) * 100}%` }}
-              />
-              <small>{hour.h}</small>
-            </span>
-          ))}
-        </div>
-      </div>
-      <dl className="landing-brief-facts">
-        <div><dt>Avalanche</dt><dd>Moderate above treeline</dd></div>
-        <div><dt>Freezing level</dt><dd>9,800 ft</dd></div>
-        <div><dt>Sunrise</dt><dd>6:48 AM</dd></div>
-        <div><dt>Sources</dt><dd>7 of 7 fresh</dd></div>
-      </dl>
-    </figure>
-  );
-}
+const SOURCES: [string, string, string][] = [
+  ["Weather", "Hourly temperature, feels-like, wind, gusts and precipitation across your window, adjusted to your elevation.", "NOAA / NWS, with Open-Meteo filling gaps"],
+  ["Avalanche", "Danger by elevation band, the listed avalanche problems and the forecaster’s bottom line, where a center covers the area.", "Avalanche.org and regional centers"],
+  ["Snowpack", "Snow depth and water content at the nearest stations, and recent snowfall.", "NRCS SNOTEL, NOAA NOHRSC"],
+  ["Alerts", "Active watches, warnings and advisories for the point you picked.", "National Weather Service"],
+  ["Air and fire", "Air quality, smoke, nearby fire activity and heat risk.", "AirNow, NASA FIRMS, NIFC"],
+  ["Daylight", "Sunrise, sunset, and how much of your window falls in the dark.", "Sunrise-Sunset API"],
+  ["Terrain", "Objective elevation, likely trail surface, and conditions at each checkpoint of an imported GPX route.", "USGS, Open-Meteo, OpenStreetMap"],
+];
+
+const EXTRAS: [string, string][] = [
+  ["Compare days", "Rank the coming days for one objective and open any of them as a full report."],
+  ["Compare objectives", "Line up two to five objectives across up to a week of dates, then keep a Plan A and a Plan B."],
+  ["Watch an objective", "Save a trip to your watchlist and get an email when its forecast changes."],
+];
+
+const RAINIER = "/planner?lat=46.8523&lon=-121.7603&name=Mount%20Rainier";
 
 export default function Landing() {
   useEffect(() => {
     markLandingSeen();
     const previous = document.title;
-    document.title = "Backcountry Conditions — Know the mountain before you go";
+    document.title = "Backcountry Conditions";
+    const root = document.documentElement;
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const mode = loadUserPreferences().themeMode;
+    const apply = () => root.setAttribute("data-theme", mode === "system" ? (media?.matches ? "dark" : "light") : mode);
+    apply();
+    media?.addEventListener?.("change", apply);
     return () => {
       document.title = previous;
+      media?.removeEventListener?.("change", apply);
     };
   }, []);
 
   return (
     <div className="landing">
       <a className="landing-skip" href="#landing-main">Skip to content</a>
-      <header className="landing-nav">
-        <a className="landing-brand" href="/welcome" aria-label="Backcountry Conditions home">
-          <BrandMark />
-          <span>Backcountry <em>Conditions</em></span>
+      <header className="landing-bar">
+        <a className="landing-brand" href="/welcome">
+          <Mountain size={22} strokeWidth={1.5} aria-hidden="true" />
+          Backcountry Conditions
         </a>
-        <nav aria-label="Landing">
-          <a href="#how">How it works</a>
-          <a href="#signals">Sources</a>
-          <a className="landing-nav-cta" href="/">Open planner</a>
+        <nav aria-label="Site">
+          <a href="#sources">Sources</a>
+          <a href="/">Open the planner</a>
         </nav>
       </header>
 
       <main id="landing-main">
-        <section className="landing-hero" aria-labelledby="landing-title">
-          <div className="landing-hero-copy">
-            <span className="landing-mono landing-eyebrow">Backcountry trip planning</span>
-            <h1 id="landing-title">
-              Know the mountain <span>before you leave the trailhead.</span>
-            </h1>
-            <p className="landing-lede">
-              Weather, avalanche, snowpack, alerts, air quality, and daylight, pulled together for the exact
-              hours you’ll be out, with a clear call and the reasons behind it.
+        <section className="landing-intro" aria-labelledby="landing-title">
+          <h1 id="landing-title">Conditions for the hours you’ll actually be out.</h1>
+          <p>
+            Pick an objective, a start time and how long you’ll be out. Backcountry Conditions reads the forecast, the
+            avalanche bulletin, snowpack, alerts, smoke and daylight, checks each hour against your own limits, and
+            shows you which ones need a second look.
+          </p>
+          <div className="landing-actions">
+            <a className="landing-button" href="/">Plan an outing</a>
+            <a className="landing-link" href={RAINIER}>
+              Or start with Mount Rainier <ArrowRight size={16} aria-hidden="true" />
+            </a>
+          </div>
+        </section>
+
+        <figure className="landing-demo">
+          <div className="sky-report">
+            <SkyHero
+              hours={SAMPLE_HOURS}
+              sunrise={SAMPLE_SUNRISE}
+              sunset={SAMPLE_SUNSET}
+              kicker="Sample conditions report"
+              title="Mount Rainier"
+              titleAs="h2"
+              subtitle="Saturday · 5:00 AM start · 12 hours · 14,411 ft"
+              level="CAUTION"
+              headline="Summit by noon or turn around early."
+              reason="The morning is clear with light wind. From noon, gusts pass your 25 mph limit and snow showers move in."
+              format={{
+                temp: (f) => `${Math.round(f)}°F`,
+                wind: (mph) => `${Math.round(mph)} mph`,
+                clock,
+                timeStyle: "12h",
+              }}
+            />
+          </div>
+          <figcaption>
+            The top of a real report, running on sample data. Drag across the sky or use the arrow keys to read any hour.
+          </figcaption>
+        </figure>
+
+        <section className="landing-section" id="sources" aria-labelledby="landing-sources-title">
+          <header>
+            <h2 id="landing-sources-title">What goes into a brief</h2>
+            <p>
+              Every source carries the time it was last updated. Anything stale or missing is marked in the report
+              rather than quietly left out.
+            </p>
+          </header>
+          <dl className="landing-sources">
+            {SOURCES.map(([name, what, from]) => (
+              <div key={name}>
+                <dt>{name}</dt>
+                <dd>{what}</dd>
+                <dd className="landing-source-from">{from}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="landing-section" aria-labelledby="landing-extras-title">
+          <header>
+            <h2 id="landing-extras-title">When one day isn’t the question</h2>
+            <p>Most trips start with a window, not a date.</p>
+          </header>
+          <dl className="landing-extras">
+            {EXTRAS.map(([name, body]) => (
+              <div key={name}>
+                <dt>{name}</dt>
+                <dd>{body}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="landing-aid" aria-labelledby="landing-aid-title">
+          <figure>
+            <img
+              src="/hero-rainier.jpg"
+              width={1672}
+              height={941}
+              loading="lazy"
+              alt="Mount Rainier above a sea of cloud, with a lenticular cloud capping the summit"
+            />
+            <figcaption>A lenticular cap on Rainier: a sign of strong wind over the summit.</figcaption>
+          </figure>
+          <div>
+            <h2 id="landing-aid-title">A planning aid, not a verdict</h2>
+            <p>
+              Forecasts miss. Avalanche bulletins cover whole regions. Nothing here has seen your slope today.
+            </p>
+            <p>
+              Use the brief to decide whether a day is worth a closer look and what to watch for, then make the call
+              on the ground.
             </p>
             <div className="landing-actions">
-              <a className="landing-button landing-button-primary" href="/">
-                Start planning <ArrowRight size={17} aria-hidden="true" />
-              </a>
-              <a className="landing-button landing-button-ghost" href="#how">See how it works</a>
+              <a className="landing-button" href="/">Plan an outing</a>
+              <span className="landing-note">No account needed. Sign in to save reports and watch objectives.</span>
             </div>
-            <p className="landing-quick">
-              <span>Try it:</span>
-              {QUICK_STARTS.map((peak) => (
-                <a key={peak.name} href={plannerLink(peak)}>{peak.name}</a>
-              ))}
-            </p>
           </div>
-          <SampleBrief />
-        </section>
-
-        <section className="landing-section" id="signals" aria-labelledby="landing-signals-title">
-          <div className="landing-section-head">
-            <span className="landing-mono landing-eyebrow">One brief, many sources</span>
-            <h2 id="landing-signals-title">Stop juggling eight browser tabs.</h2>
-            <p>
-              Every signal is checked against your date, start time, and trip length, and each one shows where it came
-              from and how fresh it is.
-            </p>
-          </div>
-          <ul className="landing-signals">
-            {SIGNALS.map((signal) => (
-              <li key={signal.name}>
-                <signal.icon size={20} strokeWidth={1.6} aria-hidden="true" />
-                <strong>{signal.name}</strong>
-                <span>{signal.source}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="landing-section" id="how" aria-labelledby="landing-how-title">
-          <div className="landing-section-head">
-            <span className="landing-mono landing-eyebrow">How it works</span>
-            <h2 id="landing-how-title">From objective to decision in three steps.</h2>
-          </div>
-          <ol className="landing-steps">
-            {STEPS.map((step, index) => (
-              <li key={step.title}>
-                <span className="landing-step-number landing-mono">{String(index + 1).padStart(2, "0")}</span>
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className="landing-section" aria-labelledby="landing-features-title">
-          <div className="landing-section-head">
-            <span className="landing-mono landing-eyebrow">Beyond a single day</span>
-            <h2 id="landing-features-title">Built for how trips actually get planned.</h2>
-          </div>
-          <div className="landing-features">
-            {FEATURES.map((feature) => (
-              <article key={feature.title}>
-                <feature.icon size={22} strokeWidth={1.6} aria-hidden="true" />
-                <h3>{feature.title}</h3>
-                <p>{feature.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="landing-final" aria-labelledby="landing-final-title">
-          <h2 id="landing-final-title">Your next objective is waiting.</h2>
-          <p>No account needed to try it. Sign in to save briefs and watch objectives.</p>
-          <a className="landing-button landing-button-primary" href="/">
-            Plan an outing <ArrowRight size={17} aria-hidden="true" />
-          </a>
-          <p className="landing-disclaimer">
-            Backcountry Conditions is a planning aid, not a guarantee. Forecasts can be wrong. Verify conditions in the
-            field and make your own call.
-          </p>
         </section>
       </main>
 
       <footer className="landing-footer">
-        <span className="landing-brand">
-          <BrandMark size={22} />
-          <span>Backcountry <em>Conditions</em></span>
-        </span>
+        <span>Backcountry Conditions</span>
         <nav aria-label="Legal">
           <a href="/status">Status</a>
           <a href="/privacy">Privacy</a>

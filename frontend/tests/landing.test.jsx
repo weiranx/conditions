@@ -8,6 +8,8 @@ import { LANDING_SEEN_KEY, shouldShowLanding } from '../src/app/landing-gate';
 
 async function mount(t) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://conditions.example/welcome' });
+  // Reduced motion skips the sun animation, which needs requestAnimationFrame.
+  dom.window.matchMedia = (query) => ({ matches: query.includes('reduce'), addEventListener() {}, removeEventListener() {} });
   const old = { window: globalThis.window, document: globalThis.document };
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
@@ -24,24 +26,32 @@ async function mount(t) {
 
 test('landing page leads into the planner', async (t) => {
   await mount(t);
-  assert.match(document.querySelector('h1').textContent, /Know the mountain/);
-  assert.match(document.title, /Backcountry Conditions/);
-  const start = [...document.querySelectorAll('a')].find((a) => a.textContent.includes('Start planning'));
-  assert.equal(start.getAttribute('href'), '/');
+  assert.equal(document.querySelectorAll('h1').length, 1);
+  assert.match(document.querySelector('h1').textContent, /hours you’ll actually be out/);
+  const plan = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Plan an outing');
+  assert.equal(plan.getAttribute('href'), '/');
 });
 
-test('quick starts open the planner with an objective', async (t) => {
+test('sample link opens the planner with an objective', async (t) => {
   await mount(t);
-  const rainier = [...document.querySelectorAll('.landing-quick a')].find((a) => a.textContent === 'Mount Rainier');
+  const rainier = [...document.querySelectorAll('a')].find((a) => a.textContent.includes('Mount Rainier'));
   const url = new URL(rainier.getAttribute('href'), 'https://conditions.example');
   assert.equal(url.pathname, '/planner');
   assert.equal(url.searchParams.get('name'), 'Mount Rainier');
   assert.equal(Number(url.searchParams.get('lat')), 46.8523);
 });
 
-test('landing page keeps the planning-aid disclaimer', async (t) => {
+test('sample report header flags the afternoon hours over the limits', async (t) => {
   await mount(t);
-  assert.match(document.body.textContent, /planning aid, not a guarantee/);
+  const sky = document.querySelector('[role="slider"]');
+  assert.ok(sky, 'the live report header is interactive');
+  assert.match(document.body.textContent, /Outside your limits · 12:00 PM–4:00 PM/);
+  assert.match(document.body.textContent, /Caution/);
+});
+
+test('landing page keeps the planning-aid message', async (t) => {
+  await mount(t);
+  assert.match(document.body.textContent, /A planning aid, not a verdict/);
 });
 
 const at = (pathname, search = '', hash = '') => ({ pathname, search, hash });
