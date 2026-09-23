@@ -1,6 +1,7 @@
 /* AI brief panel: header, empty/loading states and the parsed explanation.
    Accent marks only the recommended move; every other section stays neutral. */
 .ai-brief,
+.ai-panel,
 .ai-explanation {
   --ai-label: var(--sky-label, var(--f-ink));
   --ai-secondary: var(--sky-secondary, var(--f-muted));
@@ -25,14 +26,14 @@
 .field-app .field-panel.ai-brief .ai-brief-heading h2 {
   margin-bottom: 0;
 }
-.field-app .ai-brief .ai-brief-regenerate {
+.field-app :is(.ai-brief, .ai-panel) .ai-brief-regenerate {
   flex: none;
   min-height: 36px;
   padding: 0 12px;
   border-radius: 10px;
   font-size: 13px;
 }
-.ai-brief .field-button[aria-disabled="true"] {
+:is(.ai-brief, .ai-panel) .field-button[aria-disabled="true"] {
   cursor: progress;
   opacity: 0.7;
 }
@@ -62,9 +63,8 @@
 .field-app .field-panel.ai-brief > .field-warning {
   margin-top: 14px;
 }
-.field-app .field-panel.ai-brief > .ai-brief-footnote {
+.ai-brief-footnote {
   display: flex;
-  max-width: none;
   align-items: flex-start;
   gap: 6px;
   margin: 16px 0 0;
@@ -73,6 +73,10 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--ai-secondary);
+}
+.field-app .field-panel.ai-brief > .ai-brief-footnote {
+  max-width: none;
+  font-size: 12px;
 }
 .ai-brief-footnote svg {
   flex: none;
@@ -131,7 +135,7 @@
   margin-bottom: 0;
 }
 /* The overall picture reads as the lead paragraph. */
-.ai-explanation-section:is(.is-overview, .is-note) .ai-explanation-copy {
+.ai-explanation-section:is(.is-overview, .is-lead) .ai-explanation-copy {
   max-width: 72ch;
   font-size: 17px;
   line-height: 1.55;
@@ -154,12 +158,73 @@
   padding-top: 16px;
   border-top: 1px solid var(--ai-separator);
 }
+.ai-explanation-supporting.is-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .ai-explanation-supporting .ai-explanation-copy {
   font-size: 14px;
   line-height: 1.55;
   color: var(--ai-secondary);
 }
 
+/* Snow analysis: the imagery sits beside the coverage summary and takeaway. */
+.ai-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ai-panel-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ai-accent) 12%, transparent);
+  color: var(--ai-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ai-panel .ai-brief-empty {
+  margin-top: 6px;
+}
+.ai-panel .ai-explanation {
+  margin-top: 8px;
+}
+.ai-explanation-media {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.ai-explanation-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.ai-snow-figure {
+  margin: 0;
+  min-width: 0;
+}
+.ai-snow-figure img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14px;
+  background: var(--ai-fill);
+}
+.ai-snow-figure figcaption {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ai-secondary);
+}
 .ai-explanation-skeleton {
   display: grid;
   gap: 10px;
@@ -188,7 +253,18 @@
     animation: none;
   }
 }
+@media (max-width: 900px) {
+  .ai-explanation-supporting.is-three {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 650px) {
+  .ai-explanation-media {
+    grid-template-columns: 1fr;
+  }
+  .ai-snow-figure {
+    max-width: 360px;
+  }
   .ai-brief-empty {
     flex-direction: column;
     align-items: stretch;
@@ -196,7 +272,7 @@
   .ai-explanation-supporting {
     grid-template-columns: 1fr;
   }
-  .ai-explanation-section:is(.is-overview, .is-note) .ai-explanation-copy {
+  .ai-explanation-section:is(.is-overview, .is-lead) .ai-explanation-copy {
     font-size: 16px;
   }
 }
