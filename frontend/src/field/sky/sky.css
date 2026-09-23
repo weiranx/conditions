@@ -1,49 +1,4 @@
-/* Sky design for the conditions report.
-   One colour, one meaning:
-     --sky-accent  brand and primary action only
-     --sky-caution over a limit (always paired with a triangle glyph or hatching)
-     --sky-cold    precipitation and below-freezing
-     --sky-missing data that could not be loaded (paired with a dashed outline)
-   Contrast against --sky-surface (light / dark): label 16.6/14.4, secondary 6.4/7.2,
-   accent 8.1/8.5, caution 5.9/7.9, cold 6.1/7.5, missing 6.2/7.4.
-   White text on the sky measures 5.1:1 or better over the brightest sampled pixel. */
-:root {
-  --sky-bg: #f2f3f1;
-  --sky-surface: #ffffff;
-  --sky-fill: #e7e9e6;
-  --sky-separator: rgba(24, 32, 28, 0.12);
-  --sky-label: #18201c;
-  --sky-secondary: #58615c;
-  --sky-accent: #1e5a43;
-  --sky-on-accent: #ffffff;
-  --sky-caution: #a8470a;
-  --sky-caution-fill: rgba(168, 71, 10, 0.14);
-  --sky-cold: #1a64a8;
-  --sky-cold-fill: rgba(26, 100, 168, 0.16);
-  --sky-missing: #5c6360;
-  --sky-ok-fill: #d5dad6;
-  --sky-radius: 20px;
-}
-html[data-theme="dark"] {
-  --sky-bg: #0f1211;
-  --sky-surface: #1b1f1d;
-  --sky-fill: #262b29;
-  --sky-separator: rgba(236, 239, 237, 0.12);
-  --sky-label: #eceeed;
-  --sky-secondary: #a3ada8;
-  --sky-accent: #7fc8a4;
-  --sky-on-accent: #0f1211;
-  --sky-caution: #ff9a4d;
-  --sky-caution-fill: rgba(255, 154, 77, 0.18);
-  --sky-cold: #72b4f0;
-  --sky-cold-fill: rgba(114, 180, 240, 0.2);
-  --sky-missing: #a7afab;
-  --sky-ok-fill: #343a37;
-}
-@media (prefers-contrast: more) {
-  :root { --sky-separator: rgba(24, 32, 28, 0.4); --sky-ok-fill: #b9c0bb; }
-}
-
+/* Sky design for the conditions report. Tokens live in tokens.css. */
 .sky-report { color: var(--sky-label); font-size: 16px; max-width: 1120px; }
 .sky-report .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sky-report button { font: inherit; }
@@ -131,13 +86,14 @@ html[data-theme="dark"] {
 .sky-readout-flag.is-within, .sky-readout-flag.is-missing { color: rgba(255, 255, 255, 0.85); font-weight: 500; }
 
 /* ---------- Chapter header ---------- */
-.sky-chapter-head { padding: 12px 0 0; }
-.sky-chapter-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* The head is display: contents so the tabs can stay pinned while the whole chapter scrolls. */
+.sky-chapter-head { display: contents; }
+.sky-chapter-bar { padding-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .sky-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 10px 0 4px; border: 0; background: none; color: var(--sky-accent); font-size: 16px; font-weight: 600; cursor: pointer; border-radius: 10px; }
 .sky-chapter-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; padding: 8px 0 12px; }
 .sky-chapter-title .sky-kicker { color: var(--sky-secondary); opacity: 1; }
 .sky-chapter-title h1 { margin: 4px 0 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; outline: none; }
-.sky-chapter-tabs { position: sticky; top: 0; z-index: 4; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; border-bottom: 1px solid var(--sky-separator); background: color-mix(in srgb, var(--f-bg) 88%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); }
+.sky-chapter-tabs { position: sticky; top: var(--field-sticky-top, 0px); z-index: 4; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; border-bottom: 1px solid var(--sky-separator); background: color-mix(in srgb, var(--f-bg) 88%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); }
 .sky-chapter-tabs button { flex: none; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: none; color: var(--sky-secondary); font-size: 14px; font-weight: 500; cursor: pointer; }
 .sky-chapter-tabs button[aria-current="page"] { background: var(--sky-label); color: var(--sky-bg); font-weight: 600; }
 

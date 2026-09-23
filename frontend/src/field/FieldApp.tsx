@@ -37,6 +37,8 @@ import "./field.css";
 import "./workspace.css";
 import "./mobile.css";
 import "./polish.css";
+import "./sky/tokens.css";
+import "./sky/shell.css";
 const Report = lazy(() =>
   import("./Report").then((module) => ({ default: module.Report })),
 );
@@ -70,16 +72,16 @@ export default function FieldApp() {
     route: w.importedGpxRoute,
   };
   const nav = [
-    { id: "home", label: "Workspace", icon: Compass },
-    { id: "planner", label: "Conditions brief", icon: Map },
+    { id: "home", label: "Workspace", short: "Plan", icon: Compass },
+    { id: "planner", label: "Conditions brief", short: "Brief", icon: Map },
     ...(w.featureFlags.tripPlanning
-      ? [{ id: "trip", label: "Compare", icon: Sunrise }]
+      ? [{ id: "trip", label: "Compare", short: "Compare", icon: Sunrise }]
       : []),
     ...(w.featureFlags.reportHistory
-      ? [{ id: "history", label: "Saved reports", icon: BookOpen }]
+      ? [{ id: "history", label: "Saved reports", short: "Saved", icon: BookOpen }]
       : []),
     ...(w.featureFlags.objectiveWatch
-      ? [{ id: "watches", label: "Watchlist", icon: Bell }]
+      ? [{ id: "watches", label: "Watchlist", short: "Watchlist", icon: Bell }]
       : []),
   ];
   const pageLabels: Record<string, string> = {
@@ -233,10 +235,10 @@ export default function FieldApp() {
             }}
           >
             <span>
-              <Mountain size={25} strokeWidth={1.4} />
+              <Mountain size={25} strokeWidth={1.4} aria-hidden="true" />
             </span>
             <strong>
-              Backcountry<small>CONDITIONS</small>
+              Backcountry <small>Conditions</small>
             </strong>
           </a>
           <span className="field-sidebar-label">PLANNING TOOLS</span>
@@ -247,8 +249,9 @@ export default function FieldApp() {
                 aria-current={w.view === item.id ? "page" : undefined}
                 onClick={() => navigate(item.id as AppView)}
               >
-                <item.icon size={18} strokeWidth={1.6} />
-                <span>{item.label}</span>
+                <item.icon size={18} strokeWidth={1.6} aria-hidden="true" />
+                <span className="field-nav-label">{item.label}</span>
+                <span className="field-nav-short">{item.short}</span>
                 {w.view === item.id && <span className="field-nav-dot" />}
               </button>
             ))}
