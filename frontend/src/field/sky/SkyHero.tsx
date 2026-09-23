@@ -14,12 +14,14 @@ type Formatters = {
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level, headline, reason, bridge, actions, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, level, headline, reason, bridge, actions, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
   kicker: string;
   title: string;
+  /** Heading element for the title; embeds below a page heading pass "h2". */
+  titleAs?: "h1" | "h2";
   subtitle: ReactNode;
   level: "GO" | "CAUTION" | "NO-GO" | string;
   headline: string;
@@ -111,6 +113,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
     : overRuns.length > 1 ? `${overRuns.length} periods outside your limits`
     : runs.some((run) => run.tone === "missing") ? "Some hours have incomplete readings" : "Within your limits all day";
   const calloutX = overRuns.length === 1 ? (x(overRuns[0].start) + x(overRuns[0].end + 1)) / 2 : width / 2;
+  // Keep the whole label inside the sky: about 7 px per character at 12 px bold, plus a margin.
+  const calloutHalf = Math.min(width / 2, (callout.length + 2) * 3.5 + 12);
   const toneWord = LEVEL_LABEL[level] || level;
   const tone = level === "GO" ? "go" : level === "NO-GO" ? "stop" : "watch";
 
@@ -228,7 +232,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
                 </g>
               );
             })}
-            <text x={Math.max(80, Math.min(width - 80, calloutX))} y={stripY - 8} textAnchor="middle" className="sky-callout"
+            <text x={Math.max(calloutHalf, Math.min(width - calloutHalf, calloutX))} y={stripY - 8} textAnchor="middle" className="sky-callout"
               fill={overRuns.length ? "#FF9A4D" : "rgba(255,255,255,.85)"}>
               {overRuns.length ? "▲ " : ""}{callout}
             </text>
@@ -243,7 +247,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
         <div className="sky-hero-grid">
         <div className="sky-hero-text">
         <span className="sky-kicker">{kicker}</span>
-        <h1>{title}</h1>
+        <Title className="sky-hero-title">{title}</Title>
         <p className="sky-subtitle">{subtitle}</p>
         <span className={`sky-pill is-${tone}`}>
           {tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}

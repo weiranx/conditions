@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   MapPinned,
   MessageCircleQuestion,
+  Moon,
   Route,
   Satellite,
   Server,
@@ -488,6 +489,13 @@ const PRODUCT_FEATURE_CONTROLS = [
     description:
       "Controls darkness scoring and planned start and return timing against sunrise and sunset.",
     icon: Clock3,
+  },
+  {
+    key: "contingencyPlanning",
+    label: "Delay & overnight",
+    description:
+      "Controls delay-margin scoring, the late-return and unplanned-night forecast, and its gear guidance.",
+    icon: Moon,
   },
   {
     key: "scoreBreakdown",

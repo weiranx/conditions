@@ -8,6 +8,7 @@ const SCORE_FEATURE_KEYS = Object.freeze([
   'fieldObservations',
   'windLoadingDetails',
   'daylightTimeline',
+  'contingencyPlanning',
   'weatherContextDetails',
 ]);
 
@@ -20,6 +21,7 @@ const FEATURE_LABELS = Object.freeze({
   fieldObservations: 'field observations',
   windLoadingDetails: 'avalanche wind loading',
   daylightTimeline: 'daylight and darkness',
+  contingencyPlanning: 'delay and overnight contingency',
   weatherContextDetails: 'weather visibility context',
 });
 
@@ -32,6 +34,7 @@ const FEATURE_REFERENCE_PATTERNS = Object.freeze({
   fieldObservations: /field observation|nearby station|weather station|radar|streamflow|stream crossing|\bqpe\b|\bnwps\b/iu,
   windLoadingDetails: /wind load(?:ing|ed)?|wind slab|snow transport/iu,
   daylightTimeline: /daylight|darkness|sunrise|sunset/iu,
+  contingencyPlanning: /delay margin|late return|unplanned night|if you(?:'|’)re delayed/iu,
   weatherContextDetails: /visibility risk|pressure trend|atmospheric context/iu,
 });
 
@@ -171,6 +174,7 @@ const factorBelongsToDisabledFeature = (factor, flags) => {
   )) return true;
   if (!isFeatureEnabled(flags, 'windLoadingDetails') && hazard === 'avalanche wind loading') return true;
   if (!isFeatureEnabled(flags, 'daylightTimeline') && hazard === 'darkness') return true;
+  if (!isFeatureEnabled(flags, 'contingencyPlanning') && hazard === 'delay margin') return true;
   if (!isFeatureEnabled(flags, 'weatherContextDetails') && hazard.includes('visibility')) return true;
   return false;
 };
@@ -191,6 +195,7 @@ const removeDisabledAnalysisDetails = (analysis, flags) => {
   if (!isFeatureEnabled(flags, 'snowpackDetails')) disabledPatterns.push(/snowpack/iu);
   if (!isFeatureEnabled(flags, 'fieldObservations')) disabledPatterns.push(/nearby station|radar|streamflow|stream crossing/iu);
   if (!isFeatureEnabled(flags, 'daylightTimeline')) disabledPatterns.push(/darkness|daylight|sunrise|sunset/iu);
+  if (!isFeatureEnabled(flags, 'contingencyPlanning')) disabledPatterns.push(/delay margin|late return/iu);
   if (!isFeatureEnabled(flags, 'weatherContextDetails')) disabledPatterns.push(/visibility/iu);
   const keepText = (value) => !disabledPatterns.some((pattern) => pattern.test(String(value || '')));
 
@@ -301,6 +306,7 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
     delete filtered.weather.elevationForecast;
     delete filtered.weather.elevationForecastNote;
   }
+  if (!isFeatureEnabled(flags, 'contingencyPlanning')) delete filtered.contingency;
   if (!isFeatureEnabled(flags, 'gearRecommendations')) delete filtered.gear;
 
   if (Array.isArray(filtered.gear)) {
@@ -316,6 +322,7 @@ const sanitizeReportForFeatureFlags = (report, flags) => {
       disabledGearIds.add('electrolytes-heat');
     }
     if (!isFeatureEnabled(flags, 'weatherContextDetails')) disabledGearIds.add('navigation-low-vis');
+    if (!isFeatureEnabled(flags, 'contingencyPlanning')) disabledGearIds.add('overnight-insulation');
     filtered.gear = withoutDisabledReferenceItems(
       filtered.gear.filter((item) => !disabledGearIds.has(String(item?.id || ''))),
     );

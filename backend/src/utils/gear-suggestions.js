@@ -13,6 +13,7 @@ const buildLayeringGearSuggestions = ({
   heatRiskData,
   selectedTravelWindowHours,
   scoreFeatures = null,
+  contingencyData = null,
 }) => {
   const MAX_GEAR_SUGGESTIONS = 12;
   const BASELINE_GEAR_IDS = new Set(['backcountry-essentials', 'layering-core']);
@@ -25,6 +26,7 @@ const buildLayeringGearSuggestions = ({
   const heatRiskEnabled = scoreFeatureEnabled('heatRiskDetails');
   const snowpackEnabled = scoreFeatureEnabled('snowpackDetails');
   const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
+  const contingencyEnabled = scoreFeatureEnabled('contingencyPlanning');
   const addSuggestion = (id, title, detail, category, tone, priority = 50) => {
     if (typeof id !== 'string' || !id.trim() || typeof title !== 'string' || !title.trim()) {
       return;
@@ -238,6 +240,30 @@ const buildLayeringGearSuggestions = ({
 
   if ((hasAlerts && cold) || avyDanger >= 3) {
     addSuggestion('emergency-shelter', 'Emergency shelter', 'Bivy sack or space blanket for severe conditions or extended rescue scenarios.', 'Safety', 'caution', 18);
+  }
+
+  const overnight = contingencyEnabled ? contingencyData?.overnight : null;
+  if (overnight?.status === 'ok' && overnight.relevant && (overnight.severity === 'moderate' || overnight.severity === 'high')) {
+    const nightLow = formatWhole(overnight.minFeelsLikeF, 'F');
+    const nightWet = Number(overnight.peakPrecipChance) >= 50 || overnight.freezingRain || overnight.snow;
+    addSuggestion(
+      'overnight-insulation',
+      'Unplanned-night insulation',
+      `Extra insulating layer, warm hat, gloves, and a sit pad sized for a night out${nightLow ? ` (night feels like ${nightLow})` : ''}, not just for moving.`,
+      'Safety',
+      overnight.severity === 'high' ? 'caution' : 'watch',
+      overnight.severity === 'high' ? 16 : 30,
+    );
+    if (overnight.severity === 'high' || nightWet) {
+      addSuggestion(
+        'emergency-shelter',
+        'Emergency shelter',
+        `Bivy sack or emergency blanket and a way to stay dry: ${String(overnight.summary || 'an unplanned night would be cold or wet').replace(/\.$/, '')}.`,
+        'Safety',
+        'caution',
+        17,
+      );
+    }
   }
 
   const rankedSuggestions = Array.from(suggestionMap.values())

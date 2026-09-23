@@ -5,6 +5,7 @@ const { estimateWindGustFromWindSpeed, findNearestCardinalFromDegreeSeries } = r
 const { parseStartClock, clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
 const { deriveTrailStatus, deriveTerrainCondition } = require('./terrain-condition');
 const { createCache, normalizeCoordKey } = require('./cache');
+const { AFTER_WINDOW_HOURS } = require('./contingency');
 
 const OPEN_METEO_CODE_LABELS = {
   0: 'Clear',
@@ -236,12 +237,20 @@ const blendNoaaWeatherWithFallback = (noaaWeatherData, fallbackWeatherData) => {
 
   const noaaTrend = Array.isArray(merged.trend) ? merged.trend : [];
   const fallbackTrend = Array.isArray(fallbackWeatherData.trend) ? fallbackWeatherData.trend : [];
+  const noaaAfterWindowTrend = Array.isArray(merged.afterWindowTrend) ? merged.afterWindowTrend : [];
+  const fallbackAfterWindowTrend = Array.isArray(fallbackWeatherData.afterWindowTrend) ? fallbackWeatherData.afterWindowTrend : [];
   if (noaaTrend.length < 6 && fallbackTrend.length > noaaTrend.length) {
     merged.trend = fallbackTrend;
+    // Keep the post-window rows from the same provider as the window itself.
+    merged.afterWindowTrend = fallbackAfterWindowTrend;
     fieldSources.trend = 'Open-Meteo';
     supplementedFields.push('trend');
   } else if (!fieldSources.trend) {
     fieldSources.trend = 'NOAA';
+  }
+  if (merged.trend === noaaTrend && noaaAfterWindowTrend.length === 0 && fallbackAfterWindowTrend.length > 0) {
+    merged.afterWindowTrend = fallbackAfterWindowTrend;
+    supplementedFields.push('afterWindowTrend');
   }
 
   if (noaaTrend.length > 0 && fallbackTrend.length > 0) {
@@ -527,7 +536,10 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
     });
 
     const forecastTrendHours = clampTravelWindowHours(trendHours, 12);
-    for (let offset = 0; offset < forecastTrendHours + (startClock && !startClock.endsWith(':00') ? 1 : 0); offset += 1) {
+    const trendRowCount = forecastTrendHours + (startClock && !startClock.endsWith(':00') ? 1 : 0);
+    // Hours past the planned return, for late-return and overnight scenarios only.
+    const afterWindowTrend = [];
+    for (let offset = 0; offset < trendRowCount + AFTER_WINDOW_HOURS; offset += 1) {
       const rowIndex = selectedHourIndex + offset;
       const rowIso = hourlyTimes[rowIndex];
       if (!rowIso) {
@@ -535,7 +547,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
       }
       const rawRowGust = readHourlyValue('wind_gusts_10m', rowIndex);
       const rowWind = Math.round(readHourlyValue('wind_speed_10m', rowIndex, Number.NaN));
-      trend.push({
+      (offset < trendRowCount ? trend : afterWindowTrend).push({
         time: hourLabelFromIso(rowIso, payload?.timezone || null),
         timeIso: rowIso,
         temp: Math.round(readHourlyValue('temperature_2m', rowIndex, Number.NaN)),
@@ -588,6 +600,7 @@ const createWeatherDataService = ({ fetchWithTimeout, requestTimeoutMs }) => {
         ?? new Date(new Date(selectedHourIso).getTime() + 3_600_000).toISOString(),
       forecastDate: resolvedDate,
       trend,
+      afterWindowTrend,
       dailyTempHighF: dailyTemperatureRange?.highF ?? null,
       dailyTempLowF: dailyTemperatureRange?.lowF ?? null,
       temperatureContext24h,

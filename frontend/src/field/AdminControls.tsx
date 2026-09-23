@@ -123,24 +123,36 @@ export function AdminControls({ a }: { a: Administration }) {
               </button>
             </div>
             <AdminNotice message={a.diagnosticsError || a.healthError} />
-            <DetailValues value={a.diagnosticSummary} />
-            <div className="field-detail-grid">
+            <p className="admin-summary-chips">
+              <span className="sky-chip">{a.diagnosticSummary.total} services</span>
+              <span className="sky-chip">{a.diagnosticSummary.operational} operational</span>
+              {a.diagnosticSummary.failed > 0 && (
+                <span className="sky-chip is-over">{a.diagnosticSummary.failed} failed</span>
+              )}
+              {a.diagnosticSummary.notConfigured > 0 && (
+                <span className="sky-chip is-missing">{a.diagnosticSummary.notConfigured} not configured</span>
+              )}
+            </p>
+            <ul className="admin-services">
               {a.diagnosticServices.map((service) => (
-                <article className="field-metric" key={service.id}>
-                  <span className="field-kicker">
-                    {service.status.replaceAll("_", " ")}
+                <li className={`admin-service is-${service.status}`} key={service.id}>
+                  <span className="admin-service-dot" aria-hidden="true" />
+                  <span>
+                    <strong>{service.name}</strong>
+                    <small>{service.message}</small>
                   </span>
-                  <h3>{service.name}</h3>
-                  <p>{service.message}</p>
-                  <small>
-                    {service.latencyMs === null
-                      ? "No response time"
-                      : `${service.latencyMs} ms`}
-                    {service.httpStatus ? ` · HTTP ${service.httpStatus}` : ""}
-                  </small>
-                </article>
+                  <span className="admin-service-meta">
+                    <b>{service.status.replaceAll("_", " ")}</b>
+                    <small>
+                      {service.latencyMs === null
+                        ? "No response time"
+                        : `${service.latencyMs} ms`}
+                      {service.httpStatus ? ` · HTTP ${service.httpStatus}` : ""}
+                    </small>
+                  </span>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
           <section className="field-panel">
             <h2>Health monitoring history</h2>

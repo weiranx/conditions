@@ -21,32 +21,32 @@
 .field-app .sky-report .field-feedback { margin: 0; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--sky-fill); color: var(--sky-label); font-size: 14px; }
 
 /* ---------- Tables ---------- */
-.field-app .sky-report .field-data-table { width: 100%; border-collapse: collapse; border: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
-.field-app .sky-report .field-data-table :is(th, td) { padding: 9px 10px; border: 0; border-bottom: 1px solid var(--sky-separator); background: none; text-align: left; }
-.field-app .sky-report .field-data-table thead th { font-size: 12px; font-weight: 600; color: var(--sky-secondary); text-transform: none; letter-spacing: 0; }
-.field-app .sky-report .field-data-table tbody tr:last-child > * { border-bottom: 0; }
-.field-app .sky-report .field-data-table small { display: block; font-size: 12px; color: var(--sky-secondary); }
+.field-app :is(.sky-report, .sky-screen) .field-data-table { width: 100%; border-collapse: collapse; border: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.field-app :is(.sky-report, .sky-screen) .field-data-table :is(th, td) { padding: 9px 10px; border: 0; border-bottom: 1px solid var(--sky-separator); background: none; text-align: left; }
+.field-app :is(.sky-report, .sky-screen) .field-data-table thead th { font-size: 12px; font-weight: 600; color: var(--sky-secondary); text-transform: none; letter-spacing: 0; }
+.field-app :is(.sky-report, .sky-screen) .field-data-table tbody tr:last-child > * { border-bottom: 0; }
+.field-app :is(.sky-report, .sky-screen) .field-data-table small { display: block; font-size: 12px; color: var(--sky-secondary); }
 
 /* ---------- Evidence disclosures: quiet rows at the foot of a card ---------- */
 .sky-evidence { display: grid; margin-top: auto; padding-top: 6px; border-top: 1px solid var(--sky-separator); }
 .sky-evidence.is-list { margin-top: 4px; }
-.field-app .sky-report :is(.field-detail-disclosure, .sky-evidence-details) { margin: 0; padding: 0; border: 0; }
-.field-app .sky-report :is(.sky-evidence, .sky-card, .field-panel) details.field-detail-disclosure + details.field-detail-disclosure { border-top: 1px solid var(--sky-separator); }
-.field-app .sky-report details.field-detail-disclosure > summary {
+.field-app :is(.sky-report, .sky-screen) :is(.field-detail-disclosure, .sky-evidence-details) { margin: 0; padding: 0; border: 0; }
+.field-app :is(.sky-report, .sky-screen) :is(.sky-evidence, .sky-card, .field-panel) details.field-detail-disclosure + details.field-detail-disclosure { border-top: 1px solid var(--sky-separator); }
+.field-app :is(.sky-report, .sky-screen) details.field-detail-disclosure > summary {
   display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0; cursor: pointer; list-style: none;
   font-size: 14px; font-weight: 600; color: var(--sky-accent);
 }
 .field-app .sky-report .sky-evidence details.field-detail-disclosure > summary { font-size: 13px; font-weight: 550; color: var(--sky-secondary); }
 .field-app .sky-report .sky-evidence details.field-detail-disclosure > summary:hover { color: var(--sky-label); }
-.field-app .sky-report details.field-detail-disclosure[open] > summary { color: var(--sky-label); }
-.field-app .sky-report details.field-detail-disclosure > :not(summary) { font-size: 13px; }
-.field-app .sky-report .field-record { display: grid; gap: 0; margin: 0 0 10px; padding: 4px 12px; border-radius: 12px; background: var(--sky-fill); }
-.field-app .sky-report .field-record > div { display: grid; grid-template-columns: minmax(120px, 38%) minmax(0, 1fr); gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--sky-separator); }
-.field-app .sky-report .field-record > div:last-child { border-bottom: 0; }
-.field-app .sky-report .field-record dt { color: var(--sky-secondary); font-size: 12px; }
-.field-app .sky-report .field-record dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
-.field-app .sky-report .field-record .field-record { background: var(--sky-surface); }
-.field-app .sky-report .field-raw-report { max-height: 360px; overflow: auto; padding: 12px; border-radius: 12px; background: var(--sky-fill); font-size: 12px; }
+.field-app :is(.sky-report, .sky-screen) details.field-detail-disclosure[open] > summary { color: var(--sky-label); }
+.field-app :is(.sky-report, .sky-screen) details.field-detail-disclosure > :not(summary) { font-size: 13px; }
+.field-app :is(.sky-report, .sky-screen) .field-record { display: grid; gap: 0; margin: 0 0 10px; padding: 4px 12px; border-radius: 12px; background: var(--sky-fill); }
+.field-app :is(.sky-report, .sky-screen) .field-record > div { display: grid; grid-template-columns: minmax(120px, 38%) minmax(0, 1fr); gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--sky-separator); }
+.field-app :is(.sky-report, .sky-screen) .field-record > div:last-child { border-bottom: 0; }
+.field-app :is(.sky-report, .sky-screen) .field-record dt { color: var(--sky-secondary); font-size: 12px; }
+.field-app :is(.sky-report, .sky-screen) .field-record dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.field-app :is(.sky-report, .sky-screen) .field-record .field-record { background: var(--sky-surface); }
+.field-app :is(.sky-report, .sky-screen) .field-raw-report { max-height: 360px; overflow: auto; padding: 12px; border-radius: 12px; background: var(--sky-fill); font-size: 12px; }
 
 /* ---------- Exposure grid and neutral mini charts ---------- */
 .sky-exposure-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
@@ -125,5 +125,5 @@
   .sky-exposure-grid { grid-template-columns: 1fr; gap: 10px; }
   .field-app .sky-report .report-precip-charts { grid-template-columns: 1fr; }
   .field-app .sky-report .field-panel { padding: 16px; }
-  .field-app .sky-report .field-record > div { grid-template-columns: 1fr; gap: 2px; }
+  .field-app :is(.sky-report, .sky-screen) .field-record > div { grid-template-columns: 1fr; gap: 2px; }
 }

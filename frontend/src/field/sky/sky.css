@@ -25,7 +25,7 @@
 .sky-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 20px 40px; align-items: start; }
 .sky-hero-text { min-width: 0; max-width: 640px; }
 .sky-kicker { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
-.sky-hero h1 { margin: 6px 0 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -0.025em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
+.sky-hero .sky-hero-title { margin: 6px 0 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -0.025em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
 .sky-subtitle { margin: 8px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.92); font-variant-numeric: tabular-nums; }
 .sky-generated { white-space: nowrap; }
 .sky-pill {
@@ -213,7 +213,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-report { font-size: 17px; }
   .sky-hero { margin: 0 calc(50% - 50vw); border-radius: 0 0 24px 24px; }
   .sky-hero-in { padding: 16px 16px calc(var(--sky-scene) + var(--sky-ridge)); }
-  .sky-hero h1 { font-size: 36px; }
+  .sky-hero .sky-hero-title { font-size: 36px; }
   .sky-hero h2 { font-size: 23px; }
   .sky-hero-actions { justify-content: flex-start; margin: 0 0 14px; }
   .sky-report .field-report-actions > button, .sky-report .field-report-actions summary { min-height: 44px; }

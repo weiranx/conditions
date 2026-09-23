@@ -102,6 +102,14 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
   ].filter(Boolean);
   if (verificationItems.length === 0) verificationItems.push('Recheck official forecasts, access, and field observations immediately before departure.');
 
+  const contingency = featureFlags.contingencyPlanning && safetyData.contingency?.status === 'ok' ? safetyData.contingency : null;
+  const contingencyLines = contingency
+    ? [
+      contingency.delayBuffer ? compact(contingency.delayBuffer.summary) : '',
+      contingency.overnight?.status === 'ok' ? compact(contingency.overnight.summary) : '',
+    ].filter(Boolean)
+    : [];
+
   const checkpoints = input.gpxRoute?.checkpoints.map((checkpoint) => (
     `${checkpoint.name} · ${checkpoint.distance_miles.toFixed(1)} mi · ETA ${clockAtProgress(input.startTime, input.travelWindowHours, checkpoint.progress_percent)}`
   )) || [];
@@ -145,6 +153,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
     insightLines.length ? `REPORT INSIGHTS\n${insightLines.map(item => `- ${item}`).join('\n')}` : '',
     `WEATHER SNAPSHOT\n${weatherFacts.map(([label, value]) => `- ${label}: ${value}`).join('\n')}`,
     `MOUNTAIN CONDITIONS\n${mountainFacts.map(([label, value]) => `- ${label}: ${value}`).join('\n')}`,
+    contingencyLines.length ? `IF YOU'RE DELAYED\n${contingencyLines.map((item) => `- ${item}`).join('\n')}` : '',
     checkpoints.length ? `ROUTE CHECKPOINTS\n${checkpoints.map((item) => `- ${item}`).join('\n')}` : '',
     links.length ? `OFFICIAL LINKS\n${links.map((link) => `- ${link.label}: ${link.url}`).join('\n')}` : '',
     'EMERGENCY NOTES\n- Carry an offline route and navigation backup.\n- Leave the plan and expected return with a trusted contact.\n- Carry emergency communication appropriate to the objective.\n- This saved snapshot is not an emergency service or a safety guarantee.',
@@ -206,6 +215,7 @@ export function buildFieldBrief(input: FieldBriefInput): FieldBriefDocument {
         <section class="card tint"><p class="section-label">Selected start time</p><h2>Weather snapshot</h2><div class="fact-grid">${renderFactGrid(weatherFacts)}</div></section>
         <section class="card tint"><p class="section-label">Terrain context</p><h2>Mountain conditions</h2><div class="fact-grid">${renderFactGrid(mountainFacts)}</div></section>
       </div>
+      ${contingencyLines.length ? `<section class="card verify"><p class="section-label">Late return</p><h2>If you're delayed</h2>${renderList(contingencyLines, '')}</section>` : ''}
       ${checkpoints.length ? `<section class="card"><p class="section-label">Offline route reference</p><h2>Route checkpoints</h2>${renderList(checkpoints, '')}</section>` : ''}
       <div class="columns">
         ${links.length ? `<section class="card links"><p class="section-label">Refresh before departure</p><h2>Official sources</h2><ul>${links.map((link) => `<li><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></li>`).join('')}</ul></section>` : ''}

@@ -1,0 +1,32 @@
+/* Service status in the Sky design: one summary, then each service as a row. */
+.sky-status-screen { display: grid; gap: 28px; max-width: 880px; padding-bottom: 40px; color: var(--sky-label); }
+.sky-status-screen > .field-page-heading { padding-bottom: 0; }
+.sky-status-screen > .sky-notice { margin: 0; }
+
+.sky-status-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 22px 24px; }
+.sky-status-hero h2 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+.sky-status-hero p { margin: 4px 0 0; font-size: 15px; line-height: 1.45; color: var(--sky-secondary); }
+.sky-status-orb { width: 18px; height: 18px; border-radius: 50%; background: var(--sky-accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--sky-accent) 16%, transparent); }
+.sky-status-hero.is-warn .sky-status-orb, .sky-status-hero.is-down .sky-status-orb { background: var(--sky-caution); box-shadow: 0 0 0 6px var(--sky-caution-fill); }
+.sky-status-hero.is-idle .sky-status-orb { background: none; outline: 1.5px dashed var(--sky-missing); box-shadow: none; }
+
+.sky-status-section { display: grid; }
+.sky-status-list { list-style: none; margin: 0; padding: 4px 20px; gap: 0; }
+.sky-status-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--sky-separator); }
+.sky-status-row:last-child { border-bottom: 0; }
+.sky-status-row > svg { margin-top: 1px; color: var(--sky-accent); }
+.sky-status-row:is(.is-warn, .is-down) > svg { color: var(--sky-caution); }
+.sky-status-row h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.sky-status-row p { margin: 2px 0 0; font-size: 14px; line-height: 1.45; color: var(--sky-secondary); overflow-wrap: anywhere; }
+.sky-status-row small { display: block; margin-top: 2px; font-size: 12px; color: var(--sky-secondary); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sky-status-label { font-size: 13px; font-weight: 600; color: var(--sky-secondary); white-space: nowrap; }
+.sky-status-row:is(.is-warn, .is-down) .sky-status-label { color: var(--sky-caution); }
+
+@media (max-width: 650px) {
+  .sky-status-hero { grid-template-columns: auto minmax(0, 1fr); padding: 18px; }
+  .sky-status-hero .field-button { grid-column: 1 / -1; justify-content: center; }
+  .sky-status-hero h2 { font-size: 20px; }
+  .sky-status-list { padding: 2px 16px; }
+  .sky-status-row { grid-template-columns: auto minmax(0, 1fr); }
+  .sky-status-label { grid-column: 2; }
+}
