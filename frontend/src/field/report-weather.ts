@@ -1,7 +1,7 @@
 import type { SafetyData, UserPreferences, WeatherTrendPoint } from "../app/types";
 import { annotateExposure, buildTravelWindowRows } from "../app/travel-window";
 import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
-import { adjustPointToElevation, highestElevationBetween, type ApproachProfile } from "../app/approach-elevation";
+import { adjustPointToElevation, adjustReadingForApproach, highestElevationBetween, type ApproachProfile } from "../app/approach-elevation";
 import { dateTimeInputsFor } from "../app/date-time-inputs";
 
 const clockMinutes = (value: string) => parseTimeInputMinutes(value) ?? parseHourLabelToMinutes(value);
@@ -9,23 +9,12 @@ const clockMinutes = (value: string) => parseTimeInputMinutes(value) ?? parseHou
 // Shift each reading of a trend that starts at the planned start to the
 // party's estimated elevation for that hour.
 function adjustTrendForApproach(data: SafetyData, trend: WeatherTrendPoint[], approach: ApproachProfile, start: string) {
-  const startMinute = clockMinutes(start);
-  const sunriseMinutes = parseSolarClockMinutes(data.solar?.sunrise);
-  const sunsetMinutes = parseSolarClockMinutes(data.solar?.sunset);
-  return trend.map((point, index) => {
-    const pointMinute = clockMinutes(point.time);
-    let offset = index * 60;
-    if (startMinute !== null && pointMinute !== null) {
-      const diff = pointMinute - startMinute;
-      offset = Math.max(0, diff < -60 ? diff + 1440 : diff);
-    }
-    const elevationFt = highestElevationBetween(approach, offset, offset + 60);
-    return adjustPointToElevation(point, approach.objectiveElevationFt, elevationFt, {
-      minuteOfDay: startMinute !== null ? startMinute + offset : pointMinute ?? offset,
-      sunriseMinutes,
-      sunsetMinutes,
-    });
-  });
+  const plan = {
+    start,
+    sunriseMinutes: parseSolarClockMinutes(data.solar?.sunrise),
+    sunsetMinutes: parseSolarClockMinutes(data.solar?.sunset),
+  };
+  return trend.map((point, index) => adjustReadingForApproach(point, index, approach, plan));
 }
 
 // Use the original readings for coverage: legacy travel rows normalize gaps to zero.
@@ -61,6 +50,8 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
       // Do not let the legacy row's zero fallback become a measured calm gust.
       gust: measured(point.gust) ? point.gust : NaN,
       complete,
+      // Temperature and wind were measured (the legacy row reads a gap as zero).
+      thermalComplete: measured(point.temp) && measured(point.wind),
       pass: complete && row.pass,
       failedRules: knownFailures.map(failure => failure.reason),
       failedRuleLabels: [...knownFailures.map(failure => failure.label), ...(!complete ? ["Incomplete hourly evidence"] : [])],
@@ -72,6 +63,19 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
   });
   annotateExposure(rows);
   return rows;
+}
+
+// Keep both cold and heat hazards in the reasons; display the breached
+// temperature extreme alongside the largest wind/precipitation readings.
+function hourReading<T extends { feelsLike: number; wind: number; gust: number }>(rows: T[], preferences: UserPreferences) {
+  const coldest = rows.reduce((a, b) => a.feelsLike < b.feelsLike ? a : b);
+  const hottest = rows.reduce((a, b) => a.feelsLike > b.feelsLike ? a : b);
+  const knownGusts = rows.map(row => row.gust).filter(Number.isFinite);
+  return {
+    thermal: coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest,
+    wind: Math.max(...rows.map(row => row.wind)),
+    gust: knownGusts.length ? Math.max(...knownGusts) : NaN,
+  };
 }
 
 // Place readings at their planned time instead of treating the first N records
@@ -147,22 +151,22 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
       return { ...row, reasonSummary: "No hourly forecast covers this planned time. Verify conditions before departure." };
     }
     const complete = covered && contributing.every(row => row.complete);
+    const thermalComplete = covered && contributing.every(row => row.thermalComplete);
     const pass = complete && contributing.every(row => row.pass);
     const failedRules = [...new Set(contributing.flatMap(row => row.failedRules))];
     const failedRuleLabels = [...new Set([
       ...contributing.flatMap(row => row.failedRuleLabels),
       ...(!covered ? ["Incomplete hourly coverage"] : []),
     ])];
-    // Keep both cold and heat hazards in the reasons; display the breached
-    // temperature extreme alongside the largest wind/precipitation readings.
-    const coldest = contributing.reduce((a, b) => a.feelsLike < b.feelsLike ? a : b);
-    const hottest = contributing.reduce((a, b) => a.feelsLike > b.feelsLike ? a : b);
-    const thermal = coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest;
-    const knownGusts = contributing.map(row => row.gust).filter(Number.isFinite);
+    const { thermal, wind, gust } = hourReading(contributing, preferences);
+    // Approach hours also keep the summit reading, for views that start from
+    // the objective forecast (e.g. elevation bands for the selected hour).
+    const summit = adjusted ? hourReading([...used].map(entry => entry.row), preferences) : null;
     return {
-      ...thermal, ...approachFields, time, complete, pass, failedRules, failedRuleLabels,
-      wind: Math.max(...contributing.map(row => row.wind)),
-      gust: knownGusts.length ? Math.max(...knownGusts) : NaN,
+      ...thermal, ...approachFields, time, complete, thermalComplete, pass, failedRules, failedRuleLabels,
+      ...(summit ? { objectiveReading: { temp: summit.thermal.temp, wind: summit.wind, gust: summit.gust } } : {}),
+      wind,
+      gust,
       precipChance: Math.max(...contributing.map(row => row.precipChance)),
       lightningRisk: contributing.some(row => row.lightningRisk),
       condition: [...new Set(contributing.map(row => row.condition))].join(" / "),

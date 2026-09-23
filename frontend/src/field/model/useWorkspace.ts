@@ -1440,12 +1440,15 @@ export function useWorkspace() {
 
   const parsedTrailheadElevation =
     parseOptionalElevationInput(trailheadElevationInput);
+  // Whole feet, as sent to the backend, so both build the same timeline.
   const trailheadElevationFt =
     parsedTrailheadElevation === null
       ? null
-      : convertDisplayElevationToFeet(
-          parsedTrailheadElevation,
-          preferences.elevationUnit,
+      : Math.round(
+          convertDisplayElevationToFeet(
+            parsedTrailheadElevation,
+            preferences.elevationUnit,
+          ),
         );
   const approachQuery = useMemo(
     () =>

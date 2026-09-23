@@ -1,5 +1,6 @@
 import type { ElevationForecastBand, SafetyData, WeatherTrendPoint } from './types';
 import type { ParsedGpxRoute, RouteTimingProfile } from '../lib/gpx';
+import { parseHourLabelToMinutes, parseTimeInputMinutes } from './core';
 import {
   GUST_INCREASE_MPH_PER_1000FT,
   TEMP_LAPSE_F_PER_1000FT,
@@ -273,6 +274,18 @@ function thinTimeline(timeline: ApproachProfile['timeline'], limit: number): App
   return [...keep].sort((a, b) => a - b).slice(0, limit).map((index) => timeline[index]);
 }
 
+/** Compact "minute:feet,…" form of a timeline, as sent to and echoed by the backend. */
+function timelineKey(timeline: ApproachProfile['timeline']): string {
+  return thinTimeline(timeline, MAX_APPROACH_ROUTE_POINTS)
+    .map((entry) => `${Math.round(entry.minute)}:${Math.round(entry.elevationFt)}`)
+    .join(',');
+}
+
+/** The timeline a profile would be scored with, comparable to pleasantness.approach.timeline. */
+export function approachTimelineKey(profile: ApproachProfile): string {
+  return timelineKey(profile.timeline);
+}
+
 /**
  * Query parameters that tell /api/safety where the party starts, so the
  * backend comfort score checks approach hours at the same elevation as the
@@ -289,9 +302,7 @@ export function buildApproachRequestParams(input: {
   const params: Record<string, string> = {};
   const track = input.gpxRoute ? buildGpxElevationTimeline(input.gpxRoute, input.timing) : null;
   if (track) {
-    params.approach_route = thinTimeline(track, MAX_APPROACH_ROUTE_POINTS)
-      .map((entry) => `${Math.round(entry.minute)}:${Math.round(entry.elevationFt)}`)
-      .join(',');
+    params.approach_route = timelineKey(track);
   } else if (finite(input.trailheadElevationFt) && input.trailheadElevationFt >= 0) {
     params.trailhead_ft = String(Math.round(input.trailheadElevationFt));
   }
@@ -314,5 +325,42 @@ export function comfortApproachIsStale(
   if (!scoresApproach(comfort.scoreVersion)) return false;
   const scored = comfort.approach ?? null;
   if (!scored || !current) return Boolean(scored) !== Boolean(current);
-  return scored.source !== current.source || Math.abs(scored.trailheadElevationFt - current.trailheadElevationFt) > 50;
+  if (scored.source !== current.source) return true;
+  // The timeline covers ascent rate, pace, stops and route shape, not just the start.
+  if (scored.timeline) return scored.timeline !== approachTimelineKey(current);
+  return Math.abs(scored.trailheadElevationFt - current.trailheadElevationFt) > 50;
+}
+
+const clockMinutes = (value: string) => parseTimeInputMinutes(value) ?? parseHourLabelToMinutes(value);
+
+/**
+ * Minutes after the planned start that an hourly reading covers, clipped to
+ * the trip. A 05:30 start makes the 05:00 reading cover minutes 0–30 and the
+ * 06:00 reading 30–90; the reading's own clock time decides, not its position
+ * in the trend. Falls back to the position when either time is unreadable.
+ */
+export function readingMinutesAfterStart(pointTime: string, startTime: string, index: number): { from: number; to: number } {
+  const startMinute = clockMinutes(startTime);
+  const pointMinute = clockMinutes(pointTime);
+  if (startMinute === null || pointMinute === null) return { from: index * 60, to: index * 60 + 60 };
+  let diff = pointMinute - startMinute;
+  if (diff < -60) diff += 1440; // past midnight on an overnight trip
+  const from = Math.max(0, diff);
+  return { from, to: Math.max(from, diff + 60) };
+}
+
+/** Shift a trend reading to where the party is during the part of the trip it covers. */
+export function adjustReadingForApproach(
+  point: WeatherTrendPoint,
+  index: number,
+  profile: ApproachProfile,
+  plan: { start: string; sunriseMinutes?: number | null; sunsetMinutes?: number | null },
+): ElevationAdjustedPoint {
+  const { from, to } = readingMinutesAfterStart(point.time, plan.start, index);
+  const startMinute = clockMinutes(plan.start);
+  return adjustPointToElevation(point, profile.objectiveElevationFt, highestElevationBetween(profile, from, to), {
+    minuteOfDay: startMinute !== null ? startMinute + from : clockMinutes(point.time) ?? from,
+    sunriseMinutes: plan.sunriseMinutes,
+    sunsetMinutes: plan.sunsetMinutes,
+  });
 }

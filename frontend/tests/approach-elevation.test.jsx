@@ -18,7 +18,7 @@ import { ApproachNote } from '../src/field/sky/ApproachNote';
 import { DayStrip } from '../src/field/sky/DayStrip';
 import { Forecast } from '../src/field/Forecast';
 import { buildPersistedReport } from '../src/app/report-storage';
-import { buildApproachRequestParams, comfortApproachIsStale, summarizeApproachHours } from '../src/app/approach-elevation';
+import { approachTimelineKey, buildApproachRequestParams, comfortApproachIsStale, readingMinutesAfterStart, summarizeApproachHours } from '../src/app/approach-elevation';
 import { ComfortScore } from '../src/field/ComfortScore';
 import { parsePersistedReport } from '../src/app/report-storage';
 
@@ -332,4 +332,59 @@ test('a comfort score from a different approach is flagged as out of date', () =
   assert.doesNotMatch(html, /different approach/);
   const stale = renderToStaticMarkup(<ComfortScore comfort={comfort({ approach: { ...scored, trailheadElevationFt: 8000 } })} approach={approach} elevation={elevation} />);
   assert.match(stale, /Comfort was scored for a different approach than your current plan/);
+});
+
+test('each reading covers the part of the trip its own clock time falls in', () => {
+  // A 05:30 start opens with the 05:00 reading, which covers only the first half hour.
+  assert.deepEqual(readingMinutesAfterStart('05:00', '05:30', 0), { from: 0, to: 30 });
+  assert.deepEqual(readingMinutesAfterStart('06:00', '05:30', 1), { from: 30, to: 90 });
+  assert.deepEqual(readingMinutesAfterStart('6 AM', '05:30', 1), { from: 30, to: 90 });
+  assert.deepEqual(readingMinutesAfterStart('05:00', '05:00', 0), { from: 0, to: 60 });
+  assert.deepEqual(readingMinutesAfterStart('00:00', '23:00', 1), { from: 60, to: 120 }, 'past midnight');
+  assert.deepEqual(readingMinutesAfterStart('Unavailable', '05:30', 2), { from: 120, to: 180 });
+});
+
+test('an off-the-hour start checks each reading at the elevation for its own minutes', () => {
+  // 7,000 → 11,000 ft over 180 min. From 05:30 the 06:00 reading covers minutes
+  // 30–90 (up to 9,000 ft), not 60–120 (up to ~9,700 ft).
+  const approach = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, timing });
+  const trend = [
+    { ...hour, time: '05:00', gust: 10 },
+    { ...hour, time: '06:00', gust: 29 },
+    { ...hour, time: '07:00', gust: 10 },
+    { ...hour, time: '08:00', gust: 10 },
+  ];
+  const data = safetyData(trend);
+  const rows = buildReportWeatherRows(data, preferences, 4, { profile: approach, start: '05:30' });
+  assert.deepEqual(rows.slice(0, 2).map((row) => row.elevationFt), [7667, 9000]);
+  // 29 mph at the summit eases to 24 mph at 9,000 ft: under the 25 mph limit.
+  assert.equal(rows[1].gust, 24);
+  const gustCaution = (decision) => [...decision.cautions, ...decision.blockers].some((item) => /Wind gusts reach/.test(item));
+  assert.equal(gustCaution(evaluateBackcountryDecision(data, '05:30', preferences, { approach })), false);
+});
+
+test('approach hours keep their summit reading for objective-based views', () => {
+  const approach = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, timing });
+  const rows = buildPlannedReportWeatherRows(safetyData([{ ...hour, time: '05:00' }, { ...hour, time: '06:00' }]), preferences, 2,
+    { start: '05:00', date: '2026-09-23', approach });
+  assert.deepEqual(rows[0].objectiveReading, { temp: 20, wind: 12, gust: 28 });
+  assert.notEqual(rows[0].gust, 28);
+  const hours = buildSkyHours(rows, { start: '05:00', sunriseMinutes: 390, sunsetMinutes: 1170 });
+  assert.deepEqual(hours[0].objectiveReading, { temp: 20, wind: 12, gust: 28 });
+});
+
+test('a comfort score is out of date when route timing changes, not only the trailhead', () => {
+  const approach = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, timing });
+  const slower = buildApproachProfile({ objectiveElevationFt: 11000, trailheadElevationFt: 7000, timing: { ...timing, ascentMinutesPer1000Ft: 60 } });
+  const scored = { source: 'manual', trailheadElevationFt: 7000, adjustedHours: 3, inversionHours: 0, timeline: approachTimelineKey(approach) };
+  assert.equal(scored.timeline, '0:7000,180:11000');
+  const comfort = { score: 80, label: 'Pleasant', summary: '', scoreVersion: '1.5.0', approach: scored };
+  assert.equal(comfortApproachIsStale(comfort, approach), false);
+  assert.equal(comfortApproachIsStale(comfort, slower), true);
+
+  // A GPX route's key matches what was sent, so an unchanged route is not flagged.
+  const displayTrack = Array.from({ length: 101 }, (_, i) => ({ lat: 0, lon: 0, progress_percent: i, elev_ft: 7000 + Math.min(i, 100 - i) * 80 }));
+  const gpxRoute = { distanceMiles: 8, displayTrack };
+  const gpx = buildApproachProfile({ objectiveElevationFt: 11000, gpxRoute, timing });
+  assert.equal(approachTimelineKey(gpx), buildApproachRequestParams({ enabled: true, gpxRoute, timing }).approach_route);
 });

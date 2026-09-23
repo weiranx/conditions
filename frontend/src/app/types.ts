@@ -757,6 +757,8 @@ export interface SafetyData {
       trailheadElevationFt: number;
       adjustedHours: number;
       inversionHours: number;
+      /** "minute:feet,…" elevation timeline that was scored. */
+      timeline?: string;
     };
     disclaimer?: string;
   };
@@ -954,6 +956,8 @@ export interface TravelWindowRow {
   approachAdjusted?: boolean;
   /** True when clear, calm conditions make a colder valley (temperature inversion) likely. */
   inversionRisk?: boolean;
+  /** The unadjusted objective reading for an approach hour (temp/wind/gust above are at elevationFt). */
+  objectiveReading?: { temp: number; wind: number; gust: number };
 }
 
 export interface TravelWindowSpan {

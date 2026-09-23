@@ -32,7 +32,7 @@ Returns a synthesized planning report for a coordinate, date, start time, and tr
 - `forecast.requestedStartTime` echoes the validated local departure clock (`HH:mm`, or `null` if omitted/invalid). `forecast.selectedStartTime` is the provider's forecast-period timestamp and may differ from the requested departure.
 - If `start` is missing or invalid, the backend selects the first available NOAA hourly forecast period for the selected date.
 - `travel_window_hours` values are rounded and clamped to `1`–`24`; invalid values fall back to `12`.
-- Approach scoring (comfort model `1.5.0`+): unless `approach=off`, the comfort score checks each hour at the party's estimated elevation. That elevation comes from `approach_route` if sent, otherwise `trailhead_ft` plus the ascent rate, otherwise the lowest forecast elevation band. Clear, calm nights and early mornings are scored colder near the trailhead, allowing for a likely inversion. Invalid approach values are ignored, not rejected. When an approach was used, `pleasantness.approach` reports its `source`, `trailheadElevationFt`, `adjustedHours` and `inversionHours`.
+- Approach scoring (comfort model `1.5.0`+): unless `approach=off`, the comfort score checks each hour at the party's estimated elevation. That elevation comes from `approach_route` if sent, otherwise `trailhead_ft` plus the ascent rate, otherwise the lowest forecast elevation band. Clear, calm nights and early mornings are scored colder near the trailhead, allowing for a likely inversion. Invalid approach values are ignored, not rejected. When an approach was used, `pleasantness.approach` reports its `source`, `trailheadElevationFt`, `adjustedHours`, `inversionHours` and the scored `timeline` (`minute:feet` pairs).
 
 ### HTTP Status Codes
 

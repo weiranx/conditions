@@ -126,7 +126,7 @@ describe('comfort score on the approach', () => {
     const approach = calculatePleasantnessScore(input(trend, approachFor(6000)));
     expect(factor(approach, 'Wind').score).toBeGreaterThan(factor(bothEnds, 'Wind').score);
     expect(approach.score).toBeGreaterThanOrEqual(bothEnds.score);
-    expect(approach.approach).toEqual({ source: 'manual', trailheadElevationFt: 6000, adjustedHours: 3, inversionHours: 0 });
+    expect(approach.approach).toEqual({ source: 'manual', trailheadElevationFt: 6000, adjustedHours: 3, inversionHours: 0, timeline: '0:6000,225:11000' });
     expect(factor(approach, 'Temperature').message).toMatch(/along your route, from about 7,300 ft on the approach/);
     expect(bothEnds).not.toHaveProperty('approach');
   });

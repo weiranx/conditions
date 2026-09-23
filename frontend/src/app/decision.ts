@@ -20,7 +20,7 @@ import {
   resolveSelectedTravelWindowMs,
 } from './core';
 import { computeFeelsLikeF, normalizeDangerLevel } from './planner-helpers';
-import { adjustPointToElevation, highestElevationBetween, type ApproachProfile } from './approach-elevation';
+import { adjustReadingForApproach, type ApproachProfile } from './approach-elevation';
 
 export type DecisionEvaluationOptions = {
   ignoreAvalancheForDecision?: boolean;
@@ -87,20 +87,17 @@ export function evaluateBackcountryDecision(
   const avalanche = data.avalanche;
   const danger = avalanche?.dangerLevel || 0;
   const description = data.weather.description || '';
-  // The trend starts at the selected start; hour i covers [i*60, i*60+60) minutes after it.
+  // Each reading is placed by its own clock time: a 05:30 start's trend opens
+  // with the 05:00 reading, which covers only the trip's first 30 minutes.
   const approach = options.approach ?? null;
   const approachStartMinute = parseTimeInputMinutes(cutoffTime);
   const approachSolar = {
     sunriseMinutes: parseSolarClockMinutes(data.solar?.sunrise),
     sunsetMinutes: parseSolarClockMinutes(data.solar?.sunset),
   };
-  const atPartyElevation = (point: WeatherTrendPoint, offsetMinutes: number): WeatherTrendPoint => {
+  const atPartyElevation = (point: WeatherTrendPoint, index: number): WeatherTrendPoint => {
     if (!approach || approachStartMinute === null) return point;
-    const elevationFt = highestElevationBetween(approach, offsetMinutes, offsetMinutes + 60);
-    return adjustPointToElevation(point, approach.objectiveElevationFt, elevationFt, {
-      minuteOfDay: approachStartMinute + offsetMinutes,
-      ...approachSolar,
-    });
+    return adjustReadingForApproach(point, index, approach, { start: cutoffTime, ...approachSolar });
   };
   const startPoint = atPartyElevation({
     time: cutoffTime,
@@ -135,7 +132,7 @@ export function evaluateBackcountryDecision(
   let stormSignalHour = '';
   const windowTrend = (data.weather.trend || [])
     .slice(0, preferences.travelWindowHours)
-    .map((point, index) => atPartyElevation(point, index * 60));
+    .map((point, index) => atPartyElevation(point, index));
   for (const wpt of windowTrend) {
     const wg = Number.isFinite(Number(wpt.gust)) ? Number(wpt.gust) : 0;
     if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }

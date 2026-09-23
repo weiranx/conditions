@@ -683,6 +683,8 @@ const calculatePleasantnessScore = ({
         trailheadElevationFt: Math.round(approach.profile.trailheadElevationFt),
         adjustedHours: coveredHours((partySamples || []).filter((sample) => sample.moved)),
         inversionHours: coveredHours((partySamples || []).filter((sample) => sample.moved && sample.inversionRisk)),
+        // Lets a client tell whether its current plan would be scored the same way.
+        timeline: approach.profile.timeline.map((entry) => `${Math.round(entry.minute)}:${Math.round(entry.elevationFt)}`).join(','),
       },
     } : {}),
     disclaimer: 'Weather comfort only; this score does not change the safety score or go/no-go decision.',

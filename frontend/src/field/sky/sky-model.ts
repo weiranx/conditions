@@ -3,7 +3,7 @@ import { parseTimeInputMinutes } from "../../app/core";
 import { weatherAppearance } from "../weather-appearance";
 
 /** A planned weather row as produced by buildPlannedReportWeatherRows. */
-export type PlannedRow = TravelWindowRow & { complete: boolean };
+export type PlannedRow = TravelWindowRow & { complete: boolean; thermalComplete?: boolean };
 
 export type SkyTone = "within" | "over" | "missing";
 
@@ -15,13 +15,18 @@ export type SkyHour = {
   tone: SkyTone;
   temp: number;
   feelsLike: number;
+  wind: number;
   gust: number;
+  /** Temperature and wind were measured, whatever else is missing. */
+  thermalComplete: boolean;
   precipChance: number;
   failedRules: string[];
   /** Estimated party elevation when the hour was scored below the objective. */
   elevationFt?: number;
   approachAdjusted?: boolean;
   inversionRisk?: boolean;
+  /** Objective-elevation reading when temp/wind/gust were shifted to the approach. */
+  objectiveReading?: { temp: number; wind: number; gust: number };
   kind: ReturnType<typeof weatherAppearance>["condition"];
   night: boolean;
   zenith: string;
@@ -102,12 +107,15 @@ export function buildSkyHours(rows: PlannedRow[], plan: {
       tone: !row.complete ? "missing" : row.pass ? "within" : "over",
       temp: row.temp,
       feelsLike: row.feelsLike,
+      wind: row.wind,
       gust: row.gust,
+      thermalComplete: row.thermalComplete ?? row.complete,
       precipChance: row.precipChance,
       failedRules: row.failedRules,
       elevationFt: row.elevationFt,
       approachAdjusted: row.approachAdjusted,
       inversionRisk: row.inversionRisk,
+      objectiveReading: row.objectiveReading,
       kind: appearance.condition,
       night,
       zenith: colors[0],
