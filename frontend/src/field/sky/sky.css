@@ -14,7 +14,8 @@
   color: #fff;
   background: #3d6f9f;
 }
-.sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; touch-action: pan-y; cursor: ew-resize; }
+.sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; touch-action: pan-y; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.sky-canvas text { pointer-events: none; }
 .sky-canvas:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 .sky-hero-in {
   position: relative;
