@@ -15,6 +15,31 @@ const AI_USAGE_RETENTION_MS = 35 * 24 * 60 * 60 * 1000;
 const ADMIN_AUDIT_LIMIT = 500;
 const ADMIN_AUDIT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Expired credentials and settled usage rows no longer affect any check, so
+// they are pruned on the same daily cleanup to keep PostgreSQL from growing
+// without bound. Guest multi-day usage is counted for all time, so only
+// account rows (monthly windows) age out.
+const AUTH_RETENTION_SQL = [
+  // Keep each user's newest session so the admin "last activity" stays accurate.
+  `DELETE FROM user_sessions AS expired
+   WHERE expired.expires_at < NOW() - INTERVAL '1 day'
+     AND EXISTS (
+       SELECT 1 FROM user_sessions AS newer
+       WHERE newer.user_id = expired.user_id
+         AND (newer.created_at, newer.id) > (expired.created_at, expired.id)
+     )`,
+  `DELETE FROM account_action_tokens WHERE expires_at < NOW() - INTERVAL '7 days'`,
+  `DELETE FROM mcp_oauth_requests WHERE expires_at <= NOW()`,
+  `DELETE FROM mcp_oauth_grants
+   WHERE expires_at < NOW() - INTERVAL '1 day'
+      OR revoked_at < NOW() - INTERVAL '30 days'`,
+  // Refresh tokens share their grant's expiry, so reuse detection is unaffected.
+  `DELETE FROM mcp_oauth_tokens WHERE expires_at < NOW() - INTERVAL '1 day'`,
+  `DELETE FROM feature_usage_events
+   WHERE (status IN ('failed', 'pending') AND updated_at < NOW() - INTERVAL '1 day')
+      OR (user_id IS NOT NULL AND created_at < NOW() - INTERVAL '90 days')`,
+];
+
 const defaultLegacyFiles = () => ({
   aiSettings: process.env.AI_SETTINGS_FILE
     ? path.resolve(process.env.AI_SETTINGS_FILE)
@@ -285,6 +310,9 @@ const createAppDataStore = ({
         )
       `, [limit]);
     }
+    for (const sql of AUTH_RETENTION_SQL) {
+      await db.query(sql);
+    }
   };
 
   const readLegacyFile = async (filename) => {
@@ -389,7 +417,7 @@ const createAppDataStore = ({
     await cleanup();
     if (!cleanupTimer) {
       cleanupTimer = setInterval(() => {
-        cleanup().catch((error) => log.error({ err: error }, 'PostgreSQL analytics retention cleanup failed'));
+        cleanup().catch((error) => log.error({ err: error }, 'PostgreSQL retention cleanup failed'));
       }, 24 * 60 * 60 * 1000);
       cleanupTimer.unref();
     }
