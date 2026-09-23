@@ -115,6 +115,55 @@ export interface SnowSurfaceProfile {
   meltFreeze?: MeltFreezeAnalysis;
 }
 
+export interface ContingencyOnsetHazard {
+  key: 'storm' | 'freezingRain' | 'severeWind' | 'heavyPrecip' | 'extremeCold' | string;
+  label: string;
+  onsetIso: string | null;
+  hoursAfterReturn: number;
+}
+
+/** What the weather does if the party returns late or spends an unplanned night out. */
+export interface ContingencyData {
+  status: 'ok' | 'unavailable';
+  plannedReturnIso: string | null;
+  summary: string;
+  delayBuffer: {
+    hours: number;
+    startIso: string | null;
+    endIso: string | null;
+    coveredHours: number;
+    complete: boolean;
+    minFeelsLikeF: number | null;
+    peakGustMph: number | null;
+    peakPrecipChance: number | null;
+    onsetHazards: ContingencyOnsetHazard[];
+    nightfall: { onsetIso: string | null; hoursAfterReturn: number } | null;
+    summary: string;
+  } | null;
+  overnight: {
+    status: 'ok' | 'unavailable';
+    relevant: boolean;
+    reasons: string[];
+    reasonCodes?: Array<'longDay' | 'nearDark' | 'coldNight' | 'winterTerrain' | string>;
+    summary: string;
+    startIso?: string | null;
+    endIso?: string | null;
+    complete?: boolean;
+    coveredHours?: number;
+    hoursToDark?: number;
+    lowTempF?: number | null;
+    minFeelsLikeF?: number | null;
+    peakWindMph?: number | null;
+    peakGustMph?: number | null;
+    peakPrecipChance?: number | null;
+    precipHours?: number;
+    storm?: boolean;
+    freezingRain?: boolean;
+    snow?: boolean;
+    severity?: 'low' | 'moderate' | 'high';
+  } | null;
+}
+
 export interface SafetyData {
   generatedAt?: string;
   partialData?: boolean;
@@ -625,6 +674,7 @@ export interface SafetyData {
     generatedTime?: string | null;
   } | null;
   gear?: (string | { id?: string; title: string; detail: string; category: string; tone: string })[];
+  contingency?: ContingencyData | null;
   trail?: string;
   terrainCondition?: {
     confidenceReasons?: string[];

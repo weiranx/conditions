@@ -1,5 +1,6 @@
 // Synthetic fixtures, never observations. No external requests or credentials.
 import pleasantnessScoring from "../../backend/src/utils/pleasantness-score.js";
+import contingency from "../../backend/src/utils/contingency.js";
 export const scenarios = [
   "mixed",
   "clear",
@@ -51,7 +52,8 @@ export function makeReport(params = {}, scenario = "mixed") {
   const lat = Number(params.lat ?? peaks[0].lat),
     lon = Number(params.lon ?? peaks[0].lon);
   const objective = peaks.find((p) => Math.abs(p.lat - lat) < 0.1) || peaks[0];
-  const trend = Array.from({ length: count }, (_, i) => {
+  // Rows past the window feed the late-return scenarios, as in the real API.
+  const forecastRows = Array.from({ length: count + contingency.AFTER_WINDOW_HOURS }, (_, i) => {
     const kind =
       scenario === "mixed"
         ? [
@@ -88,6 +90,8 @@ export function makeReport(params = {}, scenario = "mixed") {
       condition,
     };
   });
+  const trend = forecastRows.slice(0, count);
+  const afterWindowTrend = forecastRows.slice(count);
   if (scenario === "missing") {
     trend[0].temp = null;
     trend[0].gust = null;
@@ -438,6 +442,12 @@ export function makeReport(params = {}, scenario = "mixed") {
       },
     ],
   };
+  report.contingency = contingency.buildContingencyAssessment({
+    weatherData: { ...report.weather, afterWindowTrend },
+    selectedStartTime: first.timeIso,
+    selectedTravelWindowHours: count,
+    winterTerrain: snowy,
+  });
   report.pleasantness = pleasantnessScoring.calculatePleasantnessScore({
     weatherData: report.weather,
     airQualityData: report.airQuality,

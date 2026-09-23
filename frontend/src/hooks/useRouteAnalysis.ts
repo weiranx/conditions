@@ -16,11 +16,18 @@ export interface RouteOption {
   description: string;
 }
 
+export type RouteLeg = 'return';
+
 export interface RouteWaypointSummary {
   name: string;
-  elev_ft: number;
+  /** Null when no elevation source knew the checkpoint's elevation. */
+  elev_ft: number | null;
   distance_miles?: number;
   progress_percent?: number;
+  /** Set on the estimated return to the start of an out-and-back route. */
+  leg?: RouteLeg;
+  /** Whether the estimated arrival falls between the checkpoint's sunrise and sunset. */
+  daylight?: 'day' | 'dark';
   etaDate?: string;
   etaTime?: string;
   offsetMinutes?: number;
@@ -37,9 +44,10 @@ export interface RouteAnalysisResult {
     name: string;
     lat: number;
     lon: number;
-    elev_ft: number;
+    elev_ft: number | null;
     distance_miles?: number;
     progress_percent?: number;
+    leg?: RouteLeg;
     eta_date?: string;
     eta_time?: string;
     offset_minutes?: number;
@@ -64,6 +72,21 @@ export interface RouteAnalysisResult {
     note?: string;
   };
   routeMetadata?: GpxRouteMetadata;
+  timing?: RouteTiming;
+}
+
+export interface RoutePace {
+  minutesPerMile: number;
+  ascentMinutesPer1000Ft: number;
+}
+
+/** How checkpoint arrival times were spread across the planned travel window. */
+export interface RouteTiming {
+  basis: 'distance-and-vert' | 'distance' | 'progress' | 'even';
+  roundTrip: boolean;
+  travelWindowHours: number;
+  pace: RoutePace;
+  paceSource: 'user' | 'default';
 }
 
 export interface GpxRouteMetadata {
@@ -79,6 +102,8 @@ export interface GpxRouteMetadata {
 export interface RouteAnalysisOptions {
   waypoints?: GpxCheckpoint[];
   routeMetadata?: GpxRouteMetadata;
+  /** Ratio of distance to climbing used to weight checkpoint arrival times. */
+  pace?: RoutePace;
 }
 
 export interface RouteLoadingState {
@@ -202,6 +227,7 @@ export function useRouteAnalysis(initialState?: {
           units: units ?? null,
           ...(options?.waypoints ? { waypoints: options.waypoints } : {}),
           ...(options?.routeMetadata ? { route_metadata: options.routeMetadata } : {}),
+          ...(options?.pace ? { pace: options.pace } : {}),
         }),
       });
       if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));

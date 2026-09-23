@@ -3,16 +3,24 @@ import { reportInsightItems } from '../app/report-insights';
 import { SourceLink } from './Details';
 import './report-insights.css';
 
+type Insight = ReturnType<typeof reportInsightItems>[number];
+
+// Items that only restate what a feed cannot establish. They stay in the
+// payload for the AI brief and field brief but are not worth screen space.
+const disclaimerOnly = (item: Insight) =>
+  item.tone === 'gap' || (item.tone === 'context' && ['access', 'station-wind', 'water'].includes(item.id));
+
 export function ReportInsights({ data, localize = text => text, onSources }: {
   data: SafetyData;
   localize?: (text: string) => string;
   onSources: () => void;
 }) {
   const items = reportInsightItems(data);
-  if (!items.length) return null;
-  const priority = items.filter(item => item.decisionRelevant);
-  const renderItem = (item: typeof items[number]) => <article key={item.id} className={`report-insight is-${item.tone}`}>
-    <span className="field-kicker">{item.tone === 'caution' ? 'Needs review' : item.tone === 'gap' ? 'Evidence gap' : item.tone === 'support' ? 'Limited agreement' : 'Planning context'}</span>
+  const cautions = items.filter(item => item.decisionRelevant);
+  const background = items.filter(item => !item.decisionRelevant && !disclaimerOnly(item));
+  if (!cautions.length && !background.length) return null;
+  const renderItem = (item: Insight) => <article key={item.id} className={`report-insight is-${item.tone}`}>
+    {!item.decisionRelevant && <span className="field-kicker">{item.tone === 'support' ? 'Limited agreement' : 'Background'}</span>}
     <h3>{item.title}</h3>
     <p>{localize(item.meaning)}</p>
     <p className="report-insight-action"><strong>For your plan:</strong> {localize(item.action)}</p>
@@ -23,11 +31,15 @@ export function ReportInsights({ data, localize = text => text, onSources }: {
       </li>)}</ul>
     </details>}
   </article>;
+  const backgroundLabel = `${background.length} background note${background.length === 1 ? '' : 's'}`;
+  if (!cautions.length) return <details className="report-insights report-insights-quiet">
+    <summary>No field or access flags · {backgroundLabel}</summary>
+    <div className="report-insight-list">{background.map(renderItem)}</div>
+    <button className="field-button" onClick={onSources}>Checks & sources</button>
+  </details>;
   return <section className="report-insights field-panel" aria-labelledby="report-insights-title">
-    <header><div><span className="field-kicker">Forecast, field observations & access</span><h2 id="report-insights-title">What this means for your trip</h2></div><button className="field-button" onClick={onSources}>Checks & sources</button></header>
-    <p>{priority.length ? `Start with: ${priority[0].title}. Weigh the highlighted checks together with the main forecast.` : 'How the available sources apply to your plan, and where they cannot confirm conditions.'}</p>
-    <p className="field-muted">These points can move the trip decision to Caution, but they do not lower the safety score.</p>
-    <div className="report-insight-list">{items.slice(0, 3).map(renderItem)}</div>
-    {items.length > 3 && <details className="report-insight-more"><summary>{items.length - 3} more findings and evidence limits</summary><div className="report-insight-list">{items.slice(3).map(renderItem)}</div></details>}
+    <header><div><span className="field-kicker">Before you commit</span><h2 id="report-insights-title">{cautions.length === 1 ? '1 check to resolve' : `${cautions.length} checks to resolve`}</h2></div><button className="field-button" onClick={onSources}>Checks & sources</button></header>
+    <div className="report-insight-list">{cautions.map(renderItem)}</div>
+    {background.length > 0 && <details className="report-insight-more"><summary>{backgroundLabel}</summary><div className="report-insight-list">{background.map(renderItem)}</div></details>}
   </section>;
 }

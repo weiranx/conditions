@@ -14,7 +14,8 @@
   color: #fff;
   background: #3d6f9f;
 }
-.sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; touch-action: pan-y; cursor: ew-resize; }
+.sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; touch-action: pan-y; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.sky-canvas text { pointer-events: none; }
 .sky-canvas:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 .sky-hero-in {
   position: relative;
@@ -25,7 +26,7 @@
 .sky-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 20px 40px; align-items: start; }
 .sky-hero-text { min-width: 0; max-width: 640px; }
 .sky-kicker { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
-.sky-hero h1 { margin: 6px 0 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -0.025em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
+.sky-hero .sky-hero-title { margin: 6px 0 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -0.025em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
 .sky-subtitle { margin: 8px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.92); font-variant-numeric: tabular-nums; }
 .sky-generated { white-space: nowrap; }
 .sky-pill {
@@ -39,6 +40,11 @@
 .sky-hero h2 { margin: 12px 0 0; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.015em; max-width: 26ch; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); outline: none; }
 .sky-lede { margin: 10px 0 0; font-size: 15px; line-height: 1.5; color: rgba(255, 255, 255, 0.92); max-width: 58ch; }
 .sky-bridge { opacity: 0.9; }
+/* The checks behind a Caution or No-go, named instead of counted. */
+.sky-limiting { margin: 10px 0 0; padding: 0; list-style: none; max-width: 58ch; display: grid; gap: 6px; }
+.sky-limiting li { position: relative; padding-left: 18px; font-size: 15px; line-height: 1.45; }
+.sky-limiting li::before { content: ""; position: absolute; left: 2px; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.75; }
+.sky-hero .sky-limiting { color: rgba(255, 255, 255, 0.92); }
 /* Hours checked below the summit. Inherits colour so it reads on the sky and on light cards. */
 .sky-approach-note { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.5; color: inherit; }
 .sky-approach-note svg { flex: none; margin-top: 2px; opacity: 0.85; }
@@ -224,7 +230,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-report { font-size: 17px; }
   .sky-hero { margin: 0 calc(50% - 50vw); border-radius: 0 0 24px 24px; }
   .sky-hero-in { padding: 16px 16px calc(var(--sky-scene) + var(--sky-ridge)); }
-  .sky-hero h1 { font-size: 36px; }
+  .sky-hero .sky-hero-title { font-size: 36px; }
   .sky-hero h2 { font-size: 23px; }
   .sky-hero-actions { justify-content: flex-start; margin: 0 0 14px; }
   .sky-report .field-report-actions > button, .sky-report .field-report-actions summary { min-height: 44px; }
@@ -252,7 +258,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-hero { color: #000; background: none; }
   .sky-canvas, .sky-hero-actions, .sky-chapter-tabs, .sky-pager, .sky-hint { display: none; }
   .sky-hero-in { padding-bottom: 0; }
-  .sky-hero :is(h1, h2, .sky-lede, .sky-subtitle, .sky-kicker) { color: #000; text-shadow: none; }
+  .sky-hero :is(h1, h2, .sky-lede, .sky-limiting, .sky-subtitle, .sky-kicker) { color: #000; text-shadow: none; }
 }
 
 /* Elevation ladder in the Terrain check: highest band first. */

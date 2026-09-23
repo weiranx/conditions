@@ -521,7 +521,7 @@ export function RouteAnalysisSection({
             )}
           >
             <RouteConditionsProfile
-              waypoints={routeAnalysis.summaries}
+              waypoints={routeAnalysis.summaries.filter((p): p is typeof p & { elev_ft: number } => typeof p.elev_ft === 'number')}
               getScoreColor={getScoreColor}
               formatTempDisplay={formatTempDisplay}
               formatWindDisplay={formatWindDisplay}

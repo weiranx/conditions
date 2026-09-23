@@ -1,0 +1,113 @@
+/* Account in the Sky design: a profile card, usage meters, the plan, AI apps,
+   and a centred sign-in card when signed out. */
+.sky-account { display: grid; gap: 32px; max-width: 880px; min-width: 0; color: var(--sky-label); }
+.sky-account-body { display: grid; gap: 32px; min-width: 0; }
+.sky-account-section { display: grid; min-width: 0; }
+.sky-account-message { margin: 0; }
+.sky-account-verify-link { gap: 8px; }
+.sky-account-verify-link h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.sky-account-verify-link .field-button { align-self: flex-start; }
+
+/* Avatar */
+.sky-avatar {
+  display: inline-grid; place-items: center; flex: none; width: 64px; height: 64px; border-radius: 50%;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--sky-accent) 85%, #fff), var(--sky-accent));
+  color: var(--sky-on-accent, #fff); font-size: 28px; font-weight: 650;
+}
+.sky-avatar.is-guest { width: 56px; height: 56px; background: var(--sky-fill); color: var(--sky-secondary); }
+
+/* Profile card */
+.sky-account-profile { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 18px; padding: 22px 24px; }
+.sky-account-id { min-width: 0; }
+.sky-account-id h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.sky-account-id p { margin: 2px 0 0; font-size: 15px; color: var(--sky-label); overflow-wrap: anywhere; }
+.sky-account-id small { display: block; margin-top: 2px; font-size: 13px; color: var(--sky-secondary); }
+.sky-tier-chip { gap: 5px; align-self: start; }
+.sky-tier-chip.is-premium { background: color-mix(in srgb, var(--sky-accent) 14%, var(--sky-surface)); color: var(--sky-accent); }
+.sky-account-verified, .sky-account-verify { grid-column: 1 / -1; margin: 14px 0 0; }
+.sky-account-verified { justify-self: start; padding-top: 14px; width: 100%; border-top: 1px solid var(--sky-separator); }
+.sky-account-verify p { margin: 0 0 4px; }
+
+/* Usage meters */
+.sky-usage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sky-usage { gap: 6px; min-width: 0; }
+.sky-usage h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--sky-secondary); }
+.sky-usage-value { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sky-usage-value small { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--sky-secondary); }
+.sky-usage p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sky-secondary); }
+.sky-usage-missing { padding: 10px 12px; border-radius: 10px; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; color: var(--sky-missing) !important; }
+.sky-usage progress {
+  display: block; width: 100%; height: 6px; margin: 4px 0; border: 0; border-radius: 3px; overflow: hidden;
+  appearance: none; -webkit-appearance: none; background: var(--sky-fill); color: var(--sky-label);
+}
+.sky-usage progress::-webkit-progress-bar { background: var(--sky-fill); border-radius: 3px; }
+.sky-usage progress::-webkit-progress-value { background: var(--sky-label); border-radius: 3px; }
+.sky-usage progress::-moz-progress-bar { background: var(--sky-label); border-radius: 3px; }
+.sky-usage.is-over progress::-webkit-progress-value { background: var(--sky-caution); }
+.sky-usage.is-over progress::-moz-progress-bar { background: var(--sky-caution); }
+.sky-usage.is-over .sky-usage-value { color: var(--sky-caution); }
+
+/* Plan and AI apps */
+.sky-account-section .sky-card > .sky-cap.is-body { margin: 0; }
+.sky-ai-card { gap: 14px; }
+.sky-ai-card .sky-card-lede { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.5; }
+.sky-ai-card code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
+.sky-mcp-url { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 6px 6px 14px; border-radius: 12px; background: var(--sky-fill); }
+.sky-mcp-url code { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.field-app .sky-mcp-url .field-button { flex: none; min-height: 36px; background: var(--sky-surface); }
+.sky-ai-guides { display: grid; border-top: 1px solid var(--sky-separator); border-bottom: 1px solid var(--sky-separator); }
+.sky-ai-guides .sky-details { margin: 0; padding: 4px 0; }
+.sky-ai-guides .sky-details + .sky-details { border-top: 1px solid var(--sky-separator); }
+.sky-ai-guides .sky-details > summary { min-height: 44px; }
+.sky-ai-guides .sky-details :is(p, ol) { margin: 6px 0 10px; font-size: 14px; line-height: 1.55; color: var(--sky-secondary); }
+.sky-ai-guides .sky-details ol { padding-left: 20px; display: grid; gap: 6px; }
+.sky-ai-guides .sky-details strong { color: var(--sky-label); }
+.sky-ai-guides a, .sky-auth-card a { color: var(--sky-accent); }
+.field-app .sky-ai-manage { align-self: flex-start; text-decoration: none; }
+.sky-account-actions { padding: 4px 0 40px; }
+
+/* Signed out: a centred sign-in card */
+.sky-auth-card { justify-items: center; align-items: center; gap: 12px; max-width: 440px; width: 100%; margin: 8px auto 0; padding: 28px 28px 22px; text-align: center; }
+.sky-auth-card > * { width: 100%; }
+.sky-auth-card > .sky-avatar { width: 56px; }
+.sky-auth-card h2 { margin: 4px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+.sky-auth-sub { margin: 0; font-size: 15px; line-height: 1.5; color: var(--sky-secondary); }
+.sky-auth-card .sky-notice { text-align: left; margin: 0; }
+.sky-segmented.sky-auth-modes { margin: 6px 0 0; }
+.sky-auth-modes button { flex: 1 1 0; }
+.sky-auth-divider { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 13px; color: var(--sky-secondary); }
+.sky-auth-divider::before, .sky-auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--sky-separator); }
+.sky-auth-card .field-google-auth { max-width: none; margin: 0; display: flex; justify-content: center; }
+.sky-auth-form { display: grid; gap: 14px; text-align: left; }
+.field-app .sky-auth-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.field-app .sky-auth-form input {
+  width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--sky-fill);
+  color: var(--sky-label); font: inherit; font-size: 16px;
+}
+.field-app .sky-auth-form input:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky-accent) 45%, transparent); }
+.sky-auth-form label small { font-size: 12px; font-weight: 500; }
+.field-app .sky-auth-form .field-button-primary { width: 100%; min-height: 50px; justify-content: center; margin-top: 4px; }
+.field-app .sky-auth-switch { justify-self: center; width: auto; min-height: 40px; color: var(--sky-accent); font-size: 14px; font-weight: 600; }
+.sky-auth-legal { margin: 0; }
+.sky-auth-card > .sky-usage { margin-top: 6px; padding: 14px 0 0; border-radius: 0; background: none; box-shadow: none; border-top: 1px solid var(--sky-separator); text-align: left; }
+.sky-auth-card > .sky-usage .sky-usage-value { font-size: 24px; }
+
+/* Inside the sign-in dialog the card sits flat. */
+.field-dialog .sky-account { gap: 20px; }
+.field-dialog .sky-auth-card { margin: 0; padding: 4px 0 0; box-shadow: none; background: none; }
+
+@media (max-width: 850px) {
+  .sky-usage-grid { grid-template-columns: 1fr; }
+  .sky-usage { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 12px; }
+  .sky-usage h3 { grid-column: 1; }
+  .sky-usage-value { grid-column: 2; grid-row: 1; font-size: 24px; text-align: right; }
+  .sky-usage :is(progress, p) { grid-column: 1 / -1; }
+}
+@media (max-width: 650px) {
+  .sky-account, .sky-account-body { gap: 26px; }
+  .sky-account-profile { grid-template-columns: auto minmax(0, 1fr); padding: 18px; }
+  .sky-avatar { width: 52px; height: 52px; font-size: 22px; }
+  .sky-account-id h2 { font-size: 22px; }
+  .sky-tier-chip { grid-column: 2; justify-self: start; margin-top: 6px; }
+  .sky-auth-card { padding: 22px 18px 18px; }
+}

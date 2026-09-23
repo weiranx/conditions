@@ -267,13 +267,6 @@ html[data-theme="dark"] {
 /* Cards: white on the grouped background, no outline. Dashed outlines are reserved for missing data. */
 .field-app .field-panel { border: 0; border-radius: 20px; }
 .field-app .field-empty-state { border: 0; border-radius: 20px; background: var(--f-paper); }
-.field-app .field-history-device { border: 0; border-radius: 20px; background: var(--f-paper); }
-.field-app .field-library-entry {
-  margin-bottom: 10px; padding: 0 18px 8px; border: 0; border-radius: 16px; background: var(--f-paper);
-}
-.field-app .field-library-entry .field-journal-entry { padding: 16px 0 10px; }
-.field-app .field-journal-entry:hover { background: transparent; }
-.field-app .field-journal-icon { border-radius: 12px; background: var(--sky-fill); color: var(--sky-accent); }
 .field-app .shortlist-mode { margin-top: 20px; }
 .field-app :is(.field-plan-form, .field-planner-map) { border: 0; border-radius: 20px; }
 .field-app .field-library h2 { font-weight: 700; letter-spacing: -0.01em; }

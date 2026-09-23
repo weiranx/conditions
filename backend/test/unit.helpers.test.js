@@ -453,6 +453,24 @@ test('buildFireRiskData marks high risk for red flag warning', () => {
   expect(fireRisk.label).toBe('Extreme');
 });
 
+test('buildFireRiskData only raises the level for wildfire near the objective', () => {
+  const calm = { temp: 45, humidity: 40, windSpeed: 5, windGust: 10, description: 'Sunny' };
+  const risk = (wildfire) => buildFireRiskData({ weatherData: calm, alertsData: { alerts: [] }, airQualityData: { usAqi: 20 }, localConditionsData: { wildfire } });
+  // A distant incident is noted but no longer reads as Elevated (a decision caution).
+  const far = risk({ incidents: [{ name: 'Far Fire', distanceKm: 90, acres: 200 }] });
+  expect(far.level).toBe(1);
+  expect(far.reasons.join(' ')).toContain('none are within 50 km');
+  expect(risk({ incidents: [{ name: 'Mid Fire', distanceKm: 40 }] }).level).toBe(3);
+  expect(risk({ incidents: [{ name: 'Close Fire', distanceKm: 10 }] }).level).toBe(4);
+  // A large fire is measured from its likely edge: 100,000 acres at 60 km reaches ~37 km.
+  expect(risk({ incidents: [{ name: 'Big Fire', distanceKm: 60, acres: 100000 }] }).level).toBe(3);
+  // Nearest known distance wins even when the list is not sorted by edge.
+  expect(risk({ incidents: [{ name: 'Far Fire', distanceKm: 90 }, { name: 'Close Fire', distanceKm: 10 }] }).level).toBe(4);
+  // An incident without a location is still treated as nearby.
+  expect(risk({ incidents: [{ name: 'Unplaced', distanceKm: null }] }).level).toBe(2);
+  expect(risk({ incidents: [] }).level).toBe(0);
+});
+
 test('buildFireRiskData marks elevated risk for dry/breezy weather without alerts', () => {
   const fireRisk = buildFireRiskData({
     weatherData: {
@@ -3543,7 +3561,7 @@ const calmWeather = (overrides = {}) => ({
 
 test('calculateSafetyScore stamps the scoring model version', () => {
   const result = calculateSafetyScore({ ...safetyScoreBaseInput(), weatherData: calmWeather() });
-  expect(result.scoreVersion).toBe('2.10.0');
+  expect(result.scoreVersion).toBe('2.11.0');
 });
 
 test('calculateSafetyScore gives benign conditions the full 100-point baseline', () => {

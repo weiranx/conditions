@@ -1,10 +1,11 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Bell,
   BookOpen,
+  CloudOff,
   Compass,
   Layers,
   LoaderCircle,
@@ -23,6 +24,7 @@ import {
   sendReportEmail,
 } from "../lib/saved-reports";
 import { copyTextToClipboard } from "../app/clipboard";
+import { markLandingSeen } from "../app/landing-gate";
 import { saveObjectiveWatch } from "../lib/objective-watches";
 import {
   loadPersistedReport,
@@ -39,6 +41,11 @@ import "./mobile.css";
 import "./polish.css";
 import "./sky/tokens.css";
 import "./sky/shell.css";
+import "./sky/sky.css";
+import "./sky/parts.css";
+import "./sky/chapters.css";
+import "./sky/screens.css";
+import "./sky/skin.css";
 const Report = lazy(() =>
   import("./Report").then((module) => ({ default: module.Report })),
 );
@@ -61,6 +68,8 @@ export default function FieldApp() {
   const [feedback, setFeedback] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
+  // Anyone who has opened the planner goes straight back to it from `/`.
+  useEffect(markLandingSeen, []);
   const plan: Plan = {
     name: w.objectiveName,
     lat: w.hasObjective ? w.position.lat : null,
@@ -397,21 +406,26 @@ export default function FieldApp() {
                   <h1>Opening shared report</h1>
                 </div>
               ) : w.sharedReportError ? (
-                <div className="field-empty-state" role="alert">
+                <div className="sky-card sky-empty-card sky-lost" role="alert">
+                  <span className="sky-lost-icon" aria-hidden="true">
+                    <CloudOff size={34} strokeWidth={1.6} />
+                  </span>
                   <h1>Report unavailable</h1>
                   <p>{w.sharedReportError}</p>
-                  <button
-                    className="field-button"
-                    onClick={w.retrySharedReport}
-                  >
-                    Try again
-                  </button>
-                  <button
-                    className="field-button"
-                    onClick={w.openBlankPlannerFromSharedReport}
-                  >
-                    Plan an outing
-                  </button>
+                  <div className="sky-toolbar-actions">
+                    <button
+                      className="field-button field-button-primary"
+                      onClick={w.retrySharedReport}
+                    >
+                      Try again
+                    </button>
+                    <button
+                      className="field-button"
+                      onClick={w.openBlankPlannerFromSharedReport}
+                    >
+                      Plan an outing
+                    </button>
+                  </div>
                 </div>
               ) : w.loading ? (
                 <div className="field-loading" role="status">
@@ -495,16 +509,27 @@ export default function FieldApp() {
               </Suspense>
             )}
             {(w.view === "not-found" || w.showAdminNotFound) && (
-              <div className="field-empty-state">
-                <Compass size={40} />
-                <h1>Page not found</h1>
-                <p>This page could not be found.</p>
-                <button
-                  className="field-button"
-                  onClick={() => navigate("home")}
-                >
-                  Back to workspace
-                </button>
+              <div className="sky-card sky-empty-card sky-lost">
+                <span className="sky-lost-icon" aria-hidden="true">
+                  <Compass size={34} strokeWidth={1.6} />
+                </span>
+                <span className="sky-lost-code">404</span>
+                <h1>Off the map</h1>
+                <p>This page could not be found. The link may be old, or the page may have moved.</p>
+                <div className="sky-toolbar-actions">
+                  <button
+                    className="field-button field-button-primary"
+                    onClick={() => navigate("home")}
+                  >
+                    Back to workspace
+                  </button>
+                  <button
+                    className="field-button"
+                    onClick={() => navigate("history")}
+                  >
+                    Saved reports
+                  </button>
+                </div>
               </div>
             )}
           </main>
@@ -515,6 +540,7 @@ export default function FieldApp() {
             </span>
             <p>A planning aid. Verify conditions in the field.</p>
             <div>
+              <a href="/welcome">About</a>
               <a
                 href="/status"
                 onClick={(e) => {

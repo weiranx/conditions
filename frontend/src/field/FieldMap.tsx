@@ -139,7 +139,8 @@ export default function FieldMap({
             pathOptions={{ color: "#2878d7", weight: 4 }}
           />
         )}
-        {w?.routeAnalysis?.waypoints.map((point, index) => (
+        {/* The return checkpoint sits on the start marker, so it is not drawn twice. */}
+        {w?.routeAnalysis?.waypoints.filter((point) => point.leg !== "return").map((point, index) => (
           <Marker key={index} position={[point.lat, point.lon]} icon={pin}>
             <Tooltip>
               {point.name} · {w.formatElevationDisplay(point.elev_ft)}

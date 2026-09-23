@@ -484,6 +484,7 @@ test("model selector exposes the full catalog and retains configured models", ()
 
 import { JSDOM } from 'jsdom';
 import { ReportVerdict } from '../src/field/ReportVerdict';
+import { verdictCopy, checkSummary } from '../src/field/verdict-copy';
 import { makeReport } from '../dev/mock-data.mjs';
 test('verdict keeps caution, stale evidence, and field warnings visible beside the score', () => {
   const data = makeReport({}, 'field-alerts');
@@ -752,6 +753,34 @@ test('verdict explains a high score under a stricter decision only when they dis
   assert.doesNotMatch(render({ level: 'CAUTION', cautions: ['Cold'] }), /report-decision-bridge/);
 });
 
+test('verdict names the checks behind the decision instead of only counting them', () => {
+  const data = makeReport({}, 'clear');
+  data.safety = { ...data.safety, score: 97.8, assessmentStatus: undefined };
+  const copy = (decision) => verdictCopy({ data, decision: { headline: 'Headline', blockers: [], cautions: [], checks: [], ...decision }, primaryReason: '', preferences });
+  const cautions = [
+    'Fire danger is elevated (Moderate). Check closures and incident updates, avoid ignition sources, and keep a clear exit route.',
+    'Check fire locations against your approach and escape routes. Compare current fire perimeters and official restrictions with the route and road access before choosing an approach.',
+  ];
+  assert.deepEqual(copy({ level: 'CAUTION', cautions }).limitingChecks, ['Fire danger is elevated (Moderate)', 'Check fire locations against your approach and escape routes']);
+  // A single limiting check under a high score is named only when the reason is something else.
+  assert.deepEqual(copy({ level: 'CAUTION', cautions: ['Wind gusts reach about 31 mph. Shorten ridge exposure.'] }).limitingChecks, []);
+  assert.deepEqual(verdictCopy({ data, decision: { level: 'CAUTION', headline: 'Headline', blockers: [], cautions: ['Wind gusts reach about 31 mph. Shorten ridge exposure.'], checks: [] }, primaryReason: 'Cold start at the trailhead.', preferences }).limitingChecks, ['Wind gusts reach about 31 mph']);
+  // No-go lists blockers, not the cautions beside them.
+  assert.deepEqual(copy({ level: 'NO-GO', blockers: ['Storm. Delay.', 'Heat. Move.'], cautions: ['Cold'] }).limitingChecks, ['Storm', 'Heat']);
+  assert.deepEqual(copy({ level: 'GO', cautions: ['Cold'] }).limitingChecks, []);
+  data.safety.score = 60;
+  assert.deepEqual(copy({ level: 'CAUTION', cautions: ['Cold. Layer up.'] }).limitingChecks, [], 'one check with no bridge is already the reason');
+  const html = renderToStaticMarkup(<ReportVerdict data={{ ...data, safety: { ...data.safety, score: 97.8 } }} decision={{ level: 'CAUTION', headline: 'Headline', blockers: [], cautions, checks: [] }} primaryReason="" freshnessWarning={null} preferences={preferences} onSources={() => {}} />);
+  assert.match(html, /aria-label="Checks setting the decision"><li>Fire danger is elevated \(Moderate\)<\/li><li>Check fire locations against your approach and escape routes<\/li><\/ul>/);
+});
+
+test('check summaries keep decimals and parentheses in the lead sentence', () => {
+  assert.equal(checkSummary('Wind gusts reach about 12.5 m/s. Shorten ridge exposure.'), 'Wind gusts reach about 12.5 m/s');
+  assert.equal(checkSummary('Air quality is moderate (AQI 58). Sensitive members should ease off.'), 'Air quality is moderate (AQI 58)');
+  assert.equal(checkSummary('Some sources are out of date or missing timestamps (weather, alerts). Refresh.'), 'Some sources are out of date or missing timestamps (weather, alerts)');
+  assert.equal(checkSummary('No trailing period'), 'No trailing period');
+});
+
 test('supplemental sources distinguish unavailable data, probabilities, zero smoke and regional text', async () => {
   const { SupplementalEvidence } = await import('../src/field/SupplementalEvidence');
   const html = renderToStaticMarkup(<SupplementalEvidence evidence={{
@@ -783,7 +812,8 @@ test('source insights are actionable, traceable and escape provider text', () =>
   const data = makeReport({}, 'field-alerts');
   data.reportInsights = { version: 1, summary: 'Access needs review', items: [accessInsight] };
   const html = renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />);
-  assert.match(html, /What this means for your trip/);
+  assert.match(html, /Before you commit/);
+  assert.match(html, /1 check to resolve/);
   assert.match(html, /For your plan/);
   assert.match(html, /Why the report says this/);
   assert.match(html, /not been matched to your route/);
@@ -809,6 +839,26 @@ test('offline field brief carries interpreted findings and actions', () => {
   const data = makeReport({}, 'field-alerts'); data.reportInsights = { version: 1, summary: '', items: [accessInsight] };
   const brief = buildFieldBrief({ objectiveName: 'Test', forecastDate: '2026-09-16', startTime: '07:00', returnTime: '12:00', travelWindowHours: 5, activity: 'hiking', safetyData: data, decision: evaluateBackcountryDecision(data, '12:00', preferences), actionLine: '' });
   assert.match(brief.text, /REPORT INSIGHTS/); assert.ok(brief.text.includes(accessInsight.action)); assert.ok(brief.html.includes(accessInsight.meaning));
+});
+const contextInsight = (id, tone = 'context') => ({ id, tone, title: `${id} title`, meaning: `${id} meaning`, action: `${id} action`, features: ['fieldObservations'], decisionRelevant: false, evidence: [] });
+test('insights panel leads with cautions and hides disclaimer-only notes', () => {
+  const data = makeReport({}, 'field-alerts');
+  data.reportInsights = { version: 1, summary: '', items: [accessInsight, contextInsight('tides'), contextInsight('evidence-gaps', 'gap'), contextInsight('water'), contextInsight('station-wind')] };
+  const html = renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />);
+  assert.match(html, /1 check to resolve/);
+  assert.match(html, /1 background note</);
+  assert.match(html, /tides title/);
+  assert.doesNotMatch(html, /evidence-gaps title|water title|station-wind title/);
+});
+test('insights collapse to one line when nothing needs review', () => {
+  const data = makeReport({}, 'field-alerts');
+  data.reportInsights = { version: 1, summary: '', items: [contextInsight('tides'), contextInsight('smoke')] };
+  const html = renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />);
+  assert.match(html, /^<details class="report-insights report-insights-quiet">/);
+  assert.match(html, /No field or access flags · 2 background notes/);
+  assert.doesNotMatch(html, /Before you commit/);
+  data.reportInsights.items = [contextInsight('access'), contextInsight('evidence-gaps', 'gap')];
+  assert.equal(renderToStaticMarkup(<ReportInsights data={data} onSources={() => {}} />), '');
 });
 test('older reports without synthesis retain compatible rendering', () => {
   assert.equal(renderToStaticMarkup(<ReportInsights data={makeReport({}, 'field-alerts')} onSources={() => {}} />), '');

@@ -1395,7 +1395,13 @@ export function useWorkspace() {
           wind: preferences.windSpeedUnit,
           elevation: preferences.elevationUnit,
         },
-        options,
+        {
+          ...options,
+          pace: {
+            minutesPerMile: preferences.runnerPaceMinutesPerMile,
+            ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+          },
+        },
       );
     },
     [
@@ -1403,6 +1409,8 @@ export function useWorkspace() {
       preferences.temperatureUnit,
       preferences.windSpeedUnit,
       preferences.elevationUnit,
+      preferences.runnerPaceMinutesPerMile,
+      preferences.runnerAscentMinutesPer1000Ft,
       requestAiAccess,
     ],
   );

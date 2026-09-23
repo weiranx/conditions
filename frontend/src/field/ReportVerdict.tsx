@@ -10,7 +10,7 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
   preferences: UserPreferences;
   onSources: () => void;
 }) {
-  const { insufficient, tone, reason, bridge, warnings, missing } = verdictCopy({ data, decision, primaryReason, preferences });
+  const { insufficient, tone, reason, bridge, limitingChecks, warnings, missing } = verdictCopy({ data, decision, primaryReason, preferences });
   return (
     <section className={`field-verdict is-${tone}`} aria-labelledby="field-verdict-title">
       <div className="field-verdict-number">
@@ -23,6 +23,7 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
         <h2 id="field-verdict-title">{decision.headline}</h2>
         <p className="report-decision-reason">{reason}</p>
         {bridge && <p className="report-decision-bridge">{bridge}</p>}
+        {limitingChecks.length > 0 && <ul className="report-decision-limiting" aria-label="Checks setting the decision">{limitingChecks.map((check) => <li key={check}>{check}</li>)}</ul>}
       </div>
       <div className="field-verdict-aside">
         <span className="field-kicker">Evidence quality</span>

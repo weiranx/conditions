@@ -44,6 +44,7 @@ const {
 } = require('./src/utils/avalanche-detail');
 const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terrain-condition');
 const { buildLayeringGearSuggestions } = require('./src/utils/gear-suggestions');
+const { buildContingencyAssessment, isWinterTerrain } = require('./src/utils/contingency');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
@@ -229,6 +230,12 @@ const getAvalancheMapLayer = async (fetchOptions) => {
  * catch-block partial-data fallback so the shape only needs to be defined (and extended) once.
  * Pass `partial: { apiWarning }` to mark the payload as a degraded/fallback response.
  */
+const omitAfterWindowTrend = (weatherData) => {
+  if (!weatherData || typeof weatherData !== 'object' || !('afterWindowTrend' in weatherData)) return weatherData;
+  const { afterWindowTrend: _afterWindowTrend, ...rest } = weatherData;
+  return rest;
+};
+
 const buildSafetyResponsePayload = ({
   generatedAt,
   parsedLat,
@@ -255,6 +262,7 @@ const buildSafetyResponsePayload = ({
   terrainConditionData,
   analysis,
   pleasantness,
+  contingencyData = null,
   featureFlags,
   partial = null,
 }) => {
@@ -284,7 +292,9 @@ const buildSafetyResponsePayload = ({
       isFuture: selectedDate > todayDate,
       availableRange: forecastDateRange,
     },
-    weather: stampGeneratedTime(weatherData),
+    // Post-window rows only feed the contingency assessment; keep them out of
+    // responses and saved reports.
+    weather: stampGeneratedTime(omitAfterWindowTrend(weatherData)),
     solar: solarData,
     avalanche: stampGeneratedTime(avalancheData),
     alerts: stampGeneratedTime(alertsData),
@@ -301,6 +311,7 @@ const buildSafetyResponsePayload = ({
     terrainCondition: terrainConditionData,
     safety: analysis,
     pleasantness,
+    contingency: contingencyData,
   };
   delete payload.activity;
 
@@ -581,6 +592,13 @@ const safetyHandler = async (req, res) => {
       relevanceReason: avalancheRelevance.reason,
     };
 
+    const contingencyData = buildContingencyAssessment({
+      weatherData,
+      selectedStartTime: alertTargetTimeIso,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+      winterTerrain: isWinterTerrain({ avalancheData, snowpackData }),
+    });
+
     gearSuggestions = buildLayeringGearSuggestions({
       weatherData,
       trailStatus,
@@ -593,6 +611,7 @@ const safetyHandler = async (req, res) => {
       heatRiskData,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
+      contingencyData,
     });
 
     const analysis = calculateSafetyScore({
@@ -612,6 +631,7 @@ const safetyHandler = async (req, res) => {
       selectedStartTime: alertTargetTimeIso,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
+      contingencyData,
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData,
@@ -650,6 +670,7 @@ const safetyHandler = async (req, res) => {
       terrainConditionData,
       analysis,
       pleasantness,
+      contingencyData,
       featureFlags: scoreFeatures,
     });
     if (req.safetySignal?.aborted || res.headersSent) {
@@ -706,6 +727,13 @@ const safetyHandler = async (req, res) => {
     const safeTrailStatus = safeTerrainCondition?.label || trailStatus || "⚠️ Data Partially Unavailable";
 
     const scoreFeatures = getFeatureFlags();
+    const fallbackStartTime = buildPlannedStartIso({ selectedDate: fallbackSelectedDate, startClock: requestedStartClock, referenceIso: safeWeatherData?.forecastStartTime });
+    const safeContingencyData = buildContingencyAssessment({
+      weatherData: safeWeatherData,
+      selectedStartTime: fallbackStartTime,
+      selectedTravelWindowHours: requestedTravelWindowHours,
+      winterTerrain: isWinterTerrain({ avalancheData: safeAvalancheData, snowpackData: safeSnowpackData }),
+    });
     const analysis = calculateSafetyScore({
       weatherData: safeWeatherData,
       avalancheData: safeAvalancheData,
@@ -719,9 +747,10 @@ const safetyHandler = async (req, res) => {
       selectedDate: fallbackSelectedDate,
       solarData,
       selectedStartClock: requestedStartClock,
-      selectedStartTime: buildPlannedStartIso({ selectedDate: fallbackSelectedDate, startClock: requestedStartClock, referenceIso: safeWeatherData?.forecastStartTime }),
+      selectedStartTime: fallbackStartTime,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
+      contingencyData: safeContingencyData,
     });
     const pleasantness = calculatePleasantnessScore({
       weatherData: safeWeatherData,
@@ -747,6 +776,7 @@ const safetyHandler = async (req, res) => {
       heatRiskData: safeHeatRiskData,
       selectedTravelWindowHours: requestedTravelWindowHours,
       scoreFeatures,
+      contingencyData: safeContingencyData,
     });
 
     const fallbackGeneratedAt = new Date().toISOString();
@@ -776,6 +806,7 @@ const safetyHandler = async (req, res) => {
       terrainConditionData: safeTerrainCondition,
       analysis,
       pleasantness,
+      contingencyData: safeContingencyData,
       featureFlags: scoreFeatures,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     });
@@ -930,6 +961,7 @@ registerRouteAnalysisRoutes({
   fetchWithTimeout,
   fetchHeaders: DEFAULT_FETCH_HEADERS,
   ensureAccountAccess,
+  fetchElevationFt: (lat, lon) => fetchObjectiveElevationFt(lat, lon, { headers: DEFAULT_FETCH_HEADERS }),
 });
 registerAiBriefRoute({ app, askAI, ensureAccountAccess });
 registerReportChatRoute({ app, ensureAccountAccess });

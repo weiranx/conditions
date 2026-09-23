@@ -21,6 +21,7 @@ const FEATURE_FLAG_KEYS = [
   'gearRecommendations',
   'windLoadingDetails',
   'daylightTimeline',
+  'contingencyPlanning',
   'scoreBreakdown',
   'weatherContextDetails',
   'avalancheDetails',

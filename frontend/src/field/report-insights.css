@@ -12,3 +12,6 @@
 .report-insight li > span, .report-insight li > time { display: block; margin-top: 4px; overflow-wrap: anywhere; }
 .report-insight li > time { font-size: .85rem; }
 @media (max-width: 600px) { .report-insights > header { flex-direction: column; } }
+.report-insights-quiet { margin-block: 12px; }
+.report-insights-quiet > summary { cursor: pointer; color: var(--f-muted); font-size: .9rem; padding-block: 7px; }
+.report-insights-quiet > .field-button { margin-top: 8px; }
