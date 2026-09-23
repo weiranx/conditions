@@ -14,6 +14,7 @@ import {
   Wind,
   type LucideIcon,
 } from "lucide-react";
+import { markLandingSeen } from "../app/landing-gate";
 import "./landing.css";
 
 type Signal = { icon: LucideIcon; name: string; source: string };
@@ -144,6 +145,7 @@ function SampleBrief() {
 
 export default function Landing() {
   useEffect(() => {
+    markLandingSeen();
     const previous = document.title;
     document.title = "Backcountry Conditions — Know the mountain before you go";
     return () => {
