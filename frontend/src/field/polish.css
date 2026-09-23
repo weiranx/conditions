@@ -1,0 +1,58 @@
+/* Visual polish layer. Loaded after the other field styles so it can refine
+   shared pieces without rewriting them. */
+
+/* Weather hero: keep the per-condition sky tint, but blend it into the forest
+   rail color so it sits in the green palette instead of reading as a flat
+   saturated blue slab. White text contrast stays on a dark ground in both
+   themes because --f-rail is dark in light and dark mode; the fallback covers
+   palettes that do not define a rail color. */
+html .field-app .forecast-sky {
+  background:
+    radial-gradient(ellipse 70% 80% at 8% 0%, rgb(255 255 255 / 0.09), transparent 70%),
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--sky-bottom) 78%, var(--f-rail, #1b2230)) 0%,
+      color-mix(in oklab, var(--sky-bottom) 42%, var(--f-rail, #1b2230)) 100%
+    );
+  border-color: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 18px 40px -30px rgb(0 0 0 / 0.55);
+}
+
+/* Disclosures: replace the browser's default triangle with a quiet chevron
+   that rotates when the section opens. */
+.field-app details:is(.field-detail-disclosure, .forecast-bluebird-details, .gear-check-actions, :not([class])) > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  transition: color var(--ui-motion-fast, 160ms ease);
+}
+.field-app details:is(.field-detail-disclosure, .forecast-bluebird-details, .gear-check-actions, :not([class])) > summary::-webkit-details-marker {
+  display: none;
+}
+.field-app details:is(.field-detail-disclosure, .forecast-bluebird-details, .gear-check-actions, :not([class])) > summary::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 3px 2px 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.7;
+  transform: rotate(-45deg);
+  transition: transform var(--ui-motion-fast, 160ms ease);
+}
+.field-app details:is(.field-detail-disclosure, .forecast-bluebird-details, .gear-check-actions, :not([class]))[open] > summary::before {
+  margin-bottom: 4px;
+  transform: rotate(45deg);
+}
+.field-app details:is(.field-detail-disclosure, .forecast-bluebird-details, .gear-check-actions, :not([class])) > summary:hover::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-app details > summary,
+  .field-app details > summary::before {
+    transition: none;
+  }
+}

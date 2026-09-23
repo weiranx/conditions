@@ -36,6 +36,7 @@ import type { AppView } from "../hooks/useUrlState";
 import "./field.css";
 import "./workspace.css";
 import "./mobile.css";
+import "./polish.css";
 const Report = lazy(() =>
   import("./Report").then((module) => ({ default: module.Report })),
 );
