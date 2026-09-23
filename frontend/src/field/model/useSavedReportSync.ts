@@ -3,7 +3,6 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { SafetyData } from '../../app/types';
 import { persistReport, type PersistedReport, type PersistedReportChatMessage } from '../../app/report-storage';
 import { createSavedReport, updateSavedReport } from '../../lib/saved-reports';
-import type { useAccount } from '../../hooks/useAccount';
 
 type AccountState = { accountLoading: boolean; accountUserId: string | undefined };
 
@@ -18,9 +17,7 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
     useState<string | null>(null);
   const [reportGenerationPending, setReportGenerationPending] = useState(false);
   const reportGenerationRef = useRef(0);
-  const reportSaveIntentRef = useRef<
-    "waiting-for-account" | "save" | "saving" | "browser-only"
-  >("browser-only");
+  const reportSaveIntentRef = useRef<"saving" | "browser-only">("browser-only");
   const reportSaveSourceDataRef = useRef<SafetyData | null>(null);
   const reportSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -53,7 +50,8 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
     accountResolvedRef.current = true;
   }, [accountLoading, accountUserId, sessionOwnerId, resetSavedReportTracking]);
 
-  // Manual saves share the same generation boundary as automatic saves.
+  // Reports are saved to the account only when the user asks; a new
+  // generation invalidates any save still in flight for the previous one.
   const saveReportSnapshot = useCallback(async (
     report: PersistedReport,
     onSaved: (saved: Awaited<ReturnType<typeof createSavedReport>>) => void,
@@ -83,12 +81,7 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
     resetSavedReportTracking();
     reportSaveSourceDataRef.current = priorSafetyData;
     setReportGenerationPending(true);
-    reportSaveIntentRef.current = accountLoading
-      ? "waiting-for-account"
-      : accountUserId
-        ? "save"
-        : "browser-only";
-  }, [accountLoading, accountUserId, resetSavedReportTracking, safetyData]);
+  }, [resetSavedReportTracking, safetyData]);
 
   useEffect(
     () => () => {
@@ -109,13 +102,12 @@ export function useSavedReportSession({ safetyData, accountLoading, accountUserI
   };
 }
 
-type SyncOptions = AccountState & {
+type SyncOptions = {
+  accountUserId: string | undefined;
   hasObjective: boolean;
   reportSnapshot: PersistedReport | null;
   safetyData: SafetyData | null;
   viewingHistoryReport: boolean;
-  reportHistoryEnabled: boolean;
-  syncGeneratedReportUsage: ReturnType<typeof useAccount>['syncGeneratedReportUsage'];
   setReportChatMessages: Dispatch<SetStateAction<PersistedReportChatMessage[]>>;
   resetRouteState: () => void;
   setReportChatSessionKey: Dispatch<SetStateAction<number>>;
@@ -124,13 +116,12 @@ type SyncOptions = AccountState & {
 // Keeps browser persistence and serialized account updates behind one boundary.
 export function useSavedReportSync(session: ReturnType<typeof useSavedReportSession>, {
   hasObjective, reportSnapshot, safetyData, viewingHistoryReport,
-  accountLoading, accountUserId, reportHistoryEnabled, syncGeneratedReportUsage,
+  accountUserId,
   setReportChatMessages, resetRouteState, setReportChatSessionKey,
 }: SyncOptions) {
   const {
     activeSavedReportId, reportGenerationPending, setReportGenerationPending,
-    setActiveSavedReportId, setActiveSavedReportShareToken,
-    reportGenerationRef, reportSaveIntentRef, reportSaveSourceDataRef,
+    reportGenerationRef, reportSaveSourceDataRef,
     reportSyncTimeoutRef, reportUpdateChainRef, lastSavedReportSnapshotRef,
   } = session;
   useEffect(() => {
@@ -158,55 +149,6 @@ export function useSavedReportSync(session: ReturnType<typeof useSavedReportSess
       },
     );
   }, [hasObjective, reportGenerationPending, reportSnapshot]);
-
-  useEffect(() => {
-    if (
-      !reportSnapshot ||
-      reportGenerationPending ||
-      reportSnapshot.safetyData === reportSaveSourceDataRef.current ||
-      viewingHistoryReport ||
-      reportSaveIntentRef.current === "browser-only"
-    )
-      return;
-    if (reportSaveIntentRef.current === "waiting-for-account") {
-      if (accountLoading) return;
-      reportSaveIntentRef.current = accountUserId ? "save" : "browser-only";
-    }
-    if (
-      reportSaveIntentRef.current !== "save" ||
-      !accountUserId ||
-      !reportHistoryEnabled
-    )
-      return;
-
-    reportSaveIntentRef.current = "saving";
-    const generation = reportGenerationRef.current;
-    const serialized = JSON.stringify(reportSnapshot);
-    void createSavedReport(reportSnapshot)
-      .then(({ id: reportId, shareToken, reportCount, reportUsage }) => {
-        syncGeneratedReportUsage(accountUserId, reportCount, reportUsage);
-        if (generation !== reportGenerationRef.current) return;
-        lastSavedReportSnapshotRef.current = serialized;
-        reportSaveSourceDataRef.current = null;
-        reportSaveIntentRef.current = "browser-only";
-        setActiveSavedReportId(reportId);
-        setActiveSavedReportShareToken(shareToken);
-      })
-      .catch(() => {
-        if (generation !== reportGenerationRef.current) return;
-        reportSaveIntentRef.current = "browser-only";
-      });
-  }, [
-    accountLoading,
-    accountUserId,
-    reportHistoryEnabled,
-    reportGenerationPending,
-    reportSnapshot,
-    syncGeneratedReportUsage,
-    viewingHistoryReport,
-    lastSavedReportSnapshotRef, reportGenerationRef, reportSaveIntentRef, reportSaveSourceDataRef,
-    setActiveSavedReportId, setActiveSavedReportShareToken,
-  ]);
 
   useEffect(() => {
     if (

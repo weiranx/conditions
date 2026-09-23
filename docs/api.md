@@ -394,11 +394,11 @@ Every account resolves to Free unless it has a current `premium`, `premium_month
 subscription with `active` or `trialing` status. When the database is not configured, this endpoint remains
 available and returns `available: false`.
 
-Free accounts receive separate monthly allowances: generated reports are count-based, while AI usage is metered
+Free accounts receive separate monthly allowances: saved reports are count-based, while AI usage is metered
 by total input and output tokens. Both meters reset at the next UTC month. `usedRequests` remains available for
 activity analytics but does not determine the AI limit. For Premium accounts, both usage objects set `unlimited`
 to `true`; their limit, remaining, and percentage fields are `null`, while current-month totals remain
-visible. `reportCount` remains the lifetime generated total.
+visible. `reportCount` remains the lifetime saved total.
 
 ### `POST /api/auth/register`
 
@@ -474,13 +474,14 @@ sessions for the account, and clears the current browser's session cookie.
 Accepts the complete preferences object under `preferences` and returns the updated signed-in account. The
 session cookie is required. Invalid values return `400`; a missing or expired session returns `401`.
 
-### Generated reports
+### Saved reports
 
-`GET /api/account/reports` lists the signed-in user's generated report summaries. `GET /api/account/reports/:reportId`
+Reports are stored only when the user explicitly saves one; generating a report does not create a snapshot.
+`GET /api/account/reports` lists the signed-in user's saved report summaries. `GET /api/account/reports/:reportId`
 returns one owned snapshot, and `POST /api/account/reports` creates a snapshot with a database-unique,
 cryptographically random `shareToken`. A successful create also returns the authoritative lifetime `reportCount`
 and current `reportUsage`; clients should update their counters from this response rather than incrementing locally.
-The client may send `PUT /api/account/reports/:reportId` after AI or route
+After a report is saved, the client may send `PUT /api/account/reports/:reportId` when AI or route
 analysis finishes; that endpoint updates only the snapshot's `ai` and `route` sections and preserves the original
 plan, conditions, preferences, title, and share token.
 

@@ -1157,8 +1157,7 @@ export function useWorkspace() {
 
   useSavedReportSync(savedReportSession, {
     hasObjective, reportSnapshot, safetyData, viewingHistoryReport,
-    accountLoading, accountUserId, reportHistoryEnabled: featureFlags.reportHistory,
-    syncGeneratedReportUsage, setReportChatMessages, resetRouteState, setReportChatSessionKey,
+    accountUserId, setReportChatMessages, resetRouteState, setReportChatSessionKey,
   });
 
   const handleRecenterMap = () => {

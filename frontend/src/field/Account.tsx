@@ -190,7 +190,7 @@ export function Account({ workspace: w }: { workspace: Workspace }) {
             </div>
             <div className="sky-usage-grid">
               <Usage
-                label="Generated reports"
+                label="Saved reports"
                 used={account.reportUsage?.usedReports}
                 limit={account.reportUsage?.limitReports}
                 remaining={account.reportUsage?.remainingReports}
