@@ -11,7 +11,7 @@ const { deriveTerrainCondition } = require('./terrain-condition');
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.9.0',
+  scoreVersion: '2.10.0',
   maxScore: 100,
   scorePrecision: 1,
 
@@ -51,6 +51,9 @@ const SCORING_CONFIG = {
   effectiveImpactFloors: {
     avalanche: { extreme: 61, high: 46, considerable: 31, moderate: 16 },
     weather: { high: 46, elevated: 31, caution: 16 },
+    // Fire level 4 covers Red Flag Warnings and active perimeters within
+    // 15 km; level 3 covers Fire Weather Watches and fires within 50 km.
+    fire: { level4: 31, level3: 16 },
     alerts: { extreme: 61, severe: 46, moderate: 31 },
     airQuality: [
       { min: 201, effective: 46 },
@@ -137,6 +140,10 @@ const SCORING_CONFIG = {
       // Convective signal can also come from trend hours, not just description.
       convectiveTrendHours: 1,
       winterImpact: 10,
+      // Glaze ice makes trails, talus, and slabs dangerous regardless of
+      // other weather, so it outweighs generic snow in the forecast.
+      freezingRainImpact: 14,
+      freezingRainMinPrecipChance: 30,
       expectedRainHigh: 0.5,
       expectedRainLow: 0.2,
       expectedRainHighImpact: 6,
@@ -160,6 +167,14 @@ const SCORING_CONFIG = {
       { max: 25, impact: 3 },
     ],
     coldDuration: { extremeWeight: 1.5, coldWeight: 0.8, cap: 12 },
+    // NWS wind chill chart: exposed skin freezes in ~30 minutes near -20F
+    // apparent temperature and in ~10 minutes near -35F.
+    frostbite: {
+      thirtyMinuteFeelsLike: -20,
+      tenMinuteFeelsLike: -35,
+      thirtyMinuteImpact: 8,
+      tenMinuteImpact: 12,
+    },
     heat: {
       level4Impact: 14,
       level3Impact: 10,
@@ -489,6 +504,10 @@ const calculateSafetyScore = ({
     /thunder|lightning|t-storm|tstm/i.test(String(item?.condition || ''))));
   const severeWinterFromDescription = /blizzard|whiteout/.test(weatherDescription);
   const severeWinterFromTrend = trend.some((row) => /blizzard|whiteout/i.test(String(row.condition || '')));
+  const freezingRainPattern = /freezing rain|freezing drizzle|ice storm|glaze/i;
+  const freezingRainFromDescription = freezingRainPattern.test(weatherDescription);
+  const freezingRainTrendHours = duration(trend.filter((row) => freezingRainPattern.test(String(row.condition || ''))
+    && (!Number.isFinite(row.precipChance) || row.precipChance >= T.storm.freezingRainMinPrecipChance)));
 
   // Temporal weighting: early-window hazards penalize more than late-window
   const trendLen = trend.length;
@@ -716,6 +735,15 @@ const calculateSafetyScore = ({
   } else if (severeWinterFromDescription || severeWinterFromTrend) {
     applyFactor('Winter Weather', T.storm.winterImpact, 'Blizzard or whiteout conditions occur within the travel window.',
       severeWinterFromDescription ? `${weatherProvider(weatherData)} short forecast` : `${weatherProvider(weatherData)} hourly trend`);
+  } else if (freezingRainFromDescription || freezingRainTrendHours > 0) {
+    applyFactor(
+      'Winter Weather',
+      T.storm.freezingRainImpact,
+      freezingRainTrendHours > 0
+        ? `Freezing rain or drizzle across ${freezingRainTrendHours}/${effectiveTrendWindowHours} trend hours can glaze trails and rock with ice.`
+        : `Freezing rain or drizzle in forecast ("${weatherData.description}") can glaze trails and rock with ice.`,
+      freezingRainTrendHours > 0 ? `${weatherProvider(weatherData)} hourly trend` : `${weatherProvider(weatherData)} short forecast`,
+    );
   } else if (/snow|sleet|freezing rain|ice/.test(weatherDescription)) {
     applyFactor('Winter Weather', T.storm.winterImpact, `Frozen precipitation in forecast ("${weatherData.description}") increases travel hazard.`, `${weatherProvider(weatherData)} short forecast`);
   }
@@ -758,6 +786,11 @@ const calculateSafetyScore = ({
             ? `Cold apparent temperature in the window (${Math.round(trendMinFeelsLike)}F).`
             : `Cool apparent temperatures (${Math.round(trendMinFeelsLike)}F) reduce comfort and dexterity margin.`;
       applyFactor('Cold', coldImpact, coldMessage, `${weatherProvider(weatherData)} temp + windchill`);
+    }
+    if (trendMinFeelsLike <= T.frostbite.tenMinuteFeelsLike) {
+      applyFactor('Cold', T.frostbite.tenMinuteImpact, `Apparent temperature reaches ${Math.round(trendMinFeelsLike)}F; exposed skin can freeze in about 10 minutes.`, `${weatherProvider(weatherData)} temp + windchill`);
+    } else if (trendMinFeelsLike <= T.frostbite.thirtyMinuteFeelsLike) {
+      applyFactor('Cold', T.frostbite.thirtyMinuteImpact, `Apparent temperature reaches ${Math.round(trendMinFeelsLike)}F; exposed skin can freeze in about 30 minutes.`, `${weatherProvider(weatherData)} temp + windchill`);
     }
   }
 
@@ -1032,6 +1065,24 @@ const calculateSafetyScore = ({
   }
   if (hasDangerousWeatherPair) {
     applyGroupImpactFloor('weather', impactFloors.weather.caution, 'Compounding weather hazards');
+  }
+  if (freezingRainTrendHours > 0 || (freezingRainFromDescription && !/slight chance|chance|isolated|scattered/.test(weatherDescription))) {
+    applyGroupImpactFloor('weather', impactFloors.weather.elevated, 'Freezing rain / icing');
+  }
+  if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= T.frostbite.tenMinuteFeelsLike) {
+    applyGroupImpactFloor('weather', impactFloors.weather.high, 'Frostbite in about 10 minutes');
+  } else if (Number.isFinite(trendMinFeelsLike) && trendMinFeelsLike <= T.frostbite.thirtyMinuteFeelsLike) {
+    applyGroupImpactFloor('weather', impactFloors.weather.elevated, 'Frostbite in about 30 minutes');
+  }
+  if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 4) {
+    applyGroupImpactFloor('weather', impactFloors.weather.elevated, 'Extreme heat risk');
+  } else if (Number.isFinite(heatRiskLevel) && heatRiskLevel >= 3) {
+    applyGroupImpactFloor('weather', impactFloors.weather.caution, 'High heat risk');
+  }
+  if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 4) {
+    applyGroupImpactFloor('fire', impactFloors.fire.level4, 'Extreme fire danger');
+  } else if (fireLevel !== null && Number.isFinite(fireLevel) && fireLevel >= 3) {
+    applyGroupImpactFloor('fire', impactFloors.fire.level3, 'High fire danger');
   }
 
   if (alertsRelevantForSelectedTime && Number.isFinite(alertsCount) && alertsCount > 0) {
