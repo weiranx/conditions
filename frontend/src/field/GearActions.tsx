@@ -74,16 +74,13 @@ export function GearActions({
 
   return (
     <section
-      className="gear-actions"
+      className="gear-actions sky-gear"
       hidden={hidden}
       aria-labelledby={`${id}-title`}
     >
-      <div className="field-chapter-heading">
-        <h2 id={`${id}-title`}>Gear and field actions</h2>
-        <p>Review the plan, then prepare your kit for these conditions.</p>
-      </div>
+      <h2 id={`${id}-title`} className="sr-only">Gear and field actions</h2>
       <div className={`gear-decision${noGo ? " is-blocked" : ""}`}>
-        <TriangleAlert size={21} aria-hidden="true" />
+        <TriangleAlert size={20} aria-hidden="true" />
         <div>
           <strong>
             {noGo
@@ -93,34 +90,34 @@ export function GearActions({
           <p>{actionLine}</p>
         </div>
       </div>
-      <div className="gear-layout">
-        <section className="gear-field-plan" aria-labelledby={`${id}-actions`}>
-          <header className="gear-section-head">
-            <span className="field-kicker">01 / Review</span>
-            <h3 id={`${id}-actions`}>Before you commit</h3>
-          </header>
+      <section className="gear-field-plan sky-section" aria-labelledby={`${id}-actions`}>
+        <div className="sky-sh">
+          <h2 id={`${id}-actions`}>Before you leave</h2>
+          <p>Settle these first. They can change the plan.</p>
+        </div>
+        <div className="gear-plan-card">
           {blockers.length > 0 && (
             <div className="gear-concerns is-blocked">
-              <h4>Resolve before departure</h4>
-              <ul>
+              <h3>Resolve before departure</h3>
+              <ol>
                 {blockers.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
-              </ul>
+              </ol>
             </div>
           )}
           {cautions.length > 0 && (
             <div className="gear-concerns">
-              <h4>Adjust for these conditions</h4>
-              <ul>
+              <h3>Adjust for these conditions</h3>
+              <ol start={blockers.length + 1} style={{ counterReset: `gear ${blockers.length}` }}>
                 {cautions.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
-              </ul>
+              </ol>
             </div>
           )}
           {actions.length > 0 && (
-            <details className="gear-check-actions">
+            <details className="gear-check-actions sky-details">
               <summary>
                 Actions from {actions.length} unmet{" "}
                 {actions.length === 1 ? "check" : "checks"}
@@ -148,58 +145,60 @@ export function GearActions({
             Review checks & sources{" "}
             <ArrowUpRight size={15} aria-hidden="true" />
           </button>
-        </section>
-        <section className="gear-kit" aria-labelledby={`${id}-kit`}>
-          <header className="gear-section-head">
-            <span className="field-kicker">02 / Prepare</span>
-            <h3 id={`${id}-kit`}>
-              <Backpack size={20} aria-hidden="true" />
-              Your packing list
-            </h3>
-          </header>
-          {items.length > 0 ? (
-            <>
-              <div className="gear-progress">
-                <div>
-                  <p role="status">
-                    <strong>
-                      {packedCount} of {items.length}
-                    </strong>{" "}
-                    packed
-                    {packedCount === items.length
-                      ? " · List complete"
-                      : ` · ${items.length - packedCount} remaining`}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={packedCount === 0}
-                    onClick={() => setPacked(new Set())}
-                  >
-                    <RotateCcw size={14} aria-hidden="true" />
-                    Reset checks
-                  </button>
-                </div>
-                <progress
-                  value={packedCount}
-                  max={items.length}
-                  aria-label="Packing progress"
-                />
+        </div>
+      </section>
+      <section className="gear-kit sky-section" aria-labelledby={`${id}-kit`}>
+        <div className="sky-sh">
+          <h2 id={`${id}-kit`}>
+            <Backpack size={20} aria-hidden="true" />
+            Pack for this day
+          </h2>
+          <p>Each item is here because of this forecast.</p>
+        </div>
+        {items.length > 0 ? (
+          <>
+            <div className="gear-progress">
+              <div>
+                <p role="status">
+                  <strong>
+                    {packedCount} of {items.length}
+                  </strong>{" "}
+                  packed
+                  {packedCount === items.length
+                    ? " · List complete"
+                    : ` · ${items.length - packedCount} remaining`}
+                </p>
+                <button
+                  type="button"
+                  disabled={packedCount === 0}
+                  onClick={() => setPacked(new Set())}
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  Reset checks
+                </button>
               </div>
-              {groups.map((group) => {
-                const members = items.filter(
-                  (item) => groupFor(item.tone) === group.id,
-                );
-                return (
-                  members.length > 0 && (
-                    <fieldset
-                      className={`gear-group is-${group.id}`}
-                      key={group.id}
-                    >
-                      <legend>
-                        {group.label}
-                        <span>{members.length}</span>
-                      </legend>
-                      <p className="gear-group-note">{group.note}</p>
+              <progress
+                value={packedCount}
+                max={items.length}
+                aria-label="Packing progress"
+              />
+            </div>
+            {groups.map((group) => {
+              const members = items.filter(
+                (item) => groupFor(item.tone) === group.id,
+              );
+              return (
+                members.length > 0 && (
+                  <fieldset
+                    className={`gear-group is-${group.id}`}
+                    key={group.id}
+                  >
+                    <legend>
+                      {group.label}
+                      <span>{members.length}</span>
+                    </legend>
+                    <p className="gear-group-note">{group.note}</p>
+                    <div className="gear-grid">
                       {members.map((item) => {
                         const key = itemKey(item);
                         const checked = packed.has(key);
@@ -221,15 +220,13 @@ export function GearActions({
                                 });
                               }}
                             />
+                            <span className="gear-check" aria-hidden="true">
+                              {checked && <Check size={15} strokeWidth={3} />}
+                            </span>
                             <span className="gear-item-copy">
                               <span className="gear-item-meta">
                                 {item.category}
-                                {checked && (
-                                  <span>
-                                    <Check size={12} aria-hidden="true" />
-                                    Packed
-                                  </span>
-                                )}
+                                {checked && <span>Packed</span>}
                               </span>
                               <strong>{item.title}</strong>
                               {item.detail && (
@@ -241,25 +238,25 @@ export function GearActions({
                           </label>
                         );
                       })}
-                    </fieldset>
-                  )
-                );
-              })}
-            </>
-          ) : (
-            <p className="gear-quiet">
-              No gear recommendations are available for this report. Build your
-              packing list from the route, current conditions, and your normal
-              essentials.
-            </p>
-          )}
-          <p className="gear-footnote">
-            Checks stay while this report is open; a new report starts fresh.
-            Carry your normal essentials too. Packing progress does not change
-            the report’s risk assessment.
+                    </div>
+                  </fieldset>
+                )
+              );
+            })}
+          </>
+        ) : (
+          <p className="gear-quiet">
+            No gear recommendations are available for this report. Build your
+            packing list from the route, current conditions, and your normal
+            essentials.
           </p>
-        </section>
-      </div>
+        )}
+        <p className="gear-footnote">
+          Checks stay while this report is open; a new report starts fresh.
+          Carry your normal essentials too. Packing progress does not change
+          the report’s risk assessment.
+        </p>
+      </section>
     </section>
   );
 }

@@ -136,10 +136,10 @@
 .sky-card {
   position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0;
   padding: 16px 18px; border-radius: var(--sky-radius); border: 0; background: var(--sky-surface);
-  color: var(--sky-label); text-align: left; font-size: 15px;
+  box-shadow: var(--sky-elevation); color: var(--sky-label); text-align: left; font-size: 15px;
 }
 button.sky-card { cursor: pointer; transition: box-shadow 0.15s ease; }
-button.sky-card:hover { box-shadow: 0 6px 20px -10px rgba(10, 30, 20, 0.35); }
+button.sky-card:hover { box-shadow: var(--sky-elevation), 0 10px 28px -14px rgba(10, 30, 20, 0.35); }
 .sky-card.is-missing { background: transparent; outline: 2px dashed var(--sky-missing); outline-offset: -2px; }
 .sky-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; color: var(--sky-secondary); }
 .sky-muted { font-size: 13px; font-weight: 500; color: var(--sky-secondary); }
@@ -243,3 +243,13 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-hero-in { padding-bottom: 0; }
   .sky-hero :is(h1, h2, .sky-lede, .sky-subtitle, .sky-kicker) { color: #000; text-shadow: none; }
 }
+
+/* Elevation ladder in the Terrain check: highest band first. */
+.sky-ladder { display: grid; gap: 0; margin: 2px 0 0; padding: 0; list-style: none; }
+.sky-ladder li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--sky-separator); }
+.sky-ladder li:last-child { border-bottom: 0; }
+.sky-ladder span { font-size: 14px; font-weight: 550; }
+.sky-ladder small { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--sky-secondary); }
+.sky-ladder strong { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sky-ladder li.is-cold strong { color: var(--sky-cold); }
+.sky-viz .t-limit { font-size: 11px; font-weight: 600; fill: var(--sky-secondary); }

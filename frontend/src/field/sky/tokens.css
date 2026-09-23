@@ -23,6 +23,8 @@
   --sky-missing: #5c6360;
   --sky-ok-fill: #d5dad6;
   --sky-radius: 20px;
+  /* Cards lift off the grouped background with a hairline and a soft, low shadow. */
+  --sky-elevation: 0 0 0 0.5px rgba(24, 32, 28, 0.06), 0 1px 2px rgba(24, 32, 28, 0.04), 0 8px 24px -16px rgba(24, 32, 28, 0.18);
 }
 html[data-theme="dark"] {
   --sky-bg: #0f1211;
@@ -39,6 +41,7 @@ html[data-theme="dark"] {
   --sky-cold-fill: rgba(114, 180, 240, 0.2);
   --sky-missing: #a7afab;
   --sky-ok-fill: #343a37;
+  --sky-elevation: 0 0 0 0.5px rgba(236, 239, 237, 0.08);
 }
 @media (prefers-contrast: more) {
   :root { --sky-separator: rgba(24, 32, 28, 0.4); --sky-ok-fill: #b9c0bb; }

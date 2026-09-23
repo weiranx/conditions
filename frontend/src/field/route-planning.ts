@@ -1,4 +1,5 @@
 import type { RouteWaypointSummary } from "../hooks/useRouteAnalysis";
+import { computeFeelsLikeF } from "../app/planner-helpers";
 
 export function hasRouteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -29,4 +30,24 @@ export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
       y: 155 - ((p.elev_ft - low) / Math.max(100, high - low)) * 125,
     })),
   };
+}
+
+type Limits = { maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number; maxFeelsLikeF: number };
+
+/**
+ * How a checkpoint's forecast sits against the user's limits. A measured breach
+ * always wins; otherwise the checkpoint is "missing" unless gust, rain chance and
+ * feels-like (given, or derived from temperature and wind) are all known, since a
+ * partial forecast cannot confirm the checkpoint is within every limit.
+ */
+export function checkpointTone(point: RouteWaypointSummary, limits: Limits): "within" | "over" | "missing" {
+  if (!point.dataAvailable) return "missing";
+  const { windGust, precipChance, temp, windSpeed } = point.weather;
+  const feelsLike = hasRouteNumber(point.weather.feelsLike) ? point.weather.feelsLike
+    : hasRouteNumber(temp) && hasRouteNumber(windSpeed) ? computeFeelsLikeF(temp, windSpeed) : null;
+  const over = (hasRouteNumber(windGust) && windGust > limits.maxWindGustMph)
+    || (hasRouteNumber(precipChance) && precipChance > limits.maxPrecipChance)
+    || (feelsLike !== null && (feelsLike < limits.minFeelsLikeF || feelsLike > limits.maxFeelsLikeF));
+  if (over) return "over";
+  return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && feelsLike !== null ? "within" : "missing";
 }

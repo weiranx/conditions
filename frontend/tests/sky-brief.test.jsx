@@ -169,3 +169,38 @@ test("high fire danger is over the limit even when air quality is unavailable", 
   assert.match(card, /is-over/);
   assert.match(card, /Fire risk high/);
 });
+
+import { plainRule, plainReason, durationLabel, terrainStatus } from "../src/field/sky/status";
+import { FreshnessChart } from "../src/field/sky/FreshnessChart";
+
+test("limit breaches read as plain language and unknown text is left alone", () => {
+  assert.equal(plainRule("gust 31>25 mph"), "Gusts 31 mph, over your 25 mph limit");
+  assert.equal(plainRule("precip 80%>60%"), "Rain chance 80%, over your 60% limit");
+  assert.equal(plainRule("feels 12°F<20°F"), "Feels like 12°F, below your 20°F floor");
+  assert.equal(plainRule("condition: Thunderstorms"), "Thunderstorms forecast");
+  assert.equal(plainRule("Something else"), "Something else");
+  assert.equal(plainReason("Hourly evidence is incomplete. gust 31>25 mph", ["gust 31>25 mph"]),
+    "Hourly evidence is incomplete. Gusts 31 mph, over your 25 mph limit");
+});
+
+test("durations switch to hours without losing minutes", () => {
+  assert.equal(durationLabel(30), "30 min");
+  assert.equal(durationLabel(210), "3 h 30 min");
+  assert.equal(durationLabel(-120), "2 h");
+});
+
+test("terrain status matches the decision's hazard codes", () => {
+  assert.equal(terrainStatus({ terrainCondition: { code: "snow_ice", label: "Snow and ice" } }), "over");
+  assert.equal(terrainStatus({ terrainCondition: { code: "weather_unavailable", label: "Unavailable" } }), "missing");
+  assert.equal(terrainStatus({ terrainCondition: null }), "missing");
+  assert.equal(terrainStatus({ terrainCondition: { code: "dry_firm", label: "Dry" } }), "ok");
+});
+
+test("a source without a timestamp is drawn as missing, never current", () => {
+  const html = renderToStaticMarkup(<FreshnessChart
+    rows={[{ label: "Alerts", issued: null, staleHours: 6 }, { label: "Weather", issued: new Date().toISOString(), staleHours: 12 }]}
+    age={() => "just now"} stamp={() => "today"} />);
+  assert.match(html, /is-missing[^]*Alerts[^]*Missing/);
+  assert.match(html, /Weather[^]*Current/);
+  assert.doesNotMatch(html, /NaN|Infinity/);
+});

@@ -2,14 +2,15 @@ import { BookOpen, Check, ChevronRight, CircleHelp, TriangleAlert } from "lucide
 import type { ReactNode } from "react";
 import type { Workspace } from "../model/useWorkspace";
 import { freshnessClass } from "../../app/core";
+import { durationLabel, plainRule, surfaceLabel, terrainStatus, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
 
 export type BriefChapter = "forecast" | "timing" | "terrain" | "route" | "sources" | "gear";
-type Status = "ok" | "over" | "missing";
+type Status = CheckStatus;
 
 const measured = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
-function StatusTag({ status, children }: { status: Status; children: ReactNode }) {
+export function StatusTag({ status, children }: { status: Status; children: ReactNode }) {
   const Icon = status === "over" ? TriangleAlert : status === "missing" ? CircleHelp : Check;
   return <span className={`sky-status is-${status}`}><Icon size={15} aria-hidden="true" />{children}</span>;
 }
@@ -27,7 +28,7 @@ function CheckCard({ title, status, statusText, caption, children, onOpen }: {
   );
 }
 
-export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, routeEnabled, gearEnabled }: {
+export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, routeEnabled, gearEnabled, showMore = true }: {
   w: Workspace;
   hours: SkyHour[];
   clock: (minute: number) => string;
@@ -36,6 +37,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   bridge: string;
   onOpen: (chapter: BriefChapter) => void;
   onReadAll: () => void;
+  /** The "More in this brief" links; the full report already contains every section. */
+  showMore?: boolean;
   routeEnabled: boolean;
   gearEnabled: boolean;
 }) {
@@ -76,11 +79,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const avalancheLevel = w.overallAvalancheLevel as number | null;
   const bands = [...(w.elevationForecastBands || [])].filter((b) => measured(b.elevationFt) && measured(b.temp))
     .sort((a, b) => a.elevationFt - b.elevationFt);
-  const surface = data.terrainCondition?.label?.replace(/^[\p{Extended_Pictographic}️\s]+/u, "") || null;
-  // Match the decision: these surfaces are cautions, and an unavailable assessment is missing evidence.
-  const terrainCode = String(data.terrainCondition?.code || "").toLowerCase();
-  const terrainStatus: Status = !surface || terrainCode === "weather_unavailable" ? "missing"
-    : ["snow_ice", "wet_muddy", "cold_slick", "dry_loose"].includes(terrainCode) || data.terrainCondition?.impact === "high" ? "over" : "ok";
+  const surface = surfaceLabel(data);
+  const terrain = terrainStatus(data);
   const fireHigh = Number(w.fireRiskLevel) >= 3;
   const gear = (w.gearRecommendations || []).filter(Boolean).slice(0, 4);
   const gearTotal = (w.gearRecommendations || []).filter(Boolean).length;
@@ -159,7 +159,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           <CheckCard title="Weather" onOpen={() => onOpen("forecast")}
             status={overCount ? "over" : missingCount ? "missing" : "ok"}
             statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} hours incomplete` : "Within limits"}
-            caption={firstOver ? firstOver.failedRules[0] || "A planned hour crosses your limits."
+            caption={firstOver ? (firstOver.failedRules[0] ? plainRule(firstOver.failedRules[0]) : "A planned hour crosses your limits.")
               : missingCount ? `${missingCount} planned ${missingCount === 1 ? "hour has" : "hours have"} incomplete readings, so ${missingCount === 1 ? "it" : "they"} can't be confirmed within your limits.`
               : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>
             {hours.length > 0 && (
@@ -173,7 +173,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
                     className={isOverHour(h) ? "f-caution" : h.tone === "missing" ? "f-none s-missing" : "f-okfill"} strokeDasharray={h.tone === "missing" ? "2 2" : undefined} />;
                 })}
                 <line x1="0" x2="240" y1={48 - (precipLimit / 100) * 44} y2={48 - (precipLimit / 100) * 44} className="s-secondary" strokeDasharray="3 3" />
-                <text x="240" y={48 - (precipLimit / 100) * 44 - 4} textAnchor="end">{precipLimit}% limit</text>
+                <text x="0" y={Math.max(9, 48 - (precipLimit / 100) * 44 - 5)} textAnchor="start" className="t-limit">rain limit {precipLimit}%</text>
                 <text x="0" y="62">{clock(hours[0].minute)}</text>
                 <text x="240" y="62" textAnchor="end">{clock(hours[hours.length - 1].minute + 60)}</text>
               </svg>
@@ -189,7 +189,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           </CheckCard>
 
           <CheckCard title="Daylight" onOpen={() => onOpen("timing")} status={daylightStatus}
-            statusText={!daylightKnown ? "Unavailable" : spare! < 0 ? `Back ${Math.abs(spare!)} min after sunset` : start! < sunrise! ? `Starts before sunrise · ${spare} min spare` : `${spare} min spare`}
+            statusText={!daylightKnown ? "Unavailable" : spare! < 0 ? `Back ${durationLabel(spare!)} after sunset` : start! < sunrise! ? `Starts before sunrise · ${durationLabel(spare!)} spare` : `${durationLabel(spare!)} spare`}
             caption={daylightKnown ? `Back at ${w.formatClockForStyle(w.returnTimeDisplay, prefs.timeStyle)}, sunset ${w.formatClockForStyle(data.solar?.sunset, prefs.timeStyle)}.` : "Sunrise and sunset are unavailable for this plan."}>
             {daylightKnown && (
               <svg className="sky-viz" viewBox="0 0 240 70" role="img"
@@ -206,25 +206,19 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
             )}
           </CheckCard>
 
-          <CheckCard title="Terrain & snow" onOpen={() => onOpen("terrain")} status={terrainStatus}
+          <CheckCard title="Terrain & snow" onOpen={() => onOpen("terrain")} status={terrain}
             statusText={surface || "Unavailable"}
-            caption={bands.length > 1 ? "Temperature by elevation at your planned time." : w.snowpackBestDepthDisplay ? `Best snow depth estimate: ${w.snowpackBestDepthDisplay}.` : "Surface and snow assessment."}>
-            {bands.length > 1 && (() => {
-              const e0 = bands[0].elevationFt, e1 = bands[bands.length - 1].elevationFt;
-              const t0 = Math.min(...bands.map((b) => b.temp), 20), t1 = Math.max(...bands.map((b) => b.temp), 50);
-              const px = (t: number) => 20 + ((t - t0) / (t1 - t0 || 1)) * 200;
-              const py = (e: number) => 60 - ((e - e0) / (e1 - e0 || 1)) * 50;
-              return (
-                <svg className="sky-viz" viewBox="0 0 240 70" role="img"
-                  aria-label={`Temperature by elevation: ${bands.map((b) => `${w.formatElevationDisplay(b.elevationFt)} ${w.formatTempDisplay(b.temp)}`).join(", ")}.`}>
-                  {t0 < 32 && t1 > 32 && <><line x1={px(32)} x2={px(32)} y1="4" y2="62" className="s-cold" strokeDasharray="3 3" /><text x={px(32) + 4} y="10" className="t-cold">32°F</text></>}
-                  <polyline fill="none" className="s-label" strokeWidth="2.5" points={bands.map((b) => `${px(b.temp)},${py(b.elevationFt)}`).join(" ")} />
-                  {bands.map((b, i) => <circle key={i} cx={px(b.temp)} cy={py(b.elevationFt)} r="3.5" className={b.temp < 32 ? "f-cold" : "f-label"} />)}
-                  <text x="0" y="68">{w.formatElevationDisplay(e0)}</text>
-                  <text x="0" y="10">{w.formatElevationDisplay(e1)}</text>
-                </svg>
-              );
-            })()}
+            caption={bands.length > 1 ? "Temperature by elevation at your start." : w.snowpackBestDepthDisplay ? `Best snow depth estimate: ${w.snowpackBestDepthDisplay}.` : "Surface and snow assessment."}>
+            {bands.length > 1 && (
+              <ol className="sky-ladder" aria-label="Temperature by elevation at your planned time">
+                {[...bands].reverse().slice(0, 3).map((b) => (
+                  <li key={b.label} className={b.temp <= 32 ? "is-cold" : undefined}>
+                    <span>{b.label}<small>{w.formatElevationDisplay(b.elevationFt)}</small></span>
+                    <strong>{w.formatTempDisplay(b.temp)}</strong>
+                  </li>
+                ))}
+              </ol>
+            )}
           </CheckCard>
 
           <CheckCard title="Avalanche" onOpen={() => onOpen("terrain")}
@@ -272,7 +266,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
         </section>
       )}
 
-      <section className="sky-section" aria-labelledby="sky-more">
+      {showMore && <section className="sky-section" aria-labelledby="sky-more">
         <div className="sky-sh"><h2 id="sky-more">More in this brief</h2></div>
         <div className="sky-group">
           {routeEnabled && <button type="button" className="sky-row" onClick={() => onOpen("route")}>
@@ -285,7 +279,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           <button type="button" className="sky-row" onClick={onReadAll}>
             <span><strong>Read the full report</strong><small>Every section on one page</small></span><BookOpen size={18} aria-hidden="true" /></button>
         </div>
-      </section>
+      </section>}
     </>
   );
 }

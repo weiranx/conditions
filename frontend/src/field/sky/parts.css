@@ -1,0 +1,114 @@
+/* Shared Sky building blocks for report chapters: lead, segmented control,
+   hour chart, tables, stat trios and disclosures. Colours come from tokens.css. */
+
+.sky-lead { margin: 20px 0 0; max-width: 64ch; font-size: 19px; line-height: 1.45; color: var(--sky-label); text-wrap: pretty; }
+.sky-lead strong { font-weight: 650; }
+.sky-lead .is-over { color: var(--sky-caution); }
+.sky-lead .is-cold { color: var(--sky-cold); }
+.sky-lead .is-missing { color: var(--sky-missing); }
+.sky-lead-note { color: var(--sky-secondary); }
+
+/* Segmented control: one choice from a short set. */
+.sky-segmented {
+  display: flex; gap: 2px; padding: 2px; margin: 0 0 14px; border-radius: 11px; background: var(--sky-fill);
+  overflow-x: auto; scrollbar-width: none;
+}
+.sky-segmented::-webkit-scrollbar { display: none; }
+.sky-segmented button {
+  flex: 1 0 auto; min-height: 34px; padding: 0 14px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--sky-label); font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.sky-segmented button[aria-pressed="true"] {
+  background: var(--sky-surface); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+html[data-theme="dark"] .sky-segmented button[aria-pressed="true"] { background: #3a403d; }
+.sky-segmented button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
+
+/* Hour chart */
+.sky-hourchart { width: 100%; min-width: 0; }
+.sky-hourchart svg { display: block; overflow: visible; font-family: var(--f-font); touch-action: pan-y; cursor: pointer; }
+.sky-hourchart svg:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 4px; border-radius: 8px; }
+.sky-hourchart text { font-size: 12px; fill: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-hourchart .hc-over-bg { fill: var(--sky-caution-fill); }
+.sky-hourchart .hc-over-line { stroke: var(--sky-caution); stroke-opacity: 0.35; }
+.sky-hourchart .hc-missing { fill: transparent; stroke: var(--sky-missing); stroke-dasharray: 3 3; stroke-opacity: 0.6; }
+.sky-hourchart .hc-selected { fill: none; stroke: var(--sky-label); stroke-width: 1.5; }
+.sky-hourchart .hc-line { fill: none; stroke: var(--sky-label); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
+.sky-hourchart .hc-point circle { fill: var(--sky-surface); stroke: var(--sky-label); stroke-width: 2; }
+.sky-hourchart .hc-point.is-over circle { fill: var(--sky-caution); stroke: var(--sky-caution); }
+.sky-hourchart .hc-point.is-missing circle { stroke: var(--sky-missing); stroke-dasharray: 2 2; }
+.sky-hourchart .hc-point text { font-weight: 600; fill: var(--sky-label); }
+.sky-hourchart .hc-point.is-over text { fill: var(--sky-caution); }
+.sky-hourchart .hc-point text.is-selected { font-size: 13px; }
+.sky-hourchart .hc-hour.is-over { fill: var(--sky-caution); font-weight: 600; }
+.sky-hourchart .hc-hour.is-selected { fill: var(--sky-label); font-weight: 700; }
+.sky-hourchart .hc-guide line { stroke-width: 1.5; }
+.sky-hourchart .hc-guide text { font-size: 11px; font-weight: 600; }
+.sky-hourchart .hc-guide.is-cold line { stroke: var(--sky-cold); }
+.sky-hourchart .hc-guide.is-cold text { fill: var(--sky-cold); }
+.sky-hourchart .hc-guide.is-caution line { stroke: var(--sky-caution); }
+.sky-hourchart .hc-guide.is-caution text { fill: var(--sky-caution); }
+.sky-hourchart .hc-guide.is-secondary line { stroke: var(--sky-secondary); }
+
+/* Tables: grouped rows on a surface, numbers right-aligned in tabular figures. */
+.sky-table-card { padding: 6px 8px; overflow-x: auto; }
+.sky-table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+.sky-table th, .sky-table td { padding: 10px; text-align: left; border-bottom: 1px solid var(--sky-separator); white-space: nowrap; }
+.sky-table thead th { padding-top: 8px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.sky-table tbody tr:last-child > * { border-bottom: 0; }
+.sky-table .is-num { text-align: right; }
+.sky-table .is-end { text-align: right; }
+.sky-table .is-sky { color: var(--sky-secondary); width: 1%; }
+.sky-table tbody th { font-weight: 600; }
+.sky-table tbody th button {
+  min-height: 32px; padding: 0 6px; margin: -4px -6px; border: 0; border-radius: 8px; background: none;
+  color: inherit; font: inherit; font-weight: 600; cursor: pointer;
+}
+.sky-table tbody th button:hover { background: var(--sky-fill); }
+.sky-table tbody th button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 0; }
+.sky-table tr.is-over > * { background: var(--sky-caution-fill); }
+.sky-table tr.is-missing > * { background: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--sky-missing) 8%, transparent) 6px 8px); }
+.sky-table tr.is-selected > th:first-child { box-shadow: inset 3px 0 0 var(--sky-label); }
+.sky-table td.is-over { color: var(--sky-caution); font-weight: 650; }
+.sky-table td.is-cold { color: var(--sky-cold); font-weight: 600; }
+.sky-table tr > :first-child { border-radius: 10px 0 0 10px; }
+.sky-table tr > :last-child { border-radius: 0 10px 10px 0; }
+
+/* Three cards in a row, one per summary figure. */
+.sky-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.sky-big-sep, .sky-big-unit { font-size: 17px; font-weight: 500; color: var(--sky-secondary); letter-spacing: 0; }
+
+/* Disclosure: a quiet row that opens in place. */
+.sky-details { margin-top: 4px; }
+.sky-details > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; list-style: none;
+  color: var(--sky-accent); font-size: 14px; font-weight: 600;
+}
+.sky-details > summary::-webkit-details-marker { display: none; }
+.sky-details > summary::after { content: ""; width: 7px; height: 7px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); transition: transform 0.15s ease; }
+.sky-details[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
+.sky-details > p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
+.sky-empty { margin: 0; padding: 18px; border-radius: 14px; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; color: var(--sky-missing); font-size: 14px; text-align: center; }
+
+@media (max-width: 1000px) {
+  .sky-trio { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 650px) {
+  .sky-lead { font-size: 18px; }
+  .sky-trio { grid-template-columns: 1fr; gap: 10px; }
+  .sky-table { font-size: 15px; }
+  .sky-table th, .sky-table td { padding: 10px 6px; }
+  .sky-table-card { padding: 4px; }
+  .sky-table .is-sky { display: none; }
+  .sky-table .sky-status-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sky-table thead .is-end { font-size: 0; }
+  .sky-table :is(th, td) { padding-inline: 5px; }
+  .sky-segmented button { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky-details > summary::after { transition: none; }
+}
+/* The older disclosure style draws its own chevron; Sky disclosures use one on the right. */
+.field-app details.sky-details > summary::before { content: none; display: none; }
+/* Visually hidden text for chapter parts that also appear outside the report (Compare uses Forecast). */
+:where(.sky-weather, .sky-timeline, .sky-gear, .sky-fresh) .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
