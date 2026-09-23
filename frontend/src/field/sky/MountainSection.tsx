@@ -14,7 +14,7 @@ const BAND_LABEL_GAP = 38;
  * and the objective marked on the ridge. Heights are to scale; the ridge
  * shape is illustrative.
  */
-export function MountainSection({ bands, objectiveFt, objectiveLabel, target, levels, sky, format }: {
+export function MountainSection({ bands, objectiveFt, objectiveLabel, target, levels, sky, format, when = "at your start" }: {
   bands: ElevationForecastBand[];
   objectiveFt: number | null;
   objectiveLabel: string;
@@ -22,6 +22,8 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
   levels: Level[];
   sky: { zenith: string; horizon: string } | null;
   format: { elevation: (ft: number) => string; temp: (f: number) => string; wind: (mph: number) => string };
+  /** Time phrase for the accessible label, e.g. "at 10:00 AM". */
+  when?: string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>(900);
   const id = useId().replace(/:/g, "");
@@ -65,7 +67,7 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
   return (
     <div className="sky-mountain" ref={ref}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img"
-        aria-label={`Conditions by elevation at your start. ${describe}.`}>
+        aria-label={`Conditions by elevation ${when}. ${describe}.`}>
         <defs>
           <linearGradient id={`${id}-sky`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={sky?.zenith || "#6f95bd"} stopOpacity="0.55" />
