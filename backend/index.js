@@ -956,6 +956,7 @@ registerRouteAnalysisRoutes({
   fetchWithTimeout,
   fetchHeaders: DEFAULT_FETCH_HEADERS,
   ensureAccountAccess,
+  fetchElevationFt: (lat, lon) => fetchObjectiveElevationFt(lat, lon, { headers: DEFAULT_FETCH_HEADERS }),
 });
 registerAiBriefRoute({ app, askAI, ensureAccountAccess });
 registerReportChatRoute({ app, ensureAccountAccess });

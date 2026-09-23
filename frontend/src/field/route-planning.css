@@ -35,85 +35,155 @@
 .field-route-options h3 { margin: 2px 0 0; font-size: 17px; font-weight: 650; }
 .field-route-options p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 
-.sky-stat-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 20px 0 0; border-radius: 20px; background: var(--sky-surface); overflow: hidden; }
-.sky-stat-strip > div { padding: 16px 18px; border-left: 1px solid var(--sky-separator); }
-.sky-stat-strip > div:first-child { border-left: 0; }
+/* Only known facts are shown, so the strip reflows from 2 to 6 cells. Hairlines come from the 1px gap. */
+.sky-stat-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1px;
+  margin: 20px 0 0; border-radius: var(--sky-radius, 20px); background: var(--sky-separator); overflow: hidden; box-shadow: var(--sky-elevation);
+}
+.sky-stat-strip > div { padding: 16px 18px; background: var(--sky-surface); }
 .sky-stat-strip dt { font-size: 13px; color: var(--sky-secondary); }
 .sky-stat-strip dd { margin: 2px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sky-stat-strip small { display: inline-flex; margin-top: 4px; padding: 1px 8px; border-radius: 999px; background: var(--sky-night-fill); font-size: 12px; font-weight: 600; color: var(--sky-label); }
 
-.sky-route-card { gap: 12px; }
+.sky-route { --sky-night-fill: color-mix(in srgb, var(--sky-label) 9%, transparent); }
+.sky-route-card { gap: 14px; }
+.sky-route-card > .sky-notice { margin: 0; }
+.sky-route-card > .sky-notice.is-info { justify-content: flex-start; background: var(--sky-fill); font-size: 14px; }
+.sky-route-source { display: inline-flex; align-items: center; gap: 6px; }
+.sky-route-source svg { color: var(--sky-secondary); }
 .sky-chip.is-missing { background: transparent; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; color: var(--sky-missing); }
+.sky-chip.is-within { background: var(--sky-ok-fill); }
 
-.sky-route-profile { width: 100%; margin-top: 4px; }
-.sky-route-profile svg { display: block; font-family: var(--f-font); }
-.sky-route-profile .rp-area { fill: var(--sky-fill); }
+.sky-route-profile { width: 100%; margin-top: 2px; }
+.sky-route-profile svg { display: block; overflow: visible; font-family: var(--f-font); }
+.sky-route-profile .rp-fill-top { stop-color: var(--sky-label); stop-opacity: 0.16; }
+.sky-route-profile .rp-fill-bottom { stop-color: var(--sky-label); stop-opacity: 0.02; }
+.sky-route-profile .rp-night rect { fill: var(--sky-night-fill); }
+.sky-route-profile .rp-tick line { stroke: var(--sky-separator); stroke-dasharray: 2 4; }
+.sky-route-profile .rp-tick text { font-size: 11px; fill: var(--sky-secondary); font-variant-numeric: tabular-nums; }
 .sky-route-profile .rp-over-bg { fill: var(--sky-caution-fill); }
 .sky-route-profile .rp-over-line { stroke: var(--sky-caution); stroke-opacity: 0.4; }
 .sky-route-profile .rp-line { fill: none; stroke: var(--sky-label); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .sky-route-profile .rp-line.is-over { stroke: var(--sky-caution); stroke-width: 3.5; }
-.sky-route-profile .rp-axis { font-size: 12px; fill: var(--sky-secondary); }
+.sky-route-profile .rp-guide { stroke: var(--sky-label); stroke-opacity: 0.35; stroke-width: 1.5; stroke-dasharray: 3 3; }
 .sky-route-profile .rp-stop { cursor: pointer; }
-.sky-route-profile .rp-stop circle { fill: var(--sky-label); stroke: var(--sky-surface); stroke-width: 2.5; }
-.sky-route-profile .rp-stop .rp-num { font-size: 11px; font-weight: 700; fill: var(--sky-surface); }
-.sky-route-profile .rp-stop.is-over circle { fill: var(--sky-caution); }
-.sky-route-profile .rp-stop.is-missing circle { fill: var(--sky-surface); stroke: var(--sky-missing); stroke-dasharray: 3 2; }
+.sky-route-profile .rp-stop .rp-dot { fill: var(--sky-label); stroke: var(--sky-surface); stroke-width: 2.5; transition: r 120ms ease; }
+.sky-route-profile .rp-stop .rp-halo { fill: var(--sky-label); fill-opacity: 0.12; }
+.sky-route-profile .rp-stop .rp-num { font-size: 11px; font-weight: 700; fill: var(--sky-surface); pointer-events: none; }
+.sky-route-profile .rp-stop.is-over .rp-dot { fill: var(--sky-caution); }
+.sky-route-profile .rp-stop.is-over .rp-halo { fill: var(--sky-caution); fill-opacity: 0.18; }
+.sky-route-profile .rp-stop.is-missing .rp-dot { fill: var(--sky-surface); stroke: var(--sky-missing); stroke-dasharray: 3 2; }
 .sky-route-profile .rp-stop.is-missing .rp-num { fill: var(--sky-missing); }
-.sky-route-profile .rp-stop.is-selected circle { stroke: var(--sky-label); stroke-width: 2.5; }
-.sky-route-profile .rp-stop.is-selected.is-over circle { stroke: var(--sky-surface); filter: drop-shadow(0 0 0 var(--sky-caution)); }
-.sky-route-profile .rp-eta { font-size: 12px; font-weight: 650; fill: var(--sky-label); font-variant-numeric: tabular-nums; }
+.sky-route-profile .rp-eta { font-size: 12px; font-weight: 650; fill: var(--sky-label); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--sky-surface); stroke-width: 4px; stroke-linejoin: round; }
 .sky-route-profile .rp-stop.is-over .rp-eta { fill: var(--sky-caution); }
+.sky-route-profile .rp-stop:hover .rp-dot { r: 12; }
 .sky-route-profile .rp-stop:focus-visible { outline: none; }
-.sky-route-profile .rp-stop:focus-visible circle { stroke: var(--sky-accent); stroke-width: 4; }
+.sky-route-profile .rp-stop:focus-visible .rp-dot { stroke: var(--sky-accent); stroke-width: 4; }
 
-.sky-route-itinerary-head h3 { margin: 8px 0 0; font-size: 17px; font-weight: 650; }
-.sky-route-itinerary-head p { margin: 2px 0 0; font-size: 13px; color: var(--sky-secondary); }
-.field-route-itinerary { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 0; }
-.field-route-itinerary > li + li { border-top: 1px solid var(--sky-separator); }
+.sky-route-legend { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; }
+.sky-route-legend ul { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--sky-secondary); }
+.sky-route-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.sky-swatch { width: 14px; height: 10px; border-radius: 3px; }
+.sky-swatch.is-over { background: repeating-linear-gradient(45deg, var(--sky-caution-fill) 0 3px, color-mix(in srgb, var(--sky-caution) 45%, transparent) 3px 5px); }
+.sky-swatch.is-missing { outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
+.sky-swatch.is-night { background: var(--sky-night-fill); outline: 1px solid var(--sky-separator); outline-offset: -1px; }
+
+.sky-route-itinerary-head { padding-top: 14px; border-top: 1px solid var(--sky-separator); }
+.sky-route-itinerary-head h3 { margin: 0; font-size: 17px; font-weight: 650; }
+.sky-route-itinerary-head p { margin: 4px 0 0; max-width: 72ch; font-size: 13px; line-height: 1.5; color: var(--sky-secondary); }
+
+/* A vertical timeline: numbered stops joined by a rail, with the leg between them underneath. */
+.field-route-itinerary { list-style: none; margin: 0; padding: 0; display: grid; }
+.field-route-itinerary > li { position: relative; }
+.field-route-itinerary > li:not(:last-child)::before {
+  content: ""; position: absolute; left: 22px; top: 32px; bottom: -12px; width: 2px; border-radius: 1px; background: var(--sky-separator);
+}
+.field-route-itinerary > li.is-return .field-route-stop-number { box-shadow: 0 0 0 3px var(--sky-surface), 0 0 0 4.5px var(--sky-separator); }
 .field-route-stop {
+  position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
-  align-items: center;
+  grid-template-columns: 26px minmax(0, 1.5fr) minmax(88px, 0.6fr) minmax(0, 1.7fr);
+  align-items: start;
   gap: 14px;
   width: 100%;
-  min-height: 56px;
-  padding: 10px 10px;
+  min-height: 60px;
+  padding: 10px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: transparent;
   text-align: left;
   color: var(--sky-label);
   font: inherit;
   cursor: pointer;
+  transition: background-color 120ms ease;
 }
 .field-route-stop[aria-pressed="true"] { background: var(--sky-fill); }
 .field-route-stop:hover { background: color-mix(in srgb, var(--sky-fill) 60%, transparent); }
+.field-route-stop[aria-pressed="true"]:hover { background: var(--sky-fill); }
 .field-route-stop:focus-visible,
 .field-route-alternatives > summary:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
 .field-route-stop strong,
 .field-route-stop small { display: block; overflow-wrap: anywhere; }
 .field-route-stop strong { font-size: 15px; font-weight: 600; line-height: 1.35; font-variant-numeric: tabular-nums; }
-.field-route-stop small { color: var(--sky-secondary); font-size: 12px; line-height: 1.4; margin-top: 2px; }
+.field-route-stop small { color: var(--sky-secondary); font-size: 12px; line-height: 1.4; margin-top: 2px; min-height: 1.4em; }
+.field-route-stop-time strong { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 .field-route-stop-number {
+  position: relative; z-index: 1;
   width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%;
   background: var(--sky-label); color: var(--sky-surface); font-size: 12px; font-weight: 700;
 }
 .field-route-stop-number.is-over { background: var(--sky-caution); color: #fff; }
-.field-route-stop-number.is-missing { background: transparent; color: var(--sky-missing); outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
+.field-route-stop-number.is-missing { background: var(--sky-surface); color: var(--sky-missing); outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
+.field-route-stop-wx { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; padding-top: 1px; }
+.sky-route-pill {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 9px; border-radius: 999px;
+  background: var(--sky-surface); box-shadow: inset 0 0 0 1px var(--sky-separator);
+  font-size: 12.5px; font-weight: 600; color: var(--sky-label); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.sky-route-pill svg { color: var(--sky-secondary); }
+.sky-route-pill.is-over { background: var(--sky-caution-fill); box-shadow: none; color: var(--sky-caution); }
+.sky-route-pill.is-over svg { color: currentColor; }
+.sky-route-pill.is-missing { background: transparent; box-shadow: none; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; color: var(--sky-missing); }
+.sky-route-pill.is-night { background: var(--sky-night-fill); box-shadow: none; }
+.field-route-leg {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 2px 10px 8px 50px;
+  font-size: 12px; font-weight: 600; color: var(--sky-secondary); font-variant-numeric: tabular-nums;
+}
+.field-route-leg span { display: inline-flex; align-items: center; gap: 4px; }
 
 .field-checkpoint { padding: 16px 18px; border-radius: 16px; background: var(--sky-fill); }
+.field-checkpoint-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .field-checkpoint h3 { margin: 0; font-size: 18px; font-weight: 700; }
-.field-checkpoint > p { margin: 2px 0 12px; font-size: 14px; color: var(--sky-secondary); }
+.field-checkpoint-head p { margin: 2px 0 0; font-size: 14px; color: var(--sky-secondary); }
+.field-checkpoint-head .sky-chip { flex: none; background: var(--sky-surface); }
+.field-checkpoint-head .sky-chip.is-over { background: var(--sky-caution-fill); }
+.field-checkpoint-head .sky-chip.is-missing { background: transparent; }
+/* The shared .sky-stat-grid (sky/chapters.css) sets type and columns; here it becomes tiles with hairlines. */
+.field-checkpoint .sky-stat-grid { gap: 1px; border-radius: 12px; overflow: hidden; background: var(--sky-separator); }
+.field-checkpoint .sky-stat-grid > div { padding: 12px 14px; background: var(--sky-surface); }
+
+/* Route briefing: the decision first, then the reasoning in a readable grid. */
+.sky-route-brief { gap: 14px; }
+.sky-route-bottom { padding: 16px 18px; border-radius: 16px; background: var(--sky-fill); box-shadow: inset 4px 0 0 var(--sky-label); }
+.sky-route-bottom p { margin: 4px 0 0; font-size: 17px; font-weight: 600; line-height: 1.45; text-wrap: pretty; }
+.sky-route-brief-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; }
+.sky-route-brief-part h3 { margin: 0 0 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--sky-secondary); }
+.sky-route-brief-part p { margin: 0; font-size: 15px; line-height: 1.55; text-wrap: pretty; }
+.sky-route-brief-part.is-gear-check { grid-column: 1 / -1; }
+.sky-route-gear { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
+.sky-route-gear li { padding: 6px 12px; border-radius: 999px; background: var(--sky-fill); font-size: 14px; line-height: 1.35; }
 
 @media (max-width: 850px) {
-  .field-route-stop { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; }
-  .field-route-stop > :nth-child(4) { grid-column: 2; }
-  .sky-stat-strip { grid-template-columns: 1fr 1fr; }
-  .sky-stat-strip > div:nth-child(3) { border-left: 0; }
-  .sky-stat-strip > div:nth-child(n + 3) { border-top: 1px solid var(--sky-separator); }
+  .field-route-stop { grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px 12px; }
+  .field-route-stop-wx { grid-column: 2 / -1; justify-content: flex-start; }
+  .field-route-stop-time { text-align: right; }
+  .sky-route-brief-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 420px) {
-  .field-route-stop-place { grid-column: 2 / -1; }
-  .field-route-stop > :nth-child(3) { grid-column: 2; }
-  .field-route-stop > :nth-child(4) { grid-column: 3; }
-  .field-route-stop-evidence { grid-column: 2 / -1; }
+  .sky-stat-strip { grid-template-columns: 1fr 1fr; }
+  .sky-stat-strip dd { font-size: 20px; }
+  .field-checkpoint-head { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-route-stop, .sky-route-profile .rp-dot { transition: none; }
 }

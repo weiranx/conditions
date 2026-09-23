@@ -1,4 +1,4 @@
-import type { RouteWaypointSummary } from "../hooks/useRouteAnalysis";
+import type { RouteTiming, RouteWaypointSummary } from "../hooks/useRouteAnalysis";
 import { computeFeelsLikeF } from "../app/planner-helpers";
 
 export function hasRouteNumber(value: unknown): value is number {
@@ -7,9 +7,10 @@ export function hasRouteNumber(value: unknown): value is number {
 
 /** Do not invent elevations or imply equal distances between uneven checkpoints. */
 export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
-  if (summaries.length < 2 || !summaries.every((p) => hasRouteNumber(p.elev_ft))) return null;
-  const low = Math.min(...summaries.map((p) => p.elev_ft));
-  const high = Math.max(...summaries.map((p) => p.elev_ft));
+  const elevations = summaries.map((p) => p.elev_ft);
+  if (summaries.length < 2 || !elevations.every(hasRouteNumber)) return null;
+  const low = Math.min(...elevations);
+  const high = Math.max(...elevations);
   const distances = summaries.map((p) => p.distance_miles);
   const progress = summaries.map((p) => p.progress_percent);
   const ordered = (values: unknown[]): values is number[] =>
@@ -25,9 +26,9 @@ export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
     axis,
     low,
     high,
-    points: summaries.map((p, i) => ({
+    points: elevations.map((_, i) => ({
       x: 20 + ((positions[i] - first) / span) * 960,
-      y: 155 - ((p.elev_ft - low) / Math.max(100, high - low)) * 125,
+      y: 155 - ((elevations[i] - low) / Math.max(100, high - low)) * 125,
     })),
   };
 }
@@ -50,4 +51,86 @@ export function checkpointTone(point: RouteWaypointSummary, limits: Limits): "wi
     || (feelsLike !== null && (feelsLike < limits.minFeelsLikeF || feelsLike > limits.maxFeelsLikeF));
   if (over) return "over";
   return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && feelsLike !== null ? "within" : "missing";
+}
+
+/** Explain how checkpoint arrival times were estimated; older saved analyses have no timing. */
+export function describeRouteTiming(timing: RouteTiming | undefined): string {
+  if (!timing) return "Estimated arrivals use your planned duration, not terrain-adjusted pace.";
+  const window = `your ${timing.travelWindowHours}-hour plan`;
+  const spread = timing.basis === "distance-and-vert"
+    ? `Arrivals spread ${window} by distance and climbing${timing.paceSource === "user" ? ", weighted by your pace settings" : ""}.`
+    : timing.basis === "distance"
+      ? `Arrivals spread ${window} by distance only; some checkpoint elevations are unknown, so climbing is not weighted.`
+      : timing.basis === "progress"
+        ? `Arrivals spread ${window} by route progress, not terrain-adjusted pace.`
+        : `Arrivals are spaced evenly across ${window} because route distances are unknown.`;
+  return timing.roundTrip ? `${spread} The route is treated as an out-and-back, so the last checkpoint is your return to the start.` : spread;
+}
+
+/** "2026-09-09" → "Wed, Sep 9", read as a calendar date rather than a UTC instant. */
+export function formatEtaDate(isoDate: string | undefined): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  if (!match) return isoDate || "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
+}
+
+export function formatLegDuration(minutes: number): string {
+  const rounded = Math.max(0, Math.round(minutes / 5) * 5);
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+export type RouteLegSummary = {
+  minutes: number | null;
+  elevationDeltaFt: number | null;
+  distanceMiles: number | null;
+};
+
+/** Time, elevation change and distance between consecutive checkpoints; unknowns stay null. */
+export function buildRouteLegs(summaries: RouteWaypointSummary[]): RouteLegSummary[] {
+  return summaries.slice(1).map((next, i) => {
+    const previous = summaries[i];
+    const minutes = hasRouteNumber(next.offsetMinutes) && hasRouteNumber(previous.offsetMinutes)
+      ? next.offsetMinutes - previous.offsetMinutes : null;
+    const elevationDeltaFt = hasRouteNumber(next.elev_ft) && hasRouteNumber(previous.elev_ft)
+      ? next.elev_ft - previous.elev_ft : null;
+    const distanceMiles = next.leg !== "return" && hasRouteNumber(next.distance_miles) && hasRouteNumber(previous.distance_miles)
+      && next.distance_miles >= previous.distance_miles ? next.distance_miles - previous.distance_miles : null;
+    return { minutes: minutes !== null && minutes >= 0 ? minutes : null, elevationDeltaFt, distanceMiles };
+  });
+}
+
+/** Rounded elevation gridlines for the profile, in its 30–155 frame units. */
+export function buildProfileTicks(low: number, high: number): { y: number; feet: number }[] {
+  const span = Math.max(100, high - low);
+  const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000].find((s) => span / s <= 4) ?? 5000;
+  const ticks: { y: number; feet: number }[] = [];
+  for (let feet = Math.ceil(low / step) * step; feet <= high; feet += step) {
+    ticks.push({ feet, y: 155 - ((feet - low) / span) * 125 });
+  }
+  return ticks;
+}
+
+export type RouteBriefingSection = { key: string; label: string; text: string };
+
+const BRIEFING_LABELS = ["Hazard zones", "Weather window", "Other concerns", "Decision points", "Gear check", "Bottom line"];
+
+/**
+ * Split a six-part route briefing ("HAZARD ZONES: …") into its sections. Returns
+ * null for free-form text so it can be shown as written.
+ */
+export function splitRouteBriefing(text: string | null | undefined): RouteBriefingSection[] | null {
+  if (!text) return null;
+  const pattern = new RegExp(`(?:^|\\s)(${BRIEFING_LABELS.join("|")})\\s*:\\s*`, "gi");
+  const matches = [...text.matchAll(pattern)];
+  if (matches.length < 2) return null;
+  return matches.map((match, i) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index ?? text.length : text.length;
+    const label = BRIEFING_LABELS.find((l) => l.toLowerCase() === match[1].toLowerCase()) ?? match[1];
+    return { key: label.toLowerCase().replace(/\s+/g, "-"), label, text: text.slice(start, end).trim() };
+  }).filter((section) => section.text);
 }

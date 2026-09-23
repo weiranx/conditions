@@ -98,7 +98,7 @@ test('itinerary keeps every arrival date, alternatives and route uncertainty vis
   const html = renderToStaticMarkup(<Route workspace={workspace()} />);
   const doc = new JSDOM(html).window.document;
   assert.equal(doc.querySelectorAll('.field-route-stop').length, 2);
-  assert.match(doc.querySelector('.field-route-itinerary').textContent, /2026-09-08.*2026-09-09/);
+  assert.match(doc.querySelector('.field-route-itinerary').textContent, /Tue, Sep 8.*Wed, Sep 9/);
   assert.ok(doc.querySelector('.field-route-alternatives'));
   assert.equal(doc.querySelector('.field-route-alternatives').open, false);
   assert.match(html, /2 of 2 forecasts returned/);
@@ -176,4 +176,92 @@ test('a missing elevation stays missing instead of becoming 0 ft', () => {
   assert.equal(knownFeet(''), null);
   assert.equal(knownFeet('10738'), 10738);
   assert.equal(knownFeet(0), 0);
+});
+
+import { describeRouteTiming } from '../src/field/route-planning';
+
+test('timing note explains how arrivals were estimated, and keeps the legacy note for old saves', () => {
+  const timing = { basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 9, pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 45 }, paceSource: 'user' };
+  assert.match(describeRouteTiming(timing), /your 9-hour plan by distance and climbing, weighted by your pace settings/);
+  assert.match(describeRouteTiming(timing), /out-and-back/);
+  assert.match(describeRouteTiming({ ...timing, basis: 'distance', roundTrip: false }), /elevations are unknown, so climbing is not weighted/);
+  assert.doesNotMatch(describeRouteTiming({ ...timing, roundTrip: false }), /out-and-back/);
+  assert.match(describeRouteTiming(undefined), /not terrain-adjusted pace/);
+});
+
+test('an out-and-back shows the return time and flags arrivals after dark', () => {
+  const analysis = {
+    ...result([
+      point({ etaTime: '06:00', etaDate: '2026-09-08', daylight: 'dark' }),
+      point({ name: 'Summit', elev_ft: 9000, etaTime: '11:00', daylight: 'day' }),
+      point({ name: 'Return to Trailhead', leg: 'return', etaTime: '20:30', daylight: 'dark' }),
+    ]),
+    timing: { basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 14, pace: { minutesPerMile: 20, ascentMinutesPer1000Ft: 30 }, paceSource: 'default' },
+  };
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: analysis })} />);
+  const doc = new JSDOM(html).window.document;
+  assert.match(doc.querySelector('.sky-lead').textContent, /Summit, at 11:00 and are back at the start around 20:30, after dark\./);
+  const stops = [...doc.querySelectorAll('.field-route-stop')].map((stop) => stop.textContent);
+  assert.match(stops[0], /After dark/);
+  assert.doesNotMatch(stops[1], /After dark/);
+  assert.match(stops[2], /After dark/);
+  assert.match(html, /your 14-hour plan by distance and climbing\./);
+  assert.match(html, /last checkpoint is your return to the start/);
+});
+
+import { buildProfileTicks, buildRouteLegs, formatEtaDate, formatLegDuration, splitRouteBriefing } from '../src/field/route-planning';
+
+test('arrival dates and leg durations read naturally', () => {
+  assert.equal(formatEtaDate('2026-09-09'), 'Wed, Sep 9');
+  assert.equal(formatEtaDate(undefined), '');
+  assert.equal(formatLegDuration(215), '3 h 35 min');
+  assert.equal(formatLegDuration(120), '2 h');
+  assert.equal(formatLegDuration(42), '40 min');
+});
+
+test('legs report time, climb and distance only when both ends know them', () => {
+  const legs = buildRouteLegs([
+    point({ offsetMinutes: 0, elev_ft: 6000, distance_miles: 0 }),
+    point({ offsetMinutes: 150, elev_ft: 8500, distance_miles: 3.5 }),
+    point({ offsetMinutes: 300, elev_ft: null, distance_miles: 5 }),
+    point({ offsetMinutes: 420, elev_ft: 6000, leg: 'return', distance_miles: undefined }),
+  ]);
+  assert.deepEqual(legs[0], { minutes: 150, elevationDeltaFt: 2500, distanceMiles: 3.5 });
+  assert.deepEqual(legs[1], { minutes: 150, elevationDeltaFt: null, distanceMiles: 1.5 });
+  assert.deepEqual(legs[2], { minutes: 120, elevationDeltaFt: null, distanceMiles: null });
+});
+
+test('profile gridlines use round elevations inside the drawn range', () => {
+  const ticks = buildProfileTicks(6500, 10000);
+  assert.deepEqual(ticks.map((t) => t.feet), [7000, 8000, 9000, 10000]);
+  assert.equal(ticks.at(-1).y, 30);
+  assert.ok(ticks.every((t) => t.y >= 30 && t.y <= 155));
+});
+
+test('six-part briefings split into sections, free text stays as written', () => {
+  const sections = splitRouteBriefing('HAZARD ZONES: Wind on the ridge.\nGEAR CHECK: Shell; headlamp.\nBOTTOM LINE: Go early.');
+  assert.deepEqual(sections.map((s) => [s.key, s.text]), [
+    ['hazard-zones', 'Wind on the ridge.'], ['gear-check', 'Shell; headlamp.'], ['bottom-line', 'Go early.'],
+  ]);
+  assert.equal(splitRouteBriefing('Checkpoint evidence.'), null);
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: { ...result([point()]),
+    analysis: 'HAZARD ZONES: Wind on the ridge. GEAR CHECK: Shell; headlamp. BOTTOM LINE: Go early.' } })} />);
+  const doc = new JSDOM(html).window.document;
+  assert.equal(doc.querySelector('.sky-route-bottom p').textContent, 'Go early.');
+  assert.deepEqual([...doc.querySelectorAll('.sky-route-gear li')].map((li) => li.textContent), ['Shell', 'headlamp']);
+});
+
+test('no stop is called the high point when every elevation is unknown', () => {
+  const analysis = result([
+    point({ elev_ft: null, etaTime: '06:00' }),
+    point({ name: 'Summit', elev_ft: null, etaTime: '11:00' }),
+    point({ name: 'Return to Trailhead', leg: 'return', elev_ft: null, etaTime: '16:00' }),
+  ]);
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: analysis })} />);
+  const doc = new JSDOM(html).window.document;
+  assert.doesNotMatch(doc.querySelector('.sky-lead').textContent, /high point/);
+  const facts = [...doc.querySelectorAll('.sky-stat-strip dt')].map((dt) => dt.textContent);
+  assert.ok(!facts.includes('Top out'));
+  assert.ok(!facts.includes('High point'));
+  assert.ok(facts.includes('Back at start'));
 });
