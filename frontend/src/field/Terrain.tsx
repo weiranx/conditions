@@ -145,6 +145,9 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const available = useAiAvailability(data.capabilities);
   const target = w.targetElevationForecast;
+  const approach = w.approachProfile;
+  const approachHours = hours.filter((h) => h.approachAdjusted).length;
+  const inversionHours = hours.filter((h) => h.inversionRisk).length;
   const surface = surfaceLabel(data);
   const status = terrainStatus(data);
   const objectiveFt = knownFeet(data.weather.elevation);
@@ -231,6 +234,43 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
           </div>
         </section>
       )}
+
+      <section className="sky-section" aria-labelledby="sky-terrain-approach">
+        <div className="sky-sh">
+          <h2 id="sky-terrain-approach">Your approach</h2>
+          <p>Early hours are checked where you are, not at the objective.</p>
+        </div>
+        <div className="sky-card">
+          <div className="sky-elevation-check">
+            <label>
+              <span>Trailhead elevation ({w.elevationUnitLabel})</span>
+              <input className="sky-approach-input" inputMode="numeric" placeholder="Estimated"
+                value={w.trailheadElevationInput} onChange={w.handleTrailheadElevationChange}
+                disabled={!w.preferences.approachElevationAdjustment || approach?.source === "gpx"} />
+            </label>
+            {approach && (
+              <dl className="sky-inline-facts">
+                <div><dt>Start</dt><dd>{w.formatElevationDisplay(approach.trailheadElevationFt)}</dd></div>
+                <div><dt>Objective</dt><dd>{w.formatElevationDisplay(approach.objectiveElevationFt)}</dd></div>
+                {approachHours > 0 && <div><dt>Hours adjusted</dt><dd>{approachHours}</dd></div>}
+              </dl>
+            )}
+          </div>
+          <p className="sky-cap">
+            {!w.preferences.approachElevationAdjustment
+              ? "Approach adjustment is off in Settings, so every hour is checked at the objective."
+              : !approach
+                ? "No approach below the objective is known, so every hour is checked at the objective. Enter your trailhead elevation to adjust the early hours."
+                : `${approach.source === "gpx"
+                  ? "Elevation over time follows your imported GPX track and route timing."
+                  : approach.source === "manual"
+                    ? "You climb from your trailhead at your ascent rate, then stay at the objective."
+                    : "Trailhead estimated from the lowest forecast band. Enter yours for a better estimate."} Temperature and wind use standard per-1,000 ft rates; rain and storm signals are never adjusted.${inversionHours > 0
+                  ? ` Clear, calm conditions make a valley inversion likely for ${inversionHours} approach hour${inversionHours === 1 ? "" : "s"}: those hours are treated as colder, not warmer, than the objective.`
+                  : ""}`}
+          </p>
+        </div>
+      </section>
 
       <div className="sky-duo sky-section">
         <section className="sky-card field-terrain-overview" aria-labelledby="sky-terrain-surface">

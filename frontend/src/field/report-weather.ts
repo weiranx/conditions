@@ -1,6 +1,7 @@
 import type { SafetyData, UserPreferences, WeatherTrendPoint } from "../app/types";
 import { annotateExposure, buildTravelWindowRows } from "../app/travel-window";
-import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
+import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
+import { adjustPointToElevation, highestElevationBetween, type ApproachProfile } from "../app/approach-elevation";
 import { dateTimeInputsFor } from "../app/date-time-inputs";
 
 const clockMinutes = (value: string) => parseTimeInputMinutes(value) ?? parseHourLabelToMinutes(value);
@@ -43,8 +44,10 @@ export function buildReportWeatherRows(data: SafetyData, preferences: UserPrefer
 
 // Place readings at their planned time instead of treating the first N records
 // as N hours of coverage. An hourly reading covers [timestamp, timestamp + 1h).
+// With an approach profile, each planned hour is scored at the elevation the
+// party is expected to be at, not at the objective.
 export function buildPlannedReportWeatherRows(data: SafetyData, preferences: UserPreferences, hours: number,
-  plan: { start: string; date: string }) {
+  plan: { start: string; date: string; approach?: ApproachProfile | null }) {
   const trend = data.weather.trend || [];
   const readings = buildReportWeatherRows(data, preferences, trend.length);
   const start = clockMinutes(plan.start);
@@ -67,8 +70,11 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
       dayOffset = legacyDay;
     }
     previousClock = minute;
-    return { row: readings[index], minute: minute === null ? NaN : dayOffset * 1440 + minute };
+    return { point, row: readings[index], minute: minute === null ? NaN : dayOffset * 1440 + minute };
   }).sort((a, b) => b.minute - a.minute);
+  const approach = plan.approach ?? null;
+  const sunriseMinutes = parseSolarClockMinutes(data.solar?.sunrise);
+  const sunsetMinutes = parseSolarClockMinutes(data.solar?.sunset);
 
   const rows = Array.from({ length: hours }, (_, index) => {
     const minute = start === null ? NaN : start + index * 60;
@@ -87,7 +93,22 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
       if (entry) used.add(entry);
       else covered = false;
     }
-    const contributing = [...used].map(entry => entry.row);
+    const elevationFt = approach && start !== null && Number.isFinite(minute)
+      ? highestElevationBetween(approach, minute - start, end - start)
+      : null;
+    const adjusted = Boolean(approach && elevationFt !== null && elevationFt < approach.objectiveElevationFt);
+    const adjustedPoints = adjusted && approach && elevationFt !== null ? [...used].map(entry => adjustPointToElevation(
+      entry.point, approach.objectiveElevationFt, elevationFt,
+      { minuteOfDay: entry.minute, sunriseMinutes, sunsetMinutes },
+    )) : [];
+    const contributing = adjusted
+      ? buildReportWeatherRows({ ...data, weather: { ...data.weather, trend: adjustedPoints } }, preferences, adjustedPoints.length)
+      : [...used].map(entry => entry.row);
+    const approachFields = elevationFt === null ? {} : {
+      elevationFt: Math.round(elevationFt),
+      approachAdjusted: adjusted,
+      inversionRisk: adjustedPoints.some(point => point.inversionRisk),
+    };
     if (contributing.length === 0) {
       const missing: WeatherTrendPoint = { time, temp: NaN, wind: NaN, gust: NaN, precipChance: NaN, condition: "Unavailable" };
       const row = buildReportWeatherRows({ ...data, weather: { ...data.weather, trend: [missing] } }, preferences, 1)[0];
@@ -107,7 +128,7 @@ export function buildPlannedReportWeatherRows(data: SafetyData, preferences: Use
     const thermal = coldest.feelsLike < preferences.minFeelsLikeF ? coldest : hottest;
     const knownGusts = contributing.map(row => row.gust).filter(Number.isFinite);
     return {
-      ...thermal, time, complete, pass, failedRules, failedRuleLabels,
+      ...thermal, ...approachFields, time, complete, pass, failedRules, failedRuleLabels,
       wind: Math.max(...contributing.map(row => row.wind)),
       gust: knownGusts.length ? Math.max(...knownGusts) : NaN,
       precipChance: Math.max(...contributing.map(row => row.precipChance)),

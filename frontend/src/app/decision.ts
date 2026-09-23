@@ -4,6 +4,7 @@ import type {
   SafetyData,
   SummitDecision,
   UserPreferences,
+  WeatherTrendPoint,
 } from './types';
 import { alertSeverityRank } from './alert-utils';
 import {
@@ -19,10 +20,13 @@ import {
   resolveSelectedTravelWindowMs,
 } from './core';
 import { computeFeelsLikeF, normalizeDangerLevel } from './planner-helpers';
+import { adjustPointToElevation, highestElevationBetween, type ApproachProfile } from './approach-elevation';
 
 export type DecisionEvaluationOptions = {
   ignoreAvalancheForDecision?: boolean;
   turnaroundTime?: string;
+  /** Score approach hours at the party's estimated elevation instead of the objective's. */
+  approach?: ApproachProfile | null;
 };
 
 export function decisionLevelRank(level: DecisionLevel | null | undefined): number {
@@ -82,10 +86,37 @@ export function evaluateBackcountryDecision(
 
   const avalanche = data.avalanche;
   const danger = avalanche?.dangerLevel || 0;
-  let gust = data.weather.windGust ?? 0;
-  let precip = data.weather.precipChance ?? 0;
-  let feelsLike: number | null = data.weather.feelsLike ?? data.weather.temp ?? null;
   const description = data.weather.description || '';
+  // The trend starts at the selected start; hour i covers [i*60, i*60+60) minutes after it.
+  const approach = options.approach ?? null;
+  const approachStartMinute = parseTimeInputMinutes(cutoffTime);
+  const approachSolar = {
+    sunriseMinutes: parseSolarClockMinutes(data.solar?.sunrise),
+    sunsetMinutes: parseSolarClockMinutes(data.solar?.sunset),
+  };
+  const atPartyElevation = (point: WeatherTrendPoint, offsetMinutes: number): WeatherTrendPoint => {
+    if (!approach || approachStartMinute === null) return point;
+    const elevationFt = highestElevationBetween(approach, offsetMinutes, offsetMinutes + 60);
+    return adjustPointToElevation(point, approach.objectiveElevationFt, elevationFt, {
+      minuteOfDay: approachStartMinute + offsetMinutes,
+      ...approachSolar,
+    });
+  };
+  const startPoint = atPartyElevation({
+    time: cutoffTime,
+    temp: data.weather.temp,
+    wind: data.weather.windSpeed,
+    gust: data.weather.windGust,
+    precipChance: data.weather.precipChance,
+    cloudCover: data.weather.cloudCover ?? null,
+    isDaytime: data.weather.isDaytime ?? null,
+    condition: description,
+  }, 0);
+  let gust = (approach ? startPoint.gust : data.weather.windGust) ?? 0;
+  let precip = data.weather.precipChance ?? 0;
+  let feelsLike: number | null = approach && Number.isFinite(startPoint.temp)
+    ? computeFeelsLikeF(startPoint.temp, Number.isFinite(startPoint.wind) ? startPoint.wind : 0)
+    : data.weather.feelsLike ?? data.weather.temp ?? null;
   const normalizedConditionText = String(description || '').trim() || 'No forecast condition text available.';
   const weatherUnavailable = /weather data unavailable/i.test(description);
   if (weatherUnavailable) {
@@ -99,7 +130,9 @@ export function evaluateBackcountryDecision(
   let peakPrecipHour = '';
   let coldestFeelsLikeHour = '';
   let stormSignalHour = '';
-  const windowTrend = (data.weather.trend || []).slice(0, preferences.travelWindowHours);
+  const windowTrend = (data.weather.trend || [])
+    .slice(0, preferences.travelWindowHours)
+    .map((point, index) => atPartyElevation(point, index * 60));
   for (const wpt of windowTrend) {
     const wg = Number.isFinite(Number(wpt.gust)) ? Number(wpt.gust) : 0;
     if (wg > gust) { gust = wg; peakGustHour = wpt.time || ''; }

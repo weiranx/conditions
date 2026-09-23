@@ -84,6 +84,7 @@
 .sky-readout-flag svg { flex: none; margin-top: 1px; }
 .sky-readout-flag.is-over { color: #ffb27a; }
 .sky-readout-flag.is-within, .sky-readout-flag.is-missing { color: rgba(255, 255, 255, 0.85); font-weight: 500; }
+.sky-readout-approach { margin: 8px 0 0; font-size: 12px; color: rgba(255, 255, 255, 0.8); }
 
 /* ---------- Chapter header ---------- */
 /* The head is display: contents so the tabs can stay pinned while the whole chapter scrolls. */
@@ -219,7 +220,7 @@ button.sky-check .sky-cap { padding-right: 22px; }
   .sky-report .field-report-actions > button, .sky-report .field-report-actions summary { min-height: 44px; }
   .sky-readout { display: grid; grid-template-columns: auto 1fr; gap: 0 16px; align-items: center; }
   .sky-readout dl { margin: 0; }
-  .sky-readout-flag { grid-column: 1 / -1; }
+  .sky-readout-flag, .sky-readout-approach { grid-column: 1 / -1; }
   .sky-hint { display: none; }
   .sky-temp { font-size: 13px; }
   .sky-sh { display: block; }

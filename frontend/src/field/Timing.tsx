@@ -65,7 +65,7 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
     ? comparison.scenarios.map((scenario) => {
       const current = scenario.startTime === w.alpineStartTime;
       const rowHours = current ? hours : buildSkyHours(
-        buildPlannedReportWeatherRows(scenario.data, w.preferences, w.travelWindowHours, { start: scenario.startTime, date: w.forecastDate }),
+        buildPlannedReportWeatherRows(scenario.data, w.preferences, w.travelWindowHours, { start: scenario.startTime, date: w.forecastDate, approach: w.approachProfile }),
         { start: scenario.startTime, sunriseMinutes: sunrise, sunsetMinutes: sunset },
       );
       return rowFor(scenario.startTime, rowHours, {

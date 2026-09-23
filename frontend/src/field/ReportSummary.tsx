@@ -12,7 +12,7 @@ export function ReportSummary({
 }) {
   const data = w.safetyData!;
   const flags = resolveReportFeatureFlags(data.featureFlags);
-  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate });
+  const hours = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, { start: w.alpineStartTime, date: w.forecastDate, approach: w.approachProfile });
   const knownGusts = hours.map(hour => hour.gust).filter(Number.isFinite);
   const peakGust = knownGusts.length ? Math.max(...knownGusts) : null;
   const returnAfterSunset = flags.daylightTimeline && w.returnMinutes != null && w.sunsetMinutesForPlan != null

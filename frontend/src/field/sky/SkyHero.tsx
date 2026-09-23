@@ -7,6 +7,7 @@ import { isOverHour, shortHour, skyRuns, spanLabel, sunProgress, type SkyHour } 
 type Formatters = {
   temp: (f: number) => string;
   wind: (mph: number) => string;
+  elevation?: (ft: number) => string;
   clock: (minute: number) => string;
   timeStyle: string;
 };
@@ -263,6 +264,12 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, subtitle, level
               <dt>Gust</dt><dd className={hour.failedRules.some((r) => /gust|wind/i.test(r)) ? "is-over" : undefined}>{Number.isFinite(hour.gust) ? format.wind(hour.gust) : "—"}</dd>
               <dt>Rain chance</dt><dd className={hour.failedRules.some((r) => /precip|rain/i.test(r)) ? "is-over" : undefined}>{Number.isFinite(hour.precipChance) ? `${hour.precipChance}%` : "—"}</dd>
             </dl>
+            {hour.approachAdjusted && Number.isFinite(hour.elevationFt) && (
+              <p className="sky-readout-approach">
+                On the approach, near {format.elevation ? format.elevation(hour.elevationFt as number) : `${hour.elevationFt} ft`}
+                {hour.inversionRisk ? " · possible valley inversion, colder than the objective" : ""}
+              </p>
+            )}
             <p className={`sky-readout-flag is-${isOverHour(hour) ? "over" : hour.tone}`}>
               {isOverHour(hour) ? <TriangleAlert size={15} aria-hidden="true" /> : hour.tone === "missing" ? <CircleHelp size={15} aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
               {isOverHour(hour) ? hour.failedRules.map(plainRule).join(" · ") : hour.tone === "missing" ? "Readings incomplete for this hour" : "Within your limits"}

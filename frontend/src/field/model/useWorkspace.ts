@@ -124,6 +124,7 @@ import { sanitizeExternalUrl, parseLinkState } from "../../app/url-state";
 import { readAccountLinkAction } from "../../app/account-links";
 import type { MultiDayUsage } from "../../app/multi-day-usage";
 import { evaluateBackcountryDecision } from "../../app/decision";
+import { buildApproachProfile } from "../../app/approach-elevation";
 import { buildReportCardOrder } from "../../app/card-ordering";
 import { buildWindLoadingDisplay } from "../../app/wind-loading-display";
 import { buildRainfallDisplay } from "../../app/rainfall-display";
@@ -269,6 +270,7 @@ export function useWorkspace() {
       forecastDate: plan.forecastDate,
       alpineStartTime: plan.alpineStartTime,
       targetElevationInput: plan.targetElevationInput,
+      trailheadElevationInput: plan.trailheadElevationInput,
       travelWindowHours: plan.travelWindowHours,
     };
   }, [initialPersistedReport, parsedInitialLinkState]);
@@ -538,6 +540,9 @@ export function useWorkspace() {
   const [targetElevationManual, setTargetElevationManual] = useState(
     Boolean(initialLinkState.targetElevationInput),
   );
+  const [trailheadElevationInput, setTrailheadElevationInput] = useState(
+    initialLinkState.trailheadElevationInput ?? "",
+  );
   const [pastStartPrompt, setPastStartPrompt] =
     useState<PastPlannedStart | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -653,6 +658,7 @@ export function useWorkspace() {
       setSnowVisionError(null);
       setTargetElevationInput("");
       setTargetElevationManual(false);
+      setTrailheadElevationInput("");
       setTripForecastRowsDirect([]);
       setTripForecastErrorDirect(null);
       setTripForecastNoteDirect(null);
@@ -793,6 +799,7 @@ export function useWorkspace() {
           linkState.forecastDate === forecastDate &&
           linkState.alpineStartTime === alpineStartTime &&
           linkState.targetElevationInput === targetElevationInput &&
+          (linkState.trailheadElevationInput ?? "") === trailheadElevationInput &&
           linkState.activity === preferences.defaultActivity &&
           (!linkState.travelWindowHours ||
             linkState.travelWindowHours === preferences.travelWindowHours);
@@ -827,6 +834,7 @@ export function useWorkspace() {
         setAlpineStartTime(linkState.alpineStartTime);
         setTargetElevationInput(linkState.targetElevationInput);
         setTargetElevationManual(Boolean(linkState.targetElevationInput));
+        setTrailheadElevationInput(linkState.trailheadElevationInput ?? "");
         setPreferences((prev) => ({
           ...prev,
           defaultActivity: linkState.activity,
@@ -858,6 +866,7 @@ export function useWorkspace() {
         forecastDate,
         alpineStartTime,
         targetElevationInput,
+        trailheadElevationInput,
         preferences.defaultActivity,
         preferences.travelWindowHours,
       ],
@@ -1032,6 +1041,7 @@ export function useWorkspace() {
     forecastDate: view === "trip" ? tripStartDate : forecastDate,
     alpineStartTime: view === "trip" ? tripStartTime : alpineStartTime,
     targetElevationInput,
+    trailheadElevationInput,
     travelWindowHours: Math.max(
       MIN_TRAVEL_WINDOW_HOURS,
       Math.min(
@@ -1093,6 +1103,7 @@ export function useWorkspace() {
       forecastDate,
       alpineStartTime,
       targetElevationInput,
+      ...(trailheadElevationInput ? { trailheadElevationInput } : {}),
       travelWindowHours: Math.max(
         MIN_TRAVEL_WINDOW_HOURS,
         Math.min(
@@ -1109,6 +1120,7 @@ export function useWorkspace() {
       forecastDate,
       alpineStartTime,
       targetElevationInput,
+      trailheadElevationInput,
       preferences.travelWindowHours,
     ],
   );
@@ -1267,6 +1279,11 @@ export function useWorkspace() {
     const digitsOnly = e.target.value.replace(/[^\d]/g, "").slice(0, 5);
     setTargetElevationInput(digitsOnly);
     setTargetElevationManual(true);
+  };
+  const handleTrailheadElevationChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setTrailheadElevationInput(e.target.value.replace(/[^\d]/g, "").slice(0, 5));
   };
   const handleTargetElevationStep = (deltaFeet: number) => {
     const parsedDisplayValue =
@@ -1498,6 +1515,7 @@ export function useWorkspace() {
       setAlpineStartTime(report.plan.alpineStartTime);
       setTargetElevationInput(report.plan.targetElevationInput);
       setTargetElevationManual(Boolean(report.plan.targetElevationInput));
+      setTrailheadElevationInput(report.plan.trailheadElevationInput ?? "");
       setImportedGpxRoute(report.route.gpxRoute);
       setPastStartPrompt(null);
       setPreviousSafetyData(null);
@@ -1701,6 +1719,7 @@ export function useWorkspace() {
       setAlpineStartTime(plan.alpineStartTime);
       setTargetElevationInput(plan.targetElevationInput);
       setTargetElevationManual(Boolean(plan.targetElevationInput));
+      setTrailheadElevationInput(plan.trailheadElevationInput ?? "");
       setPreferences((current) => ({
         ...current,
         travelWindowHours: plan.travelWindowHours,
@@ -1983,15 +2002,51 @@ export function useWorkspace() {
     returnMinutes !== null
       ? minutesToTwentyFourHourClock(returnMinutes % 1440)
       : null;
+  const parsedTrailheadElevation =
+    parseOptionalElevationInput(trailheadElevationInput);
+  const trailheadElevationFt =
+    parsedTrailheadElevation === null
+      ? null
+      : convertDisplayElevationToFeet(
+          parsedTrailheadElevation,
+          preferences.elevationUnit,
+        );
+  // Where the party is at each planned hour; null scores every hour at the objective.
+  const approachProfile = useMemo(
+    () =>
+      safetyData && preferences.approachElevationAdjustment
+        ? buildApproachProfile({
+            objectiveElevationFt: safetyData.weather.elevation,
+            trailheadElevationFt,
+            gpxRoute: importedGpxRoute,
+            elevationBands: safetyData.weather.elevationForecast,
+            timing: {
+              paceMinutesPerMile: preferences.runnerPaceMinutesPerMile,
+              ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+              stopBufferMinutes: preferences.runnerStopBufferMinutes,
+            },
+          })
+        : null,
+    [
+      safetyData,
+      trailheadElevationFt,
+      importedGpxRoute,
+      preferences.approachElevationAdjustment,
+      preferences.runnerPaceMinutesPerMile,
+      preferences.runnerAscentMinutesPer1000Ft,
+      preferences.runnerStopBufferMinutes,
+    ],
+  );
   let decision = safetyData
     ? evaluateBackcountryDecision(safetyData, alpineStartTime, preferences, {
         turnaroundTime: returnTimeFormatted ?? undefined,
+        approach: approachProfile,
       })
     : null;
 
   const { dayOverDay, startTimeScenarios } = useReportComparisons({
     hasObjective, view, safetyData, forecastDate, currentStartTime: alpineStartTime,
-    position: { lat: position.lat, lng: position.lng }, preferences,
+    position: { lat: position.lat, lng: position.lng }, preferences, approach: approachProfile,
     viewingHistoryReport, loading: loading || reportGenerationPending,
     startTimeComparisonsEnabled: featureFlags.startTimeComparisons,
   });
@@ -2069,9 +2124,9 @@ export function useWorkspace() {
   const travelWindowRows = useMemo(
     () =>
       safetyData
-        ? buildPlannedReportWeatherRows(safetyData, preferences, travelWindowHours, { start: alpineStartTime, date: forecastDate })
+        ? buildPlannedReportWeatherRows(safetyData, preferences, travelWindowHours, { start: alpineStartTime, date: forecastDate, approach: approachProfile })
         : [],
-    [safetyData, preferences, travelWindowHours, alpineStartTime, forecastDate],
+    [safetyData, preferences, travelWindowHours, alpineStartTime, forecastDate, approachProfile],
   );
   const travelWindowInsights = buildTravelWindowInsights(
     travelWindowRows,
@@ -3083,6 +3138,9 @@ export function useWorkspace() {
     handlePlannerTimeChange,
     handleWeatherHourSelect,
     handleTargetElevationChange,
+    trailheadElevationInput,
+    handleTrailheadElevationChange,
+    approachProfile,
     handleTargetElevationStep,
     handleCopyLink,
     handleRequestAiBriefAction,

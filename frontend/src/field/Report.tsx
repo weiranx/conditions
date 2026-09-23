@@ -135,6 +135,7 @@ export function Report({
   const plannedRows = buildPlannedReportWeatherRows(data, w.preferences, w.travelWindowHours, {
     start: w.alpineStartTime,
     date: w.forecastDate,
+    approach: w.approachProfile,
   });
   const skyHours = buildSkyHours(plannedRows, {
     start: w.alpineStartTime,
@@ -360,6 +361,7 @@ export function Report({
           format={{
             temp: (f) => w.formatTempDisplay(f),
             wind: (mph) => w.formatWindDisplay(mph),
+            elevation: (ft) => w.formatElevationDisplay(ft),
             clock,
             timeStyle: w.preferences.timeStyle,
           }}

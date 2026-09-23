@@ -49,6 +49,7 @@ export function getDefaultUserPreferences(): UserPreferences {
     runnerPaceMinutesPerMile: 30,
     runnerAscentMinutesPer1000Ft: 45,
     runnerStopBufferMinutes: 45,
+    approachElevationAdjustment: true,
   };
 }
 
@@ -108,6 +109,9 @@ export function normalizeUserPreferences(value: unknown): UserPreferences {
       0,
       240,
     ),
+    approachElevationAdjustment: typeof parsed.approachElevationAdjustment === 'boolean'
+      ? parsed.approachElevationAdjustment
+      : defaults.approachElevationAdjustment,
   };
 }
 

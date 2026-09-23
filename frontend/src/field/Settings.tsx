@@ -279,6 +279,27 @@ export function Settings({
             <section id={`${sectionId}-weather`} tabIndex={-1} aria-label="Weather thresholds" className="field-panel field-settings-panel">
               <h2>Weather thresholds</h2>
               <Thresholds workspace={w} />
+              <label className="field-admin-toggle">
+                <span>
+                  <strong>Score the approach at trailhead elevation</strong>
+                  <small>
+                    The forecast is for the objective. While you climb from the
+                    trailhead, check your limits at your estimated elevation
+                    instead. Rain and storm signals are never adjusted. On clear,
+                    calm mornings the valley is treated as colder in case of an
+                    inversion.
+                  </small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={p.approachElevationAdjustment}
+                  onChange={(e) =>
+                    w.updatePreferences({
+                      approachElevationAdjustment: e.target.checked,
+                    })
+                  }
+                />
+              </label>
               <details className="field-details">
                 <summary>Try the thresholds on a sample hour</summary>
                 <p className="field-muted">

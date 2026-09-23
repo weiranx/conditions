@@ -119,6 +119,9 @@ html[data-theme="dark"] .sky-mountain .mt-ridge { fill: #1c2621; stroke: rgba(25
 .sky-stepper-row { display: inline-grid; grid-template-columns: 44px 7ch 44px; align-items: center; border-radius: 12px; background: var(--sky-fill); }
 .sky-stepper-row input { min-width: 0; height: 44px; border: 0; background: transparent; color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 650; text-align: center; font-variant-numeric: tabular-nums; }
 .sky-stepper-row input:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; border-radius: 8px; }
+.sky-approach-input { width: 12ch; height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sky-approach-input:disabled { opacity: 0.55; }
+.sky-approach-input:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 0; }
 
 /* Wind loading */
 .sky-wind-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: center; }

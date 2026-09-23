@@ -422,10 +422,13 @@ visible. `reportCount` remains the lifetime generated total.
     "travelWindowHours": 12,
     "runnerPaceMinutesPerMile": 30,
     "runnerAscentMinutesPer1000Ft": 45,
-    "runnerStopBufferMinutes": 45
+    "runnerStopBufferMinutes": 45,
+    "approachElevationAdjustment": true
   }
 }
 ```
+
+`approachElevationAdjustment` is optional; when present it must be a boolean.
 
 Returns `201` and the signed-in account. Password accounts start with `emailVerified: false`; when email delivery
 is configured, the response also reports whether the initial verification message was accepted for delivery.
