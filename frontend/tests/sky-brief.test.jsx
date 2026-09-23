@@ -143,3 +143,29 @@ test("peak gust is unavailable rather than calm when no gust was measured", () =
   assert.match(html, /Peak gust.*Unavailable/s);
   assert.doesNotMatch(html, /0 mph/);
 });
+
+const checkCard = (html, title) => html.slice(html.indexOf(`<span>${title}</span>`), html.indexOf("sky-chev", html.indexOf(`<span>${title}</span>`)));
+
+test("incomplete weather hours are not described as within limits", () => {
+  const html = brief(briefWorkspace(), buildSkyHours([row(), row({ time: "08:00", complete: false, pass: false, gust: NaN })], plan));
+  const card = checkCard(html, "Weather");
+  assert.match(card, /1 planned hour has incomplete readings/);
+  assert.doesNotMatch(card, /Every planned hour is within your limits/);
+});
+
+test("terrain status follows the hazard code, not whether a label exists", () => {
+  const status = (terrainCondition) => {
+    const w = briefWorkspace();
+    return checkCard(brief({ ...w, safetyData: { ...w.safetyData, terrainCondition } }), "Terrain &amp; snow");
+  };
+  assert.match(status({ code: "snow_ice", label: "Snow and ice" }), /is-over/);
+  assert.match(status({ code: "weather_unavailable", label: "Weather unavailable" }), /is-missing/);
+  assert.match(status({ code: "dry_firm", label: "Mostly dry" }), /is-ok/);
+});
+
+test("high fire danger is over the limit even when air quality is unavailable", () => {
+  const w = briefWorkspace({ fireRiskLevel: 3, fireRiskLabel: "High" });
+  const card = checkCard(brief({ ...w, safetyData: { ...w.safetyData, airQuality: null } }), "Air &amp; fire");
+  assert.match(card, /is-over/);
+  assert.match(card, /Fire risk high/);
+});

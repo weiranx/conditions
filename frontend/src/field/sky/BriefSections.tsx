@@ -77,6 +77,11 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const bands = [...(w.elevationForecastBands || [])].filter((b) => measured(b.elevationFt) && measured(b.temp))
     .sort((a, b) => a.elevationFt - b.elevationFt);
   const surface = data.terrainCondition?.label?.replace(/^[\p{Extended_Pictographic}️\s]+/u, "") || null;
+  // Match the decision: these surfaces are cautions, and an unavailable assessment is missing evidence.
+  const terrainCode = String(data.terrainCondition?.code || "").toLowerCase();
+  const terrainStatus: Status = !surface || terrainCode === "weather_unavailable" ? "missing"
+    : ["snow_ice", "wet_muddy", "cold_slick", "dry_loose"].includes(terrainCode) || data.terrainCondition?.impact === "high" ? "over" : "ok";
+  const fireHigh = Number(w.fireRiskLevel) >= 3;
   const gear = (w.gearRecommendations || []).filter(Boolean).slice(0, 4);
   const gearTotal = (w.gearRecommendations || []).filter(Boolean).length;
 
@@ -154,7 +159,9 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           <CheckCard title="Weather" onOpen={() => onOpen("forecast")}
             status={overCount ? "over" : missingCount ? "missing" : "ok"}
             statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} hours incomplete` : "Within limits"}
-            caption={firstOver ? firstOver.failedRules[0] || "A planned hour crosses your limits." : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>
+            caption={firstOver ? firstOver.failedRules[0] || "A planned hour crosses your limits."
+              : missingCount ? `${missingCount} planned ${missingCount === 1 ? "hour has" : "hours have"} incomplete readings, so ${missingCount === 1 ? "it" : "they"} can't be confirmed within your limits.`
+              : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>
             {hours.length > 0 && (
               <svg className="sky-viz" viewBox="0 0 240 64" role="img"
                 aria-label={`Rain chance by hour against your ${precipLimit}% limit: ${hours.map((h) => `${clock(h.minute)} ${measured(h.precipChance) ? `${h.precipChance}%` : "unavailable"}`).join(", ")}.`}>
@@ -199,7 +206,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
             )}
           </CheckCard>
 
-          <CheckCard title="Terrain & snow" onOpen={() => onOpen("terrain")} status={surface ? "ok" : "missing"}
+          <CheckCard title="Terrain & snow" onOpen={() => onOpen("terrain")} status={terrainStatus}
             statusText={surface || "Unavailable"}
             caption={bands.length > 1 ? "Temperature by elevation at your planned time." : w.snowpackBestDepthDisplay ? `Best snow depth estimate: ${w.snowpackBestDepthDisplay}.` : "Surface and snow assessment."}>
             {bands.length > 1 && (() => {
@@ -235,8 +242,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
           </CheckCard>
 
           <CheckCard title="Air & fire" onOpen={() => onOpen("forecast")}
-            status={!measured(aqi) ? "missing" : aqi > 100 || (w.fireRiskLevel as number) >= 3 ? "over" : "ok"}
-            statusText={measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
+            status={fireHigh || (measured(aqi) && aqi > 100) ? "over" : !measured(aqi) ? "missing" : "ok"}
+            statusText={fireHigh && !(measured(aqi) && aqi > 100) ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : measured(aqi) ? `AQI ${aqi}` : "AQI unavailable"}
             caption={`${aqiCategory || "Air quality unavailable"} · fire risk ${String(w.fireRiskLabel || "unavailable").toLowerCase()}.`}>
             {measured(aqi) && (
               <svg className="sky-viz" viewBox="0 0 240 70" role="img" aria-label={`Air quality index ${aqi}, ${aqiCategory || "category unavailable"}.`}>
