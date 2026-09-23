@@ -12,11 +12,13 @@
     "preview": "vite preview",
     "dev:mock": "VITE_MOCK_API=true vite --host 127.0.0.1",
     "test:mock": "node --test dev/mock-api.test.mjs",
-    "test:history": "node scripts/verify-report-history.mjs",
-    "test:field": "node scripts/verify-field-ui.mjs"
+    "test:ui": "node scripts/run-ui-tests.mjs",
+    "test:field": "node scripts/run-ui-tests.mjs",
+    "test:history": "node scripts/run-ui-tests.mjs report-history",
+    "test:admin": "node scripts/run-ui-tests.mjs admin"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.226",

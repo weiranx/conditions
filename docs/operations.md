@@ -188,7 +188,7 @@ to `main`:
 - `frontend-checks`: installs locked dependencies, typechecks, lints, runs field,
   comparison, mock API, and saved-report history tests, and builds the frontend.
 
-CI uses Node 20 to match the backend Docker runtime. Jobs have explicit timeouts,
+CI uses Node 24 to match the backend Docker runtime. Jobs have explicit timeouts,
 read-only repository permissions, and pinned action commits. Dependabot proposes
 weekly grouped action updates. New commits cancel superseded CI runs on the same
 branch or pull request.
@@ -234,7 +234,7 @@ node --test scripts/tests/*.test.mjs
 Before deploying a new version:
 
 1. `cd backend && npm test` — the complete backend test suite passes
-2. `cd frontend && npm run test:field && npm run test:mock && npm run test:history` — frontend test suites pass
+2. `cd frontend && npm run test:ui && npm run test:mock` — frontend test suites pass
 3. `cd frontend && npm run typecheck && npm run lint` — no TypeScript or lint errors
 4. `cd frontend && npm run build` — production build succeeds
 5. Smoke-test the planner: search an objective, reload the forecast, toggle settings/unit preferences

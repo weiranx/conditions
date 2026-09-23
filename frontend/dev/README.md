@@ -12,4 +12,4 @@ Supported workflows include report/search responses, multi-day forecasts, saved 
 
 Mock mode is guarded by `import.meta.env.DEV` and the Vite plugin's `apply: 'serve'`. Production builds omit the development controls and use the configured real API. The development mock does not validate the real database, authentication, email delivery, or AI providers. Basemap tiles may still require a network connection.
 
-Run `npm run test:mock` for mock API/persistence tests. Run `node scripts/verify-field-ui.mjs` for visual-component data tests.
+Run `npm run test:mock` for mock API/persistence tests. Run `npm run test:ui` for component tests (every `tests/*.test.jsx`; pass a name fragment such as `npm run test:ui -- admin` to run a subset).

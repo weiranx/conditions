@@ -1,5 +1,5 @@
 # ── Stage 1: install production deps ──────────────────────────────────────────
-FROM node:20-bookworm-slim AS deps
+FROM node:24-bookworm-slim AS deps
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Stage 2: final runtime image ──────────────────────────────────────────────
-FROM node:20-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 
 # Reserve the existing volume owner IDs before packages create system accounts.
 RUN groupadd --system --gid 101 appgroup && useradd --system --uid 100 --gid 101 appuser

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js `>=20.19.0`
+- Node.js `>=22` (CI and Docker use Node 24)
 - npm `>=10`
 
 ---
