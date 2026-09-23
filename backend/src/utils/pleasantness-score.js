@@ -5,7 +5,7 @@ const { clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
 // forecast comfort across the selected travel window; it must never be used as a
 // go/no-go signal or allowed to offset a hazard.
 const PLEASANTNESS_CONFIG = {
-  scoreVersion: '1.3.0',
+  scoreVersion: '1.4.0',
   weights: {
     temperature: 30,
     wind: 25,
@@ -22,10 +22,22 @@ const PLEASANTNESS_CONFIG = {
   ],
 };
 
+// Tuned for people moving under their own power: exertion makes air that feels
+// neutral at rest (upper 60s) warm on a climb, so the ideal band sits lower.
 const TEMPERATURE_CURVE = [
-  [-20, 0], [0, 10], [15, 25], [30, 50], [40, 75], [48, 95],
-  [55, 100], [68, 100], [75, 90], [82, 70], [90, 40], [100, 10], [110, 0],
+  [-20, 0], [0, 10], [15, 25], [30, 50], [38, 75], [45, 95],
+  [50, 100], [62, 100], [70, 88], [78, 65], [86, 38], [96, 10], [106, 0],
 ];
+
+// Direct sun on exposed terrain feels several degrees warmer than the shaded
+// air temperature a forecast reports; the full load applies under clear skies
+// near solar noon.
+const SOLAR_LOAD_MAX_F = 8;
+
+// Dark hours before the first daylight hour are usually a deliberate alpine
+// start, so they cost less than finishing after dark.
+const NIGHT_VIEW_PENALTY = 25;
+const PRE_DAWN_VIEW_PENALTY = 5;
 
 const WIND_CURVE = [
   [0, 100], [5, 100], [10, 92], [15, 78], [20, 60],
@@ -150,6 +162,83 @@ const conditionViewScore = (condition) => {
   return null;
 };
 
+const clearSkyFraction = (row) => {
+  const cover = inRange(row?.cloudCover, 0, 100);
+  if (cover !== null) return 1 - (cover / 100);
+  const normalized = String(row?.condition || '').toLowerCase();
+  if (!normalized) return null;
+  if (/rain|snow|shower|drizzle|thunder|fog|mist|overcast|flurr|sleet|smoke/.test(normalized)) return 0;
+  if (/mostly cloudy/.test(normalized)) return 0.25;
+  if (/partly|mostly sunny|mostly clear|few clouds|scattered clouds/.test(normalized)) return 0.6;
+  if (/cloudy/.test(normalized)) return 0.1;
+  if (/clear|sunny/.test(normalized)) return 1;
+  return null;
+};
+
+// Sun strength by local clock hour, peaking around solar noon (~1 pm with
+// daylight saving). Only timestamps with an explicit UTC offset carry a
+// trustworthy local hour; otherwise fall back to the daytime flag.
+const sunStrength = (row) => {
+  if (row?.isDaytime === false) return 0;
+  const match = /T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?([+-]\d{2}:?\d{2})$/.exec(String(row?.timeIso || ''));
+  if (match) {
+    const localHour = Number(match[1]) + (Number(match[2]) / 60);
+    return clamp(1 - (Math.abs(localHour - 13) / 6.5), 0, 1);
+  }
+  return row?.isDaytime === true ? 0.6 : 0.5;
+};
+
+const solarLoadF = (row) => {
+  const clear = clearSkyFraction(row);
+  if (clear === null) return 0;
+  return Math.round(SOLAR_LOAD_MAX_F * clear * sunStrength(row) * 10) / 10;
+};
+
+// Forecasts describe the objective point. The report's elevation bands estimate
+// how the lowest part of the route differs, so comfort can score both ends.
+const elevationSpread = (weatherData) => {
+  const bands = Array.isArray(weatherData?.elevationForecast) ? weatherData.elevationForecast : [];
+  const top = bands.find((band) => finiteNumber(band?.deltaFromObjectiveFt) === 0 && finiteNumber(band?.temp) !== null);
+  const low = bands
+    .filter((band) => finiteNumber(band?.deltaFromObjectiveFt) < 0 && finiteNumber(band?.temp) !== null)
+    .sort((a, b) => finiteNumber(a.deltaFromObjectiveFt) - finiteNumber(b.deltaFromObjectiveFt))[0];
+  if (!top || !low) return null;
+  const offset = (key) => {
+    const lowValue = finiteNumber(low[key]);
+    const topValue = finiteNumber(top[key]);
+    return lowValue !== null && topValue !== null ? lowValue - topValue : 0;
+  };
+  return {
+    elevationFt: finiteNumber(low.elevationFt),
+    temp: offset('temp'),
+    wind: offset('windSpeed'),
+    gust: offset('windGust'),
+  };
+};
+
+// Returns the sample itself plus, when elevation bands exist, the same hour
+// shifted to the bottom of the route.
+const routeVariants = (sample, spread) => {
+  if (!spread) return [sample];
+  const temp = finiteNumber(sample.temp);
+  const wind = inRange(sample.wind, 0);
+  const gust = inRange(sample.gust, 0);
+  const feelsLike = finiteNumber(sample.feelsLike);
+  const lowTemp = temp === null ? null : temp + spread.temp;
+  const lowWind = wind === null ? null : Math.max(0, wind + spread.wind);
+  return [sample, {
+    ...sample,
+    temp: lowTemp,
+    wind: lowWind,
+    gust: gust === null ? null : Math.max(0, gust + spread.gust),
+    feelsLike: lowTemp !== null ? computeFeelsLikeF(lowTemp, lowWind ?? 0) : feelsLike === null ? null : feelsLike + spread.temp,
+  }];
+};
+
+// Continuous caps: a weak component limits the overall score in proportion to
+// how weak it is, so a one-point change cannot swing the rating by a full label.
+const componentCap = (score, core) => Math.round(Math.min(100, core ? (0.75 * score) + 30 : (0.5 * score) + 60));
+
 const cloudCoverScore = (cloudCover) => scoreOnCurve(cloudCover, [
   [0, 100], [20, 95], [50, 85], [75, 70], [100, 55],
 ]);
@@ -232,64 +321,80 @@ const calculatePleasantnessScore = ({
   const pointFeelsLike = finiteNumber(weatherData?.feelsLike)
     ?? (pointTemp !== null ? computeFeelsLikeF(pointTemp, pointWind ?? 0) : null);
 
-  const temperatureRows = trend
-    .map((row) => {
-      const temp = finiteNumber(row?.temp);
-      const wind = inRange(row?.wind, 0) ?? 0;
-      const feelsLike = finiteNumber(row?.feelsLike) ?? (temp === null ? null : computeFeelsLikeF(temp, wind));
+  const spread = elevationSpread(weatherData);
+
+  // Score each hour at the objective and at the bottom of the route, keeping
+  // the less comfortable end. Sun adds radiant warmth to both.
+  const temperatureSample = (sample) => {
+    const solarLoad = solarLoadF(sample);
+    const variants = routeVariants(sample, spread).map((variant) => {
+      const temp = finiteNumber(variant.temp);
+      const feelsLike = finiteNumber(variant.feelsLike)
+        ?? (temp === null ? null : computeFeelsLikeF(temp, inRange(variant.wind, 0) ?? 0));
       if (feelsLike === null) return null;
-      return {
-        feelsLike,
-        hours: row.hours,
-        humidity: finiteNumber(row?.humidity),
-        dewPoint: finiteNumber(row?.dewPoint),
-        moisturePenalty: moistureComfortPenalty({
-          tempF: temp,
-          humidity: row?.humidity,
-          dewPointF: row?.dewPoint,
-          condition: row?.condition,
-        }),
-      };
-    })
-    .filter(Boolean);
+      const moisturePenalty = moistureComfortPenalty({
+        tempF: temp,
+        humidity: variant.humidity,
+        dewPointF: variant.dewPoint,
+        condition: variant.condition,
+      });
+      const baseScore = scoreOnCurve(feelsLike + solarLoad, TEMPERATURE_CURVE);
+      return { feelsLike, moisturePenalty, score: clamp(baseScore - moisturePenalty) };
+    }).filter(Boolean);
+    if (variants.length === 0) return null;
+    return {
+      feelsLikeValues: variants.map((variant) => variant.feelsLike),
+      score: Math.min(...variants.map((variant) => variant.score)),
+      moisturePenalty: Math.max(...variants.map((variant) => variant.moisturePenalty)),
+      solarLoad,
+      hours: sample.hours,
+      humidity: finiteNumber(sample.humidity),
+      dewPoint: finiteNumber(sample.dewPoint),
+    };
+  };
+
+  const temperatureRows = trend.map(temperatureSample).filter(Boolean);
   const temperatureHours = coveredHours(temperatureRows);
   if (temperatureRows.length === 0 && pointFeelsLike !== null) {
-    temperatureRows.push({
+    temperatureRows.push(temperatureSample({
+      temp: pointTemp,
+      wind: pointWind,
+      gust: weatherData?.windGust,
       feelsLike: pointFeelsLike,
+      humidity: weatherData?.humidity,
+      dewPoint: weatherData?.dewPoint,
+      cloudCover: weatherData?.cloudCover,
+      condition: weatherDescription,
+      isDaytime: weatherData?.isDaytime,
       hours: 1,
-      humidity: finiteNumber(weatherData?.humidity),
-      dewPoint: finiteNumber(weatherData?.dewPoint),
-      moisturePenalty: moistureComfortPenalty({
-        tempF: pointTemp,
-        humidity: weatherData?.humidity,
-        dewPointF: weatherData?.dewPoint,
-        condition: weatherDescription,
-      }),
-    });
+    }));
   }
-  const feelsLikeValues = temperatureRows.map((row) => row.feelsLike).filter(Number.isFinite);
-  const temperatureScores = temperatureRows
-    .map((row) => {
-      const baseScore = scoreOnCurve(row.feelsLike, TEMPERATURE_CURVE);
-      return baseScore === null ? null : { score: clamp(baseScore - row.moisturePenalty), hours: row.hours };
-    })
-    .filter(Boolean);
+  const feelsLikeValues = temperatureRows.flatMap((row) => row.feelsLikeValues).filter(Number.isFinite);
+  const temperatureScores = temperatureRows.map((row) => ({ score: row.score, hours: row.hours }));
   const peakMoisturePenalty = temperatureRows.length
     ? Math.max(...temperatureRows.map((row) => row.moisturePenalty))
+    : 0;
+  const peakSolarLoad = temperatureRows.length
+    ? Math.round(Math.max(...temperatureRows.map((row) => row.solarLoad)))
     : 0;
   const dewPointValues = temperatureRows.map((row) => row.dewPoint).filter(Number.isFinite);
   const humidityValues = temperatureRows.map((row) => row.humidity).filter(Number.isFinite);
 
-  const windRows = trend.map((row) => {
-    const sustained = inRange(row?.wind, 0);
-    const gust = inRange(row?.gust, 0) ?? sustained;
-    if (sustained === null && gust === null) return null;
-    return { score: scoreOnCurve(Math.max(sustained ?? 0, (gust ?? 0) * 0.65), WIND_CURVE), hours: row.hours };
-  }).filter(Boolean);
+  const windSample = (sample) => {
+    const scores = routeVariants(sample, spread).map((variant) => {
+      const sustained = inRange(variant.wind, 0);
+      const gust = inRange(variant.gust, 0) ?? sustained;
+      if (sustained === null && gust === null) return null;
+      return scoreOnCurve(Math.max(sustained ?? 0, (gust ?? 0) * 0.65), WIND_CURVE);
+    }).filter((score) => score !== null);
+    return scores.length ? { score: Math.min(...scores), hours: sample.hours } : null;
+  };
+  const windRows = trend.map((row) => windSample({ ...row, wind: inRange(row?.wind, 0), gust: inRange(row?.gust, 0) }))
+    .filter(Boolean);
   const windHours = coveredHours(windRows);
   const pointGust = inRange(weatherData?.windGust, 0);
   if (windRows.length === 0 && (pointWind !== null || pointGust !== null)) {
-    windRows.push({ score: scoreOnCurve(Math.max(pointWind ?? 0, (pointGust ?? 0) * 0.65), WIND_CURVE), hours: 1 });
+    windRows.push(windSample({ wind: pointWind, gust: pointGust, hours: 1 }));
   }
 
   const precipitationScore = (row) => {
@@ -306,12 +411,16 @@ const calculatePleasantnessScore = ({
     if (pointScore !== null) precipRows.push({ score: pointScore, hours: 1 });
   }
 
-  const viewRows = trend.map((row) => {
+  const firstDaylightIndex = trend.findIndex((row) => row?.isDaytime === true);
+  const viewRows = trend.map((row, index) => {
     const conditionScore = conditionViewScore(row?.condition);
     const coverScore = cloudCoverScore(inRange(row?.cloudCover, 0, 100));
     let rowScore = conditionScore ?? coverScore;
     if (rowScore === null) return null;
-    if (daylightEnabled && row?.isDaytime === false) rowScore = Math.max(0, rowScore - 25);
+    if (daylightEnabled && row?.isDaytime === false) {
+      const preDawn = firstDaylightIndex > index;
+      rowScore = Math.max(0, rowScore - (preDawn ? PRE_DAWN_VIEW_PENALTY : NIGHT_VIEW_PENALTY));
+    }
     return { score: rowScore, hours: row.hours };
   }).filter(Boolean);
   const viewsHours = coveredHours(viewRows);
@@ -319,7 +428,7 @@ const calculatePleasantnessScore = ({
     let pointViewScore = conditionViewScore(weatherDescription)
       ?? cloudCoverScore(inRange(weatherData?.cloudCover, 0, 100));
     if (daylightEnabled && pointViewScore !== null && weatherData?.isDaytime === false) {
-      pointViewScore = Math.max(0, pointViewScore - 25);
+      pointViewScore = Math.max(0, pointViewScore - NIGHT_VIEW_PENALTY);
     }
     if (pointViewScore !== null) viewRows.push({ score: pointViewScore, hours: 1 });
   }
@@ -342,13 +451,20 @@ const calculatePleasantnessScore = ({
       message: (() => {
         const range = formatRange(feelsLikeValues, '°F');
         if (!range) return 'Temperature comfort is unavailable.';
-        if (peakMoisturePenalty <= 0) return `Feels-like temperatures span ${range} during the selected window.`;
-        const peakDewPoint = dewPointValues.length ? Math.round(Math.max(...dewPointValues)) : null;
-        const peakHumidity = humidityValues.length ? Math.round(Math.max(...humidityValues)) : null;
-        const moistureSignal = peakDewPoint !== null
-          ? `dew point peaks at ${peakDewPoint}°F`
-          : `relative humidity peaks at ${peakHumidity}%`;
-        return `Feels-like temperatures span ${range}; ${moistureSignal}, reducing temperature comfort by up to ${peakMoisturePenalty} points.`;
+        const where = spread && spread.elevationFt !== null
+          ? ` between the objective and ${Math.round(spread.elevationFt).toLocaleString('en-US')} ft`
+          : ' during the selected window';
+        const details = [];
+        if (peakSolarLoad >= 2) details.push(`direct sun adds up to ${peakSolarLoad}°F`);
+        if (peakMoisturePenalty > 0) {
+          const peakDewPoint = dewPointValues.length ? Math.round(Math.max(...dewPointValues)) : null;
+          const peakHumidity = humidityValues.length ? Math.round(Math.max(...humidityValues)) : null;
+          const moistureSignal = peakDewPoint !== null
+            ? `dew point peaks at ${peakDewPoint}°F`
+            : `relative humidity peaks at ${peakHumidity}%`;
+          details.push(`${moistureSignal}, reducing temperature comfort by up to ${peakMoisturePenalty} points`);
+        }
+        return `Feels-like temperatures span ${range}${where}${details.length ? `; ${details.join('; ')}` : ''}.`;
       })(),
     },
     {
@@ -446,11 +562,7 @@ const calculatePleasantnessScore = ({
   // comfort dimension is plainly rough (for example, ideal temperatures in
   // 20 mph wind). These caps keep a severe component from being averaged away.
   for (const component of availableComponents) {
-    const core = coreComponentNames.includes(component.factor);
-    const maximum = component.score < 25 ? (core ? 39 : 74)
-      : component.score < 50 ? (core ? 59 : 84)
-        : component.score < 70 ? (core ? 74 : 89)
-          : core && component.score < 85 ? 89 : 100;
+    const maximum = componentCap(component.score, coreComponentNames.includes(component.factor));
     limitScore(maximum, `${component.factor} limits overall comfort to ${labelForScore(maximum)} (${maximum}/100).`);
   }
 
@@ -461,7 +573,8 @@ const calculatePleasantnessScore = ({
     limitScore(74, 'A core weather factor is missing, so comfort cannot be rated above Mixed.');
   }
   if (completeHours < requestedHours) {
-    const maximum = completeHours / requestedHours < 0.75 ? 74 : 89;
+    // Scales from Mixed at two-thirds coverage up to just below Excellent.
+    const maximum = Math.round(clamp(44 + (45 * (completeHours / requestedHours)), 74, 89));
     limitScore(maximum, `Complete temperature, wind, and precipitation readings cover ${completeHours} of ${requestedHours} planned hours; the rating is limited to ${labelForScore(maximum)}.`);
   }
   const allHoursHaveConditions = coveredHours(trend) === requestedHours && trend.every((row) => String(row?.condition || '').trim());
