@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Day Band</title>
+<style>
+/* Inter stands in for the platform font only where none exists (Linux screenshots). */
+@font-face{font-family:InterLocal;font-weight:400;src:url(fonts/inter-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:InterLocal;font-weight:500;src:url(fonts/inter-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:InterLocal;font-weight:600;src:url(fonts/inter-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:InterLocal;font-weight:700;src:url(fonts/inter-latin-700-normal.woff2) format("woff2")}
+
+/* Semantic tokens. One color, one meaning:
+   accent  = brand + primary action only
+   caution = over a limit (always paired with a triangle glyph or hatch)
+   cold    = precipitation and below-freezing
+   missing = data we could not load (paired with a dashed outline)
+   Contrast vs surface (light / dark): label 16.6/14.4, secondary 6.4/7.2, accent 8.1/8.5,
+   caution 5.9/7.9, cold 6.1/7.5, missing 6.2/7.4. */
+:root{
+ --bg:#F2F3F1;--surface:#FFFFFF;--fill:#E7E9E6;--separator:rgba(24,32,28,.12);
+ --label:#18201C;--secondary:#58615C;
+ --accent:#1E5A43;--on-accent:#FFFFFF;
+ --caution:#A8470A;--caution-fill:rgba(168,71,10,.14);
+ --cold:#1A64A8;--cold-fill:rgba(26,100,168,.16);
+ --missing:#5C6360;
+ --ok-fill:#D5DAD6;
+ --bar:rgba(242,243,241,.78);
+ --font:-apple-system,BlinkMacSystemFont,"Segoe UI",InterLocal,Roboto,sans-serif;
+ --r:14px;
+}
+@media (prefers-color-scheme:dark){:root{
+ --bg:#0F1211;--surface:#1B1F1D;--fill:#262B29;--separator:rgba(236,239,237,.12);
+ --label:#ECEFED;--secondary:#A3ADA8;
+ --accent:#7FC8A4;--on-accent:#0F1211;
+ --caution:#FF9A4D;--caution-fill:rgba(255,154,77,.18);
+ --cold:#72B4F0;--cold-fill:rgba(114,180,240,.2);
+ --missing:#A7AFAB;--ok-fill:#343A37;
+ --bar:rgba(15,18,17,.72)}}
+@media (prefers-contrast:more){:root{--separator:rgba(24,32,28,.4);--ok-fill:#B9C0BB}}
+@media (prefers-reduced-transparency:reduce){:root{--bar:var(--bg)}}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--label);font:400 1rem/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+.num{font-variant-numeric:tabular-nums}
+.sym{width:1.1em;height:1.1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.15em}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* App frame: sidebar on regular width, tab bar on compact */
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.sidebar{padding:20px 12px;border-right:1px solid var(--separator);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;padding:6px 10px 18px}
+.brand svg{width:22px;height:22px;color:var(--accent)}
+.sidebar a{display:flex;align-items:center;gap:10px;padding:0 10px;min-height:36px;border-radius:9px;font-size:14px;color:var(--secondary)}
+.sidebar a.on{background:var(--fill);color:var(--label);font-weight:600}
+.sidebar a.on .sym{color:var(--accent)}
+.sidebar .sp{flex:1}
+
+.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:10px 32px;min-height:56px;background:var(--bar);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);border-bottom:1px solid transparent}
+.toolbar .crumb{font-size:14px;color:var(--secondary);flex:1}
+.tbtn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;font-size:14px;font-weight:500;color:var(--label);background:var(--fill)}
+.tbtn.prominent{background:var(--accent);color:var(--on-accent);font-weight:600}
+
+.content{max-width:820px;padding:8px 32px 64px}
+.title{padding:16px 0 20px}
+h1{font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.subtitle{margin-top:6px;color:var(--secondary);font-size:15px}
+
+/* Verdict */
+.verdict{display:grid;gap:10px}
+.status{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:15px;color:var(--caution)}
+.status .sym{width:18px;height:18px}
+.verdict h2{font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-.01em;max-width:30ch}
+.verdict p{color:var(--secondary);font-size:15px;max-width:62ch}
+
+/* Signature: the day band */
+.day{margin-top:24px;background:var(--surface);border-radius:var(--r);padding:16px 16px 12px}
+.readout{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;min-height:28px}
+.readout .t{font-weight:600;font-size:17px}
+.readout .v{font-size:15px;color:var(--secondary)}
+.readout .v b{color:var(--label);font-weight:600}
+.readout .v b.over{color:var(--caution)}
+.readout .flag{margin-left:auto;font-size:13px;font-weight:600;color:var(--caution);display:inline-flex;gap:5px;align-items:center}
+.band{position:relative;margin-top:14px;touch-action:none;cursor:ew-resize;padding:22px 0 6px}
+.band .track{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;height:44px}
+.band .seg{border-radius:6px;background:var(--ok-fill);position:relative}
+.band .seg.over{background:var(--caution-fill);background-image:repeating-linear-gradient(-45deg,var(--caution) 0 1.5px,transparent 1.5px 7px);box-shadow:inset 0 0 0 1.5px var(--caution)}
+.band .seg.sel{outline:2.5px solid var(--label);outline-offset:2px}
+.band .rain{height:5px;margin-top:5px;display:grid;grid-template-columns:repeat(12,1fr);gap:3px;pointer-events:none}
+.band .rain i{border-radius:3px;background:var(--cold)}
+.band .ticks{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:8px;font-size:12px;color:var(--secondary);text-align:center}
+.band .ticks .over{color:var(--caution);font-weight:600}
+.band .mark{position:absolute;top:0;font-size:12px;color:var(--secondary);transform:translateX(-50%);white-space:nowrap;display:flex;align-items:center;gap:4px}
+.band .mark:after{content:"";position:absolute;left:50%;top:16px;height:52px;border-left:1.5px dashed var(--secondary);opacity:.6}
+.band .callout{position:absolute;top:0;font-size:12px;font-weight:600;color:var(--caution);transform:translateX(-50%);white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:4px;font-size:12px;color:var(--secondary)}
+.legend i{display:inline-block;width:18px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* Missing data notice: inline, not an alert */
+.notice{margin-top:12px;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--r);background:var(--surface);outline:1.5px dashed var(--missing);outline-offset:-1.5px}
+.notice .sym{color:var(--missing);width:20px;height:20px}
+.notice div{flex:1;font-size:15px}
+.notice div span{color:var(--secondary)}
+.notice a{font-size:15px;font-weight:600;color:var(--accent);white-space:nowrap;min-height:44px;display:inline-flex;align-items:center}
+
+/* Grouped lists (familiar pattern) */
+section{margin-top:32px}
+.sh{display:flex;justify-content:space-between;align-items:baseline;padding:0 16px 8px}
+.sh h3{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.sh span{font-size:13px;color:var(--secondary)}
+.group{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 16px;position:relative}
+.row+.row:before{content:"";position:absolute;top:0;left:16px;right:0;border-top:1px solid var(--separator)}
+.row .k{flex:1;min-width:0}
+.row .k small{display:block;color:var(--secondary);font-size:13px;margin-top:1px}
+.row .val{font-weight:600;text-align:right;white-space:nowrap}
+.row .val.over{color:var(--caution)}
+.row .val small{font-weight:400;color:var(--secondary)}
+.row .chev{width:14px;height:14px;color:var(--secondary);opacity:.7}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:600;white-space:nowrap}
+.st .sym{width:16px;height:16px}
+.st.ok{color:var(--secondary)}
+.st.over{color:var(--caution)}
+.st.missing{color:var(--missing)}
+a.row:hover{background:color-mix(in srgb,var(--fill) 55%,transparent)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.two section{margin-top:32px}
+
+.check{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--secondary);flex:none;display:grid;place-items:center}
+.check.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.check.on .sym{width:14px;height:14px;stroke-width:3}
+.row.done .k{color:var(--secondary);text-decoration:line-through}
+
+.foot{margin-top:28px;padding:0 16px;font-size:13px;color:var(--secondary)}
+.foot b{font-weight:600;color:var(--label)}
+
+.tabbar{display:none}
+.inline-title{display:none}
+
+@media (max-width:1000px){.two{grid-template-columns:1fr;gap:0}}
+@media (max-width:760px){
+ body{font-size:17px}
+ .app{grid-template-columns:1fr}
+ .sidebar{display:none}
+ .toolbar{padding:6px 12px;min-height:52px;padding-top:max(6px,env(safe-area-inset-top))}
+ .toolbar .crumb{display:none}
+ .toolbar .sp{flex:1}
+ .inline-title{display:block;position:absolute;left:16px;max-width:calc(100% - 250px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:17px;opacity:0;transition:opacity .15s}
+ .toolbar.scrolled{border-bottom-color:var(--separator)}
+ .toolbar.scrolled .inline-title{opacity:1}
+ .tbtn{min-height:44px;min-width:44px;justify-content:center;padding:0 14px}
+ .tbtn .lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+ .tbtn.prominent .lbl{position:static;width:auto;height:auto;clip:auto}
+ .content{padding:0 16px 120px}
+ .title{padding:4px 0 16px}
+ h1{font-size:34px}
+ .subtitle{font-size:15px}
+ .verdict h2{font-size:22px}
+ .verdict p,.notice div,.notice a{font-size:15px}
+ .day{margin-left:-4px;margin-right:-4px;padding:14px 12px 10px}
+ .readout .flag{margin-left:0;width:100%}
+ .band .track{height:52px;gap:2px}
+ .band .ticks,.band .rain{gap:2px}
+ .band .ticks span:nth-child(even){visibility:hidden}
+ .notice{display:grid;grid-template-columns:20px 1fr;gap:4px 12px;align-items:start}
+ .notice .sym{margin-top:2px}
+ .notice a{grid-column:2;min-height:36px}
+ .sh{padding:0 16px 6px}
+ .row{min-height:52px}
+ .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:6;padding:6px 8px max(8px,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);border-top:1px solid var(--separator)}
+ .tabbar a{display:grid;justify-items:center;gap:2px;min-height:49px;align-content:center;font-size:11px;font-weight:500;color:var(--secondary)}
+ .tabbar a .sym{width:24px;height:24px}
+ .tabbar a.on{color:var(--accent)}
+}
+@media (prefers-reduced-motion:no-preference){.band .seg{transition:outline-color .12s}}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="s-mtn" viewBox="0 0 24 24"><path d="M3 19l6.5-12 4 7 2.5-3.5L21 19z"/></symbol>
+ <symbol id="s-doc" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></symbol>
+ <symbol id="s-plan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+ <symbol id="s-cmp" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></symbol>
+ <symbol id="s-saved" viewBox="0 0 24 24"><path d="M7 3.5h10v17l-5-3.5-5 3.5z"/></symbol>
+ <symbol id="s-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9M10 20a2 2 0 0 0 4 0"/></symbol>
+ <symbol id="s-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+ <symbol id="s-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M6 11H5v9.5h14V11h-1"/></symbol>
+ <symbol id="s-tri" viewBox="0 0 24 24"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.1"/></symbol>
+ <symbol id="s-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+ <symbol id="s-q" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="3 2.4"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5M12 16.6v.1"/></symbol>
+ <symbol id="s-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+ <symbol id="s-sun" viewBox="0 0 24 24"><path d="M4 17h16M8 17a4 4 0 0 1 8 0M12 7v2.5M6.3 11.3l1.6 1.6M17.7 11.3l-1.6 1.6"/></symbol>
+</svg>
+
+<div class="app">
+ <nav class="sidebar" aria-label="Main">
+  <div class="brand"><svg class="sym"><use href="#s-mtn"/></svg>Backcountry Conditions</div>
+  <a class="on" aria-current="page"><svg class="sym"><use href="#s-doc"/></svg>Brief</a>
+  <a><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
+  <a><svg class="sym"><use href="#s-cmp"/></svg>Compare</a>
+  <a><svg class="sym"><use href="#s-saved"/></svg>Saved</a>
+  <a><svg class="sym"><use href="#s-bell"/></svg>Watchlist</a>
+  <span class="sp"></span>
+  <a><svg class="sym"><use href="#s-gear"/></svg>Settings</a>
+ </nav>
+
+ <div>
+  <div class="toolbar">
+   <span class="crumb">Brief</span><span class="inline-title" id="it" aria-hidden="true">Mount Shasta</span><span class="sp"></span>
+   <button class="tbtn" aria-label="Share"><svg class="sym"><use href="#s-share"/></svg><span class="lbl">Share</span></button>
+   <button class="tbtn" aria-label="Watch for changes"><svg class="sym"><use href="#s-bell"/></svg><span class="lbl">Watch</span></button>
+   <button class="tbtn prominent"><span class="lbl">Edit plan</span></button>
+  </div>
+
+  <main class="content">
+   <div class="title">
+    <h1>Mount Shasta</h1>
+    <div class="subtitle num">Wed, Sep 23 · 7:00 AM start · 12 hours · 10,738 ft</div>
+   </div>
+
+   <div class="verdict">
+    <span class="status"><svg class="sym"><use href="#s-tri"/></svg>Caution</span>
+    <h2>Clear morning, wet midday. Plan to be off exposed ground by noon.</h2>
+    <p class="num">Rain chance reaches 80% at 12 PM with gusts to 31 mph, and it's below freezing from 2 to 4 PM. It clears after 4 PM, and you're back 30 minutes before sunset.</p>
+   </div>
+
+   <div class="day" id="day">
+    <div class="readout num" id="readout" aria-live="polite"></div>
+    <div class="band" id="band" role="slider" tabindex="0" aria-label="Hour of your trip" aria-valuemin="0" aria-valuemax="11" aria-valuenow="5">
+     <span class="callout" id="callout">Outside your limits · 12–4 PM</span>
+     <div class="track" id="track"></div>
+     <div class="rain" id="rain"></div>
+     <div class="ticks num" id="ticks"></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--ok-fill)"></i>Within limits</span><span><i style="background:var(--caution-fill);background-image:repeating-linear-gradient(-45deg,var(--caution) 0 1.5px,transparent 1.5px 6px);box-shadow:inset 0 0 0 1.5px var(--caution)"></i>Over a limit</span><span><i style="background:var(--cold);height:5px;vertical-align:2px"></i>Rain chance</span></div>
+    <p class="sr">Twelve hours from 7 AM to 6 PM. Within your limits from 7 to 11 AM and 4 to 6 PM. Over your limits from 12 PM to 3 PM: gusts 26 to 31 mph against a 25 mph limit, and rain chance 60 to 80 percent against a 60 percent limit.</p>
+   </div>
+
+   <div class="notice" role="note">
+    <svg class="sym"><use href="#s-q"/></svg>
+    <div>NWS alerts didn't load. <span>This brief may be missing an active warning.</span></div>
+    <a href="#">Open weather.gov</a>
+   </div>
+
+   <div class="two">
+    <section>
+     <div class="sh"><h3>At a glance</h3></div>
+     <div class="group num">
+      <div class="row"><span class="k">Peak gust<small>12 PM · limit 25 mph</small></span><span class="val over">31 mph</span></div>
+      <div class="row"><span class="k">Rain<small>12-hour total</small></span><span class="val">0.07 in</span></div>
+      <div class="row"><span class="k">Snow<small>12-hour total</small></span><span class="val">0.8 in</span></div>
+      <div class="row"><span class="k">Return<small>Sunset 7:30 PM</small></span><span class="val">7:00 PM</span></div>
+      <div class="row"><span class="k">Safety score<small>Hazards only, before your limits</small></span><span class="val">74 <small>of 100</small></span></div>
+     </div>
+    </section>
+
+    <section>
+     <div class="sh"><h3>Checks</h3><span>6 sources</span></div>
+     <div class="group">
+      <a class="row" href="#"><span class="k">Weather</span><span class="st over"><svg class="sym"><use href="#s-tri"/></svg>Over limits</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+      <a class="row" href="#"><span class="k">Alerts</span><span class="st missing"><svg class="sym"><use href="#s-q"/></svg>Not loaded</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+      <a class="row" href="#"><span class="k">Daylight</span><span class="st ok"><svg class="sym"><use href="#s-check"/></svg>30 min spare</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+      <a class="row" href="#"><span class="k">Terrain &amp; snow</span><span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Mostly dry</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+      <a class="row" href="#"><span class="k">Avalanche</span><span class="st ok"><svg class="sym"><use href="#s-check"/></svg>No bulletin</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+      <a class="row" href="#"><span class="k">Air &amp; fire</span><span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Low risk</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+     </div>
+    </section>
+   </div>
+
+   <section>
+    <div class="sh"><h3>Before you go</h3><span>1 of 4</span></div>
+    <div class="group">
+     <label class="row done"><span class="check on"><svg class="sym"><use href="#s-check"/></svg></span><span class="k">Rain shell and warm layer</span></label>
+     <label class="row"><span class="check"></span><span class="k">Traction for icy footing after 2 PM</span></label>
+     <label class="row"><span class="check"></span><span class="k">Check NWS alerts before leaving</span></label>
+     <label class="row"><span class="check"></span><span class="k">Headlamp</span></label>
+    </div>
+   </section>
+
+   <p class="foot">Why caution with a score of 74? <b>The score rates hazards on their own; the call also checks your limits and timing, and 4 hours cross them.</b></p>
+  </main>
+ </div>
+</div>
+
+<nav class="tabbar" aria-label="Main">
+ <a class="on" aria-current="page"><svg class="sym"><use href="#s-doc"/></svg>Brief</a>
+ <a><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
+ <a><svg class="sym"><use href="#s-cmp"/></svg>Compare</a>
+ <a><svg class="sym"><use href="#s-saved"/></svg>Saved</a>
+ <a><svg class="sym"><use href="#s-bell"/></svg>Watchlist</a>
+</nav>
+
+<script src="shared.js"></script>
+<script>
+const H=window.HOURS,LIM={g:25,p:60},full=['7 AM','8 AM','9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM','6 PM'];
+const track=document.getElementById('track'),rain=document.getElementById('rain'),ticks=document.getElementById('ticks'),band=document.getElementById('band'),out=document.getElementById('readout');
+track.innerHTML=H.map((h,i)=>`<div class="seg ${h.ok?'':'over'}" data-i="${i}"></div>`).join('');
+rain.innerHTML=H.map(h=>`<i style="opacity:${h.p?Math.max(.18,h.p/100):0};transform:scaleX(${h.p?1:0})"></i>`).join('');
+ticks.innerHTML=H.map(h=>`<span class="${h.ok?'':'over'}">${h.h}</span>`).join('');
+// marks: start at left edge of 7a, return at right edge of 6p (7 PM), callout centered on the over window
+const first=H.findIndex(h=>!h.ok),last=H.length-1-[...H].reverse().findIndex(h=>!h.ok);
+document.getElementById('callout').style.left=`${((first+last+1)/2)/H.length*100}%`;
+let sel=first;
+function render(){
+ [...track.children].forEach((c,i)=>c.classList.toggle('sel',i===sel));
+ const h=H[sel],g=h.g>LIM.g,p=h.p>=LIM.p;
+ out.innerHTML=`<span class="t">${full[sel]}</span><span class="v"><b>${h.t}°F</b> · Gust <b class="${g?'over':''}">${h.g} mph</b> · Rain <b class="${p?'over':''}">${h.p}%</b></span>`+
+  (h.ok?'':`<span class="flag"><svg class="sym"><use href="#s-tri"/></svg>${[g&&'Gust over 25 mph',p&&'Rain over 60%'].filter(Boolean).join(' · ')}</span>`);
+ band.setAttribute('aria-valuenow',sel);band.setAttribute('aria-valuetext',`${full[sel]}, ${h.t} degrees, gust ${h.g} miles per hour, rain chance ${h.p} percent${h.ok?'':', over your limits'}`);
+}
+function pick(e){const r=track.getBoundingClientRect();sel=Math.max(0,Math.min(H.length-1,Math.floor((e.clientX-r.left)/r.width*H.length)));render();}
+band.addEventListener('pointerdown',e=>{band.setPointerCapture(e.pointerId);pick(e)});
+band.addEventListener('pointermove',e=>{if(e.buttons)pick(e)});
+band.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){sel=Math.min(H.length-1,sel+1);render();e.preventDefault()}if(e.key==='ArrowLeft'){sel=Math.max(0,sel-1);render();e.preventDefault()}});
+render();
+const tb=document.querySelector('.toolbar'),h1=document.querySelector('h1');
+addEventListener('scroll',()=>tb.classList.toggle('scrolled',h1.getBoundingClientRect().bottom<tb.offsetHeight),{passive:true});
+</script>
+</body></html>
