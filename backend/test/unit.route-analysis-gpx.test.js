@@ -204,7 +204,10 @@ test('AI named routes use specific landmark names instead of mapped checkpoint l
     'Happy Isles Trailhead',
     'Vernal Fall Footbridge',
     'Half Dome',
+    'Return to Happy Isles Trailhead',
   ]);
+  expect(response.body.waypoints.at(-1)).toMatchObject({ leg: 'return', lat: 37.7329, lon: -119.5587, elev_ft: 4035 });
+  expect(response.body.timing).toMatchObject({ basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 12, paceSource: 'default' });
   expect(response.body.waypoints.map((waypoint) => waypoint.name).join(' ')).not.toMatch(/checkpoint\s+\d/i);
   const waypointCalls = aiCalls.filter((call) => call.options.feature === 'route-waypoints');
   expect(waypointCalls).toHaveLength(2);

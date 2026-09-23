@@ -1,4 +1,4 @@
-import type { RouteWaypointSummary } from "../hooks/useRouteAnalysis";
+import type { RouteTiming, RouteWaypointSummary } from "../hooks/useRouteAnalysis";
 import { computeFeelsLikeF } from "../app/planner-helpers";
 
 export function hasRouteNumber(value: unknown): value is number {
@@ -7,9 +7,10 @@ export function hasRouteNumber(value: unknown): value is number {
 
 /** Do not invent elevations or imply equal distances between uneven checkpoints. */
 export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
-  if (summaries.length < 2 || !summaries.every((p) => hasRouteNumber(p.elev_ft))) return null;
-  const low = Math.min(...summaries.map((p) => p.elev_ft));
-  const high = Math.max(...summaries.map((p) => p.elev_ft));
+  const elevations = summaries.map((p) => p.elev_ft);
+  if (summaries.length < 2 || !elevations.every(hasRouteNumber)) return null;
+  const low = Math.min(...elevations);
+  const high = Math.max(...elevations);
   const distances = summaries.map((p) => p.distance_miles);
   const progress = summaries.map((p) => p.progress_percent);
   const ordered = (values: unknown[]): values is number[] =>
@@ -25,9 +26,9 @@ export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
     axis,
     low,
     high,
-    points: summaries.map((p, i) => ({
+    points: elevations.map((_, i) => ({
       x: 20 + ((positions[i] - first) / span) * 960,
-      y: 155 - ((p.elev_ft - low) / Math.max(100, high - low)) * 125,
+      y: 155 - ((elevations[i] - low) / Math.max(100, high - low)) * 125,
     })),
   };
 }
@@ -50,4 +51,18 @@ export function checkpointTone(point: RouteWaypointSummary, limits: Limits): "wi
     || (feelsLike !== null && (feelsLike < limits.minFeelsLikeF || feelsLike > limits.maxFeelsLikeF));
   if (over) return "over";
   return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && feelsLike !== null ? "within" : "missing";
+}
+
+/** Explain how checkpoint arrival times were estimated; older saved analyses have no timing. */
+export function describeRouteTiming(timing: RouteTiming | undefined): string {
+  if (!timing) return "Estimated arrivals use your planned duration, not terrain-adjusted pace.";
+  const window = `your ${timing.travelWindowHours}-hour plan`;
+  const spread = timing.basis === "distance-and-vert"
+    ? `Arrivals spread ${window} by distance and climbing${timing.paceSource === "user" ? ", weighted by your pace settings" : ""}.`
+    : timing.basis === "distance"
+      ? `Arrivals spread ${window} by distance only; some checkpoint elevations are unknown, so climbing is not weighted.`
+      : timing.basis === "progress"
+        ? `Arrivals spread ${window} by route progress, not terrain-adjusted pace.`
+        : `Arrivals are spaced evenly across ${window} because route distances are unknown.`;
+  return timing.roundTrip ? `${spread} The route is treated as an out-and-back, so the last checkpoint is your return to the start.` : spread;
 }

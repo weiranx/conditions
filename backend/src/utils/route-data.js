@@ -198,8 +198,9 @@ const buildRouteTerrainProfile = (waypoints, haversineKm) => {
     const segmentKm = haversineKm(previous.lat, previous.lon, current.lat, current.lon);
     distanceKm += segmentKm;
     aspects.push(cardinal(bearingDegrees(previous, current)));
-    const previousElevation = Number(previous?.elev_ft);
-    const currentElevation = Number(current?.elev_ft);
+    // Number(null) is 0, so an unknown elevation must not become sea level.
+    const previousElevation = previous?.elev_ft == null ? NaN : Number(previous.elev_ft);
+    const currentElevation = current?.elev_ft == null ? NaN : Number(current.elev_ft);
     if (Number.isFinite(previousElevation) && Number.isFinite(currentElevation) && segmentKm > 0.03) {
       const deltaFt = currentElevation - previousElevation;
       if (deltaFt > 0) elevationGainFt += deltaFt;

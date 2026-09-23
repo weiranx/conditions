@@ -177,3 +177,34 @@ test('a missing elevation stays missing instead of becoming 0 ft', () => {
   assert.equal(knownFeet('10738'), 10738);
   assert.equal(knownFeet(0), 0);
 });
+
+import { describeRouteTiming } from '../src/field/route-planning';
+
+test('timing note explains how arrivals were estimated, and keeps the legacy note for old saves', () => {
+  const timing = { basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 9, pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 45 }, paceSource: 'user' };
+  assert.match(describeRouteTiming(timing), /your 9-hour plan by distance and climbing, weighted by your pace settings/);
+  assert.match(describeRouteTiming(timing), /out-and-back/);
+  assert.match(describeRouteTiming({ ...timing, basis: 'distance', roundTrip: false }), /elevations are unknown, so climbing is not weighted/);
+  assert.doesNotMatch(describeRouteTiming({ ...timing, roundTrip: false }), /out-and-back/);
+  assert.match(describeRouteTiming(undefined), /not terrain-adjusted pace/);
+});
+
+test('an out-and-back shows the return time and flags arrivals after dark', () => {
+  const analysis = {
+    ...result([
+      point({ etaTime: '06:00', etaDate: '2026-09-08', daylight: 'dark' }),
+      point({ name: 'Summit', elev_ft: 9000, etaTime: '11:00', daylight: 'day' }),
+      point({ name: 'Return to Trailhead', leg: 'return', etaTime: '20:30', daylight: 'dark' }),
+    ]),
+    timing: { basis: 'distance-and-vert', roundTrip: true, travelWindowHours: 14, pace: { minutesPerMile: 20, ascentMinutesPer1000Ft: 30 }, paceSource: 'default' },
+  };
+  const html = renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: analysis })} />);
+  const doc = new JSDOM(html).window.document;
+  assert.match(doc.querySelector('.sky-lead').textContent, /Summit, at 11:00 and are back at the start around 20:30, after dark\./);
+  const stops = [...doc.querySelectorAll('.field-route-stop')].map((stop) => stop.textContent);
+  assert.match(stops[0], /After dark/);
+  assert.doesNotMatch(stops[1], /After dark/);
+  assert.match(stops[2], /After dark/);
+  assert.match(html, /your 14-hour plan by distance and climbing\./);
+  assert.match(html, /last checkpoint is your return to the start/);
+});

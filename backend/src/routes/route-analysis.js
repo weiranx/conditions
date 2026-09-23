@@ -11,6 +11,14 @@ const {
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 const { finiteNumber, serializeWaypointReports } = require('../utils/route-briefing');
+const {
+  DEFAULT_ROUTE_PACE,
+  appendReturnCheckpoint,
+  classifyDaylight,
+  computeCheckpointFractions,
+  computeDistanceProgress,
+  sanitizeRoutePace,
+} = require('../utils/route-timing');
 
 const withTimeout = (promise, ms, label) => {
   let timeout = null;
@@ -34,6 +42,9 @@ const routeSuggestionsCache = createCache({ name: 'route-suggestions', ttlMs: 24
 const waypointCache = createCache({ name: 'waypoints', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 200 });
 const nominatimGeocodeCache = createCache({ name: 'nominatim-geocode', ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 6 * 24 * 60 * 60 * 1000, maxEntries: 500 });
 
+// Number(null) and Number('') are 0, so check for absence before converting.
+const knownElevation = (value) => (value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value));
+
 const pick = (obj, keys) => {
   if (!obj || typeof obj !== 'object') return {};
   return keys.reduce((acc, k) => {
@@ -42,16 +53,20 @@ const pick = (obj, keys) => {
   }, {});
 };
 
-const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowHours = 12) => {
+// `fractions` (0–1 per checkpoint, from computeCheckpointFractions) places each
+// arrival within the travel window; without it, route progress or even spacing is used.
+const buildCheckpointSchedule = (waypoints, date, start = '06:00', travelWindowHours = 12, fractions = null) => {
   const [year, month, day] = String(date).split('-').map(Number);
   const [hour, minute] = String(start || '06:00').split(':').map(Number);
   const baseMs = Date.UTC(year, month - 1, day, hour, minute);
   const safeHours = Math.max(1, Math.min(24, Math.round(Number(travelWindowHours) || 12)));
   return waypoints.map((waypoint, index) => {
     const fallbackProgress = waypoints.length > 1 ? (index / (waypoints.length - 1)) * 100 : 0;
-    const progress = Number.isFinite(Number(waypoint.progress_percent))
-      ? Math.max(0, Math.min(100, Number(waypoint.progress_percent)))
-      : fallbackProgress;
+    const progress = Array.isArray(fractions) && Number.isFinite(fractions[index])
+      ? Math.max(0, Math.min(100, fractions[index] * 100))
+      : Number.isFinite(Number(waypoint.progress_percent))
+        ? Math.max(0, Math.min(100, Number(waypoint.progress_percent)))
+        : fallbackProgress;
     const offsetMinutes = Math.round(safeHours * 60 * progress / 100);
     const eta = new Date(baseMs + offsetMinutes * 60 * 1000);
     return {
@@ -84,8 +99,10 @@ const buildDeterministicRouteBriefing = (summaries, failedWaypointNames = [], un
     .map((summary) => `${summary.name}: ${summary.avalanche.risk} avalanche danger`).join('; ');
   const alerted = available.filter((summary) => summary.activeAlerts > 0).map((summary) => summary.name);
   const incomplete = summaries.filter((summary) => summary.partialData).map((summary) => summary.name);
+  const dark = available.filter((summary) => summary.daylight === 'dark').map((summary) => `${summary.name} (${summary.etaTime})`);
   const concerns = [
     avalancheConcerns,
+    dark.length ? `Estimated arrival falls outside daylight at ${dark.join(', ')}; plan for slower travel and navigation in the dark.` : '',
     alerted.length ? `Active alerts at ${alerted.join(', ')}; read the official alert details.` : '',
     incomplete.length ? `Some source data is incomplete at ${incomplete.join(', ')}.` : '',
   ].filter(Boolean).join(' ');
@@ -261,6 +278,15 @@ const geocodeWaypoint = async (name, peakLat, peakLon, fetchWithTimeout, fetchHe
   }).catch(() => null);
 };
 
+const describeTiming = ({ basis, roundTrip, travelWindowHours, pace, paceSource }, daylightEnabled = true) => {
+  const weighting = basis === 'distance-and-vert'
+    ? `weighted by segment distance and elevation change (${pace.minutesPerMile} min per mile, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing${paceSource === 'user' ? ' from the traveler\'s pace settings' : ', a default ratio'})`
+    : basis === 'distance'
+      ? 'weighted by segment distance only because some checkpoint elevations are unknown'
+      : basis === 'progress' ? 'spaced by reported route progress' : 'spaced evenly because route distances are unknown';
+  return `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the window and the final checkpoint (leg "return") is the estimated return to the start by the same route.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
+};
+
 const registerRouteAnalysisRoutes = ({
   app,
   askAI,
@@ -272,6 +298,7 @@ const registerRouteAnalysisRoutes = ({
   ensureGpxImportEnabled = () => assertFeatureEnabled('gpxImport'),
   ensureAIEnabled = () => assertAIFeatureEnabled('routeAnalysis'),
   getProductFeatureFlags = getFeatureFlags,
+  fetchElevationFt = null,
 }) => {
   const routeDataService = createRouteDataService({
     fetchWithTimeout,
@@ -321,9 +348,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
   });
 
   // POST /api/route-analysis
-  // Body: { peak, route, lat, lon, date, start }
+  // Body: { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints?, route_metadata?, pace? }
   app.post('/api/route-analysis', async (req, res) => {
-    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata } = req.body;
+    const { peak, route, lat, lon, date, start, travel_window_hours, units, waypoints, route_metadata, pace } = req.body;
     if (!peak || !route || lat == null || lon == null || !date) {
       return res.status(400).json({ error: 'peak, route, lat, lon, and date are required' });
     }
@@ -347,6 +374,7 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       return res.status(400).json({ error: error.message });
     }
     const routeMetadata = suppliedWaypoints ? sanitizeRouteMetadata(route_metadata) : null;
+    const userPace = sanitizeRoutePace(pace);
     try {
       ensureRouteAnalysisEnabled();
     } catch (error) {
@@ -441,10 +469,36 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         }
       }
 
-      // Step 2: Estimate arrival time from route progress, then evaluate each
-      // checkpoint at that ETA instead of applying the trailhead start time to
-      // every point on the route.
-      const checkpointSchedule = buildCheckpointSchedule(waypointsCopy, date, start || '06:00', travel_window_hours || 12);
+      // Step 2: Estimate arrival times, then evaluate each checkpoint at its ETA
+      // instead of applying the trailhead start time to every point on the route.
+      // Fill missing elevations first so climbing and descent can weight timing.
+      if (typeof fetchElevationFt === 'function') {
+        await Promise.all(waypointsCopy.map(async (wp) => {
+          if (knownElevation(wp.elev_ft) !== null) return;
+          try {
+            const { elevationFt } = await withTimeout(Promise.resolve(fetchElevationFt(wp.lat, wp.lon)), 10000, 'Checkpoint elevation') || {};
+            if (Number.isFinite(elevationFt)) wp.elev_ft = Math.round(elevationFt);
+          } catch (err) {
+            logger.warn({ err }, 'Checkpoint elevation lookup failed');
+          }
+        }));
+      }
+      // GPX tracks already cover the whole outing. Named and mapped routes stop at
+      // the objective, so add the trip back to the first checkpoint.
+      const roundTrip = routeSource !== 'gpx';
+      const outboundWaypoints = waypointsCopy;
+      if (roundTrip) {
+        waypointsCopy = appendReturnCheckpoint(waypointsCopy);
+        const progress = computeDistanceProgress(waypointsCopy, haversineKm);
+        waypointsCopy.forEach((waypoint, index) => {
+          if (progress) waypoint.progress_percent = progress[index];
+          else delete waypoint.progress_percent;
+        });
+      }
+      const routePace = userPace || DEFAULT_ROUTE_PACE;
+      const { basis: timingBasis, fractions } = computeCheckpointFractions(waypointsCopy, { haversineKm, pace: routePace });
+      const travelWindowHours = Math.max(1, Math.min(24, Math.round(Number(travel_window_hours) || 12)));
+      const checkpointSchedule = buildCheckpointSchedule(waypointsCopy, date, start || '06:00', travelWindowHours, fractions);
       waypointsCopy.forEach((waypoint, index) => {
         waypoint.eta_date = checkpointSchedule[index].date;
         waypoint.eta_time = checkpointSchedule[index].time;
@@ -469,12 +523,10 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
         const dataAvailable = settled.status === 'fulfilled' && settled.value?.statusCode === 200 && Boolean(settled.value?.payload);
         const rawPayload = dataAvailable ? settled.value.payload : {};
         const p = sanitizeReportForFeatureFlags(rawPayload, featureFlags);
-        const resolvedElevationFt = Number.isFinite(Number(wp.elev_ft))
-          ? Number(wp.elev_ft)
-          : Number.isFinite(Number(p.weather?.elevation))
-            ? Math.round(Number(p.weather.elevation))
-            : 0;
+        // An unknown elevation stays null rather than becoming 0 ft.
+        const resolvedElevationFt = knownElevation(wp.elev_ft) ?? (knownElevation(p.weather?.elevation) !== null ? Math.round(knownElevation(p.weather.elevation)) : null);
         wp.elev_ft = resolvedElevationFt;
+        const daylight = dataAvailable ? classifyDaylight(wp.eta_time, p.solar) : null;
         const avyRelevant = Boolean(p.avalanche && p.avalanche.relevant !== false);
         const snowDepthIn = p.snowpack?.snotel?.snowDepthIn ?? p.snowpack?.nohrsc?.snowDepthIn ?? null;
         const hasSnow = snowDepthIn != null && snowDepthIn > 0;
@@ -483,9 +535,11 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           elev_ft: resolvedElevationFt,
           ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
           ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
+          ...(wp.leg ? { leg: wp.leg } : {}),
           etaDate: wp.eta_date,
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,
+          ...(daylight ? { daylight } : {}),
           dataAvailable,
           score: finiteNumber(p.safety?.score) ? p.safety.score : null,
           tier: p.safety?.tier ?? null,
@@ -497,7 +551,15 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           ...(hasSnow ? { snowDepthIn } : {}),
         };
       });
-      const terrainProfile = buildRouteTerrainProfile(waypointsCopy, haversineKm);
+      // Terrain sampling describes the mapped geometry once, not the retraced return.
+      const terrainProfile = buildRouteTerrainProfile(outboundWaypoints, haversineKm);
+      const timing = {
+        basis: timingBasis,
+        roundTrip,
+        travelWindowHours,
+        pace: routePace,
+        paceSource: userPace ? 'user' : 'default',
+      };
 
       // Step 4: Synthesize — feed the AI the raw safety report per waypoint (bounded),
       // the same raw-data approach used for the score card's AI analysis, instead of
@@ -510,6 +572,8 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
           elev_ft: wp.elev_ft,
           ...(wp.distance_miles != null ? { distance_miles: wp.distance_miles } : {}),
           ...(wp.progress_percent != null ? { progress_percent: wp.progress_percent } : {}),
+          ...(wp.leg ? { leg: wp.leg } : {}),
+          ...(summaries[i].daylight ? { arrivalDaylight: summaries[i].daylight } : {}),
           etaDate: wp.eta_date,
           etaTime: wp.eta_time,
           offsetMinutes: wp.offset_minutes,
@@ -545,6 +609,7 @@ ${routeSourceDetails ? `Mapped route match: ${JSON.stringify(routeSourceDetails)
 ${routeMetadata ? `Recorded GPX metadata: ${JSON.stringify(routeMetadata)}` : ''}
 ${terrainProfile ? `Sampled terrain profile: ${JSON.stringify(terrainProfile)}` : ''}
 Date: ${date}${start ? `, Start time: ${start}` : ''}
+Checkpoint timing: ${describeTiming(timing, featureFlags.daylightTimeline !== false)}
 ${failedWaypointNames.length ? `\nNo data is available for these waypoints: ${failedWaypointNames.join(', ')} (report is null below). Do not fabricate conditions for them — note the gap and reason from the waypoints that do have data.\n` : ''}
 Safety report per waypoint in route travel order (JSON; reportCondensed and omittedReportFields identify abridged evidence, never assume omitted fields are clear):
 ${reportsJson}
@@ -582,6 +647,7 @@ Use plain, calm language that feels like advice from an experienced trip partner
         featureFlags,
         partialData,
         routeSource,
+        timing,
         ...(routeSourceDetails ? { routeSourceDetails } : {}),
         ...(terrainProfile ? { terrainProfile } : {}),
         ...(routeMetadata ? { routeMetadata } : {}),

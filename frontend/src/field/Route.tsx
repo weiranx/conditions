@@ -6,7 +6,7 @@ import type { Workspace } from "./model/useWorkspace";
 import { parseGpxFile } from "../lib/gpx";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
-import { buildCheckpointProfile, checkpointTone, hasRouteNumber } from "./route-planning";
+import { buildCheckpointProfile, checkpointTone, describeRouteTiming, hasRouteNumber } from "./route-planning";
 import "./route-planning.css";
 import { RouteProfile, type ProfileStop } from "./sky/RouteProfile";
 
@@ -39,6 +39,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
   const distance = hasRouteNumber(meta?.distanceMiles) ? meta.distanceMiles : hasRouteNumber(lastDistance) ? lastDistance : null;
   const gain = hasRouteNumber(meta?.elevationGainFt) ? meta.elevationGainFt : null;
   const highPoint = hasRouteNumber(meta?.maxElevationFt) ? meta.maxElevationFt : profile ? profile.high : null;
+  const returnStop = result?.summaries.at(-1)?.leg === "return" ? result.summaries.at(-1) : undefined;
   function analyze(name: string, useGpx = false) {
     if (!name.trim() || readOnly || w.routeLoading || !available.routeAnalysis) return;
     w.handleFetchRouteAnalysis(
@@ -75,7 +76,9 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
             {gain !== null && <><strong>{w.formatElevationDeltaDisplay(gain)}</strong> of gain across </>}
             <strong>{result.summaries.length} checkpoints</strong>.{" "}
             {highIndex >= 0 && result.summaries[highIndex].etaTime && (
-              <>You reach the high point, {result.summaries[highIndex].name}, at <strong className={stops[highIndex]?.tone === "over" ? "is-over" : undefined}>{result.summaries[highIndex].etaTime}</strong>. </>
+              <>You reach the high point, {result.summaries[highIndex].name}, at <strong className={stops[highIndex]?.tone === "over" ? "is-over" : undefined}>{result.summaries[highIndex].etaTime}</strong>{returnStop?.etaTime
+                ? <> and are back at the start around <strong>{returnStop.etaTime}</strong>{returnStop.daylight === "dark" ? ", after dark" : ""}</>
+                : null}. </>
             )}
             {overStops > 0
               ? <strong className="is-over">{overStops} {overStops === 1 ? "checkpoint crosses" : "checkpoints cross"} your limits.</strong>
@@ -310,7 +313,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
             <div className="sky-route-itinerary-head">
               <div>
                 <h3>Checkpoint itinerary</h3>
-                <p className="field-muted">Estimated arrivals use your planned duration, not terrain-adjusted pace. Times are local to the objective.</p>
+                <p className="field-muted">{describeRouteTiming(result.timing)} Times are local to the objective.</p>
               </div>
             </div>
             {result.summaries.length === 0 ? (
@@ -333,7 +336,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                       </span>
                       <span>
                         <strong>{point.etaTime || "Time unavailable"}</strong>
-                        <small>{point.etaDate || "Date unavailable"}</small>
+                        <small>{point.etaDate || "Date unavailable"}{point.daylight === "dark" ? " · After dark" : ""}</small>
                       </span>
                       <span>
                         <strong>{point.dataAvailable ? displayNumber(point.weather.temp, w.formatTempDisplay) : "Unavailable"}</strong>
@@ -357,6 +360,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                   {hasRouteNumber(selected.distance_miles) ? `${w.formatDistanceDisplay(selected.distance_miles)} along route` : "Distance unavailable"} · Arrive{" "}
                   {selected.etaDate || ""}{" "}
                   {selected.etaTime || "Time unavailable"}
+                  {selected.daylight === "dark" ? " · after dark" : ""}
                 </p>
                 <dl className="sky-stat-grid">
                   <div>

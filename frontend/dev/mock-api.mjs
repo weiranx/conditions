@@ -475,13 +475,38 @@ export function createMockApi({ databasePath } = {}) {
           lat: Number(body.lat) + 0.01,
           lon: Number(body.lon) + 0.01,
           elev_ft: 10000,
+          progress_percent: 50,
+        },
+        {
+          name: "Return to Demo trailhead",
+          lat: body.lat,
+          lon: body.lon,
+          elev_ft: 6500,
           progress_percent: 100,
+          leg: "return",
         },
       ];
+      const [startHour, startMinute] = String(body.start || "06:00").split(":").map(Number);
+      const windowMinutes = Math.round(Number(body.travel_window_hours) || 12) * 60;
+      const clock = (offset) => {
+        const total = (startHour * 60 + startMinute + offset) % (24 * 60);
+        return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+      };
+      const offsets = [0, Math.round(windowMinutes * 0.6), windowMinutes];
       return ok({
         waypoints,
-        summaries: waypoints.map((w) => ({
+        timing: {
+          basis: "distance-and-vert",
+          roundTrip: true,
+          travelWindowHours: windowMinutes / 60,
+          pace: body.pace || { minutesPerMile: 20, ascentMinutesPer1000Ft: 30 },
+          paceSource: body.pace ? "user" : "default",
+        },
+        summaries: waypoints.map((w, i) => ({
           ...w,
+          etaDate: body.date,
+          etaTime: clock(offsets[i]),
+          offsetMinutes: offsets[i],
           dataAvailable: true,
           score: report.safety.score,
           weather: report.weather,
