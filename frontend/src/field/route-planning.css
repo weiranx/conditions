@@ -103,10 +103,6 @@
 .field-checkpoint { padding: 16px 18px; border-radius: 16px; background: var(--sky-fill); }
 .field-checkpoint h3 { margin: 0; font-size: 18px; font-weight: 700; }
 .field-checkpoint > p { margin: 2px 0 12px; font-size: 14px; color: var(--sky-secondary); }
-.sky-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; margin: 0; }
-.sky-stat-grid dt { font-size: 13px; color: var(--sky-secondary); }
-.sky-stat-grid dd { margin: 2px 0 0; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.sky-stat-grid small { display: block; font-size: 12px; color: var(--sky-secondary); }
 
 @media (max-width: 850px) {
   .field-route-stop { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; }
@@ -114,7 +110,6 @@
   .sky-stat-strip { grid-template-columns: 1fr 1fr; }
   .sky-stat-strip > div:nth-child(3) { border-left: 0; }
   .sky-stat-strip > div:nth-child(n + 3) { border-top: 1px solid var(--sky-separator); }
-  .sky-stat-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 420px) {
   .field-route-stop-place { grid-column: 2 / -1; }

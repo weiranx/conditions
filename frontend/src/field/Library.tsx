@@ -67,8 +67,8 @@ function WatchHistory({ id }: { id: string }) {
     <div className="field-watch-history">
       {loading && <p role="status">Loading check history…</p>}
       {error && (
-        <div className="field-warning" role="alert">
-          <p>{error}</p>
+        <div className="sky-notice is-caution" role="alert">
+          <div><p>{error}</p></div>
           <button
             className="field-button"
             onClick={() => {
@@ -82,18 +82,18 @@ function WatchHistory({ id }: { id: string }) {
         </div>
       )}
       {checks.map((check) => (
-        <article key={check.id}>
-          <span className="field-kicker">
+        <article key={check.id} className={`sky-watch-check is-${check.status}`}>
+          <span className="sky-muted">
             {check.checkType === "manual" ? "Manual check" : "Automatic check"} · {watchCheckLabel(check.status)}
           </span>
           <h3>{sentenceCase(ageLabel(check.checkedAt))}</h3>
           <p>{watchCheckDetail(check)}</p>
-          {check.error && <p className="field-warning">{check.error}</p>}
+          {check.error && <p className="sky-notice is-caution">{check.error}</p>}
           <Details title="Check measurements" value={check.summary} />
         </article>
       ))}
       {!loading && !error && !checks.length && (
-        <p className="field-muted">No checks recorded yet.</p>
+        <p className="sky-cap">No checks recorded yet.</p>
       )}
       <Details title="Change events" value={events} />
     </div>
@@ -210,117 +210,119 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
       setPending("");
     }
   }
+  const policyLine = policy
+    ? `${policy.automaticChecks
+      ? policy.schedulerEnabled
+        ? `Automatic checks ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}.`
+        : "Automatic checks are paused on this server."
+      : `Manual checks · ${policy.manualRefreshCooldownMinutes} minute cooldown.`} ${policy.historyDays} days of check history. ${policy.emailAlerts ? "Email alerts available." : "Email alerts require Premium."}`
+    : "";
   return (
-    <section className="field-library">
+    <section className="field-library sky-screen sky-watchlist">
       <header className="field-page-heading">
         <span className="field-kicker">
           Monitoring
         </span>
         <h1>Watchlist</h1>
-        <p>
-          Follow conditions, review changes, and manage your objective alerts.
+        <p className="sky-lead">
+          {account.user && !loading && items.length > 0
+            ? <><strong>{activeCount} {activeCount === 1 ? "objective" : "objectives"}</strong> being watched{attentionCount > 0
+              ? <>; <strong className="is-over">{attentionCount} {attentionCount === 1 ? "needs" : "need"} attention</strong></> : ""}. </>
+            : null}
+          <span className="sky-lead-note">Follow conditions as the forecast updates, review what changed, and get alerts.</span>
         </p>
       </header>
-      <div className="field-library-bar">
-        <span>
-          {`${activeCount}${policy ? ` / ${policy.activeWatchLimit}` : ""} active watches · ${items.length - activeCount} completed`}
-        </span>
-        <div className="field-action-row">
+      <div className="sky-card sky-filter-bar">
+        <div className="field-library-search">
+          <label htmlFor={searchId} className="sr-only">Find an objective</label>
+          <div className="field-input-icon sky-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              id={searchId}
+              type="search"
+              placeholder="Search by name or date"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {search && (
+              <button type="button" className="field-icon-button" aria-label="Clear search" onClick={() => {
+                setSearch("");
+                document.getElementById(searchId)?.focus({ preventScroll: true });
+              }}><X size={16} /></button>
+            )}
+          </div>
+        </div>
+        <div className="sky-toolbar-actions">
           <button
             className="field-button"
             disabled={loading}
             onClick={() => setRevision((n) => n + 1)}
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={15} aria-hidden="true" />
             Refresh
           </button>
-          <button className="field-button" onClick={() => navigate("planner")}>
+          <button className="field-button field-button-primary" onClick={() => navigate("planner")}>
             Plan an outing
-            <ArrowUpRight size={15} />
+            <ArrowUpRight size={15} aria-hidden="true" />
           </button>
         </div>
       </div>
-      <div className="field-library-search">
-        <label htmlFor={searchId}>Find an objective</label>
-        <div className="field-input-icon">
-          <Search size={17} aria-hidden="true" />
-          <input
-            id={searchId}
-            type="search"
-            placeholder="Search by name or date"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          {search && (
-            <button type="button" className="field-icon-button" aria-label="Clear search" onClick={() => {
-              setSearch("");
-              document.getElementById(searchId)?.focus({ preventScroll: true });
-            }}><X size={16} /></button>
-          )}
-        </div>
-        <p role="status">{query && !loading ? `${resultCount} ${resultCount === 1 ? "result" : "results"}` : ""}</p>
-      </div>
       {items.length > 0 && (
-        <div className="field-watch-filters" role="group" aria-label="Filter watches">
+        <div className="sky-segmented sky-watch-filter field-watch-filters" role="group" aria-label="Filter watches">
           {([
             ['active', 'Active', activeCount], ['attention', 'Needs attention', attentionCount],
             ['ended', 'Completed', items.length - activeCount], ['all', 'All', items.length],
           ] as const).map(([value, label, count]) => (
-            <button type="button" className="field-button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>
-              {label} <span>{count}</span>
+            <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+              {label} <span className="sky-count">{count}</span>
             </button>
           ))}
         </div>
       )}
-      {policy && (
-        <p className="field-feedback">
-          {policy.automaticChecks
-            ? policy.schedulerEnabled
-              ? `Automatic checks ${formatObjectiveWatchCadence(policy.checkIntervalMinutes)}.`
-              : "Automatic checks are paused on this server."
-            : `Manual checks · ${policy.manualRefreshCooldownMinutes} minute cooldown.`}{" "}
-          {policy.historyDays} days of check history.{" "}
-          {policy.emailAlerts
-            ? "Email alerts available."
-            : "Email alerts require Premium."}
-        </p>
-      )}
-      {loading && <p role="status">Loading your plans…</p>}
+      <p className="sky-cap sky-watch-meta" role="status">
+        {query && !loading ? `${resultCount} ${resultCount === 1 ? "result" : "results"} · ` : ""}
+        {`${activeCount}${policy ? ` of ${policy.activeWatchLimit}` : ""} active watches · ${items.length - activeCount} completed`}
+        {policyLine && ` · ${policyLine}`}
+      </p>
+      {loading && <p className="sky-cap" role="status">Loading your plans…</p>}
       {error && (
-        <div className="field-warning" role="alert">
-          <p>{error}</p>
+        <div className="sky-notice is-caution" role="alert">
+          <div><p>{error}</p></div>
           <button className="field-button" disabled={loading || !!pending} onClick={() => setRevision((n) => n + 1)}>Retry loading plans</button>
         </div>
       )}
       {notice && (
-        <p className="field-feedback" role="status">
+        <p className="sky-notice is-info" role="status">
           {notice}
         </p>
       )}
+      <div className="sky-watch-grid">
       {visibleWatches.map((item) => {
           const ended = watchHasEnded(item, now);
           const wait = watchRefreshWait(item, policy, now);
           const latest = item.latestCheck;
+          const attention = watchNeedsAttention(item, policy, now);
+          const state = ended ? 'Completed' : policy?.automaticChecks ? policy.schedulerEnabled ? 'Monitoring' : 'Checks paused' : 'Manual checks';
           return (
-          <article className="field-panel field-watch-card" key={item.id}>
-            <div className="field-panel-heading">
+          <article className={`sky-card field-watch-card${attention ? " is-attention" : ""}${ended ? " is-ended" : ""}`} key={item.id}>
+            <div className="sky-watch-head">
               <div>
-                <span className="field-kicker">
+                <span className="sky-muted">
                   {dateLabel(item.plan.forecastDate)} ·{" "}
                   {item.plan.alpineStartTime} · {item.plan.travelWindowHours}h window
                 </span>
                 <h2>{item.title}</h2>
               </div>
-              <span className="field-watch-state">{ended ? 'Completed' : policy?.automaticChecks ? policy.schedulerEnabled ? 'Monitoring' : 'Checks paused' : 'Manual checks'}</span>
+              <span className={`sky-chip field-watch-state${attention ? " is-over" : ""}`}>{state}</span>
             </div>
-            <p className="field-muted">
+            <p className="sky-cap">
               {ended ? 'Monitoring complete · history remains available' : item.lastCheckedAt ? `Last successful check ${ageLabel(item.lastCheckedAt)}` : 'No successful checks yet'}
               {!ended && policy?.automaticChecks && policy.schedulerEnabled && item.nextCheckAt
                 ? ` · Next check ${new Date(item.nextCheckAt).toLocaleString()}` : ''}
             </p>
             {latest && (
               <section className={`field-watch-latest is-${latest.status}`} aria-label={`${item.title} latest check`}>
-                <div><strong>{watchCheckLabel(latest.status)}</strong>
+                <div className="sky-watch-latest-head"><strong>{watchCheckLabel(latest.status)}</strong>
                   {latest.checkedAt && <time dateTime={latest.checkedAt}>{new Date(latest.checkedAt).toLocaleString()}</time>}
                 </div>
                 {latest.status !== 'failed' && latest.summary && (
@@ -331,27 +333,27 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                     {typeof latest.summary.maxPrecipChance === 'number' && <span>Precipitation <b>{Math.round(latest.summary.maxPrecipChance)}%</b></span>}
                   </p>
                 )}
-                <p>{watchCheckDetail(latest)}</p>
+                <p className="sky-watch-detail">{watchCheckDetail(latest)}</p>
               </section>
             )}
             {!!item.lastChange?.reasons?.length && latest?.status !== 'changed' && (
-              <p className="field-warning">Previous risk increase{item.lastChange.checkedAt ? ` · ${new Date(item.lastChange.checkedAt).toLocaleString()}` : ''}: {item.lastChange.reasons.map((r) => r.label).join(' · ')}</p>
+              <p className="sky-notice is-caution">Previous risk increase{item.lastChange.checkedAt ? ` · ${new Date(item.lastChange.checkedAt).toLocaleString()}` : ''}: {item.lastChange.reasons.map((r) => r.label).join(' · ')}</p>
             )}
             {!ended && isObjectiveWatchCheckOverdue(item, policy, now) && (
-              <p className="field-warning">
+              <p className="sky-notice is-caution">
                 Scheduled check is overdue. Refresh manually and verify the
                 latest source evidence.
               </p>
             )}
             {item.consecutiveFailures > 0 && (
-              <p className="field-warning">
+              <p className="sky-notice is-caution">
                 {item.consecutiveFailures} recent checks failed. The last
                 successful result may be stale.
               </p>
             )}
-            <div className="field-action-row">
+            <div className="sky-watch-actions">
               <button
-                className="field-button"
+                className="field-button field-button-primary"
                 onClick={() => w.handleOpenObjectiveWatch(item.plan)}
               >
                 Plan this objective
@@ -388,7 +390,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                   });
                 }}
               >
-                <RefreshCw size={14} />
+                <RefreshCw size={14} aria-hidden="true" />
                 {pending === item.id ? 'Working…' : ended ? 'Plan completed' : wait > 0 ? `Check in ${Math.ceil(wait / 60000)}m` : 'Check now'}
               </button>
               <button
@@ -402,16 +404,16 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                 Check history
               </button>
               <button
-                className="field-button"
+                className="field-button sky-icon-only"
                 disabled={!!pending}
                 aria-label={`Remove watch for ${item.title}`}
                 onClick={() => setDeleting(item)}
               >
-                <Trash2 size={14} />
+                <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
             {policy?.emailAlerts && (
-              <label className="field-toggle">
+              <label className="sky-switch">
                 <input
                   type="checkbox"
                   checked={item.notificationsEnabled}
@@ -424,6 +426,7 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
                     });
                   }}
                 />
+                <span aria-hidden="true" />
                 {account.user?.emailVerified ? 'Email when risk increases' : 'Verify your email in Account to enable alerts'}
               </label>
             )}
@@ -434,16 +437,17 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
             )}
           </article>
         ); })}
+      </div>
       {!loading && !error && !query && items.length > 0 && visibleWatches.length === 0 && (
-        <div className="field-empty-state">
+        <div className="sky-card sky-empty-card field-empty-state">
           <h2>{filter === 'attention' ? 'No objectives need attention' : filter === 'ended' ? 'No completed plans yet' : 'No active watches'}</h2>
           <p>Completed plans keep their history and do not count toward your active watch limit.</p>
           <button className="field-button" onClick={() => setFilter('all')}>Show all watches</button>
         </div>
       )}
       {!loading && !error && query && resultCount === 0 && (
-        <div className="field-empty-state">
-          <Search size={32} aria-hidden="true" />
+        <div className="sky-card sky-empty-card field-empty-state">
+          <Search size={30} aria-hidden="true" />
           <h2>No matching objectives</h2>
           <p>Try a different name or date, or clear your search to see everything.</p>
           <button className="field-button" onClick={() => { setSearch(""); setFilter('all'); }}>Clear search and show all watches</button>
@@ -451,8 +455,8 @@ function WatchLibrary({ onOpen, navigate, workspace: w }: LibraryProps) {
       )}
       {!loading && !error && !query &&
         (!account.user || items.length === 0) && (
-          <div className="field-empty-state">
-            <Bell size={36} />
+          <div className="sky-card sky-empty-card field-empty-state">
+            <Bell size={30} aria-hidden="true" />
             <h2>
               {account.user
                 ? "No watched objectives yet"

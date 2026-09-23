@@ -1,24 +1,54 @@
-.field-report-history h2 { margin: 0; font: 400 23px var(--f-serif); color: var(--f-ink); }
-.field-history-device { margin-bottom: 36px; padding: 20px; border: 1px solid var(--f-line); border-radius: 12px; background: var(--f-soft); }
-.field-history-device > div > p { margin: 6px 0 0; font-size: 13px; color: var(--f-muted); line-height: 1.5; }
-.field-history-device .field-journal-entry { padding-bottom: 0; border: 0; }
-.field-history-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
-.field-history-filters .field-library-search { flex: 1 1 280px; max-width: none; margin-bottom: 0; }
-.field-history-filters .field-toggle { margin-top: 20px; }
-.field-history-count { min-height: 20px; margin: 16px 0 0; font-size: 12px; color: var(--f-muted); }
-.field-report-history .field-journal-entry > span > span { display: block; font-size: 12px; line-height: 1.65; }
-.field-report-history .field-journal-entry small { font-size: 11px; letter-spacing: .02em; }
-.field-report-history .field-journal-entry strong { overflow-wrap: anywhere; }
-.field-report-history .field-journal-entry b { white-space: nowrap; }
-.field-report-history .field-text-button { min-height: 44px; }
-.field-history-more { display: flex; justify-content: center; padding: 24px 0; }
-.field-history-spinner { animation: field-history-spin 1s linear infinite; flex: none; }
-@keyframes field-history-spin { to { transform: rotate(360deg); } }
-@media (max-width: 650px) {
-  .field-history-device { padding: 16px; }
-  .field-history-filters .field-toggle { margin-top: 0; }
-  .field-report-history .field-journal-icon { display: none; }
+/* Saved reports in the Sky design: a date badge, title, score and arrow per row. */
+.field-history-filters { margin-bottom: 0; }
+.field-history-count { margin: 10px 4px 8px; }
+.field-history-device .sky-row-list { padding: 6px; }
+
+.field-report-history .field-library-entry { position: relative; margin: 0; padding: 0; border: 0; background: none; }
+.field-report-history .sky-row-group + .sky-row-group .field-library-entry { border-top: 1px solid var(--sky-separator); }
+.field-report-history .sky-row-group + .sky-row-group:has(.sky-row-month) .field-library-entry { border-top: 0; }
+.sky-report-row {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) auto 20px; align-items: center; gap: 14px;
+  width: 100%; min-height: 72px; padding: 10px 12px; border: 0; border-radius: 14px; background: none;
+  color: var(--sky-label); font: inherit; text-align: left; cursor: pointer;
 }
-@media (prefers-reduced-motion: reduce) {
-  .field-history-spinner { animation: none; }
+.field-app .sky-report-row:hover { background: color-mix(in srgb, var(--sky-fill) 60%, transparent); }
+.sky-report-row:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: -3px; }
+.sky-report-row:disabled { cursor: default; opacity: 0.7; }
+.sky-report-row > svg { color: var(--sky-secondary); }
+.field-library-entry:has(.sky-row-action) .sky-report-row { padding-right: 118px; grid-template-columns: 48px minmax(0, 1fr) auto; }
+.field-library-entry:has(.sky-row-action) .sky-report-row > svg:last-child { display: none; }
+
+.sky-date-badge { display: grid; place-items: center; width: 48px; height: 52px; border-radius: 12px; background: var(--sky-fill); line-height: 1; }
+.sky-date-badge small { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--sky-caution); letter-spacing: 0.04em; }
+.sky-date-badge strong { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sky-date-badge.is-missing small { color: var(--sky-missing); }
+.sky-report-copy { display: grid; gap: 2px; min-width: 0; }
+.sky-report-copy strong { font-size: 16px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sky-report-copy small { font-size: 13px; color: var(--sky-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sky-report-copy small + small { font-size: 12px; }
+.sky-ai-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--sky-accent); font-weight: 600; }
+.sky-ai-tag svg { vertical-align: -1px; }
+.sky-report-copy small:last-child .sky-ai-tag { display: none; }
+.sky-score-chip { display: inline-flex; align-items: baseline; gap: 1px; padding: 4px 10px; border-radius: 999px; background: var(--sky-fill); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sky-score-chip small { font-size: 11px; font-weight: 500; color: var(--sky-secondary); }
+.sky-score-chip.is-missing { background: transparent; outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; color: var(--sky-missing); }
+.sky-row-action {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.sky-row-action:hover:not(:disabled) { background: color-mix(in srgb, var(--sky-label) 12%, var(--sky-fill)); }
+.sky-row-action:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
+.sky-row-action:disabled { opacity: 0.5; cursor: default; }
+.field-history-more { display: flex; justify-content: center; margin-top: 14px; }
+.field-history-spinner { animation: sky-spin 0.9s linear infinite; }
+@keyframes sky-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .field-history-spinner { animation: none; } }
+
+@media (max-width: 650px) {
+  .sky-report-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; padding: 10px; }
+  .sky-report-row > svg { display: none; }
+  .field-library-entry:has(.sky-row-action) .sky-report-row { padding-right: 10px; padding-bottom: 50px; }
+  .sky-row-action { top: auto; bottom: 10px; right: auto; left: 66px; transform: none; min-height: 32px; }
+  .sky-date-badge { width: 44px; height: 48px; }
 }
