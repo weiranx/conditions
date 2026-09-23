@@ -148,7 +148,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
                     : "The score rates hazards on their own; the decision also checks your limits and timing.")}
               </p>
             </div>
-            <span className="sky-cap">Evidence quality: {data.safety.evidenceQuality || "not assessed"}</span>
+            {data.safety.evidenceQuality && <span className="sky-cap">Evidence quality: {data.safety.evidenceQuality}</span>}
           </div>
         </div>
       </section>
@@ -158,7 +158,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
         <div className="sky-checks">
           <CheckCard title="Weather" onOpen={() => onOpen("forecast")}
             status={overCount ? "over" : missingCount ? "missing" : "ok"}
-            statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} hours incomplete` : "Within limits"}
+            statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` : "Within limits"}
             caption={firstOver ? (firstOver.failedRules[0] ? plainRule(firstOver.failedRules[0]) : "A planned hour crosses your limits.")
               : missingCount ? `${missingCount} planned ${missingCount === 1 ? "hour has" : "hours have"} incomplete readings, so ${missingCount === 1 ? "it" : "they"} can't be confirmed within your limits.`
               : hours.length ? "Every planned hour is within your limits." : "Hourly forecast unavailable."}>

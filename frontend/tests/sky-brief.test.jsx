@@ -83,6 +83,13 @@ test("the sky names the over-limit window and starts on the first hour that need
     /<ul class="sky-limiting" aria-label="Checks setting the decision"><li>Fire danger is elevated \(Moderate\)<\/li><li>Check fire locations<\/li><\/ul>/);
 });
 
+test("a status shows right under the subtitle, before the decision", () => {
+  const hours = buildSkyHours([row({})], plan);
+  const html = hero(hours, { status: <div className="sky-passed">This start has passed.</div> });
+  assert.ok(html.indexOf("sky-passed") > html.indexOf("sky-subtitle"));
+  assert.ok(html.indexOf("sky-passed") < html.indexOf("field-verdict-title"));
+});
+
 test("missing hours are never described as within limits", () => {
   const hours = buildSkyHours([row({ complete: false, pass: false, gust: NaN, temp: NaN })], plan);
   const html = hero(hours);

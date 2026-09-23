@@ -312,7 +312,7 @@ export function Report({
           </div>
         </div>
       )}
-      {passed && (
+      {passed && activeView !== "brief" && (
         <div className="sky-notice is-caution">
           <TriangleAlert size={20} aria-hidden="true" />
           <div>
@@ -351,6 +351,17 @@ export function Report({
       <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
     </>
   );
+  // On the brief the passed start leads the hero, before the decision it dates.
+  const passedStatus = passed && !w.viewingHistoryReport ? (
+    <div className="sky-passed" role="status">
+      <Clock3 size={16} aria-hidden="true" />
+      <p><strong>This start has passed.</strong> The forecast is kept for reference.</p>
+      <div className="sky-passed-actions">
+        <button type="button" onClick={w.handleUseNowAfterPastStart}>Start now</button>
+        <button type="button" onClick={w.handleUseTomorrowAfterPastStart}>Start tomorrow</button>
+      </div>
+    </div>
+  ) : null;
   const approachNote = (
     <ApproachNote
       hours={skyHours}
@@ -383,6 +394,7 @@ export function Report({
           kicker={w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"}
           title={report.plan.objectiveName}
           subtitle={subtitle}
+          status={passedStatus}
           level={decision.level}
           headline={decision.headline}
           reason={copy.reason}
