@@ -35,7 +35,7 @@ Run from the repository root:
 npm --prefix frontend run typecheck
 npm --prefix frontend run lint
 npm --prefix frontend run build
-npm --prefix frontend run test:field
+npm --prefix frontend run test:ui
 npm --prefix frontend run test:mock
 git diff --check
 ```

@@ -1,8 +1,6 @@
-const nodeFetch = require('node-fetch');
-
 const DEFAULT_FETCH_HEADERS = { 'User-Agent': 'BackcountryConditions/1.0 (+https://backcountryconditions.app; support@backcountryconditions.app)' };
 
-const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : nodeFetch;
+const fetchImpl = (...args) => globalThis.fetch(...args);
 
 const createFetchWithTimeout = (defaultTimeoutMs) => async (url, options = {}, timeoutMs = defaultTimeoutMs) => {
   const controller = new AbortController();
