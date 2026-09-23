@@ -1,0 +1,119 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Map First</title>
+<style>
+:root{--ink:#10201b;--mute:#5f6d68;--glass:rgba(255,255,255,.86);--line:rgba(16,32,27,.1);--amber:#d98a12;--green:#2f9e62;--red:#d9534f;--sans:'Liberation Sans',Helvetica,Arial,sans-serif}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font:14px/1.45 var(--sans);color:var(--ink);overflow:hidden;background:#cfd8c8}
+#map{position:fixed;inset:0}
+#map svg{width:100%;height:100%}
+.search{position:fixed;top:18px;left:18px;width:400px;display:flex;gap:10px;align-items:center;background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 6px 24px rgba(0,0,0,.15);font-size:15px}
+.search .q{flex:1;font-weight:700}.search .m{color:var(--mute);font-size:13px}
+.panel{position:fixed;top:84px;left:18px;bottom:18px;width:400px;background:var(--glass);backdrop-filter:blur(14px);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,.18);padding:22px;overflow:auto;display:flex;flex-direction:column;gap:18px}
+.handle{display:none}
+.v{display:flex;gap:16px;align-items:center}
+.ring{width:76px;height:76px;flex:none;position:relative}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font:700 26px var(--sans)}
+.v .t{font:700 12px var(--sans);letter-spacing:.1em;color:var(--amber)}
+.v h2{font-size:21px;line-height:1.2;margin-top:4px}
+.p{color:#34423d}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:rgba(16,32,27,.06);border-radius:10px;padding:3px}
+.seg span{text-align:center;padding:7px;border-radius:8px;font-weight:700;font-size:12px;color:var(--mute)}.seg span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.rows{display:grid;gap:2px}
+.rows div{display:grid;grid-template-columns:10px 1fr auto;gap:12px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line)}
+.rows i{width:10px;height:10px;border-radius:50%}
+.rows b{font-size:14px}.rows span{color:var(--mute);font-size:13px;text-align:right}
+.lbl{font:700 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.cp{display:grid;gap:8px}
+.cp div{display:flex;justify-content:space-between;background:#fff;border-radius:10px;padding:10px 12px;border:1px solid var(--line);font-size:13px}
+.cp div b{font-weight:700}.cp em{font-style:normal;font-weight:700}
+.scrub{position:fixed;left:436px;right:18px;bottom:18px;background:var(--glass);backdrop-filter:blur(14px);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.18);padding:14px 18px}
+.scrub .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.scrub .top b{font-size:15px}.scrub .top span{color:var(--mute);font-size:13px}
+.strip{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;position:relative}
+.strip div{height:34px;border-radius:6px;display:grid;place-items:center;color:#fff;font:700 11px var(--sans)}
+.strip .knob{position:absolute;top:-6px;bottom:-6px;width:4px;border-radius:2px;background:var(--ink);left:calc(100%/12*5.5)}
+.ticks{display:grid;grid-template-columns:repeat(12,1fr);font-size:11px;color:var(--mute);text-align:center;margin-top:6px}
+.layers{position:fixed;right:18px;top:18px;display:grid;gap:8px}
+.layers span{background:#fff;border-radius:10px;padding:8px 12px;font-weight:700;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.layers span.on{background:var(--ink);color:#fff}
+.pin{position:fixed;background:#fff;border-radius:10px;padding:6px 10px;font-weight:700;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);white-space:nowrap}
+.pin small{display:block;font-weight:400;color:var(--mute)}
+@media (max-width:700px){
+ .search{left:12px;right:12px;width:auto;top:12px}
+ #map{bottom:auto;height:44%}
+ .layers,.pin.hide-m{display:none}
+ .panel{top:auto;left:0;right:0;bottom:0;width:auto;height:58%;border-radius:22px 22px 0 0;padding:10px 18px 18px}
+ .handle{display:block;width:40px;height:5px;border-radius:3px;background:rgba(0,0,0,.2);margin:0 auto 4px;flex:none}
+ .scrub{left:12px;right:12px;bottom:auto;top:auto;top:calc(42% - 86px);padding:10px 12px}
+ .scrub .top span{display:none}
+ .strip div{height:24px;font-size:0}
+ .ticks{font-size:9px}
+}
+</style></head><body>
+<div id="map">
+<svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+ <defs>
+  <radialGradient id="peak" cx="62%" cy="42%" r="55%"><stop offset="0" stop-color="#f4f1ea"/><stop offset=".18" stop-color="#e6e4dc"/><stop offset=".35" stop-color="#b9c2a8"/><stop offset=".7" stop-color="#9fb08a"/><stop offset="1" stop-color="#8aa078"/></radialGradient>
+  <filter id="sh"><feGaussianBlur stdDeviation="30"/></filter>
+ </defs>
+ <rect width="1440" height="900" fill="url(#peak)"/>
+ <g fill="none" stroke="#5c6b4e" stroke-opacity=".28" id="contours"></g>
+ <path d="M700 240 L1000 520 L1300 560" stroke="#7a6b55" stroke-opacity=".15" stroke-width="80" fill="none" filter="url(#sh)"/>
+ <path id="route" d="M1180 780 C1120 700 1090 650 1040 600 S960 520 940 470 S900 400 895 378" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+ <path d="M1180 780 C1120 700 1090 650 1040 600" fill="none" stroke="#2f9e62" stroke-width="5" stroke-linecap="round"/>
+ <path d="M1040 600 S960 520 940 470 S900 400 895 378" fill="none" stroke="#d98a12" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 0"/>
+ <circle cx="1180" cy="780" r="9" fill="#10201b" stroke="#fff" stroke-width="3"/>
+ <circle cx="1040" cy="600" r="7" fill="#fff" stroke="#10201b" stroke-width="3"/>
+ <circle cx="940" cy="470" r="7" fill="#fff" stroke="#10201b" stroke-width="3"/>
+ <path d="M880 390 l15 -28 l15 28z" fill="#10201b" stroke="#fff" stroke-width="3"/>
+</svg>
+</div>
+<div class="pin hide-m" style="left:1040px;top:318px">Objective · 10,738 ft<small>12p · 80% precip · gust 31</small></div>
+<div class="pin hide-m" style="left:1000px;top:560px">Midpoint · 8,900 ft<small>10a · 51°F · gust 22</small></div>
+<div class="pin hide-m" style="left:1200px;top:770px">Trailhead<small>7a · 61°F · calm</small></div>
+
+<div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5f6d68" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span class="q">Mount Shasta</span><span class="m">Wed 23 · 7a · 12h</span></div>
+<div class="layers"><span class="on">Hazard</span><span>Wind</span><span>Snow</span><span>Satellite</span></div>
+
+<div class="panel">
+ <div class="handle"></div>
+ <div class="v">
+  <div class="ring"><svg viewBox="0 0 76 76"><circle cx="38" cy="38" r="32" stroke="#e5e2d9" stroke-width="8" fill="none"/><circle cx="38" cy="38" r="32" stroke="#d98a12" stroke-width="8" fill="none" stroke-dasharray="148.8 201" stroke-linecap="round" transform="rotate(-90 38 38)"/></svg><b>74</b></div>
+  <div><div class="t">CAUTION</div><h2>Top out by 11:30, then get low.</h2></div>
+ </div>
+ <p class="p">The route goes amber on the upper half at midday: rain chances hit 80% with gusts to 31 mph. Morning and late afternoon are fine.</p>
+ <div class="seg"><span class="on">Overview</span><span>Hourly</span><span>Terrain</span></div>
+ <div class="rows">
+  <div><i style="background:var(--amber)"></i><b>Weather</b><span>80% precip · 31 mph</span></div>
+  <div><i style="background:var(--green)"></i><b>Daylight</b><span>+30 min buffer</span></div>
+  <div><i style="background:var(--green)"></i><b>Surface</b><span>Dry below 12k ft</span></div>
+  <div><i style="background:var(--green)"></i><b>Avalanche</b><span>Off-season</span></div>
+  <div><i style="background:var(--green)"></i><b>Air & fire</b><span>AQI 32 · low</span></div>
+  <div><i style="background:#aaa"></i><b>Alerts</b><span>Feed missing</span></div>
+ </div>
+ <div class="lbl">Along the route</div>
+ <div class="cp">
+  <div><b>Trailhead · 7:00a</b><em style="color:var(--green)">Go</em></div>
+  <div><b>Midpoint · 10:00a</b><em style="color:var(--green)">Go</em></div>
+  <div><b>Objective · 12:00p</b><em style="color:var(--amber)">Review</em></div>
+ </div>
+</div>
+
+<div class="scrub">
+ <div class="top"><b>12:00 PM · 42°F · gust 31 mph · 80% precip</b><span>Drag to see conditions along the route</span></div>
+ <div class="strip" id="strip"></div>
+ <div class="ticks" id="ticks"></div>
+</div>
+<script src="shared.js"></script>
+<script>
+const g=document.getElementById('contours');let c='';
+for(let i=1;i<=22;i++){const rx=40+i*38,ry=28+i*27;c+=`<ellipse cx="${900+i*6}" cy="${380+i*5}" rx="${rx}" ry="${ry}" transform="rotate(${-18+i} ${900} ${380})" stroke-width="${i%5?1:2}"/>`;}
+g.innerHTML=c;
+const H=window.HOURS;
+if(innerWidth<700)document.querySelector('#map svg').setAttribute('viewBox','700 250 640 580');
+document.getElementById('strip').innerHTML=H.map(h=>`<div style="background:${h.ok?'#2f9e62':'#d98a12'}">${h.t}°</div>`).join('')+'<span class="knob"></span>';
+document.getElementById('ticks').innerHTML=H.map(h=>`<span>${h.h}</span>`).join('');
+</script>
+</body></html>

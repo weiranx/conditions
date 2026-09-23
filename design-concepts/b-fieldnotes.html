@@ -1,0 +1,133 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Field Notes</title>
+<style>
+:root{--paper:#f6f2ea;--card:#fffdf8;--ink:#1f2a24;--mute:#6b736c;--line:#e2dccf;--forest:#24453a;--amber:#b86b12;--amberbg:#fbecd3;--green:#2f7a4f;--greenbg:#e2f0e6;--sky:#3b6f9e;--serif:Georgia,'Liberation Serif','DejaVu Serif',serif;--sans:'Liberation Sans',Helvetica,Arial,sans-serif}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans)}
+header{display:flex;align-items:center;gap:28px;padding:18px 48px;border-bottom:1px solid var(--line)}
+.brand{font:700 17px var(--serif);display:flex;gap:10px;align-items:center}
+.brand svg{width:22px;stroke:var(--forest);fill:none;stroke-width:2}
+header nav{display:flex;gap:22px;font-size:14px;color:var(--mute)}
+header nav a.on{color:var(--ink);font-weight:700;border-bottom:2px solid var(--forest);padding-bottom:4px}
+header .sp{flex:1}
+.av{width:32px;height:32px;border-radius:50%;background:var(--forest);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+.wrap{max-width:1180px;margin:0 auto;padding:36px 48px 60px;display:grid;grid-template-columns:1fr 330px;gap:48px}
+.wrap>*{min-width:0}
+.kicker{font:700 12px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+h1{font:400 56px/1.02 var(--serif);letter-spacing:-.02em;margin:10px 0 12px}
+.meta{color:var(--mute);display:flex;gap:16px;flex-wrap:wrap;font-size:14px}
+.meta b{color:var(--ink)}
+.verdict{margin-top:28px;background:var(--amberbg);border-radius:18px;padding:26px 28px;display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:start}
+.stamp{width:92px;height:92px;border-radius:50%;border:3px solid var(--amber);color:var(--amber);display:grid;place-items:center;text-align:center;transform:rotate(-8deg);font:700 11px/1.15 var(--sans);letter-spacing:.08em}
+.stamp b{display:block;font:700 30px/1 var(--serif);letter-spacing:0}
+.verdict h2{font:400 30px/1.15 var(--serif);color:#5a3408}
+.verdict p{margin-top:10px;color:#5c4a33;max-width:560px}
+.verdict .rule{margin-top:14px;display:inline-flex;gap:8px;align-items:center;background:#fff8ec;border:1px solid #efd4a6;border-radius:999px;padding:7px 14px;font-weight:700;font-size:13px;color:#7a4608}
+section{margin-top:40px}
+section h3{font:400 26px var(--serif);margin-bottom:4px}
+section .sub{color:var(--mute);font-size:14px;margin-bottom:18px}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 20px 14px}
+.chart{overflow-x:auto}.chart svg{width:100%;min-width:560px;height:auto;display:block}
+.hz{display:grid;gap:10px}
+.hz div{display:grid;grid-template-columns:28px 130px 1fr auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.hz .ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700}
+.hz .ok .ic{background:var(--greenbg);color:var(--green)}
+.hz .warn .ic{background:var(--amberbg);color:var(--amber)}
+.hz .gap .ic{background:#ececec;color:#777}
+.hz b{font-size:15px}.hz span{color:var(--mute);font-size:14px}.hz em{font-style:normal;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.hz .ok em{color:var(--green)}.hz .warn em{color:var(--amber)}.hz .gap em{color:#888}
+aside{display:grid;gap:18px;align-content:start;position:sticky;top:24px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+.box h4{font:400 20px var(--serif);margin-bottom:12px}
+.score{display:flex;align-items:baseline;gap:8px}.score b{font:400 54px/1 var(--serif)}.score span{color:var(--mute)}
+.bar{height:8px;border-radius:4px;background:var(--line);margin:12px 0 8px;overflow:hidden}.bar i{display:block;height:100%;width:74%;background:linear-gradient(90deg,var(--amber),#d9a441)}
+.small{font-size:13px;color:var(--mute)}
+.pack li{list-style:none;display:flex;gap:10px;padding:8px 0;border-top:1px dashed var(--line);font-size:14px}
+.pack li:first-child{border-top:0}.pack{padding:0}
+.pack i{width:18px;height:18px;border:1.5px solid var(--forest);border-radius:5px;flex:none;margin-top:2px}
+.pack i.c{background:var(--forest)}
+.acts{display:flex;gap:8px}.acts button{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--card);font:700 13px var(--sans);color:var(--ink)}
+.acts button.p{background:var(--forest);color:#fff;border-color:var(--forest)}
+@media (max-width:700px){
+ header{padding:14px 16px}header nav{display:none}
+ .wrap{grid-template-columns:1fr;padding:20px 16px 40px;gap:24px}
+ h1{font-size:38px}
+ .verdict{grid-template-columns:1fr;padding:20px}
+ .stamp{width:76px;height:76px;position:absolute;right:30px;margin-top:-34px}.stamp b{font-size:24px}
+ .verdict{position:relative}
+ .verdict h2{font-size:24px;padding-right:70px}
+ .hz div{grid-template-columns:26px 1fr auto}.hz span{grid-column:2/4;margin-top:-8px}
+ aside{position:static}
+ section{margin-top:28px}
+}
+</style></head><body>
+<header>
+ <div class="brand"><svg viewBox="0 0 24 24"><path d="M2 20l7-13 4 7 3-4 6 10z"/></svg>Backcountry Conditions</div>
+ <nav><a class="on">Brief</a><a>Plan</a><a>Compare</a><a>Saved</a><a>Watchlist</a></nav>
+ <span class="sp"></span><div class="av">WX</div>
+</header>
+<div class="wrap">
+ <main>
+  <div class="kicker">Conditions brief · Wednesday, September 23</div>
+  <h1>Mount Shasta</h1>
+  <div class="meta"><span><b>7:00 AM</b> start</span><span><b>12 h</b> outside</span><span><b>10,738 ft</b></span><span>Mountain hiking</span></div>
+
+  <div class="verdict">
+   <div class="stamp"><div><b>74</b>CAUTION</div></div>
+   <div>
+    <h2>A good morning, a wet afternoon. Be off the exposed ground by noon.</h2>
+    <p>Rain chances climb to 80% at midday with gusts to 31 mph, and temperatures dip to 25°F by 2 PM. Clears again by 4 PM, and you'll finish 30 minutes before sunset.</p>
+    <span class="rule">⟲ Suggested turnaround · 11:30 AM</span>
+   </div>
+  </div>
+
+  <section>
+   <h3>The shape of your day</h3>
+   <div class="sub">Temperature, gusts and rain chance, hour by hour. Shaded hours fall outside your limits.</div>
+   <div class="chart" id="chart"></div>
+  </section>
+
+  <section>
+   <h3>What we checked</h3>
+   <div class="sub">Six signals, one line each. Tap any row for the full evidence.</div>
+   <div class="hz">
+    <div class="warn"><i class="ic">!</i><b>Weather</b><span>80% precip at noon, gusts 31 mph</span><em>Review</em></div>
+    <div class="ok"><i class="ic">✓</i><b>Daylight</b><span>Back at 7:00 PM, sunset 7:30 PM</span><em>OK</em></div>
+    <div class="ok"><i class="ic">✓</i><b>Trail surface</b><span>Mostly dry; snow above 12,000 ft</span><em>OK</em></div>
+    <div class="ok"><i class="ic">✓</i><b>Avalanche</b><span>Off-season, no bulletin issued</span><em>OK</em></div>
+    <div class="ok"><i class="ic">✓</i><b>Air & fire</b><span>AQI 32 · fire risk low</span><em>OK</em></div>
+    <div class="gap"><i class="ic">?</i><b>Alerts</b><span>NWS alert feed didn't respond</span><em>Missing</em></div>
+   </div>
+  </section>
+ </main>
+ <aside>
+  <div class="box">
+   <div class="kicker">Safety score</div>
+   <div class="score"><b>74</b><span>/ 100 · low risk</span></div>
+   <div class="bar"><i></i></div>
+   <div class="small">The score measures hazards. The call above also weighs your limits and timing.</div>
+  </div>
+  <div class="box">
+   <h4>Pack for this</h4>
+   <ul class="pack"><li><i class="c"></i>Hard shell and warm layer</li><li><i></i>Microspikes above 12k ft</li><li><i></i>Headlamp (30 min buffer)</li><li><i></i>Set watch alarm for 11:30 AM</li></ul>
+  </div>
+  <div class="acts"><button>Share</button><button>Watch</button><button class="p">Edit plan</button></div>
+ </aside>
+</div>
+<script src="shared.js"></script>
+<script>
+const H=window.HOURS,W=760,Ht=300,pl=34,pr=34,pt=16,pb=100,n=H.length,cw=(W-pl-pr)/n;
+const x=i=>pl+cw*i+cw/2,yT=t=>pt+(1-(t-20)/50)*(Ht-pt-pb);
+let s=`<svg viewBox="0 0 ${W} ${Ht}" font-family="Liberation Sans,Arial" font-size="11">`;
+H.forEach((h,i)=>{if(!h.ok)s+=`<rect x="${pl+cw*i}" y="${pt}" width="${cw}" height="${Ht-pt-pb}" fill="#fbecd3"/>`;});
+s+=`<text x="${pl+cw*5+4}" y="${pt+12}" fill="#b86b12" font-weight="700">OUTSIDE LIMITS</text>`;
+H.forEach((h,i)=>{const base=Ht-8,bh=Math.max(2,h.p/100*44);s+=`<rect x="${x(i)-cw*.3}" y="${base-bh}" width="${cw*.6}" height="${bh}" rx="3" fill="#3b6f9e" opacity="${.3+h.p/140}"/>`;if(h.p>=20)s+=`<text x="${x(i)}" y="${base-bh-4}" text-anchor="middle" fill="#3b6f9e" font-weight="700">${h.p}%</text>`});s+=`<text x="4" y="${Ht-10}" fill="#3b6f9e">rain</text>`;
+s+=`<line x1="${pl}" x2="${W-pr}" y1="${yT(32)}" y2="${yT(32)}" stroke="#3b6f9e" stroke-dasharray="3 4"/><text x="${W-pr}" y="${yT(32)-5}" text-anchor="end" fill="#3b6f9e">freezing</text>`;
+s+=`<path d="${H.map((h,i)=>(i?'L':'M')+x(i)+' '+yT(h.t)).join('')}" fill="none" stroke="#1f2a24" stroke-width="2.5" stroke-linejoin="round"/>`;
+H.forEach((h,i)=>{s+=`<circle cx="${x(i)}" cy="${yT(h.t)}" r="3.5" fill="#fffdf8" stroke="#1f2a24" stroke-width="2"/><text x="${x(i)}" y="${yT(h.t)-9}" text-anchor="middle" fill="#1f2a24" font-weight="700">${h.t}°</text>`;
+ s+=`<text x="${x(i)}" y="${Ht-pb+16}" text-anchor="middle" fill="#6b736c">${h.h}</text><text x="${x(i)}" y="${Ht-pb+32}" text-anchor="middle" fill="${h.g>25?'#b86b12':'#9aa19b'}" font-weight="${h.g>25?700:400}">${h.g}</text>`});
+s+=`<text x="4" y="${Ht-pb+32}" fill="#9aa19b">gust</text></svg>`;
+document.getElementById('chart').innerHTML=s;
+</script>
+</body></html>
