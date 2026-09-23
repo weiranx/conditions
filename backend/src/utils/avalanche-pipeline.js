@@ -574,8 +574,31 @@ async function tryScraperFallback({
 /**
  * Applies post-fetch processing: derived danger, expiry checks, and staleness warnings.
  */
+// Centers publish at least every few days in season. A bulletin whose publish and expiry
+// times are both older than this is the last product of a closed season, not stale data.
+const AVALANCHE_SEASON_CLOSED_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+function markSeasonClosedIfLastBulletinIsOld(avalancheData, nowMs = Date.now()) {
+  if (avalancheData?.coverageStatus !== 'reported') return avalancheData;
+  const publishedMs = parseIsoTimeToMs(avalancheData.publishedTime);
+  const expiresMs = parseIsoTimeToMsWithReference(avalancheData.expiresTime, avalancheData.publishedTime);
+  // One missing timestamp may be a feed problem mid-season, so keep the stale handling.
+  if (publishedMs === null || expiresMs === null) return avalancheData;
+  if (nowMs - Math.max(publishedMs, expiresMs) <= AVALANCHE_SEASON_CLOSED_AFTER_MS) {
+    return avalancheData;
+  }
+  const offSeason = createUnknownAvalancheData('no_active_forecast');
+  return {
+    ...offSeason,
+    center: avalancheData.center || offSeason.center,
+    center_id: avalancheData.center_id || null,
+    zone: avalancheData.zone || null,
+    link: avalancheData.link || null,
+  };
+}
+
 function applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso }) {
-  let result = applyDerivedOverallAvalancheDanger(avalancheData);
+  let result = markSeasonClosedIfLastBulletinIsOld(applyDerivedOverallAvalancheDanger(avalancheData));
 
   const avalancheTargetMs = parseIsoTimeToMs(alertTargetTimeIso);
   const avalancheExpiresMs = parseIsoTimeToMsWithReference(
@@ -623,5 +646,6 @@ function applyAvalanchePostProcessing({ avalancheData, alertTargetTimeIso }) {
 module.exports = {
   fetchAvalanchePipeline,
   applyAvalanchePostProcessing,
+  markSeasonClosedIfLastBulletinIsOld,
   tryScraperFallback,
 };
