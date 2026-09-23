@@ -27,7 +27,7 @@ for i,(fn,title,nav,src) in enumerate(PAGES):
         prev = CHAPTERS[ci-1] if ci>0 else None; nxt = CHAPTERS[ci+1] if ci+1<len(CHAPTERS) else None
         pager = '<nav class="pager" aria-label="Chapters">' + (f'<a href="{prev[0]}"><span>Previous</span><b>‹ {esc(prev[1])}</b></a>' if prev else '<a href="e-sky.html"><span>Back to</span><b>‹ Brief</b></a>') + (f'<a class="next" href="{nxt[0]}"><span>Next</span><b>{esc(nxt[1])} ›</b></a>' if nxt else '<a class="next" href="e-sky.html"><span>Done</span><b>Brief ›</b></a>') + '</nav>'
     else:
-        tool = f'<span class="ttl" style="position:static;transform:none">{esc(title)}</span><span style="flex:1"></span>'
+        tool = '<span style="flex:1"></span>'
         pager = ''
     html = f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">

@@ -312,7 +312,7 @@ a.card .cap{padding-right:22px}
  <nav class="sidebar" aria-label="Main">
   <div class="brand"><svg class="sym"><use href="#s-mtn"/></svg>Backcountry Conditions</div>
   <a class="on" aria-current="page"><svg class="sym"><use href="#s-doc"/></svg>Brief</a>
-  <a><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
+  <a href="e-plan.html"><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
   <a><svg class="sym"><use href="#s-cmp"/></svg>Compare</a>
   <a><svg class="sym"><use href="#s-saved"/></svg>Saved</a>
   <a><svg class="sym"><use href="#s-bell"/></svg>Watchlist</a>
@@ -325,7 +325,7 @@ a.card .cap{padding-right:22px}
    <span class="crumb">Brief</span><span class="inline-title" id="it" aria-hidden="true">Mount Shasta</span><span class="sp"></span>
    <button class="tbtn" aria-label="Share"><svg class="sym"><use href="#s-share"/></svg><span class="lbl">Share</span></button>
    <button class="tbtn" aria-label="Watch for changes"><svg class="sym"><use href="#s-bell"/></svg><span class="lbl">Watch</span></button>
-   <button class="tbtn prominent"><span class="lbl">Edit plan</span></button>
+   <a class="tbtn prominent" href="e-plan.html"><span class="lbl">Edit plan</span></a>
   </div>
 
   <header class="hero" id="hero">
@@ -395,7 +395,7 @@ a.card .cap{padding-right:22px}
    <section>
     <div class="sh"><h3>Checks</h3><p>Open any card for the full evidence.</p></div>
     <div class="checks">
-     <a class="card" href="#">
+     <a class="card" href="e-weather.html">
       <div class="hd">Weather<span class="st over"><svg class="sym"><use href="#s-tri"/></svg>Over 12–4 PM</span></div>
       <svg class="viz" id="wx" viewBox="0 0 240 64" role="img" aria-label="Hourly rain chance, 7 AM to 6 PM; hours 12 to 3 PM exceed your limits."></svg>
       <div class="cap">Rain peaks at 80% and gusts at 31 mph at noon.</div>
@@ -406,7 +406,7 @@ a.card .cap{padding-right:22px}
       <div class="empty">No response from NWS</div>
       <a class="cta" href="#">Open weather.gov</a>
      </div>
-     <a class="card" href="#">
+     <a class="card" href="e-timing.html">
       <div class="hd">Daylight<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>30 min spare</span></div>
       <svg class="viz" viewBox="0 0 240 70" role="img" aria-label="Sunrise 6:52 AM, sunset 7:30 PM. You start at 7 AM and return at 7 PM, 30 minutes before sunset.">
        <line x1="6" y1="58" x2="234" y2="58" class="secS" stroke-opacity=".35"/>
@@ -418,7 +418,7 @@ a.card .cap{padding-right:22px}
       <div class="cap">Back at 7:00 PM, sunset 7:30 PM.</div>
       <svg class="sym chev"><use href="#s-chev"/></svg>
      </a>
-     <a class="card" href="#">
+     <a class="card" href="e-terrain.html">
       <div class="hd">Terrain &amp; snow<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Mostly dry</span></div>
       <svg class="viz" viewBox="0 0 240 70" role="img" aria-label="Snow line near 12,000 feet; your objective at 10,738 feet is below it.">
        <path d="M0 68 L70 34 L96 42 L132 8 L170 38 L196 30 L240 68Z" class="mtn"/>
@@ -430,7 +430,7 @@ a.card .cap{padding-right:22px}
       <div class="cap">Dry below the snow line; fresh snow up high.</div>
       <svg class="sym chev"><use href="#s-chev"/></svg>
      </a>
-     <a class="card" href="#">
+     <a class="card" href="e-terrain.html">
       <div class="hd">Avalanche<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>No bulletin</span></div>
       <svg class="viz" viewBox="0 0 240 56" role="img" aria-label="No avalanche danger rating is issued for this date.">
        <g><rect x="0" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="49" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="98" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="147" y="14" width="44" height="18" rx="5" class="fillc"/><rect x="196" y="14" width="44" height="18" rx="5" class="fillc"/></g>
@@ -440,7 +440,7 @@ a.card .cap{padding-right:22px}
       <div class="cap">No avalanche forecast is issued for this date.</div>
       <svg class="sym chev"><use href="#s-chev"/></svg>
      </a>
-     <a class="card" href="#">
+     <a class="card" href="e-weather.html">
       <div class="hd">Air &amp; fire<span class="st ok"><svg class="sym"><use href="#s-check"/></svg>Low risk</span></div>
       <svg class="viz" viewBox="0 0 240 70" role="img" aria-label="Air quality index 32, good. Fire risk low.">
        <path d="M40 64 A56 56 0 0 1 152 64" fill="none" class="okS" stroke-width="10" stroke-linecap="round"/>
@@ -464,13 +464,21 @@ a.card .cap{padding-right:22px}
      <label class="card item"><input type="checkbox" aria-label="Headlamp"><span class="tick"></span><span class="ic"><svg class="sym"><use href="#s-lamp"/></svg></span><span class="name">Headlamp</span><span class="why">Only <b>30 min</b> of daylight spare</span></label>
     </div>
    </section>
+   <section>
+    <div class="sh"><h3>More in this brief</h3></div>
+    <div class="group">
+     <a class="row" href="e-route.html"><span class="k">Route<small>11.8 mi · 3,790 ft gain · 7 checkpoints</small></span><span class="st over"><svg class="sym"><use href="#s-tri"/></svg>2 in storm</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+     <a class="row" href="e-sources.html"><span class="k">Checks &amp; sources<small>5 of 8 current · what changed since yesterday</small></span><span class="st missing"><svg class="sym"><use href="#s-q"/></svg>1 failed</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+     <a class="row" href="e-gear.html"><span class="k">Gear &amp; actions<small>What to pack and when you'll need it</small></span><span class="st ok">1 of 8 packed</span><svg class="sym chev"><use href="#s-chev"/></svg></a>
+    </div>
+   </section>
   </main>
  </div>
 </div>
 
 <nav class="tabbar" aria-label="Main">
  <a class="on" aria-current="page"><svg class="sym"><use href="#s-doc"/></svg>Brief</a>
- <a><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
+ <a href="e-plan.html"><svg class="sym"><use href="#s-plan"/></svg>Plan</a>
  <a><svg class="sym"><use href="#s-cmp"/></svg>Compare</a>
  <a><svg class="sym"><use href="#s-saved"/></svg>Saved</a>
  <a><svg class="sym"><use href="#s-bell"/></svg>Watchlist</a>
