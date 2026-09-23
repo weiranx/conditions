@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { DaylightChart } from "./DaylightChart";
+import { ContingencyCard } from "./ContingencyCard";
 import { Thresholds } from "./Settings";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { minutesToTwentyFourHourClock, parseTimeInputMinutes } from "../app/core";
@@ -231,6 +232,18 @@ export function Timing({ workspace: w, hours }: { workspace: Workspace; hours: S
           </details>
         </section>
       </div>
+
+      {flags.contingencyPlanning && w.safetyData?.contingency?.status === "ok" && (
+        <div className="sky-section">
+          <ContingencyCard
+            contingency={w.safetyData.contingency}
+            returnMinutes={Number.isFinite(w.returnMinutes) ? (w.returnMinutes as number) : null}
+            clock={clock}
+            formatTemp={(value) => w.formatTempDisplay(value)}
+            formatWind={(value) => w.formatWindDisplay(value)}
+          />
+        </div>
+      )}
     </div>
   );
 }

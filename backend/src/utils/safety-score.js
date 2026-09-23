@@ -5,13 +5,14 @@ const { parseWindMph } = require('./wind');
 const { clampTravelWindowHours, parseClockToMinutes, parseIsoClockMinutes } = require('./time');
 const { normalizeAlertSeverity } = require('./alerts');
 const { deriveTerrainCondition } = require('./terrain-condition');
+const { describeOnset } = require('./contingency');
 
 // --- Scoring Config: all thresholds, group scales, tier definitions ---
 // scoreVersion is stamped onto every result so logged scores stay comparable
 // across threshold changes. Bump it whenever any value in `thresholds`,
 // `groupScales`, `maxScore`, or `tiers` changes in a way that shifts outputs.
 const SCORING_CONFIG = {
-  scoreVersion: '2.10.0',
+  scoreVersion: '2.11.0',
   maxScore: 100,
   scorePrecision: 1,
 
@@ -211,6 +212,18 @@ const SCORING_CONFIG = {
       deepImpact: 3,
     },
     darknessImpact: 5,
+    // A hazard that starts in the hours just after the planned return (and is
+    // absent from the trip window) costs margin if the party runs late.
+    delayMargin: {
+      storm: 5,
+      freezingRain: 5,
+      severeWind: 4,
+      heavyPrecip: 3,
+      extremeCold: 3,
+      perAdditionalHazard: 1,
+      maxImpact: 8,
+      lateOnsetMultiplier: 0.6,
+    },
     volatilityRange: 18,
     volatilityImpact: 6,
     alerts: { extreme: 24, severe: 16, moderate: 10, minor: 5 },
@@ -323,6 +336,7 @@ const calculateSafetyScore = ({
   selectedTravelWindowHours = null,
   scoreFeatures = null,
   includeAvalanche = true,
+  contingencyData = null,
 }) => {
   const T = SCORING_CONFIG.thresholds;
   const explanations = [];
@@ -337,6 +351,7 @@ const calculateSafetyScore = ({
   const windLoadingEnabled = scoreFeatureEnabled('windLoadingDetails');
   const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
   const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
+  const contingencyEnabled = scoreFeatureEnabled('contingencyPlanning');
 
   const mapHazardToGroup = (hazard) => {
     const normalized = String(hazard || '').toLowerCase();
@@ -895,6 +910,28 @@ const calculateSafetyScore = ({
 
   if (daylightEnabled && isDaytime === false && !isNightBeforeSunrise) {
     applyFactor('Darkness', T.darknessImpact, 'Selected forecast period is nighttime, reducing navigation margin and terrain visibility.', `${weatherProvider(weatherData)} isDaytime flag`);
+  }
+
+  const delayBuffer = contingencyEnabled ? contingencyData?.delayBuffer : null;
+  const delayOnsets = Array.isArray(delayBuffer?.onsetHazards)
+    ? delayBuffer.onsetHazards.filter((hazard) => Number.isFinite(T.delayMargin[hazard?.key]))
+    : [];
+  if (delayOnsets.length > 0) {
+    const DM = T.delayMargin;
+    const earliest = delayOnsets.reduce((min, hazard) => Math.min(min, Number(hazard.hoursAfterReturn) || 0), Number.POSITIVE_INFINITY);
+    const baseImpact = Math.max(...delayOnsets.map((hazard) => DM[hazard.key])) + (delayOnsets.length - 1) * DM.perAdditionalHazard;
+    // Hazards arriving in the back half of the buffer need a longer delay to matter.
+    const lateOnset = earliest >= (Number(delayBuffer.hours) || 0) / 2;
+    const impact = Math.round(Math.min(DM.maxImpact, baseImpact) * (lateOnset ? DM.lateOnsetMultiplier : 1));
+    const described = delayOnsets
+      .map((hazard) => `${String(hazard.label || hazard.key).toLowerCase()} ${describeOnset(Number(hazard.hoursAfterReturn) || 0)}`)
+      .join('; ');
+    applyFactor(
+      'Delay Margin',
+      impact,
+      `A late return would run into new hazards: ${described}. Keep a firm turnaround.`,
+      `${weatherProvider(weatherData)} hourly forecast past the travel window`,
+    );
   }
 
   if (Number.isFinite(tempRange) && tempRange >= T.volatilityRange) {

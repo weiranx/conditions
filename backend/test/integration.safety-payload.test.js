@@ -188,6 +188,13 @@ describe('/api/safety response payload (mocked upstreams)', () => {
       dailyTempLowF: 50,
     });
     expect(typeof res.body.weather.generatedTime).toBe('string');
+    // Post-window rows feed the late-return scenarios but stay out of the payload.
+    expect(res.body.weather.afterWindowTrend).toBeUndefined();
+    expect(res.body.contingency).toMatchObject({
+      status: 'ok',
+      delayBuffer: expect.objectContaining({ hours: expect.any(Number) }),
+      overnight: expect.objectContaining({ status: expect.any(String) }),
+    });
     expect(res.body.avalanche).toBeTruthy();
     expect(res.body.alerts).toBeTruthy();
     expect(res.body.airQuality).toBeTruthy();

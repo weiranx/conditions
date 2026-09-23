@@ -6,6 +6,13 @@
 .sky-lead .is-over { color: var(--sky-caution); }
 .sky-lead .is-cold { color: var(--sky-cold); }
 .sky-lead .is-missing { color: var(--sky-missing); }
+
+.sky-contingency .is-over { color: var(--sky-caution); }
+.sky-contingency-night { margin-top: 10px; }
+.sky-contingency-level { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--sky-fill); color: var(--sky-secondary); }
+.sky-contingency-level.is-moderate,
+.sky-contingency-level.is-high { color: var(--sky-caution); }
+.sky-contingency-level.is-high { box-shadow: inset 0 0 0 1.5px var(--sky-caution); }
 .sky-lead-note { color: var(--sky-secondary); }
 
 /* Segmented control: one choice from a short set. */

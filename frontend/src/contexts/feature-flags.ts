@@ -20,6 +20,7 @@ export const PRODUCT_FEATURE_KEYS = [
   'gearRecommendations',
   'windLoadingDetails',
   'daylightTimeline',
+  'contingencyPlanning',
   'scoreBreakdown',
   'weatherContextDetails',
   'avalancheDetails',
@@ -36,6 +37,7 @@ export const SCORE_AFFECTING_FEATURE_KEYS = [
   'fieldObservations',
   'windLoadingDetails',
   'daylightTimeline',
+  'contingencyPlanning',
   'weatherContextDetails',
 ] as const satisfies readonly ProductFeatureKey[];
 
@@ -59,6 +61,7 @@ export const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   gearRecommendations: true,
   windLoadingDetails: true,
   daylightTimeline: true,
+  contingencyPlanning: true,
   scoreBreakdown: true,
   weatherContextDetails: true,
   avalancheDetails: true,
