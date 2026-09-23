@@ -1,8 +1,12 @@
 import { useId } from "react";
 import type { ElevationForecastBand } from "../../app/types";
 import { useWidth } from "./useWidth";
+import { spreadLabels } from "./spread-labels";
 
 type Level = { label: string; ft: number; tone: "cold" | "snow" };
+
+/** Vertical space one band label (name line + temperature line) needs. */
+const BAND_LABEL_GAP = 38;
 
 /**
  * The mountain in cross-section at the planned start: forecast bands by
@@ -29,7 +33,7 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
   const levelsInView = levels.filter((l) => Number.isFinite(l.ft) && l.ft > base - 3000 && l.ft < top + 4000);
   const lo = Math.min(base, ...levelsInView.map((l) => l.ft)) - 600;
   const hi = Math.max(top, ...levelsInView.map((l) => l.ft)) + 900;
-  const height = width < 560 ? 280 : 320;
+  const height = Math.max(width < 560 ? 280 : 320, sorted.length * BAND_LABEL_GAP + 40);
   const side = width < 560 ? 132 : 190;
   const plotW = width - side;
   const y = (ft: number) => 16 + (1 - (ft - lo) / (hi - lo)) * (height - 32);
@@ -52,6 +56,7 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
     }
     return yy > pts[0][1] ? 0 : peakX;
   };
+  const labelYs = spreadLabels(sorted.map((b) => y(b.elevationFt)), BAND_LABEL_GAP, 20, height - 20);
   const snow = levelsInView.find((l) => l.tone === "snow");
   const describe = [
     ...sorted.map((b) => `${b.label} ${format.elevation(b.elevationFt)}: ${format.temp(b.temp)}, gusts ${format.wind(b.windGust)}`),
@@ -77,15 +82,19 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
             <text x="10" y={y(l.ft) - 6}>{l.label} {format.elevation(l.ft)}</text>
           </g>
         ))}
-        {sorted.map((b) => (
-          <g key={b.label} className="mt-band">
-            <line x1={ridgeX(b.elevationFt)} x2={width} y1={y(b.elevationFt)} y2={y(b.elevationFt)} />
-            <text x={plotW + 12} y={y(b.elevationFt) - 5} className="mt-band-name">{b.label} · {format.elevation(b.elevationFt)}</text>
-            <text x={plotW + 12} y={y(b.elevationFt) + 13} className={`mt-band-temp${b.temp <= 32 ? " is-cold" : ""}`}>
-              {format.temp(b.temp)} · {format.wind(b.windGust)} gust
-            </text>
-          </g>
-        ))}
+        {sorted.map((b, i) => {
+          const by = y(b.elevationFt);
+          const ly = labelYs[i];
+          return (
+            <g key={b.label} className="mt-band">
+              <polyline points={`${ridgeX(b.elevationFt).toFixed(1)},${by.toFixed(1)} ${plotW},${by.toFixed(1)} ${plotW + 8},${ly.toFixed(1)} ${width},${ly.toFixed(1)}`} />
+              <text x={plotW + 12} y={ly - 5} className="mt-band-name">{b.label} · {format.elevation(b.elevationFt)}</text>
+              <text x={plotW + 12} y={ly + 14} className={`mt-band-temp${b.temp <= 32 ? " is-cold" : ""}`}>
+                {format.temp(b.temp)} · {format.wind(b.windGust)} gust
+              </text>
+            </g>
+          );
+        })}
         {target && (
           <g className="mt-target">
             <line x1={ridgeX(target.ft)} x2={plotW} y1={y(target.ft)} y2={y(target.ft)} strokeDasharray="2 3" />
