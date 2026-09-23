@@ -112,6 +112,54 @@ test('an hourly blizzard enforces the High floor', () => {
   expect(result.factors.some((factor) => factor.hazard === 'Winter Weather')).toBe(true);
 });
 
+test.each([
+  [-25, 69, /30 minutes/],
+  [-40, 54, /10 minutes/],
+])('apparent temperature of %pF enforces a frostbite floor', (feelsLike, maxScore, reason) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    temp: 10, feelsLike: 10,
+    trend: calmWeather().trend.map((row, i) => i === 4 ? { ...row, temp: 10, feelsLike } : { ...row, temp: 10, feelsLike: 10 }),
+  }) });
+  expect(result.score).toBeLessThanOrEqual(maxScore);
+  expect(result.groupImpacts.weather.floorReason).toMatch(reason);
+});
+
+test('colder frostbite bands never score better than milder ones', () => {
+  const scoreAt = (feelsLike) => calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    temp: feelsLike, feelsLike, trend: calmWeather().trend.map((row) => ({ ...row, temp: feelsLike, feelsLike })),
+  }) }).score;
+  expect(scoreAt(-40)).toBeLessThan(scoreAt(-25));
+  expect(scoreAt(-25)).toBeLessThan(scoreAt(-5));
+});
+
+test.each([[4, 69, /Extreme heat/], [3, 84, /High heat/]])('heat risk level %p enforces a weather floor', (level, maxScore, reason) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), heatRiskData: { status: 'ok', level, label: 'Heat' } });
+  expect(result.score).toBeLessThanOrEqual(maxScore);
+  expect(result.groupImpacts.weather.floorReason).toMatch(reason);
+});
+
+test.each([[4, 69, /Extreme fire/], [3, 84, /High fire/]])('fire level %p enforces a fire floor', (level, maxScore, reason) => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), fireRiskData: { status: 'ok', level } });
+  expect(result.score).toBeLessThanOrEqual(maxScore);
+  expect(result.groupImpacts.fire.floorReason).toMatch(reason);
+});
+
+test('hourly freezing rain outweighs generic winter weather and enforces the Elevated floor', () => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row, i) => i === 5 ? { ...row, temp: 31, precipChance: 60, condition: 'Freezing Rain' } : row),
+  }) });
+  expect(result.score).toBeLessThanOrEqual(69);
+  expect(result.groupImpacts.weather.floorReason).toMatch(/Freezing rain/);
+  expect(result.factors).toEqual(expect.arrayContaining([expect.objectContaining({ hazard: 'Winter Weather', impact: 14 })]));
+});
+
+test('a low-probability freezing drizzle hour does not enforce the icing floor', () => {
+  const result = calculateSafetyScore({ ...baseSafetyInput(), weatherData: calmWeather({
+    trend: calmWeather().trend.map((row, i) => i === 5 ? { ...row, precipChance: 15, condition: 'Slight Chance Freezing Drizzle' } : row),
+  }) });
+  expect(result.groupImpacts.weather?.floorReason || '').not.toMatch(/Freezing rain/);
+});
+
 test('hazards after the selected travel window do not affect the score', () => {
   const weatherData = calmWeather({ trend: [
     ...calmWeather().trend,
