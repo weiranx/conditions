@@ -28,7 +28,7 @@ export function buildDecisionDisplayState(decision: SummitDecision | null): Deci
       ? decision.blockers[0] || 'A no-go threshold is tripped. Change the objective, timing, or day before committing.'
       : decision.level === 'CAUTION'
         ? decision.cautions[0] || 'Adjust terrain, timing, or pace, and define a clear turnaround trigger before committing.'
-        : 'No current threshold is tripped. Verify official sources and reassess conditions at planned checkpoints.'
+        : 'Conditions are within your limits. Check official sources and reassess at your planned checkpoints.'
     : '';
   const fieldBriefTopRisks = decision
     ? (decision.blockers.length > 0 ? decision.blockers : decision.cautions).slice(0, 3)
@@ -72,31 +72,31 @@ export function buildDecisionDisplayState(decision: SummitDecision | null): Deci
 export function describeFailedCriticalCheck(check: SummitDecision['checks'][number]): string {
   switch (check.key) {
     case 'avalanche':
-      return /coverage unavailable/i.test(String(check.detail || ''))
-        ? 'Avalanche bulletin is unavailable for selected objective/time'
+      return /no avalanche forecast covers|coverage unavailable/i.test(String(check.detail || ''))
+        ? 'No avalanche bulletin covers this objective and time'
         : 'Avalanche danger exceeds Moderate';
     case 'convective-signal':
-      return 'Convective storm signal appears in forecast';
+      return 'Forecast mentions thunderstorms';
     case 'precipitation':
-      return 'Precipitation chance exceeds threshold';
+      return 'Precipitation chance is above your limit';
     case 'wind-gust':
-      return 'Wind gust exceeds threshold';
+      return 'Wind gusts are above your limit';
     case 'daylight':
-      return 'Start time misses the 30-minute daylight buffer';
+      return 'Plan leaves less than 30 minutes of daylight margin';
     case 'feels-like':
-      return 'Apparent temperature is below threshold';
+      return 'Feels-like temperature is below your limit';
     case 'nws-alerts':
-      return 'Active NWS alert overlaps selected travel window';
+      return 'An active NWS alert overlaps your travel window';
     case 'air-quality':
-      return 'Air quality exceeds 100 AQI';
+      return 'Air quality is worse than AQI 100';
     case 'fire-risk':
-      return 'Fire risk is High or above';
+      return 'Fire danger is High or above';
     case 'heat-risk':
       return 'Heat risk is High or above';
     case 'terrain-signal':
-      return 'Terrain/trail condition signal is unavailable';
+      return 'Trail surface assessment is unavailable';
     case 'source-freshness':
-      return 'Core source freshness has stale or missing feeds';
+      return 'Some core sources are out of date';
     default:
       return check.label;
   }

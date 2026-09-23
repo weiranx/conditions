@@ -308,7 +308,7 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
                 ? `${unusual.length} to review`
                 : missing.length === 5
                   ? "Observations incomplete"
-                  : "No unusual signals in available feeds"}
+                  : "Nothing unusual reported"}
             </span>
           </div>
           <div className="field-signal-grid">
@@ -326,7 +326,7 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
             <details className="field-missing-signals">
               <summary>
                 <CircleHelp size={16} />
-                {missing.length} observation feeds unavailable
+                {missing.length} observation {missing.length === 1 ? "feed" : "feeds"} unavailable
               </summary>
               {missing.map((signal) => (
                 <p key={signal.key}>{signal.title}</p>

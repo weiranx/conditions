@@ -255,8 +255,8 @@ export function Report({
       {w.viewingHistoryReport && (
         <aside className="sky-notice" aria-label="Saved report snapshot">
           <BookOpen size={20} aria-hidden="true" />
-          <div>This is a saved snapshot. Opening it does not refresh conditions or run AI.
-            To check current conditions, edit the plan and generate a new report.</div>
+          <div>This is a saved snapshot. It shows conditions from when it was generated
+            and won’t update. For current conditions, edit the plan and generate a new report.</div>
         </aside>
       )}
       {feedback && (
@@ -270,7 +270,7 @@ export function Report({
           <div>
             {data.apiWarning ||
               w.freshnessWarningSummary ||
-              "Some source evidence is incomplete. Verify current sources before committing."}
+              "Some sources returned incomplete data. Check the official forecasts before committing."}
           </div>
           <button type="button" className="sky-link" onClick={() => go("sources")}>Checks &amp; sources</button>
         </div>
@@ -280,11 +280,11 @@ export function Report({
           <TriangleAlert size={20} aria-hidden="true" />
           <div>
             {copy.warnings.length > 0 && <>
-              <strong>Reported field warnings.</strong>{" "}
+              <strong>Field reports to check.</strong>{" "}
               {copy.warnings.map((signal) => `${signal.title}: ${signal.detail}`).join(" · ")}{" "}
-              Check observation times and route relevance.
+              Check when each report was made and whether it applies to your route.
             </>}
-            {copy.missing.length > 0 && <span> {copy.missing.map((signal) => signal.title).join(" · ")}. Missing feeds cannot confirm clear conditions.</span>}
+            {copy.missing.length > 0 && <span> {copy.missing.map((signal) => signal.title).join(" · ")}. Missing data does not mean conditions are clear.</span>}
           </div>
         </div>
       )}
@@ -292,14 +292,14 @@ export function Report({
         <div className="sky-notice is-caution">
           <TriangleAlert size={20} aria-hidden="true" />
           <div>
-            <strong>This report’s departure date has passed.</strong>{" "}
-            The saved forecast is available for reference. Choose a current plan for your next outing.
+            <strong>This report’s planned start has passed.</strong>{" "}
+            The forecast below is kept for reference. Pick a new start to get current conditions.
             <div className="field-action-row">
               <button className="field-button" onClick={w.handleUseNowAfterPastStart}>
-                Use now
+                Start now
               </button>
               <button className="field-button" onClick={w.handleUseTomorrowAfterPastStart}>
-                Use tomorrow
+                Start tomorrow
               </button>
             </div>
           </div>
@@ -382,7 +382,7 @@ export function Report({
             <DayStrip hours={skyHours} clock={clock} />
           </div>
           {!fullReport && (
-            <nav className="sky-chapter-tabs" aria-label="Briefing chapters">
+            <nav className="sky-chapter-tabs" aria-label="Report sections">
               {visibleChapters.map((c) => (
                 <button key={c.id} type="button" aria-current={activeView === c.id ? "page" : undefined} onClick={() => go(c.id)}>
                   {c.label}
@@ -426,7 +426,7 @@ export function Report({
           <Suspense
             fallback={
               <p className="field-loading" role="status">
-                Loading report detail…
+                Loading section…
               </p>
             }
           >
@@ -509,9 +509,9 @@ export function Report({
           <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => go("sources")} />
         )}
         <p className="field-muted">
-          Backcountry Conditions is a planning aid, not a safety guarantee. Verify
-          official forecasts and make final decisions from field observations and
-          team judgment.
+          Backcountry Conditions is a planning aid, not a guarantee of safety. Check
+          official forecasts, and make the final call from what you see in the field
+          and your team’s judgment.
         </p>
       </div>
     </div>

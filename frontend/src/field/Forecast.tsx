@@ -135,10 +135,10 @@ export function Forecast({ report }: { report: PersistedReport }) {
     return (
       <div className="field-empty-inline">
         <CloudSun />
-        <h3>Hourly evidence is unavailable.</h3>
+        <h3>Hourly forecast is unavailable.</h3>
         <p>
-          The summary forecast remains available in the source evidence.
-          Generate a new brief to try again.
+          The summary forecast is still available under Checks &amp; sources.
+          Generate a new report to try again.
         </p>
       </div>
     );
@@ -244,7 +244,7 @@ export function Forecast({ report }: { report: PersistedReport }) {
           {selectedRow.pass ? <Check size={16} /> : <TriangleAlert size={16} />}
           <p>
             {selectedRow.pass
-              ? "Within your selected weather thresholds at this hour."
+              ? "Within your weather limits at this hour."
               : selectedRow.reasonSummary}
           </p>
         </div>
@@ -370,7 +370,7 @@ export function Forecast({ report }: { report: PersistedReport }) {
           ) : (
             <p className="field-muted">
               No hourly {WEATHER_TREND_METRIC_LABELS[metric].toLowerCase()}{" "}
-              evidence is available.
+              data is available.
             </p>
           )}
           <div

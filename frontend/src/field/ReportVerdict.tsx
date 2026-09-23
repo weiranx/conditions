@@ -32,13 +32,13 @@ export function ReportVerdict({ data, decision, primaryReason, freshnessWarning,
       </div>
       {(freshnessWarning || warnings.length > 0 || missing.length > 0) && (
         <div className="report-verdict-warnings" aria-label="Warnings and evidence gaps">
-          {freshnessWarning && <p className="report-verdict-freshness"><TriangleAlert size={17} aria-hidden="true" /><span><strong>Source freshness needs review.</strong> {freshnessWarning}</span></p>}
+          {freshnessWarning && <p className="report-verdict-freshness"><TriangleAlert size={17} aria-hidden="true" /><span><strong>Some sources may be out of date.</strong> {freshnessWarning}</span></p>}
           {warnings.length > 0 && <>
-            <h3>Reported field warnings</h3>
+            <h3>Field reports to check</h3>
             <ul>{warnings.map((signal) => <li key={signal.key}><strong>{signal.title}</strong><span>{signal.detail}</span></li>)}</ul>
-            <p>Check observation times and route relevance. Nearby reports may not describe your exact route.</p>
+            <p>Check when each report was made and whether it applies to your route. Nearby reports may not match conditions on it.</p>
           </>}
-          {missing.length > 0 && <p>{missing.map((signal) => signal.title).join(' · ')}. Missing feeds cannot confirm clear conditions.</p>}
+          {missing.length > 0 && <p>{missing.map((signal) => signal.title).join(' · ')}. Missing data does not mean conditions are clear.</p>}
         </div>
       )}
 

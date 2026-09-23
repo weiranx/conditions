@@ -36,9 +36,9 @@ export function verdictCopy({ data, decision, primaryReason, preferences }: {
     ? (limiting > 1 ? `${limiting} blocking checks` : "a blocking check")
     : (limiting > 1 ? `${limiting} checks that need attention` : "a check that needs attention");
   const bridge = scoreOutranksDecision
-    ? `Score ${Number(score.toFixed(1))} rates conditions overall. This decision is set by ${limitingLabel}.`
+    ? `The score of ${Number(score.toFixed(1))} rates conditions overall. The decision is set by ${limitingLabel}.`
     : "";
-  const reason = decision.blockers[0] || (review ? `${review.title}. ${review.action}` : "") || primaryReason || decision.cautions[0] || "No critical threshold failures in the available forecast. Reassess conditions in the field.";
+  const reason = decision.blockers[0] || (review ? `${review.title}. ${review.action}` : "") || primaryReason || decision.cautions[0] || "Nothing in the available forecast crosses your limits. Keep reassessing once you are in the field.";
   const scoreValue = !insufficient && Number.isFinite(data.safety.score) ? Number(data.safety.score.toFixed(1)) : null;
   return { insufficient, tone, reason, bridge, warnings, missing, scoreValue };
 }

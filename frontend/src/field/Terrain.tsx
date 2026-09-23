@@ -117,7 +117,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
                 </strong>
                 <p>
                   {cell.reasons.join(" ") ||
-                    "No additional terrain-specific threshold failures in the available model. This is not an assessment of slope stability."}
+                    "Nothing here crosses a terrain-specific limit in the available data. This is not a slope-stability assessment."}
                 </p>
               </div>
             </div>
@@ -125,7 +125,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
         </>
       ) : (
         <p className="field-muted">
-          Insufficient hourly or elevation data to construct the terrain view.
+          Not enough hourly or elevation data to build the terrain view.
         </p>
       )}
     </section>

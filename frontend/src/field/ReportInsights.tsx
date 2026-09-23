@@ -25,8 +25,8 @@ export function ReportInsights({ data, localize = text => text, onSources }: {
   </article>;
   return <section className="report-insights field-panel" aria-labelledby="report-insights-title">
     <header><div><span className="field-kicker">Forecast, field observations & access</span><h2 id="report-insights-title">What this means for your trip</h2></div><button className="field-button" onClick={onSources}>Checks & sources</button></header>
-    <p>{priority.length ? `${priority[0].title}. Resolve the highlighted checks alongside the main forecast.` : 'These findings explain how the available sources apply to your plan, and where they cannot confirm conditions.'}</p>
-    <p className="field-muted">Review points can change the trip decision to Caution. They do not add another penalty to the safety score.</p>
+    <p>{priority.length ? `Start with: ${priority[0].title}. Weigh the highlighted checks together with the main forecast.` : 'How the available sources apply to your plan, and where they cannot confirm conditions.'}</p>
+    <p className="field-muted">These points can move the trip decision to Caution, but they do not lower the safety score.</p>
     <div className="report-insight-list">{items.slice(0, 3).map(renderItem)}</div>
     {items.length > 3 && <details className="report-insight-more"><summary>{items.length - 3} more findings and evidence limits</summary><div className="report-insight-list">{items.slice(3).map(renderItem)}</div></details>}
   </section>;
