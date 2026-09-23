@@ -22,9 +22,9 @@ export function ReportSummary({
   const coverageMissing = completeHours.length < w.travelWindowHours;
   const firstConcern = hours.find((hour) => hour.failedRules.length > 0);
   const windowNote = [
-    coverageMissing ? `${completeHours.length} of ${w.travelWindowHours} hours have complete weather readings.` : "",
-    firstConcern ? `First threshold concern at ${w.formatClockForStyle(firstConcern.time, w.preferences.timeStyle)}: ${firstConcern.failedRules.join(" • ")}` : "",
-  ].filter(Boolean).join(" ") || "Hourly thresholds only. Daylight, source freshness, and field warnings still apply.";
+    coverageMissing ? `Complete weather data for ${completeHours.length} of ${w.travelWindowHours} hours.` : "",
+    firstConcern ? `First hour outside your limits: ${w.formatClockForStyle(firstConcern.time, w.preferences.timeStyle)} (${firstConcern.failedRules.join(" • ")}).` : "",
+  ].filter(Boolean).join(" ") || "Checks your hourly weather limits only. Daylight, source age, and field reports are assessed separately.";
   const surface =
     data.terrainCondition?.label?.replace(
       /^[\p{Extended_Pictographic}\uFE0F\s]+/u,
@@ -44,7 +44,7 @@ export function ReportSummary({
           </span>
           <strong>{w.formatWindDisplay(peakGust)}</strong>
           <span>
-            In the planned travel window
+            During your planned window
             <ArrowUpRight size={14} />
           </span>
         </button>
@@ -55,7 +55,7 @@ export function ReportSummary({
           </span>
           <strong>{w.expectedRainWindowDisplay}</strong>
           <span>
-            {w.expectedTravelWindowHours}-hour accumulation
+            Total over {w.expectedTravelWindowHours} hours
             <ArrowUpRight size={14} />
           </span>
         </button>
@@ -92,7 +92,7 @@ export function ReportSummary({
       </div>
       <button className={`report-window-summary${coverageMissing || withinLimits < hours.length ? " needs-review" : ""}`} onClick={() => onOpen("timing")}>
         <span className="report-summary-label"><Clock3 size={17} aria-hidden="true" /> Travel window <ArrowUpRight size={14} aria-hidden="true" /></span>
-        <strong>{(data.weather.trend || []).length ? `${withinLimits} of ${w.travelWindowHours} hours within limits` : "Hourly evidence unavailable"}</strong>
+        <strong>{(data.weather.trend || []).length ? `${withinLimits} of ${w.travelWindowHours} hours within limits` : "Hourly forecast unavailable"}</strong>
         <span className="report-window-segments" aria-hidden="true">
           {Array.from({ length: w.travelWindowHours }, (_, index) => {
             const hour = hours[index];

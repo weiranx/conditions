@@ -203,8 +203,8 @@ export function Report({
       </header>
       {w.viewingHistoryReport && (
         <aside className="field-feedback" aria-label="Saved report snapshot">
-          This is a saved snapshot. Opening it does not refresh conditions or run AI.
-          To check current conditions, edit the plan and generate a new report.
+          This is a saved snapshot. It shows conditions from when it was generated
+          and won’t update. For current conditions, edit the plan and generate a new report.
         </aside>
       )}
       <div className="field-report-toolbar">
@@ -300,30 +300,30 @@ export function Report({
           <span>
             {data.apiWarning ||
               w.freshnessWarningSummary ||
-              "Some source evidence is incomplete. Verify current sources before committing."}
+              "Some sources returned incomplete data. Check the official forecasts before committing."}
           </span>
         </div>
       )}
       {passed && (
         <div className="field-warning">
           <div>
-            <strong>This report’s departure date has passed.</strong>
+            <strong>This report’s planned start has passed.</strong>
             <p>
-              The saved forecast is available for reference. Choose a current
-              plan for your next outing.
+              The forecast below is kept for reference. Pick a new start to get
+              current conditions.
             </p>
             <div className="field-action-row">
               <button
                 className="field-button"
                 onClick={w.handleUseNowAfterPastStart}
               >
-                Use now
+                Start now
               </button>
               <button
                 className="field-button"
                 onClick={w.handleUseTomorrowAfterPastStart}
               >
-                Use tomorrow
+                Start tomorrow
               </button>
             </div>
           </div>
@@ -357,7 +357,7 @@ export function Report({
               onClick={() => setFullReport((value) => !value)}
             >
               <BookOpen size={16} aria-hidden="true" />
-              {fullReport ? "Back to chapters" : "Read full report"}
+              {fullReport ? "Back to sections" : "Read full report"}
             </button>
           </div>
           <label className="report-section-picker">
@@ -374,7 +374,7 @@ export function Report({
               <option value="all">All sections</option>
             </select>
           </label>
-          <nav className="field-chapters" aria-label="Briefing chapters">
+          <nav className="field-chapters" aria-label="Report sections">
             {visibleChapters.map((c) => (
               <button
                 key={c.id}
@@ -393,7 +393,7 @@ export function Report({
           <Suspense
             fallback={
               <p className="field-loading" role="status">
-                Loading report detail…
+                Loading section…
               </p>
             }
           >
@@ -474,9 +474,9 @@ export function Report({
       )}
       <ReportInsights data={data} localize={w.localizeUnitText} onSources={() => openChapter("sources")} />
       <p className="field-muted">
-        Backcountry Conditions is a planning aid, not a safety guarantee. Verify
-        official forecasts and make final decisions from field observations and
-        team judgment.
+        Backcountry Conditions is a planning aid, not a guarantee of safety. Check
+        official forecasts, and make the final call from what you see in the field
+        and your team’s judgment.
       </p>
     </div>
   );

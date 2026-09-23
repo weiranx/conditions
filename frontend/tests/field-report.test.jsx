@@ -121,7 +121,7 @@ test("hourly forecast converts temperature and wind using the report preferences
 });
 test("a missing hourly forecast is explicitly unavailable", () => {
   const html = renderToStaticMarkup(<Forecast report={report([])} />);
-  assert.match(html, /Hourly evidence is unavailable/);
+  assert.match(html, /Hourly forecast is unavailable/);
   assert.doesNotMatch(html, /within limits|NaN|Infinity/);
 });
 test("sparse chart readings never create invalid SVG coordinates", () => {
@@ -466,7 +466,7 @@ test('verdict keeps caution, stale evidence, and field warnings visible beside t
   assert.match(reason.textContent, /timestamps need review/);
   assert.equal(reason.closest('details'), null);
   const warnings = root.querySelector('[aria-label="Warnings and evidence gaps"]');
-  assert.match(warnings.textContent, /Source freshness needs review/);
+  assert.match(warnings.textContent, /Some sources may be out of date/);
   assert.match(warnings.textContent, /Lightning detected at the objective/);
   assert.match(warnings.textContent, /road closure/);
   assert.match(warnings.textContent, /land-manager notice/);
@@ -480,7 +480,7 @@ test('verdict respects disabled field observations and does not invent field war
     decision={{ level: 'GO', headline: 'Within thresholds.', blockers: [], cautions: [] }}
     primaryReason="Within selected thresholds." freshnessWarning={null}
     preferences={preferences} onSources={() => {}} />);
-  assert.doesNotMatch(html, /Lightning detected|Reported field warnings|Warnings and evidence gaps/);
+  assert.doesNotMatch(html, /Lightning detected|Field reports to check|Warnings and evidence gaps/);
 });
 
 import { ScoreExplanation } from '../src/field/ScoreExplanation';
@@ -536,7 +536,7 @@ test('summary distinguishes missing hours from passing hours and highlights a re
   data.snowpack = undefined;
   const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data)} onOpen={() => {}} />);
   assert.match(html, /1 of 3 hours within limits/);
-  assert.match(html, /1 of 3 hours have complete weather readings/);
+  assert.match(html, /Complete weather data for 1 of 3 hours/);
   assert.match(html, /Return is after sunset/);
   assert.match(html, /15 mph/);
   assert.doesNotMatch(html, /40 mph/);
@@ -547,7 +547,7 @@ test('summary does not imply clear weather when the hourly forecast is absent', 
   const data = makeReport({}, 'missing');
   data.weather.trend = [];
   const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data)} onOpen={() => {}} />);
-  assert.match(html, /Hourly evidence unavailable/);
+  assert.match(html, /Hourly forecast unavailable/);
   assert.doesNotMatch(html, /hours within limits/);
 });
 test('report weather coverage preserves zero measurements and excludes hazards outside the window', () => {
@@ -590,8 +590,8 @@ test('summary peak gust stays unavailable without measured gusts inside the plan
 test('summary keeps a known gust warning visible alongside missing coverage', () => {
   const data = weatherData([{ ...weatherHour, time: '07:00', gust: 90, precipChance: null }]);
   const html = renderToStaticMarkup(<ReportSummary workspace={summaryWorkspace(data, { alpineStartTime: '06:00' })} onOpen={() => {}} />);
-  assert.match(html, /0 of 3 hours have complete weather readings/);
-  assert.match(html, /First threshold concern at 07:00: gust 90/);
+  assert.match(html, /Complete weather data for 0 of 3 hours/);
+  assert.match(html, /First hour outside your limits: 07:00 \(gust 90/);
 });
 
 test('summary rejects complete forecast readings outside the planned window', () => {
@@ -713,8 +713,8 @@ test('verdict explains a high score under a stricter decision only when they dis
   const data = makeReport({}, 'clear');
   data.safety = { ...data.safety, score: 91, assessmentStatus: undefined };
   const render = (decision) => renderToStaticMarkup(<ReportVerdict data={data} decision={{ headline: 'Headline', blockers: [], cautions: [], checks: [], ...decision }} primaryReason="" freshnessWarning={null} preferences={preferences} onSources={() => {}} />);
-  assert.match(render({ level: 'CAUTION', cautions: ['Cold', 'Wind'] }), /Score 91 rates conditions overall\. This decision is set by 2 checks that need attention\./);
-  assert.match(render({ level: 'NO-GO', blockers: ['Storm'] }), /This decision is set by a blocking check\./);
+  assert.match(render({ level: 'CAUTION', cautions: ['Cold', 'Wind'] }), /The score of 91 rates conditions overall\. The decision is set by 2 checks that need attention\./);
+  assert.match(render({ level: 'NO-GO', blockers: ['Storm'] }), /The decision is set by a blocking check\./);
   assert.doesNotMatch(render({ level: 'GO' }), /report-decision-bridge/);
   data.safety.score = 78;
   assert.doesNotMatch(render({ level: 'CAUTION', cautions: ['Cold'] }), /report-decision-bridge/);

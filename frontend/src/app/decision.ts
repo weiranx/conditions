@@ -78,7 +78,7 @@ export function evaluateBackcountryDecision(
   };
 
   const insufficientEvidence = data.safety.assessmentStatus === 'insufficient_evidence';
-  if (insufficientEvidence) addCaution('Insufficient evidence for a trip assessment. ' + (data.safety.evidenceReasons || []).join(' '));
+  if (insufficientEvidence) addCaution('Not enough data to assess this trip. ' + (data.safety.evidenceReasons || []).join(' '));
 
   const avalanche = data.avalanche;
   const danger = avalanche?.dangerLevel || 0;
@@ -296,7 +296,7 @@ export function evaluateBackcountryDecision(
   }
 
   if (freshnessIssues.length > 0) {
-    addCaution(`Some feeds are stale or missing timestamps (${freshnessIssues.join(', ')}). Refresh the report and open the affected official sources before committing.`);
+    addCaution(`Some sources are out of date or missing timestamps (${freshnessIssues.join(', ')}). Refresh the report and check those official sources before committing.`);
   }
 
   const cutoffMinutes = parseTimeInputMinutes(cutoffTime);
@@ -335,9 +335,9 @@ export function evaluateBackcountryDecision(
       label: avalancheGateRequired ? 'Avalanche danger is Moderate or lower' : avalancheCheckLabel('Moderate or lower'),
       ok: avalancheGateRequired ? (!avalancheUnknown && danger <= 2) : true,
       detail: !avalancheRelevant
-        ? 'Not required by current seasonal and snowpack profile.'
+        ? 'Not needed for this location given the season and snowpack.'
         : avalancheUnknown
-          ? 'Coverage unavailable for this objective/time.'
+          ? 'No avalanche forecast covers this objective and time.'
           : `Current danger: ${['No Rating', 'Low', 'Moderate', 'Considerable', 'High', 'Extreme'][normalizeDangerLevel(danger)] || 'Unknown'}.`,
       action:
         avalancheGateRequired && avalancheUnknown
@@ -348,13 +348,13 @@ export function evaluateBackcountryDecision(
     }] : []),
     {
       key: 'convective-signal',
-      label: 'No convective storm signal (thunder/lightning/hail)',
+      label: 'No thunderstorm signal (thunder, lightning, or hail)',
       ok: !hasStormSignal,
       detail: hasStormSignal
         ? (startHasStormSignal
-          ? `Convective risk keywords in start-time forecast: ${normalizedConditionText}.`
-          : `Convective risk keywords detected at ${stormSignalHour} within travel window.`)
-        : `Forecast text: ${normalizedConditionText}. No convective keywords detected.`,
+          ? `The start-time forecast mentions storms: ${normalizedConditionText}.`
+          : `The forecast mentions storms at ${stormSignalHour}, inside your travel window.`)
+        : `Forecast: ${normalizedConditionText}. No thunder, lightning, or hail mentioned.`,
       action: hasStormSignal ? 'Leave exposed terrain before the storm arrives; descend at the first thunder, lightning, or rapid cloud growth.' : undefined,
     },
     {
@@ -401,20 +401,20 @@ export function evaluateBackcountryDecision(
   if (alertsRelevantForSelectedStart && hasActiveAlertCount) {
     checks.push({
       key: 'nws-alerts',
-      label: 'No active NWS alerts at selected start time',
+      label: 'No active NWS alerts at your start time',
       ok: activeAlertCount === 0,
       detail:
         activeAlertCount === 0
           ? 'No active alerts.'
           : `${activeAlertCount} active \u2022 highest severity ${highestAlertSeverity}.`,
-      action: activeAlertCount > 0 ? 'Open alert details and verify your route is outside affected zones/time windows.' : undefined,
+      action: activeAlertCount > 0 ? 'Open the alert details and confirm your route is outside the affected areas and times.' : undefined,
     });
   }
 
   if (hasAqi) {
     checks.push({
       key: 'air-quality',
-      label: 'Air quality is <= 100 AQI',
+      label: 'Air quality is AQI 100 or better',
       ok: aqi <= 100,
       detail: `Current AQI ${Math.round(aqi)} (${data.airQuality?.category || 'Unknown'}).`,
       action: aqi > 100 ? 'Reduce exertion and shorten the plan; choose a cleaner-air objective if anyone develops symptoms.' : undefined,
@@ -424,7 +424,7 @@ export function evaluateBackcountryDecision(
   if (hasFireRisk) {
     checks.push({
       key: 'fire-risk',
-      label: 'Fire risk is below High (L3+)',
+      label: 'Fire danger is below High',
       ok: fireRiskLevel < 3,
       detail: `${data.fireRisk?.label || 'Unknown'} (${Number.isFinite(fireRiskLevel) ? `L${Math.round(fireRiskLevel)}` : 'L?'})`,
       action: fireRiskLevel >= 3 ? 'Verify closures, use no flame or sparks, keep multiple exits, and leave for increasing smoke or wind.' : undefined,
@@ -434,7 +434,7 @@ export function evaluateBackcountryDecision(
   if (hasHeatRisk) {
     checks.push({
       key: 'heat-risk',
-      label: 'Heat risk is below High (L3+)',
+      label: 'Heat risk is below High',
       ok: heatRiskLevel < 3,
       detail: `${data.heatRisk?.label || 'Unknown'} (${Number.isFinite(heatRiskLevel) ? `L${Math.round(heatRiskLevel)}` : 'L?'})`,
       action: heatRiskLevel >= 3 ? 'Shift to cooler hours or elevations, shorten exposed segments, and set water and cooling checkpoints.' : undefined,
@@ -444,26 +444,26 @@ export function evaluateBackcountryDecision(
   if (terrainCode) {
     checks.push({
       key: 'terrain-signal',
-      label: 'Terrain / trail surface signal is available',
+      label: 'Trail surface assessment is available',
       ok: !terrainCriticalGateFail,
       detail: terrainCriticalGateFail
-        ? 'Surface/trail classification unavailable from current weather inputs.'
+        ? 'The trail surface could not be classified from the current weather data.'
         : terrainConfidence
-          ? `${terrainLabel} \u2022 confidence ${terrainConfidence} \u2022 use as advisory context, not a hard gate.`
-          : `${terrainLabel} \u2022 use as advisory context, not a hard gate.`,
+          ? `${terrainLabel} \u2022 ${terrainConfidence} confidence \u2022 advisory only, not a pass/fail limit.`
+          : `${terrainLabel} \u2022 advisory only, not a pass/fail limit.`,
       action: terrainCriticalGateFail ? 'Test traction and supportability in low-consequence terrain before committing to exposed travel.' : undefined,
     });
   }
 
   checks.push({
     key: 'source-freshness',
-    label: 'Core source freshness has no stale/missing feeds',
+    label: 'Core sources are up to date',
     ok: freshnessIssues.length === 0,
-    detail: freshnessIssues.length === 0 ? 'Timestamps are current enough for active feeds.' : `Issue: ${freshnessIssues.join(', ')}.`,
-    action: freshnessIssues.length > 0 ? 'Refresh the report and open each affected official source before committing.' : undefined,
+    detail: freshnessIssues.length === 0 ? 'Every active source was updated recently enough to rely on.' : `Out of date or missing a timestamp: ${freshnessIssues.join(', ')}.`,
+    action: freshnessIssues.length > 0 ? 'Refresh the report and check each affected official source before committing.' : undefined,
   });
 
-  if (data.safety.assessmentStatus) checks.push({ key: 'evidence-coverage', label: 'Critical evidence covers the trip window', ok: !insufficientEvidence, detail: (data.safety.evidenceReasons || []).join(' ') || 'Critical evidence is available for the requested window.', action: insufficientEvidence ? 'Refresh missing sources and verify the full travel window before committing.' : undefined });
+  if (data.safety.assessmentStatus) checks.push({ key: 'evidence-coverage', label: 'Key data covers your whole trip window', ok: !insufficientEvidence, detail: (data.safety.evidenceReasons || []).join(' ') || 'Key data is available for the full requested window.', action: insufficientEvidence ? 'Refresh the missing sources and check the full travel window before committing.' : undefined });
 
   for (const insight of reportInsightItems(data).filter(item => item.decisionRelevant)) {
     addCaution(`${insight.title}. ${insight.action}`);
@@ -471,17 +471,17 @@ export function evaluateBackcountryDecision(
   }
 
   let level: DecisionLevel = 'GO';
-  let headline = 'No current threshold is tripped — keep normal precautions.';
+  let headline = 'Conditions are within your limits — travel with normal precautions.';
 
   if (blockers.length > 0) {
     level = 'NO-GO';
     headline = 'Do not commit to this plan — change the objective, timing, or day.';
   } else if (insufficientEvidence) {
     level = 'CAUTION';
-    headline = 'Insufficient evidence — resolve the missing coverage before committing.';
+    headline = 'Not enough data to assess this trip — fill the gaps before committing.';
   } else if (unknownSnowpackMode && !ignoreAvalancheForDecision) {
     level = 'CAUTION';
-    headline = 'No current avalanche bulletin — use unrated-terrain travel practices.';
+    headline = 'No current avalanche bulletin — travel as you would in unrated terrain.';
   } else if (cautions.length > 0) {
     level = 'CAUTION';
     headline = 'Adjust terrain, timing, or pace before committing.';

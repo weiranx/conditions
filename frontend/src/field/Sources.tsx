@@ -168,8 +168,8 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
       <section className="field-panel">
         <h2>Official alerts</h2>
         <p>
-          {w.nwsAlertCount} alerts relevant to the selected start ·{" "}
-          {w.nwsTotalAlertCount} in the returned feed.
+          {w.nwsAlertCount} {w.nwsAlertCount === 1 ? "alert applies" : "alerts apply"} to your start time ·{" "}
+          {w.nwsTotalAlertCount} in the full feed.
         </p>
         {w.nwsAlerts.map((alert, i) => (
           <Details
@@ -181,7 +181,7 @@ export function Sources({ workspace: w }: { workspace: Workspace }) {
         {!w.nwsAlerts.length && (
           <p className="field-muted">
             {w.safetyData?.alerts?.note ||
-              "No alert details returned. This does not establish that every hazard is absent."}
+              "No alerts were returned. That does not mean there are no hazards."}
           </p>
         )}
       </section>
