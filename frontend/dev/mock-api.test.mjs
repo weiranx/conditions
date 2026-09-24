@@ -237,6 +237,34 @@ test("multi-day results preserve selected dates, coordinates and duration", asyn
   assert.equal(payload.multiDayUsage.unlimited, true);
 });
 
+test("itinerary checks return each day at its camp with the night after it", async () => {
+  const api = createMockApi();
+  const camp = { name: "Lake camp", lat: 36.5, lon: -118.3, elevationFt: 10800 };
+  const trailhead = { name: "Trailhead", lat: 36.6, lon: -118.2, elevationFt: 8300 };
+  const { status, payload } = await api.handle("/api/itineraries/check", "POST", {
+    startDate: "2026-09-05",
+    activity: "backpacking",
+    stages: [
+      { start: "07:00", travelHours: 6, from: trailhead, to: camp },
+      { start: "08:00", travelHours: 5, from: camp, to: trailhead, checkpoints: [{ name: "Pass", lat: 36.55, lon: -118.25 }] },
+    ],
+  });
+  assert.equal(status, 200);
+  assert.deepEqual(payload.stages.map((stage) => stage.date), ["2026-09-05", "2026-09-06"]);
+  assert.equal(payload.stages[0].report.campNight.status, "ok");
+  assert.equal(payload.stages[1].report.campNight, undefined);
+  assert.equal(payload.stages[1].checkpoints[0].name, "Pass");
+  assert.equal(payload.failedCount, 0);
+  assert.ok(["GO", "CAUTION", "NO-GO", "INCOMPLETE"].includes(payload.assessment.level));
+  assert.equal(payload.assessment.days.length, 2);
+  assert.equal(payload.assessment.nights.length, 1);
+  assert.equal(payload.chatContext.contextType, "multi-day-itinerary");
+  assert.equal(
+    (await api.handle("/api/itineraries/check", "POST", { startDate: "2026-09-05", stages: [] })).status,
+    400,
+  );
+});
+
 test("AI model and provider selections survive reads and unrelated updates", async () => {
   const api = createMockApi();
   await api.handle("/api/admin/ai-settings", "PATCH", {

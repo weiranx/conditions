@@ -6,7 +6,8 @@ const { createMcpOAuthService } = require('../auth/mcp-oauth');
 const { readSessionToken } = require('../auth/account-access');
 const allowedReadPath = path => path === '/api/auth/mcp/identity' || path === '/api/search' || path === '/api/safety'
   || path === '/api/account/reports' || /^\/api\/account\/reports\/[0-9a-f-]{36}$/iu.test(path)
-  || path === '/api/account/objective-watches';
+  || path === '/api/account/objective-watches'
+  || path === '/api/account/trips' || /^\/api\/account\/trips\/[0-9a-f-]{36}$/iu.test(path);
 function registerMcpOAuthRoutes({ app, database, accountService, env = process.env, service }) {
   const issuer = env.MCP_PUBLIC_URL, frontendOrigin = env.MCP_FRONTEND_ORIGIN;
   if (!issuer && !service) return;

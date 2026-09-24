@@ -88,6 +88,7 @@ function planWorkspace(overrides = {}) {
     hasObjective: false,
     objectiveDraftDirty: false,
     featureFlags: { gpxImport: false },
+    itinerary: { mode: 'day' },
     forecastDate: '2026-09-06',
     alpineStartTime: '07:00',
     todayDate: '2026-09-06',

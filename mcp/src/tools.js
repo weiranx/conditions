@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ApiError } from './api.js';
+import { checkItinerary } from './itinerary.js';
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`);
@@ -10,6 +11,18 @@ const plan = z.object({
   lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180),
   date, start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u).describe('Local departure time at the objective, HH:mm.'),
   travel_window_hours: z.number().int().min(1).max(24).default(12),
+}).strict();
+const point = z.object({
+  name: z.string().trim().max(100).optional(),
+  lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180),
+  elevation_ft: z.number().min(-1500).max(30000).optional().describe('Known elevation in feet; omit when unknown.'),
+}).strict();
+const itineraryDay = z.object({
+  start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u).describe('Local departure time for this day, HH:mm.'),
+  travel_hours: z.number().int().min(1).max(24),
+  from: point.describe('Where the day starts: the trailhead, or the previous night\'s camp.'),
+  to: point.describe('Where the day ends: tonight\'s camp, or the exit trailhead on the last day. Use the same point as from for a layover day.'),
+  high_points: z.array(point).max(2).optional().describe('Passes or high points crossed this day, checked over the same hours.'),
 }).strict();
 const annotation = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 const result = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value });
@@ -45,9 +58,22 @@ export function createServer(api) {
     if (comparisons.every(item => item.failure)) throw new ApiError('ALL_PLANS_FAILED', 'No comparison report could be retrieved.', { comparisons });
     return { comparisons };
   });
+  register('check_itinerary', 'Check a multi-day trip (2–7 consecutive days starting start_date): each day at the camp it ends at, plus any high points, and the night that follows at that camp. Returns compact evidence per day and night; a day that could not be checked stays in the list with its failure. The trip is only as good as its weakest day or night; do not average or rank days, and treat an unchecked or unforecast night as unknown. Each day and high point may count against report usage limits.', {
+    start_date: date,
+    activity: z.string().trim().max(40).optional().describe('Activity profile, e.g. backpacking, hiking, mountaineering.'),
+    days: z.array(itineraryDay).min(2).max(7),
+  }, async args => {
+    const days = await checkItinerary(api, args, error => errorResult(error).structuredContent);
+    if (days.every(day => day.failure && day.highPoints.every(point => point.failure))) {
+      throw new ApiError('ALL_DAYS_FAILED', 'No day of this trip could be checked.', { days });
+    }
+    return { startDate: args.start_date, days };
+  });
   if (api.hasAccount) {
     register('list_saved_reports', 'List your connected Conditions account’s saved report summaries. Historical snapshots, not current forecasts. Follow nextCursor if supplied.', { query: z.string().max(200).optional(), cursor: z.string().uuid().optional() }, ({ query, cursor }) => api.get('/api/account/reports', { q: query, cursor }, true));
     register('get_saved_report', 'Read a saved report by UUID from list_saved_reports. Its forecast and source timestamps may be stale; do not describe it as current.', { report_id: z.string().uuid() }, ({ report_id }) => api.get(`/api/account/reports/${report_id}`, {}, true));
+    register('list_saved_trips', 'List your connected account’s saved multi-day trips. Historical snapshots, not current forecasts.', {}, () => api.get('/api/account/trips', {}, true));
+    register('get_saved_trip', 'Read a saved multi-day trip by UUID from list_saved_trips, as compact day-by-day evidence with each night at camp. Its forecasts may be stale; do not describe it as current.', { trip_id: z.string().uuid() }, ({ trip_id }) => api.get(`/api/account/trips/${trip_id}`, { view: 'summary' }, true));
     register('list_objective_watches', 'Read objective watches and their last/next checks for your connected account. Does not create watches, send alerts, or trigger checks.', {}, () => api.get('/api/account/objective-watches', {}, true));
   }
   return server;

@@ -79,6 +79,14 @@ import type { MultiDayUsage } from "../../app/multi-day-usage";
 import { buildApproachRequestParams } from "../../app/approach-elevation";
 import { buildPlanParams, planParamsQuery, planSettingsParams } from "../../app/plan-evaluation";
 import { usePlanEvaluation } from "../../hooks/usePlanEvaluation";
+import { useItinerary } from "./useItinerary";
+import {
+  stagePlan,
+  stageStartElevationFt,
+  type ItineraryCheckResult,
+  type ItineraryDraft,
+  type ItineraryPoint,
+} from "../../app/itinerary";
 import {
   buildPersistedReport,
   clearPersistedReport,
@@ -443,8 +451,8 @@ export function useWorkspace() {
   const [reportChatSessionKey, setReportChatSessionKey] = useState(0);
   const [viewingHistoryReport, setViewingHistoryReport] = useState(false);
   const [restoredReportSnapshot, setRestoredReportSnapshot] = useState<PersistedReport | null>(null);
-  const [, setRestoredReportSource] = useState<
-    "saved" | "shared" | null
+  const [restoredReportSource, setRestoredReportSource] = useState<
+    "saved" | "shared" | "itinerary" | null
   >(null);
   const savedReportSession = useSavedReportSession({ safetyData, accountLoading, accountUserId });
   const {
@@ -538,6 +546,16 @@ export function useWorkspace() {
     initialStartTime: alpineStartTime,
     preferences,
     objectiveName,
+    onUsageUpdated: handleMultiDayUsageUpdated,
+    onUsageLimitReached: handleMultiDayUsageLimitReached,
+  });
+  const itinerary = useItinerary({
+    enabled: featureFlags.tripPlanning,
+    todayDate,
+    maxForecastDate,
+    initialStartDate: forecastDate,
+    initialStartTime: alpineStartTime,
+    preferences,
     onUsageUpdated: handleMultiDayUsageUpdated,
     onUsageLimitReached: handleMultiDayUsageLimitReached,
   });
@@ -656,6 +674,30 @@ export function useWorkspace() {
     hasObjective &&
     normalizeSuggestionText(searchQuery) !==
       normalizeSuggestionText(committedSearchQuery);
+  // While a trip is being built, the plan's objective is its trailhead. An
+  // opened day moves the objective to that day's camp, so it is ignored then.
+  const { mode: itineraryMode, openDayIndex: itineraryOpenDay, setTrailhead: setItineraryTrailhead } = itinerary;
+  useEffect(() => {
+    if (itineraryMode !== "multi" || itineraryOpenDay !== null || !hasObjective || objectiveDraftDirty) return;
+    setItineraryTrailhead({ name: objectiveName, lat: position.lat, lon: position.lng, elevationFt: null });
+  }, [itineraryMode, itineraryOpenDay, hasObjective, objectiveDraftDirty, objectiveName, position.lat, position.lng, setItineraryTrailhead]);
+  // Entering multi-day mode (or loading into it) with no objective picks the
+  // stored trip's trailhead back up, once; clearing it later stays cleared.
+  const trailheadRestoredForMode = useRef<string | null>(null);
+  useEffect(() => {
+    if (trailheadRestoredForMode.current === itineraryMode) return;
+    trailheadRestoredForMode.current = itineraryMode;
+    const trailhead = itinerary.draft.trailhead;
+    if (itineraryMode !== "multi" || hasObjective || !trailhead) return;
+    // Syncs the objective to stored trip state once per mode; not a render cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPosition({ lat: trailhead.lat, lng: trailhead.lon });
+    setHasObjective(true);
+    setObjectiveName(trailhead.name);
+    setSearchInputValue(trailhead.name);
+    setCommittedSearchQuery(trailhead.name);
+    setMapFocusNonce((value) => value + 1);
+  }, [itineraryMode, hasObjective, itinerary.draft.trailhead, setSearchInputValue, setCommittedSearchQuery]);
 
   const handleImportGpxObjective = useCallback(
     (route: ParsedGpxRoute) => {
@@ -1362,7 +1404,7 @@ export function useWorkspace() {
     (
       report: PersistedReport,
       shareToken: string,
-      source: "saved" | "shared" = "saved",
+      source: "saved" | "shared" | "itinerary" = "saved",
     ) => {
       clearWakeRetry();
       clearLastLoadedKey();
@@ -1567,6 +1609,71 @@ export function useWorkspace() {
       tripForecastRows,
     ],
   );
+
+  /** Opens one checked day of the trip as a read-only conditions brief. */
+  const openItineraryDay = useCallback(
+    (index: number) => {
+      const check = itinerary.result;
+      const stage = check?.stages[index];
+      const report = check?.results[index]?.report;
+      if (!stage || !report) return;
+      const startFt = stageStartElevationFt(stage, check.results[index]);
+      const plan = stagePlan(
+        stage,
+        startFt === null ? "" : String(Math.round(convertElevationFeetToDisplayValue(startFt, preferencesRef.current.elevationUnit))),
+      );
+      handleOpenSavedReport(
+        buildPersistedReport(plan, report, {
+          aiBriefNarrative: null,
+          snowVisionAnalysis: null,
+          snowVisionImage: null,
+          reportChatMessages: [],
+        }, { preferences: { ...preferencesRef.current, travelWindowHours: stage.travelHours } }),
+        "",
+        "itinerary",
+      );
+      itinerary.setOpenDayIndex(index);
+    },
+    [itinerary, handleOpenSavedReport],
+  );
+
+  /** The trip brief in the planner, with its trailhead as the objective and no single-day report open. */
+  const showTrip = useCallback((trailhead: ItineraryPoint | null, openBrief = true) => {
+    setViewingHistoryReport(false);
+    setRestoredReportSource(null);
+    setRestoredReportSnapshot(null);
+    setSafetyData(null);
+    setPreviousSafetyData(null);
+    setReportChatMessages([]);
+    setReportChatSessionKey((value) => value + 1);
+    // The opened day's start elevation belonged to that day.
+    setTrailheadElevationInput("");
+    if (trailhead) {
+      setPosition({ lat: trailhead.lat, lng: trailhead.lon });
+      setHasObjective(true);
+      setObjectiveName(trailhead.name);
+      setSearchInputValue(trailhead.name);
+      setCommittedSearchQuery(trailhead.name);
+      setMapFocusNonce((value) => value + 1);
+    }
+    itinerary.setOpenDayIndex(null);
+    if (openBrief) navigateToView("planner");
+  }, [itinerary, setSafetyData, setSearchInputValue, setCommittedSearchQuery, navigateToView]);
+
+  /**
+   * Back from a trip day to the trip, with the trailhead as the objective
+   * again. `openBrief: false` leaves navigation to the caller.
+   */
+  const closeItineraryDay = useCallback(
+    (openBrief = true) => showTrip(itinerary.draft.trailhead, openBrief),
+    [showTrip, itinerary.draft.trailhead],
+  );
+
+  /** A trip opened from Saved reports: its plan and the days it was saved with. */
+  const openSavedTrip = useCallback((draft: ItineraryDraft, result: ItineraryCheckResult) => {
+    itinerary.restore(draft, result);
+    showTrip(draft.trailhead);
+  }, [itinerary, showTrip]);
 
   const handleSelectMultiDayForecastDay = useCallback(
     (date: string) => {
@@ -2231,6 +2338,11 @@ export function useWorkspace() {
 
   return {
     setActiveSavedReportId, setActiveSavedReportShareToken, reportSaveIntentRef,
+    itinerary,
+    restoredReportSource,
+    openItineraryDay,
+    closeItineraryDay,
+    openSavedTrip,
     featureFlags,
     accountLoading,
     refreshAccount,

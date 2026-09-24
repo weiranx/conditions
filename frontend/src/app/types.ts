@@ -40,7 +40,7 @@ export interface SupplementalSource {
 import type { LatLngLiteral } from 'leaflet';
 
 export type DecisionLevel = 'GO' | 'CAUTION' | 'NO-GO';
-export type ActivityType = 'backcountry' | 'hiking' | 'scrambling' | 'alpine-climbing' | 'mountaineering' | 'snow-climbing' | 'ski-touring' | 'trail-running';
+export type ActivityType = 'backcountry' | 'hiking' | 'backpacking' | 'scrambling' | 'alpine-climbing' | 'mountaineering' | 'snow-climbing' | 'ski-touring' | 'trail-running';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type MapStyle = 'topo' | 'street' | 'satellite';
 export type TemperatureUnit = 'f' | 'c';
@@ -174,6 +174,40 @@ export interface ContingencyData {
     severity?: 'low' | 'moderate' | 'high';
   } | null;
 }
+
+export type CampNightReasonCode =
+  | 'freezingRain' | 'storm' | 'severeWind' | 'windyCamp' | 'veryCold' | 'coldNight' | 'wetNight' | 'snow';
+
+/**
+ * The planned night at camp after an itinerary day (backend/src/utils/camp-night.js).
+ * Readings the forecast lacks are null and listed in `missing`; `complete` is
+ * false when the forecast ends before morning or a reading is missing.
+ */
+export type CampNightData =
+  | { status: 'unavailable'; arrivalIso: string | null; elevationFt: number | null; summary: string }
+  | {
+    status: 'ok';
+    arrivalIso: string;
+    startIso: string;
+    endIso: string;
+    elevationFt: number | null;
+    nightHours: number | null;
+    complete: boolean;
+    missing: Array<'temperature' | 'gust' | 'precipitation'>;
+    coveredHours: number;
+    lowTempF: number | null;
+    minFeelsLikeF: number | null;
+    peakWindMph: number | null;
+    peakGustMph: number | null;
+    peakPrecipChance: number | null;
+    precipHours: number;
+    storm: boolean;
+    freezingRain: boolean;
+    snow: boolean;
+    severity: 'low' | 'moderate' | 'high';
+    reasonCodes: CampNightReasonCode[];
+    summary: string;
+  };
 
 export interface SafetyData {
   generatedAt?: string;
@@ -691,6 +725,8 @@ export interface SafetyData {
   } | null;
   gear?: (string | { id?: string; title: string; detail: string; reason?: string; category: string; tone: string })[];
   contingency?: ContingencyData | null;
+  /** Only on itinerary days that end at camp. */
+  campNight?: CampNightData | null;
   trail?: string;
   terrainCondition?: {
     confidenceReasons?: string[];

@@ -1321,6 +1321,8 @@ const AI_USAGE_FEATURE_LABELS: Record<string, string> = {
   "report-chat-suggestions": "Report chat suggestions",
   "trip-chat": "Trip chat",
   "trip-chat-suggestions": "Trip chat suggestions",
+  "itinerary-chat": "Itinerary chat",
+  "itinerary-chat-suggestions": "Itinerary chat suggestions",
   "route-analysis": "Route analysis",
   "route-suggestions": "Route suggestions",
   "route-waypoints": "Route waypoints",

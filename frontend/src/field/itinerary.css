@@ -1,0 +1,146 @@
+/* Multi-day trips: the plan form's day/multi-day switch and camps step, the
+   trip brief's day and night timeline, and the trip's map pins. */
+
+/* ── Plan form ─────────────────────────────────────────────────────────── */
+.sky-trip-mode {
+  display: inline-flex; gap: 2px; margin: 4px 0 10px; padding: 3px;
+  border-radius: 12px; background: var(--sky-fill);
+}
+.field-plan-form.sky-plan .sky-trip-mode label {
+  position: relative; display: inline-flex; align-items: center; margin: 0;
+  padding: 7px 14px; border-radius: 9px; cursor: pointer;
+  font-size: 14px; font-weight: 600; color: var(--sky-secondary);
+}
+.sky-trip-mode label.is-checked { background: var(--sky-segment); color: var(--sky-label); box-shadow: var(--sky-raised-shadow); }
+.sky-trip-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.sky-trip-mode label:has(input:focus-visible) { box-shadow: var(--sky-focus-ring); }
+
+.sky-trip-when output { min-width: 2ch; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sky-trip-when-note { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--sky-secondary); }
+
+.sky-trip-camps { margin-top: 18px; }
+.sky-trip-hint { margin: 6px 0 10px; font-size: 13px; line-height: 1.45; color: var(--sky-secondary); }
+.sky-trip-hint .field-text-button { margin-left: 6px; }
+.sky-trip-legs { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.sky-trip-leg { display: grid; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--sky-field); box-shadow: inset 0 0 0 1px var(--sky-field-border); }
+.sky-trip-day summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; cursor: pointer; list-style: none; }
+.sky-trip-day summary::-webkit-details-marker { display: none; }
+.sky-trip-day summary::after { content: "Edit"; margin-left: auto; font-size: 13px; font-weight: 600; color: var(--sky-accent); }
+.sky-trip-day[open] summary::after { content: "Done"; }
+.sky-trip-day > .field-input-grid { margin-top: 10px; }
+.sky-trip-day-label { font-weight: 700; }
+.sky-trip-day-summary { font-size: 13px; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-trip-night { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--sky-separator); }
+.sky-trip-night-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--sky-secondary); }
+.sky-trip-layover { margin: 0; font-size: 14px; }
+.sky-trip-layover .field-text-button { margin-left: 6px; }
+.sky-trip-layover-toggle { justify-self: start; font-size: 13px; }
+.sky-trip-checkpoint, .sky-trip-bail-list li {
+  display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 14px;
+}
+.sky-trip-checkpoint span, .sky-trip-bail-list span { flex: 1; min-width: 0; }
+.sky-trip-bail { margin-top: 12px; }
+.sky-trip-bail summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.sky-trip-bail summary small { margin-left: auto; font-weight: 400; color: var(--sky-secondary); }
+.sky-trip-bail-list { margin: 0; padding: 0; list-style: none; }
+
+.sky-trip-place { position: relative; margin: 0; }
+.sky-trip-place.is-chosen { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.sky-trip-place.is-chosen span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sky-trip-place .field-input-icon input { font-size: 15px; }
+.sky-trip-place-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+.sky-trip-place-actions [aria-pressed="true"] { color: var(--sky-caution); }
+.sky-visually-hidden-label {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ── Trip brief ────────────────────────────────────────────────────────── */
+.sky-trip-brief { display: grid; gap: 20px; max-width: 920px; }
+.sky-trip-heading p { font-variant-numeric: tabular-nums; }
+.sky-trip-verdict { margin-top: 0; }
+.sky-trip-verdict.is-missing { outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
+.sky-trip-verdict .sky-pill.is-watch:has(svg.lucide-circle-dashed) { color: var(--sky-missing); }
+.sky-trip-notes { color: var(--sky-secondary); }
+.sky-trip-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.sky-trip-actions .field-button { display: inline-flex; align-items: center; gap: 6px; }
+
+.sky-trip-timeline { position: relative; margin: 0; padding: 0 0 0 22px; list-style: none; display: grid; gap: 12px; }
+/* The trail between the cards. */
+.sky-trip-timeline::before {
+  content: ""; position: absolute; left: 7px; top: 12px; bottom: 12px;
+  border-left: 2px dotted var(--sky-separator);
+}
+.sky-trip-card { position: relative; padding: 16px 18px; border-radius: 18px; }
+.sky-trip-card::before {
+  content: ""; position: absolute; left: -20px; top: 22px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--sky-surface); box-shadow: 0 0 0 2px var(--sky-secondary);
+}
+.sky-trip-card.is-ok::before { box-shadow: 0 0 0 2px var(--sky-accent); }
+.sky-trip-card.is-over::before { box-shadow: 0 0 0 2px var(--sky-caution); background: var(--sky-caution-fill); }
+.sky-trip-card.is-missing { outline: 1.5px dashed var(--sky-missing); outline-offset: -1.5px; }
+.sky-trip-card.is-missing::before { box-shadow: 0 0 0 2px var(--sky-missing); }
+.sky-trip-card.is-night { background: color-mix(in srgb, var(--sky-cold) 5%, var(--sky-surface)); }
+.sky-trip-card.is-night::before { border-radius: 3px; }
+.sky-trip-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sky-trip-card-kicker { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.sky-trip-card h3 { margin: 6px 0 0; font-size: 18px; line-height: 1.3; font-weight: 650; overflow-wrap: anywhere; }
+.sky-trip-card .sky-cap { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+.sky-trip-card .sky-notice { margin-top: 10px; }
+.sky-trip-readings {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 16px; margin: 12px 0 0;
+}
+.sky-trip-readings div { min-width: 0; }
+.sky-trip-readings dt { font-size: 12px; color: var(--sky-secondary); }
+.sky-trip-readings dd { margin: 2px 0 0; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sky-trip-checkpoints { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.sky-trip-checkpoints li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.sky-trip-checkpoints li span:first-of-type { flex: 1; min-width: 0; }
+.sky-trip-flags { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.sky-trip-flags:empty { display: none; }
+.sky-trip-flags li {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px;
+  background: var(--sky-fill); font-size: 12px; color: var(--sky-secondary);
+}
+.sky-trip-night-summary { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; font-size: 14px; line-height: 1.45; }
+.sky-trip-night-summary svg { flex: none; margin-top: 2px; color: var(--sky-caution); }
+.sky-trip-exit { display: flex; align-items: center; gap: 6px; }
+.sky-trip-open { display: inline-flex; align-items: center; gap: 4px; margin-top: 12px; }
+.sky-trip-disclaimer { margin: 0; max-width: 64ch; }
+.sky-trip-starts { margin: 0; padding: 6px 18px; list-style: none; }
+.sky-trip-starts li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 0;
+  border-bottom: 1px solid var(--sky-separator);
+}
+.sky-trip-starts li:last-child { border-bottom: 0; }
+.sky-trip-start-date { min-width: 9ch; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sky-trip-start-reason { flex: 1; min-width: 14ch; font-size: 14px; }
+
+/* The bar above a trip day opened in the conditions brief. */
+.sky-trip-daybar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px;
+  padding: 10px 14px; border-radius: 14px; background: var(--sky-accent-tint); font-size: 14px;
+}
+.sky-trip-daybar strong { font-weight: 650; }
+.sky-trip-daybar nav { display: flex; gap: 6px; margin-left: auto; }
+
+.sky-trip-loading { display: grid; gap: 10px; }
+
+@media (max-width: 640px) {
+  .sky-trip-readings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sky-trip-timeline { padding-left: 18px; }
+  .sky-trip-card { padding: 14px; }
+  .sky-trip-card::before { left: -17px; }
+  .sky-trip-daybar nav { margin-left: 0; }
+}
+
+/* ── Map pins ──────────────────────────────────────────────────────────── */
+.field-trip-pin span {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: #1e5a43; color: #fff; border: 2px solid #fff;
+  font: 700 12px/1 var(--sky-font); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.field-trip-pin.is-exit span, .field-trip-pin.is-bail span { border-radius: 6px; background: #3d4642; }
+.field-trip-pin.is-checkpoint span { background: #58615c; font-size: 10px; }
+.field-trip-pin.is-caution span { background: #a8470a; }
+.field-trip-pin.is-nogo span { background: #9e2f22; }
+.field-trip-pin.is-unknown span { background: #fff; color: #3d4642; border: 2px dashed #5c6360; }

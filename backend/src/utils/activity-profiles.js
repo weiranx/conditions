@@ -25,6 +25,14 @@ const ACTIVITY_PROFILES = {
     hazardWeights: {},
     snowTravel: false,
   },
+  backpacking: {
+    limits: { maxWindGustMph: 30, maxPrecipChance: 60, minFeelsLikeF: 15, maxFeelsLikeF: 90 },
+    timing: { paceMinutesPerMile: 35, ascentMinutesPer1000Ft: 50, stopBufferMinutes: 60 },
+    label: 'Backpacking',
+    focus: 'Lead with the nights: the low and wind chill at each camp against a sleep system, wind on an exposed camp, and rain or snow overnight. Then afternoon thunderstorms over passes and high ground (cross early), staying dry when rain repeats across days, stream crossings that rise through the afternoon, and smoke. A backpacker carries shelter and food, but a wet or cold camp compounds from one day into the next, and retreat means walking out.',
+    hazardWeights: { Storm: 1.15, Cold: 1.1 },
+    snowTravel: false,
+  },
   'trail-running': {
     limits: { maxWindGustMph: 30, maxPrecipChance: 50, minFeelsLikeF: 25, maxFeelsLikeF: 85 },
     timing: { paceMinutesPerMile: 20, ascentMinutesPer1000Ft: 30, stopBufferMinutes: 30 },

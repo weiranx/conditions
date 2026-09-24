@@ -10,8 +10,11 @@ No shared owner password, browser session, or static bearer key is accepted by H
 - `search_objectives`
 - `get_conditions_report`
 - `compare_conditions_plans`
+- `check_itinerary` — a 2–7 day trip, each day at its camp and high points, with each night read at camp
 - `list_saved_reports`
 - `get_saved_report`
+- `list_saved_trips`
+- `get_saved_trip`
 - `list_objective_watches`
 
 Private routes use the authenticated user's ID and retain their existing backend
@@ -89,7 +92,7 @@ Existing manually configured connections continue to work. Metadata supplies the
 `/api/auth/mcp/authorize`, `/token`, and `/revoke` endpoints. Existing shared-owner
 tokens stop working on cutover and users must reconnect with their own account.
 
-Local stdio (`node src/index.js --stdio`) exposes only the three public tools.
+Local stdio (`node src/index.js --stdio`) exposes only the four public tools.
 The health endpoint tests the MCP process; it does not prove backend availability.
 
 ## Verification

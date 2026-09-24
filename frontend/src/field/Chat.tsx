@@ -20,7 +20,7 @@ export function Chat({
   readOnly = false,
 }: {
   reportPayload: string;
-  contextType?: "report" | "trip";
+  contextType?: "report" | "trip" | "itinerary";
   contextLabel?: string;
   initialMessages?: PersistedReportChatMessage[];
   onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
@@ -36,8 +36,10 @@ export function Chat({
   const expandButton = useRef<HTMLButtonElement>(null);
   const exitButton = useRef<HTMLButtonElement>(null);
   const scrollPosition = useRef(0);
-  const title = readOnly ? "Saved conversation" : contextType === "trip" ? "Ask about these days" : "Ask about this report";
-  const context = contextLabel || (contextType === "trip" ? "Your multi-day comparison" : "Your conditions brief");
+  const title = readOnly
+    ? "Saved conversation"
+    : contextType === "trip" ? "Ask about these days" : contextType === "itinerary" ? "Ask about this trip" : "Ask about this report";
+  const context = contextLabel || (contextType === "trip" ? "Your multi-day comparison" : contextType === "itinerary" ? "Your multi-day trip" : "Your conditions brief");
 
   // Keep the same conversation DOM when moving into the browser's modal layer.
   // Opening inline never invokes native dialog autofocus or moves the report.
@@ -96,7 +98,7 @@ export function Chat({
         <header className="field-chat-dialog-header">
           <div><h2 id={`${id}-title`}>{title}</h2><p id={`${id}-context`}>{context}</p></div>
           {fullScreen && <button ref={exitButton} className="field-chat-screen-button" aria-label="Exit full screen" title="Exit full screen (Esc)" onClick={() => changeScreen(false)}>
-            <Minimize2 size={16} aria-hidden="true" /><span>Back to {contextType === "trip" ? "comparison" : "report"}</span>
+            <Minimize2 size={16} aria-hidden="true" /><span>Back to {contextType === "trip" ? "comparison" : contextType === "itinerary" ? "trip" : "report"}</span>
           </button>}
         </header>
         {opened && (

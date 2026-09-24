@@ -21,6 +21,7 @@ const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const ACTIVITIES = new Set([
   'backcountry',
   'hiking',
+  'backpacking',
   'scrambling',
   'alpine-climbing',
   'mountaineering',

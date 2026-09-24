@@ -31,7 +31,7 @@ async function http(t) {
 
 test('public tools are read-only and account tools are absent without a session', async t => {
   const c = await pair(t, { hasAccount: false }); const { tools } = await c.listTools();
-  assert.equal(tools.length, 3);
+  assert.equal(tools.length, 4);
   assert.ok(tools.every(x => x.annotations.readOnlyHint && !x.annotations.destructiveHint));
 });
 test('report preserves nulls, zeroes, partial evidence and requested timing', async t => {
@@ -62,7 +62,7 @@ test('all-plan failure is marked as a tool error', async t => {
 test('private report tools use account routes and remove share tokens', async t => {
   const id = 'd4167c22-61fa-4e49-8d68-0c538752967e';
   const c = await pair(t, { hasAccount: true, get: async (path, _args, account) => { assert.equal(account, true); assert.equal(path, `/api/account/reports/${id}`); return { report: { id, shareToken: 'secret-share', snapshot: { weather: null } } }; } });
-  assert.equal((await c.listTools()).tools.length, 6);
+  assert.equal((await c.listTools()).tools.length, 9);
   const r = await c.callTool({ name: 'get_saved_report', arguments: { report_id: id } }); assert.equal(r.structuredContent.data.report.shareToken, undefined);
 });
 test('upstream session handling, redirect rejection, and safe expired-session errors', async () => {
@@ -87,7 +87,7 @@ test('HTTP refuses unauthenticated requests and untrusted origins', async t => {
 test('SDK client initializes, lists tools and retrieves report over authenticated HTTP', async t => {
   const { base } = await http(t); const c = new Client({ name: 'integration-test', version: '1' });
   await c.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
-  t.after(() => c.close()); assert.equal((await c.listTools()).tools.length, 6);
+  t.after(() => c.close()); assert.equal((await c.listTools()).tools.length, 9);
   const r = await c.callTool({ name: 'get_conditions_report', arguments: plan }); assert.equal(r.structuredContent.data.partialData, true);
 });
 test('HTTP rejects invalid and revoked account tokens', async t => {
@@ -105,4 +105,54 @@ test('each API instance forwards only its own account bearer', async () => {
   await Promise.all(['alice','bob'].map(accessToken => createApi({baseUrl:'https://api.example',accessToken,fetchImpl}).get('/api/account/reports', {}, true)));
   assert.deepEqual(seen.map(h=>h.Authorization).sort(), ['Bearer alice','Bearer bob']);
   assert.ok(seen.every(h=>!h.Cookie));
+});
+
+const trailhead = { name: 'Snow Lakes TH', lat: 47.53, lon: -120.71, elevation_ft: 1350 };
+const camp = { name: 'Nada Lake', lat: 47.49, lon: -120.76 };
+const trip = {
+  start_date: '2026-09-30', activity: 'backpacking',
+  days: [
+    { start: '07:00', travel_hours: 7, from: trailhead, to: camp, high_points: [{ name: 'Col', lat: 47.5, lon: -120.74 }] },
+    { start: '08:00', travel_hours: 6, from: camp, to: trailhead },
+  ],
+};
+test('itinerary checks each day at its camp with the night after it, and keeps failed days in place', async t => {
+  const calls = [];
+  const c = await pair(t, { hasAccount: false, get: async (path, args) => {
+    assert.equal(path, '/api/safety'); calls.push(args);
+    if (args.date === '2026-10-01') throw new ApiError('HTTP_503', 'Unavailable');
+    return { safety: { score: 70 }, weather: { elevation: 4950, trend: [{ temp: 40, gust: null, precipChance: 30 }] }, ...(args.camp_night ? { campNight: { status: 'ok', severity: 'moderate' } } : {}) };
+  } });
+  const r = await c.callTool({ name: 'check_itinerary', arguments: trip });
+  assert.equal(r.isError, undefined);
+  const [first, second] = r.structuredContent.data.days;
+  assert.deepEqual(calls.map(q => [q.date, q.lat, q.camp_night, q.trailhead_ft, q.approach]), [
+    ['2026-09-30', 47.49, '1', 1350, undefined],
+    ['2026-09-30', 47.5, undefined, 1350, undefined],
+    ['2026-10-01', 47.53, undefined, undefined, 'off'],
+  ]);
+  assert.equal(first.summary.campNight.severity, 'moderate');
+  assert.equal(first.summary.weather.peakGustMph, null, 'a missing gust stays null');
+  assert.equal(first.summary.weather.hoursMissingGust, 1);
+  assert.equal(first.highPoints[0].summary.safetyScore, 70);
+  assert.equal(second.failure.error, 'HTTP_503');
+  assert.equal(second.endsAt, 'exit');
+});
+test('itinerary with no day checked is a tool error, and invalid days never reach backend', async t => {
+  let calls = 0;
+  const failing = await pair(t, { get: async () => { calls++; throw new ApiError('HTTP_503', 'Unavailable'); } });
+  assert.equal((await failing.callTool({ name: 'check_itinerary', arguments: trip })).isError, true);
+  calls = 0;
+  for (const days of [[trip.days[0]], [{ ...trip.days[0], travel_hours: 30 }, trip.days[1]], [{ ...trip.days[0], high_points: [camp, camp, camp] }, trip.days[1]]]) {
+    assert.equal((await failing.callTool({ name: 'check_itinerary', arguments: { ...trip, days } })).isError, true);
+  }
+  assert.equal(calls, 0);
+});
+test('saved trip tools read account routes as a compact summary', async t => {
+  const id = 'd4167c22-61fa-4e49-8d68-0c538752967e';
+  const seen = [];
+  const c = await pair(t, { hasAccount: true, get: async (path, args, account) => { assert.equal(account, true); seen.push([path, args]); return { trips: [] }; } });
+  await c.callTool({ name: 'list_saved_trips', arguments: {} });
+  await c.callTool({ name: 'get_saved_trip', arguments: { trip_id: id } });
+  assert.deepEqual(seen, [['/api/account/trips', {}], [`/api/account/trips/${id}`, { view: 'summary' }]]);
 });

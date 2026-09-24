@@ -7,6 +7,7 @@ export const DEFAULT_CENTER: LatLngLiteral = { lat: 39.8283, lng: -98.5795 };
 const localDataPrefix = import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true' ? 'summitsafe:mock:' : 'summitsafe:';
 export const USER_PREFERENCES_KEY = `${localDataPrefix}user-preferences:v1`;
 export const PERSISTED_REPORT_KEY = `${localDataPrefix}persisted-report:v1`;
+export const ITINERARY_DRAFT_KEY = `${localDataPrefix}itinerary-draft:v1`;
 export const LEGACY_DEFAULT_START_TIME = '04:30';
 export const MIN_TRAVEL_WINDOW_HOURS = 1;
 export const MAX_TRAVEL_WINDOW_HOURS = 24;

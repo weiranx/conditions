@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { SavedTrips } from "./SavedTrips";
 import {
   ArrowUpRight,
   Bell,
@@ -142,8 +143,14 @@ interface LibraryProps {
 }
 
 export function Library(props: LibraryProps) {
+  const { featureFlags } = props.workspace;
   return props.kind === "history"
-    ? <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={props.workspace.featureFlags.reportSharing} timeStyle={props.workspace.preferences.timeStyle} />
+    ? (
+      <>
+        <ReportHistory localReport={props.localReport} onOpen={props.onOpen} navigate={props.navigate} sharingEnabled={featureFlags.reportSharing} timeStyle={props.workspace.preferences.timeStyle} />
+        {featureFlags.tripPlanning && <SavedTrips workspace={props.workspace} />}
+      </>
+    )
     : <WatchLibrary {...props} />;
 }
 

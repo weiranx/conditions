@@ -27,6 +27,8 @@ import {
 import { copyTextToClipboard } from "../app/clipboard";
 import { markLandingSeen } from "../app/landing-gate";
 import { saveObjectiveWatch } from "../lib/objective-watches";
+import { saveTrip, watchTripDays } from "../lib/saved-trips";
+import { convertElevationFeetToDisplayValue } from "../app/core";
 import {
   loadPersistedReport,
   parsePersistedReport,
@@ -34,6 +36,7 @@ import {
 } from "../app/report-storage";
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
+import { buildTripOverlay } from "./itinerary-overlay";
 import { Dialog } from "./Dialog";
 import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer } from "./touch";
@@ -56,6 +59,9 @@ const Report = lazy(() =>
 const FieldMap = lazy(() => import("./FieldMap"));
 const Legal = lazy(() => import("./Legal"));
 const Compare = lazy(() => import("./Compare"));
+const Itinerary = lazy(() =>
+  import("./Itinerary").then((module) => ({ default: module.Itinerary })),
+);
 const Operations = lazy(() => import("./Operations"));
 const Administration = lazy(() => import("./Administration"));
 
@@ -120,6 +126,8 @@ export default function FieldApp() {
       scrollPageToTop();
       return;
     }
+    // Leaving an opened trip day puts the trailhead back as the objective.
+    if (w.itinerary.openDayIndex !== null && page !== "planner") w.closeItineraryDay(false);
     if (page === "trip") w.openTripToolView();
     else w.navigateToView(page);
   }
@@ -196,6 +204,76 @@ export default function FieldApp() {
       setActionBusy(false);
     }
   }
+  const it = w.itinerary;
+  const multiDay = it.mode === "multi";
+  // The trip being built, or the one last checked, drawn over the map.
+  const tripOverlay = multiDay ? buildTripOverlay(it.draft, it.assessment) : null;
+  // A map tap sets whichever trip point is waiting for one, else the objective.
+  function pickOnMap(lat: number, lon: number) {
+    const target = it.pickTarget;
+    if (!multiDay || !target) {
+      w.handleMapPositionChange({ lat, lng: lon });
+      return;
+    }
+    const point = { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon, elevationFt: null };
+    it.updateDraft((draft) => {
+      if (target.kind === "camp") {
+        return { ...draft, camps: draft.camps.map((camp, index) => (index === target.index ? { point, layover: false } : camp)) };
+      }
+      if (target.kind === "exit") return { ...draft, exit: point };
+      if (target.kind === "bail") return { ...draft, bailPoints: [...draft.bailPoints, point].slice(0, 4) };
+      return {
+        ...draft,
+        days: draft.days.map((day, index) => (index === target.day ? { ...day, checkpoints: [...day.checkpoints, { ...point, name: "High point" }].slice(0, 2) } : day)),
+      };
+    });
+    it.setPickTarget(null);
+  }
+  async function tripAction(kind: "save" | "watch") {
+    const result = it.result;
+    if (!result || actionBusy) return;
+    if (!account.user) {
+      w.setAccountAccessReason("ai");
+      return;
+    }
+    setActionBusy(true);
+    setFeedback("");
+    try {
+      if (kind === "save") {
+        await saveTrip(it.draft, result);
+        setFeedback("Trip saved to your account. Find it under Saved reports.");
+        return;
+      }
+      const outcome = await watchTripDays(
+        it.draft,
+        result,
+        w.preferences,
+        (feet) => String(Math.round(convertElevationFeetToDisplayValue(feet, w.preferences.elevationUnit))),
+        w.todayDate,
+      );
+      const days = (list: number[]) => list.map((index) => index + 1).join(", ");
+      if (outcome.watched.length === 0) {
+        setFeedback(outcome.error || "No upcoming day of this trip could be watched.");
+        return;
+      }
+      const watchedText = `Watching day${outcome.watched.length > 1 ? "s" : ""} ${days(outcome.watched)} in your watchlist.`;
+      const automatic = outcome.policy?.automaticChecks
+        ? " Automatic checks will flag meaningful changes."
+        : " Run checks from the watchlist to compare with this trip.";
+      setFeedback(outcome.limited
+        ? `${watchedText} Your plan's watch limit stopped the rest: ${outcome.error}`
+        : outcome.error
+          ? `${watchedText} ${outcome.error}`
+          : `${watchedText}${automatic}`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not complete this action.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+  function editTrip() {
+    navigate("home");
+  }
   function chooseOnMap() {
     w.setShowSuggestions(false);
     mapRef.current?.focus({ preventScroll: true });
@@ -220,11 +298,19 @@ export default function FieldApp() {
     >
       <div className="field-planner-map-heading">
         <div>
-          <span className="field-kicker" id="field-objective-map-title">Objective map</span>
+          <span className="field-kicker" id="field-objective-map-title">{multiDay ? "Trip map" : "Objective map"}</span>
           <span role="status">
-            {plan.lat === null
-              ? "Choose a location on the map"
-              : `${plan.lat.toFixed(4)}°, ${plan.lon?.toFixed(4)}° selected`}
+            {multiDay && it.pickTarget
+              ? it.pickTarget.kind === "camp"
+                ? `Tap the map to place the camp for night ${it.pickTarget.index + 1}`
+                : it.pickTarget.kind === "exit"
+                  ? "Tap the map to place the exit"
+                  : it.pickTarget.kind === "bail"
+                    ? "Tap the map to add a bail point"
+                    : `Tap the map to add a high point for day ${it.pickTarget.day + 1}`
+              : plan.lat === null
+                ? "Choose a location on the map"
+                : `${plan.lat.toFixed(4)}°, ${plan.lon?.toFixed(4)}° selected`}
           </span>
         </div>
         <button type="button" className="field-text-button" onClick={returnToPlan}>
@@ -238,9 +324,8 @@ export default function FieldApp() {
         <FieldMap
           plan={plan}
           workspace={w}
-          onPick={(lat, lon) =>
-            w.handleMapPositionChange({ lat, lng: lon })
-          }
+          trip={tripOverlay}
+          onPick={pickOnMap}
         />
       </Suspense>
       <div className="field-map-note">
@@ -336,6 +421,7 @@ export default function FieldApp() {
               <span>{dateLabel(w.todayDate)}</span>
               <button
                 onClick={() => {
+                  if (w.itinerary.openDayIndex !== null) w.closeItineraryDay(false);
                   if (w.handleEditPlan()) navigate("planner");
                 }}
               >
@@ -460,6 +546,41 @@ export default function FieldApp() {
                     </button>
                   </div>
                 </div>
+              ) : multiDay && it.openDayIndex === null ? (
+                it.loading ? (
+                  <div className="field-loading" role="status">
+                    <LoaderCircle className="field-spin" size={35} />
+                    <span className="field-kicker">Trip check</span>
+                    <h1>Checking {it.draft.camps.length + 1} days and {it.draft.camps.length} {it.draft.camps.length === 1 ? "night" : "nights"}</h1>
+                    <p>Each day at its camp and high points, then each night at camp. This takes a little longer than a single day.</p>
+                  </div>
+                ) : it.result ? (
+                  <Suspense fallback={<p role="status">Opening trip brief…</p>}>
+                    <Itinerary
+                      workspace={w}
+                      onEdit={editTrip}
+                      onSave={w.featureFlags.reportHistory ? () => void tripAction("save") : undefined}
+                      onWatch={w.featureFlags.objectiveWatch ? () => void tripAction("watch") : undefined}
+                      actionBusy={actionBusy}
+                      feedback={feedback}
+                    />
+                  </Suspense>
+                ) : (
+                  <section className="field-planner">
+                    <header className="field-page-heading">
+                      <span className="field-kicker">New trip</span>
+                      <h1>Plan a multi-day trip</h1>
+                      <p>Set a trailhead, a camp for each night, and how long you hike each day.</p>
+                    </header>
+                    {it.error && (
+                      <p className="sky-notice is-caution" role="alert">{it.error}</p>
+                    )}
+                    <div className="field-planner-grid">
+                      <WorkspacePlan workspace={w} onChooseMap={chooseOnMap} />
+                      {map}
+                    </div>
+                  </section>
+                )
               ) : w.loading ? (
                 <div className="field-loading" role="status">
                   <LoaderCircle className="field-spin" size={35} />
@@ -493,11 +614,14 @@ export default function FieldApp() {
                 <Suspense
                   fallback={<p role="status">Opening conditions report…</p>}
                 >
+                  {w.restoredReportSource === "itinerary" && it.openDayIndex !== null && it.result && (
+                    <TripDayBar workspace={w} />
+                  )}
                   <Report
                     key={`${w.safetyData?.generatedAt}-${w.reportChatSessionKey}`}
                     report={w.reportSnapshot}
                     workspace={w}
-                    onEdit={() => w.handleEditPlan()}
+                    onEdit={() => (w.restoredReportSource === "itinerary" ? editTrip() : w.handleEditPlan())}
                     onSave={() => void action("save")}
                     onShare={() => void action("share")}
                     onWatch={() => void action("watch")}
@@ -686,5 +810,36 @@ export default function FieldApp() {
         )}
       </div>
     </AiAccessContext.Provider>
+  );
+}
+
+/** Above a trip day opened in the brief: where it sits in the trip, and the way back. */
+function TripDayBar({ workspace: w }: { workspace: ReturnType<typeof useWorkspace> }) {
+  const it = w.itinerary;
+  const index = it.openDayIndex ?? 0;
+  const stages = it.result?.stages ?? [];
+  const stage = stages[index];
+  const checked = (dayIndex: number) => Boolean(it.result?.results[dayIndex]?.report);
+  const previous = [...stages.keys()].filter((dayIndex) => dayIndex < index && checked(dayIndex)).pop();
+  const next = [...stages.keys()].find((dayIndex) => dayIndex > index && checked(dayIndex));
+  if (!stage) return null;
+  return (
+    <div className="sky-trip-daybar" role="navigation" aria-label="Trip days">
+      <button type="button" className="field-text-button" onClick={() => w.closeItineraryDay()}>
+        <ArrowLeft size={15} aria-hidden="true" />
+        Trip brief
+      </button>
+      <span>
+        <strong>Day {index + 1} of {stages.length}</strong> · {stage.layover ? "Layover at" : "Ending at"} {stage.to.name || "camp"} · {dateLabel(stage.date)}
+      </span>
+      <nav>
+        <button type="button" className="field-button" disabled={previous === undefined} onClick={() => previous !== undefined && w.openItineraryDay(previous)}>
+          Previous day
+        </button>
+        <button type="button" className="field-button" disabled={next === undefined} onClick={() => next !== undefined && w.openItineraryDay(next)}>
+          Next day
+        </button>
+      </nav>
+    </div>
   );
 }
