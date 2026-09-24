@@ -4,6 +4,8 @@
 .field-app .sky-admin > * { min-width: 0; }
 .field-app .sky-admin > .field-page-heading { padding-bottom: 4px; }
 .field-app .sky-admin .sky-notice { margin: 0; }
+.field-app .sky-admin .field-panel .sky-notice { margin: 8px 0; background: var(--sky-fill); font-size: 14px; }
+.field-app .sky-admin .sky-notice.is-success { box-shadow: inset 4px 0 0 var(--sky-accent); }
 
 /* Toolbar */
 .sky-admin-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 12px; }
@@ -45,6 +47,8 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .field-app .sky-admin [ref], .field-app .sky-admin > div:not([class]) { display: grid; gap: 20px; min-width: 0; }
 .field-app .sky-admin > div:not([class]) > * { min-width: 0; }
 .field-app .sky-admin .field-panel > h2, .field-app .sky-admin .field-section-heading h2 { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.field-app .sky-admin .field-panel > h2 small { margin-left: 6px; font-size: 15px; font-weight: 600; color: var(--sky-secondary); font-variant-numeric: tabular-nums; }
+.field-app .sky-admin .admin-subheading { margin: 22px 0 2px; font-size: 16px; font-weight: 650; }
 .field-app .sky-admin .field-panel > p, .field-app .sky-admin .field-panel > fieldset > p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 .field-app .sky-admin .field-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .field-app .sky-admin .field-section-heading h2 { margin: 0; }
@@ -85,15 +89,28 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .field-app .sky-admin .field-admin-toggle input:checked { background: var(--sky-accent); }
 .field-app .sky-admin .field-admin-toggle input:checked::after { transform: translateX(18px); }
 .field-app .sky-admin .field-admin-toggle input:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
+.field-app .sky-admin .field-admin-toggle .admin-toggle-note { font-weight: 600; }
+/* A settings row whose control is a menu rather than a switch. */
+.field-app .sky-admin .admin-select-row { cursor: default; }
+.field-app .sky-admin .admin-select-row select {
+  flex: none; min-width: 190px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 12px;
+  background: var(--sky-fill); color: var(--sky-label); font: inherit; font-size: 15px;
+}
 
 /* Settings rows */
 .field-app .sky-admin .field-admin-setting { padding: 16px 0; border-top: 1px solid var(--sky-separator); }
 .field-app .sky-admin .field-admin-setting h3 { margin: 0 0 4px; font-size: 16px; font-weight: 650; }
 .field-app .sky-admin .field-admin-setting h3 small { margin-left: 6px; font-size: 13px; font-weight: 500; color: var(--sky-secondary); }
+.field-app .sky-admin .field-admin-setting h3 .admin-badge { margin-left: 8px; vertical-align: 2px; }
 .field-app .sky-admin .field-admin-setting p { margin: 0 0 4px; font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 .field-app .sky-admin .field-admin-setting small { font-size: 12px; color: var(--sky-secondary); overflow-wrap: anywhere; }
+.field-app .sky-admin .field-admin-setting code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .field-app .sky-admin .field-admin-setting .field-action-row { margin: 10px 0 0; }
-.field-app .sky-admin .field-admin-limits { display: grid; grid-template-columns: repeat(2, minmax(140px, 200px)) auto auto; gap: 10px; align-items: end; margin: 12px 0; }
+.field-app .sky-admin .admin-maintenance { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.field-app .sky-admin .admin-maintenance > div { flex: 1 1 320px; min-width: 0; }
+.field-app .sky-admin .field-admin-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; margin: 0 0 8px; }
+.field-app .sky-admin .field-admin-limits .field-action-row { margin: 8px 0 0; }
+.field-app .sky-admin .field-admin-limits .field-form-label { flex: 1 1 140px; }
 
 /* Key/value records and disclosures */
 .field-app .sky-admin .field-record { margin: 6px 0 10px; padding: 2px 14px; border-radius: 12px; background: var(--sky-fill); font-size: 14px; }
@@ -119,14 +136,16 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .field-app .sky-admin .field-details > summary::-webkit-details-marker { display: none; }
 .field-app .sky-admin .field-details > summary small { margin: 0; font-size: 12px; font-weight: 500; color: var(--sky-secondary); }
 .admin-mini-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 4px 0 12px; }
-.admin-mini-stats > div { min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--sky-fill); }
-.admin-mini-stats dt { font-size: 12px; font-weight: 600; color: var(--sky-secondary); }
-.admin-mini-stats dd { margin: 2px 0 0; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.admin-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 4px; }
+:is(.admin-mini-stats, .admin-tiles) > div { min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--sky-fill); }
+:is(.admin-mini-stats, .admin-tiles) dt { font-size: 12px; font-weight: 600; color: var(--sky-secondary); }
+:is(.admin-mini-stats, .admin-tiles) dd { margin: 2px 0 0; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.admin-tiles dd { font-size: 16px; }
 
 /* Badges */
 .field-app .sky-admin .admin-badge {
   display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border: 0; border-radius: 999px;
-  background: var(--sky-fill); color: var(--sky-label); font-size: 12px; font-weight: 600; text-transform: capitalize; white-space: nowrap;
+  background: var(--sky-fill); color: var(--sky-label); font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 .field-app .sky-admin .admin-badge[data-tone="good"] { background: color-mix(in srgb, var(--sky-accent) 14%, var(--sky-surface)); color: var(--sky-accent); }
 .field-app .sky-admin .admin-badge[data-tone="critical"], .field-app .sky-admin .admin-badge[data-tone="warning"] { background: var(--sky-caution-fill); color: var(--sky-caution); }
@@ -152,6 +171,8 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .admin-facts > div:last-child { border-bottom: 0; }
 .admin-facts dt { color: var(--sky-label); }
 .admin-facts dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.admin-facts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; margin: 4px 0 8px; }
+.admin-facts-grid > div:nth-last-child(2):nth-child(odd) { border-bottom: 0; }
 .admin-resource { margin: 10px 0 14px; }
 .admin-resource > div { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
 .admin-resource strong { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -168,7 +189,8 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .field-app .sky-admin .admin-overview-grid .field-text-button { align-self: flex-start; margin-top: auto; }
 
 /* Users */
-.admin-user-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* Badge text is already cased; workspace.css capitalizes this slot for plain words. */
+.field-app .sky-admin .admin-user-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; text-transform: none; }
 .field-app .sky-admin .field-admin-user { padding: 12px 0; border-top: 1px solid var(--sky-separator); }
 .field-app .sky-admin .field-admin-user > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 48px; cursor: pointer; list-style: none; }
 .field-app .sky-admin .field-admin-user > summary::-webkit-details-marker { display: none; }
@@ -180,6 +202,16 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .field-app .sky-admin .field-admin-user summary small { margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--sky-secondary); }
 .field-app .sky-admin .field-admin-user[open] { margin: 0 -12px; padding: 12px; border-top-color: transparent; border-radius: 14px; background: var(--sky-fill); }
 .field-app .sky-admin .field-admin-user[open] .field-record { background: var(--sky-surface); }
+/* Inside an open row the fill is the background, so fills move to the surface. */
+.field-app .sky-admin .field-admin-user[open] .admin-badge:not([data-tone]),
+.field-app .sky-admin .field-admin-user[open] .field-button,
+.field-app .sky-admin .field-admin-user[open] :is(input:not([type="checkbox"]), select) { background: var(--sky-surface); }
+.field-app .sky-admin .field-admin-user[open] .field-button:hover:not(:disabled) { background: color-mix(in srgb, var(--f-ink) 10%, var(--sky-surface)); }
+.field-app .sky-admin .field-admin-user[open] .admin-resource meter,
+.field-app .sky-admin .field-admin-user[open] .admin-resource meter::-webkit-meter-bar { background: var(--sky-surface); }
+.admin-user-usage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; margin-top: 6px; }
+.admin-user-usage .admin-resource { margin: 8px 0; }
+.field-app .sky-admin .admin-user-meta { margin: 0 0 2px; font-size: 13px; color: var(--sky-secondary); }
 
 /* Operations: service rows */
 .admin-summary-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px !important; }
@@ -194,9 +226,32 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .admin-service-meta { text-align: right; }
 .admin-service-meta b { font-size: 13px; font-weight: 600; text-transform: capitalize; color: var(--sky-secondary); }
 .admin-service.is-failed .admin-service-meta b { color: var(--sky-caution); }
+.admin-checks { margin-top: 10px; }
+.admin-checks .admin-service { padding: 11px 0; }
+.admin-checks .admin-service strong { font-size: 15px; }
+.admin-service small.admin-check-error { color: var(--sky-caution); }
+
+/* Health-check strip: one bar per recorded check, oldest first. Failed checks
+   are full height as well as caution-coloured. */
+.admin-uptime { display: flex; align-items: flex-end; gap: 2px; height: 28px; margin: 16px 0 4px; }
+.admin-uptime i { flex: 1 1 0; min-width: 1px; height: 60%; border-radius: 2px; background: color-mix(in srgb, var(--sky-accent) 70%, transparent); }
+.admin-uptime i.is-failed { height: 100%; background: var(--sky-caution); }
+.admin-uptime-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--sky-secondary); }
+
+/* Audit trail */
+.admin-audit { list-style: none; margin: 4px 0 0; padding: 0; }
+.admin-audit-entry { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 12px 0 6px; border-top: 1px solid var(--sky-separator); }
+.admin-audit-entry > svg { margin-top: 2px; color: var(--sky-accent); }
+.admin-audit-entry.is-failed > svg { color: var(--sky-caution); }
+.admin-audit-entry strong { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.admin-audit-entry small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; font-size: 13px; color: var(--sky-secondary); }
+.admin-audit-entry small b { color: var(--sky-caution); font-weight: 600; }
+.field-app .sky-admin .admin-audit-entry .admin-badge { min-height: 20px; padding: 0 8px; font-size: 11px; }
+.field-app .sky-admin .admin-audit-entry details.field-detail-disclosure > summary { min-height: 32px; font-size: 13px; }
 
 /* Analytics */
 .field-admin-chart { height: 280px; min-width: 0; margin: 16px 0 8px; }
+.field-app .sky-admin .admin-chart-empty { margin: 16px 0 8px; padding: 56px 18px; }
 .field-app .sky-admin .field-admin-chart .recharts-legend-item-text { color: var(--sky-secondary) !important; font-size: 13px; }
 .field-app .sky-admin .field-admin-chart .recharts-default-tooltip { border: 0 !important; border-radius: 12px; background: var(--sky-surface) !important; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14); font-size: 13px; }
 .admin-analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -227,11 +282,16 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 .admin-hotspots b { font-size: 20px; font-weight: 700; color: var(--sky-caution); font-variant-numeric: tabular-nums; }
 .field-app .sky-admin .admin-all-clear { margin: 8px 0 0; font-size: 15px; color: var(--sky-secondary); }
 
-/* Request table */
+/* Tables */
 .field-app .sky-admin .field-table-wrap { margin: 8px 0 0; overflow-x: auto; }
-.field-app .sky-admin .admin-requests { min-width: 720px; font-size: 14px; }
-.field-app .sky-admin .admin-requests :is(th, td) { padding: 10px 10px; border-bottom: 1px solid var(--sky-separator); vertical-align: middle; }
-.field-app .sky-admin .admin-requests th { font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.field-app .sky-admin .admin-table { font-size: 14px; }
+.field-app .sky-admin .admin-table :is(th, td) { padding: 10px 10px; border-bottom: 1px solid var(--sky-separator); vertical-align: middle; }
+.field-app .sky-admin .admin-table th { font-size: 13px; font-weight: 600; color: var(--sky-secondary); }
+.field-app .sky-admin .admin-table td strong { font-weight: 600; }
+.field-app .sky-admin .admin-table td small { display: block; margin-top: 2px; font-size: 12px; color: var(--sky-secondary); }
+.field-app .sky-admin .admin-table td.is-over { color: var(--sky-caution); font-weight: 650; }
+.field-app .sky-admin .admin-table .admin-table-empty { padding: 32px 10px; border-bottom: 0; text-align: center; white-space: normal; color: var(--sky-secondary); }
+.field-app .sky-admin .admin-requests { min-width: 720px; }
 .field-app .sky-admin .admin-requests th .field-text-button { min-height: 32px; padding: 0; color: var(--sky-secondary); font-size: 13px; }
 .field-app .sky-admin .admin-requests th[aria-sort="ascending"] .field-text-button,
 .field-app .sky-admin .admin-requests th[aria-sort="descending"] .field-text-button { color: var(--sky-label); }
@@ -244,6 +304,8 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
 
 /* Confirmation dialog actions */
 .admin-confirm-actions { justify-content: flex-end; margin-top: 12px; }
+.field-app .field-button.admin-button-danger { background: var(--sky-caution); color: var(--sky-bg); }
+.field-app .field-button.admin-button-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--sky-caution) 85%, var(--sky-label)); color: var(--sky-bg); }
 
 @media (max-width: 1150px) {
   .field-app .sky-admin-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -256,8 +318,7 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
   .sky-admin-toolbar .sky-toolbar-actions { margin-left: 0; width: 100%; }
   .sky-segmented.sky-admin-range { width: 100%; }
   .sky-admin-range button { flex: 1 1 0; }
-  .field-app .sky-admin .field-admin-limits { grid-template-columns: 1fr 1fr; }
-  .field-app .sky-admin .field-admin-limits > :not(label) { grid-column: auto; }
+  .field-app .sky-admin .field-admin-limits { grid-template-columns: 1fr; }
 }
 @media (max-width: 650px) {
   .field-app .sky-admin { gap: 16px; }
@@ -268,13 +329,21 @@ html[data-theme="dark"] .field-app .sky-admin .field-chapter-nav button[aria-cur
   .field-app .sky-admin .field-chapter-nav button { flex: 0 0 auto; background: var(--sky-fill); border-radius: 999px; min-height: 40px; }
   .field-app .sky-admin .field-chapter-nav button[aria-current="page"] { background: var(--sky-label); color: var(--sky-bg); box-shadow: none; }
   .field-app .sky-admin .field-action-row > * { flex: 1 1 100%; max-width: 100%; }
-  .admin-mini-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-mini-stats, .admin-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-facts-grid, .admin-user-usage { grid-template-columns: 1fr; }
+  .admin-facts-grid > div:nth-last-child(2):nth-child(odd) { border-bottom: 1px solid var(--sky-separator); }
+  .field-app .sky-admin .admin-select-row { flex-wrap: wrap; }
+  .field-app .sky-admin .admin-select-row select { flex: 1 1 100%; }
+  .admin-uptime { gap: 1px; }
   .admin-bars li { grid-template-columns: minmax(0, 1fr) 72px; gap: 4px 12px; }
   .admin-bar-label { grid-column: 1; }
   .admin-bar-track { grid-column: 1 / -1; grid-row: 2; }
   .admin-bar-value { grid-column: 2; grid-row: 1; }
   .admin-service { grid-template-columns: auto minmax(0, 1fr); }
   .admin-service-meta { grid-column: 2; text-align: left; }
+  .admin-checks .admin-service { gap: 4px 14px; }
+  .admin-checks .admin-service-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+  .admin-checks .admin-service-meta small { margin-top: 0; }
   .field-app .sky-admin .field-record > div { grid-template-columns: 1fr; gap: 2px; }
   .field-app .sky-admin .field-admin-user > summary { flex-wrap: wrap; }
 }

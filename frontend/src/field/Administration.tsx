@@ -5,18 +5,21 @@ import {
   useAdministration,
   type Administration as Model,
 } from "./model/useAdministration";
-import { DetailValues } from "./Details";
 import { Dialog } from "./Dialog";
+import { AdminActivity } from "./AdminActivity";
 import { AdminControls } from "./AdminControls";
 import { AdminUsers } from "./AdminUsers";
 import { AdminAnalytics } from "./AdminAnalytics";
+/** Errors use the caution tone; confirmations of completed actions use success. */
 export function AdminNotice({
   message,
+  tone = "caution",
 }: {
   message: string | null | undefined;
+  tone?: "caution" | "success";
 }) {
   return message ? (
-    <p className="sky-notice is-caution" role="status">
+    <p className={`sky-notice admin-notice is-${tone}`} role="status">
       {message}
     </p>
   ) : null;
@@ -163,100 +166,7 @@ export default function Administration() {
         {a.activeSection === "users" && <AdminUsers a={a} />}
         {a.activeSection === "operations" && <AdminControls a={a} />}
         {a.activeSection === "analytics" && <AdminAnalytics a={a} />}
-        {a.activeSection === "activity" && (
-          <section className="field-panel">
-            <h2>Audit trail</h2>
-            <div className="field-action-row admin-filters">
-              <label className="field-form-label">
-                Search activity
-                <input
-                  type="search"
-                  value={a.auditQuery}
-                  onChange={(e) => a.setAuditQuery(e.target.value)}
-                />
-              </label>
-              <label className="field-form-label">
-                Category
-                <select
-                  value={a.auditFilter}
-                  onChange={(e) =>
-                    a.setAuditFilter(e.target.value as typeof a.auditFilter)
-                  }
-                >
-                  {a.AUDIT_FILTERS.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="field-button"
-                onClick={() =>
-                  a.triggerCsvDownload(
-                    "admin-activity.csv",
-                    [
-                      "Timestamp",
-                      "Action",
-                      "Category",
-                      "Status",
-                      "Summary",
-                      "Actor network",
-                      "Details",
-                    ],
-                    a.filteredAuditEntries.map((e) => [
-                      e.timestamp,
-                      e.action,
-                      e.category,
-                      e.status,
-                      e.summary,
-                      e.actorNetwork,
-                      JSON.stringify(e.details),
-                    ]),
-                  )
-                }
-              >
-                Export activity
-              </button>
-            </div>
-            <AdminNotice message={a.auditError} />
-            <div className="admin-result-summary" role="status">
-              <span>
-                {a.filteredAuditEntries.length} of {a.auditEntries.length}{" "}
-                loaded events
-              </span>
-              {(a.auditQuery || a.auditFilter !== "all") && (
-                <button
-                  className="field-text-button"
-                  onClick={() => {
-                    a.setAuditQuery("");
-                    a.setAuditFilter("all");
-                  }}
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-            {a.filteredAuditEntries.map((entry, i) => (
-              <details
-                className="field-details"
-                key={`${entry.timestamp}-${i}`}
-              >
-                <summary>
-                  <span>{entry.summary}</span>
-                  <small>
-                    {new Date(entry.timestamp).toLocaleString()} ·{" "}
-                    {entry.status}
-                  </small>
-                </summary>
-                <DetailValues value={entry} />
-              </details>
-            ))}
-            {!a.filteredAuditEntries.length && (
-              <p className="sky-empty">No matching activity.</p>
-            )}
-          </section>
-        )}
+        {a.activeSection === "activity" && <AdminActivity a={a} />}
       </div>
       {a.confirmation && (
         <Dialog
@@ -272,7 +182,7 @@ export default function Administration() {
               {a.confirmation.cancelLabel || "Cancel"}
             </button>
             <button
-              className="field-button field-button-primary"
+              className={`field-button ${a.confirmation.tone === "danger" ? "admin-button-danger" : "field-button-primary"}`}
               onClick={() => a.resolveAdminConfirmation(true)}
             >
               {a.confirmation.confirmLabel}
