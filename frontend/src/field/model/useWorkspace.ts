@@ -161,7 +161,8 @@ import {
   TRAVEL_THRESHOLD_PRESETS,
 } from "../../hooks/usePreferenceHandlers";
 import type { TravelThresholdPresetKey } from "../../hooks/usePreferenceHandlers";
-import { useProductFeatureFlags } from "../../contexts/feature-flags";
+import { resolveReportFeatureFlags, useProductFeatureFlags } from "../../contexts/feature-flags";
+import { buildRouteReportContext } from "../route-planning";
 import { useAccount } from "../../hooks/useAccount";
 import {
   buildSavedReportShareUrl,
@@ -1319,6 +1320,7 @@ export function useWorkspace() {
     void handleRequestAiBrief({
       safetyData,
       decisionLevel: decision.level,
+      route: routeReportContext,
     });
   };
 
@@ -2395,6 +2397,14 @@ export function useWorkspace() {
     ).rainfallData;
     return legacy && typeof legacy === "object" ? legacy : null;
   }, [safetyData]);
+  // The analyzed route, for the AI explanation and chat to read with the report.
+  const routeReportContext = useMemo(
+    () =>
+      safetyData && resolveReportFeatureFlags(safetyData.featureFlags).routeAnalysis
+        ? buildRouteReportContext(plannedRouteName, routeAnalysis)
+        : null,
+    [safetyData, plannedRouteName, routeAnalysis],
+  );
   const rawReportPayload = React.useMemo(
     () =>
       safetyData
@@ -2431,6 +2441,7 @@ export function useWorkspace() {
             pleasantness: safetyData.pleasantness || null,
             safety: safetyData.safety,
             decision,
+            ...(routeReportContext ? { route: routeReportContext } : {}),
           })
         : "",
     [
@@ -2446,6 +2457,7 @@ export function useWorkspace() {
       targetElevationFt,
       decision,
       rainfallPayload,
+      routeReportContext,
     ],
   );
   const deepDiveShareLink =

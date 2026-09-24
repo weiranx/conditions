@@ -94,7 +94,14 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   const [heroHeight, setHeroHeight] = useState(640);
   useEffect(() => {
     const el = ref.current;
-    if (el) setHeroHeight(el.getBoundingClientRect().height || 640);
+    if (!el) return;
+    const measure = () => setHeroHeight(el.getBoundingClientRect().height || 640);
+    measure();
+    // Notes can arrive after the first paint (a route analysis finishing, for one).
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [ref, width, headline, reason]);
   const horizon = heroHeight - ridge + 18;
   const peak = heroHeight - ridge - scene + 26;

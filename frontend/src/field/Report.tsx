@@ -29,6 +29,8 @@ import { AiExplanation, AiExplanationSkeleton } from "./AiExplanation";
 import { SkyHero } from "./sky/SkyHero";
 import { DayStrip } from "./sky/DayStrip";
 import { ApproachNote } from "./sky/ApproachNote";
+import { RouteNote } from "./sky/RouteNote";
+import { summarizePlannedRoute } from "./route-planning";
 import { BriefSections } from "./sky/BriefSections";
 import { buildSkyHours } from "./sky/sky-model";
 import { verdictCopy } from "./verdict-copy";
@@ -156,6 +158,23 @@ export function Report({
   const clock = (minute: number) =>
     w.formatClockForStyle(minutesToTwentyFourHourClock(((minute % 1440) + 1440) % 1440), w.preferences.timeStyle);
   const copy = verdictCopy({ data, decision, primaryReason: w.fieldBriefPrimaryReason, preferences: w.preferences });
+  // The route chosen in the plan, once the report has a Route chapter to show it.
+  const route = flags.routeAnalysis
+    ? summarizePlannedRoute({
+      name: w.plannedRouteName,
+      analysis: w.routeAnalysis,
+      // Analysis waits for a loading account before it starts.
+      checking: w.routeLoadingState?.kind === "analysis"
+        ? { checkpointCount: w.routeLoadingState.checkpointCount }
+        : w.accountLoading && !w.viewingHistoryReport ? {} : null,
+      error: w.routeError,
+      limits: w.preferences,
+      signedIn: Boolean(w.accountUser),
+      available: ai.routeAnalysis,
+      saved: w.viewingHistoryReport,
+    })
+    : null;
+  const eta = (time: string) => w.formatClockForStyle(time, w.preferences.timeStyle);
 
   useEffect(() => {
     const listener = () => setView(viewFromHash());
@@ -372,6 +391,7 @@ export function Report({
   const subtitle = (
     <>
       {/* Line breaks fall between the parts, never inside "7:00 AM" or "13,775 ft". */}
+      {route && <>via {route.name} · </>}
       <span className="sky-nowrap">{dateLabel(report.plan.forecastDate)}</span> · <span className="sky-nowrap">{w.displayStartTime} start</span> · <span className="sky-nowrap">{report.plan.travelWindowHours} hours</span>
       {data.weather.elevation != null && <> · <span className="sky-nowrap">{w.formatElevationDisplay(Number(data.weather.elevation))}</span></>}
       <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
@@ -395,6 +415,13 @@ export function Report({
       clock={clock}
       elevation={(ft) => w.formatElevationDisplay(ft)}
       onEdit={w.viewingHistoryReport ? undefined : () => go("terrain", "sky-terrain-approach")}
+    />
+  );
+  const routeNote = (
+    <RouteNote
+      route={route}
+      format={{ temp: (f) => w.formatTempDisplay(f), wind: (mph) => w.formatWindDisplay(mph), eta }}
+      onOpen={() => go("route")}
     />
   );
   const chapterContent = (id: Chapter) => {
@@ -426,7 +453,7 @@ export function Report({
           reason={copy.reason}
           bridge={copy.bridge}
           limitingChecks={copy.limitingChecks}
-          note={approachNote}
+          note={<>{approachNote}{routeNote}</>}
           actions={actions}
           format={{
             temp: (f) => w.formatTempDisplay(f),
@@ -477,6 +504,7 @@ export function Report({
             onOpen={(next) => go(next)}
             onReadAll={() => go("all")}
             routeEnabled={flags.routeAnalysis}
+            route={route}
             gearEnabled={flags.gearRecommendations}
           />
         )}
@@ -496,6 +524,7 @@ export function Report({
                 </ul>
               )}
               {approachNote}
+              {routeNote}
               <p className="sky-cap">{subtitle}</p>
             </section>
             <BriefSections
@@ -508,6 +537,7 @@ export function Report({
               onOpen={(next) => go(next)}
               onReadAll={() => go("all")}
               routeEnabled={flags.routeAnalysis}
+              route={route}
               gearEnabled={flags.gearRecommendations}
               showMore={false}
             />

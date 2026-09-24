@@ -5,6 +5,8 @@ import { freshnessClass } from "../../app/core";
 import { durationLabel, plainRule, surfaceLabel, terrainStatus, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
 import { avalancheBriefCaption } from "../../app/avalanche-display";
+import { describeCheckpointBreach, type PlannedRouteSummary } from "../route-planning";
+import { RouteStrip } from "./RouteStrip";
 
 export type BriefChapter = "forecast" | "timing" | "terrain" | "route" | "sources" | "gear";
 type Status = CheckStatus;
@@ -16,11 +18,11 @@ export function StatusTag({ status, children }: { status: Status; children: Reac
   return <span className={`sky-status is-${status}`}><Icon size={15} aria-hidden="true" />{children}</span>;
 }
 
-function CheckCard({ title, status, statusText, caption, children, onOpen }: {
-  title: string; status: Status; statusText: string; caption: string; children?: ReactNode; onOpen: () => void;
+function CheckCard({ title, status, statusText, caption, children, onOpen, className = "" }: {
+  title: string; status: Status; statusText: string; caption: string; children?: ReactNode; onOpen: () => void; className?: string;
 }) {
   return (
-    <button type="button" className={`sky-card sky-check${status === "missing" ? " is-missing" : ""}`} onClick={onOpen}>
+    <button type="button" className={`sky-card sky-check${status === "missing" ? " is-missing" : ""}${className ? ` ${className}` : ""}`} onClick={onOpen}>
       <span className="sky-card-head"><span>{title}</span><StatusTag status={status}>{statusText}</StatusTag></span>
       {children}
       <span className="sky-cap">{caption}</span>
@@ -29,7 +31,40 @@ function CheckCard({ title, status, statusText, caption, children, onOpen }: {
   );
 }
 
-export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, routeEnabled, gearEnabled, showMore = true }: {
+const UNCHECKED_ROUTE: Record<Extract<PlannedRouteSummary, { state: "unchecked" }>["reason"], string> = {
+  failed: "Route analysis didn't finish. Open Route to try again.",
+  saved: "No route analysis was saved with this report.",
+  unavailable: "Route analysis is unavailable on this server right now.",
+  "sign-in": "Sign in to check conditions at timed checkpoints along the route.",
+  "not-run": "Open Route to check conditions at timed checkpoints along the route.",
+};
+
+/** Status, status text and caption for the planned route's check card. */
+function routeCheck(route: PlannedRouteSummary, format: { temp: (f: number) => string; wind: (mph: number) => string; eta: (time: string) => string }) {
+  if (route.state === "checking") return {
+    status: "missing" as Status, statusText: "Checking…",
+    caption: `Checking ${route.checkpointCount ? `${route.checkpointCount} checkpoints` : "timed checkpoints"} along the route. This can take a minute.`,
+  };
+  if (route.state === "unchecked") return { status: "missing" as Status, statusText: "Not checked", caption: UNCHECKED_ROUTE[route.reason] };
+  const { stops, overCount, missingCount, firstOver, finish } = route;
+  const back = finish
+    ? ` ${finish.returnToStart ? "Back at the start" : "Finish"} around ${format.eta(finish.eta)}${finish.dark ? ", after dark" : ""}.`
+    : "";
+  if (!stops.length) return { status: "missing" as Status, statusText: "No forecasts", caption: "No checkpoint forecasts were returned for this route." };
+  if (firstOver) return {
+    status: "over" as Status,
+    statusText: `${overCount} of ${stops.length} over`,
+    caption: `${firstOver.name}${firstOver.eta ? ` at ${format.eta(firstOver.eta)}` : ""}: ${describeCheckpointBreach(firstOver.breach, format)}.${back}`,
+  };
+  if (missingCount) return {
+    status: "missing" as Status,
+    statusText: `${missingCount} incomplete`,
+    caption: `${missingCount} checkpoint ${missingCount === 1 ? "forecast is" : "forecasts are"} missing or incomplete, so ${missingCount === 1 ? "it" : "they"} can't be checked against every limit.${back}`,
+  };
+  return { status: "ok" as Status, statusText: "Within limits", caption: `All ${stops.length} checkpoint forecasts are within your limits.${back}` };
+}
+
+export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridge, onOpen, onReadAll, routeEnabled, route = null, gearEnabled, showMore = true }: {
   w: Workspace;
   hours: SkyHour[];
   clock: (minute: number) => string;
@@ -41,6 +76,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   /** The "More in this brief" links; the full report already contains every section. */
   showMore?: boolean;
   routeEnabled: boolean;
+  /** The route chosen in the plan; the checks then lead with it. */
+  route?: PlannedRouteSummary | null;
   gearEnabled: boolean;
 }) {
   const data = w.safetyData!;
@@ -87,6 +124,15 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const fireDriver = data.fireRisk?.primaryDriver;
   const fireCause = Number(w.fireRiskLevel) >= 2 && fireDriver
     ? ({ fire: "fire nearby", weather: "fire weather", smoke: "smoke" } as const)[fireDriver]
+    : "";
+  const eta = (time: string) => w.formatClockForStyle(time, prefs.timeStyle);
+  const routeFormat = { temp: (f: number) => w.formatTempDisplay(f), wind: (mph: number) => w.formatWindDisplay(mph), eta };
+  const routeFacts = route?.state === "checked"
+    ? [
+      route.distanceMiles !== null ? w.formatDistanceDisplay(route.distanceMiles) : null,
+      route.gainFt !== null ? `${w.formatElevationDeltaDisplay(route.gainFt)} gain` : null,
+      route.stops.length ? `${route.stops.length} ${route.stops.length === 1 ? "checkpoint" : "checkpoints"}` : null,
+    ].filter(Boolean).join(" · ")
     : "";
   const gear = (w.gearRecommendations || []).filter(Boolean).slice(0, 4);
   const gearTotal = (w.gearRecommendations || []).filter(Boolean).length;
@@ -162,6 +208,17 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
       <section className="sky-section" aria-labelledby="sky-checks">
         <div className="sky-sh"><h2 id="sky-checks">Checks</h2><p>Open any card for the full evidence.</p></div>
         <div className="sky-checks">
+          {route && (
+            <CheckCard title="Route" className="is-route" onOpen={() => onOpen("route")} {...routeCheck(route, routeFormat)}>
+              <span className="sky-route-check-name">
+                <strong>{route.name}</strong>
+                {routeFacts && <span className="sky-muted">{routeFacts}</span>}
+              </span>
+              {route.state === "checked" && (
+                <RouteStrip name={route.name} stops={route.stops} profile={route.profile} eta={eta} />
+              )}
+            </CheckCard>
+          )}
           <CheckCard title="Weather" onOpen={() => onOpen("forecast")}
             status={overCount ? "over" : missingCount ? "missing" : "ok"}
             statusText={overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : overCount ? `${overCount} hours over` : missingCount ? `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` : "Within limits"}
@@ -275,7 +332,7 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
       {showMore && <section className="sky-section" aria-labelledby="sky-more">
         <div className="sky-sh"><h2 id="sky-more">More in this brief</h2></div>
         <div className="sky-group">
-          {routeEnabled && <button type="button" className="sky-row" onClick={() => onOpen("route")}>
+          {routeEnabled && !route && <button type="button" className="sky-row" onClick={() => onOpen("route")}>
             <span><strong>Route</strong><small>Conditions along your route and checkpoints</small></span><ChevronRight size={18} aria-hidden="true" /></button>}
           <button type="button" className="sky-row" onClick={() => onOpen("sources")}>
             <span><strong>Checks &amp; sources</strong><small>{w.hasFreshnessWarning ? w.freshnessWarningSummary : "Source freshness and where each number comes from"}</small></span>

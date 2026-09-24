@@ -1,4 +1,4 @@
-import type { RouteTiming, RouteWaypointSummary } from "../hooks/useRouteAnalysis";
+import type { RouteAnalysisResult, RouteTiming, RouteWaypointSummary } from "../hooks/useRouteAnalysis";
 import { computeFeelsLikeF } from "../app/planner-helpers";
 
 export function hasRouteNumber(value: unknown): value is number {
@@ -35,6 +35,28 @@ export function buildCheckpointProfile(summaries: RouteWaypointSummary[]) {
 
 type Limits = { maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: number; maxFeelsLikeF: number };
 
+/** One of the user's limits that a checkpoint forecast crosses, in mph, % and °F. */
+export type CheckpointBreach = { kind: "gust" | "precip" | "cold" | "heat"; value: number; limit: number };
+
+function checkpointFeelsLike(point: RouteWaypointSummary): number | null {
+  const { feelsLike, temp, windSpeed } = point.weather;
+  if (hasRouteNumber(feelsLike)) return feelsLike;
+  return hasRouteNumber(temp) && hasRouteNumber(windSpeed) ? computeFeelsLikeF(temp, windSpeed) : null;
+}
+
+/** Every limit a checkpoint's measured forecast crosses; a missing reading crosses nothing. */
+export function checkpointBreaches(point: RouteWaypointSummary, limits: Limits): CheckpointBreach[] {
+  if (!point.dataAvailable) return [];
+  const { windGust, precipChance } = point.weather;
+  const feelsLike = checkpointFeelsLike(point);
+  const breaches: CheckpointBreach[] = [];
+  if (hasRouteNumber(windGust) && windGust > limits.maxWindGustMph) breaches.push({ kind: "gust", value: windGust, limit: limits.maxWindGustMph });
+  if (hasRouteNumber(precipChance) && precipChance > limits.maxPrecipChance) breaches.push({ kind: "precip", value: precipChance, limit: limits.maxPrecipChance });
+  if (feelsLike !== null && feelsLike < limits.minFeelsLikeF) breaches.push({ kind: "cold", value: feelsLike, limit: limits.minFeelsLikeF });
+  if (feelsLike !== null && feelsLike > limits.maxFeelsLikeF) breaches.push({ kind: "heat", value: feelsLike, limit: limits.maxFeelsLikeF });
+  return breaches;
+}
+
 /**
  * How a checkpoint's forecast sits against the user's limits. A measured breach
  * always wins; otherwise the checkpoint is "missing" unless gust, rain chance and
@@ -43,14 +65,143 @@ type Limits = { maxWindGustMph: number; maxPrecipChance: number; minFeelsLikeF: 
  */
 export function checkpointTone(point: RouteWaypointSummary, limits: Limits): "within" | "over" | "missing" {
   if (!point.dataAvailable) return "missing";
-  const { windGust, precipChance, temp, windSpeed } = point.weather;
-  const feelsLike = hasRouteNumber(point.weather.feelsLike) ? point.weather.feelsLike
-    : hasRouteNumber(temp) && hasRouteNumber(windSpeed) ? computeFeelsLikeF(temp, windSpeed) : null;
-  const over = (hasRouteNumber(windGust) && windGust > limits.maxWindGustMph)
-    || (hasRouteNumber(precipChance) && precipChance > limits.maxPrecipChance)
-    || (feelsLike !== null && (feelsLike < limits.minFeelsLikeF || feelsLike > limits.maxFeelsLikeF));
-  if (over) return "over";
-  return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && feelsLike !== null ? "within" : "missing";
+  if (checkpointBreaches(point, limits).length) return "over";
+  const { windGust, precipChance } = point.weather;
+  return hasRouteNumber(windGust) && hasRouteNumber(precipChance) && checkpointFeelsLike(point) !== null ? "within" : "missing";
+}
+
+export type RouteStopSummary = {
+  name: string;
+  eta: string | null;
+  tone: "within" | "over" | "missing";
+  dark: boolean;
+  elevationFt: number | null;
+};
+
+/**
+ * The planned route as the report shows it. "checking" while its checkpoints are
+ * analyzed, "unchecked" when no analysis exists (and why), "checked" once one does.
+ */
+export type PlannedRouteSummary =
+  | { state: "checking"; name: string; checkpointCount: number | null }
+  | { state: "unchecked"; name: string; reason: "failed" | "saved" | "unavailable" | "sign-in" | "not-run" }
+  | {
+    state: "checked";
+    name: string;
+    tone: "within" | "over" | "missing";
+    stops: RouteStopSummary[];
+    /** Each stop's place along the route and height, from 0 to 1; null when an elevation is unknown. */
+    profile: { x: number; y: number }[] | null;
+    overCount: number;
+    missingCount: number;
+    firstOver: { name: string; eta: string | null; breach: CheckpointBreach } | null;
+    finish: { eta: string; dark: boolean; returnToStart: boolean } | null;
+    distanceMiles: number | null;
+    gainFt: number | null;
+  };
+
+export function summarizePlannedRoute({ name, analysis, checking, error, limits, signedIn, available, saved }: {
+  /** The route chosen in the plan; empty when none is. */
+  name: string;
+  analysis: RouteAnalysisResult | null;
+  /** Set while this route's checkpoints are being analyzed (or the account that may analyze them is loading). */
+  checking: { checkpointCount?: number } | null;
+  error: string | null;
+  limits: Limits;
+  signedIn: boolean;
+  /** Whether this server offers route analysis. */
+  available: boolean;
+  /** A saved snapshot, which can't be analyzed again. */
+  saved: boolean;
+}): PlannedRouteSummary | null {
+  const label = name.trim() || analysis?.routeSourceDetails?.matchedName?.trim() || (analysis ? "Your route" : "");
+  if (!label) return null;
+  if (!analysis) {
+    if (checking) return { state: "checking", name: label, checkpointCount: checking.checkpointCount ?? null };
+    const reason = error ? "failed" : saved ? "saved" : !available ? "unavailable" : !signedIn ? "sign-in" : "not-run";
+    return { state: "unchecked", name: label, reason };
+  }
+  const summaries = analysis.summaries;
+  const stops = summaries.map((point) => ({
+    name: point.name,
+    eta: point.etaTime || null,
+    tone: checkpointTone(point, limits),
+    dark: point.daylight === "dark",
+    elevationFt: hasRouteNumber(point.elev_ft) ? point.elev_ft : null,
+  }));
+  const profile = buildCheckpointProfile(summaries);
+  const overIndex = stops.findIndex((stop) => stop.tone === "over");
+  const overCount = stops.filter((stop) => stop.tone === "over").length;
+  const missingCount = stops.filter((stop) => stop.tone === "missing").length;
+  const last = summaries.at(-1);
+  const lastDistance = last?.distance_miles;
+  const metaDistance = analysis.routeMetadata?.distanceMiles;
+  const metaGain = analysis.routeMetadata?.elevationGainFt;
+  return {
+    state: "checked",
+    name: label,
+    // No checkpoint forecast at all confirms nothing about the route.
+    tone: overCount ? "over" : missingCount || !stops.length ? "missing" : "within",
+    stops,
+    profile: profile?.points.map((point) => ({ x: (point.x - 20) / 960, y: (155 - point.y) / 125 })) ?? null,
+    overCount,
+    missingCount,
+    firstOver: overIndex >= 0
+      ? { name: stops[overIndex].name, eta: stops[overIndex].eta, breach: checkpointBreaches(summaries[overIndex], limits)[0] }
+      : null,
+    finish: last?.etaTime ? { eta: last.etaTime, dark: last.daylight === "dark", returnToStart: last.leg === "return" } : null,
+    distanceMiles: hasRouteNumber(metaDistance) ? metaDistance : hasRouteNumber(lastDistance) ? lastDistance : null,
+    gainFt: hasRouteNumber(metaGain) ? metaGain : null,
+  };
+}
+
+/** "gusts 48 mph, over your 40 mph limit", worded like the hourly limit checks, to follow a colon. */
+export function describeCheckpointBreach(breach: CheckpointBreach, format: { temp: (f: number) => string; wind: (mph: number) => string }): string {
+  if (breach.kind === "gust") return `gusts ${format.wind(breach.value)}, over your ${format.wind(breach.limit)} limit`;
+  if (breach.kind === "precip") return `rain chance ${Math.round(breach.value)}%, over your ${breach.limit}% limit`;
+  if (breach.kind === "cold") return `feels like ${format.temp(breach.value)}, below your ${format.temp(breach.limit)} floor`;
+  return `feels like ${format.temp(breach.value)}, above your ${format.temp(breach.limit)} ceiling`;
+}
+
+/**
+ * The route analysis as plain report data for the AI explanation and chat. Readings
+ * stay in the analysis's own units (°F, mph, %, ft, miles) and unknowns stay null.
+ */
+export function buildRouteReportContext(name: string, analysis: RouteAnalysisResult | null) {
+  if (!analysis) return null;
+  const number = (value: unknown) => (hasRouteNumber(value) ? value : null);
+  const meta = analysis.routeMetadata;
+  return {
+    name: name.trim() || analysis.routeSourceDetails?.matchedName || null,
+    source: analysis.routeSourceDetails?.sourceLabel || analysis.routeSource || null,
+    basis: "Point forecasts at each checkpoint for its estimated arrival time. The decision level uses the objective's hourly forecast, not these.",
+    distanceMiles: number(meta?.distanceMiles),
+    elevationGainFt: number(meta?.elevationGainFt),
+    maxElevationFt: number(meta?.maxElevationFt),
+    partialData: Boolean(analysis.partialData),
+    arrivalTiming: analysis.timing?.basis ?? null,
+    checkpoints: analysis.summaries.map((point) => ({
+      name: point.name,
+      elevationFt: number(point.elev_ft),
+      distanceMiles: number(point.distance_miles),
+      returnLeg: point.leg === "return",
+      etaDate: point.etaDate || null,
+      etaTime: point.etaTime || null,
+      daylight: point.daylight ?? null,
+      forecastAvailable: point.dataAvailable,
+      ...(point.dataAvailable
+        ? {
+          description: point.weather.description || null,
+          tempF: number(point.weather.temp),
+          feelsLikeF: number(point.weather.feelsLike),
+          windGustMph: number(point.weather.windGust),
+          precipChance: number(point.weather.precipChance),
+          avalancheRisk: point.avalanche?.risk || null,
+          activeAlerts: number(point.activeAlerts),
+        }
+        : {}),
+    })),
+  };
 }
 
 /** Explain how checkpoint arrival times were estimated; older saved analyses have no timing. */
