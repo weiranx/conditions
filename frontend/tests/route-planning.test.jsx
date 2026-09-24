@@ -499,6 +499,7 @@ const planWorkspace = (overrides = {}) => ({
   formatTempDisplay: (f) => `${f}°F`,
   searchQuery: 'Test mountain', showSuggestions: false, suggestions: [], activeSuggestionIndex: -1,
   hasObjective: true, objectiveDraftDirty: false, featureFlags: { gpxImport: true, routeAnalysis: true },
+  itinerary: { mode: 'day' },
   todayDate: '2026-09-08', maxForecastDate: '2026-09-15', travelWindowHoursDraft: '4',
   routeLoading: false, routeLoadingState: null, routeError: null, accountUser: null,
   customRouteName: 'West ridge', plannedRouteName: 'West ridge', importedGpxRoute: null,

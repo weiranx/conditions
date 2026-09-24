@@ -475,6 +475,7 @@ const buildReadableReportHtml = (report, { temperatureUnit, windUnit }) => {
 
 const ACTIVITY_LABELS = Object.freeze({
   hiking: 'Mountain hiking',
+  backpacking: 'Backpacking',
   scrambling: 'Exposed scrambling',
   'alpine-climbing': 'Alpine climbing',
   mountaineering: 'Mountaineering',

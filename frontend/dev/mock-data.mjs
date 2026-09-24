@@ -1,6 +1,7 @@
 // Synthetic fixtures, never observations. No external requests or credentials.
 import pleasantnessScoring from "../../backend/src/utils/pleasantness-score.js";
 import contingency from "../../backend/src/utils/contingency.js";
+import campNight from "../../backend/src/utils/camp-night.js";
 import approachElevation from "../../backend/src/utils/approach-elevation.js";
 import gearSuggestions from "../../backend/src/utils/gear-suggestions.js";
 import planEvaluation from "../../backend/src/utils/plan-evaluation.js";
@@ -464,6 +465,14 @@ export function makeReport(params = {}, scenario = "mixed") {
     selectedTravelWindowHours: count,
     winterTerrain: snowy,
   });
+  // Itinerary days ending at camp ask for the night that follows.
+  if (params.camp_night === "1") {
+    report.campNight = campNight.buildCampNight({
+      weatherData: { ...report.weather, afterWindowTrend },
+      selectedStartTime: first.timeIso,
+      selectedTravelWindowHours: count,
+    });
+  }
   report.gear = gearSuggestions.buildLayeringGearSuggestions({
     weatherData: report.weather,
     trailStatus: snowy ? "Snowy / Icy" : "Dry",

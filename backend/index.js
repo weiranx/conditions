@@ -45,6 +45,7 @@ const {
 const { deriveTerrainCondition, deriveTrailStatus } = require('./src/utils/terrain-condition');
 const { buildLayeringGearSuggestions, normalizeGearActivity } = require('./src/utils/gear-suggestions');
 const { buildContingencyAssessment, isWinterTerrain } = require('./src/utils/contingency');
+const { buildCampNight } = require('./src/utils/camp-night');
 const { registerSearchRoutes } = require('./src/routes/search');
 const { registerHealthRoutes } = require('./src/routes/health');
 const { registerFeatureFlagRoutes } = require('./src/routes/feature-flags');
@@ -64,6 +65,8 @@ const { registerSafetyRoute, createSafetyInvoker } = require('./src/routes/safet
 const { registerEvaluateRoute } = require('./src/routes/evaluate');
 const { registerPlanComparisonRoutes } = require('./src/routes/plan-comparisons');
 const { registerTripForecastRoutes } = require('./src/routes/trip-forecasts');
+const { registerItineraryRoutes } = require('./src/routes/itineraries');
+const { registerSavedItineraryRoutes } = require('./src/routes/saved-itineraries');
 const { logReportRequest, registerReportLogsRoute } = require('./src/routes/report-logs');
 const { registerRouteAnalysisRoutes } = require('./src/routes/route-analysis');
 const { registerAiBriefRoute } = require('./src/routes/ai-brief');
@@ -267,6 +270,7 @@ const buildSafetyResponsePayload = ({
   analysis,
   pleasantness,
   contingencyData = null,
+  campNightData = null,
   featureFlags,
   partial = null,
 }) => {
@@ -317,6 +321,8 @@ const buildSafetyResponsePayload = ({
     safety: analysis,
     pleasantness,
     contingency: contingencyData,
+    // Only itinerary stages ask for it (camp_night=1); other reports omit it.
+    ...(campNightData ? { campNight: campNightData } : {}),
   };
   delete payload.activity;
 
@@ -374,6 +380,8 @@ const safetyHandler = async (req, res) => {
   const requestedActivity = normalizeGearActivity(typeof activity === 'string' ? activity : null);
   // Optional: where the party starts, so comfort scores the approach hours there.
   const approachRequest = parseApproachQuery(req.query);
+  // Optional: the day ends at camp, so describe the night that follows.
+  const campNightRequested = req.query.camp_night === '1' || req.query.camp_night === 'true';
 
   // Pre-initialize everything to avoid "access before initialization" errors
   let avalancheData = createUnknownAvalancheData("no_center_coverage");
@@ -615,6 +623,15 @@ const safetyHandler = async (req, res) => {
       solarData,
     });
 
+    const campNightData = campNightRequested
+      ? buildCampNight({
+          weatherData,
+          selectedStartTime: alertTargetTimeIso,
+          selectedTravelWindowHours: requestedTravelWindowHours,
+          solarData,
+        })
+      : null;
+
     gearSuggestions = buildLayeringGearSuggestions({
       weatherData,
       trailStatus,
@@ -692,6 +709,7 @@ const safetyHandler = async (req, res) => {
       analysis,
       pleasantness,
       contingencyData,
+      campNightData,
       featureFlags: scoreFeatures,
     }), req.query, { onError: logEvaluationError });
     if (req.safetySignal?.aborted || res.headersSent) {
@@ -834,6 +852,14 @@ const safetyHandler = async (req, res) => {
       analysis,
       pleasantness,
       contingencyData: safeContingencyData,
+      campNightData: campNightRequested
+        ? buildCampNight({
+            weatherData: safeWeatherData,
+            selectedStartTime: fallbackStartTime,
+            selectedTravelWindowHours: requestedTravelWindowHours,
+            solarData,
+          })
+        : null,
       featureFlags: scoreFeatures,
       partial: { apiWarning: error?.message || 'One or more upstream data providers failed during this request.' },
     }), req.query, { onError: logEvaluationError });
@@ -935,6 +961,16 @@ registerTripForecastRoutes({
   invokeSafetyHandler,
   isProduction: IS_PRODUCTION,
 });
+registerItineraryRoutes({
+  app,
+  accountService,
+  tierService: accountTierService,
+  usageService: multiDayUsageLimitService,
+  invokeSafetyHandler,
+  fetchElevationFt: (lat, lon) => fetchObjectiveElevationFt(lat, lon, { headers: DEFAULT_FETCH_HEADERS }),
+  isProduction: IS_PRODUCTION,
+});
+registerSavedItineraryRoutes({ app, database, accountService });
 registerSavedReportRoutes({
   app,
   database,

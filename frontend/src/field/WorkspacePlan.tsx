@@ -29,6 +29,7 @@ import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import { liftAboveKeyboard } from "./touch";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { RouteSuggestions } from "./RouteSuggestions";
+import { ItineraryCamps, ItineraryWhen } from "./ItineraryPlan";
 
 
 export function WorkspacePlan({
@@ -48,7 +49,9 @@ export function WorkspacePlan({
   const [error, setError] = useState("");
   const [selectingLocation, setSelectingLocation] = useState(false);
   const [showAllActivities, setShowAllActivities] = useState(false);
-  const busy = comparison ? w.tripForecastLoading : w.loading;
+  // A multi-day trip is planned here too; Compare keeps its own day range.
+  const multiDay = !comparison && w.itinerary.mode === "multi";
+  const busy = comparison ? w.tripForecastLoading : multiDay ? w.itinerary.loading : w.loading;
   const selected = w.hasObjective && !w.objectiveDraftDirty;
   const activities = [
     ...ACTIVITY_PROFILE_ORDER.map((key) => ({
@@ -116,7 +119,14 @@ export function WorkspacePlan({
         }
         setError("");
         if (comparison) void w.runTripForecast();
-        else {
+        else if (multiDay) {
+          if (w.itinerary.gaps.length) {
+            setError(w.itinerary.gaps[0]);
+            return;
+          }
+          w.navigateToView("planner");
+          void w.itinerary.runCheck();
+        } else {
           w.navigateToView("planner");
           w.handleGenerateReport();
         }
@@ -128,7 +138,7 @@ export function WorkspacePlan({
         </div>
       </div>
       <fieldset disabled={busy}>
-        <h3 className="sky-plan-step"><span aria-hidden="true">1</span>Where</h3>
+        <h3 className="sky-plan-step"><span aria-hidden="true">1</span>{multiDay ? "Trailhead" : "Where"}</h3>
         <div
           className="field-search"
           ref={searchWrapperRef}
@@ -138,7 +148,7 @@ export function WorkspacePlan({
           }}
         >
           <label htmlFor={`${id}-search`}>
-            Mountain, trail, or coordinates
+            {multiDay ? "Trailhead, trail, or coordinates" : "Mountain, trail, or coordinates"}
           </label>
           <div className="field-input-icon">
             {w.searchLoading
@@ -266,7 +276,7 @@ export function WorkspacePlan({
             <LocateFixed size={14} />
             {w.locatingUser ? "Locating…" : "Use my location"}
           </button>
-          {w.featureFlags.gpxImport && (
+          {w.featureFlags.gpxImport && !multiDay && (
             <>
               <input
                 type="file"
@@ -312,7 +322,7 @@ export function WorkspacePlan({
             ? "Select a search result or choose a point on the map."
             : "Select a search result or enter latitude, longitude."}
         </p>
-        {w.importedGpxRoute && (
+        {w.importedGpxRoute && !multiDay && (
           <div className="field-route-import">
             <strong>{w.importedGpxRoute.fileName}</strong>
             <p>
@@ -349,7 +359,7 @@ export function WorkspacePlan({
         )}
         <div className="field-form-divider">
           <h3 className="sky-plan-step"><span aria-hidden="true">2</span>When</h3>
-          {!comparison && (
+          {!comparison && !multiDay && (
             <button
               className="field-text-button"
               type="button"
@@ -362,11 +372,31 @@ export function WorkspacePlan({
             </button>
           )}
         </div>
+        {!comparison && w.featureFlags.tripPlanning && (
+          <div className="sky-trip-mode" role="radiogroup" aria-label="Trip length">
+            {([["day", "Day trip"], ["multi", "Multi-day"]] as const).map(([value, label]) => (
+              <label key={value} className={w.itinerary.mode === value ? "is-checked" : undefined}>
+                <input
+                  type="radio"
+                  name={`${id}-trip-mode`}
+                  value={value}
+                  checked={w.itinerary.mode === value}
+                  onChange={() => {
+                    setError("");
+                    w.itinerary.setMode(value);
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        )}
         <p className="field-plan-timezone" id={`${id}-timezone`}>
           {w.hasObjective
             ? `Local time · ${w.objectiveTimezone || "the objective"}`
             : "Choose a location to set the local time zone."}
         </p>
+        {multiDay ? <ItineraryWhen workspace={w} /> : (
         <div className="field-input-grid field-plan-schedule">
           <label>
             Date
@@ -462,6 +492,7 @@ export function WorkspacePlan({
             </span>
           </div>
         </div>
+        )}
         <fieldset className="sky-plan-activities">
           <legend className="sky-plan-step"><span aria-hidden="true">3</span>How</legend>
           <div
@@ -481,9 +512,10 @@ export function WorkspacePlan({
                     value={option.key}
                     checked={checked}
                     onChange={() => {
-                      if (!comparison && w.safetyData) w.handleEditPlan();
+                      if (!comparison && !multiDay && w.safetyData) w.handleEditPlan();
                       // Loaded days carry the previous activity's gear list.
                       if (comparison) w.setTripForecastRowsDirect([]);
+                      if (multiDay) w.itinerary.updateDraft((draft) => draft);
                       w.updatePreferences(option.patch);
                     }}
                     onClick={(event) => {
@@ -540,7 +572,9 @@ export function WorkspacePlan({
             </button>
           </details>
         </fieldset>
-        {!comparison && w.featureFlags.routeAnalysis && (
+        {multiDay ? (
+          <ItineraryCamps workspace={w} onChooseMap={onChooseMap} />
+        ) : !comparison && w.featureFlags.routeAnalysis && (
           <PlanRoute workspace={w} selected={selected} />
         )}
         {comparison ? (
@@ -574,6 +608,8 @@ export function WorkspacePlan({
               ? "Select location"
             : comparison
               ? "Compare these days"
+            : multiDay
+              ? w.itinerary.gaps[0] || `Check ${w.itinerary.draft.camps.length + 1}-day trip`
               : "Create conditions brief"}
           <ArrowRight size={17} />
         </button>

@@ -36,7 +36,7 @@ test('public tools are read-only and account tools are absent without a session'
 });
 test('tools that spend account usage are not marked read-only', async t => {
   const c = await pair(t, { hasAccount: true }); const { tools } = await c.listTools();
-  const spending = ['get_multi_day_forecast', 'get_ai_brief', 'ask_report_assistant', 'suggest_routes', 'analyze_route', 'analyze_satellite_snow'];
+  const spending = ['get_multi_day_forecast', 'check_itinerary', 'get_ai_brief', 'ask_report_assistant', 'suggest_routes', 'analyze_route', 'analyze_satellite_snow'];
   for (const tool of tools) {
     assert.equal(tool.annotations.readOnlyHint, !spending.includes(tool.name), tool.name);
     assert.equal(tool.annotations.destructiveHint, false, tool.name);
@@ -77,7 +77,7 @@ test('all-plan failure is marked as a tool error', async t => {
 test('private report tools use account routes and remove share tokens', async t => {
   const id = 'd4167c22-61fa-4e49-8d68-0c538752967e';
   const c = await pair(t, { hasAccount: true, get: async (path, _args, account) => { assert.equal(account, true); assert.equal(path, `/api/account/reports/${id}`); return { report: { id, shareToken: 'secret-share', snapshot: { weather: null } } }; } });
-  assert.equal((await c.listTools()).tools.length, 19);
+  assert.equal((await c.listTools()).tools.length, 22);
   const r = await c.callTool({ name: 'get_saved_report', arguments: { report_id: id } }); assert.equal(r.structuredContent.data.report.shareToken, undefined);
 });
 test('upstream session handling, redirect rejection, and safe expired-session errors', async () => {
@@ -102,7 +102,7 @@ test('HTTP refuses unauthenticated requests and untrusted origins', async t => {
 test('SDK client initializes, lists tools and retrieves report over authenticated HTTP', async t => {
   const { base } = await http(t); const c = new Client({ name: 'integration-test', version: '1' });
   await c.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
-  t.after(() => c.close()); assert.equal((await c.listTools()).tools.length, 19);
+  t.after(() => c.close()); assert.equal((await c.listTools()).tools.length, 22);
   const r = await c.callTool({ name: 'get_conditions_report', arguments: plan }); assert.equal(r.structuredContent.data.partialData, true);
 });
 test('HTTP rejects invalid and revoked account tokens', async t => {
@@ -122,6 +122,51 @@ test('each API instance forwards only its own account bearer', async () => {
   assert.ok(seen.every(h=>!h.Cookie));
 });
 
+const trailhead = { name: 'Snow Lakes TH', lat: 47.53, lon: -120.71, elevation_ft: 1350 };
+const camp = { name: 'Nada Lake', lat: 47.49, lon: -120.76 };
+const trip = {
+  start_date: '2026-09-30', activity: 'backpacking', max_gust_mph: 30,
+  days: [
+    { start: '07:00', travel_hours: 7, from: trailhead, to: camp, high_points: [{ name: 'Col', lat: 47.5, lon: -120.74 }] },
+    { start: '08:00', travel_hours: 6, from: camp, to: trailhead },
+  ],
+};
+test('itinerary check posts the trip to the app route in summary view with an idempotency key', async t => {
+  let posted;
+  const c = await pair(t, { hasAccount: true, post: async (path, body, account, options) => { posted = { path, body, account, options };
+    return { startDate: '2026-09-30', stages: [{ index: 0, checked: true }, { index: 1, checked: false }], assessment: { level: 'INCOMPLETE' }, failedCount: 1 }; } });
+  const r = await c.callTool({ name: 'check_itinerary', arguments: trip });
+  assert.equal(r.isError, undefined);
+  assert.equal(posted.path, '/api/itineraries/check'); assert.equal(posted.account, true);
+  assert.match(posted.options.headers['Idempotency-Key'], /^[0-9a-f-]{36}$/u);
+  assert.equal(posted.body.view, 'summary'); assert.equal(posted.body.activity, 'backpacking');
+  assert.deepEqual(posted.body.plan, { max_gust_mph: 30 });
+  assert.deepEqual(posted.body.stages[0], {
+    start: '07:00', travelHours: 7,
+    from: { name: 'Snow Lakes TH', lat: 47.53, lon: -120.71, elevationFt: 1350 },
+    to: { name: 'Nada Lake', lat: 47.49, lon: -120.76, elevationFt: null },
+    checkpoints: [{ name: 'Col', lat: 47.5, lon: -120.74, elevationFt: null }],
+  });
+  assert.equal(r.structuredContent.data.assessment.level, 'INCOMPLETE');
+  assert.equal(r.structuredContent.data.stages[1].checked, false);
+});
+test('invalid itineraries never reach the backend', async t => {
+  let posts = 0;
+  const c = await pair(t, { hasAccount: true, post: async () => { posts++; return {}; } });
+  for (const days of [[trip.days[0]], [{ ...trip.days[0], travel_hours: 30 }, trip.days[1]], [{ ...trip.days[0], high_points: [camp, camp, camp] }, trip.days[1]]]) {
+    assert.equal((await c.callTool({ name: 'check_itinerary', arguments: { ...trip, days } })).isError, true);
+  }
+  assert.equal((await c.callTool({ name: 'check_itinerary', arguments: { ...trip, start_date: '2026-02-30' } })).isError, true);
+  assert.equal(posts, 0);
+});
+test('saved trip tools read account routes as a compact summary', async t => {
+  const id = 'd4167c22-61fa-4e49-8d68-0c538752967e';
+  const seen = [];
+  const c = await pair(t, { hasAccount: true, get: async (path, args, account) => { assert.equal(account, true); seen.push([path, args]); return { trips: [] }; } });
+  await c.callTool({ name: 'list_saved_trips', arguments: {} });
+  await c.callTool({ name: 'get_saved_trip', arguments: { trip_id: id } });
+  assert.deepEqual(seen, [['/api/account/trips', {}], [`/api/account/trips/${id}`, { view: 'summary' }]]);
+});
 test('report forwards activity, name and approach inputs the app sends', async t => {
   let query;
   const c = await pair(t, { hasAccount: false, get: async (_path, args) => { query = args; return {}; } });

@@ -313,13 +313,19 @@ export function Report({
   );
   const notices = (
     <>
-      {w.viewingHistoryReport && (
+      {w.viewingHistoryReport && (w.restoredReportSource === "itinerary" ? (
+        <aside className="sky-notice" aria-label="Trip day">
+          <BookOpen size={20} aria-hidden="true" />
+          <div>This day was checked with your trip and won’t update on its own.
+            For newer forecasts, go back to the trip brief and check the trip again.</div>
+        </aside>
+      ) : (
         <aside className="sky-notice" aria-label="Saved report snapshot">
           <BookOpen size={20} aria-hidden="true" />
           <div>This is a saved snapshot. It shows conditions from when it was generated
             and won’t update. For current conditions, edit the plan and generate a new report.</div>
         </aside>
-      )}
+      ))}
       {feedback && (
         <p className="sky-notice is-info" role="status">
           {feedback}
@@ -438,7 +444,7 @@ export function Report({
           hours={skyHours}
           sunrise={w.sunriseMinutesForPlan}
           sunset={w.sunsetMinutesForPlan}
-          kicker={`${w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
+          kicker={`${w.restoredReportSource === "itinerary" ? "Trip day report" : w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
           title={report.plan.objectiveName}
           subtitle={subtitle}
           status={passedStatus}

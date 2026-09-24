@@ -190,23 +190,29 @@ const selectNight = ({ allRows, returnMs, sun }) => {
   return { startMs, endMs, rows, complete: nightEndOffset >= 0 };
 };
 
+// What a night's forecast rows hold. A reading no row reports stays null.
+const measureNight = (nightRows) => ({
+  coveredHours: totalHours(nightRows),
+  lowTempF: extremum(nightRows, 'temp', 'min'),
+  minFeelsLikeF: extremum(nightRows, 'feelsLike', 'min'),
+  peakWindMph: extremum(nightRows, 'wind', 'max'),
+  peakGustMph: extremum(nightRows, 'gust', 'max'),
+  peakPrecipChance: extremum(nightRows, 'precipChance', 'max'),
+  precipHours: totalHours(nightRows.filter((row) => row.precipChance >= 50)),
+  storm: nightRows.some((row) => STORM_PATTERN.test(row.condition)),
+  freezingRain: nightRows.some((row) => FREEZING_RAIN_PATTERN.test(row.condition)),
+  snow: nightRows.some((row) => SNOW_PATTERN.test(row.condition)),
+});
+
 const buildOvernight = ({ allRows, returnMs, windowHours, winterTerrain, sun = null }) => {
   const night = selectNight({ allRows, returnMs, sun });
   if (night.error) {
     return { status: 'unavailable', relevant: false, reasons: [], reasonCodes: [], summary: night.error };
   }
-  const { startMs: nightStartMs, endMs: nightEndMs, rows: nightRows } = night;
-  const coveredHours = totalHours(nightRows);
-
-  const lowTempF = extremum(nightRows, 'temp', 'min');
-  const minFeelsLikeF = extremum(nightRows, 'feelsLike', 'min');
-  const peakWindMph = extremum(nightRows, 'wind', 'max');
-  const peakGustMph = extremum(nightRows, 'gust', 'max');
-  const peakPrecipChance = extremum(nightRows, 'precipChance', 'max');
-  const precipHours = totalHours(nightRows.filter((row) => row.precipChance >= 50));
-  const storm = nightRows.some((row) => STORM_PATTERN.test(row.condition));
-  const freezingRain = nightRows.some((row) => FREEZING_RAIN_PATTERN.test(row.condition));
-  const snow = nightRows.some((row) => SNOW_PATTERN.test(row.condition));
+  const { startMs: nightStartMs, endMs: nightEndMs } = night;
+  const {
+    coveredHours, lowTempF, minFeelsLikeF, peakWindMph, peakGustMph, peakPrecipChance, precipHours, storm, freezingRain, snow,
+  } = measureNight(night.rows);
   const severity = classifyOvernightSeverity({ minFeelsLikeF, peakGustMph, peakPrecipChance, storm, freezingRain });
 
   const hoursToDark = roundHours(nightStartMs - returnMs);
@@ -329,10 +335,14 @@ const buildContingencyAssessment = ({
 
 module.exports = {
   AFTER_WINDOW_HOURS,
+  COLD_NIGHT_FEELS_LIKE_F,
   DELAY_HAZARDS,
   buildContingencyAssessment,
   classifyOvernightSeverity,
   describeOnset,
   isWinterTerrain,
+  measureNight,
+  mergeRows,
   resolveDelayBufferHours,
+  selectNight,
 };

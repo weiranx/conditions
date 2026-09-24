@@ -26,11 +26,14 @@ Account (OAuth). Tools that spend AI or multi-day usage are annotated
 `readOnlyHint: false` (non-destructive), so clients can ask before calling them:
 
 - `list_saved_reports`, `get_saved_report`, `list_objective_watches`
+- `list_saved_trips`, `get_saved_trip` — saved multi-day trips, as compact day-by-day evidence
 - `get_watch_history` — a watch's checks and change events
 - `get_comparison_baseline` — the saved report a new one is compared against
 - `get_account_usage` — tier and report, multi-day and AI usage
 - `get_multi_day_forecast` — 2–7 day trip forecast; per-day full reports are
   omitted (use `get_conditions_report` for a day)
+- `check_itinerary` — a 2–7 day trip, each day at its camp and high points with the night after it,
+  returned as the app's trip assessment and compact evidence per day
 - `get_ai_brief` — fetches the plan's report and asks for the app's AI brief
   with the report's computed decision
 - `ask_report_assistant` — the app's report chat; the streamed answer is

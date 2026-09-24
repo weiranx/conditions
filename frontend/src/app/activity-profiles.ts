@@ -42,6 +42,7 @@ export interface ActivityProfile {
 
 export const ACTIVITY_PROFILE_ORDER: ActivityType[] = [
   'hiking',
+  'backpacking',
   'scrambling',
   'alpine-climbing',
   'mountaineering',
@@ -66,6 +67,22 @@ export const ACTIVITY_PROFILES: Record<ActivityType, ActivityProfile> = {
     preferencePatch: {
       defaultActivity: 'hiking', maxWindGustMph: 25, maxPrecipChance: 60, minFeelsLikeF: 5, maxFeelsLikeF: 95,
       runnerPaceMinutesPerMile: 30, runnerAscentMinutesPer1000Ft: 45, runnerStopBufferMinutes: 45,
+    },
+  },
+  backpacking: {
+    label: 'Backpacking',
+    shortLabel: 'Backpack',
+    description: 'Multi-day travel with a full pack, where each night at camp matters as much as each day on trail.',
+    report: {
+      chapters: ['forecast', 'timing', 'terrain', 'route'],
+      checks: ['weather', 'alerts', 'daylight', 'air', 'terrain', 'avalanche'],
+      leads: 'storms, camp nights and staying dry',
+      numbers: ['gust', 'precip'],
+      numbersNote: 'Wind and rain against your limits; each night at camp is on the trip brief.',
+    },
+    preferencePatch: {
+      defaultActivity: 'backpacking', maxWindGustMph: 30, maxPrecipChance: 60, minFeelsLikeF: 15, maxFeelsLikeF: 90,
+      runnerPaceMinutesPerMile: 35, runnerAscentMinutesPer1000Ft: 50, runnerStopBufferMinutes: 60,
     },
   },
   scrambling: {

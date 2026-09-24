@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import itineraryAssessment from "../../backend/src/utils/itinerary-assessment.js";
 import { makeReport, peaks, scenarios } from "./mock-data.mjs";
 import planContext from "../../backend/src/utils/plan-context.js";
 import planEvaluation from "../../backend/src/utils/plan-evaluation.js";
@@ -496,6 +497,90 @@ export function createMockApi({ databasePath } = {}) {
         multiDayUsage: usage("Runs"),
       });
     }
+    if (p === "/api/itineraries/check" && method === "POST") {
+      if (scenario === "error") return fail(500, "Simulated trip check failure.");
+      const stages = Array.isArray(body.stages) ? body.stages.slice(0, 7) : [];
+      if (stages.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(String(body.startDate || ""))) {
+        return fail(400, "Provide a start date and 2–7 days, each with a start time, 1–24 travel hours, and valid start and end points.");
+      }
+      const dayScenario = (i) => (scenario === "mixed" ? ["clear", "cloudy", "rain", "snow", "clear", "fog", "clear"][i % 7] : scenario);
+      const planSettings = body.plan && typeof body.plan === "object" ? body.plan : {};
+      const reportFor = (point, stage, i, extra = {}) => {
+        const d = new Date(`${body.startDate}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + i);
+        const report = makeReport(
+          {
+            lat: point.lat,
+            lon: point.lon,
+            date: d.toISOString().slice(0, 10),
+            start: stage.start,
+            travel_window_hours: String(stage.travelHours),
+            activity: body.activity,
+            ...planSettings,
+            ...extra,
+          },
+          dayScenario(i),
+        );
+        return { ...report, featureFlags: db.flags };
+      };
+      const result = stages.map((stage, i) => {
+        const d = new Date(`${body.startDate}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + i);
+        // The "missing" scenario leaves the last day unchecked, as a failed upstream would.
+        const failed = scenario === "missing" && i === stages.length - 1;
+        return {
+          index: i,
+          date: d.toISOString().slice(0, 10),
+          fromElevationFt: stage.from?.elevationFt ?? null,
+          report: failed ? null : reportFor(stage.to, stage, i, i < stages.length - 1 ? { camp_night: "1" } : {}),
+          checkpoints: (stage.checkpoints || []).map((point) => ({
+            name: point.name,
+            lat: point.lat,
+            lon: point.lon,
+            report: reportFor(point, stage, i),
+          })),
+        };
+      });
+      // The same assessment and chat context the real route computes.
+      const samePlace = (a, b) => Math.abs(a.lat - b.lat) < 1e-5 && Math.abs(a.lon - b.lon) < 1e-5;
+      const planned = stages.map((stage, i) => ({
+        ...stage,
+        index: i,
+        date: result[i].date,
+        layover: samePlace(stage.from, stage.to),
+        checkpoints: stage.checkpoints || [],
+      }));
+      const checkedAt = now();
+      const bailPoints = Array.isArray(body.bailPoints) ? body.bailPoints : [];
+      const assessment = itineraryAssessment.assessItinerary({
+        stages: planned,
+        results: result,
+        planSettings,
+        activity: body.activity || "",
+        todayDate: checkedAt.slice(0, 10),
+        bailPoints,
+      });
+      db.usedRuns = (db.usedRuns || 0) + 1;
+      persist();
+      return ok({
+        startDate: body.startDate,
+        checkedAt,
+        stages: result,
+        assessment,
+        chatContext: itineraryAssessment.buildItineraryChatContext({
+          name: body.name,
+          checkedAt,
+          startDate: body.startDate,
+          stages: planned,
+          assessment,
+          context: planContext.buildPlanContext({ ...planSettings, activity: body.activity }),
+          featureFlags: db.flags,
+          bailPoints,
+        }),
+        failedCount: result.filter((stage) => !stage.report).length,
+        multiDayUsage: usage("Runs"),
+      });
+    }
     if (p === "/api/account/reports/comparison-baseline") {
       const item = db.reports.find(
         (r) =>
@@ -574,6 +659,38 @@ export function createMockApi({ databasePath } = {}) {
         persist();
       }
       return ok({ report: item });
+    }
+    if (p === "/api/account/trips" || p.startsWith("/api/account/trips/")) {
+      db.trips = db.trips || [];
+      const summary = (trip) => ({
+        id: trip.id,
+        title: trip.title,
+        startDate: trip.snapshot.result?.startDate ?? null,
+        dayCount: trip.snapshot.result?.stages?.length ?? null,
+        verdictLevel: trip.snapshot.verdictLevel ?? null,
+        checkedAt: trip.snapshot.result?.checkedAt ?? null,
+        createdAt: trip.createdAt,
+        updatedAt: trip.createdAt,
+      });
+      if (p === "/api/account/trips") {
+        if (method === "POST") {
+          const stages = body.trip?.result?.stages;
+          if (!body.trip?.draft || !Array.isArray(stages) || stages.length < 2) return fail(400, "Provide a checked trip to save.");
+          const trip = { id: randomUUID(), title: body.trip.title || "Multi-day trip", snapshot: body.trip, createdAt: now() };
+          db.trips.unshift(trip);
+          persist();
+          return { status: 201, payload: { trip: summary(trip) } };
+        }
+        return ok({ trips: db.trips.map(summary) });
+      }
+      const trip = db.trips.find((item) => item.id === p.split("/").at(-1));
+      if (!trip) return fail(404, "Saved trip not found.");
+      if (method === "DELETE") {
+        db.trips = db.trips.filter((item) => item !== trip);
+        persist();
+        return { status: 204, payload: null };
+      }
+      return ok({ trip: { ...summary(trip), snapshot: trip.snapshot } });
     }
     if (p === "/api/account/objective-watches") {
       if (method === "GET") {

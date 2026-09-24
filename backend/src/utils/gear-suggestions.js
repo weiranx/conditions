@@ -41,6 +41,7 @@ const buildLayeringGearSuggestions = ({
     'snow-climbing': ['alpine-hardware'],
     'ski-touring': ['ski-touring-kit'],
     'trail-running': ['hydration-run'],
+    backpacking: ['overnight-kit'],
   };
   const BASELINE_GEAR_IDS = new Set([
     'backcountry-essentials',
@@ -246,6 +247,16 @@ const buildLayeringGearSuggestions = ({
       'Safety & rescue',
       'go',
       13,
+    );
+  }
+  if (gearActivity === 'backpacking') {
+    addSuggestion(
+      'overnight-kit',
+      'Shelter, sleep system, and water treatment',
+      'A tent or tarp you can stake out in wind, a bag and pad rated for the coldest camp, a filter or tablets, and food for every day plus a spare.',
+      'Essentials',
+      'go',
+      12,
     );
   }
   if (skiing) {

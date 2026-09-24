@@ -20,6 +20,24 @@ import { useProductFeatureFlags } from "../contexts/feature-flags";
 import { hasCoarsePointer } from "./touch";
 import { checkpointPin, groupCheckpointsByPlace, worstTone } from "./route-map-pins";
 import { checkpointTone } from "./route-planning";
+import type { TripOverlay, TripOverlayTone } from "./itinerary-overlay";
+const tripPin = (label: string, kind: string, tone: TripOverlayTone) => L.divIcon({
+  className: `field-trip-pin is-${kind} is-${tone}`,
+  html: `<span>${label.slice(0, 2).replace(/[<>&"']/g, "")}</span>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+function FitTrip({ trip }: { trip: TripOverlay }) {
+  const map = useMap();
+  // Refit when a point is added or moved, not on every status change.
+  const key = trip.points.map((point) => `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`).join("|");
+  useEffect(() => {
+    const bounds = trip.points.map((point) => [point.lat, point.lon] as [number, number]);
+    if (bounds.length >= 2) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, key]);
+  return null;
+}
 const pin = L.divIcon({
   className: "field-map-pin",
   html: "<span></span>",
@@ -85,10 +103,13 @@ export default function FieldMap({
   plan,
   onPick,
   workspace: w,
+  trip,
 }: {
   plan: Plan;
   onPick?: (lat: number, lon: number) => void;
   workspace?: Workspace;
+  /** A multi-day trip: its camps, exits and high points, drawn over the objective. */
+  trip?: TripOverlay | null;
 }) {
   const [localStyle, setLocalStyle] = useState<MapStyle>("topo");
   const [nonce, setNonce] = useState(0);
@@ -164,6 +185,32 @@ export default function FieldMap({
           route={plan.route}
         />
         <Pick onPick={onPick} />
+        {trip && trip.points.length > 0 && (
+          <>
+            <FitTrip trip={trip} />
+            {trip.track ? (
+              <Polyline
+                positions={trip.track.map((point) => [point.lat, point.lon])}
+                pathOptions={{ color: "#2878d7", weight: 4 }}
+              />
+            ) : (
+              <Polyline
+                positions={trip.path.map((point) => [point.lat, point.lon])}
+                pathOptions={{ color: "#2878d7", weight: 3, dashArray: "6 6" }}
+              />
+            )}
+            {trip.points.map((point) => (
+              <Marker
+                key={point.key}
+                position={[point.lat, point.lon]}
+                icon={tripPin(point.label, point.kind, point.tone)}
+                zIndexOffset={point.kind === "camp" ? 500 : 0}
+              >
+                <Tooltip>{point.title}</Tooltip>
+              </Marker>
+            ))}
+          </>
+        )}
         {plan.lat !== null && (
           <Marker
             position={[lat, lon]}

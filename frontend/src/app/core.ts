@@ -23,6 +23,7 @@ export function normalizeActivity(rawActivity: string | null): ActivityType {
 
   const cleaned = rawActivity.trim().toLowerCase();
   if (cleaned === 'hiking' || cleaned === 'hike' || cleaned === 'mountain-hiking') return 'hiking';
+  if (cleaned === 'backpacking' || cleaned === 'backpack' || cleaned === 'backpacker' || cleaned === 'thru-hiking') return 'backpacking';
   if (cleaned === 'scrambling' || cleaned === 'scramble' || cleaned === 'exposed-scrambling') return 'scrambling';
   if (cleaned === 'alpine-climbing' || cleaned === 'alpine_climbing' || cleaned === 'alpine') return 'alpine-climbing';
   if (cleaned === 'mountaineering' || cleaned === 'mountaineer' || cleaned === 'glacier') return 'mountaineering';

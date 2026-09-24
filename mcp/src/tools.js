@@ -10,7 +10,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).refine(value => {
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u);
 const lat = z.number().min(-90).max(90), lon = z.number().min(-180).max(180);
 // Mirrors ACTIVITY_KEYS in backend/src/utils/activity-profiles.js.
-const ACTIVITIES = ['backcountry', 'hiking', 'trail-running', 'scrambling', 'alpine-climbing', 'mountaineering', 'snow-climbing', 'ski-touring'];
+const ACTIVITIES = ['backcountry', 'hiking', 'backpacking', 'trail-running', 'scrambling', 'alpine-climbing', 'mountaineering', 'snow-climbing', 'ski-touring'];
 const activity = z.enum(ACTIVITIES).optional().describe('Planned activity. Tailors hazard weights, gear, avalanche relevance and default limits; general backcountry when omitted.');
 const elevationFt = z.number().min(-1500).max(29100);
 // The traveler's plan beyond date and time: the same flat params the app sends with /api/safety.
@@ -48,6 +48,18 @@ const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: t
 // multi-day usage: not read-only, though nothing is deleted or overwritten.
 const generated = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 const result = (value, extra = []) => ({ content: [{ type: 'text', text: JSON.stringify(value) }, ...extra], structuredContent: value });
+const point = z.object({
+  name: z.string().trim().max(100).optional(),
+  lat, lon,
+  elevation_ft: elevationFt.optional().describe('Known elevation in feet; omit when unknown and the backend looks it up.'),
+}).strict();
+const itineraryDay = z.object({
+  start: clock.describe('Local departure time for this day, HH:mm.'),
+  travel_hours: z.number().int().min(1).max(24),
+  from: point.describe('Where the day starts: the trailhead, or the previous night\'s camp.'),
+  to: point.describe('Where the day ends: tonight\'s camp, or the exit trailhead on the last day. Use the same point as from for a layover day.'),
+  high_points: z.array(point).max(2).optional().describe('Passes or high points crossed this day, checked over the same hours.'),
+}).strict();
 export const errorResult = error => result({ error: error instanceof ApiError ? error.code : 'REQUEST_FAILED', message: error instanceof ApiError ? error.message : 'The request failed.', ...(error instanceof ApiError ? error.details : {}) });
 
 // Remove capability-bearing share links, including links nested in saved snapshots,
@@ -116,6 +128,8 @@ export function createServer(api) {
   if (api.hasAccount) {
     register('list_saved_reports', 'List your connected Conditions account’s saved report summaries. Historical snapshots, not current forecasts. Follow nextCursor if supplied.', { query: z.string().max(200).optional(), cursor: z.string().uuid().optional() }, ({ query, cursor }) => api.get('/api/account/reports', { q: query, cursor }, true));
     register('get_saved_report', 'Read a saved report by UUID from list_saved_reports. Its forecast and source timestamps may be stale; do not describe it as current.', { report_id: z.string().uuid() }, ({ report_id }) => api.get(`/api/account/reports/${report_id}`, {}, true));
+    register('list_saved_trips', 'List your connected account’s saved multi-day trips. Historical snapshots, not current forecasts.', {}, () => api.get('/api/account/trips', {}, true));
+    register('get_saved_trip', 'Read a saved multi-day trip by UUID from list_saved_trips, as compact day-by-day evidence with each night at camp. Its forecasts may be stale; do not describe it as current.', { trip_id: z.string().uuid() }, ({ trip_id }) => api.get(`/api/account/trips/${trip_id}`, { view: 'summary' }, true));
     register('list_objective_watches', 'Read objective watches and their last/next checks for your connected account. Does not create watches, send alerts, or trigger checks.', {}, () => api.get('/api/account/objective-watches', {}, true));
     register('get_watch_history', 'Check history and change events for one of your objective watches (from list_objective_watches), within your plan’s history window. Does not trigger a check.', { watch_id: z.string().uuid() }, async ({ watch_id }) => {
       const [checks, events] = await Promise.all([
@@ -131,6 +145,31 @@ export function createServer(api) {
     }, true));
     register('get_account_usage', 'Your account tier, saved-report count, and report, multi-day and AI usage against their limits. Check before tools that count against usage.', {}, () => api.get('/api/account/usage', {}, true));
 
+    register('check_itinerary', 'Check a multi-day trip (2–7 consecutive days from start_date) as the app does: each day at the camp it ends at, plus any high points, and the night that follows at that camp, against the traveler\'s limits. Returns the app\'s trip assessment (the weakest day or night, each day\'s decision and each night\'s state) and compact evidence per day; a day that could not be checked stays in place. Do not average or rank days, and treat an unchecked or unforecast night as unknown. Counts as one multi-day run.', {
+      start_date: date,
+      name: z.string().trim().min(1).max(200).optional().describe('Trip name.'),
+      activity,
+      days: z.array(itineraryDay).min(2).max(7),
+      bail_points: z.array(point).max(10).optional().describe('Other trailheads or roads to walk out to; each night names its nearest way out.'),
+      max_gust_mph: planFields.max_gust_mph, max_precip_chance: planFields.max_precip_chance, min_feels_like_f: planFields.min_feels_like_f, max_feels_like_f: planFields.max_feels_like_f,
+    }, async ({ start_date, name, activity: tripActivity, days, bail_points, ...limits }) => {
+      const toPoint = ({ name: pointName, lat: pointLat, lon: pointLon, elevation_ft }) => ({ name: pointName, lat: pointLat, lon: pointLon, elevationFt: elevation_ft ?? null });
+      return api.post('/api/itineraries/check', {
+        startDate: start_date,
+        name,
+        activity: tripActivity,
+        plan: limits,
+        view: 'summary',
+        bailPoints: (bail_points ?? []).map(toPoint),
+        stages: days.map(day => ({
+          start: day.start,
+          travelHours: day.travel_hours,
+          from: toPoint(day.from),
+          to: toPoint(day.to),
+          checkpoints: (day.high_points ?? []).map(toPoint),
+        })),
+      }, true, { headers: { 'Idempotency-Key': randomUUID() }, maxBytes: 20_000_000, timeout: COMPARISON_TIMEOUT_MS });
+    }, generated);
     register('get_multi_day_forecast', 'The app’s multi-day trip forecast: 2–7 consecutive days at one objective with a per-day summary, decision, day-to-day changes, the app’s day ranking and highlights. Per-day full reports are omitted; call get_conditions_report for a day’s full evidence. include_avalanche keeps avalanche danger in each day’s decision (Compare objectives) instead of a weather-only comparison (Compare days). Counts against multi-day usage limits.', {
       lat, lon, start_date: date, start: clock.describe('Local departure time each day, HH:mm.'),
       duration_days: z.number().int().min(2).max(7), travel_window_hours: z.number().int().min(1).max(24).default(12),

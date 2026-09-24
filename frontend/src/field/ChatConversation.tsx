@@ -21,7 +21,7 @@ export function ChatConversation({
   id: string;
   viewportRef: RefObject<HTMLDivElement | null>;
   reportPayload: string;
-  contextType: "report" | "trip";
+  contextType: "report" | "trip" | "itinerary";
   initialMessages: PersistedReportChatMessage[];
   onMessagesChange?: (messages: PersistedReportChatMessage[]) => void;
   readOnly: boolean;
@@ -73,6 +73,10 @@ export function ChatConversation({
     "Which day has the best weather window?",
     "What are the tradeoffs between these days?",
     "What should I verify before committing?",
+  ] : contextType === "itinerary" ? [
+    "What makes the weakest day or night hard?",
+    "Is my sleep system warm enough for these nights?",
+    "What would make this trip safer to run?",
   ] : [
     "What is driving the risk score?",
     "How does the timing affect my plan?",
@@ -92,7 +96,7 @@ export function ChatConversation({
           {!messages.length && <div className="field-chat-welcome">
             <span className="field-chat-avatar is-large" aria-hidden="true"><Sparkles size={18} /></span>
             <h3>{readOnly ? "No messages saved" : "Make sense of the conditions."}</h3>
-            <p>{readOnly ? "This report does not have a saved conversation." : "Explore the forecast, weigh the tradeoffs, or work through your timing. Answers use the conditions in this " + (contextType === "trip" ? "comparison." : "report.")}</p>
+            <p>{readOnly ? "This report does not have a saved conversation." : "Explore the forecast, weigh the tradeoffs, or work through your timing. Answers use the conditions in this " + (contextType === "trip" ? "comparison." : contextType === "itinerary" ? "trip." : "report.")}</p>
           </div>}
           <div role="log" aria-label="AI conversation" aria-live={busy ? "off" : "polite"}>
             {messages.map(message => <article key={message.id} className={`field-chat-message is-${message.role}`}>
