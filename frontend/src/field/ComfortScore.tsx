@@ -4,6 +4,15 @@ import { APPROACH_SOURCE_LABEL, comfortApproachIsStale, type ApproachProfile } f
 import { ConditionScale } from "./ConditionCharts";
 import "./comfort-score.css";
 
+/** Mirrors the backend comfort labels (pleasantness-score.js). */
+const COMFORT_BANDS = [
+  { from: 0, label: "Harsh" },
+  { from: 40, label: "Uncomfortable" },
+  { from: 60, label: "Mixed" },
+  { from: 75, label: "Pleasant" },
+  { from: 90, label: "Excellent" },
+];
+
 const validScore = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 
@@ -25,7 +34,7 @@ export function ComfortScore({ comfort, localize = (text) => text, approach, ele
     <section className="sky-card sky-exposure condition-card is-comfort comfort-score" aria-label="Weather comfort">
       <span className="sky-card-head"><span className="sky-exposure-title"><Smile size={16} aria-hidden="true" />Weather comfort</span></span>
       <span className="sky-big">{score === null ? "Unknown" : comfort.label}</span>
-      <ConditionScale label="Weather comfort score" value={score} maximum={100} format={(value) => `${Math.round(value)}/100`} />
+      <ConditionScale label="Weather comfort score" value={score} maximum={100} format={(value) => `${Math.round(value)}/100`} bands={COMFORT_BANDS} />
       <p className="comfort-outlook sky-cap is-body">{localize(comfort.summary || "A weather-comfort outlook for this outing.")}</p>
       {scoredApproach && scoredApproach.adjustedHours > 0 && (
         <p className="sky-cap comfort-approach">

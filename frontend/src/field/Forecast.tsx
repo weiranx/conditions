@@ -40,7 +40,7 @@ import {
   parseSolarClockMinutes,
   parseTimeInputMinutes,
 } from "../app/core";
-import { HourChart, type HourGuide, type HourTone } from "./sky/HourChart";
+import { HourChart, type HourChartKind, type HourGuide, type HourTone } from "./sky/HourChart";
 import { buildSkyHours, shortHour, type PlannedRow } from "./sky/sky-model";
 import { plainReason } from "./sky/status";
 
@@ -123,11 +123,16 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
     sunriseMinutes: parseSolarClockMinutes(report.safetyData.solar?.sunrise),
     sunsetMinutes: parseSolarClockMinutes(report.safetyData.solar?.sunset),
   });
-  const tints = sky.map((h) => `${h.horizon}66`);
+  const tints = sky.map((h) => h.horizon);
 
-  const chart = buildWeatherTrendChartData(buildWeatherTrendRows(trend, preferences.timeStyle), metric)
+  const trendRows = buildWeatherTrendRows(trend, preferences.timeStyle);
+  const chart = buildWeatherTrendChartData(trendRows, metric)
     .map((point) => (finite(point.value) ? point.value : null));
+  const windArrows = buildWeatherTrendChartData(trendRows, "windDirection").map((point) => (finite(point.value) ? point.value : null));
   const isTemp = ["temp", "feelsLike", "dewPoint"].includes(metric);
+  const isPercent = ["precipChance", "cloudCover", "humidity"].includes(metric);
+  const chartKind: HourChartKind = metric === "windDirection" ? "direction" : isPercent ? "bars" : "line";
+  const chartPalette = isTemp ? "temperature" : metric === "precipChance" || metric === "humidity" ? "cold" : "neutral";
   const isWind = ["wind", "gust"].includes(metric);
   const metricValue = (value: number) =>
     isTemp ? temp(value)
@@ -188,7 +193,7 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
       <section className="sky-section" aria-labelledby="sky-weather-hours">
         <div className="sky-sh">
           <h2 id="sky-weather-hours">Hour by hour</h2>
-          <p>Pick a measurement. Hatched hours cross a limit.</p>
+          <p>Pick a measurement. Hatched hours cross a limit; the strip below shows daylight.</p>
         </div>
         <div className="sky-card sky-hour-card">
           {flags.hourlyWeatherCharts && (
@@ -203,6 +208,8 @@ export function Forecast({ report, approach = null, elevation = (ft) => `${ft} f
               {chart.some((v) => v !== null) ? (
                 <HourChart labels={labels} values={chart} tones={tones} tints={tints} guides={guides}
                   format={compactValue} describe={metricValue} selected={selectedIndex} onSelect={setHour}
+                  kind={chartKind} palette={chartPalette} coldBelow={isTemp ? 32 : undefined}
+                  domain={isPercent ? [0, 100] : undefined} arrows={isWind ? windArrows : undefined}
                   label={`${WEATHER_TREND_METRIC_LABELS[metric]} by hour. Use the arrow keys to move between hours.`} />
               ) : (
                 <p className="sky-empty">
