@@ -54,6 +54,13 @@
   border-radius: 16px; background: var(--sky-surface, var(--f-paper)); border: 1px solid var(--sky-field-border, var(--f-line));
   color: var(--sky-label, var(--f-ink)); font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  /* The name wraps inside the card instead of widening its track into the padding. */
+  grid-template-columns: minmax(0, 1fr); overflow-wrap: break-word;
+}
+/* Two narrow columns beside the map: a little less padding keeps "Mountaineering" on one line. */
+.sky-activity-grid { container-type: inline-size; }
+@container (max-width: 299px) {
+  .field-plan-form.sky-plan label.sky-activity { padding-inline: 10px; font-size: 14px; }
 }
 .field-plan-form.sky-plan label.sky-activity:hover { border-color: var(--sky-field-border-hover); box-shadow: 0 6px 14px -10px rgba(24, 32, 28, 0.35); }
 .field-plan-form.sky-plan .sky-activity input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }

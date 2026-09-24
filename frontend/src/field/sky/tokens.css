@@ -23,8 +23,16 @@
   --sky-missing: #5c6360;
   --sky-ok-fill: #d5dad6;
   --sky-radius: 20px;
-  /* One typeface everywhere, landing page included; Inter's optical sizes tighten large titles. */
+  /* Inter carries everything you read and every number; Inter's optical sizes tighten large text. */
   --sky-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Newsreader sets page titles and section headings only, at weight 500. Never data or decisions. */
+  --sky-display: "Newsreader", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  /* Settling motion: quick start, long soft landing. */
+  --sky-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The sidebar is a shade recessed from the page, so the raised current item stands out. */
+  --sky-sidebar: linear-gradient(180deg, #eceeea, #e9ebe7);
+  /* A faint top light on cards; only visible in the dark. */
+  --sky-sheen: none;
   /* Cards lift off the grouped background with a hairline, a contact shadow and a long, faint drop. */
   --sky-hairline: rgba(24, 32, 28, 0.07);
   --sky-elevation: 0 0 0 1px var(--sky-hairline), 0 1px 2px rgba(24, 32, 28, 0.05), 0 6px 16px -8px rgba(24, 32, 28, 0.08), 0 20px 40px -28px rgba(24, 32, 28, 0.2);
@@ -72,6 +80,8 @@ html[data-theme="dark"] {
   --sky-hairline: rgba(236, 239, 237, 0.075);
   --sky-elevation: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 0 0 1px var(--sky-hairline), 0 16px 36px -24px rgba(0, 0, 0, 0.8);
   --sky-elevation-raised: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(236, 239, 237, 0.12), 0 22px 44px -24px rgba(0, 0, 0, 0.9);
+  --sky-sidebar: linear-gradient(180deg, #0c0f0e, #0a0c0b);
+  --sky-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 140px);
   --sky-raised: #2c322f;
   --sky-raised-hover: #353b38;
   --sky-segment: #3a403d;

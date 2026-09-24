@@ -4,7 +4,7 @@
 
 /* ---------- Cards and rhythm ---------- */
 .field-app .sky-report .field-panel {
-  margin: 0; padding: 18px 20px; border: 0; border-radius: var(--sky-radius); background: var(--sky-surface);
+  margin: 0; padding: 18px 20px; border: 0; border-radius: var(--sky-radius); background: var(--sky-surface) var(--sky-sheen);
   box-shadow: var(--sky-elevation); color: var(--sky-label);
 }
 .field-app .sky-report .field-panel + .field-panel { margin-top: 14px; }
@@ -13,7 +13,7 @@
 .field-app .sky-report .field-panel > p, .field-app .sky-report .field-muted { font-size: 14px; line-height: 1.5; color: var(--sky-secondary); }
 .field-app .sky-report .field-kicker { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--sky-secondary); }
 .field-app .sky-report .field-chapter-heading { margin: 36px 0 12px; padding: 0 4px; }
-.field-app .sky-report .field-chapter-heading h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.field-app .sky-report .field-chapter-heading h2 { margin: 0; font-family: var(--sky-display); font-size: 28px; font-weight: 500; line-height: 1.15; letter-spacing: -0.015em; }
 .field-app .sky-report .field-chapter-heading p { margin: 4px 0 0; font-size: 14px; color: var(--sky-secondary); }
 .field-app .sky-report .field-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--sky-fill); color: var(--sky-label); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .field-app .sky-report .field-badge.is-watch { background: var(--sky-caution-fill); color: var(--sky-caution); }
@@ -156,7 +156,7 @@
 .field-app .sky-report .report-insight.is-caution > .field-kicker { color: var(--sky-caution); }
 
 /* ---------- AI brief and chat ---------- */
-.field-app .sky-report .field-chat { border: 0; border-radius: var(--sky-radius); background: var(--sky-surface); box-shadow: var(--sky-elevation); }
+.field-app .sky-report .field-chat { border: 0; border-radius: var(--sky-radius); background: var(--sky-surface) var(--sky-sheen); box-shadow: var(--sky-elevation); }
 
 @media (max-width: 1000px) {
   .sky-exposure-grid { grid-template-columns: 1fr 1fr; }

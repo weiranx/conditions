@@ -10,14 +10,14 @@
 /* The older .field-compare-intro rule strips the card to a bare rule line; keep it a card. */
 .field-comparison .sky-compare-empty.field-compare-intro { padding: 22px 24px; border: 0; border-radius: var(--sky-radius); background: var(--sky-surface); }
 .sky-compare-empty > svg { color: var(--sky-secondary); }
-.sky-compare-empty h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.sky-compare-empty h2 { margin: 0; font-family: var(--sky-display); font-size: 27px; font-weight: 500; letter-spacing: -0.015em; }
 .sky-compare-empty p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--sky-secondary); }
 .sky-compare-empty .sky-list { align-self: stretch; margin-top: 8px; }
 
 /* Recommendation */
 .compare-recommendation { margin-top: 0; display: grid; gap: 6px; }
 .sky-compare-best { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
-.sky-compare-best h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+.sky-compare-best h2 { margin: 0; font-family: var(--sky-display); font-size: 36px; font-weight: 500; letter-spacing: -0.02em; }
 .sky-compare-best .sky-pill { margin: 0; box-shadow: inset 0 0 0 1px var(--sky-separator); }
 .compare-recommendation .sky-verdict-reason { margin: 2px 0 4px; }
 .compare-recommendation .sky-cap { margin: 0; }
@@ -100,7 +100,7 @@
   .sky-day-row .sky-daystrip, .sky-day-row .sky-minisky { grid-area: strip; }
   .sky-day-row.has-note { grid-template-areas: "label fact" "strip strip" "note note"; }
   .sky-day-note { grid-area: note; margin-top: 0; }
-  .sky-compare-best h2 { font-size: 26px; }
+  .sky-compare-best h2 { font-size: 30px; }
 }
 @media print {
   .field-compare-layout > .field-plan-form, .compare-export, .sky-days { display: none; }

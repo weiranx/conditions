@@ -72,15 +72,15 @@ html[data-theme="dark"] {
   --f-rail-selected: var(--sky-fill);
   --f-rail-line: var(--sky-separator);
   padding: calc(20px + var(--safe-top)) 12px max(16px, var(--safe-bottom)) max(12px, var(--safe-left));
-  background: var(--f-bg);
+  background: var(--sky-sidebar);
   color: var(--f-ink);
   border-right: 1px solid var(--sky-separator);
 }
-/* Brand lockup: the app-icon tile, the name, and "Conditions" as a quieter second line. */
+/* Brand lockup: the app-icon tile, the name set as a wordmark, and "Conditions" as a quieter second line. */
 .field-app .field-brand { --brand-tile: 34px; align-items: center; gap: 11px; padding: 2px 8px 22px; color: var(--f-ink); }
-.field-app .field-brand strong { font-size: 15px; font-weight: 650; line-height: 1.2; letter-spacing: -0.015em; }
+.field-app .field-brand strong { font-family: var(--sky-display); font-size: 18px; font-weight: 600; line-height: 1.1; letter-spacing: -0.012em; }
 .field-app .field-sidebar .field-brand small {
-  display: block; margin: 1px 0 0; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--f-muted); opacity: 1;
+  display: block; margin: 2px 0 0; font-family: var(--sky-font); font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--f-muted); opacity: 1;
 }
 .field-app .field-sidebar-label { display: none; }
 .field-app .field-sidebar nav { gap: 2px; margin: 0; }
@@ -88,6 +88,7 @@ html[data-theme="dark"] {
 .field-app .field-sidebar-bottom button {
   gap: 11px; min-height: 38px; padding: 0 10px; border-radius: 10px;
   font-size: 14px; font-weight: 500; color: var(--f-muted); background: transparent; box-shadow: none;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.2s ease;
 }
 .field-app .field-sidebar nav button svg,
 .field-app .field-sidebar-bottom button svg { width: 18px; height: 18px; }
@@ -193,7 +194,7 @@ html[data-theme="dark"] {
     border: 0; background: var(--f-bg);
   }
   .field-app .field-brand { --brand-tile: 32px; gap: 10px; padding: 0; width: auto; }
-  .field-app .field-brand strong { font-size: 16px; }
+  .field-app .field-brand strong { font-size: 18px; }
   .field-app .field-sidebar-note { display: none; }
 
   /* The tab bar floats as a glass capsule, clear of the screen edges and the home indicator. */
@@ -272,11 +273,16 @@ html[data-theme="dark"] {
 /* Pages sit in the same reading column as the report. */
 .field-app #field-main { max-width: 1184px; }
 
-/* Large title, plain secondary subtitle; kickers are quiet labels, not all-caps tags. */
+/* Large display title, plain secondary subtitle; kickers are quiet labels, not all-caps tags. */
 .field-app .field-kicker { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--f-muted); }
 .field-app .field-page-heading { padding: 20px 0 24px; }
-.field-app :is(.field-page-heading, .field-workspace-heading) h1 { margin: 4px 0 8px; font-size: 36px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
+.field-app :is(.field-page-heading, .field-workspace-heading) h1 {
+  margin: 4px 0 10px; font-family: var(--sky-display); font-size: 46px; font-weight: 500; letter-spacing: -0.022em; line-height: 1.04;
+}
 .field-app :is(.field-page-heading, .field-workspace-heading) p { font-size: 16px; line-height: 1.5; color: var(--f-muted); }
+@media (max-width: 650px) {
+  .field-app :is(.field-page-heading, .field-workspace-heading) h1 { font-size: 38px; }
+}
 
 /* Buttons, 44px targets. Secondary actions are raised white keys; the accent is a lit surface
    kept for the primary action. */
@@ -324,8 +330,7 @@ html[data-theme="dark"] {
 .field-app .field-empty-state { border: 0; border-radius: 20px; background: var(--f-paper); }
 .field-app .shortlist-mode { margin-top: 20px; }
 .field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section) { border: 0; border-radius: 20px; }
-.field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section, .field-empty-state) { box-shadow: var(--sky-elevation); }
-.field-app .field-library h2 { font-weight: 700; letter-spacing: -0.01em; }
+.field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section, .field-empty-state) { background-image: var(--sky-sheen); box-shadow: var(--sky-elevation); }
 @media (max-width: 850px) {
   .field-app :is(.field-settings-shortcuts button, .field-button[aria-pressed], .field-preset-list button, .shortlist-mode .field-button) { min-height: 44px; }
 }
@@ -375,8 +380,22 @@ html:has(.field-app) { scrollbar-color: color-mix(in srgb, var(--sky-label) 28%,
   background: var(--sky-surface); color: var(--sky-accent);
   box-shadow: 0 0 0 1px var(--sky-hairline), 0 0 0 9px color-mix(in srgb, var(--sky-fill) 45%, transparent);
 }
-.field-app .field-loading h1 { margin: 0; font: 700 28px/1.15 var(--f-font); letter-spacing: -0.022em; color: var(--sky-label); }
+.field-app .field-loading h1 { margin: 0; font: 500 34px/1.1 var(--sky-display); letter-spacing: -0.02em; color: var(--sky-label); }
 .field-app .field-loading p { font-size: 15px; color: var(--sky-secondary); }
 @media (prefers-reduced-motion: no-preference) {
   .field-app #field-main > p { animation: sky-scrim-in 300ms ease-out 400ms both; }
 }
+
+/* ---------- Arrival ---------- */
+/* Each screen settles in as it opens, and the brief's cards follow in a short cascade. No
+   forwards fill, so no transform lingers to trap a fixed-position descendant. The brief's sky
+   stays put under the toolbar; only its body rises. */
+@media (prefers-reduced-motion: no-preference) {
+  .field-app #field-main > :not(p, .sky-report.is-brief) { animation: sky-rise 420ms var(--sky-ease-out); }
+  .sky-report.is-brief .sky-body { animation: sky-rise 480ms var(--sky-ease-out) 60ms backwards; }
+  .sky-report.is-brief :is(.sky-nums, .sky-checks) > * { animation: sky-rise 520ms var(--sky-ease-out) 120ms backwards; }
+  .sky-report.is-brief :is(.sky-nums, .sky-checks) > :nth-child(2) { animation-delay: 170ms; }
+  .sky-report.is-brief :is(.sky-nums, .sky-checks) > :nth-child(3) { animation-delay: 220ms; }
+  .sky-report.is-brief .sky-checks > :nth-child(n + 4) { animation-delay: 270ms; }
+}
+@keyframes sky-rise { from { opacity: 0; transform: translateY(10px); } }
