@@ -228,9 +228,14 @@ const readWatchRoute = (watch) => {
       lon: finiteNumber(point?.lon),
       offsetMinutes: finiteNumber(point?.offset_minutes),
     }))
-    .filter((point) => point.lat !== null && point.lon !== null && point.offsetMinutes !== null && point.offsetMinutes >= 0)
-    .slice(0, MAX_ROUTE_CHECKPOINTS);
-  return points.length >= 2 ? points : null;
+    .filter((point) => point.lat !== null && point.lon !== null && point.offsetMinutes !== null && point.offsetMinutes >= 0);
+  if (points.length < 2) return null;
+  if (points.length <= MAX_ROUTE_CHECKPOINTS) return points;
+  // A long route (an out-and-back retraces every checkpoint) is sampled evenly,
+  // always keeping its start and its final arrival rather than dropping the tail.
+  const picked = new Set(Array.from({ length: MAX_ROUTE_CHECKPOINTS },
+    (_, index) => Math.round((index * (points.length - 1)) / (MAX_ROUTE_CHECKPOINTS - 1))));
+  return [...picked].sort((a, b) => a - b).map((index) => points[index]);
 };
 
 /** A checkpoint's arrival date and clock from the plan's date and start, plus its offset. */

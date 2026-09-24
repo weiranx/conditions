@@ -124,6 +124,10 @@ test('lists watched objectives for the signed-in account without returning basel
         last_attempted_at: CREATED_AT,
         created_at: CREATED_AT,
         updated_at: CREATED_AT,
+        baseline_route: { customRouteName: 'DC', routeAnalysis: { routeName: null, waypoints: [
+          { name: 'Paradise', lat: 46.78, lon: -121.74, offset_minutes: 0 },
+          { name: 'Camp Muir', lat: 46.83, lon: -121.73, offset_minutes: 300 },
+        ] } },
       },
       {
         id: secondWatchId,
@@ -146,6 +150,10 @@ test('lists watched objectives for the signed-in account without returning basel
     lastAttemptedAt: CREATED_AT.toISOString(),
   });
   expect(response.body.watches[0]).not.toHaveProperty('baselineReport');
+  // The listing reads only the report's route parts, to say which watches cover a route.
+  expect(response.body.watches[0].route).toEqual({ name: 'DC', checkpointCount: 2 });
+  expect(response.body.watches[1]).not.toHaveProperty('route');
+  expect(query.mock.calls[0][0]).toContain("AS baseline_route");
   expect(query.mock.calls[0][0]).toContain('ORDER BY updated_at DESC, id DESC');
   expect(query.mock.calls[0][1]).toEqual([USER_ID, 14]);
   expect(query.mock.calls[0][0]).toContain('checks.watch_id = objective_watches.id');
@@ -873,4 +881,8 @@ test('a watch lists the analyzed route it also re-checks, and nothing without on
   };
   expect(mapObjectiveWatch(row).route).toEqual({ name: 'Disappointment Cleaver', checkpointCount: 2 });
   expect(mapObjectiveWatch({ ...row, baseline_report: { safetyData: {} } }).route).toBeUndefined();
+  // Listings select only the report's route parts, as baseline_route.
+  const { baseline_report: report, ...listed } = row;
+  expect(mapObjectiveWatch({ ...listed, baseline_route: report.route }).route).toEqual({ name: 'Disappointment Cleaver', checkpointCount: 2 });
+  expect(mapObjectiveWatch({ ...listed, baseline_route: { customRouteName: null, routeAnalysis: { routeName: null, waypoints: null } } }).route).toBeUndefined();
 });

@@ -456,7 +456,7 @@ const describeTiming = ({ basis, mode, roundTrip, routeShape, travelWindowHours,
       : basis === 'progress' ? 'spaced by reported route progress' : 'spaced evenly because route distances are unknown';
   const hours = (minutes) => `${Math.round((minutes / 60) * 10) / 10} hours`;
   const arrivals = mode === 'pace'
-    ? `ETAs follow the traveler's own pace (${pace.minutesPerMile} min per mile, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing, descents at a third of that, plus ${stopMinutes} minutes of stops spread across the outing), about ${hours(estimatedMinutes)} in all against a planned ${travelWindowHours}-hour window${windowFit === 'longer' ? ', so the outing runs past the planned window' : windowFit === 'shorter' ? ', so it finishes well inside the planned window' : ''}. They are estimates.${turnaround ? ` To finish within the plan, turn around at ${turnaround.objectiveName} by ${turnaround.byPlanEnd}${turnaround.byDark ? ` (by ${turnaround.byDark} to finish before sunset)` : ''}.` : ''}`
+    ? `ETAs follow the traveler's own pace (${pace.minutesPerMile} min per mile${basis === 'distance' ? '; climbing is not counted because some checkpoint elevations are unknown, so these arrivals are early' : `, ${pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing, descents at a third of that`}, plus ${stopMinutes} minutes of stops spread across the outing), about ${hours(estimatedMinutes)} in all against a planned ${travelWindowHours}-hour window${windowFit === 'longer' ? ', so the outing runs past the planned window' : windowFit === 'shorter' ? ', so it finishes well inside the planned window' : ''}. They are estimates.${turnaround ? ` To finish within the plan, turn around at ${turnaround.objectiveName} by ${turnaround.byPlanEnd}${turnaround.byDark ? ` (by ${turnaround.byDark} to finish before sunset)` : ''}.` : ''}`
     : `ETAs spread the planned ${travelWindowHours}-hour window across checkpoints, ${weighting}. They are estimates, not a pace prediction.`;
   return `${arrivals}${roundTrip ? ' The route is treated as an out-and-back: the objective is reached part-way through the outing and the checkpoints after it (leg "return") retrace the same route back to the start, the final one being the estimated return to the start.' : ''}${routeShape === 'loop' ? ' The route is a loop: checkpoints after the objective continue around it, and the final checkpoint is the return to the start.' : routeShape === 'point-to-point' ? ' The route is a traverse or one-way trip: it finishes somewhere other than where it starts.' : ''}${daylightEnabled ? ' arrivalDaylight marks whether an ETA falls between that checkpoint\'s sunrise and sunset.' : ''}`;
 };
@@ -805,7 +805,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
       const trackForTiming = suppliedTrack && gpxDistancesKnown ? (roundTrip ? mirrorTrack(suppliedTrack) : suppliedTrack) : null;
       const paceMode = Boolean(userPace) && !returnPathUnknown && (
         trackForTiming !== null
-        || (timingBasis === 'distance-and-vert' && (gpxDistancesKnown || distanceBasis === 'along-trail' || distanceBasis === 'route-length'))
+        // With some elevations unknown, pace still sets arrivals from distance alone.
+        || ((timingBasis === 'distance-and-vert' || timingBasis === 'distance')
+          && (gpxDistancesKnown || distanceBasis === 'along-trail' || distanceBasis === 'route-length'))
       );
       const stopMinutes = paceMode ? (userPace.stopBufferMinutes ?? 0) : 0;
       let estimatedMinutes = null;

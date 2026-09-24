@@ -211,7 +211,8 @@ export interface UseRouteAnalysisReturn {
   setCustomRouteName: (value: string) => void;
   routeShape: RouteShapeChoice;
   setRouteShape: (value: RouteShapeChoice) => void;
-  fetchRouteSuggestions: (peak: string, lat: number, lon: number) => Promise<void>;
+  /** With keepPlan, the planned route and its analysis stay while suggestions load. */
+  fetchRouteSuggestions: (peak: string, lat: number, lon: number, options?: { keepPlan?: boolean }) => Promise<void>;
   fetchRouteAnalysis: (
     peak: string,
     route: string,
@@ -328,12 +329,16 @@ export function useRouteAnalysis(initialState?: {
     nextRequestIdRef.current += 1;
   }, []);
 
-  const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number) => {
+  const fetchRouteSuggestions = useCallback(async (peak: string, lat: number, lon: number, options?: { keepPlan?: boolean }) => {
     const request = beginRequest({ kind: 'suggestions', routeName: peak });
     setRouteSuggestions(null);
-    setRouteAnalysis(null);
     setRouteError(null);
-    setCustomRouteName('');
+    // From the plan, new suggestions start the route over; the Route chapter and
+    // route comparison look for alternatives without dropping the planned route.
+    if (!options?.keepPlan) {
+      setRouteAnalysis(null);
+      setCustomRouteName('');
+    }
     try {
       const { response, payload } = await fetchApi(`/api/route-suggestions?peak=${encodeURIComponent(peak)}&lat=${lat}&lon=${lon}`, {
         signal: request.controller.signal,

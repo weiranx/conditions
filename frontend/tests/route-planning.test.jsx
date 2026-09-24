@@ -15,6 +15,7 @@ import {
 } from '../src/field/route-planning';
 import { formatClockForStyle } from '../src/app/core';
 import { fetchApiStream } from '../src/lib/api-client';
+import { useRouteAnalysis } from '../src/hooks/useRouteAnalysis';
 import { groupCheckpointsByPlace, worstTone } from '../src/field/route-map-pins';
 import { parseGpxText } from '../src/lib/gpx';
 import { buildPersistedReport, parsePersistedReport } from '../src/app/report-storage';
@@ -594,6 +595,34 @@ test('route map pins group the way back with the way out and show the worst fore
   // The map loads with the chapter, after the route is analyzed.
   assert.match(renderToStaticMarkup(<Route workspace={workspace({ routeAnalysis: { ...result([point(), point({ name: 'Summit' })]),
     waypoints: [{ name: 'Trailhead', lat: 46, lon: -121 }, { name: 'Summit', lat: 46.01, lon: -121 }] } })} />), /Loading map/);
+});
+
+test('looking for alternative routes keeps the planned route and its analysis; the plan starts over', async (t) => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
+  const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  globalThis.fetch = async () => new Response(JSON.stringify([{ name: 'West ridge', distance_rt_miles: 9, elev_gain_ft: 3000 }]),
+    { headers: { 'content-type': 'application/json' } });
+  let hook;
+  function Probe() {
+    hook = useRouteAnalysis({ routeAnalysis: result([point()]), customRouteName: 'East ridge' });
+    return null;
+  }
+  const root = createRoot(document.getElementById('root'));
+  t.after(async () => {
+    await act(async () => root.unmount());
+    dom.window.close(); Object.assign(globalThis, previous); delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+  await act(async () => root.render(<Probe />));
+  await act(async () => hook.fetchRouteSuggestions('Peak', 46, -121, { keepPlan: true }));
+  assert.equal(hook.customRouteName, 'East ridge');
+  assert.ok(hook.routeAnalysis);
+  assert.deepEqual(hook.routeSuggestions.map((route) => route.name), ['West ridge']);
+  await act(async () => hook.fetchRouteSuggestions('Peak', 46, -121));
+  assert.equal(hook.customRouteName, '');
+  assert.equal(hook.routeAnalysis, null);
 });
 
 // Last in the file: the published availability is shared module state.

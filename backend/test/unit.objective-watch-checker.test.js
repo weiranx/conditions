@@ -693,4 +693,14 @@ describe('watched routes', () => {
     expect(harness.calls).toHaveLength(1);
     expect(harness.state.reference.routeMaxWindGust).toBeNull();
   });
+
+  test('a long route is sampled evenly and keeps its final arrival', () => {
+    const { readWatchRoute } = require('../src/services/objective-watch-checker');
+    const waypoints = Array.from({ length: 13 }, (_, i) => ({ name: `P${i}`, lat: 46 + i * 0.01, lon: -121, offset_minutes: i * 30 }));
+    const points = readWatchRoute({ baseline_report: { route: { routeAnalysis: { waypoints } } } });
+    expect(points).toHaveLength(10);
+    expect(points[0].name).toBe('P0');
+    expect(points.at(-1).name).toBe('P12');
+    expect(points.map((point) => point.offsetMinutes)).toEqual([...points.map((point) => point.offsetMinutes)].sort((a, b) => a - b));
+  });
 });

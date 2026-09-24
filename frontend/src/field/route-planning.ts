@@ -344,7 +344,9 @@ export function describeRouteTiming(timing: RouteTiming | undefined): string {
   if (!timing) return "Estimated arrivals use your planned duration, not terrain-adjusted pace.";
   const window = `your ${timing.travelWindowHours}-hour plan`;
   const spread = timing.mode === "pace"
-    ? `Arrivals follow your pace: ${timing.pace.minutesPerMile} min per mile, ${timing.pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing, descents at a third of that${timing.stopMinutes ? `, and ${timing.stopMinutes} min of stops spread along the way` : ""}${timing.trackTimed ? ", over every climb and descent of your track" : ""}.`
+    ? `Arrivals follow your pace: ${timing.pace.minutesPerMile} min per mile${timing.basis === "distance" && !timing.trackTimed
+      ? " (some checkpoint elevations are unknown, so climbing isn't counted and arrivals may be early)"
+      : `, ${timing.pace.ascentMinutesPer1000Ft} min per 1,000 ft of climbing, descents at a third of that`}${timing.stopMinutes ? `, and ${timing.stopMinutes} min of stops spread along the way` : ""}${timing.trackTimed ? ", over every climb and descent of your track" : ""}.`
     : timing.basis === "distance-and-vert"
     ? `Arrivals spread ${window} by distance and climbing${timing.paceSource === "user" ? ", weighted by your pace settings" : ""}.`
     : timing.basis === "distance"

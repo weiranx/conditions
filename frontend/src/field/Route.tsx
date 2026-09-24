@@ -315,7 +315,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
               type="button"
               className="field-button"
               disabled={readOnly || w.routeLoading}
-              onClick={() => w.handleFetchRouteSuggestions(w.objectiveName, w.position.lat, w.position.lng)}
+              onClick={() => w.handleFetchRouteSuggestions(w.objectiveName, w.position.lat, w.position.lng, { keepPlan: true })}
             >
               {w.routeLoadingState?.kind === "suggestions" ? "Finding routes…" : "Suggest routes"}
             </button>

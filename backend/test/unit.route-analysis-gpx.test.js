@@ -889,3 +889,29 @@ test('an NDJSON client gets stages and each checkpoint as it lands, then the res
   const invalid = await request(app).post('/api/route-analysis').set('Accept', 'application/x-ndjson').send(gpxPaceBody({ date: 'soon' }));
   expect(invalid.status).toBe(400);
 });
+
+test('a mapped trail with unknown elevations is still timed by pace, from distance alone', async () => {
+  const app = express();
+  app.use(express.json());
+  registerRouteAnalysisRoutes({
+    app,
+    askAI: async () => { throw new Error('no AI'); },
+    ensureAIEnabled: () => { throw new Error('AI features are unavailable'); },
+    invokeSafetyHandler: async () => ({ statusCode: 200, payload: { weather: { temp: 45 }, safety: { score: 80 } } }),
+    fetchWithTimeout: jest.fn(async (url) => (String(url).includes('mapservices.nps.gov')
+      ? { ok: true, json: async () => ({ features: [{ attributes: { TRLNAME: 'Elevationless Trail' }, geometry: { paths: [[[-119.60, 37.70], [-119.59, 37.71], [-119.58, 37.72]]] } }] }) }
+      : { ok: false })),
+    fetchHeaders: {},
+    fetchElevationFt: async () => { throw new Error('elevation service down'); },
+  });
+  const response = await request(app).post('/api/route-analysis').send({
+    peak: 'Elevationless Peak', route: 'Elevationless Trail', lat: 37.72, lon: -119.58, date: '2026-07-12', start: '06:00',
+    travel_window_hours: 12, pace: { minutesPerMile: 30, ascentMinutesPer1000Ft: 45, stopBufferMinutes: 0 },
+  });
+  expect(response.status).toBe(200);
+  expect(response.body.timing).toMatchObject({ basis: 'distance', distanceBasis: 'along-trail', mode: 'pace' });
+  // 30 min per mile over the out-and-back, not stretched across the 12-hour window.
+  const miles = response.body.waypoints.at(-1).distance_miles;
+  expect(response.body.waypoints.at(-1).offset_minutes).toBeCloseTo(miles * 30, -1);
+  expect(response.body.timing.estimatedMinutes).toBeLessThan(12 * 60);
+});

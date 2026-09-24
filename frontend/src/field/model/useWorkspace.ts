@@ -1217,9 +1217,9 @@ export function useWorkspace() {
   };
 
   const handleFetchRouteSuggestions = useCallback(
-    (peak: string, lat: number, lon: number) => {
+    (peak: string, lat: number, lon: number, options?: { keepPlan?: boolean }) => {
       if (!requestAiAccess()) return;
-      void fetchRouteSuggestions(peak, lat, lon);
+      void fetchRouteSuggestions(peak, lat, lon, options);
     },
     [fetchRouteSuggestions, requestAiAccess],
   );

@@ -106,7 +106,7 @@ export default function CompareRoutes({ workspace: w }: { workspace: Workspace }
             <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Enter a named route" maxLength={250} disabled={full} />
           </label>
           <button type="button" className="field-button" disabled={w.routeLoading}
-            onClick={() => w.handleFetchRouteSuggestions(w.objectiveName, w.position.lat, w.position.lng)}>
+            onClick={() => w.handleFetchRouteSuggestions(w.objectiveName, w.position.lat, w.position.lng, { keepPlan: true })}>
             {w.routeLoadingState?.kind === "suggestions" ? "Finding routes…" : "Suggest routes"}
           </button>
           <button className="field-button field-button-primary" disabled={!canAnalyze || !draft.trim()}>Compare</button>
