@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
   useRef,
+  useLayoutEffect,
 } from "react";
 import type { LatLngLiteral } from "leaflet";
 import { buildPlannedReportWeatherRows } from "../report-weather";
@@ -450,8 +451,12 @@ export function useWorkspace() {
     fetchRouteSuggestions,
     fetchRouteAnalysis,
     resetRouteState,
+    clearRouteAnalysis,
     restoreRouteState,
   } = useRouteAnalysis(initialRestoredReport?.route);
+  // Set once the planned-route handler exists below; a new report starts it.
+  const reportGeneratedRef = useRef<() => void>(() => {});
+  const handleReportGenerated = useCallback(() => reportGeneratedRef.current(), []);
 
   // Approach inputs sent with each report so the backend comfort score checks
   // approach hours at the same elevation as the brief. Kept current below.
@@ -1159,7 +1164,7 @@ export function useWorkspace() {
   useSavedReportSync(savedReportSession, {
     hasObjective, reportSnapshot, safetyData, viewingHistoryReport,
     accountLoading, accountUserId, syncGeneratedReportUsage,
-    setReportChatMessages, resetRouteState, setReportChatSessionKey,
+    setReportChatMessages, onReportGenerated: handleReportGenerated, setReportChatSessionKey,
   });
 
   const handleRecenterMap = () => {
@@ -1492,7 +1497,8 @@ export function useWorkspace() {
     setSnowVisionImage(null);
     setSnowVisionLoading(false);
     setSnowVisionError(null);
-    resetRouteState();
+    // The planned route stays with the plan; only its analysis was for this report.
+    clearRouteAnalysis();
     return true;
   }, [
     resetSavedReportTracking,
@@ -1505,7 +1511,7 @@ export function useWorkspace() {
     setSnowVisionImage,
     setSnowVisionLoading,
     setSnowVisionError,
-    resetRouteState,
+    clearRouteAnalysis,
     requestNewReportAccess,
   ]);
 
@@ -1957,6 +1963,91 @@ export function useWorkspace() {
       Math.round(Number(preferences.travelWindowHours) || 12),
     ),
   );
+
+  // The route chosen in the plan: an imported GPX track wins over a typed name.
+  const plannedRouteName = importedGpxRoute
+    ? importedGpxRoute.name ||
+      importedGpxRoute.fileName.replace(/\.gpx$/i, "") ||
+      "Imported GPX route"
+    : customRouteName.trim();
+  const handleAnalyzePlannedRoute = useCallback(() => {
+    if (!plannedRouteName || viewingHistoryReport) return;
+    const gpx = importedGpxRoute;
+    handleFetchRouteAnalysis(
+      objectiveName,
+      plannedRouteName,
+      position.lat,
+      position.lng,
+      forecastDate,
+      alpineStartTime,
+      travelWindowHours,
+      gpx
+        ? {
+            waypoints: gpx.checkpoints,
+            routeMetadata: {
+              fileName: gpx.fileName,
+              pointCount: gpx.pointCount,
+              distanceMiles: gpx.distanceMiles,
+              elevationGainFt: gpx.elevationGainFt,
+              minElevationFt: gpx.minElevationFt,
+              maxElevationFt: gpx.maxElevationFt,
+              routeShape: gpx.routeShape,
+            },
+          }
+        : undefined,
+    );
+  }, [
+    plannedRouteName,
+    viewingHistoryReport,
+    importedGpxRoute,
+    handleFetchRouteAnalysis,
+    objectiveName,
+    position.lat,
+    position.lng,
+    forecastDate,
+    alpineStartTime,
+    travelWindowHours,
+  ]);
+  // A new report analyzes the planned route alongside it. Guests and servers
+  // without route analysis skip it quietly; the Route chapter offers it instead.
+  // While the session is still loading, the decision waits for the account.
+  const [routeAwaitingAccount, setRouteAwaitingAccount] =
+    useState<typeof safetyData>(null);
+  useLayoutEffect(() => {
+    reportGeneratedRef.current = () => {
+      clearRouteAnalysis();
+      setRouteAwaitingAccount(null);
+      const capabilities = safetyData?.capabilities;
+      if (
+        !featureFlags.routeAnalysis ||
+        capabilities?.ai === false ||
+        capabilities?.routeAnalysis === false
+      )
+        return;
+      if (accountLoading) setRouteAwaitingAccount(safetyData);
+      else if (accountUser) handleAnalyzePlannedRoute();
+    };
+  });
+  useEffect(() => {
+    if (!routeAwaitingAccount || accountLoading) return;
+    setRouteAwaitingAccount(null);
+    // Only for the report it was deferred for, and not if one already started.
+    if (
+      accountUser &&
+      routeAwaitingAccount === safetyData &&
+      !routeAnalysis &&
+      !routeLoading
+    )
+      handleAnalyzePlannedRoute();
+  }, [
+    routeAwaitingAccount,
+    accountLoading,
+    accountUser,
+    safetyData,
+    routeAnalysis,
+    routeLoading,
+    handleAnalyzePlannedRoute,
+  ]);
 
   const prefHandlers = usePreferenceHandlers({
     preferences,
@@ -3012,6 +3103,8 @@ export function useWorkspace() {
     fetchRouteAnalysis,
     resetRouteState,
     restoreRouteState,
+    plannedRouteName,
+    handleAnalyzePlannedRoute,
     safetyHook,
     safetyData,
     setSafetyData,

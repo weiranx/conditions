@@ -1,9 +1,8 @@
 import { formatSnowDepthForElevationUnit } from "../app/core";
-import { useRef, useState } from "react";
-import { ArrowRight, CircleDashed, Clock, CloudRain, Info, Moon, Mountain, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Upload, Wind } from "lucide-react";
+import { useState } from "react";
+import { CircleDashed, Clock, CloudRain, Info, Moon, MoveRight, Route as RouteIcon, Thermometer, TrendingDown, TrendingUp, TriangleAlert, Wind } from "lucide-react";
 import { Markdown } from "./Markdown";
 import type { Workspace } from "./model/useWorkspace";
-import { parseGpxFile } from "../lib/gpx";
 import { useAiAvailability } from "../hooks/useAiAvailability";
 import { Details } from "./Details";
 import {
@@ -22,7 +21,6 @@ import { RouteProfile, type ProfileLevel, type ProfileStop } from "./sky/RoutePr
 import { knownFeet } from "./sky/status";
 
 export function Route({ workspace: w }: { workspace: Workspace }) {
-  const upload = useRef<HTMLInputElement>(null);
   const [checkpoint, setCheckpoint] = useState(0);
   const available = useAiAvailability(w.safetyData?.capabilities);
   const result = w.routeAnalysis;
@@ -79,31 +77,10 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
       ? [{ label: returnStop ? "Back at start" : "Finish", value: lastStop.etaTime, ...(lastStop.daylight === "dark" ? { note: "After dark" } : {}) }] : []),
     { label: "Planned time", value: `${w.travelWindowHours} h` },
   ];
-  function analyze(name: string, useGpx = false) {
-    if (!name.trim() || readOnly || w.routeLoading || !available.routeAnalysis) return;
-    w.handleFetchRouteAnalysis(
-      w.objectiveName,
-      name,
-      w.position.lat,
-      w.position.lng,
-      w.forecastDate,
-      w.alpineStartTime,
-      w.travelWindowHours,
-      useGpx && gpx
-        ? {
-            waypoints: gpx.checkpoints,
-            routeMetadata: {
-              fileName: gpx.fileName,
-              pointCount: gpx.pointCount,
-              distanceMiles: gpx.distanceMiles,
-              elevationGainFt: gpx.elevationGainFt,
-              minElevationFt: gpx.minElevationFt,
-              maxElevationFt: gpx.maxElevationFt,
-              routeShape: gpx.routeShape,
-            },
-          }
-        : undefined,
-    );
+  const canAnalyze = !readOnly && !w.routeLoading && available.routeAnalysis && Boolean(w.plannedRouteName);
+  function analyze() {
+    if (!canAnalyze) return;
+    w.handleAnalyzePlannedRoute();
     setCheckpoint(0);
   }
   return (
@@ -130,42 +107,22 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
         )}
       </p>
       {!readOnly && (
-        <section className="sky-card sky-section sky-route-choose">
-          <div className="field-panel-heading">
-            <div>
-              <h2 className="sky-card-title">Choose a route</h2>
-              <p className="field-muted">
-                Route suggestions and analysis use the current objective, start,
-                and duration.
-              </p>
-            </div>
-            <button
-              className="field-button"
-              disabled={w.routeLoading || !available.routeAnalysis}
-              onClick={() =>
-                w.handleFetchRouteSuggestions(
-                  w.objectiveName,
-                  w.position.lat,
-                  w.position.lng,
-                )
-              }
-            >
-              Find routes <ArrowRight size={15} />
-            </button>
-          </div>
-          <p className="field-route-plan-context">
-            {w.forecastDate} · {w.alpineStartTime} start · {w.travelWindowHours} hours
-            {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
-          </p>
-          <form
-            className="field-inline-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              analyze(w.customRouteName);
-            }}
-          >
-            <label>
-              Route name
+        <form
+          className="sky-card sky-section sky-route-choose"
+          aria-label="Planned route"
+          onSubmit={(e) => {
+            e.preventDefault();
+            analyze();
+          }}
+        >
+          {gpx ? (
+            <p className="sky-route-planned">
+              <RouteIcon size={16} aria-hidden="true" />
+              <span><strong>{w.plannedRouteName}</strong> · your GPX track, {gpx.checkpoints.length} checkpoints</span>
+            </p>
+          ) : (
+            <label className="sky-route-planned-name">
+              Route
               <input
                 value={w.customRouteName}
                 onChange={(e) => w.setCustomRouteName(e.target.value)}
@@ -173,82 +130,22 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                 maxLength={250}
               />
             </label>
-            <button
-              className="field-button field-button-primary"
-              disabled={
-                w.routeLoading ||
-                !available.routeAnalysis ||
-                !w.customRouteName.trim()
-              }
-            >
-              Analyze route
-            </button>
-          </form>
-          {w.featureFlags.gpxImport && (
-            <>
-              <input
-                type="file"
-                accept=".gpx,application/gpx+xml"
-                ref={upload}
-                hidden
-                onChange={async (e) => {
-                  const input = e.target;
-                  const file = input.files?.[0];
-                  if (!file) return;
-                  try {
-                    w.setImportedGpxRoute(await parseGpxFile(file));
-                    w.setRouteError(null);
-                  } catch (error) {
-                    w.setRouteError(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not read GPX.",
-                    );
-                  }
-                  input.value = "";
-                }}
-              />
-              <button
-                className="field-text-button"
-                onClick={() => upload.current?.click()}
-              >
-                <Upload size={15} />
-                Import GPX for analysis
-              </button>
-            </>
           )}
-          {gpx && (
-            <div className="field-route-import">
-              <strong>{gpx.name}</strong>
-              <p>
-                {w.formatDistanceDisplay(gpx.distanceMiles)} ·{" "}
-                {w.formatElevationDeltaDisplay(gpx.elevationGainFt)} gain ·{" "}
-                {gpx.checkpoints.length} checkpoints
-              </p>
-              <div className="field-action-row">
-                <button
-                  className="field-button"
-                  disabled={w.routeLoading || !available.routeAnalysis}
-                  onClick={() => analyze(gpx.name, true)}
-                >
-                  Analyze GPX checkpoints
-                </button>
-                <button
-                  className="field-button"
-                  onClick={() => w.setImportedGpxRoute(null)}
-                >
-                  Remove GPX
-                </button>
-              </div>
-            </div>
-          )}
+          <button className="field-button field-button-primary" disabled={!canAnalyze}>
+            {result ? "Analyze again" : "Analyze route"}
+          </button>
+          <p className="field-route-plan-context">
+            {w.forecastDate} · {w.alpineStartTime} start · {w.travelWindowHours} hours
+            {w.objectiveTimezone ? ` · ${w.objectiveTimezone}` : ""}
+            {!w.plannedRouteName && !result ? " · Name a route to check conditions along it." : ""}
+          </p>
           {!available.routeAnalysis && (
             <p className="field-feedback">
               Route analysis is unavailable on this server. Saved analysis
               remains readable.
             </p>
           )}
-        </section>
+        </form>
       )}
       {w.routeLoading && (
         <div className="sky-notice is-info sky-route-loading" role="status">
@@ -267,42 +164,6 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
         <p className="sky-notice is-caution" role="alert">
           {w.routeError}
         </p>
-      )}
-      {w.routeSuggestions && w.routeSuggestions.length > 0 && (
-        <details className="field-route-alternatives sky-section" open={!result}>
-          <summary>Route options ({w.routeSuggestions.length})</summary>
-        <div className="field-route-options">
-          {w.routeSuggestions.map((route, i) => (
-            <article className="sky-card" key={i}>
-              <div className="field-panel-heading">
-                <div>
-                  <span className="field-kicker">{route.class}</span>
-                  <h3>{route.name}</h3>
-                </div>
-                <Mountain size={20} />
-              </div>
-              <p>{route.description}</p>
-              <p>
-                {w.formatDistanceDisplay(route.distance_rt_miles)} round trip ·{" "}
-                {w.formatElevationDeltaDisplay(route.elev_gain_ft)} gain
-              </p>
-              {!readOnly && (
-                <button
-                  className="field-text-button"
-                  disabled={w.routeLoading || !available.routeAnalysis}
-                  onClick={() => analyze(route.name)}
-                >
-                  Analyze this route
-                  <ArrowRight size={14} />
-                </button>
-              )}
-            </article>
-          ))}
-        </div>
-        </details>
-      )}
-      {!w.routeLoading && w.routeSuggestions?.length === 0 && (
-        <p className="field-feedback">No route suggestions found. Enter a route name or import a GPX track.</p>
       )}
       {result && (
         <>
@@ -369,7 +230,7 @@ export function Route({ workspace: w }: { workspace: Workspace }) {
                 <p>{describeRouteTiming(result.timing)} Times are local to the objective.</p>
               </div>
               {result.summaries.length === 0 ? (
-                <p className="field-feedback">No checkpoint forecasts were returned. Try another route or import a GPX track.</p>
+                <p className="field-feedback">No checkpoint forecasts were returned. Try another route, or import a GPX track in the plan.</p>
               ) : (
                 <ol className="field-route-itinerary" aria-label="Checkpoint itinerary">
                   {result.summaries.map((point, i) => {
