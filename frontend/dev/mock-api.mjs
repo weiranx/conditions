@@ -9,6 +9,15 @@ import {
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { makeReport, peaks, scenarios } from "./mock-data.mjs";
+import {
+  ACCOUNT_FIXTURES,
+  CACHE_FIXTURES,
+  DIAGNOSTIC_SERVICES,
+  aiUsage,
+  healthHistory,
+  reportLogs,
+  seedAudit,
+} from "./admin-fixtures.mjs";
 
 const now = () => new Date().toISOString();
 const featureKeys = [
@@ -117,6 +126,97 @@ export function createMockApi({ databasePath } = {}) {
     multiDayUsage: usage("Runs"),
     aiUsage: { ...usage("Tokens"), usedRequests: 0 },
   });
+  let cachesClearedAt = 0;
+  // Older mock databases predate the seeded admin history and fixture accounts.
+  const auditLog = () => {
+    if (!db.auditSeeded) {
+      db.audit = [...db.audit, ...seedAudit(Date.now())];
+      db.auditSeeded = true;
+    }
+    return db.audit;
+  };
+  const audit = (entry) => {
+    db.audit = [
+      {
+        timestamp: now(),
+        status: "success",
+        actorNetwork: "127.0.0.x",
+        details: null,
+        ...entry,
+      },
+      ...auditLog(),
+    ].slice(0, 200);
+  };
+  const accountState = () => {
+    db.accounts ??= Object.fromEntries(
+      ACCOUNT_FIXTURES.map((account) => [account.id, { ...account.state }]),
+    );
+    return db.accounts;
+  };
+  const accounts = () => {
+    const state = accountState();
+    const time = Date.now();
+    return [
+      {
+        ...db.user,
+        tier: "premium",
+        status: "active",
+        authProvider: "mock",
+        authMethods: ["password"],
+        updatedAt: now(),
+        lastActivityAt: now(),
+        activeSessions: 1,
+        savedReports: db.reports.length,
+        aiCalls: 0,
+        aiTokens: 0,
+        aiTokenLimitOverride: null,
+        reportUsageLimitOverride: null,
+        isOwner: true,
+      },
+      ...ACCOUNT_FIXTURES.map((account) => ({
+        id: account.id,
+        displayName: account.displayName,
+        email: account.email,
+        authProvider: account.authProvider,
+        authMethods: account.authMethods,
+        ...state[account.id],
+        createdAt: new Date(time - account.createdDaysAgo * 86400000).toISOString(),
+        updatedAt: new Date(time - account.activeMinutesAgo * 60000).toISOString(),
+        lastActivityAt: new Date(time - account.activeMinutesAgo * 60000).toISOString(),
+        isOwner: false,
+      })),
+    ];
+  };
+  const scheduler = () => {
+    db.scheduler ??= {
+      enabled: false,
+      checkIntervalMinutes: 180,
+      lastCompletedAt: null,
+      lastSummary: null,
+    };
+    const state = db.scheduler;
+    return {
+      enabled: state.enabled,
+      configured: true,
+      running: false,
+      health: state.enabled ? "healthy" : "stopped",
+      message: state.enabled
+        ? "The simulated five-minute heartbeat is current. No background emails are sent."
+        : "Automatic checks are paused. Mock watches refresh manually; no background emails are sent.",
+      lastHeartbeatAt: state.enabled
+        ? new Date(Date.now() - 2 * 60000).toISOString()
+        : null,
+      lastStartedAt: state.lastCompletedAt,
+      lastCompletedAt: state.lastCompletedAt,
+      lastStatus: state.enabled ? "completed" : "stopped",
+      lastError: null,
+      lastSummary: state.lastSummary,
+      checkIntervalMinutes: state.checkIntervalMinutes,
+      expectedIntervalMinutes: 5,
+      staleAfterMinutes: 15,
+      updatedAt: now(),
+    };
+  };
   const health = () => ({
     ok: true,
     service: "backcountry-conditions-mock",
@@ -126,7 +226,11 @@ export function createMockApi({ databasePath } = {}) {
     nodeVersion: process.version,
     memory: { heapUsedMb: 32, rssMb: 64 },
     database: { configured: true, connected: true, latencyMs: 0 },
-    caches: [],
+    caches: CACHE_FIXTURES.map((cache) =>
+      cachesClearedAt
+        ? { ...cache, size: 0, hits: 0, misses: 0, staleHits: 0 }
+        : cache,
+    ),
     timestamp: now(),
     ai: {
       available: db.aiSettings?.enabled !== false,
@@ -539,44 +643,168 @@ export function createMockApi({ databasePath } = {}) {
     }
     if (p.startsWith("/api/admin/") && !db.signedIn)
       return fail(401, "Sign in to the mock admin account.");
-    if (p === "/api/report-logs") return ok(db.logs);
-    if (p === "/api/ai-usage") return ok([]);
-    if (p === "/api/admin/audit-log") return ok(db.audit);
-    if (p === "/api/admin/users")
+    if (p === "/api/report-logs")
+      return ok(
+        [...db.logs, ...reportLogs(Date.now())].sort((a, b) =>
+          b.timestamp.localeCompare(a.timestamp),
+        ),
+      );
+    if (p === "/api/ai-usage") return ok(aiUsage(Date.now()));
+    if (p === "/api/admin/audit-log") {
+      const entries = auditLog();
+      persist();
+      return ok(entries);
+    }
+    if (p === "/api/admin/users") {
+      const users = accounts();
+      const count = (test) => users.filter(test).length;
       return ok({
-        users: [
-          {
-            ...db.user,
-            tier: "premium",
-            status: "active",
-            authProvider: "mock",
-            authMethods: ["password"],
-            updatedAt: now(),
-            lastActivityAt: now(),
-            activeSessions: 1,
-            savedReports: db.reports.length,
-            aiCalls: 0,
-            aiTokens: 0,
-            aiTokenLimitOverride: null,
-            reportUsageLimitOverride: null,
-            isOwner: true,
-          },
-        ],
-        total: 1,
+        users,
+        total: users.length,
         limit: 500,
         summary: {
-          active: 1,
-          suspended: 0,
-          free: 0,
-          premium: 1,
-          verified: 1,
-          unverified: 0,
-          activeSessions: 1,
+          active: count((u) => u.status === "active"),
+          suspended: count((u) => u.status === "suspended"),
+          free: count((u) => u.tier === "free"),
+          premium: count((u) => u.tier === "premium"),
+          verified: count((u) => u.emailVerified),
+          unverified: count((u) => !u.emailVerified),
+          activeSessions: users.reduce((sum, u) => sum + u.activeSessions, 0),
         },
       });
+    }
+    if (p === "/api/admin/users/reset-usage" && method === "POST") {
+      for (const state of Object.values(accountState()))
+        Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0 });
+      audit({
+        action: "users.usage.reset-all",
+        category: "accounts",
+        summary: "Reset current-month usage for every account",
+      });
+      persist();
+      return ok({ reset: true });
+    }
+    if (p === "/api/admin/users/reset-usage-limits" && method === "POST") {
+      for (const state of Object.values(accountState()))
+        Object.assign(state, {
+          aiTokenLimitOverride: null,
+          reportUsageLimitOverride: null,
+        });
+      audit({
+        action: "users.usage-limits.reset-all",
+        category: "accounts",
+        summary: "Restored default limits for every account",
+      });
+      persist();
+      return ok({ reset: true });
+    }
+    const userRoute = /^\/api\/admin\/users\/([^/]+)(?:\/([a-z-]+))?$/.exec(p);
+    if (userRoute && method !== "GET") {
+      const id = decodeURIComponent(userRoute[1]);
+      const action = userRoute[2] || "status";
+      const account = ACCOUNT_FIXTURES.find((fixture) => fixture.id === id);
+      // The owner is Premium, so there is no metered usage to reset.
+      if (id === db.user.id && action === "reset-usage") {
+        audit({
+          action: "users.reset-usage.updated",
+          category: "accounts",
+          summary: `Reset ${db.user.displayName}'s monthly usage`,
+          details: { userId: id },
+        });
+        persist();
+        return ok({ id });
+      }
+      if (!account)
+        return id === db.user.id
+          ? fail(403, "The mock owner account cannot be changed.")
+          : fail(404, "Account not found.");
+      const state = accountState()[id];
+      const name = account.displayName;
+      const limit = body.limit === null ? null : Number(body.limit);
+      if (
+        action.endsWith("usage-limit") &&
+        limit !== null &&
+        !(Number.isInteger(limit) && limit > 0)
+      )
+        return fail(400, "Enter a whole number greater than zero.");
+      let summary;
+      switch (action) {
+        case "status":
+          if (!["active", "suspended"].includes(body.status))
+            return fail(400, "Unknown account status.");
+          state.status = body.status;
+          if (body.status === "suspended") state.activeSessions = 0;
+          summary = `${body.status === "suspended" ? "Suspended" : "Reactivated"} ${name}`;
+          break;
+        case "tier":
+          if (!["free", "premium"].includes(body.tier))
+            return fail(400, "Unknown account tier.");
+          state.tier = body.tier;
+          summary = `Moved ${name} to ${body.tier === "premium" ? "Premium" : "Free"}`;
+          break;
+        case "usage-limit":
+          state.aiTokenLimitOverride = limit;
+          summary =
+            limit === null
+              ? `Restored ${name}'s default AI token limit`
+              : `Set ${name}'s monthly AI token limit to ${limit.toLocaleString("en-US")}`;
+          break;
+        case "report-usage-limit":
+          state.reportUsageLimitOverride = limit;
+          summary =
+            limit === null
+              ? `Restored ${name}'s default report limit`
+              : `Set ${name}'s monthly report limit to ${limit.toLocaleString("en-US")}`;
+          break;
+        case "reset-usage":
+          Object.assign(state, { savedReports: 0, aiCalls: 0, aiTokens: 0 });
+          summary = `Reset ${name}'s monthly usage`;
+          break;
+        case "revoke-sessions":
+          state.activeSessions = 0;
+          summary = `Signed ${name} out of every session`;
+          break;
+        case "send-verification":
+          db.outbox.push({
+            type: "verification",
+            to: account.email,
+            createdAt: now(),
+          });
+          summary = `Sent a verification link to ${account.email}`;
+          break;
+        default:
+          return fail(
+            501,
+            `Local mock does not implement ${method} ${p}. No external request was made.`,
+          );
+      }
+      audit({
+        action: `users.${action}.updated`,
+        category: "accounts",
+        summary,
+        details: { userId: id },
+      });
+      persist();
+      return ok({
+        id,
+        ...state,
+        message:
+          action === "send-verification"
+            ? `Mock verification email for ${account.email} added to the local outbox. Nothing was sent.`
+            : undefined,
+      });
+    }
     if (p === "/api/admin/feature-flags") {
       if (method === "PATCH") {
         db.flags = { ...db.flags, ...body.flags };
+        audit({
+          action: "product.flags.updated",
+          category: "configuration",
+          summary: Object.entries(body.flags || {})
+            .map(([flag, on]) => `Turned ${on ? "on" : "off"} ${flag}`)
+            .join("; "),
+          details: body.flags || null,
+        });
         persist();
       }
       return ok({ flags: db.flags, persistent: true });
@@ -586,6 +814,12 @@ export function createMockApi({ databasePath } = {}) {
     if (p === "/api/admin/usage-settings") {
       if (method === "PATCH") {
         db.usageSettings = { ...db.usageSettings, ...body };
+        audit({
+          action: "usage.limits.updated",
+          category: "configuration",
+          summary: "Changed the default Free monthly limits",
+          details: body,
+        });
         persist();
       }
       return ok({
@@ -618,27 +852,7 @@ export function createMockApi({ databasePath } = {}) {
         timestamp: now(),
       });
     if (p === "/api/admin/health-monitor-history")
-      return ok({
-        entries: [
-          {
-            checkedAt: now(),
-            healthy: true,
-            summary: "Local mock healthy",
-            statusCode: 200,
-            durationMs: 3,
-            action: "none",
-            alertError: null,
-          },
-        ],
-        summary: {
-          total: 1,
-          healthy: 1,
-          unhealthy: 0,
-          availabilityPercent: 100,
-          lastCheckAt: now(),
-          lastUnhealthyAt: null,
-        },
-      });
+      return ok(healthHistory(Date.now()));
     if (p === "/api/admin/runtime-environment")
       return ok({
         persistent: true,
@@ -671,43 +885,85 @@ export function createMockApi({ databasePath } = {}) {
         restartDelayMs: 0,
         reason: "The Vite mock has no backend process to restart.",
       });
-    if (p === "/api/admin/objective-watch-scheduler")
-      return ok({
-        enabled: false,
-        configured: true,
-        running: false,
-        health: "stopped",
-        message:
-          "Mock watches refresh manually; no background emails are sent.",
-        lastHeartbeatAt: null,
-        lastStartedAt: null,
-        lastCompletedAt: null,
-        lastStatus: "idle",
-        lastError: null,
-        lastSummary: null,
-        checkIntervalMinutes: 180,
-        expectedIntervalMinutes: 180,
-        staleAfterMinutes: 360,
-        updatedAt: now(),
+    if (p === "/api/admin/objective-watch-scheduler") {
+      if (method === "PATCH") {
+        scheduler();
+        if (typeof body.enabled === "boolean") {
+          db.scheduler.enabled = body.enabled;
+          audit({
+            action: "objective-watch.scheduler.updated",
+            category: "configuration",
+            summary: `${body.enabled ? "Started" : "Stopped"} automatic Objective Watch checks`,
+          });
+        }
+        if (body.checkIntervalMinutes !== undefined) {
+          const minutes = Number(body.checkIntervalMinutes);
+          if (!Number.isInteger(minutes) || minutes < 5 || minutes > 1440 || minutes % 5)
+            return fail(400, "Choose an interval from 5 minutes to 24 hours in 5-minute increments.");
+          db.scheduler.checkIntervalMinutes = minutes;
+          audit({
+            action: "objective-watch.interval.updated",
+            category: "configuration",
+            summary: `Set the Objective Watch check cadence to ${minutes} minutes`,
+          });
+        }
+        persist();
+      }
+      return ok(scheduler());
+    }
+    if (p === "/api/admin/objective-watch-scheduler/run" && method === "POST") {
+      scheduler();
+      const summary = {
+        due: db.watches.length,
+        checked: db.watches.length,
+        changed: 0,
+        failed: 0,
+        notificationsSent: 0,
+      };
+      Object.assign(db.scheduler, { lastCompletedAt: now(), lastSummary: summary });
+      audit({
+        action: "objective-watch.checks.run",
+        category: "maintenance",
+        summary: `Ran due Objective Watch checks (${summary.checked} checked)`,
+        details: summary,
       });
-    if (p === "/api/admin/diagnostics")
+      persist();
+      return ok({ ...scheduler(), manualRun: { alreadyRunning: false, summary } });
+    }
+    if (p === "/api/admin/maintenance/caches" && method === "POST") {
+      cachesClearedAt = Date.now();
+      const cleared = CACHE_FIXTURES.map((cache) => cache.name);
+      audit({
+        action: "maintenance.caches.cleared",
+        category: "maintenance",
+        summary: `Cleared ${cleared.length} backend caches`,
+        details: { caches: cleared },
+      });
+      persist();
+      return ok({ cleared, count: cleared.length });
+    }
+    if (p === "/api/admin/diagnostics") {
+      const count = (status) =>
+        DIAGNOSTIC_SERVICES.filter((service) => service.status === status).length;
+      audit({
+        action: "diagnostics.external.completed",
+        category: "diagnostics",
+        summary: "External diagnostics completed successfully",
+      });
+      persist();
       return ok({
         startedAt: now(),
         completedAt: now(),
         durationMs: 0,
-        summary: { total: 1, operational: 1, failed: 0, notConfigured: 0 },
-        services: [
-          {
-            id: "mock",
-            name: "Local mock API",
-            category: "Development",
-            status: "operational",
-            httpStatus: 200,
-            latencyMs: 0,
-            message: "Fixture data; no external services called.",
-          },
-        ],
+        summary: {
+          total: DIAGNOSTIC_SERVICES.length,
+          operational: count("operational"),
+          failed: count("failed"),
+          notConfigured: count("not_configured"),
+        },
+        services: DIAGNOSTIC_SERVICES,
       });
+    }
     if (p === "/api/admin/ai-models" || p === "/api/admin/ai-models/refresh")
       return ok({
         fetchedAt: now(),
@@ -755,6 +1011,11 @@ export function createMockApi({ databasePath } = {}) {
             ]),
           ),
         };
+        audit({
+          action: "ai.settings.updated",
+          category: "configuration",
+          summary: `Updated AI ${Object.keys(body).join(", ")}`,
+        });
         persist();
       }
       return ok({
@@ -770,7 +1031,8 @@ export function createMockApi({ databasePath } = {}) {
           "demo-fixture",
         configured: true,
         fallbackProvider: "anthropic",
-        fallbackConfigured: true,
+        // Matches the backend: a fallback only counts while failover is on.
+        fallbackConfigured: db.aiSettings.failoverEnabled === true,
         providers: Object.fromEntries(
           ["openai", "anthropic", "gemini"].map((provider) => [
             provider,

@@ -36,7 +36,69 @@ test("Premium session returns unlimited reports, AI and multi-day usage", async 
   }
   const users = await api.handle("/api/admin/users");
   assert.equal(users.payload.users[0].isOwner, true);
-  assert.equal(users.payload.summary.premium, 1);
+  assert.equal(users.payload.users[0].tier, "premium");
+  assert.equal(
+    users.payload.summary.premium,
+    users.payload.users.filter((user) => user.tier === "premium").length,
+  );
+});
+test("mock admin dashboard has a week of traffic and simulated account actions", async () => {
+  const api = createMockApi();
+  const DAY = 24 * 60 * 60 * 1000;
+  const oldest = (entries) =>
+    Math.min(...entries.map((entry) => Date.parse(entry.timestamp)));
+  const logs = (await api.handle("/api/report-logs")).payload;
+  const ai = (await api.handle("/api/ai-usage")).payload;
+  assert.ok(logs.length > 50 && ai.length > 10);
+  assert.ok(Date.now() - oldest(logs) > 7 * DAY);
+  assert.ok(logs.every((entry) => Date.parse(entry.timestamp) <= Date.now()));
+  // Fixed clock slots keep timestamps stable between refreshes.
+  const time = Date.now();
+  const settled = (entries) =>
+    entries.filter((entry) => {
+      const at = Date.parse(entry.timestamp);
+      return at > time - 7 * DAY && at < time - 60 * 60 * 1000;
+    });
+  assert.deepEqual(
+    settled((await api.handle("/api/report-logs")).payload),
+    settled(logs),
+  );
+  const history = (await api.handle("/api/admin/health-monitor-history")).payload;
+  assert.equal(history.entries.length, 100);
+  assert.equal(history.summary.total, 100);
+
+  const directory = (await api.handle("/api/admin/users")).payload;
+  const member = directory.users.find((user) => !user.isOwner && user.status === "active");
+  await api.handle(`/api/admin/users/${member.id}`, "PATCH", { status: "suspended" });
+  await api.handle(`/api/admin/users/${member.id}/usage-limit`, "PATCH", { limit: 5000 });
+  const updated = (await api.handle("/api/admin/users")).payload;
+  const changed = updated.users.find((user) => user.id === member.id);
+  assert.equal(changed.status, "suspended");
+  assert.equal(changed.activeSessions, 0);
+  assert.equal(changed.aiTokenLimitOverride, 5000);
+  assert.equal(updated.summary.suspended, directory.summary.suspended + 1);
+  assert.equal(
+    (await api.handle(`/api/admin/users/${member.id}/usage-limit`, "PATCH", { limit: -1 })).status,
+    400,
+  );
+  assert.equal(
+    (await api.handle("/api/admin/users/mock-admin", "PATCH", { status: "suspended" })).status,
+    403,
+  );
+  const audit = (await api.handle("/api/admin/audit-log")).payload;
+  assert.match(audit[0].summary, /monthly AI token limit to 5,000/);
+  assert.match(audit[1].summary, /^Suspended /);
+
+  const cleared = await api.handle("/api/admin/maintenance/caches", "POST");
+  assert.equal(cleared.payload.count, cleared.payload.cleared.length);
+  const health = (await api.handle("/api/healthz")).payload;
+  assert.ok(health.caches.every((cache) => cache.size === 0));
+
+  await api.handle("/api/admin/objective-watch-scheduler", "PATCH", { checkIntervalMinutes: 60 });
+  const run = await api.handle("/api/admin/objective-watch-scheduler/run", "POST");
+  assert.equal(run.payload.checkIntervalMinutes, 60);
+  assert.equal(run.payload.manualRun.alreadyRunning, false);
+  assert.ok(run.payload.lastCompletedAt);
 });
 test("saved reports, watches, preferences and mock outbox persist across server restarts", async () => {
   const dir = mkdtempSync(join(tmpdir(), "conditions-mock-"));
