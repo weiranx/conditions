@@ -18,6 +18,7 @@ import {
   parseTimeInputMinutes,
 } from '../app/core';
 import { parseOptionalElevationInput } from '../app/planner-helpers';
+import { applyPreferencePatch } from '../app/activity-limits';
 import { getDefaultUserPreferences, persistUserPreferences } from '../app/preferences';
 
 type TravelThresholdPresetKey = 'conservative' | 'standard' | 'aggressive' | 'runner';
@@ -170,7 +171,7 @@ export function usePreferenceHandlers({
 
   const updatePreferences = useCallback((patch: Partial<UserPreferences>) => {
     setPreferences((prev) => {
-      const next = { ...prev, ...patch };
+      const next = applyPreferencePatch(prev, patch);
       if (persistLocally) persistUserPreferences(next);
       onPreferencesChange?.(next);
       return next;
@@ -409,11 +410,12 @@ export function usePreferenceHandlers({
   }, [onApplyToPlanner]);
 
   const resetPreferences = useCallback(() => {
-    const defaults = getDefaultUserPreferences();
+    // Custom activities are kept, but every activity's limits go back to its defaults.
+    const defaults = { ...getDefaultUserPreferences(), customActivities: preferences.customActivities };
     setPreferences(defaults);
     if (persistLocally) persistUserPreferences(defaults);
     onPreferencesChange?.(defaults);
-  }, [onPreferencesChange, persistLocally, setPreferences]);
+  }, [onPreferencesChange, persistLocally, preferences.customActivities, setPreferences]);
 
   return {
     travelWindowHoursDraft,

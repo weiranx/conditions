@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import type { Workspace } from "./model/useWorkspace";
 import { DaylightChart } from "./DaylightChart";
 import { ContingencyCard } from "./ContingencyCard";
-import { Thresholds } from "./Settings";
+import { Thresholds } from "./Thresholds";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { minutesToTwentyFourHourClock, parseHourLabelToMinutes, parseTimeInputMinutes } from "../app/core";
 import { buildPlannedReportWeatherRows } from "./report-weather";

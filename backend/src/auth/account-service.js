@@ -120,6 +120,83 @@ const validatePreferenceBoolean = (preferences, field) => {
   return value;
 };
 
+const CUSTOM_ACTIVITY_ID_PATTERN = /^custom-[a-z0-9]{1,32}$/u;
+const MAX_CUSTOM_ACTIVITIES = 12;
+const MAX_CUSTOM_ACTIVITY_LABEL_LENGTH = 40;
+
+const validateCustomActivities = (value) => {
+  if (!Array.isArray(value) || value.length > MAX_CUSTOM_ACTIVITIES) {
+    throw new AccountValidationError(
+      `Keep up to ${MAX_CUSTOM_ACTIVITIES} custom activities.`,
+      'preferences.customActivities',
+    );
+  }
+  const seen = new Set();
+  return value.map((activity) => {
+    if (!activity || typeof activity !== 'object' || Array.isArray(activity)) {
+      throw new AccountValidationError('Provide valid custom activities.', 'preferences.customActivities');
+    }
+    const { id, label, baseActivity } = activity;
+    if (typeof id !== 'string' || !CUSTOM_ACTIVITY_ID_PATTERN.test(id) || seen.has(id)) {
+      throw new AccountValidationError('Provide valid custom activities.', 'preferences.customActivities');
+    }
+    seen.add(id);
+    const cleanLabel = typeof label === 'string' ? label.replace(/\s+/gu, ' ').trim() : '';
+    if (!cleanLabel || characterCount(cleanLabel) > MAX_CUSTOM_ACTIVITY_LABEL_LENGTH || CONTROL_CHAR_PATTERN.test(cleanLabel)) {
+      throw new AccountValidationError(
+        `Name each custom activity with 1 to ${MAX_CUSTOM_ACTIVITY_LABEL_LENGTH} characters.`,
+        'preferences.customActivities',
+      );
+    }
+    if (typeof baseActivity !== 'string' || !ACTIVITIES.has(baseActivity)) {
+      throw new AccountValidationError('Choose a valid base activity.', 'preferences.customActivities');
+    }
+    return { id, label: cleanLabel, baseActivity };
+  });
+};
+
+// Weather limits saved per built-in activity or custom activity id.
+const validateActivityLimits = (value, customIds) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AccountValidationError('Provide valid activity limits.', 'preferences.activityLimits');
+  }
+  const result = {};
+  for (const [key, limits] of Object.entries(value)) {
+    if (!ACTIVITIES.has(key) && !customIds.has(key)) {
+      throw new AccountValidationError('Activity limits refer to an unknown activity.', 'preferences.activityLimits');
+    }
+    if (!limits || typeof limits !== 'object' || Array.isArray(limits)) {
+      throw new AccountValidationError('Provide valid activity limits.', 'preferences.activityLimits');
+    }
+    result[key] = {
+      maxWindGustMph: validatePreferenceNumber(limits, 'maxWindGustMph', 10, 80),
+      maxPrecipChance: validatePreferenceNumber(limits, 'maxPrecipChance', 0, 100, { integer: true }),
+      minFeelsLikeF: validatePreferenceNumber(limits, 'minFeelsLikeF', -40, 60),
+      maxFeelsLikeF: validatePreferenceNumber(limits, 'maxFeelsLikeF', 70, 120),
+    };
+  }
+  return result;
+};
+
+const validateActivityPreferences = (preferences) => {
+  // Optional so clients from before per-activity limits keep saving.
+  const customActivities = preferences.customActivities === undefined
+    ? undefined
+    : validateCustomActivities(preferences.customActivities);
+  const customIds = new Set((customActivities || []).map((activity) => activity.id));
+  const customActivityId = preferences.customActivityId;
+  if (customActivityId !== undefined && customActivityId !== null && !customIds.has(customActivityId)) {
+    throw new AccountValidationError('Choose a valid custom activity.', 'preferences.customActivityId');
+  }
+  return {
+    ...(customActivities === undefined ? {} : { customActivities }),
+    ...(customActivityId === undefined ? {} : { customActivityId }),
+    ...(preferences.activityLimits === undefined
+      ? {}
+      : { activityLimits: validateActivityLimits(preferences.activityLimits, customIds) }),
+  };
+};
+
 const validateAccountPreferences = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new AccountValidationError('Provide valid account preferences.', 'preferences');
@@ -167,6 +244,7 @@ const validateAccountPreferences = (value) => {
     ...(preferences.approachElevationAdjustment === undefined
       ? {}
       : { approachElevationAdjustment: validatePreferenceBoolean(preferences, 'approachElevationAdjustment') }),
+    ...validateActivityPreferences(preferences),
   };
 };
 

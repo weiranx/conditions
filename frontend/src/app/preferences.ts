@@ -13,7 +13,18 @@ import {
   normalizeTimeStyle,
   normalizeWindSpeedUnit,
 } from './core';
-import type { UserPreferences } from './types';
+import {
+  ACTIVITY_LIMIT_KEYS,
+  MAX_CUSTOM_ACTIVITIES,
+  activeActivityKey,
+  builtInActivityLimits,
+  isCustomActivityId,
+  normalizeCustomActivityLabel,
+  pickActivityLimits,
+  sameActivityLimits,
+} from './activity-limits';
+import { ACTIVITY_PROFILE_ORDER } from './activity-profiles';
+import type { ActivityLimits, ActivityType, CustomActivity, UserPreferences } from './types';
 
 function normalizeNumberPreference(rawValue: unknown, fallback: number, min: number, max: number): number {
   const numericValue = Number(rawValue);
@@ -32,9 +43,48 @@ function normalizeDecimalPreference(rawValue: unknown, fallback: number, min: nu
   return Number(clamped.toFixed(precision));
 }
 
+const WEATHER_LIMIT_BOUNDS = {
+  maxWindGustMph: [10, 80],
+  maxPrecipChance: [0, 100],
+  minFeelsLikeF: [-40, 60],
+  maxFeelsLikeF: [70, 120],
+} as const;
+
+function normalizeActivityLimits(value: unknown, fallback: ActivityLimits): ActivityLimits {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value as Partial<ActivityLimits> : {};
+  const limits = { ...fallback };
+  for (const key of ACTIVITY_LIMIT_KEYS) {
+    const [min, max] = WEATHER_LIMIT_BOUNDS[key];
+    limits[key] = key === 'maxPrecipChance'
+      ? normalizeNumberPreference(raw[key], fallback[key], min, max)
+      : normalizeDecimalPreference(raw[key], fallback[key], min, max, 2);
+  }
+  return limits;
+}
+
+function normalizeCustomActivities(value: unknown): CustomActivity[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const activities: CustomActivity[] = [];
+  for (const item of value) {
+    if (activities.length >= MAX_CUSTOM_ACTIVITIES) break;
+    if (!item || typeof item !== 'object') continue;
+    const { id, label, baseActivity } = item as Partial<CustomActivity>;
+    const cleanLabel = typeof label === 'string' ? normalizeCustomActivityLabel(label) : '';
+    if (!isCustomActivityId(id) || seen.has(id) || !cleanLabel) continue;
+    if (!ACTIVITY_PROFILE_ORDER.includes(baseActivity as ActivityType)) continue;
+    seen.add(id);
+    activities.push({ id, label: cleanLabel, baseActivity: baseActivity as ActivityType });
+  }
+  return activities;
+}
+
 export function getDefaultUserPreferences(): UserPreferences {
   return {
     defaultActivity: 'hiking',
+    customActivityId: null,
+    customActivities: [],
+    activityLimits: {},
     defaultStartTime: '07:00',
     themeMode: 'system',
     temperatureUnit: 'f',
@@ -63,7 +113,14 @@ export function hasStoredUserPreferences(value: unknown): boolean {
     || Object.prototype.hasOwnProperty.call(preferences, 'themeMode');
 }
 
-export function normalizeUserPreferences(value: unknown): UserPreferences {
+/**
+ * `adoptActivityDefaults` is for a person's live preferences only: saved
+ * report snapshots keep the limits they were checked against.
+ */
+export function normalizeUserPreferences(
+  value: unknown,
+  { adoptActivityDefaults = false }: { adoptActivityDefaults?: boolean } = {},
+): UserPreferences {
   const defaults = getDefaultUserPreferences();
   const parsed = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Partial<UserPreferences>
@@ -73,8 +130,20 @@ export function normalizeUserPreferences(value: unknown): UserPreferences {
     ? defaults.defaultStartTime
     : storedStartTime;
 
-  return {
-    defaultActivity: parsed.defaultActivity ? normalizeActivity(parsed.defaultActivity) : defaults.defaultActivity,
+  const customActivities = normalizeCustomActivities(parsed.customActivities);
+  const customActivity = customActivities.find((activity) => activity.id === parsed.customActivityId) || null;
+  const rawActivityLimits = parsed.activityLimits && typeof parsed.activityLimits === 'object' && !Array.isArray(parsed.activityLimits)
+    ? parsed.activityLimits as Record<string, unknown>
+    : {};
+  const customIds = new Set(customActivities.map((activity) => activity.id));
+
+  const normalized: UserPreferences = {
+    defaultActivity: customActivity
+      ? customActivity.baseActivity
+      : parsed.defaultActivity ? normalizeActivity(parsed.defaultActivity) : defaults.defaultActivity,
+    customActivityId: customActivity?.id || null,
+    customActivities,
+    activityLimits: {},
     defaultStartTime: normalizedStartTime,
     themeMode: normalizeThemeMode(parsed.themeMode),
     temperatureUnit: normalizeTemperatureUnit(parsed.temperatureUnit),
@@ -113,6 +182,22 @@ export function normalizeUserPreferences(value: unknown): UserPreferences {
       ? parsed.approachElevationAdjustment
       : defaults.approachElevationAdjustment,
   };
+
+  // The flat limits are the active activity's; saved limits for the others
+  // ride along. Preferences from before per-activity limits had one global set:
+  // limits someone tuned seed the active activity, untouched defaults give way
+  // to that activity's own defaults.
+  const legacy = !parsed.activityLimits;
+  if (adoptActivityDefaults && legacy && sameActivityLimits(pickActivityLimits(normalized), pickActivityLimits(defaults))) {
+    Object.assign(normalized, builtInActivityLimits(normalized.defaultActivity));
+  }
+  const fallbackLimits = pickActivityLimits(normalized);
+  for (const [key, limits] of Object.entries(rawActivityLimits)) {
+    const known = isCustomActivityId(key) ? customIds.has(key) : ACTIVITY_PROFILE_ORDER.includes(key as ActivityType);
+    if (known) normalized.activityLimits[key] = normalizeActivityLimits(limits, fallbackLimits);
+  }
+  normalized.activityLimits[activeActivityKey(normalized)] = fallbackLimits;
+  return normalized;
 }
 
 export function loadUserPreferences(): UserPreferences {
@@ -128,7 +213,7 @@ export function loadUserPreferences(): UserPreferences {
       return defaults;
     }
 
-    return normalizeUserPreferences(JSON.parse(raw));
+    return normalizeUserPreferences(JSON.parse(raw), { adoptActivityDefaults: true });
   } catch {
     return defaults;
   }

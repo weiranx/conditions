@@ -18,7 +18,9 @@ import {
   ACTIVITY_PROFILES,
   ACTIVITY_PROFILE_ORDER,
 } from "../app/activity-profiles";
+import { activeActivityKey, activeActivityLabel } from "../app/activity-limits";
 import { parseGpxFile } from "../lib/gpx";
+import { Thresholds } from "./Thresholds";
 import "./sky/plan.css";
 import { ACTIVITY_ICONS } from "./sky/activity-icons";
 import { liftAboveKeyboard } from "./touch";
@@ -438,27 +440,60 @@ export function WorkspacePlan({
         <fieldset className="sky-plan-activities">
           <legend className="sky-plan-step"><span aria-hidden="true">3</span>How</legend>
           <div className="sky-activity-grid" role="radiogroup" aria-label="Activity">
-            {ACTIVITY_PROFILE_ORDER.map((key) => {
-              const Icon = ACTIVITY_ICONS[key] || Compass;
-              const checked = w.preferences.defaultActivity === key;
+            {[
+              ...ACTIVITY_PROFILE_ORDER.map((key) => ({
+                key,
+                label: ACTIVITY_PROFILES[key].label,
+                icon: key,
+                patch: { defaultActivity: key, customActivityId: null },
+              })),
+              ...w.preferences.customActivities.map((custom) => ({
+                key: custom.id,
+                label: custom.label,
+                icon: custom.baseActivity,
+                patch: { defaultActivity: custom.baseActivity, customActivityId: custom.id },
+              })),
+            ].map((option) => {
+              const Icon = ACTIVITY_ICONS[option.icon] || Compass;
+              const checked = activeActivityKey(w.preferences) === option.key;
               return (
-                <label key={key} className={`sky-activity${checked ? " is-checked" : ""}`}>
+                <label key={option.key} className={`sky-activity${checked ? " is-checked" : ""}`}>
                   <input
                     type="radio"
                     name={`${id}-activity`}
-                    value={key}
+                    value={option.key}
                     checked={checked}
                     onChange={() => {
                       if (!comparison && w.safetyData) w.handleEditPlan();
-                      w.updatePreferences({ defaultActivity: key });
+                      w.updatePreferences(option.patch);
                     }}
                   />
                   <Icon size={24} strokeWidth={1.7} aria-hidden="true" />
-                  <span>{ACTIVITY_PROFILES[key].label}</span>
+                  <span>{option.label}</span>
                 </label>
               );
             })}
           </div>
+          <details className="sky-plan-limits">
+            <summary>
+              <span className="sky-plan-limits-title">
+                Limits for {activeActivityLabel(w.preferences)}
+                <span className="sky-plan-limits-edit">Adjust</span>
+              </span>
+              <span className="sky-plan-limit-chips">
+                <span>Gusts ≤ {w.formatWindDisplay(w.preferences.maxWindGustMph)}</span>
+                <span>Rain or snow ≤ {w.preferences.maxPrecipChance}%</span>
+                <span>
+                  Feels {w.formatTempDisplay(w.preferences.minFeelsLikeF)} to {w.formatTempDisplay(w.preferences.maxFeelsLikeF)}
+                </span>
+              </span>
+            </summary>
+            <Thresholds workspace={w} hideHeader />
+            <button type="button" className="sky-plan-limits-link" onClick={() => w.navigateToView("settings")}>
+              <Plus size={14} aria-hidden="true" />
+              Create your own activity in Preferences
+            </button>
+          </details>
         </fieldset>
         {comparison ? (
           <label className="field-activity">
