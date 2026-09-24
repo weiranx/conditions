@@ -98,6 +98,14 @@ const calculateNextCheckAt = (plan, checkedAt, standardIntervalMinutes = DEFAULT
   return new Date(now.getTime() + cadenceMs);
 };
 
+// Re-check with the activity the reference snapshot was scored for. Snapshots
+// scored before activity weighting carry no safety.activity and keep scoring as
+// general backcountry, so a watch never reports a jump caused by the model.
+const watchScoringActivity = (watch) => {
+  const activity = (watch.last_snapshot || watch.baseline_report?.safetyData)?.safety?.activity;
+  return typeof activity === 'string' && activity ? activity : null;
+};
+
 const buildPlanKey = (plan) => {
   const lat = finiteNumber(plan?.lat);
   const lon = finiteNumber(plan?.lon);
@@ -555,8 +563,9 @@ const createObjectiveWatchChecker = ({
         `, [watch.id, checkedAt.toISOString(), claimToken]);
         continue;
       }
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(watch);
+      const groupKey = `${key}:${watchScoringActivity(watch) || ''}`;
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(watch);
     }
 
     let checked = 0;
@@ -571,6 +580,7 @@ const createObjectiveWatchChecker = ({
           date: sample.plan.forecastDate,
           start: sample.plan.alpineStartTime,
           travel_window_hours: String(sample.plan.travelWindowHours || 12),
+          ...(watchScoringActivity(sample) ? { activity: watchScoringActivity(sample) } : {}),
           name: sample.title,
         }, { suppressReportLog: true });
         // A date that has rolled out of the forecast is finished, not a
