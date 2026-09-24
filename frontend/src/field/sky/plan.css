@@ -153,6 +153,30 @@
 .field-app .field-workspace-empty strong { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 .field-app .field-workspace-empty p { font-size: 14px; color: var(--sky-secondary); }
 
+/* The chosen activity's weather limits, editable in place. */
+.sky-plan-limits {
+  clear: both; margin: 12px 0 0; border-radius: 14px; background: var(--sky-fill, var(--f-wash));
+  color: var(--sky-label, var(--f-ink));
+}
+.sky-plan-limits > summary {
+  display: grid; gap: 8px; padding: 12px 14px; cursor: pointer; list-style: none; border-radius: 14px;
+}
+.sky-plan-limits > summary::-webkit-details-marker { display: none; }
+.sky-plan-limits > summary:focus-visible { outline: 3px solid var(--sky-accent, var(--f-primary)); outline-offset: 2px; }
+.sky-plan-limits-title { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; font-weight: 650; }
+.sky-plan-limits-edit { font-weight: 600; color: var(--sky-accent, var(--f-primary)); }
+.sky-plan-limits[open] .sky-plan-limits-edit { visibility: hidden; }
+.sky-plan-limit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sky-plan-limit-chips > span {
+  padding: 3px 9px; border-radius: 999px; background: var(--sky-surface, var(--f-paper));
+  font-size: 13px; color: var(--sky-secondary, var(--f-muted));
+}
+.sky-plan-limits .sky-thresholds { padding: 0 10px 4px; }
+.sky-plan-limits-link {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 14px; padding: 0; border: 0; background: none;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--sky-accent, var(--f-primary)); cursor: pointer;
+}
+
 /* Optional fourth step: a route to check at timed checkpoints once the brief is ready. */
 .sky-plan-route { margin: 28px 0 0; }
 .sky-plan-route > summary {

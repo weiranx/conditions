@@ -59,6 +59,7 @@ import {
   normalizeDangerLevel,
   parseOptionalElevationInput,
 } from "../../app/planner-helpers";
+import { applyPreferencePatch } from "../../app/activity-limits";
 import {
   hasStoredUserPreferences,
   loadUserPreferences,
@@ -288,13 +289,12 @@ export function useWorkspace() {
   const sharedReportResolvedTokenRef = useRef<string | null>(null);
 
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
-    return {
-      ...initialPreferences,
+    return applyPreferencePatch(initialPreferences, {
       defaultActivity: initialLinkState.activity,
       ...(initialLinkState.travelWindowHours
         ? { travelWindowHours: initialLinkState.travelWindowHours }
         : {}),
-    };
+    });
   });
   const preferencesRef = useRef(preferences);
   const preHistoryPreferencesRef = useRef<UserPreferences | null>(null);
@@ -319,14 +319,14 @@ export function useWorkspace() {
     if (hasStoredUserPreferences(accountUser.preferences)) {
       const accountPreferences = normalizeUserPreferences(
         accountUser.preferences,
+        { adoptActivityDefaults: true },
       );
       setPreferences(
         initialLinkState.hasObjective
-          ? {
-              ...accountPreferences,
+          ? applyPreferencePatch(accountPreferences, {
               defaultActivity: preferencesRef.current.defaultActivity,
               travelWindowHours: preferencesRef.current.travelWindowHours,
-            }
+            })
           : accountPreferences,
       );
       return;
@@ -845,13 +845,14 @@ export function useWorkspace() {
         setTargetElevationInput(linkState.targetElevationInput);
         setTargetElevationManual(Boolean(linkState.targetElevationInput));
         setTrailheadElevationInput(linkState.trailheadElevationInput ?? "");
-        setPreferences((prev) => ({
-          ...prev,
-          defaultActivity: linkState.activity,
-          ...(linkState.travelWindowHours
-            ? { travelWindowHours: linkState.travelWindowHours }
-            : {}),
-        }));
+        setPreferences((prev) =>
+          applyPreferencePatch(prev, {
+            defaultActivity: linkState.activity,
+            ...(linkState.travelWindowHours
+              ? { travelWindowHours: linkState.travelWindowHours }
+              : {}),
+          }),
+        );
         setError(null);
       },
       [

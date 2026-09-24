@@ -79,6 +79,8 @@ function planWorkspace(overrides = {}) {
     searchWrapperRef: createRef(),
     searchInputRef: createRef(),
     preferences,
+    formatWindDisplay: (mph) => `${mph} mph`,
+    formatTempDisplay: (f) => `${f}°F`,
     searchQuery: '',
     showSuggestions: false,
     suggestions: [],

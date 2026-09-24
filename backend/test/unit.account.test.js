@@ -128,6 +128,40 @@ describe('password accounts', () => {
       .toThrow(AccountValidationError);
   });
 
+  test('accepts custom activities and per-activity weather limits', () => {
+    const custom = { id: 'custom-winterpeaks', label: '  Winter   peaks ', baseActivity: 'hiking' };
+    const limits = { maxWindGustMph: 20, maxPrecipChance: 40, minFeelsLikeF: -5, maxFeelsLikeF: 80 };
+    const withActivities = {
+      ...PREFERENCES,
+      customActivities: [custom],
+      customActivityId: 'custom-winterpeaks',
+      activityLimits: { 'ski-touring': limits, 'custom-winterpeaks': limits },
+    };
+    expect(validateAccountPreferences(withActivities)).toEqual({
+      ...withActivities,
+      customActivities: [{ ...custom, label: 'Winter peaks' }],
+    });
+    expect(validateAccountPreferences({ ...PREFERENCES, customActivityId: null }))
+      .toEqual({ ...PREFERENCES, customActivityId: null });
+    // A selection or saved limits must refer to a real activity.
+    expect(() => validateAccountPreferences({ ...PREFERENCES, customActivityId: 'custom-missing' }))
+      .toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({ ...PREFERENCES, activityLimits: { 'custom-missing': limits } }))
+      .toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({ ...PREFERENCES, activityLimits: { hiking: { ...limits, maxWindGustMph: 5 } } }))
+      .toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({
+      ...PREFERENCES,
+      customActivities: [{ ...custom, baseActivity: 'kayaking' }],
+    })).toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({
+      ...PREFERENCES,
+      customActivities: [{ ...custom, label: 'x'.repeat(41) }],
+    })).toThrow(AccountValidationError);
+    expect(() => validateAccountPreferences({ ...PREFERENCES, customActivities: [custom, custom] }))
+      .toThrow(AccountValidationError);
+  });
+
   test('creates a user, credentials, session, and hashed verification token in one database statement', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [{ ...USER_ROW, verification_token_id: '4df4041e-5ff1-441d-b62f-81283f372489' }],
