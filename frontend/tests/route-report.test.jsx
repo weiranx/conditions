@@ -112,10 +112,11 @@ function workspace() {
 }
 const brief = (route) => renderToStaticMarkup(
   <BriefSections w={workspace()} hours={hours} clock={(m) => `${m}`} scoreValue={74} insufficient={false} bridge=""
-    onOpen={() => {}} onReadAll={() => {}} routeEnabled route={route} gearEnabled />);
+    onOpen={() => {}} onReadAll={() => {}} sections={["forecast", "timing", "terrain", "route", "sources"]} route={route} gearEnabled />);
+const routeSection = (html) => html.slice(html.indexOf("<strong>Route</strong>"), html.indexOf("</button>", html.indexOf("<strong>Route</strong>")));
 const routeCard = (html) => html.slice(html.indexOf("is-route"), html.indexOf("<span>Weather</span>"));
 
-test("the brief's checks lead with the planned route and drop the generic route link", () => {
+test("the brief's checks lead with the planned route and its section says how it went", () => {
   const route = summarize({
     analysis: analysis([stop(), stop({ name: "Col", etaTime: "09:30", weather: { ...calm, windGust: 42 } }),
       stop({ name: "Return to Trailhead", etaTime: "15:00", leg: "return" })], { routeMetadata: { distanceMiles: 9.4, elevationGainFt: 5100 } }),
@@ -128,14 +129,15 @@ test("the brief's checks lead with the planned route and drop the generic route 
   assert.match(card, /sky-status is-over[^>]*>.*1 of 3 over/);
   assert.match(card, /Col at @09:30: gusts 42 mph, over your 30 mph limit\. Back at the start around @15:00\./);
   assert.match(card, /Checkpoints along East Ridge: Trailhead at @06:00, within your limits; Col at @09:30, over your limits/);
-  assert.doesNotMatch(html, /Conditions along your route and checkpoints/);
+  assert.match(card, /Open Route/);
+  assert.match(routeSection(html), /1 of 3 over/);
   assert.doesNotMatch(html, /NaN|undefined/);
 });
 
-test("without a planned route the brief keeps the route link and no route card", () => {
+test("without a planned route the brief keeps the Route section and no route card", () => {
   const html = brief(null);
   assert.doesNotMatch(html, /is-route/);
-  assert.match(html, /Conditions along your route and checkpoints/);
+  assert.match(routeSection(html), /Check a route’s checkpoints/);
 });
 
 test("a route being checked or not checked is never shown as within limits", () => {

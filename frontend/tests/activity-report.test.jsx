@@ -10,6 +10,14 @@ test('every activity orders every chapter and check exactly once', () => {
   }
 });
 
+test('every activity leads the brief with two different headline numbers', () => {
+  for (const key of ACTIVITY_PROFILE_ORDER) {
+    const { numbers, numbersNote } = ACTIVITY_PROFILES[key].report;
+    assert.equal(new Set(numbers).size, 2, key);
+    assert.ok(numbersNote, key);
+  }
+});
+
 test('a report keeps the activity it was generated for', () => {
   assert.equal(reportActivity({ safetyData: { forecast: { activity: 'ski-touring' } }, preferences: { defaultActivity: 'hiking' } }), 'ski-touring');
   assert.equal(reportActivity({ safetyData: { forecast: {} }, preferences: { defaultActivity: 'scrambling' } }), 'scrambling');

@@ -12,12 +12,8 @@ import {
   Link,
   Mail,
   Ellipsis,
-  Mountain,
   RefreshCw,
-  Route as RouteIcon,
-  ShieldCheck,
   Sparkles,
-  Sunrise,
   Info,
   TriangleAlert,
 } from "lucide-react";
@@ -32,6 +28,7 @@ import { ApproachNote } from "./sky/ApproachNote";
 import { RouteNote } from "./sky/RouteNote";
 import { summarizePlannedRoute } from "./route-planning";
 import { BriefSections } from "./sky/BriefSections";
+import { REPORT_CHAPTERS, type ReportChapter } from "./sky/report-chapters";
 import { buildSkyHours } from "./sky/sky-model";
 import { verdictCopy } from "./verdict-copy";
 import { buildPlannedReportWeatherRows } from "./report-weather";
@@ -64,15 +61,8 @@ const Sources = lazy(() =>
 );
 const Route = lazy(() => import("./Route").then((m) => ({ default: m.Route })));
 const Chat = lazy(() => import("./Chat").then((m) => ({ default: m.Chat })));
-const chapters = [
-  { id: "forecast", label: "Weather", icon: Sunrise },
-  { id: "timing", label: "Timing", icon: Clock3 },
-  { id: "terrain", label: "Terrain & snow", icon: Mountain },
-  { id: "route", label: "Route", icon: RouteIcon },
-  { id: "sources", label: "Checks & sources", icon: ShieldCheck },
-  { id: "gear", label: "Gear & actions", icon: Check },
-] as const;
-type Chapter = (typeof chapters)[number]["id"];
+const chapters = REPORT_CHAPTERS;
+type Chapter = ReportChapter;
 type View = Chapter | "brief" | "all";
 function viewFromHash(): View {
   const hash = parseReportSectionHash(window.location.hash) || "";
@@ -451,7 +441,7 @@ export function Report({
           hours={skyHours}
           sunrise={w.sunriseMinutesForPlan}
           sunset={w.sunsetMinutesForPlan}
-          kicker={w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"}
+          kicker={`${w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"} · ${activity.label}`}
           title={report.plan.objectiveName}
           subtitle={subtitle}
           status={passedStatus}
@@ -510,7 +500,7 @@ export function Report({
             bridge={copy.bridge}
             onOpen={(next) => go(next)}
             onReadAll={() => go("all")}
-            routeEnabled={flags.routeAnalysis}
+            sections={visibleChapters.map((c) => c.id)}
             route={route}
             gearEnabled={flags.gearRecommendations}
             activity={reportActivity(report)}
@@ -544,7 +534,6 @@ export function Report({
               bridge={copy.bridge}
               onOpen={(next) => go(next)}
               onReadAll={() => go("all")}
-              routeEnabled={flags.routeAnalysis}
               route={route}
               gearEnabled={flags.gearRecommendations}
               activity={reportActivity(report)}
