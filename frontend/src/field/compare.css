@@ -22,6 +22,9 @@
 .compare-recommendation .sky-verdict-reason { margin: 2px 0 4px; }
 .compare-recommendation .sky-cap { margin: 0; }
 .compare-recommendation .field-button { margin-top: 8px; }
+.compare-limiting { margin: 0 0 4px; }
+.compare-limiting li { font-size: 14px; }
+.compare-ties { display: grid; gap: 6px; margin: 2px 0 4px; }
 .compare-decision { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; background: var(--sky-fill); color: var(--sky-label); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
 .compare-decision.is-caution, .compare-decision.is-blocked { background: var(--sky-caution-fill); color: var(--sky-caution); }
 
@@ -44,6 +47,10 @@
 .sky-day-fact strong { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .sky-day-fact strong small { font-size: 12px; font-weight: 500; color: var(--sky-secondary); }
 .sky-day-fact > small { font-size: 12px; color: var(--sky-secondary); }
+/* The check behind a Caution or No-go, under the day's strip. */
+.sky-day-note { grid-column: 2 / -1; display: flex; align-items: baseline; gap: 6px; min-width: 0; margin-top: -4px; font-size: 13px; line-height: 1.35; color: var(--sky-caution); }
+.sky-day-note > span { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.sky-day-note > small { flex: none; font-size: 12px; color: var(--sky-secondary); }
 
 /* Tradeoffs */
 .compare-highlights .sky-big.is-small { font-size: 20px; }
@@ -77,6 +84,8 @@
 .compare-hours-track { display: block; height: 5px; margin-top: 6px; border-radius: 3px; background: var(--sky-fill); overflow: hidden; }
 .compare-hours-track > span { display: block; height: 100%; border-radius: 3px; background: var(--sky-label); }
 .compare-table-note { margin: 8px 6px 4px; }
+.compare-concerns { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.35; }
+.compare-concerns .compare-concerns-more { font-size: 12px; color: var(--sky-secondary); }
 .compare-export { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .compare-export p { margin: 0; }
 
@@ -89,6 +98,8 @@
   .sky-day-label { grid-area: label; }
   .sky-day-fact { grid-area: fact; }
   .sky-day-row .sky-daystrip { grid-area: strip; }
+  .sky-day-row.has-note { grid-template-areas: "label fact" "strip strip" "note note"; }
+  .sky-day-note { grid-area: note; margin-top: 0; }
   .sky-compare-best h2 { font-size: 26px; }
 }
 @media print {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, MapPin, Search, X } from 'lucide-react';
 import type L from 'leaflet';
 import type { Workspace } from './model/useWorkspace';
@@ -9,11 +9,14 @@ import { SHORTLIST_KEY, objectiveFrom, readShortlist, shortlistDates, shortlistV
 import { resolveObjectiveTimeZone } from '../app/planned-start';
 import { addDaysToIsoDate } from '../app/core';
 import { dateLabel, ageLabel } from './data';
-import type { MultiDayTripForecastDay } from '../app/trip-forecast';
+import { sameTripRank, type MultiDayTripForecastDay } from '../app/trip-forecast';
+import { dayConcerns, longestStretch } from './trip-days';
 import './shortlist.css';
 
 const finite = (value: number | null | undefined): value is number => value != null && Number.isFinite(value);
 const tone = (day: MultiDayTripForecastDay) => day.decisionLevel === 'GO' ? 'go' : day.decisionLevel === 'NO-GO' ? 'blocked' : 'caution';
+// The search suggests typed coordinates as a 'Dropped pin'; name the pin by its point instead.
+const PIN_LABEL = 'Dropped pin';
 
 export default function ObjectiveShortlist({ workspace: w }: { workspace: Workspace }) {
   const id = useId();
@@ -35,23 +38,34 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
     onUsageUpdated: w.handleMultiDayUsageUpdated, onUsageLimitReached: w.handleMultiDayUsageLimitReached,
   });
   const add = useCallback((position: L.LatLngLiteral, name?: string) => {
-    const objective = objectiveFrom({ lat: position.lat, lon: position.lng, name: name || `${position.lat}, ${position.lng}` });
-    if (!objective || comparison.loading) return;
-    if (state.objectives.some(o => o.id === objective.id)) { setFeedback('That location is already on your shortlist.'); return; }
-    if (state.objectives.length >= 5) { setFeedback('Your shortlist has 5 objectives. Remove one to add another.'); return; }
+    const label = name && name !== PIN_LABEL ? name : `${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`;
+    const objective = objectiveFrom({ lat: position.lat, lon: position.lng, name: label });
+    if (!objective || comparison.loading) return false;
+    if (state.objectives.some(o => o.id === objective.id)) { setFeedback('That location is already on your shortlist.'); return false; }
+    if (state.objectives.length >= 5) { setFeedback('Your shortlist has 5 objectives. Remove one to add another.'); return false; }
     setState(current => ({ ...current, objectives: [...current.objectives, objective] }));
     setFeedback(`${objective.name} added.`);
+    return true;
   }, [comparison.loading, state.objectives]);
-  const search = useSearchSuggestions({ initialSearchQuery: '', updateObjectivePosition: add });
+  // Adding from the search empties the box for the next objective.
+  const clearSearch = useRef<(query: string) => void>(() => {});
+  const addFromSearch = useCallback((position: L.LatLngLiteral, name?: string) => {
+    if (add(position, name)) clearSearch.current('');
+  }, [add]);
+  const search = useSearchSuggestions({ initialSearchQuery: '', updateObjectivePosition: addFromSearch });
+  useEffect(() => { clearSearch.current = search.setSearchQuery; }, [search.setSearchQuery]);
   const { searchWrapperRef, searchInputRef } = search;
   const dates = shortlistDates(state);
   const validation = shortlistValidation(state);
   const ranked = rankShortlist(comparison.results, state.hours);
   const best = ranked[0];
   const bestObjective = state.objectives.find(o => o.id === best?.objectiveId);
-  const ties = best ? ranked.filter(r => r.day.decisionLevel === best.day.decisionLevel && r.day.score === best.day.score).length : 0;
+  const tied = best ? ranked.filter(r => r !== best && sameTripRank(r.day, best.day)) : [];
+  const bestConcerns = best ? dayConcerns(best.day) : [];
   const selectedObjective = state.objectives.find(o => o.id === selected?.objectiveId);
   const selectedDay = comparison.results.find(r => r.objectiveId === selected?.objectiveId)?.days.find(d => d.date === selected?.date);
+  const selectedConcerns = selectedDay ? dayConcerns(selectedDay) : [];
+  const selectedStretch = selectedDay ? longestStretch(selectedDay, w.preferences.timeStyle) : null;
   function open(objective: ShortlistObjective, choice: ShortlistChoice) {
     w.handleOpenComparisonPlan({ lat: objective.lat, lon: objective.lon, objectiveName: objective.name,
       searchQuery: objective.name, forecastDate: choice.date, alpineStartTime: choice.startTime,
@@ -66,10 +80,10 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
     return { objectiveId, date, startTime: state.startTime, hours: state.hours };
   }
   const highlights = [
-    { label: 'Lightest departure gust', metric: (day: MultiDayTripForecastDay) => finite(day.windGustMph) ? -day.windGustMph : null,
-      value: (day: MultiDayTripForecastDay) => w.formatWindDisplay(day.windGustMph) },
-    { label: 'Lowest departure rain / snow chance', metric: (day: MultiDayTripForecastDay) => finite(day.precipChance) ? -day.precipChance : null,
-      value: (day: MultiDayTripForecastDay) => `${day.precipChance}%` },
+    { label: 'Lightest peak gust', metric: (day: MultiDayTripForecastDay) => finite(day.peakGustMph) ? -day.peakGustMph : null,
+      value: (day: MultiDayTripForecastDay) => w.formatWindDisplay(day.peakGustMph) },
+    { label: 'Lowest peak rain / snow chance', metric: (day: MultiDayTripForecastDay) => finite(day.peakPrecipChance) ? -day.peakPrecipChance : null,
+      value: (day: MultiDayTripForecastDay) => `${day.peakPrecipChance}%` },
     { label: 'Most hours within your limits', metric: (day: MultiDayTripForecastDay) => day.travelTotalHours > 0 ? day.travelPassHours : null,
       value: (day: MultiDayTripForecastDay) => `${day.travelPassHours} of ${day.travelTotalHours} forecast hours` },
   ];
@@ -165,8 +179,16 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
             <span className="sky-muted">Comparison outlook</span>
             <h2>{!best ? 'More evidence needed' : best.day.decisionLevel === 'NO-GO' ? 'No recommended option among ranked results' : best.day.decisionLevel === 'CAUTION' ? 'Leading option still needs caution' : 'Most favorable reported conditions'}</h2>
             {best && bestObjective ? <><p><strong>{bestObjective.name} · {dateLabel(best.day.date)}</strong></p><p>{best.day.decisionHeadline}</p>
-              {ties > 1 && <p>{ties} options share this rank. Compare the tradeoffs below.</p>}</> : <p>No complete, scored hourly forecast is available to rank. Review missing evidence below.</p>}
-            <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by hazard decision, then the existing report score. Comfort does not affect ranking. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
+              {bestConcerns.length > 0 && <ul className="sky-limiting compare-limiting" aria-label="Checks setting this option's decision">
+                {bestConcerns.map(concern => <li key={concern}>{concern}</li>)}
+              </ul>}
+              {tied.length > 0 && <div className="compare-ties"><span className="sky-cap">Also ranked first</span><div className="compare-highlight-days">
+                {tied.map(option => <button key={`${option.objectiveId}-${option.day.date}`} type="button" aria-pressed={selected?.objectiveId === option.objectiveId && selected.date === option.day.date}
+                  onClick={() => setSelected({ objectiveId: option.objectiveId, date: option.day.date })}>
+                  {state.objectives.find(o => o.id === option.objectiveId)?.name} · {dateLabel(option.day.date)}
+                </button>)}
+              </div></div>}</> : <p>No complete, scored hourly forecast is available to rank. Review missing evidence below.</p>}
+            <p className="shortlist-caption">{comparison.results.reduce((count, result) => count + result.days.length, 0)} of {state.objectives.length * dates.length} options returned. Ranked by hazard decision, then the existing report score, then hours within your limits. Comfort does not affect ranking. Partial results and incomplete hourly windows are excluded. These are point forecasts; review route conditions and official sources before committing.</p>
           </section>}
           <div className="sky-trio sky-section compare-highlights" aria-label="Objective weather tradeoffs" role="group">
             {highlights.map(highlight => {
@@ -180,7 +202,7 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
             })}
           </div>
           <div className="sky-sh sky-section"><h2 className="shortlist-grid-heading">Objectives × dates</h2><p>Select a result for details and Plan A / Plan B.</p></div>
-          <p className="sky-cap shortlist-caption">Scroll across for more dates. Gusts, rain / snow chance, and cloud cover are departure readings.</p>
+          <p className="sky-cap shortlist-caption">Scroll across for more dates. Peak gust and rain / snow chance are the highest from departure through the trip; cloud cover is at departure.</p>
           <div className="sky-card sky-table-card">
           <div className="compare-table-scroll" role="region" tabIndex={0} aria-label="Objective and date comparison">
             <table className="sky-table compare-table shortlist-table"><caption className="sr-only">Conditions at each objective and date, departing {state.startTime} local for {state.hours} hours</caption>
@@ -190,12 +212,14 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
                 return <tr key={objective.id}><th scope="row">{objective.name}<small>{resolveObjectiveTimeZone(objective.lat, objective.lon)}</small></th>
                   {dates.map(date => {
                     const day = result?.days.find(d => d.date === date);
+                    const concerns = day ? dayConcerns(day) : [];
                     const choice = choiceFor(objective.id, date);
                     return <td key={date} className={selected?.objectiveId === objective.id && selected.date === date ? 'is-selected' : ''}>
                       {day ? <button className="shortlist-cell" aria-pressed={selected?.objectiveId === objective.id && selected.date === date} aria-label={`Review ${objective.name}, ${dateLabel(date)}`} onClick={() => setSelected({ objectiveId: objective.id, date })}>
                         <span className={`compare-decision is-${tone(day)}`}>{day.decisionLevel}</span>
                         <strong>{finite(day.score) ? `${day.score}/100` : 'Score unavailable'}</strong>
-                        <span>Gust {w.formatWindDisplay(day.windGustMph)}</span><span>Rain / snow {finite(day.precipChance) ? `${day.precipChance}%` : 'unavailable'}</span>
+                        {concerns.length > 0 && <small className="shortlist-concern">{concerns[0]}{concerns.length > 1 && ` +${concerns.length - 1} more`}</small>}
+                        <span>Peak gust {finite(day.peakGustMph) ? w.formatWindDisplay(day.peakGustMph) : 'unavailable'}</span><span>Peak rain / snow {finite(day.peakPrecipChance) ? `${day.peakPrecipChance}%` : 'unavailable'}</span>
                         <span>{day.travelTotalHours > 0 ? `${day.travelPassHours}/${day.travelTotalHours} forecast hours within limits` : 'Hourly forecast unavailable'}</span>
                         <span>Cloud cover {finite(day.cloudCoverPct) ? `${day.cloudCoverPct}%` : 'unavailable'}</span>
                         <span>Comfort {finite(day.safetyData.pleasantness?.score) ? `${day.safetyData.pleasantness!.score}/100` : 'unavailable'}</span>
@@ -216,9 +240,13 @@ export default function ObjectiveShortlist({ workspace: w }: { workspace: Worksp
             <h2 className="sky-card-lede">{selectedObjective.name}</h2>
             <p className="sky-cap">{dateLabel(selectedDay.date)} · {state.startTime} local · {state.hours} hours</p>
             <p className="sky-cap is-body">{selectedDay.decisionHeadline}</p>
+            {selectedConcerns.length > 0 && <ul className="sky-limiting compare-limiting" aria-label="Checks setting this option's decision">
+              {selectedConcerns.map(concern => <li key={concern}>{concern}</li>)}
+            </ul>}
             {selectedDay.apiWarning && <p className="sky-notice is-caution">{selectedDay.apiWarning}</p>}
             <dl className="sky-list shortlist-details">
-              <div><dt>Weather window</dt><dd>{selectedDay.travelTotalHours ? `${selectedDay.travelPassHours} of ${selectedDay.travelTotalHours} forecast hours within your limits` : 'Hourly forecast unavailable'}</dd></div>
+              <div><dt>Weather window</dt><dd>{selectedDay.travelTotalHours ? `${selectedDay.travelPassHours} of ${selectedDay.travelTotalHours} forecast hours within your limits` : 'Hourly forecast unavailable'}{selectedStretch && ` · ${selectedStretch.toLowerCase()}`}</dd></div>
+              <div><dt>Wind and rain / snow</dt><dd>Gusts peak at {finite(selectedDay.peakGustMph) ? w.formatWindDisplay(selectedDay.peakGustMph) : 'unavailable'} · chance peaks at {finite(selectedDay.peakPrecipChance) ? `${selectedDay.peakPrecipChance}%` : 'unavailable'}</dd></div>
               <div><dt>Views</dt><dd>{selectedDay.visibilitySummary || 'Visibility outlook unavailable'}{finite(selectedDay.cloudCoverPct) && ` · ${selectedDay.cloudCoverPct}% cloud cover at departure`}</dd></div>
               <div><dt>Comfort · separate from hazards</dt><dd>{finite(selectedDay.safetyData.pleasantness?.score) ? `${selectedDay.safetyData.pleasantness!.score}/100 · ${selectedDay.safetyData.pleasantness!.label}` : 'Comfort unavailable'}</dd></div>
               <div><dt>Source confidence</dt><dd>{finite(selectedDay.safetyData.safety.confidence) ? `${Math.round(selectedDay.safetyData.safety.confidence!)}%` : 'Unavailable'}{selectedDay.partialData ? ' · Partial data' : ''}</dd></div>

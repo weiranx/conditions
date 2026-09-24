@@ -2,12 +2,23 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
 import { getDefaultUserPreferences } from '../src/app/preferences';
 import { objectiveFrom, readShortlist, rankShortlist, sameChoice, shortlistValidation, SHORTLIST_KEY } from '../src/app/objective-shortlist';
 import { useObjectiveShortlist } from '../src/field/model/useObjectiveShortlist';
 import ObjectiveShortlist from '../src/field/ObjectiveShortlist';
 import { makeReport } from '../dev/mock-data.mjs';
+// React DOM checks for `input` event support when it loads, so load it with a DOM present.
+const bootstrap = new JSDOM('<html><body></body></html>');
+const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+globalThis.window = bootstrap.window;
+globalThis.document = bootstrap.window.document;
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: bootstrap.window.navigator });
+const { createRoot } = await import('react-dom/client');
+bootstrap.window.close();
+delete globalThis.window;
+delete globalThis.document;
+if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+else delete globalThis.navigator;
 const preferences = { ...getDefaultUserPreferences(), travelWindowHours: 8 };
 const rainier = objectiveFrom({ name: 'Rainier', lat: 46.8523, lon: -121.7603 });
 const hood = objectiveFrom({ name: 'Hood', lat: 45.3735, lon: -121.6959 });
@@ -82,6 +93,26 @@ test('hazard rank precedes score and comfort; partial and missing data never win
     { ...day, score: 100, partialData: true }, { ...day, score: null }, { ...day, score: 100, travelTotalHours: 0 }] }]);
   assert.deepEqual(ranked.map(r => r.day.score), [80, 100]);
   assert.deepEqual(rankShortlist([{ objectiveId: rainier.id, days: [day] }], 12), [], 'an incomplete hourly window cannot win');
+});
+test('equal hazard and score rank the option with more hours within limits first', () => {
+  const day = { score: 80, decisionLevel: 'CAUTION', partialData: false, travelTotalHours: 8 };
+  const ranked = rankShortlist([
+    { objectiveId: rainier.id, days: [{ ...day, travelPassHours: 3 }] },
+    { objectiveId: hood.id, days: [{ ...day, travelPassHours: 7 }] },
+  ]);
+  assert.deepEqual(ranked.map(r => r.objectiveId), [hood.id, rainier.id]);
+});
+test('typed coordinates join under their own point and the search clears for the next objective', async t => {
+  await harness(t, { ...state, objectives: [rainier] }, true);
+  const input = document.querySelector('input[role="combobox"]');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, '45.3735, -121.6959');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await act(async () => input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  assert.deepEqual(JSON.parse(localStorage.getItem(SHORTLIST_KEY)).objectives.map(o => o.name), ['Rainier', '45.3735, -121.6959']);
+  assert.equal(input.value, '');
+  assert.match(document.body.textContent, /45\.3735, -121\.6959 added\./);
 });
 test('comparison is explicit, sequential, and preserves local time, hours and quota callbacks', async t => {
   const h = await harness(t);
