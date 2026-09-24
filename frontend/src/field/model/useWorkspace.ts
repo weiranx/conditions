@@ -2811,6 +2811,7 @@ export function useWorkspace() {
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
   } = windLoading;
   if (decision && aspectOverlapProblems.length > 0) {
@@ -3470,6 +3471,7 @@ export function useWorkspace() {
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
     terrainCondition,
     terrainConditionPillClass,
