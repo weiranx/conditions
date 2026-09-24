@@ -91,8 +91,9 @@ import {
 } from "../../app/report-storage";
 import { followThemePreference } from "../../app/theme";
 import { useHealthChecks } from "../../hooks/useHealthChecks";
-import { useRouteAnalysis } from "../../hooks/useRouteAnalysis";
-import type { RouteAnalysisOptions } from "../../hooks/useRouteAnalysis";
+import { requestRouteAnalysis, useRouteAnalysis } from "../../hooks/useRouteAnalysis";
+import type { RouteAnalysisOptions, RouteAnalysisResult } from "../../hooks/useRouteAnalysis";
+import type { StreamEvent } from "../../lib/api-client";
 import { useTripForecast } from "../../hooks/useTripForecast";
 import { useSafetyData } from "../../hooks/useSafetyData";
 import { useSearchSuggestions } from "../../hooks/useSearchSuggestions";
@@ -1793,6 +1794,66 @@ export function useWorkspace() {
     alpineStartTime,
     travelWindowHours,
   ]);
+  // Another named route on this plan, analyzed the way the planned route would
+  // be, for comparing routes. It doesn't replace the planned route's analysis.
+  const analyzeRouteForComparison = useCallback(
+    async (routeName: string, { signal, onProgress }: { signal?: AbortSignal; onProgress?: (event: StreamEvent) => void } = {}) => {
+      if (!requestAiAccess()) throw new Error("Sign in to analyze routes.");
+      const suggestion = routeSuggestions?.find((option) => option.name === routeName);
+      return requestRouteAnalysis({
+        peak: objectiveName,
+        route: routeName,
+        lat: position.lat,
+        lon: position.lng,
+        date: forecastDate,
+        start: alpineStartTime,
+        travelWindowHours,
+        units: {
+          temperature: preferences.temperatureUnit,
+          wind: preferences.windSpeedUnit,
+          elevation: preferences.elevationUnit,
+        },
+        options: {
+          pace: {
+            minutesPerMile: preferences.runnerPaceMinutesPerMile,
+            ascentMinutesPer1000Ft: preferences.runnerAscentMinutesPer1000Ft,
+            stopBufferMinutes: preferences.runnerStopBufferMinutes,
+          },
+          ...(suggestion && Number.isFinite(suggestion.distance_rt_miles) && suggestion.distance_rt_miles > 0
+            ? { routeDistanceRtMiles: suggestion.distance_rt_miles }
+            : {}),
+        },
+      }, { signal, onProgress });
+    },
+    [
+      requestAiAccess,
+      routeSuggestions,
+      objectiveName,
+      position.lat,
+      position.lng,
+      forecastDate,
+      alpineStartTime,
+      travelWindowHours,
+      preferences.temperatureUnit,
+      preferences.windSpeedUnit,
+      preferences.elevationUnit,
+      preferences.runnerPaceMinutesPerMile,
+      preferences.runnerAscentMinutesPer1000Ft,
+      preferences.runnerStopBufferMinutes,
+    ],
+  );
+  // Make a compared route the planned one, keeping its analysis.
+  const adoptRouteAnalysis = useCallback(
+    (analysis: RouteAnalysisResult) => {
+      restoreRouteState({
+        routeSuggestions,
+        routeAnalysis: analysis,
+        customRouteName: analysis.routeName ?? "",
+        routeShape: "auto",
+      });
+    },
+    [restoreRouteState, routeSuggestions],
+  );
   const prefHandlers = usePreferenceHandlers({
     preferences,
     setPreferences,
@@ -2288,6 +2349,8 @@ export function useWorkspace() {
     setRouteError,
     customRouteName,
     setCustomRouteName,
+    analyzeRouteForComparison,
+    adoptRouteAnalysis,
     cancelRouteRequest,
     routeShape,
     setRouteShape,

@@ -25,6 +25,7 @@ import {
   parseSolarClockMinutes,
 } from "../app/core";
 import ObjectiveShortlist from "./ObjectiveShortlist";
+import CompareRoutes from "./CompareRoutes";
 import { revealStart } from "./page-scroll";
 import { longestStretch } from "./trip-days";
 
@@ -39,12 +40,16 @@ const hoursLabel = (day: MultiDayTripForecastDay, timeStyle: TimeStyle) => {
   return `${day.travelPassHours} of ${day.travelTotalHours} forecast hours within limits${stretch ? ` · ${stretch.toLowerCase()}` : ""}`;
 };
 
+type CompareMode = 'days' | 'objectives' | 'routes';
+
 export default function Compare({ workspace: w }: { workspace: Workspace }) {
-  const [mode, setMode] = useState<'days' | 'objectives'>(() => {
-    try { return localStorage.getItem('summitsafe:comparison-mode') === 'objectives' ? 'objectives' : 'days'; }
-    catch { return 'days'; }
+  const [mode, setMode] = useState<CompareMode>(() => {
+    try {
+      const stored = localStorage.getItem('summitsafe:comparison-mode');
+      return stored === 'objectives' || stored === 'routes' ? stored : 'days';
+    } catch { return 'days'; }
   });
-  function chooseMode(next: 'days' | 'objectives') {
+  function chooseMode(next: CompareMode) {
     setMode(next);
     try { localStorage.setItem('summitsafe:comparison-mode', next); } catch { /* Mode still works without storage. */ }
   }
@@ -52,11 +57,14 @@ export default function Compare({ workspace: w }: { workspace: Workspace }) {
     <div className="shortlist-mode" role="group" aria-label="Comparison mode">
       <button className="field-button" aria-pressed={mode === 'days'} onClick={() => chooseMode('days')}>Compare days</button>
       <button className="field-button" aria-pressed={mode === 'objectives'} onClick={() => chooseMode('objectives')}>Compare objectives</button>
+      {w.featureFlags.routeAnalysis && (
+        <button className="field-button" aria-pressed={mode === 'routes'} onClick={() => chooseMode('routes')}>Compare routes</button>
+      )}
     </div>
-    {mode === 'days' ? <CompareDays workspace={w} /> : <>
+    {mode === 'days' ? <CompareDays workspace={w} /> : mode === 'routes' && w.featureFlags.routeAnalysis ? <CompareRoutes workspace={w} /> : mode === 'objectives' ? <>
       <header className="field-page-heading"><span className="field-kicker">Objective comparison</span><h1>Where should you go?</h1><p>Compare your shortlist, find the tradeoffs, and keep a backup plan.</p></header>
       <ObjectiveShortlist workspace={w} />
-    </>}
+    </> : <CompareDays workspace={w} />}
   </>;
 }
 

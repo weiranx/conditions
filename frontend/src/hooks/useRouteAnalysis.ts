@@ -236,6 +236,57 @@ export interface UseRouteAnalysisReturn {
   }) => void;
 }
 
+export interface RouteAnalysisInput {
+  peak: string;
+  route: string;
+  lat: number;
+  lon: number;
+  date: string;
+  start: string;
+  travelWindowHours: number;
+  units?: RouteAnalysisUnits;
+  options?: RouteAnalysisOptions;
+}
+
+/**
+ * Analyze one route for a plan, following the server's progress lines when it
+ * streams them. The result keeps the route name and plan it was run for, so
+ * renaming the route later can't relabel its checkpoints and a changed plan can
+ * be flagged. Throws with the server's message on failure.
+ */
+export async function requestRouteAnalysis(
+  { peak, route, lat, lon, date, start, travelWindowHours, units, options }: RouteAnalysisInput,
+  { signal, onProgress = () => {} }: { signal?: AbortSignal; onProgress?: (event: StreamEvent) => void } = {},
+): Promise<RouteAnalysisResult> {
+  const { ok, payload } = await fetchApiStream('/api/route-analysis', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({
+      peak,
+      route,
+      lat,
+      lon,
+      date,
+      start,
+      travel_window_hours: travelWindowHours,
+      units: units ?? null,
+      ...(options?.waypoints ? { waypoints: options.waypoints } : {}),
+      ...(options?.routeMetadata ? { route_metadata: options.routeMetadata } : {}),
+      ...(options?.pace ? { pace: options.pace } : {}),
+      ...(options?.routeDistanceRtMiles ? { route_distance_rt_miles: options.routeDistanceRtMiles } : {}),
+      ...(options?.track ? { track: options.track } : {}),
+      ...(options?.routeShape && options.routeShape !== 'auto' ? { route_shape: options.routeShape } : {}),
+    }),
+  }, onProgress);
+  if (!ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
+  return {
+    ...(payload as RouteAnalysisResult),
+    routeName: route,
+    request: { lat, lon, date, start, travelWindowHours, routeShape: options?.routeShape ?? 'auto', ...(options?.pace ? { pace: options.pace } : {}) },
+  };
+}
+
 export function useRouteAnalysis(initialState?: {
   routeSuggestions?: RouteOption[] | null;
   routeAnalysis?: RouteAnalysisResult | null;
@@ -336,36 +387,12 @@ export function useRouteAnalysis(initialState?: {
       });
     };
     try {
-      const { ok, payload } = await fetchApiStream('/api/route-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: request.controller.signal,
-        body: JSON.stringify({
-          peak,
-          route,
-          lat,
-          lon,
-          date,
-          start,
-          travel_window_hours: travelWindowHours,
-          units: units ?? null,
-          ...(options?.waypoints ? { waypoints: options.waypoints } : {}),
-          ...(options?.routeMetadata ? { route_metadata: options.routeMetadata } : {}),
-          ...(options?.pace ? { pace: options.pace } : {}),
-          ...(options?.routeDistanceRtMiles ? { route_distance_rt_miles: options.routeDistanceRtMiles } : {}),
-          ...(options?.track ? { track: options.track } : {}),
-          ...(options?.routeShape && options.routeShape !== 'auto' ? { route_shape: options.routeShape } : {}),
-        }),
-      }, onProgress);
-      if (!ok) throw new Error(readApiErrorMessage(payload, 'Failed to analyze route'));
+      const analysis = await requestRouteAnalysis(
+        { peak, route, lat, lon, date, start, travelWindowHours, units, options },
+        { signal: request.controller.signal, onProgress },
+      );
       if (!isCurrentRequest(request.id)) return;
-      // Keep the name and plan with the result, so renaming the route later can't
-      // relabel these checkpoints and a changed plan can be flagged.
-      setRouteAnalysis({
-        ...(payload as RouteAnalysisResult),
-        routeName: route,
-        request: { lat, lon, date, start, travelWindowHours, routeShape: options?.routeShape ?? 'auto', ...(options?.pace ? { pace: options.pace } : {}) },
-      });
+      setRouteAnalysis(analysis);
     } catch (err) {
       if (request.controller.signal.aborted || !isCurrentRequest(request.id)) return;
       setRouteError(err instanceof Error ? err.message : 'Route analysis failed. Try again.');
