@@ -406,10 +406,12 @@ export function buildSnowpackDisplayState(
   const depthSignalValues = [
     Number(safetyData?.snowpack?.snotel?.snowDepthIn),
     Number(safetyData?.snowpack?.nohrsc?.snowDepthIn),
+    cdecDepthIn,
   ].filter((value) => Number.isFinite(value) && value > 0);
   const sweSignalValues = [
     Number(safetyData?.snowpack?.snotel?.sweIn),
     Number(safetyData?.snowpack?.nohrsc?.sweIn),
+    cdecSweIn,
   ].filter((value) => Number.isFinite(value) && value > 0);
   const hasSignal = depthSignalValues.length > 0 || sweSignalValues.length > 0;
 

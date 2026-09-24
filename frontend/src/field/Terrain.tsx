@@ -19,6 +19,8 @@ const FieldMap = lazy(() => import("./FieldMap"));
 function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
   const flags = resolveReportFeatureFlags(w.safetyData?.featureFlags);
   const [selection, setSelection] = useState({ lane: 0, hour: 0 });
+  // Without snow to move, lee aspects are no more hazardous than any other.
+  const showWindLoading = flags.windLoadingDetails && w.windLoadingApplies;
   const model = useMemo(
     () =>
       buildTerrainWindow({
@@ -32,10 +34,8 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
         avalancheDanger: flags.avalancheDetails
           ? w.overallAvalancheLevel
           : null,
-        leewardAspects: flags.windLoadingDetails ? w.leewardAspectHints : [],
-        secondaryAspects: flags.windLoadingDetails
-          ? w.secondaryWindAspects
-          : [],
+        leewardAspects: showWindLoading ? w.leewardAspectHints : [],
+        secondaryAspects: showWindLoading ? w.secondaryWindAspects : [],
         preferences: w.preferences,
       }),
     [
@@ -49,7 +49,7 @@ function TerrainWindow({ workspace: w }: { workspace: Workspace }) {
       w.secondaryWindAspects,
       w.preferences,
       flags.avalancheDetails,
-      flags.windLoadingDetails,
+      showWindLoading,
     ],
   );
   const lane = model.lanes[selection.lane] || model.lanes[0];
@@ -327,7 +327,7 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
           </div>
           <Details title="Surface, freeze/thaw, and travel evidence" value={data.terrainCondition} />
         </section>
-        {flags.windLoadingDetails && (
+        {flags.windLoadingDetails && w.windLoadingApplies && (
           <section className="sky-card" aria-labelledby="sky-terrain-wind">
             <span className="sky-card-head">
               <span id="sky-terrain-wind">Wind loading</span>
@@ -361,46 +361,52 @@ export function Terrain({ workspace: w, hours }: { workspace: Workspace; hours: 
             <p>Regional bulletin{data.avalanche?.center ? ` · ${data.avalanche.center}` : ""}</p>
           </div>
           <div className="sky-card">
-            <div className="sky-danger" role="img"
-              aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5, ${AVALANCHE_SCALE[avalancheLevel - 1] || ""}.` : "No avalanche danger rating."}>
-              {AVALANCHE_SCALE.map((label, i) => (
-                <span key={label} className={avalancheLevel === i + 1 ? `is-on${i >= 2 ? " is-over" : ""}` : undefined}>
-                  <i />{label}
+            {w.avalancheRelevant ? (
+              <>
+                <div className="sky-danger" role="img"
+                  aria-label={avalancheLevel ? `Avalanche danger ${avalancheLevel} of 5, ${AVALANCHE_SCALE[avalancheLevel - 1] || ""}.` : "No avalanche danger rating."}>
+                  {AVALANCHE_SCALE.map((label, i) => (
+                    <span key={label} className={avalancheLevel === i + 1 ? `is-on${i >= 2 ? " is-over" : ""}` : undefined}>
+                      <i />{label}
+                    </span>
+                  ))}
+                </div>
+                <span className="sky-card-head">
+                  <span>{w.avalancheUnknown ? "Unknown danger" : data.avalanche?.risk || "Unavailable"}</span>
                 </span>
-              ))}
-            </div>
-            <span className="sky-card-head">
-              <span>{w.avalancheUnknown ? "Unknown danger" : data.avalanche?.risk || "Unavailable"}</span>
-            </span>
-            {w.avalancheExpiredForSelectedStart && (
-              <p className="sky-notice is-caution">
-                This bulletin expires before the selected departure. Check for a current forecast.
-              </p>
-            )}
-            <p className="sky-cap is-body">
-              {!w.avalancheRelevant ? w.avalancheNotApplicableReason : data.avalanche?.bottomLine || data.avalanche?.relevanceReason}
-            </p>
-            {w.avalancheElevationRows.length > 0 && (
-              <dl className="sky-list">
-                {w.avalancheElevationRows.map((band) => (
-                  <div key={band.key}>
-                    <dt>{band.label}</dt>
-                    <dd>{band.rating === null ? "No rating" : w.getDangerText(band.rating)}</dd>
-                  </div>
+                {w.avalancheExpiredForSelectedStart && (
+                  <p className="sky-notice is-caution">
+                    This bulletin expires before the selected departure. Check for a current forecast.
+                  </p>
+                )}
+                <p className="sky-cap is-body">
+                  {data.avalanche?.bottomLine || data.avalanche?.relevanceReason}
+                </p>
+                {w.avalancheElevationRows.length > 0 && (
+                  <dl className="sky-list">
+                    {w.avalancheElevationRows.map((band) => (
+                      <div key={band.key}>
+                        <dt>{band.label}</dt>
+                        <dd>{band.rating === null ? "No rating" : w.getDangerText(band.rating)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {data.avalanche?.problems?.map((problem, i) => (
+                  <article className="sky-problem" key={i}>
+                    <h3>{problem.name}</h3>
+                    <p>{problem.discussion || problem.problem_description}</p>
+                    <Details
+                      title="Affected aspects, elevations, size, and likelihood"
+                      value={{ likelihood: problem.likelihood, size: problem.size, location: problem.location }}
+                    />
+                  </article>
                 ))}
-              </dl>
+                {data.avalanche?.advice && <p className="sky-cap is-body">{data.avalanche.advice}</p>}
+              </>
+            ) : (
+              <p className="sky-cap is-body">{w.avalancheNotApplicableReason || "No avalanche forecast applies to this plan."}</p>
             )}
-            {data.avalanche?.problems?.map((problem, i) => (
-              <article className="sky-problem" key={i}>
-                <h3>{problem.name}</h3>
-                <p>{problem.discussion || problem.problem_description}</p>
-                <Details
-                  title="Affected aspects, elevations, size, and likelihood"
-                  value={{ likelihood: problem.likelihood, size: problem.size, location: problem.location }}
-                />
-              </article>
-            ))}
-            {data.avalanche?.advice && <p className="sky-cap is-body">{data.avalanche.advice}</p>}
             <SourceLink url={w.safeAvalancheLink}>Read the complete bulletin</SourceLink>
             <Details title="Avalanche forecast coverage and validity" value={data.avalanche} />
           </div>
