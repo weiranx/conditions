@@ -15,7 +15,7 @@ type Formatters = {
 const LEVEL_LABEL: Record<string, string> = { GO: "Go", CAUTION: "Caution", "NO-GO": "No-go" };
 
 /** The Brief's signature: the planned day drawn as its forecast sky. */
-export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, level, headline, reason, bridge, limitingChecks = [], note, actions, format }: {
+export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title = "h1", subtitle, status, level, headline, reason, bridge, limitingChecks = [], note, actions, format }: {
   hours: SkyHour[];
   sunrise: number | null;
   sunset: number | null;
@@ -24,6 +24,8 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
   /** Heading element for the title; embeds below a page heading pass "h2". */
   titleAs?: "h1" | "h2";
   subtitle: ReactNode;
+  /** A time-sensitive status shown right under the subtitle, e.g. a start that has passed. */
+  status?: ReactNode;
   level: "GO" | "CAUTION" | "NO-GO" | string;
   headline: string;
   reason: string;
@@ -278,6 +280,7 @@ export function SkyHero({ hours, sunrise, sunset, kicker, title, titleAs: Title 
         <span className="sky-kicker">{kicker}</span>
         <Title className="sky-hero-title">{title}</Title>
         <p className="sky-subtitle">{subtitle}</p>
+        {status}
         <span className={`sky-pill is-${tone}`}>
           {tone === "go" ? <Check size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}
           <span><span className="sr-only">Trip decision: </span>{toneWord}</span>

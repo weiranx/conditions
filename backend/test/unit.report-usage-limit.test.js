@@ -63,7 +63,7 @@ test('summarizes Free and Premium report usage for the current UTC month', async
     exhausted: false,
     limitSource: 'unlimited',
   });
-  expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('FROM saved_reports'), [
+  expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('FROM feature_usage_events'), [
     USER_ID,
     '2026-07-01T00:00:00.000Z',
     '2026-08-01T00:00:00.000Z',
@@ -144,7 +144,7 @@ test('honors a per-user report allowance and reset point without deleting report
     remainingReports: 72,
     periodStart: '2026-07-10T12:30:00.000Z',
   });
-  expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('FROM saved_reports'), [
+  expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('FROM feature_usage_events'), [
     USER_ID,
     '2026-07-10T12:30:00.000Z',
     '2026-08-01T00:00:00.000Z',

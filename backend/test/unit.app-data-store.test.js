@@ -116,3 +116,30 @@ test('imports each legacy admin and analytics store once through transactions', 
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('daily cleanup prunes expired credentials and settled usage rows', async () => {
+  const query = jest.fn(async () => ({ rowCount: 0, rows: [] }));
+  const db = {
+    configured: true,
+    query,
+    transaction: jest.fn(async (callback) => callback(query)),
+  };
+  const log = { error: jest.fn(), info: jest.fn(), warn: jest.fn() };
+  const missing = path.join(os.tmpdir(), 'conditions-missing-legacy-file');
+  const legacyFiles = {
+    aiSettings: missing, featureFlags: missing, reportActivity: missing, aiUsage: missing, adminAudit: missing,
+  };
+  const store = createAppDataStore({ db, legacyFiles, log });
+
+  await store.initialize();
+  const statements = query.mock.calls.map(([sql]) => sql);
+  const deleteFrom = (table) => statements.find((sql) => sql.includes(`DELETE FROM ${table}`));
+
+  expect(deleteFrom('user_sessions')).toMatch(/expires_at < NOW\(\)[\s\S]*newer\.user_id = expired\.user_id/);
+  expect(deleteFrom('account_action_tokens')).toContain('expires_at <');
+  expect(deleteFrom('mcp_oauth_requests')).toContain('expires_at <= NOW()');
+  expect(deleteFrom('mcp_oauth_grants')).toContain('revoked_at <');
+  expect(deleteFrom('mcp_oauth_tokens')).toContain('expires_at <');
+  // Guest usage is counted for all time, so only account rows age out.
+  expect(deleteFrom('feature_usage_events')).toContain('user_id IS NOT NULL AND created_at <');
+});

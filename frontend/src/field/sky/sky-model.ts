@@ -27,6 +27,8 @@ export type SkyHour = {
   inversionRisk?: boolean;
   /** Objective-elevation reading when temp/wind/gust were shifted to the approach. */
   objectiveReading?: { temp: number; wind: number; gust: number };
+  /** Forecast condition text, e.g. "Chance Snow Showers". */
+  condition: string;
   kind: ReturnType<typeof weatherAppearance>["condition"];
   night: boolean;
   zenith: string;
@@ -116,6 +118,7 @@ export function buildSkyHours(rows: PlannedRow[], plan: {
       approachAdjusted: row.approachAdjusted,
       inversionRisk: row.inversionRisk,
       objectiveReading: row.objectiveReading,
+      condition: row.condition || "",
       kind: appearance.condition,
       night,
       zenith: colors[0],

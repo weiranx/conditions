@@ -36,27 +36,52 @@ html[data-theme="dark"] .sky-segmented button[aria-pressed="true"] { background:
 .sky-hourchart { width: 100%; min-width: 0; }
 .sky-hourchart svg { display: block; overflow: visible; font-family: var(--f-font); touch-action: pan-y; cursor: pointer; }
 .sky-hourchart svg:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 4px; border-radius: 8px; }
-.sky-hourchart text { font-size: 12px; fill: var(--sky-secondary); font-variant-numeric: tabular-nums; }
-.sky-hourchart .hc-over-bg { fill: var(--sky-caution-fill); }
-.sky-hourchart .hc-over-line { stroke: var(--sky-caution); stroke-opacity: 0.35; }
+.sky-hourchart text { font-size: 12px; fill: var(--sky-secondary); font-variant-numeric: tabular-nums; pointer-events: none; }
+.sky-hourchart .hc-hit { fill: transparent; }
+.sky-hourchart .hc-grid { stroke: var(--sky-separator); stroke-width: 1; }
+.sky-hourchart .hc-over-bg { fill: var(--sky-caution-fill); opacity: 0.55; }
+.sky-hourchart .hc-over-line { stroke: var(--sky-caution); stroke-opacity: 0.22; }
 .sky-hourchart .hc-missing { fill: transparent; stroke: var(--sky-missing); stroke-dasharray: 3 3; stroke-opacity: 0.6; }
-.sky-hourchart .hc-selected { fill: none; stroke: var(--sky-label); stroke-width: 1.5; }
-.sky-hourchart .hc-line { fill: none; stroke: var(--sky-label); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
-.sky-hourchart .hc-point circle { fill: var(--sky-surface); stroke: var(--sky-label); stroke-width: 2; }
-.sky-hourchart .hc-point.is-over circle { fill: var(--sky-caution); stroke: var(--sky-caution); }
+.sky-hourchart .hc-cold-zone { fill: var(--sky-cold-fill); opacity: 0.6; }
+.sky-hourchart .hc-cursor { stroke: var(--sky-label); stroke-opacity: 0.18; stroke-width: 1; }
+.sky-hourchart .hc-sky { stroke: none; }
+.sky-hourchart .hc-line { fill: none; stroke-width: 2.75; stroke-linejoin: round; stroke-linecap: round;
+  stroke-dasharray: 1; stroke-dashoffset: 0; animation: hc-draw 700ms cubic-bezier(.2,.7,.2,1) both; }
+.sky-hourchart .hc-area { animation: hc-fade 700ms ease-out both; }
+.sky-hourchart .hc-bar { transform-box: fill-box; transform-origin: bottom; animation: hc-grow 500ms cubic-bezier(.2,.7,.2,1) both; transition: opacity 120ms; }
+.sky-hourchart .hc-bar.is-over { stroke: var(--sky-caution); stroke-width: 1.5; }
+.sky-hourchart .hc-bar.is-active { stroke: var(--sky-label); stroke-width: 1.5; }
+.sky-hourchart .hc-dir path { fill: var(--sky-label); transition: transform 120ms; }
+.sky-hourchart .hc-dir.is-over path { fill: var(--sky-caution); }
+.sky-hourchart .hc-dir { animation: hc-fade 500ms ease-out both; }
+.sky-hourchart .hc-windarrow path { fill: var(--sky-secondary); }
+.sky-hourchart .hc-windarrow.is-selected path { fill: var(--sky-label); }
+.sky-hourchart .hc-point circle { fill: var(--sky-surface); stroke: var(--sky-label); stroke-width: 2; animation: hc-fade 500ms 250ms ease-out both; }
+.sky-hourchart .hc-point circle.is-extreme { stroke-width: 2.5; }
+.sky-hourchart .hc-point circle.hc-halo { fill: var(--sky-label); fill-opacity: 0.1; stroke: none; }
+.sky-hourchart .hc-point.is-over circle:not(.hc-halo) { fill: var(--sky-caution); stroke: var(--sky-caution); }
+.sky-hourchart .hc-point.is-over circle.hc-halo { fill: var(--sky-caution); }
 .sky-hourchart .hc-point.is-missing circle { stroke: var(--sky-missing); stroke-dasharray: 2 2; }
-.sky-hourchart .hc-point text { font-weight: 600; fill: var(--sky-label); }
+.sky-hourchart .hc-point text { font-weight: 600; fill: var(--sky-label); paint-order: stroke; stroke: var(--sky-surface); stroke-width: 3px; stroke-linejoin: round; }
 .sky-hourchart .hc-point.is-over text { fill: var(--sky-caution); }
-.sky-hourchart .hc-point text.is-selected { font-size: 13px; }
+.sky-hourchart .hc-point text.is-selected { font-size: 15px; font-weight: 700; }
+.sky-hourchart .hc-point text.is-extreme { font-weight: 700; }
+.sky-hourchart .hc-point text.hc-extreme { font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; fill: var(--sky-secondary); }
 .sky-hourchart .hc-hour.is-over { fill: var(--sky-caution); font-weight: 600; }
 .sky-hourchart .hc-hour.is-selected { fill: var(--sky-label); font-weight: 700; }
 .sky-hourchart .hc-guide line { stroke-width: 1.5; }
-.sky-hourchart .hc-guide text { font-size: 11px; font-weight: 600; }
+.sky-hourchart .hc-guide text { font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--sky-surface); stroke-width: 3px; }
 .sky-hourchart .hc-guide.is-cold line { stroke: var(--sky-cold); }
 .sky-hourchart .hc-guide.is-cold text { fill: var(--sky-cold); }
 .sky-hourchart .hc-guide.is-caution line { stroke: var(--sky-caution); }
 .sky-hourchart .hc-guide.is-caution text { fill: var(--sky-caution); }
 .sky-hourchart .hc-guide.is-secondary line { stroke: var(--sky-secondary); }
+@keyframes hc-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes hc-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hc-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .sky-hourchart .hc-line, .sky-hourchart .hc-area, .sky-hourchart .hc-bar, .sky-hourchart .hc-dir, .sky-hourchart .hc-point circle { animation: none; }
+}
 
 /* Tables: grouped rows on a surface, numbers right-aligned in tabular figures. */
 .sky-table-card { padding: 6px 8px; overflow-x: auto; }

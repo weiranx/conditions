@@ -21,6 +21,19 @@ import type { Workspace } from "./model/useWorkspace";
 import { resolveReportFeatureFlags } from "../contexts/feature-flags";
 import { Details, SourceLink } from "./Details";
 import { ComfortScore } from "./ComfortScore";
+import { shortHour } from "./sky/sky-model";
+import { parseHourLabelToMinutes, parseSolarClockMinutes, parseTimeInputMinutes } from "../app/core";
+import { adjustPointToElevation } from "../app/approach-elevation";
+
+/** US EPA AQI categories. */
+const AQI_BANDS = [
+  { from: 0, label: "Good" },
+  { from: 51, label: "Moderate" },
+  { from: 101, label: "Sensitive" },
+  { from: 151, label: "Unhealthy" },
+  { from: 201, label: "Very unhealthy" },
+  { from: 301, label: "Hazardous" },
+];
 
 /** One exposure measure: a headline value, a small neutral chart, and its evidence tucked away. */
 function ExposureCard({ icon, title, value, tone = "ok", status, children, note, evidence, className = "" }: {
@@ -68,6 +81,17 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
     ? w.formatClockForStyle(hours[hours.length - 1].time, w.preferences.timeStyle)
     : "End";
   const percent = (value: number) => `${Math.round(value)}%`;
+  const hourMinutes = hours.map((hour) => parseTimeInputMinutes(hour.time) ?? parseHourLabelToMinutes(hour.time) ?? NaN);
+  // Heat builds lowest on the route, so the heat card leads with the trailhead and keeps the summit for reference.
+  const approach = w.approachProfile;
+  const trailheadTemps = approach && approach.trailheadElevationFt < approach.objectiveElevationFt - 500
+    ? hours.map((hour, i) => adjustPointToElevation(hour, approach.objectiveElevationFt, approach.trailheadElevationFt, {
+      minuteOfDay: Number.isFinite(hourMinutes[i]) ? hourMinutes[i] : 720,
+      sunriseMinutes: parseSolarClockMinutes(data.solar?.sunrise),
+      sunsetMinutes: parseSolarClockMinutes(data.solar?.sunset),
+    }).temp)
+    : null;
+  const hourTicks = hourMinutes.map((minute) => shortHour(minute, w.preferences.timeStyle === "24h" ? "24h" : "12h"));
   const uvDisplay = (value: number | null | undefined) =>
     typeof value === "number" && Number.isFinite(value) && value >= 0
       ? value < 0.1 && value > 0 ? "<0.1" : value.toFixed(1)
@@ -145,7 +169,14 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
               value={w.heatRiskLabel || "Unavailable"} tone={levelTone(w.heatRiskLabel)}
               note={w.heatRiskGuidance}
               evidence={<Details title="Heat-stress measurements" value={data.heatRisk} />}>
-              <ConditionTrend label="Temperature" values={hours.map((hour) => hour.temp)} format={w.formatTempDisplay} start={start} end={end} />
+              <ConditionTrend label={trailheadTemps ? "Temperature, trailhead to summit" : "Temperature at the summit"}
+                values={trailheadTemps ?? hours.map((hour) => hour.temp)} format={w.formatTempDisplay} start={start} end={end}
+                compare={trailheadTemps && approach ? {
+                  primaryLabel: `Trailhead ${w.formatElevationDisplay(Math.round(approach.trailheadElevationFt / 100) * 100)}`,
+                  label: `Summit ${w.formatElevationDisplay(approach.objectiveElevationFt)}`,
+                  values: hours.map((hour) => hour.temp),
+                } : undefined}
+                hours={hourTicks} bands={[{ from: 85, to: 200, label: "hot", tone: "caution" }, { from: -100, to: 32, label: "freezing", tone: "cold" }]} />
             </ExposureCard>
           )}
           {flags.fireRiskDetails && (
@@ -153,7 +184,8 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
               value={w.fireRiskLabel || "Unavailable"} tone={Number.isFinite(fireLevel) && fireLevel >= 3 ? "over" : levelTone(w.fireRiskLabel) === "missing" ? "missing" : "ok"}
               note={data.fireRisk?.guidance}
               evidence={<Details title="Fire-weather drivers and alerts" value={data.fireRisk} />}>
-              <ConditionTrend label="Relative humidity" values={hours.map((hour) => hour.humidity)} format={percent} start={start} end={end} domain={[0, 100]} />
+              <ConditionTrend label="Relative humidity" values={hours.map((hour) => hour.humidity)} format={percent} start={start} end={end} domain={[0, 100]}
+                hours={hourTicks} bands={[{ from: 0, to: 30, label: "dry, fire spreads faster", tone: "caution" }]} />
             </ExposureCard>
           )}
           {flags.airQualityDetails && (
@@ -164,7 +196,7 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
               note={w.airQualityFutureNotApplicable ? "Current AQI does not represent the selected future date." : !aqiKnown ? "Unavailable" : undefined}
               evidence={<Details title="Air-quality sources, timing, and pollutants" value={data.airQuality} />}>
               {!w.airQualityFutureNotApplicable && (
-                <ConditionScale label="US air-quality index" value={data.airQuality?.usAqi} maximum={500} />
+                <ConditionScale label="US air-quality index" value={data.airQuality?.usAqi} maximum={500} bands={AQI_BANDS} />
               )}
             </ExposureCard>
           )}
@@ -172,7 +204,8 @@ export function Conditions({ workspace: w }: { workspace: Workspace }) {
             value={visibility || "Unavailable"} tone={levelTone(visibility)}
             note={w.weatherVisibilityDetail}
             evidence={<Details title="Visibility risk and active hours" value={data.weather.visibilityRisk} />}>
-            <ConditionTrend label="Cloud cover" values={hours.map((hour) => hour.cloudCover)} format={percent} start={start} end={end} domain={[0, 100]} />
+            <ConditionTrend label="Cloud cover" values={hours.map((hour) => hour.cloudCover)} format={percent} start={start} end={end} domain={[0, 100]}
+              hours={hourTicks} kind="bars" />
           </ExposureCard>
           {flags.weatherContextDetails && (
             <ExposureCard className="is-atmosphere" icon={<Sun size={16} aria-hidden="true" />} title="Sun and atmosphere"

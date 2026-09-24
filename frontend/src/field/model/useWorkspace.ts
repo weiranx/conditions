@@ -1173,8 +1173,8 @@ export function useWorkspace() {
 
   useSavedReportSync(savedReportSession, {
     hasObjective, reportSnapshot, safetyData, viewingHistoryReport,
-    accountLoading, accountUserId, reportHistoryEnabled: featureFlags.reportHistory,
-    syncGeneratedReportUsage, setReportChatMessages, resetRouteState, setReportChatSessionKey,
+    accountLoading, accountUserId, syncGeneratedReportUsage,
+    setReportChatMessages, resetRouteState, setReportChatSessionKey,
   });
 
   const handleRecenterMap = () => {
@@ -2835,6 +2835,7 @@ export function useWorkspace() {
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
   } = windLoading;
   if (decision && aspectOverlapProblems.length > 0) {
@@ -3494,6 +3495,7 @@ export function useWorkspace() {
     windLoadingActionLine,
     windLoadingSummary,
     windLoadingNotes,
+    windLoadingApplies,
     windLoadingHintsRelevant,
     terrainCondition,
     terrainConditionPillClass,

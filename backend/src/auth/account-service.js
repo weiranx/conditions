@@ -524,8 +524,11 @@ const createAccountService = ({
                     )
                   ) AS saved_reports,
                   MAX(updated_at) AS last_report_at
-           FROM saved_reports
+           -- The monthly report meter counts generations, not stored reports.
+           FROM feature_usage_events
            WHERE user_id = users.id
+             AND feature_key = 'report_generation'
+             AND status = 'succeeded'
          ) report_activity ON TRUE
          LEFT JOIN LATERAL (
            SELECT limits ->> 'monthlyTokenLimit' AS ai_token_limit_override,

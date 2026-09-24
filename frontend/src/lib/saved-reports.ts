@@ -86,6 +86,27 @@ export async function createSavedReport(report: PersistedReport): Promise<Create
   return requireCreatedSavedReport(payload);
 }
 
+export interface ReportGenerationUsage {
+  reportCount: number;
+  reportUsage: AccountReportUsage;
+}
+
+// Counts one generated report against the monthly allowance without storing it.
+export async function recordReportGeneration(idempotencyKey: string): Promise<ReportGenerationUsage> {
+  const { response, payload } = await fetchApi('/api/account/reports/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idempotencyKey }),
+  });
+  if (!response.ok) throw new Error(readApiErrorMessage(payload, 'Could not record this generated report.'));
+  const reportCount = (payload as SavedReportMutationResponse | null)?.reportCount;
+  const reportUsage = parseAccountReportUsage((payload as SavedReportMutationResponse | null)?.reportUsage);
+  if (typeof reportCount !== 'number' || !Number.isSafeInteger(reportCount) || reportCount < 0 || !reportUsage) {
+    throw new Error('Report usage returned an unexpected response.');
+  }
+  return { reportCount, reportUsage };
+}
+
 export async function updateSavedReport(reportId: string, report: PersistedReport): Promise<void> {
   const { response, payload } = await fetchApi(`/api/account/reports/${encodeURIComponent(reportId)}`, {
     method: 'PUT',

@@ -279,13 +279,19 @@ test("compact charts distinguish gaps and unavailable values from real zero", ()
     />,
   );
   assert.doesNotMatch(html, /NaN|Infinity/);
-  assert.match(html, /M\s*8/);
-  assert.match(html, /M\s*292/);
+  // The missing middle hour splits the line into two separate runs.
+  assert.equal((html.match(/class="condition-line"/g) || []).length, 2);
   const missing = renderToStaticMarkup(
     <ConditionScale label="AQI" value={null} maximum={500} />,
   );
   assert.match(missing, /unavailable/i);
   assert.doesNotMatch(missing, /0 on a scale/);
+  const banded = renderToStaticMarkup(
+    <ConditionScale label="AQI" value={33} maximum={500}
+      bands={[{ from: 0, label: "Good" }, { from: 51, label: "Moderate" }, { from: 101, label: "Sensitive" }]} />,
+  );
+  assert.match(banded, /in the Good range \(0 to 51\)/);
+  assert.equal((banded.match(/condition-band-seg is-active/g) || []).length, 1);
   const zero = renderToStaticMarkup(
     <AccumulationBars
       label="Rain"
@@ -761,17 +767,24 @@ test('verdict names the checks behind the decision instead of only counting them
     'Fire danger is elevated (Moderate). Check closures and incident updates, avoid ignition sources, and keep a clear exit route.',
     'Check fire locations against your approach and escape routes. Compare current fire perimeters and official restrictions with the route and road access before choosing an approach.',
   ];
-  assert.deepEqual(copy({ level: 'CAUTION', cautions }).limitingChecks, ['Fire danger is elevated (Moderate)', 'Check fire locations against your approach and escape routes']);
+  // The reason already states the first caution, so only the other one is listed.
+  assert.deepEqual(copy({ level: 'CAUTION', cautions }).limitingChecks, ['Check fire locations against your approach and escape routes']);
   // A single limiting check under a high score is named only when the reason is something else.
   assert.deepEqual(copy({ level: 'CAUTION', cautions: ['Wind gusts reach about 31 mph. Shorten ridge exposure.'] }).limitingChecks, []);
   assert.deepEqual(verdictCopy({ data, decision: { level: 'CAUTION', headline: 'Headline', blockers: [], cautions: ['Wind gusts reach about 31 mph. Shorten ridge exposure.'], checks: [] }, primaryReason: 'Cold start at the trailhead.', preferences }).limitingChecks, ['Wind gusts reach about 31 mph']);
   // No-go lists blockers, not the cautions beside them.
-  assert.deepEqual(copy({ level: 'NO-GO', blockers: ['Storm. Delay.', 'Heat. Move.'], cautions: ['Cold'] }).limitingChecks, ['Storm', 'Heat']);
+  assert.deepEqual(copy({ level: 'NO-GO', blockers: ['Storm. Delay.', 'Heat. Move.'], cautions: ['Cold'] }).limitingChecks, ['Heat']);
   assert.deepEqual(copy({ level: 'GO', cautions: ['Cold'] }).limitingChecks, []);
   data.safety.score = 60;
   assert.deepEqual(copy({ level: 'CAUTION', cautions: ['Cold. Layer up.'] }).limitingChecks, [], 'one check with no bridge is already the reason');
+  data.safety.score = 97.8;
+  assert.deepEqual(
+    verdictCopy({ data, decision: { level: 'CAUTION', headline: 'Headline', blockers: [], cautions: ['Cold start. Layer up.', 'Stale sources. Refresh.'], checks: [] }, primaryReason: 'Cold start. Layer up.', preferences }).limitingChecks,
+    ['Stale sources'],
+    'the check the reason states is not listed again',
+  );
   const html = renderToStaticMarkup(<ReportVerdict data={{ ...data, safety: { ...data.safety, score: 97.8 } }} decision={{ level: 'CAUTION', headline: 'Headline', blockers: [], cautions, checks: [] }} primaryReason="" freshnessWarning={null} preferences={preferences} onSources={() => {}} />);
-  assert.match(html, /aria-label="Checks setting the decision"><li>Fire danger is elevated \(Moderate\)<\/li><li>Check fire locations against your approach and escape routes<\/li><\/ul>/);
+  assert.match(html, /aria-label="Checks setting the decision"><li>Check fire locations against your approach and escape routes<\/li><\/ul>/);
 });
 
 test('check summaries keep decimals and parentheses in the lead sentence', () => {

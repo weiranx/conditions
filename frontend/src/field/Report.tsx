@@ -118,6 +118,7 @@ export function Report({
   const flags = resolveReportFeatureFlags(data.featureFlags);
   const ai = useAiAvailability(data.capabilities);
   const decision = w.decision!;
+  const emailNeedsSave = !w.sharedReportToken && !w.activeSavedReportId;
   const passed = getPastPlannedStart(
     report.plan.forecastDate,
     report.plan.alpineStartTime,
@@ -253,9 +254,13 @@ export function Report({
           <span className="sr-only">More actions</span>
         </summary>
         <div className="report-actions-popover">
-          <button disabled={actionBusy} onClick={onEmail}>
+          <button
+            disabled={actionBusy}
+            onClick={onEmail}
+            title={emailNeedsSave ? "Saves this report to your account and emails you a link" : undefined}
+          >
             <Mail size={16} />
-            Email report
+            {emailNeedsSave ? "Save & email report" : "Email report"}
           </button>
           <button onClick={w.handleRetryFetch}>
             <RefreshCw size={16} />
@@ -312,7 +317,7 @@ export function Report({
           </div>
         </div>
       )}
-      {passed && (
+      {passed && activeView !== "brief" && (
         <div className="sky-notice is-caution">
           <TriangleAlert size={20} aria-hidden="true" />
           <div>
@@ -351,6 +356,17 @@ export function Report({
       <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
     </>
   );
+  // On the brief the passed start leads the hero, before the decision it dates.
+  const passedStatus = passed && !w.viewingHistoryReport ? (
+    <div className="sky-passed" role="status">
+      <Clock3 size={16} aria-hidden="true" />
+      <p><strong>This start has passed.</strong> The forecast is kept for reference.</p>
+      <div className="sky-passed-actions">
+        <button type="button" onClick={w.handleUseNowAfterPastStart}>Start now</button>
+        <button type="button" onClick={w.handleUseTomorrowAfterPastStart}>Start tomorrow</button>
+      </div>
+    </div>
+  ) : null;
   const approachNote = (
     <ApproachNote
       hours={skyHours}
@@ -383,6 +399,7 @@ export function Report({
           kicker={w.viewingHistoryReport ? "Saved conditions report" : "Conditions report"}
           title={report.plan.objectiveName}
           subtitle={subtitle}
+          status={passedStatus}
           level={decision.level}
           headline={decision.headline}
           reason={copy.reason}

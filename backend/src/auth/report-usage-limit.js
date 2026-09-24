@@ -9,6 +9,9 @@ const {
 } = require('./monthly-usage-limit');
 
 const REPORT_USAGE_SETTINGS_KEY = 'report_usage_limits';
+// Each generated report is metered as a usage event; the report itself is only
+// stored when the user saves it.
+const REPORT_GENERATION_FEATURE_KEY = 'report_generation';
 const LEGACY_USAGE_SETTINGS_KEY = 'monthly_usage_limits';
 
 const summarizeReportUsage = ({ usedReports, tierKey, freeLimitReports, window }) => {
@@ -122,9 +125,11 @@ const createReportUsageLimitService = ({
         ? new Date(resetAt).toISOString()
         : window.periodStart;
       result = await query(`
-        SELECT COUNT(*)::bigint AS used_reports
-        FROM saved_reports
+        SELECT COALESCE(SUM(units), 0)::bigint AS used_reports
+        FROM feature_usage_events
         WHERE user_id = $1
+          AND feature_key = '${REPORT_GENERATION_FEATURE_KEY}'
+          AND status = 'succeeded'
           AND created_at >= $2
           AND created_at < $3
       `, [userId, effectivePeriodStart, window.periodEnd]);
@@ -199,6 +204,7 @@ const createReportUsageLimitService = ({
 };
 
 module.exports = {
+  REPORT_GENERATION_FEATURE_KEY,
   ReportUsageLimitError,
   ReportUsageUnavailableError,
   createReportUsageLimitService,
