@@ -40,7 +40,7 @@
 .sky-kicker { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
 .sky-hero .sky-hero-title { margin: 6px 0 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -0.032em; text-shadow: 0 1px 12px rgba(0, 20, 40, 0.25); }
 .sky-subtitle { margin: 8px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.92); font-variant-numeric: tabular-nums; }
-.sky-generated { white-space: nowrap; }
+.sky-generated, .sky-nowrap { white-space: nowrap; }
 .sky-pill {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 20px;
   padding: 6px 12px 6px 10px; border-radius: 999px; background: #fff;
@@ -187,7 +187,9 @@
 .sky-link { border: 0; background: none; color: var(--sky-accent); font-weight: 600; font-size: 15px; min-height: 44px; cursor: pointer; white-space: nowrap; }
 
 .sky-section { margin-top: 36px; }
-.sky-sh { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 0 4px 12px; }
+/* The note sits beside the heading when both fit; in a narrow column it drops below
+   instead of squeezing the heading onto two lines. */
+.sky-sh { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; padding: 0 4px 12px; }
 .sky-sh h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
 .sky-sh p { margin: 0; font-size: 14px; color: var(--sky-secondary); }
 .sky-nums { display: grid; grid-template-columns: 1.1fr 1fr 1.15fr; gap: 14px; }

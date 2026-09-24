@@ -371,8 +371,9 @@ export function Report({
   );
   const subtitle = (
     <>
-      {dateLabel(report.plan.forecastDate)} · {w.displayStartTime} start · {report.plan.travelWindowHours} hours
-      {data.weather.elevation != null && <> · {w.formatElevationDisplay(Number(data.weather.elevation))}</>}
+      {/* Line breaks fall between the parts, never inside "7:00 AM" or "13,775 ft". */}
+      <span className="sky-nowrap">{dateLabel(report.plan.forecastDate)}</span> · <span className="sky-nowrap">{w.displayStartTime} start</span> · <span className="sky-nowrap">{report.plan.travelWindowHours} hours</span>
+      {data.weather.elevation != null && <> · <span className="sky-nowrap">{w.formatElevationDisplay(Number(data.weather.elevation))}</span></>}
       <span className="sky-generated"> · Generated {ageLabel(data.generatedAt)}</span>
     </>
   );

@@ -2,7 +2,7 @@
    tradeoff cards, a side-by-side table and the selected day's detail. */
 .sky-compare { color: var(--sky-label); }
 .field-compare-layout > div { min-width: 0; }
-.sky-compare-results { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0; min-width: 0; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); }
+.sky-compare-results { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0; min-width: 0; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); container: compare-results / inline-size; }
 .sky-compare-results > * { min-width: 0; }
 .sky-compare-results > .sky-notice { margin: 0 0 12px; }
 
@@ -57,7 +57,7 @@
 .compare-highlight-days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .compare-highlight-days button {
   min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--sky-fill);
-  color: var(--sky-label); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  color: var(--sky-label); font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
 }
 .compare-highlight-days button[aria-pressed="true"] { background: var(--sky-label); color: var(--sky-bg); font-weight: 600; }
 
@@ -69,6 +69,8 @@
 .compare-table th:first-child { position: sticky; left: 0; z-index: 1; background: var(--sky-surface); font-size: 13px; color: var(--sky-secondary); font-weight: 600; }
 .compare-table td { white-space: normal; min-width: 110px; vertical-align: top; }
 .compare-table thead th { vertical-align: bottom; }
+/* Row labels line up with the first line of each day's value, not the middle of a tall cell. */
+.compare-table tbody th { vertical-align: top; }
 .compare-table thead button {
   display: grid; gap: 4px; justify-items: start; width: 100%; min-height: 44px; padding: 6px 8px; margin: -6px -8px;
   border: 0; border-radius: 10px; background: none; color: var(--sky-label); font: inherit; text-align: left; cursor: pointer;
@@ -92,6 +94,12 @@
 .compare-selected-detail { gap: 10px; scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px); }
 .compare-selected-detail .sky-card-lede { margin: 0; }
 .sky-compare-hourly { margin-top: 56px; }
+
+/* Beside the plan form on a small laptop the results column is too narrow for three
+   tradeoff cards; stack them so each day chip keeps to one line. */
+@container compare-results (max-width: 540px) {
+  .sky-trio.compare-highlights { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+}
 
 @media (max-width: 760px) {
   .sky-day-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label fact" "strip strip"; gap: 6px 10px; }

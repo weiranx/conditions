@@ -37,7 +37,8 @@ export function buildDayOverDayChanges(current: SafetyData, previous: SafetyData
   const currentDanger = parseOptionalFiniteNumber(current?.avalanche?.dangerLevel);
   const previousDanger = parseOptionalFiniteNumber(previous?.avalanche?.dangerLevel);
   if (Number.isFinite(currentDanger) && Number.isFinite(previousDanger) && currentDanger !== previousDanger) {
-    changes.push(`Avalanche danger changed ${formatSignedDelta(currentDanger - previousDanger)} step(s).`);
+    const levels = Math.abs(currentDanger - previousDanger);
+    changes.push(`Avalanche danger ${currentDanger > previousDanger ? 'rose' : 'fell'} ${levels} ${levels === 1 ? 'level' : 'levels'}.`);
   }
 
   const currentGust = parseOptionalFiniteNumber(current?.weather?.windGust);

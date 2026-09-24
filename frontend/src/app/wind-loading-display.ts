@@ -253,10 +253,10 @@ export function buildWindLoadingDisplay(
           ? `Directional coverage: ${Math.round(trendDirectionalCoverageRatio * 100)}% of trend hours reported usable direction.`
           : 'Directional coverage: not enough trend direction data.',
         directionalTrendWindDirections.length > 0 && trendAgreementRatio !== null
-          ? `Trend agreement: ${Math.round(trendAgreementRatio * 100)}% of ${directionalTrendWindDirections.length} nearby hour(s) align within 45 degrees.`
+          ? `Trend agreement: ${Math.round(trendAgreementRatio * 100)}% of ${directionalTrendWindDirections.length} nearby ${directionalTrendWindDirections.length === 1 ? 'hour aligns' : 'hours align'} within 45 degrees.`
           : 'Trend agreement: not enough directional trend data.',
         windTrendRows.length > 0
-          ? `Active loading window: ${activeTransportHours}/${windTrendRows.length} hour(s) show active wind-transport signal (${windLoadingActiveHoursDetail}).`
+          ? `Active loading window: active wind transport in ${activeTransportHours} of ${windTrendRows.length} ${windTrendRows.length === 1 ? 'hour' : 'hours'} (${windLoadingActiveHoursDetail}).`
           : null,
         secondaryWindAspects.length > 0 && Number.isFinite(windGustMph) && windGustMph >= 20
           ? `Secondary cross-loading possible on ${secondaryWindAspects.join(', ')} aspects.`
