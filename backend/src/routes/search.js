@@ -22,7 +22,8 @@ const registerSearchRoutes = ({ app, fetchWithTimeout, defaultFetchHeaders, peak
     try {
       const fetchOptions = { headers: defaultFetchHeaders };
       const bias = parseSearchBias(near);
-      const searchCacheKey = bias ? `${normalizeTextKey(query)}@${bias.key}` : normalizeTextKey(query);
+      // Separate components: query text could otherwise spell out another query's bias.
+      const searchCacheKey = JSON.stringify([normalizeTextKey(query), bias ? bias.key : null]);
       const apiResults = await nominatimSearchCache.getOrFetch(searchCacheKey, async () => {
         // More candidates than we show: businesses are dropped and outdoor features re-ranked first.
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=12&addressdetails=1&extratags=1&dedupe=1&accept-language=en${bias ? `&viewbox=${bias.viewbox}` : ''}`;

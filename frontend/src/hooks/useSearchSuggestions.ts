@@ -89,7 +89,9 @@ export function useSearchSuggestions({
     () => (Number.isFinite(nearLat) && Number.isFinite(nearLon) ? { lat: Math.round(nearLat), lon: Math.round(nearLon) } : null),
     [nearLat, nearLon],
   );
-  const nearKey = near ? `@${near.lat},${near.lon}` : '';
+  const nearKey = near ? `${near.lat},${near.lon}` : null;
+  // Separate components: query text could otherwise spell out another query's area.
+  const cacheKeyFor = useCallback((query: string) => JSON.stringify([normalizeSuggestionText(query), nearKey]), [nearKey]);
 
   const setSearchQuery = useCallback((value: string) => {
     setSearchQueryState(value);
@@ -136,7 +138,7 @@ export function useSearchSuggestions({
       return;
     }
 
-    const cacheKey = normalizeSuggestionText(query) + nearKey;
+    const cacheKey = cacheKeyFor(query);
     const cached = suggestionCacheRef.current.get(cacheKey);
 
     if (cached) {
@@ -205,7 +207,7 @@ export function useSearchSuggestions({
         setSearchLoading(false);
       }
     }
-  }, [getStoredSuggestionsForQuery, near, nearKey]);
+  }, [cacheKeyFor, getStoredSuggestionsForQuery, near]);
 
   const selectSuggestion = useCallback(
     (s: Suggestion) => {
@@ -271,7 +273,7 @@ export function useSearchSuggestions({
         return true;
       }
 
-      const cached = suggestionCacheRef.current.get(normalizeSuggestionText(query) + nearKey);
+      const cached = suggestionCacheRef.current.get(cacheKeyFor(query));
       if (cached && cached[0]) {
         setSuggestions(cached);
         selectSuggestion(cached[0]);
@@ -332,7 +334,7 @@ export function useSearchSuggestions({
         setSearchLoading(false);
       }
     },
-    [getStoredSuggestionsForQuery, near, nearKey, recordRecentSuggestion, selectSuggestion, setSearchQuery, updateObjectivePosition],
+    [cacheKeyFor, getStoredSuggestionsForQuery, near, recordRecentSuggestion, selectSuggestion, setSearchQuery, updateObjectivePosition],
   );
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

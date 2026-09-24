@@ -123,3 +123,25 @@ describe('place search', () => {
     expect(matchCatalogPeaks(peaks, 'mt. rain')).toEqual([{ ...peaks[0], type: 'peak', class: 'natural', kind: 'Peak' }]);
   });
 });
+
+describe('search route cache', () => {
+  test('a query that spells out a bias does not share results with the biased search', async () => {
+    const { registerSearchRoutes } = require('../src/routes/search');
+    let handler;
+    const app = { get: (_path, fn) => { handler = fn; } };
+    const urls = [];
+    const fetchWithTimeout = async (url) => {
+      urls.push(url);
+      const county = url.includes('viewbox') ? 'King County' : 'Kent County';
+      return { ok: true, json: async () => [place('water', 'lake', 'Snow Lake', county, 'Washington')] };
+    };
+    registerSearchRoutes({ app, fetchWithTimeout, defaultFetchHeaders: {}, peaks: [] });
+    const search = (query) => new Promise((resolve) => handler({ query }, { json: resolve }));
+
+    const unbiased = await search({ q: 'cachekeyprobe@47,-122' });
+    const biased = await search({ q: 'cachekeyprobe', near: '47,-122' });
+    expect(urls).toHaveLength(2);
+    expect(unbiased[0].name).toContain('Kent County');
+    expect(biased[0].name).toContain('King County');
+  });
+});
