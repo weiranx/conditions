@@ -404,7 +404,7 @@
 }
 .field-plan-form,
 .field-planner-map {
-  scroll-margin-top: 16px;
+  scroll-margin-top: calc(var(--field-sticky-top, 0px) + 16px);
 }
 .field-app .field-planner-map > .field-planner-map-heading {
   display: flex;

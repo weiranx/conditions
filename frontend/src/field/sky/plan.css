@@ -10,7 +10,7 @@
 }
 .field-plan-form.sky-plan .field-form-divider { border-top: 0; margin-top: 28px; padding-top: 0; }
 /* Lifted to the top of a phone's screen while typing, clear of the keyboard. */
-.field-plan-form.sky-plan .field-search { scroll-margin-top: 12px; }
+.field-plan-form.sky-plan .field-search { scroll-margin-top: calc(var(--field-sticky-top, 0px) + 12px); }
 .field-plan-form.sky-plan .field-form-divider .sky-plan-step { margin: 0; }
 
 .field-plan-form.sky-plan .field-plan-duration { min-width: 0; font-size: 13px; font-weight: 550; }

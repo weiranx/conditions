@@ -58,7 +58,8 @@ html:has(.landing) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-block: 20px;
+  /* Below the status bar when the page runs under it (viewport-fit=cover). */
+  padding-block: calc(20px + env(safe-area-inset-top, 0px)) 20px;
 }
 .landing-brand {
   display: inline-flex;
