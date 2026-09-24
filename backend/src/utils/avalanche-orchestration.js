@@ -1,4 +1,5 @@
 const { normalizeHttpUrl } = require('./url-utils');
+const { toFiniteOrNull: parseFiniteNumber } = require('./numbers');
 
 const AVALANCHE_UNKNOWN_MESSAGE =
   "No official avalanche center forecast covers this objective. Avalanche terrain can still be dangerous. Treat conditions as unknown and use conservative terrain choices.";
@@ -53,13 +54,6 @@ const parseForecastMonth = (dateValue) => {
   }
   const month = parseInt(match[2], 10) - 1;
   return Number.isFinite(month) && month >= 0 && month <= 11 ? month : null;
-};
-
-const parseFiniteNumber = (value) => {
-  if (value === null || value === undefined || typeof value === 'boolean'
-    || (typeof value === 'string' && !value.trim())) return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
 };
 
 const evaluateSnowpackSignal = (snowpackData) => {

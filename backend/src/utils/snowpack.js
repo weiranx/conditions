@@ -1,4 +1,5 @@
 const { createCache, normalizeCoordDateKey } = require('./cache');
+const { toFiniteOrNull } = require('./numbers');
 
 const CDEC_STATIONS = (() => {
   try {
@@ -52,7 +53,7 @@ const createSnowpackService = ({
       return null;
     }
     const candidates = values
-      .filter((entry) => entry && Number.isFinite(Number(entry.value)) && isValidIsoDate(String(entry.date || '')))
+      .filter((entry) => entry && toFiniteOrNull(entry.value) !== null && isValidIsoDate(String(entry.date || '')))
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
     if (!candidates.length) {
       return null;
@@ -118,7 +119,7 @@ const createSnowpackService = ({
       return null;
     }
     const valid = values
-      .filter((entry) => entry && Number.isFinite(Number(entry.value)) && isValidIsoDate(String(entry.date || '')))
+      .filter((entry) => entry && toFiniteOrNull(entry.value) !== null && isValidIsoDate(String(entry.date || '')))
       .map((entry) => ({ date: String(entry.date), value: Number(entry.value) }))
       .filter((entry) => entry.date <= targetIso);
     if (!valid.length) {
@@ -169,9 +170,9 @@ const createSnowpackService = ({
   };
 
   const compareCurrentToHistoricalAverage = (currentValue, averageValue) => {
-    const currentNumeric = Number(currentValue);
-    const averageNumeric = Number(averageValue);
-    if (!Number.isFinite(currentNumeric) || !Number.isFinite(averageNumeric) || averageNumeric < 0.5) {
+    const currentNumeric = toFiniteOrNull(currentValue);
+    const averageNumeric = toFiniteOrNull(averageValue);
+    if (currentNumeric === null || averageNumeric === null || averageNumeric < 0.5) {
       return {
         status: 'unknown',
         percentOfAverage: null,
@@ -201,8 +202,8 @@ const createSnowpackService = ({
       return Array.isArray(stationJson)
         ? stationJson.filter((station) =>
             ['SNTL', 'SNTLT', 'MSNT'].includes(String(station?.networkCode || '').toUpperCase()) &&
-            Number.isFinite(Number(station?.latitude)) &&
-            Number.isFinite(Number(station?.longitude)),
+            toFiniteOrNull(station?.latitude) !== null &&
+            toFiniteOrNull(station?.longitude) !== null,
           )
         : [];
     });
@@ -210,9 +211,9 @@ const createSnowpackService = ({
   const findNearestSnotelStations = (lat, lon, stations, maxDistanceKm = 140, limit = 3) => (
     (Array.isArray(stations) ? stations : [])
       .map((station) => {
-        const stationLat = Number(station?.latitude);
-        const stationLon = Number(station?.longitude);
-        if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) return null;
+        const stationLat = toFiniteOrNull(station?.latitude);
+        const stationLon = toFiniteOrNull(station?.longitude);
+        if (stationLat === null || stationLon === null) return null;
         return { station, distanceKm: haversineKm(lat, lon, stationLat, stationLon) };
       })
       .filter((candidate) => candidate && candidate.distanceKm <= maxDistanceKm)
@@ -220,14 +221,7 @@ const createSnowpackService = ({
       .slice(0, limit)
   );
 
-  const parseNohrscPixelValue = (resultEntry) => {
-    const raw = resultEntry?.attributes?.['Service Pixel Value'];
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric)) {
-      return null;
-    }
-    return numeric;
-  };
+  const parseNohrscPixelValue = (resultEntry) => toFiniteOrNull(resultEntry?.attributes?.['Service Pixel Value']);
 
   const _sampleNohrscPoint = async (sampleLat, sampleLon, extentPaddingDeg, fetchOptions) => {
     const mapExtent = `${(sampleLon - extentPaddingDeg).toFixed(4)},${(sampleLat - extentPaddingDeg).toFixed(4)},${(
@@ -429,8 +423,12 @@ const createSnowpackService = ({
     }
 
     const MISSING_VALUE = -9999;
-    const depthSensor18 = data.filter((e) => Number(e.SENSOR_NUM) === 18 && Number(e.VALUE) !== MISSING_VALUE && Number.isFinite(Number(e.VALUE)));
-    const sweSensor3 = data.filter((e) => Number(e.SENSOR_NUM) === 3 && Number(e.VALUE) !== MISSING_VALUE && Number.isFinite(Number(e.VALUE)));
+    const isReading = (e) => {
+      const value = toFiniteOrNull(e.VALUE);
+      return value !== null && value !== MISSING_VALUE;
+    };
+    const depthSensor18 = data.filter((e) => Number(e.SENSOR_NUM) === 18 && isReading(e));
+    const sweSensor3 = data.filter((e) => Number(e.SENSOR_NUM) === 3 && isReading(e));
 
     const latestDepth = depthSensor18.length ? depthSensor18[depthSensor18.length - 1] : null;
     const latestSwe = sweSensor3.length ? sweSensor3[sweSensor3.length - 1] : null;
@@ -506,10 +504,10 @@ const createSnowpackService = ({
         mapByElement[elementCode] = extractLatestAwdbValue(entry?.values, targetDate || todayIso);
       }
 
-      const snowDepthIn = Number.isFinite(Number(mapByElement.SNWD?.value)) ? Number(mapByElement.SNWD.value) : null;
-      const sweIn = Number.isFinite(Number(mapByElement.WTEQ?.value)) ? Number(mapByElement.WTEQ.value) : null;
-      const precipIn = Number.isFinite(Number(mapByElement.PREC?.value)) ? Number(mapByElement.PREC.value) : null;
-      const obsTempF = Number.isFinite(Number(mapByElement.TOBS?.value)) ? Number(mapByElement.TOBS.value) : null;
+      const snowDepthIn = toFiniteOrNull(mapByElement.SNWD?.value);
+      const sweIn = toFiniteOrNull(mapByElement.WTEQ?.value);
+      const precipIn = toFiniteOrNull(mapByElement.PREC?.value);
+      const obsTempF = toFiniteOrNull(mapByElement.TOBS?.value);
       const observedDate = mapByElement.SNWD?.date || mapByElement.WTEQ?.date || mapByElement.PREC?.date || mapByElement.TOBS?.date || null;
       const snwdEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'SNWD');
       const wteqEntry = elementData.find((entry) => String(entry?.stationElement?.elementCode || '').toUpperCase() === 'WTEQ');
@@ -547,24 +545,25 @@ const createSnowpackService = ({
         stationName: nearest.station.name || stationTriplet,
         swe: {
           currentIn: sweIn,
-          averageIn: Number.isFinite(Number(sweHistorical?.average)) ? Number(sweHistorical.average) : null,
+          averageIn: toFiniteOrNull(sweHistorical?.average),
           status: sweComparison.status,
           percentOfAverage: sweComparison.percentOfAverage,
-          sampleCount: Number.isFinite(Number(sweHistorical?.sampleCount)) ? Number(sweHistorical.sampleCount) : 0,
-          maxOffsetDays: Number.isFinite(Number(sweHistorical?.maxOffsetDays)) ? Number(sweHistorical.maxOffsetDays) : null,
+          sampleCount: toFiniteOrNull(sweHistorical?.sampleCount) ?? 0,
+          maxOffsetDays: toFiniteOrNull(sweHistorical?.maxOffsetDays),
         },
         depth: {
           currentIn: snowDepthIn,
-          averageIn: Number.isFinite(Number(snowDepthHistorical?.average)) ? Number(snowDepthHistorical.average) : null,
+          averageIn: toFiniteOrNull(snowDepthHistorical?.average),
           status: depthComparison.status,
           percentOfAverage: depthComparison.percentOfAverage,
-          sampleCount: Number.isFinite(Number(snowDepthHistorical?.sampleCount)) ? Number(snowDepthHistorical.sampleCount) : 0,
-          maxOffsetDays: Number.isFinite(Number(snowDepthHistorical?.maxOffsetDays)) ? Number(snowDepthHistorical.maxOffsetDays) : null,
+          sampleCount: toFiniteOrNull(snowDepthHistorical?.sampleCount) ?? 0,
+          maxOffsetDays: toFiniteOrNull(snowDepthHistorical?.maxOffsetDays),
         },
         overall: overallComparison,
         summary: overallSummary,
       };
 
+      const stationElevationFt = toFiniteOrNull(nearest.station.elevation);
       return {
         source: 'NRCS AWDB / SNOTEL',
         status: 'ok',
@@ -574,7 +573,7 @@ const createSnowpackService = ({
         networkCode: nearest.station.networkCode || null,
         stateCode: nearest.station.stateCode || null,
         distanceKm: Number(nearest.distanceKm.toFixed(1)),
-        elevationFt: Number.isFinite(Number(nearest.station.elevation)) ? Math.round(Number(nearest.station.elevation)) : null,
+        elevationFt: stationElevationFt === null ? null : Math.round(stationElevationFt),
         observedDate,
         snowDepthIn,
         sweIn,
@@ -624,15 +623,16 @@ const createSnowpackService = ({
           const code = String(entry?.stationElement?.elementCode || '').toUpperCase();
           values[code] = extractLatestAwdbValue(entry?.values, targetDate || todayIso);
         }
+        const stationElevationFt = toFiniteOrNull(station?.elevation);
         return [{
           stationTriplet,
           stationName: station?.name || stationTriplet,
           distanceKm: Number(distanceKm.toFixed(1)),
-          elevationFt: Number.isFinite(Number(station?.elevation)) ? Math.round(Number(station.elevation)) : null,
+          elevationFt: stationElevationFt === null ? null : Math.round(stationElevationFt),
           observedDate: values.SNWD?.date || values.WTEQ?.date || values.TOBS?.date || null,
-          snowDepthIn: Number.isFinite(Number(values.SNWD?.value)) ? Number(values.SNWD.value) : null,
-          sweIn: Number.isFinite(Number(values.WTEQ?.value)) ? Number(values.WTEQ.value) : null,
-          obsTempF: Number.isFinite(Number(values.TOBS?.value)) ? Number(values.TOBS.value) : null,
+          snowDepthIn: toFiniteOrNull(values.SNWD?.value),
+          sweIn: toFiniteOrNull(values.WTEQ?.value),
+          obsTempF: toFiniteOrNull(values.TOBS?.value),
         }];
       });
     };
@@ -733,8 +733,9 @@ const createSnowpackService = ({
           const mid = Math.floor(sorted.length / 2);
           return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
         };
-        const depths = snotelStations.map((station) => Number(station?.snowDepthIn)).filter(Number.isFinite);
-        const swes = snotelStations.map((station) => Number(station?.sweIn)).filter(Number.isFinite);
+        // A station without a depth (or SWE) sensor has no reading, not 0 in.
+        const depths = snotelStations.map((station) => toFiniteOrNull(station?.snowDepthIn)).filter((value) => value !== null);
+        const swes = snotelStations.map((station) => toFiniteOrNull(station?.sweIn)).filter((value) => value !== null);
         return {
           stationCount: snotelStations.length,
           medianDepthIn: median(depths),

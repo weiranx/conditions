@@ -1,6 +1,7 @@
 'use strict';
 
 const { createHash, randomUUID } = require('crypto');
+const { toFiniteOrNull: finiteNumber } = require('../utils/numbers');
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_BATCH_SIZE = 100;
@@ -34,12 +35,6 @@ const ACCOUNT_TIER_JOIN = `
     LIMIT 1
   ) account_tier ON TRUE
 `;
-
-const finiteNumber = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 
 const maxFinite = (values) => {
   const finite = values.map(finiteNumber).filter((value) => value !== null);

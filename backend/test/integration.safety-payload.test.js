@@ -224,6 +224,17 @@ describe('/api/safety response payload (mocked upstreams)', () => {
     expect(Array.isArray(res.body.pleasantness.factors)).toBe(true);
   }, 20000);
 
+  test('GET /api/safety uses the documented 12-hour window when travel_window_hours is omitted', async () => {
+    const res = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00`);
+    expect(res.status).toBe(200);
+    expect(res.body.weather.trend).toHaveLength(12);
+
+    const explicit = await request(app)
+      .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=08:00&travel_window_hours=4`);
+    expect(explicit.body.weather.trend).toHaveLength(4);
+  }, 20000);
+
   test('GET /api/safety preserves requested minutes separately from the provider period', async () => {
     const res = await request(app)
       .get(`/api/safety?lat=46.8800&lon=-121.7269&date=${FORECAST_DATE}&start=13:30`);

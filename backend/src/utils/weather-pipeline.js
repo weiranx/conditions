@@ -10,6 +10,7 @@ const {
   normalizeNoaaPressureHpa,
   resolveNoaaCloudCover,
 } = require('./weather-normalizers');
+const { toFiniteOrNull } = require('./numbers');
 const { buildVisibilityRisk, buildElevationForecastBands } = require('./visibility-risk');
 const {
   blendNoaaWeatherWithFallback,
@@ -214,7 +215,7 @@ async function fetchWeatherPipeline({
       .slice(forecastStartIndex, forecastStartIndex + 24)
       .map((p) => ({
         timeIso: p?.startTime || null,
-        tempF: Number.isFinite(Number(p?.temperature)) ? Number(p.temperature) : null,
+        tempF: toFiniteOrNull(p?.temperature),
         isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
       }));
     const precedingNight = buildPrecedingNight(periods.slice(Math.max(0, forecastStartIndex - 24), forecastStartIndex).map(p => ({
@@ -253,8 +254,8 @@ async function fetchWeatherPipeline({
         windDirection: findNearestWindDirection(periods, rowIndex),
         precipChance: trendPrecip,
         humidity: trendHumidity,
-        dewPoint: Number.isFinite(Number(trendDewPoint)) ? Number(trendDewPoint) : null,
-        cloudCover: Number.isFinite(Number(trendCloudCover)) ? Number(trendCloudCover) : null,
+        dewPoint: trendDewPoint,
+        cloudCover: trendCloudCover,
         pressure: trendPressure,
         condition: p.shortForecast || 'Unknown',
         isDaytime: typeof p?.isDaytime === 'boolean' ? p.isDaytime : null,
@@ -336,7 +337,7 @@ async function fetchWeatherPipeline({
         fieldSources: {
           temp: 'NOAA',
           feelsLike: 'NOAA',
-          dewPoint: Number.isFinite(Number(currentDewPoint)) ? 'NOAA' : 'Unavailable',
+          dewPoint: currentDewPoint !== null ? 'NOAA' : 'Unavailable',
           description: 'NOAA',
           windSpeed: 'NOAA',
           windGust: windGustSource,

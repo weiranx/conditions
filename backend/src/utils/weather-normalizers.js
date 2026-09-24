@@ -1,3 +1,5 @@
+const { toFiniteOrNull } = require('./numbers');
+
 const computeFeelsLikeF = (tempF, windMph) => {
   if (!Number.isFinite(tempF)) {
     return null;
@@ -10,16 +12,16 @@ const computeFeelsLikeF = (tempF, windMph) => {
 };
 
 const celsiusToF = (valueC) => {
-  const numeric = Number(valueC);
-  if (!Number.isFinite(numeric)) {
+  const numeric = toFiniteOrNull(valueC);
+  if (numeric === null) {
     return null;
   }
   return (numeric * 9) / 5 + 32;
 };
 
 const normalizeNoaaDewPointF = (dewpointField) => {
-  const value = Number(dewpointField?.value);
-  if (!Number.isFinite(value)) {
+  const value = toFiniteOrNull(dewpointField?.value);
+  if (value === null) {
     return null;
   }
   const unitCode = String(dewpointField?.unitCode || '').toLowerCase();
@@ -31,8 +33,8 @@ const normalizeNoaaDewPointF = (dewpointField) => {
 };
 
 const normalizePressureHpa = (value) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
+  const numeric = toFiniteOrNull(value);
+  if (numeric === null) {
     return null;
   }
   return Math.round(numeric * 10) / 10;
@@ -46,8 +48,8 @@ const normalizeNoaaPressureHpa = (barometricPressureField) => {
     return normalizePressureHpa(barometricPressureField > 2000 ? barometricPressureField / 100 : barometricPressureField);
   }
 
-  const rawValue = Number(barometricPressureField?.value);
-  if (!Number.isFinite(rawValue)) {
+  const rawValue = toFiniteOrNull(barometricPressureField?.value);
+  if (rawValue === null) {
     return null;
   }
   const unitCode = String(barometricPressureField?.unitCode || '').toLowerCase();
@@ -61,8 +63,8 @@ const normalizeNoaaPressureHpa = (barometricPressureField) => {
 };
 
 const clampPercent = (value) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
+  const numeric = toFiniteOrNull(value);
+  if (numeric === null) {
     return null;
   }
   return Math.max(0, Math.min(100, Math.round(numeric)));
@@ -115,11 +117,6 @@ const resolveNoaaCloudCover = (forecastPeriod) => {
   return { value: null, source: 'Unavailable' };
 };
 
-const toFiniteNumberOrNull = (value) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
-
 module.exports = {
   computeFeelsLikeF,
   celsiusToF,
@@ -130,5 +127,4 @@ module.exports = {
   inferNoaaCloudCoverFromIcon,
   inferNoaaCloudCoverFromForecastText,
   resolveNoaaCloudCover,
-  toFiniteNumberOrNull,
 };

@@ -12,13 +12,7 @@
  * Fetching lives in local-conditions-fetch.js.
  */
 
-const toFiniteOrNull = (value) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
+const { toFiniteOrNull } = require('./numbers');
 
 /**
  * Classify the direction of a flow/level time series.
@@ -154,7 +148,6 @@ const buildLocalConditions = ({
 });
 
 module.exports = {
-  toFiniteOrNull,
   classifyFlowTrend,
   categorizePm25,
   summarizeTides,

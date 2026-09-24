@@ -1,6 +1,7 @@
 const { computeFeelsLikeF } = require('./weather-normalizers');
 const { clampTravelWindowHours, parseIsoTimeToMs } = require('./time');
 const { adjustPointToElevation, highestElevationBetween } = require('./approach-elevation');
+const { toFiniteOrNull: finiteNumber } = require('./numbers');
 
 // Pleasantness is intentionally independent from the safety score. It describes
 // forecast comfort across the selected travel window; it must never be used as a
@@ -57,13 +58,6 @@ const AIR_QUALITY_CURVE = [
 ];
 
 const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, value));
-
-const finiteNumber = (value) => {
-  if (typeof value !== 'number' && typeof value !== 'string') return null;
-  if (typeof value === 'string' && !value.trim()) return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
 
 const inRange = (value, min, max = Infinity) => {
   const numeric = finiteNumber(value);

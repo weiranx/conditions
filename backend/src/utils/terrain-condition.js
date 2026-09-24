@@ -1,12 +1,5 @@
 const { snowEvidence, surfaceIntervals, meltFreezeAnalysis, groundMoisture, surfaceOutlook } = require('./surface-evidence');
-
-const toFinite = (value) => {
-  if (value === null || value === undefined || typeof value === 'boolean' || (typeof value === 'string' && value.trim() === '')) {
-    return null;
-  }
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
+const { toFiniteOrNull: toFinite } = require('./numbers');
 
 const deriveSnowProfile = ({
   hasSnowCoverage,

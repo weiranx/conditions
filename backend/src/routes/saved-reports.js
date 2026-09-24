@@ -6,6 +6,7 @@ const { readSessionToken } = require('../auth/account-access');
 const { FREE_ACCOUNT_TIER } = require('../auth/account-tier');
 const { REPORT_GENERATION_FEATURE_KEY, createReportUsageLimitService } = require('../auth/report-usage-limit');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
+const { toFiniteOrNull: parseFiniteNumber } = require('../utils/numbers');
 
 const MAX_SAVED_REPORT_BYTES = 4 * 1024 * 1024;
 const SAVED_REPORT_LIST_LIMIT = 100;
@@ -34,13 +35,6 @@ const normalizeReportCount = (value) => {
     throw new Error('Generated report count is unavailable.');
   }
   return count;
-};
-
-const parseFiniteNumber = (value) => {
-  if ((typeof value !== 'number' && typeof value !== 'string')
-    || (typeof value === 'string' && !value.trim())) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const isValidCalendarDate = (value) => {

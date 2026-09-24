@@ -7,15 +7,7 @@
  */
 
 const { FT_PER_METER } = require('./geo');
-
-const toFiniteOrNull = (value) => {
-  // Treat null/undefined/'' as missing — Number() would coerce these to 0.
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
+const { toFiniteOrNull } = require('./numbers');
 
 /**
  * NWS wind chill (°F). Only defined for temp <= 50°F and wind >= 3 mph;

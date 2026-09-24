@@ -11,15 +11,7 @@
 const { FT_PER_METER } = require('./geo');
 const { logger } = require('./logger');
 const { createCache, normalizeCoordKey } = require('./cache');
-
-const toFiniteOrNull = (value) => {
-  // Open-Meteo emits null for missing hours; Number(null) would coerce to 0.
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
+const { toFiniteOrNull } = require('./numbers');
 
 const parseClockToMinutes = (clock) => {
   const m = String(clock || '').match(/^(\d{1,2}):(\d{2})$/);

@@ -127,6 +127,24 @@ test('rejects a duration outside the supported 2–7 day range', async () => {
   expect(response.status).toBe(400);
 });
 
+test('rejects a missing coordinate instead of forecasting 0°, 0° and spending an allowance', async () => {
+  const usageService = {
+    available: true,
+    reserve: jest.fn().mockResolvedValue({ reservationId: 'reservation-id', duplicate: false, usage: USAGE }),
+    finish: jest.fn().mockResolvedValue(USAGE),
+  };
+  const invokeSafetyHandler = jest.fn();
+  for (const lat of [null, '', '  ']) {
+    const response = await request(makeApp({ usageService, invokeSafetyHandler }))
+      .post('/api/trip-forecasts')
+      .set('Idempotency-Key', 'multi-day-request-missing-lat')
+      .send({ lat, lon: -121.4, startDate: '2026-07-14', startTime: '07:00', durationDays: 3, travelWindowHours: 12 });
+    expect(response.status).toBe(400);
+  }
+  expect(usageService.reserve).not.toHaveBeenCalled();
+  expect(invokeSafetyHandler).not.toHaveBeenCalled();
+});
+
 test('rejects new multi-day forecasts when trip planning is disabled', async () => {
   const usageService = {
     available: true,

@@ -1,6 +1,7 @@
 'use strict';
 
 const { sanitizeReportForFeatureFlags } = require('../utils/report-feature-filter');
+const { toFiniteOrNull: finiteNumber } = require('../utils/numbers');
 
 const APP_NAME = 'Backcountry Conditions';
 
@@ -93,12 +94,6 @@ const compactText = (value, fallback = '', maxLength = 280) => {
     .trim();
   if (!text) return fallback;
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
-};
-
-const finiteNumber = (value) => {
-  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
 };
 
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);

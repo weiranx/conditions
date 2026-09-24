@@ -1,3 +1,5 @@
+const { toFiniteOrNull } = require('./numbers');
+
 const parseIsoTimeToMs = (value) => {
   if (typeof value !== 'string' || !value.trim()) {
     return null;
@@ -142,8 +144,9 @@ const parseIsoClockMinutes = (isoValue) => {
 };
 
 const clampTravelWindowHours = (rawValue, fallback = 12) => {
-  const numeric = Number(rawValue);
-  if (!Number.isFinite(numeric)) {
+  // An absent window (null, '') uses the fallback rather than clamping 0 up to 1 hour.
+  const numeric = toFiniteOrNull(rawValue);
+  if (numeric === null) {
     return fallback;
   }
   return Math.max(1, Math.min(24, Math.round(numeric)));

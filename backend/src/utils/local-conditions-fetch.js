@@ -6,8 +6,8 @@
 
 const { logger } = require('./logger');
 const { createCache, normalizeCoordDateKey } = require('./cache');
+const { toFiniteOrNull } = require('./numbers');
 const {
-  toFiniteOrNull,
   categorizePm25,
   summarizeTides,
   filterClosureAlerts,
@@ -63,7 +63,7 @@ const createLocalConditionsService = ({
         const nwps = await nwpsRes.json();
         const forecast = nwps?.forecast || {};
         const rows = Array.isArray(forecast?.data)
-          ? forecast.data.filter((row) => Number.isFinite(Number(row?.primary)) || Number.isFinite(Number(row?.secondary)))
+          ? forecast.data.filter((row) => toFiniteOrNull(row?.primary) !== null || toFiniteOrNull(row?.secondary) !== null)
           : [];
         if (rows.length) {
           const primaryIsFlow = /flow|discharge/i.test(String(forecast?.primaryName || ''));
@@ -71,8 +71,8 @@ const createLocalConditionsService = ({
           const flowMultiplier = /kcfs/i.test(primaryIsFlow ? forecast?.primaryUnits : forecast?.secondaryUnits) ? 1000 : 1;
           const normalizedRows = rows.map((row) => ({
             validTime: row?.validTime || null,
-            stageFt: primaryIsFlow ? Number(row?.secondary) : Number(row?.primary),
-            flowCfs: (primaryIsFlow ? Number(row?.primary) : secondaryIsFlow ? Number(row?.secondary) : NaN) * flowMultiplier,
+            stageFt: toFiniteOrNull(primaryIsFlow ? row?.secondary : row?.primary) ?? NaN,
+            flowCfs: (toFiniteOrNull(primaryIsFlow ? row?.primary : secondaryIsFlow ? row?.secondary : null) ?? NaN) * flowMultiplier,
           }));
           const peak = normalizedRows.reduce((best, row) => {
             const candidate = Number.isFinite(row.flowCfs) ? row.flowCfs : Number.isFinite(row.stageFt) ? row.stageFt : -Infinity;

@@ -1,6 +1,7 @@
 'use strict';
 
 const { logger } = require('./logger');
+const { toFiniteOrNull } = require('./numbers');
 
 const SH_TOKEN_URL = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token';
 const SH_PROCESS_URL = 'https://sh.dataspace.copernicus.eu/api/v1/process';
@@ -111,9 +112,7 @@ const findBestAcquisition = async ({ token, bbox3857, fetchWithTimeout }) => {
   const candidates = (payload?.features || []).map((feature) => ({
     id: feature?.id || null,
     acquiredAt: feature?.properties?.datetime || feature?.properties?.start_datetime || null,
-    cloudCover: Number.isFinite(Number(feature?.properties?.['eo:cloud_cover']))
-      ? Number(feature.properties['eo:cloud_cover'])
-      : null,
+    cloudCover: toFiniteOrNull(feature?.properties?.['eo:cloud_cover']),
   })).filter((candidate) => candidate.acquiredAt && Number.isFinite(Date.parse(candidate.acquiredAt)));
   if (!candidates.length) return null;
   candidates.sort((a, b) => Date.parse(b.acquiredAt) - Date.parse(a.acquiredAt));

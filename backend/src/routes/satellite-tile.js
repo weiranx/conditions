@@ -1,5 +1,6 @@
 const { fetchSentinelTile } = require('../utils/sentinel-tiles');
 const { assertFeatureEnabled } = require('../utils/feature-flags');
+const { toFiniteOrNull } = require('../utils/numbers');
 
 const registerSatelliteTileRoute = ({
   app,
@@ -18,7 +19,7 @@ const registerSatelliteTileRoute = ({
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=3600');
       if (tile?.metadata?.acquiredAt) res.setHeader('X-Imagery-Acquired-At', tile.metadata.acquiredAt);
-      if (Number.isFinite(Number(tile?.metadata?.cloudCover))) res.setHeader('X-Imagery-Cloud-Cover', String(tile.metadata.cloudCover));
+      if (toFiniteOrNull(tile?.metadata?.cloudCover) !== null) res.setHeader('X-Imagery-Cloud-Cover', String(tile.metadata.cloudCover));
       if (tile?.metadata?.selection) res.setHeader('X-Imagery-Selection', tile.metadata.selection);
       // Helmet's default Cross-Origin-Resource-Policy: same-origin blocks the browser
       // from rendering this as an <img> tile when the frontend is on a different origin

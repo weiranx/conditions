@@ -1,6 +1,7 @@
 'use strict';
 
 const { parseClockToMinutes } = require('./time');
+const { toFiniteOrNull: knownNumber } = require('./numbers');
 
 // Naismith's rule (3 mph plus 30 minutes per 1,000 ft of ascent) sets the
 // default ratio between distance and climbing. Only the ratio matters: segment
@@ -10,9 +11,6 @@ const DEFAULT_ROUTE_PACE = Object.freeze({ minutesPerMile: 20, ascentMinutesPer1
 // third of the ascent rate so steep descents are not treated as free.
 const DESCENT_SHARE_OF_ASCENT = 1 / 3;
 const KM_PER_MILE = 1.609344;
-
-const knownNumber = (value) => (value === null || value === undefined || value === '' ? null
-  : Number.isFinite(Number(value)) ? Number(value) : null);
 
 const sanitizeRoutePace = (raw) => {
   if (!raw || typeof raw !== 'object') return null;

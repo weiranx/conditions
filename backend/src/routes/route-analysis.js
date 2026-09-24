@@ -11,6 +11,7 @@ const {
 const { createRouteDataService, buildRouteTerrainProfile } = require('../utils/route-data');
 const { denyUnconfiguredAccountAccess } = require('../auth/account-access');
 const { finiteNumber, serializeWaypointReports } = require('../utils/route-briefing');
+const { toFiniteOrNull } = require('../utils/numbers');
 const {
   DEFAULT_ROUTE_PACE,
   appendReturnCheckpoint,
@@ -356,9 +357,9 @@ Return ONLY a valid JSON array with no explanation, no markdown, no code fences:
     }
     const safePeak = String(peak).slice(0, 200);
     const safeRoute = String(route).slice(0, 200);
-    const safeLat = Number(lat);
-    const safeLon = Number(lon);
-    if (!Number.isFinite(safeLat) || !Number.isFinite(safeLon)) {
+    const safeLat = toFiniteOrNull(lat);
+    const safeLon = toFiniteOrNull(lon);
+    if (safeLat === null || safeLon === null) {
       return res.status(400).json({ error: 'lat and lon must be valid numbers' });
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
