@@ -1936,6 +1936,16 @@ export function useWorkspace() {
         (_, value) =>
           `depth ~${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)}`,
       )
+      .replace(
+        /(\d+(?:\.\d+)?)\s?in of new snow\b/gi,
+        (_, value) =>
+          `${formatSnowDepthForElevationUnit(Number(value), preferences.elevationUnit)} of new snow`,
+      )
+      .replace(/(\d+(?:\.\d+)?)\s?in of rain\b/gi, (match, value) =>
+        preferences.elevationUnit === "m"
+          ? `${Math.round(Number(value) * 25.4)} mm of rain`
+          : match,
+      )
       .replace(/(-?\d+(?:\.\d+)?)\s?km\b/gi, (_, value) =>
         formatDistanceForElevationUnit(
           Number(value),

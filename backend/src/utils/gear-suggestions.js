@@ -27,6 +27,7 @@ const buildLayeringGearSuggestions = ({
   const snowpackEnabled = scoreFeatureEnabled('snowpackDetails');
   const weatherContextEnabled = scoreFeatureEnabled('weatherContextDetails');
   const contingencyEnabled = scoreFeatureEnabled('contingencyPlanning');
+  const daylightEnabled = scoreFeatureEnabled('daylightTimeline');
   const addSuggestion = (id, title, detail, category, tone, priority = 50, reason = '') => {
     if (typeof id !== 'string' || !id.trim() || typeof title !== 'string' || !title.trim()) {
       return;
@@ -253,7 +254,7 @@ const buildLayeringGearSuggestions = ({
       'Safety & rescue',
       'caution',
       15,
-      'Firm, icy snow with cold temperatures',
+      cold ? 'Firm, icy snow with cold temperatures' : `Icy trail with snow depth ~${snowDepth} nearby`,
     );
   }
 
@@ -338,7 +339,7 @@ const buildLayeringGearSuggestions = ({
     );
   }
 
-  if (hasDarkInWindow) {
+  if (daylightEnabled && hasDarkInWindow) {
     addSuggestion('headlamp-dark', 'Headlamp and spare batteries', 'Check it works before you leave, and keep it where you can reach it.', 'Navigation & comms', 'watch', 35, 'Part of your time window is after dark');
   }
 

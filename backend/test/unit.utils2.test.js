@@ -1705,6 +1705,11 @@ describe('buildLayeringGearSuggestions — reasons and daylight', () => {
       },
     });
     expect(dark.some((s) => s.id === 'headlamp-dark')).toBe(true);
+    expect(buildLayeringGearSuggestions({
+      ...baseSuggestionInput(),
+      weatherData: { ...baseSuggestionInput().weatherData, trend: [{ temp: 50, isDaytime: false }] },
+      scoreFeatures: { daylightTimeline: false },
+    }).some((s) => s.id === 'headlamp-dark')).toBe(false);
     expect(buildLayeringGearSuggestions(baseSuggestionInput()).some((s) => s.id === 'headlamp-dark')).toBe(false);
   });
 
@@ -1717,6 +1722,16 @@ describe('buildLayeringGearSuggestions — reasons and daylight', () => {
     const sun = suggestions.find((s) => s.id === 'sun-protection');
     expect(sun).toMatchObject({ title: 'Dark sunglasses and sunscreen', tone: 'watch' });
   });
+});
+
+test('alpine hardware on a warm icy trail cites snow depth, not cold', () => {
+  const suggestions = buildLayeringGearSuggestions({
+    ...baseSuggestionInput(),
+    trailStatus: 'icy',
+    snowpackData: { snotel: { snowDepthIn: 6 } },
+    weatherData: { ...baseSuggestionInput().weatherData, temp: 55, feelsLike: 55 },
+  });
+  expect(suggestions.find((s) => s.id === 'alpine-hardware').reason).toBe('Icy trail with snow depth ~6 in nearby');
 });
 
 describe('buildLayeringGearSuggestions — humidity moisture backup', () => {
