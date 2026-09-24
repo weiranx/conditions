@@ -1,9 +1,117 @@
-import { useId } from "react";
+import { useId, type ReactElement } from "react";
 import type { ElevationForecastBand } from "../../app/types";
 import { useWidth } from "./useWidth";
 import { spreadLabels } from "./spread-labels";
+import type { SkyHour } from "./sky-model";
 
 type Level = { label: string; ft: number; tone: "cold" | "snow" };
+type Weather = Pick<SkyHour, "kind" | "condition" | "precipChance" | "night">;
+
+/** Deterministic 0–1 noise so precipitation marks hold still between renders. */
+const noise = (i: number, j: number, salt: number) => {
+  const v = Math.sin(i * 127.1 + j * 311.7 + salt * 74.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+function Cloud({ x, y, s, className }: { x: number; y: number; s: number; className: string }) {
+  return (
+    <g className={className} transform={`translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${s})`}>
+      <circle cx="-16" cy="4" r="12" />
+      <circle cx="2" cy="-4" r="17" />
+      <circle cx="20" cy="4" r="12" />
+      <rect x="-28" y="4" width="60" height="12" rx="6" />
+    </g>
+  );
+}
+
+/**
+ * The hour's sky drawn over the section: sun or moon, cloud cover, and
+ * precipitation that falls as snow above the snow level (or freezing level)
+ * and as rain below it. Illustrative, like the ridge; driven by the forecast.
+ */
+function WeatherSky({ weather, plotW, height, y, phaseFt }: {
+  weather: Weather;
+  plotW: number;
+  height: number;
+  y: (ft: number) => number;
+  /** Elevation where precipitation turns from rain to snow, when known. */
+  phaseFt: number | null;
+}) {
+  const { kind, night } = weather;
+  const chance = Number.isFinite(weather.precipChance) ? weather.precipChance : 0;
+  const wet = kind === "rain" || kind === "snow" || kind === "storm" || chance >= 50;
+  const clouds = kind === "storm" ? 5 : wet || kind === "cloudy" ? 4 : kind === "partly" || kind === "fog" ? 2 : 0;
+  const heavy = wet || kind === "storm";
+  // "neutral" means the condition is unknown or unavailable, so draw no sun or stars for it.
+  const showSun = kind === "clear" || kind === "partly" || (kind === "fog" && !wet);
+  const cloudY = 34;
+  const cloudSpots = [[0.3, 0], [0.72, 6], [0.5, -4], [0.12, 8], [0.9, 2]] as const;
+  const scale = plotW < 420 ? 0.9 : 1.2;
+  // Pixels back to feet: y() is linear, so two probes recover it.
+  const y0 = y(0), perFt = (y(1000) - y0) / 1000;
+  const marks: ReactElement[] = [];
+  if (wet) {
+    const density = Math.min(0.85, Math.max(0.35, chance / 100));
+    const colW = 22, rowH = 24, startY = cloudY + 22;
+    for (let i = 0; i * colW < plotW; i += 1) {
+      for (let j = 0; startY + j * rowH < height; j += 1) {
+        if (noise(i, j, 1) > density) continue;
+        const mx = i * colW + noise(i, j, 2) * colW;
+        const my = startY + j * rowH + noise(i, j, 3) * rowH;
+        const ft = (my - y0) / perFt;
+        const snow = phaseFt !== null ? ft >= phaseFt : kind === "snow";
+        marks.push(snow
+          ? <circle key={`${i}-${j}`} className="mt-flake" cx={mx.toFixed(1)} cy={my.toFixed(1)} r="2.4" />
+          : <line key={`${i}-${j}`} className="mt-drop" x1={mx.toFixed(1)} y1={my.toFixed(1)} x2={(mx - 3).toFixed(1)} y2={(my + 9).toFixed(1)} />);
+      }
+    }
+  }
+  const sunX = plotW * 0.14, sunY = cloudY + 6;
+  return (
+    <g className="mt-weather" aria-hidden="true">
+      {night && (kind === "clear" || kind === "partly") && [0.08, 0.22, 0.41, 0.58, 0.83, 0.94].map((fx, i) => (
+        <circle key={fx} className="mt-star" cx={plotW * fx} cy={14 + noise(i, 0, 9) * 60} r={i % 2 ? 1 : 1.4} />
+      ))}
+      {showSun && (night
+        ? <path className="mt-moon" d={`M${sunX + 6},${sunY - 14} a14,14 0 1,0 8,24 a11,11 0 1,1 -8,-24 Z`} />
+        : (
+          <g className="mt-sun">
+            {Array.from({ length: 8 }, (_, i) => {
+              const a = (i * Math.PI) / 4;
+              return <line key={i} x1={sunX + Math.cos(a) * 19} y1={sunY + Math.sin(a) * 19} x2={sunX + Math.cos(a) * 25} y2={sunY + Math.sin(a) * 25} />;
+            })}
+            <circle cx={sunX} cy={sunY} r="13" />
+          </g>
+        ))}
+      {marks}
+      {cloudSpots.slice(0, clouds).map(([fx, dy], i) => (
+        <Cloud key={i} x={plotW * fx} y={cloudY + dy} s={scale * (i % 2 ? 0.85 : 1.05)} className={`mt-cloud${heavy ? " is-heavy" : ""}`} />
+      ))}
+      {kind === "storm" && (
+        <path className="mt-bolt" d={`M${plotW * 0.52 + 4},${cloudY + 20} l-10,22 h8 l-6,20 l18,-28 h-9 l7,-14 Z`} />
+      )}
+    </g>
+  );
+}
+
+/** Low valley fog, drawn over the ridge. */
+function Fog({ plotW, height }: { plotW: number; height: number }) {
+  return (
+    <g className="mt-fog" aria-hidden="true">
+      {[0.62, 0.72, 0.82].map((fy, i) => (
+        <rect key={fy} x={plotW * (i % 2 ? 0.05 : -0.05)} y={height * fy} width={plotW * 0.95} height="14" rx="7" />
+      ))}
+    </g>
+  );
+}
+
+/** Condition and precipitation chance; `maxLength` shortens the condition for the visible label. */
+function precipText(weather: Weather, maxLength = Infinity) {
+  const chance = Number.isFinite(weather.precipChance) ? Math.round(weather.precipChance) : null;
+  const condition = weather.condition.trim();
+  const shown = condition.length > maxLength ? `${condition.slice(0, maxLength - 1)}…` : condition;
+  return [shown, chance !== null && chance > 0 ? `${chance}% precip` : null].filter(Boolean).join(" · ");
+}
 
 /** Vertical space one band label (name line + temperature line) needs. */
 const BAND_LABEL_GAP = 38;
@@ -14,13 +122,15 @@ const BAND_LABEL_GAP = 38;
  * and the objective marked on the ridge. Heights are to scale; the ridge
  * shape is illustrative.
  */
-export function MountainSection({ bands, objectiveFt, objectiveLabel, target, levels, sky, format, when = "at your start" }: {
+export function MountainSection({ bands, objectiveFt, objectiveLabel, target, levels, sky, weather = null, format, when = "at your start" }: {
   bands: ElevationForecastBand[];
   objectiveFt: number | null;
   objectiveLabel: string;
   target: { ft: number; label: string } | null;
   levels: Level[];
   sky: { zenith: string; horizon: string } | null;
+  /** The selected hour's forecast, drawn into the sky. */
+  weather?: Weather | null;
   format: { elevation: (ft: number) => string; temp: (f: number) => string; wind: (mph: number) => string };
   /** Time phrase for the accessible label, e.g. "at 10:00 AM". */
   when?: string;
@@ -60,7 +170,11 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
   };
   const labelYs = spreadLabels(sorted.map((b) => y(b.elevationFt)), BAND_LABEL_GAP, 20, height - 20);
   const snow = levelsInView.find((l) => l.tone === "snow");
+  const phaseLevel = levels.find((l) => l.tone === "snow" && Number.isFinite(l.ft)) ?? levels.find((l) => l.tone === "cold" && Number.isFinite(l.ft));
+  const weatherText = weather ? precipText(weather, 32) : "";
+  const weatherDescription = weather ? precipText(weather) : "";
   const describe = [
+    ...(weatherDescription ? [weatherDescription] : []),
     ...sorted.map((b) => `${b.label} ${format.elevation(b.elevationFt)}: ${format.temp(b.temp)}, gusts ${format.wind(b.windGust)}`),
     ...levelsInView.map((l) => `${l.label} ${format.elevation(l.ft)}`),
   ].join(". ");
@@ -74,10 +188,18 @@ export function MountainSection({ bands, objectiveFt, objectiveLabel, target, le
             <stop offset="1" stopColor={sky?.horizon || "#d5e1ec"} stopOpacity="0.35" />
           </linearGradient>
           <clipPath id={`${id}-ridge`}><path d={ridgePath} /></clipPath>
+          <clipPath id={`${id}-plot`}><rect width={plotW} height={height} /></clipPath>
         </defs>
         <rect width={plotW} height={height} fill={`url(#${id}-sky)`} />
+        {weather && (
+          <g clipPath={`url(#${id}-plot)`}>
+            <WeatherSky weather={weather} plotW={plotW} height={height} y={y} phaseFt={phaseLevel?.ft ?? null} />
+          </g>
+        )}
         <path d={ridgePath} className="mt-ridge" />
         {snow && <rect x="0" y="0" width={plotW} height={y(snow.ft)} clipPath={`url(#${id}-ridge)`} className="mt-snow" />}
+        {weather?.kind === "fog" && <g clipPath={`url(#${id}-plot)`}><Fog plotW={plotW} height={height} /></g>}
+        {weatherText && <text className="mt-condition" x={plotW - 10} y="20" textAnchor="end">{weatherText}</text>}
         {levelsInView.map((l) => (
           <g key={l.label} className={`mt-level is-${l.tone}`}>
             <line x1="0" x2={plotW} y1={y(l.ft)} y2={y(l.ft)} strokeDasharray="5 4" />
