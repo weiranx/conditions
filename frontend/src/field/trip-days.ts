@@ -37,6 +37,8 @@ export function buildTripChatContext(days: MultiDayTripForecastDay[], plan: {
   const best = ranked[0];
   return {
     contextType: "multi-day-trip-plan",
+    // Built-in activity the days were checked as; frames the chat's answers.
+    activity: preferences.defaultActivity,
     featureFlags: flags,
     objective: {
       name: plan.objectiveName || "Selected objective",
