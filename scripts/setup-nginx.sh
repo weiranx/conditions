@@ -21,9 +21,12 @@ EMAIL=""
 WITH_MCP=true
 DRY_RUN=false
 
-SITES_AVAILABLE="${SUMMITSAFE_NGINX_SITE:-/etc/nginx/sites-available/summitsafe}"
-SITES_ENABLED="/etc/nginx/sites-enabled/summitsafe"
-ACME_ROOT=/var/www/certbot
+# The overrides exist for scripts/tests; production uses the defaults.
+NGINX_DIR="${SUMMITSAFE_NGINX_DIR:-/etc/nginx}"
+LETSENCRYPT_DIR="${SUMMITSAFE_LETSENCRYPT_DIR:-/etc/letsencrypt}"
+ACME_ROOT="${SUMMITSAFE_ACME_ROOT:-/var/www/certbot}"
+SITES_AVAILABLE="${SUMMITSAFE_NGINX_SITE:-$NGINX_DIR/sites-available/summitsafe}"
+SITES_ENABLED="$NGINX_DIR/sites-enabled/summitsafe"
 
 usage() {
   sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -51,7 +54,7 @@ done
 [[ "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] \
   || fail "--domain must be a hostname such as api.example.com."
 
-CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
+CERT_DIR="$LETSENCRYPT_DIR/live/${DOMAIN}"
 
 # Port 80 serves ACME challenges (for issuing and renewing) and redirects the
 # rest to HTTPS once the certificate exists.
@@ -179,6 +182,19 @@ fi
 command -v nginx >/dev/null 2>&1 || fail "nginx is not installed."
 
 backup=""
+
+# Puts back the site as it was before this run (or removes a site this run
+# created) and reloads nginx, so a failed run leaves the live proxy unchanged.
+restore_previous_site() {
+  if [ -n "$backup" ]; then
+    cp -p "$backup" "$SITES_AVAILABLE"
+    echo "==> Restored $backup" >&2
+  else
+    rm -f "$SITES_ENABLED" "$SITES_AVAILABLE"
+  fi
+  nginx -t && systemctl reload nginx
+}
+
 install_site() {
   local content="$1"
   if [ -f "$SITES_AVAILABLE" ] && [ -z "$backup" ]; then
@@ -190,13 +206,8 @@ install_site() {
   [ -L "$SITES_ENABLED" ] || ln -sfn "$SITES_AVAILABLE" "$SITES_ENABLED"
 
   if ! nginx -t; then
-    if [ -n "$backup" ]; then
-      cp -p "$backup" "$SITES_AVAILABLE"
-      echo "==> Restored $backup" >&2
-    else
-      rm -f "$SITES_ENABLED" "$SITES_AVAILABLE"
-    fi
-    fail "nginx rejected the generated configuration; nothing was reloaded."
+    restore_previous_site || true
+    fail "nginx rejected the generated configuration; the previous site is still live."
   fi
   systemctl reload nginx
 }
@@ -214,17 +225,21 @@ if [ ! -f "$CERT_DIR/fullchain.pem" ]; then
   install_site "$(http_server 'return 503;')"
 
   echo "==> Requesting a Let's Encrypt certificate for $DOMAIN..."
-  certbot certonly --webroot --webroot-path "$ACME_ROOT" \
-    --domain "$DOMAIN" --email "$EMAIL" --agree-tos --non-interactive --no-eff-email
+  if ! certbot certonly --webroot --webroot-path "$ACME_ROOT" \
+    --domain "$DOMAIN" --email "$EMAIL" --agree-tos --non-interactive --no-eff-email; then
+    # The challenge-only site answers 503; never leave it serving the domain.
+    restore_previous_site || true
+    fail "certbot could not issue a certificate for $DOMAIN (check DNS and port 80); the previous site was restored."
+  fi
 else
   echo "==> Reusing the existing certificate in $CERT_DIR"
 fi
 
 # Renewals reload nginx so it serves the new certificate. Certificates issued
 # by the older standalone setup keep their stop/start hooks and still renew.
-mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-printf '#!/bin/sh\nsystemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
-chmod 755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+mkdir -p "$LETSENCRYPT_DIR/renewal-hooks/deploy"
+printf '#!/bin/sh\nsystemctl reload nginx\n' > "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx.sh"
+chmod 755 "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx.sh"
 
 echo "==> Writing $SITES_AVAILABLE"
 if [ -f "$SITES_AVAILABLE" ] && ! diff -u "$SITES_AVAILABLE" <(render_site); then

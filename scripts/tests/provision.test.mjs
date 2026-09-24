@@ -272,3 +272,90 @@ test('nginx setup rejects a malformed domain before touching anything', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /--domain must be a hostname/);
 });
+
+// Runs the real setup-nginx.sh against a temporary /etc layout; nginx,
+// systemctl and certbot are stubs that record their calls.
+function nginxFixture(t, { certbotExit = 0, existingSite = null } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'conditions-nginx-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bin = join(root, 'bin');
+  const nginxDir = join(root, 'nginx');
+  const letsencrypt = join(root, 'letsencrypt');
+  for (const dir of [bin, join(nginxDir, 'sites-available'), join(nginxDir, 'sites-enabled')]) mkdirSync(dir, { recursive: true });
+  const site = join(nginxDir, 'sites-available', 'summitsafe');
+  if (existingSite) writeFileSync(site, existingSite);
+  stub(bin, 'id', 'echo 0');
+  stub(bin, 'nginx', 'exit 0');
+  stub(bin, 'systemctl', 'exit 0');
+  stub(bin, 'certbot', `[ "$TEST_CERTBOT_EXIT" = 0 ] || exit "$TEST_CERTBOT_EXIT"
+mkdir -p "$SUMMITSAFE_LETSENCRYPT_DIR/live/api.example.test"
+touch "$SUMMITSAFE_LETSENCRYPT_DIR/live/api.example.test/fullchain.pem"`);
+  const env = {
+    ...process.env, PATH: `${bin}:${process.env.PATH}`, TEST_ROOT: root, TEST_CERTBOT_EXIT: String(certbotExit),
+    SUMMITSAFE_NGINX_DIR: nginxDir, SUMMITSAFE_LETSENCRYPT_DIR: letsencrypt, SUMMITSAFE_ACME_ROOT: join(root, 'acme'),
+  };
+  return {
+    site,
+    run: () => spawnSync('bash', [setupNginx, '--domain', 'api.example.test', '--email', 'ops@example.test'], { env, encoding: 'utf8' }),
+    calls: () => (existsSync(join(root, 'calls.txt')) ? readFileSync(join(root, 'calls.txt'), 'utf8') : ''),
+  };
+}
+
+test('issues a certificate, then serves the HTTPS site with a renewal reload hook', (t) => {
+  const f = nginxFixture(t);
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(readFileSync(f.site, 'utf8'), /listen 443 ssl;/);
+  assert.match(f.calls(), /certbot certonly --webroot/);
+});
+
+test('a failed certificate request restores the previous live site', (t) => {
+  const f = nginxFixture(t, { certbotExit: 1, existingSite: 'server { listen 80; server_name live; }\n' });
+  const result = f.run();
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /certbot could not issue a certificate.*previous site was restored/);
+  assert.equal(readFileSync(f.site, 'utf8'), 'server { listen 80; server_name live; }\n');
+  // Reloaded once for the ACME-only site and once more after restoring.
+  assert.equal(f.calls().match(/systemctl reload nginx/g).length, 2);
+});
+
+test('a failed certificate request on a new server removes the challenge-only site', (t) => {
+  const f = nginxFixture(t, { certbotExit: 1 });
+  assert.equal(f.run().status, 1);
+  assert.equal(existsSync(f.site), false);
+});
+
+// scripts/provision.sh with SSH, node and curl stubbed.
+function localFixture(t, { oauthStatus }) {
+  const root = mkdtempSync(join(tmpdir(), 'conditions-provision-local-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(root, 'ci-key'), 'private');
+  writeFileSync(join(root, 'ci-key.pub'), `${CI_KEY}\n`);
+  stub(bin, 'ssh', 'cat > /dev/null');
+  stub(bin, 'ssh-keyscan', 'exit 0');
+  stub(bin, 'node', 'exit 0');
+  stub(bin, 'curl', `printf '%s' "${oauthStatus}"`);
+  const result = spawnSync('bash', [fileURLToPath(new URL('../provision.sh', import.meta.url)),
+    '--host', '203.0.113.10', '--domain', 'api.example.test', '--frontend-origin', 'https://app.example.test',
+    '--ci-key', join(root, 'ci-key'), '--no-github'], {
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, TEST_ROOT: root }, encoding: 'utf8',
+  });
+  const smokeCall = readFileSync(join(root, 'calls.txt'), 'utf8').split('\n').find((line) => line.startsWith('node '));
+  return { result, smokeCall };
+}
+
+test('the local smoke test skips MCP until the backend has MCP OAuth settings', (t) => {
+  const { result, smokeCall } = localFixture(t, { oauthStatus: '404' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Skipping MCP checks: MCP OAuth is not configured/);
+  assert.match(smokeCall, /smoke-test\.mjs --api https:\/\/api\.example\.test --frontend https:\/\/app\.example\.test --no-mcp$/);
+});
+
+test('the local smoke test includes MCP once OAuth metadata is served', (t) => {
+  const { result, smokeCall } = localFixture(t, { oauthStatus: '200' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /Skipping MCP checks/);
+  assert.match(smokeCall, /--frontend https:\/\/app\.example\.test$/);
+});

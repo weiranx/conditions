@@ -11,7 +11,9 @@ const {
 const { buildDayOverDayChanges, formatScoreDelta, scoresComparable } = require('../src/utils/day-over-day');
 const { makeReport } = require('./fixtures/plan-report');
 
-const DATE = new Date().toISOString().slice(0, 10);
+// Tomorrow keeps every departure in the future. A 04:00 (UTC-7) start today is
+// over 12 hours old after 23:00 UTC, and the report then calls the forecast stale.
+const DATE = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 const PLAN = { lat: '46.8523', lon: '-121.7603', date: DATE, start: '07:00', travel_window_hours: '10', approach: 'off' };
 
 // The safety handler as the routes see it: an evaluated report for each query.

@@ -74,7 +74,7 @@ done
 [ -n "$HOST" ] || fail "--host is required."
 [ -n "$DOMAIN" ] || fail "--domain is required."
 [ -n "$FRONTEND_ORIGIN" ] || fail "--frontend-origin is required."
-for command in ssh ssh-keygen ssh-keyscan node; do
+for command in ssh ssh-keygen ssh-keyscan node curl; do
   command -v "$command" >/dev/null 2>&1 || fail "Required command '$command' is not installed."
 done
 
@@ -131,9 +131,18 @@ fi
 
 echo
 smoke_args=(--api "https://$DOMAIN" --frontend "$FRONTEND_ORIGIN")
+skip_mcp=false
 for arg in "${server_args[@]}"; do
-  if [ "$arg" = --no-mcp ]; then smoke_args+=(--no-mcp); fi
+  if [ "$arg" = --no-mcp ]; then skip_mcp=true; fi
 done
+# provision-server.sh never writes the backend's MCP OAuth settings, and until
+# they exist the backend serves no OAuth metadata. That step is listed above.
+if [ "$skip_mcp" = false ] && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+  "https://$DOMAIN/.well-known/oauth-authorization-server" || true)" != 200 ]; then
+  echo "==> Skipping MCP checks: MCP OAuth is not configured in the backend .env yet."
+  skip_mcp=true
+fi
+if [ "$skip_mcp" = true ]; then smoke_args+=(--no-mcp); fi
 if ! node "$ROOT/scripts/smoke-test.mjs" "${smoke_args[@]}"; then
   echo "Server provisioning finished, but the public smoke test failed (see above)." >&2
   echo "A new frontend host may still need VITE_API_BASE_URL=https://$DOMAIN and a deploy." >&2
