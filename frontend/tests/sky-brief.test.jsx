@@ -258,6 +258,23 @@ test("the brief lists every report section in reading order, with its state", ()
   assert.doesNotMatch(full, /sky-sections/, "the full report already contains every section");
 });
 
+test("a section never reads clear over a check it cannot confirm", () => {
+  const w = briefWorkspace();
+  const weather = (html) => html.slice(html.indexOf("<strong>Weather</strong>"), html.indexOf("</button>", html.indexOf("<strong>Weather</strong>")));
+  assert.match(weather(brief(w)), /Within limits/);
+  const noAqi = weather(brief({ ...w, safetyData: { ...w.safetyData, airQuality: null } }));
+  assert.match(noAqi, /Air quality unavailable/);
+  assert.doesNotMatch(noAqi, /Within limits/);
+});
+
+test("the freezing level is not compared with an unknown objective elevation", () => {
+  const w = briefWorkspace();
+  const card = (elevation) => numberCard(brief({ ...w, safetyData: { ...w.safetyData, weather: { elevation },
+    atmosphere: { freezingLevelFt: 11000 }, terrainCondition: { code: "snow_ice", signals: { refreezeQuality: "weak", freezeThawMinTempF: 30 } } } }, undefined, "snow-climbing"), "Overnight refreeze");
+  assert.match(card(9000), /freezing level sits above the objective/);
+  assert.doesNotMatch(card(null), /freezing level/);
+});
+
 test("every brief card names the section it opens", () => {
   const w = briefWorkspace({ sourceFreshnessRows: [{ label: "Alerts", issued: null, staleHours: 6, stateOverride: "fresh" }] });
   const html = brief(w);

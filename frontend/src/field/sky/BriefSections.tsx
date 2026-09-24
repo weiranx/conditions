@@ -2,7 +2,7 @@ import { BookOpen, Check, ChevronRight, CircleHelp, TriangleAlert } from "lucide
 import type { ReactNode } from "react";
 import type { Workspace } from "../model/useWorkspace";
 import { freshnessClass } from "../../app/core";
-import { durationLabel, plainRule, surfaceLabel, terrainStatus, type CheckStatus } from "./status";
+import { durationLabel, knownFeet, plainRule, surfaceLabel, terrainStatus, type CheckStatus } from "./status";
 import { isOverHour, spanLabel, skyRuns, type SkyHour } from "./sky-model";
 import { avalancheBriefCaption } from "../../app/avalanche-display";
 import { describeCheckpointBreach, type PlannedRouteSummary } from "../route-planning";
@@ -304,8 +304,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
   const refreeze = REFREEZE[signals?.refreezeQuality ?? "unknown"] ?? REFREEZE.unknown;
   const nightLow = signals?.freezeThawMinTempF;
   const freezingLevel = data.atmosphere?.freezingLevelFt;
-  const objectiveFt = Number(data.weather?.elevation);
-  const freezingAbove = measured(freezingLevel) && Number.isFinite(objectiveFt) && freezingLevel > objectiveFt;
+  const objectiveFt = knownFeet(data.weather?.elevation);
+  const freezingAbove = measured(freezingLevel) && objectiveFt !== null && freezingLevel > objectiveFt;
   const snowFirst = activity === "ski-touring" || activity === "snow-climbing";
 
   const numberCards: Record<ActivityNumber, ReactNode> = {
@@ -414,7 +414,8 @@ export function BriefSections({ w, hours, clock, scoreValue, insufficient, bridg
     forecast: weatherOver ? { status: "over", text: overRuns.length === 1 ? `Over ${spanLabel(hours, overRuns[0], clock)}` : `${overCount} hours over` }
       : airOver ? { status: "over", text: fireHigh ? `Fire risk ${String(w.fireRiskLabel || "high").toLowerCase()}` : `AQI ${aqi}` }
         : missingCount ? { status: "missing", text: `${missingCount} ${missingCount === 1 ? "hour" : "hours"} incomplete` }
-          : hours.length ? { status: "ok", text: "Within limits" } : { status: "missing", text: "Hourly forecast unavailable" },
+          : !hours.length ? { status: "missing", text: "Hourly forecast unavailable" }
+            : !measured(aqi) ? { status: "missing", text: "Air quality unavailable" } : { status: "ok", text: "Within limits" },
     timing: !daylightKnown ? { status: "missing", text: "Daylight unavailable" }
       : spare! < 0 ? { status: "over", text: `Back ${durationLabel(spare!)} after sunset` } : { status: "ok", text: `${durationLabel(spare!)} of daylight spare` },
     terrain: avalancheOver ? { status: "over", text: `Avalanche ${["", "Low", "Moderate", "Considerable", "High", "Extreme"][avalancheLevel!] || `level ${avalancheLevel}`}` }
