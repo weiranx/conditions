@@ -36,7 +36,18 @@ const stations = [
   { stationTriplet: 'THREE:XX:SNTL', stationId: '3', networkCode: 'SNTL', name: 'Three', latitude: 40.2, longitude: -111, elevation: 8000 },
 ];
 
-const createTestService = ({ failDetailed = false, failNearbyBatch = false } = {}) => {
+const viirsGranule = {
+  title: 'VNP10A1F.A2026015.h09v04.002',
+  time_start: '2026-01-15T00:00:00.000Z',
+  updated: '2026-01-16T03:00:00.000Z',
+  links: [],
+};
+
+const createTestService = ({
+  failDetailed = false,
+  failNearbyBatch = false,
+  cmr = async () => response({ feed: { entry: [] } }),
+} = {}) => {
   const requestedUrls = [];
   const fetchWithTimeout = jest.fn(async (url) => {
     requestedUrls.push(url);
@@ -55,7 +66,7 @@ const createTestService = ({ failDetailed = false, failNearbyBatch = false } = {
         ],
       });
     }
-    if (url.includes('cmr.earthdata.nasa.gov')) return response({ feed: { entry: [] } });
+    if (url.includes('cmr.earthdata.nasa.gov')) return cmr();
     return response({});
   });
   const service = createSnowpackService({
@@ -115,4 +126,48 @@ test('snowpack falls back to individual nearby requests when a batch fails', asy
     'TWO:XX:SNTL',
     'THREE:XX:SNTL',
   ]);
+});
+
+test('snowpack attaches VIIRS metadata that arrives with the other sources', async () => {
+  const { service } = createTestService({ cmr: async () => response({ feed: { entry: [viirsGranule] } }) });
+  const result = await service.fetchSnowpackData(40, -111, '2026-01-15', {});
+
+  expect(result.viirs).toMatchObject({ status: 'metadata_available', granuleId: viirsGranule.title });
+});
+
+test('snowpack does not wait for a slow VIIRS lookup and reuses it once it arrives', async () => {
+  let releaseCmr;
+  const { requestedUrls, service } = createTestService({
+    cmr: () => new Promise((resolve) => {
+      releaseCmr = () => resolve(response({ feed: { entry: [viirsGranule] } }));
+    }),
+  });
+
+  const first = await service.fetchSnowpackData(40, -111, '2026-01-15', {});
+  expect(first.snotel.stationTriplet).toBe('ONE:XX:SNTL');
+  expect(first.viirs).toBeNull();
+
+  releaseCmr();
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = await service.fetchSnowpackData(40, -111, '2026-01-15', {});
+
+  expect(second.viirs).toMatchObject({ granuleId: viirsGranule.title });
+  expect(requestedUrls.filter((url) => url.includes('cmr.earthdata.nasa.gov'))).toHaveLength(1);
+});
+
+test('future report dates share one snowpack lookup', async () => {
+  const { requestedUrls, service } = createTestService();
+  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+
+  const [tomorrow, nextDay] = await Promise.all([
+    service.fetchSnowpackData(40, -111, day(1), {}),
+    service.fetchSnowpackData(40, -111, day(2), {}),
+  ]);
+  const today = await service.fetchSnowpackData(40, -111, day(0), {});
+  const detailedRequests = requestedUrls.filter((url) => url.includes('elements=WTEQ,SNWD,PREC,TOBS'));
+
+  expect(nextDay).toEqual(tomorrow);
+  expect(tomorrow.snotel.note).toMatch(/future/);
+  expect(today.snotel.note).toBe('Nearest daily SNOTEL observation.');
+  expect(detailedRequests).toHaveLength(2);
 });

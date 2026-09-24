@@ -56,6 +56,7 @@ async function fetchWeatherPipeline({
   fetchWithTimeout,
   fetchObjectiveElevationFt,
   fetchOpenMeteoWeatherFallback,
+  prefetchOpenMeteoWeather = null,
   createUnavailableWeatherData,
   noaaCircuitBreaker = null,
 }) {
@@ -98,6 +99,11 @@ async function fetchWeatherPipeline({
   const prefetchedSolarPromise = prefetchedSolarDate
     ? fetchSolarData(prefetchedSolarDate)
     : null;
+
+  // NOAA hourly periods carry no barometric pressure, so nearly every NOAA
+  // report is supplemented from Open-Meteo, and a NOAA failure falls back to
+  // it. Start that fetch now rather than after the NOAA round trips.
+  prefetchOpenMeteoWeather?.({ lat: parsedLat, lon: parsedLon, fetchOptions });
 
   // NOAA is a single critical-path upstream hit on every request; when a breaker is
   // injected, fast-fail once it's been chronically failing instead of piling on more
