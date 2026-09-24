@@ -33,8 +33,10 @@
 /* Number and time inputs: right-aligned value, unit after it. */
 .sky-number-field {
   display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px 0 4px;
-  border-radius: 11px; background: var(--sky-fill); color: var(--sky-secondary); font-size: 14px;
+  border-radius: 11px; background: var(--sky-field); box-shadow: inset 0 0 0 1px var(--sky-field-border);
+  color: var(--sky-secondary); font-size: 14px; transition: box-shadow 0.15s ease;
 }
+.sky-number-field:hover { box-shadow: inset 0 0 0 1px var(--sky-field-border-hover); }
 .field-app .sky-number-field input {
   width: 72px; min-height: 40px; padding: 0 4px 0 8px; border: 0; border-radius: 9px; background: transparent;
   color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums;
@@ -42,14 +44,15 @@
 }
 .sky-number-field input::-webkit-outer-spin-button,
 .sky-number-field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.sky-number-field:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky-accent) 45%, transparent); }
+.sky-number-field:focus-within { box-shadow: inset 0 0 0 2px var(--sky-accent), var(--sky-focus-ring); }
 .field-app .sky-number-field input:focus { outline: none; }
 .sky-number-field > span { white-space: nowrap; }
 .field-app .sky-time-field {
-  min-height: 40px; padding: 0 12px; border: 0; border-radius: 11px; background: var(--sky-fill);
+  min-height: 40px; padding: 0 12px; border: 0; border-radius: 11px; background: var(--sky-field); box-shadow: inset 0 0 0 1px var(--sky-field-border);
   color: var(--sky-label); font: inherit; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
-.field-app .sky-time-field:focus { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky-accent) 45%, transparent); }
+.field-app .sky-time-field:hover { box-shadow: inset 0 0 0 1px var(--sky-field-border-hover); }
+.field-app .sky-time-field:focus { outline: none; box-shadow: inset 0 0 0 2px var(--sky-accent), var(--sky-focus-ring); }
 
 /* Limits: presets, then the four values */
 .sky-thresholds { display: grid; gap: 12px; min-width: 0; }
@@ -65,10 +68,14 @@
   font: inherit; text-align: left; cursor: pointer;
 }
 .field-app .sky-profile-grid button:hover { background: color-mix(in srgb, var(--sky-fill) 40%, var(--sky-surface)); }
-.field-app .sky-profile-grid button[aria-pressed="true"] { box-shadow: var(--sky-elevation), inset 0 0 0 2px var(--sky-accent); background: var(--sky-surface); }
+.field-app .sky-profile-grid button[aria-pressed="true"] { box-shadow: var(--sky-elevation), inset 0 0 0 2px var(--sky-accent); background: var(--sky-accent-tint); }
 .field-app .sky-profile-grid button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
-.sky-profile-grid button > svg { margin-bottom: 6px; color: var(--sky-secondary); }
-.sky-profile-grid button[aria-pressed="true"] > svg { color: var(--sky-accent); }
+/* The same glyph well as the plan form's activity cards. */
+.sky-profile-grid button > svg {
+  box-sizing: content-box; margin-bottom: 8px; padding: 7px; border-radius: 10px;
+  background: var(--sky-fill); color: var(--sky-secondary);
+}
+.sky-profile-grid button[aria-pressed="true"] > svg { background: var(--sky-accent-fill); color: var(--sky-on-accent); }
 .field-app .sky-profile-grid strong { font-size: 16px; font-weight: 650; }
 .field-app .sky-profile-grid small { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sky-secondary); }
 

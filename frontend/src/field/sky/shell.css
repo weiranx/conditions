@@ -20,7 +20,9 @@
   --f-primary-ink: #ffffff;
   --f-radius: 16px;
   --f-control-radius: 10px;
+  --f-font: var(--sky-font);
   --shell-bar: rgba(242, 243, 241, 0.8);
+  --shell-float: rgba(255, 255, 255, 0.78);
   --shell-side: 232px;
   --shell-toolbar: 56px;
 }
@@ -41,13 +43,14 @@ html[data-theme="dark"] {
   --f-primary-hover: #9bd6b8;
   --f-primary-ink: #0f1211;
   --shell-bar: rgba(15, 18, 17, 0.74);
+  --shell-float: rgba(34, 39, 37, 0.8);
 }
 @media (prefers-contrast: more) {
   :root { --f-muted: #3f4743; --f-line: #6b736f; --f-accent: #3f4743; }
   html[data-theme="dark"] { --f-muted: #d0d6d3; --f-line: #8d9792; --f-accent: #d0d6d3; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  :root, html[data-theme="dark"] { --shell-bar: var(--f-bg); }
+  :root, html[data-theme="dark"] { --shell-bar: var(--f-bg); --shell-float: var(--f-paper); }
 }
 
 /* ---------- Regular width: light sidebar ---------- */
@@ -73,34 +76,42 @@ html[data-theme="dark"] {
   color: var(--f-ink);
   border-right: 1px solid var(--sky-separator);
 }
-.field-app .field-brand { gap: 10px; padding: 6px 10px 18px; color: var(--f-ink); }
-.field-app .field-brand > span { width: 24px; height: 24px; color: var(--sky-accent); }
-.field-app .field-brand > span svg { width: 24px; height: 24px; stroke-width: 1.8; }
-.field-app .field-brand strong { font-size: 15px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+/* Brand lockup: the app-icon tile, the name, and "Conditions" as a quieter second line. */
+.field-app .field-brand { --brand-tile: 34px; align-items: center; gap: 11px; padding: 2px 8px 22px; color: var(--f-ink); }
+.field-app .field-brand strong { font-size: 15px; font-weight: 650; line-height: 1.2; letter-spacing: -0.015em; }
 .field-app .field-sidebar .field-brand small {
-  display: block; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; text-transform: none; color: inherit; opacity: 1;
+  display: block; margin: 1px 0 0; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--f-muted); opacity: 1;
 }
 .field-app .field-sidebar-label { display: none; }
 .field-app .field-sidebar nav { gap: 2px; margin: 0; }
 .field-app .field-sidebar nav button,
 .field-app .field-sidebar-bottom button {
-  gap: 10px; min-height: 36px; padding: 0 10px; border-radius: 9px;
-  font-size: 14px; font-weight: 450; color: var(--f-muted); background: transparent; box-shadow: none;
+  gap: 11px; min-height: 38px; padding: 0 10px; border-radius: 10px;
+  font-size: 14px; font-weight: 500; color: var(--f-muted); background: transparent; box-shadow: none;
 }
 .field-app .field-sidebar nav button svg,
 .field-app .field-sidebar-bottom button svg { width: 18px; height: 18px; }
 .field-app .field-sidebar button:hover { background: var(--f-rail-hover); color: var(--f-ink); }
-.field-app .field-sidebar button[aria-current="page"] {
-  background: var(--sky-fill); color: var(--f-ink); font-weight: 600; box-shadow: none;
+/* The current page is a raised chip, like a selected segment. */
+.field-app .field-sidebar button[aria-current="page"],
+.field-app .field-sidebar button[aria-current="page"]:hover {
+  background: var(--sky-raised); color: var(--f-ink); font-weight: 600; box-shadow: var(--sky-raised-shadow);
 }
 .field-app .field-sidebar button[aria-current="page"] svg { color: var(--sky-accent); }
+/* The signed-in account shows its initial, as on the account page. */
+.field-sidebar-avatar {
+  display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; margin-inline: -2px; border-radius: 50%;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--sky-accent) 80%, #fff), var(--sky-accent));
+  color: var(--sky-on-accent); font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: 0;
+}
 .field-app .field-sidebar :is(button, a):focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 1px; }
 .field-app .field-sidebar .field-sidebar-bottom { gap: 2px; border-top: 0; padding-top: 12px; }
 .field-nav-short { display: none; }
 
 /* ---------- Regular width: blurred toolbar ---------- */
+/* Above the search field (z-index 10) and the report's sticky section bar (15) scrolling under it. */
 .field-app .field-topbar {
-  position: sticky; top: 0; z-index: 10;
+  position: sticky; top: 0; z-index: 20;
   height: var(--shell-top); padding: var(--safe-top) max(32px, var(--safe-right)) 0 32px;
   background: var(--shell-bar);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
@@ -112,10 +123,10 @@ html[data-theme="dark"] {
 .field-app .field-topbar .field-breadcrumb-current { color: var(--f-muted); font-weight: 500; }
 .field-app .field-topbar > div { gap: 14px; font-size: 13px; color: var(--f-muted); }
 .field-app .field-topbar button {
-  min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px;
-  background: var(--sky-fill); color: var(--f-ink); font-size: 14px; font-weight: 500; box-shadow: none;
+  min-height: 34px; padding: 0 14px; gap: 6px; border: 0; border-radius: 999px;
+  background: var(--sky-raised); color: var(--f-ink); font-size: 14px; font-weight: 600; box-shadow: var(--sky-raised-shadow);
 }
-.field-app .field-topbar button:hover { background: color-mix(in srgb, var(--f-ink) 12%, var(--sky-fill)); }
+.field-app .field-topbar button:hover { background: var(--sky-raised-hover); }
 .field-app .field-topbar button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
 /* Symmetric, so the brief's sky can bleed evenly past both edges. */
 .field-app #field-main { padding-inline: max(32px, var(--safe-right)); }
@@ -124,8 +135,31 @@ html[data-theme="dark"] {
   border-top: 1px solid var(--sky-separator); max-width: none;
   font-size: 13px; color: var(--f-muted);
 }
-.field-app .field-footer > span { letter-spacing: 0.02em; font-size: 12px; font-weight: 600; }
+.field-app .field-footer > span { letter-spacing: 0.06em; font-size: 11.5px; font-weight: 650; }
+.field-app .field-footer > span svg { color: var(--sky-accent); }
 .field-app .field-footer p { margin: 0; }
+
+/* ---------- Page backdrop ---------- */
+/* Contour lines from a survey sheet and a faint glow sit behind each page title and fade out
+   before the content. The lines are generated, not a real place. The brief paints its sky here. */
+.field-app .field-content {
+  position: relative; isolation: isolate;
+  background: radial-gradient(900px 420px at 100% -60px, var(--sky-glow), transparent 70%) no-repeat;
+}
+.field-app .field-content::before {
+  content: ""; position: absolute; z-index: -1; top: 0; right: 0; width: min(100%, 1180px); height: 440px; pointer-events: none;
+  background: var(--sky-topo);
+  -webkit-mask: url("./topo.svg") right -40px top -60px / 1600px 640px no-repeat, radial-gradient(90% 100% at 100% 0%, #000 25%, transparent 78%);
+  -webkit-mask-composite: source-in;
+  mask: url("./topo.svg") right -40px top -60px / 1600px 640px no-repeat, radial-gradient(90% 100% at 100% 0%, #000 25%, transparent 78%);
+  mask-composite: intersect;
+}
+.field-app .field-content:has(.sky-report.is-brief) { background: none; }
+.field-app .field-content:has(.sky-report.is-brief)::before { content: none; }
+@media print {
+  .field-app .field-content { background: none; }
+  .field-app .field-content::before { content: none; }
+}
 
 /* ---------- The report brief: the sky runs to the window edges, under the toolbar ---------- */
 .field-content { overflow-x: clip; }
@@ -158,34 +192,33 @@ html[data-theme="dark"] {
     height: var(--shell-top); padding: var(--safe-top) max(6px, var(--safe-right)) 0 max(16px, var(--safe-left));
     border: 0; background: var(--f-bg);
   }
-  .field-app .field-brand { padding: 0; width: auto; }
-  .field-app .field-brand > span, .field-app .field-brand > span svg { width: 22px; height: 22px; }
-  .field-app .field-brand strong { font-size: 17px; }
-  .field-app .field-sidebar .field-brand small { display: inline; font-size: 17px; }
+  .field-app .field-brand { --brand-tile: 32px; gap: 10px; padding: 0; width: auto; }
+  .field-app .field-brand strong { font-size: 16px; }
   .field-app .field-sidebar-note { display: none; }
 
+  /* The tab bar floats as a glass capsule, clear of the screen edges and the home indicator. */
   .field-app .field-sidebar nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0;
-    margin: 0; padding: 6px max(8px, var(--safe-right)) max(8px, var(--safe-bottom)) max(8px, var(--safe-left));
+    position: fixed; left: max(12px, var(--safe-left)); right: max(12px, var(--safe-right)); bottom: max(10px, var(--safe-bottom)); z-index: 30;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px;
+    margin: 0; padding: 5px; border: 0; border-radius: 27px;
     overflow: visible;
-    background: var(--shell-bar);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    backdrop-filter: blur(20px) saturate(1.6);
-    border-top: 1px solid var(--sky-separator);
+    background: var(--shell-float);
+    -webkit-backdrop-filter: blur(22px) saturate(1.7);
+    backdrop-filter: blur(22px) saturate(1.7);
+    box-shadow: 0 0 0 1px var(--sky-hairline), 0 2px 6px rgba(8, 20, 14, 0.06), 0 14px 34px -12px rgba(8, 20, 14, 0.38);
   }
   .field-app .field-sidebar nav button {
     display: grid; justify-items: center; align-content: center; gap: 2px;
-    flex: none; min-width: 0; min-height: 49px; padding: 0 2px; border-radius: 10px;
+    flex: none; min-width: 0; min-height: 52px; padding: 0 2px; border-radius: 22px;
     font-size: 11px; font-weight: 500; line-height: 1.2; white-space: nowrap;
     color: var(--f-muted); background: transparent;
   }
   .field-app .field-sidebar nav button svg { width: 24px; height: 24px; }
-  .field-app .field-sidebar nav button[aria-current="page"] {
-    color: var(--sky-accent); background: transparent; box-shadow: none; font-weight: 600;
+  .field-app .field-sidebar nav button[aria-current="page"],
+  .field-app .field-sidebar nav button[aria-current="page"]:hover {
+    color: var(--sky-accent); background: color-mix(in srgb, var(--sky-accent) 12%, transparent); box-shadow: none; font-weight: 600;
   }
   .field-app .field-sidebar nav button:hover { background: transparent; color: var(--f-ink); }
-  .field-app .field-sidebar nav button[aria-current="page"]:hover { color: var(--sky-accent); }
   .field-app .field-sidebar nav .field-nav-label { display: none; }
   .field-app .field-sidebar nav .field-nav-short { display: block; }
 
@@ -197,14 +230,16 @@ html[data-theme="dark"] {
   .field-app .field-sidebar-bottom button[aria-current="page"] { color: var(--sky-accent); }
 
   .field-app .field-topbar { display: none; }
-  .field-app .field-content { padding-bottom: calc(64px + max(8px, var(--safe-bottom))); }
+  /* Clears the floating tab bar (62px tall, 10px or the home indicator above the bottom edge). */
+  .field-app .field-content { padding-bottom: calc(80px + max(10px, var(--safe-bottom))); }
   /* Symmetric, so full-bleed pieces (calc(50% - 50vw)) reach both edges. */
   .field-app #field-main { padding-inline: max(16px, var(--safe-left), var(--safe-right)); }
   .field-app .field-footer { padding: 24px max(16px, var(--safe-right)) 24px max(16px, var(--safe-left)); flex-wrap: wrap; }
 
   /* The brief's sky reaches the top of the screen; the header row sits on it. */
   .field-app:has(.sky-report.is-brief) .field-sidebar { background: transparent; }
-  .field-app:has(.sky-report.is-brief) :is(.field-brand, .field-brand > span, .field-sidebar-bottom button) { color: #fff; }
+  .field-app:has(.sky-report.is-brief) :is(.field-brand, .field-sidebar-bottom button) { color: #fff; }
+  .field-app:has(.sky-report.is-brief) .field-sidebar .field-brand small { color: rgba(255, 255, 255, 0.82); }
   .sky-report.is-brief .sky-hero {
     margin: calc(-1 * var(--shell-top)) calc(50% - 50vw) 0;
     padding-inline: 0;
@@ -240,36 +275,43 @@ html[data-theme="dark"] {
 /* Large title, plain secondary subtitle; kickers are quiet labels, not all-caps tags. */
 .field-app .field-kicker { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--f-muted); }
 .field-app .field-page-heading { padding: 20px 0 24px; }
-.field-app :is(.field-page-heading, .field-workspace-heading) h1 { margin: 4px 0 6px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
-.field-app :is(.field-page-heading, .field-workspace-heading) p { font-size: 15px; line-height: 1.45; color: var(--f-muted); }
+.field-app :is(.field-page-heading, .field-workspace-heading) h1 { margin: 4px 0 8px; font-size: 36px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
+.field-app :is(.field-page-heading, .field-workspace-heading) p { font-size: 16px; line-height: 1.5; color: var(--f-muted); }
 
-/* Buttons: filled, borderless, 44px targets. Accent is kept for the primary action. */
+/* Buttons, 44px targets. Secondary actions are raised white keys; the accent is a lit surface
+   kept for the primary action. */
 .field-app .field-button {
   min-height: 44px; padding: 0 16px; gap: 8px; border: 0; border-radius: 12px;
-  background: var(--sky-fill); color: var(--f-ink); font-size: 15px; font-weight: 600;
+  background: var(--sky-raised); color: var(--f-ink); font-size: 15px; font-weight: 600; box-shadow: var(--sky-raised-shadow);
 }
-.field-app .field-button:hover:not(:disabled) { background: color-mix(in srgb, var(--f-ink) 12%, var(--sky-fill)); color: var(--f-ink); }
-.field-app .field-button.field-button-primary { background: var(--f-primary); color: var(--f-primary-ink); }
-.field-app .field-button.field-button-primary:hover:not(:disabled) { background: var(--f-primary-hover); color: var(--f-primary-ink); }
+.field-app .field-button:hover:not(:disabled) { background: var(--sky-raised-hover); color: var(--f-ink); }
+.field-app .field-button.field-button-primary {
+  background: var(--sky-accent-fill); color: var(--f-primary-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 1px color-mix(in srgb, var(--sky-accent) 82%, #000), 0 1px 2px rgba(10, 40, 28, 0.18), 0 8px 18px -10px var(--sky-accent-glow);
+}
+.field-app .field-button.field-button-primary:hover:not(:disabled) { background: var(--sky-accent-fill-hover); color: var(--f-primary-ink); }
+/* A disabled primary drops its glow; secondary keys keep the ring that outlines them. */
+.field-app .field-button.field-button-primary:disabled { box-shadow: none; }
 .field-app .field-button:focus-visible { outline: 3px solid var(--sky-accent); outline-offset: 2px; }
 .field-app .field-text-button { color: var(--sky-accent); font-weight: 600; }
 
 /* Choice rows: a segmented control for modes, capsules for jump links and presets. */
 .field-app .shortlist-mode {
-  display: inline-flex; gap: 2px; padding: 2px; margin-bottom: 8px; border-radius: 11px; background: var(--sky-fill);
+  display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 8px; border-radius: 12px; background: var(--sky-fill);
 }
 .field-app .shortlist-mode .field-button {
-  min-height: 36px; padding: 0 16px; border-radius: 9px; background: transparent; color: var(--f-ink); font-size: 14px; font-weight: 500;
+  min-height: 36px; padding: 0 16px; border-radius: 9px; background: transparent; color: var(--f-muted); font-size: 14px; font-weight: 500; box-shadow: none;
 }
-.field-app .shortlist-mode .field-button[aria-pressed="true"] {
-  background: var(--f-paper); color: var(--f-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+.field-app .shortlist-mode .field-button[aria-pressed="true"],
+.field-app .shortlist-mode .field-button[aria-pressed="true"]:hover {
+  background: var(--sky-segment); color: var(--f-ink); font-weight: 600; box-shadow: var(--sky-raised-shadow);
 }
 .field-app .field-settings-shortcuts { gap: 6px; }
 .field-app .field-settings-shortcuts button,
 .field-app .field-button[aria-pressed]:not(.shortlist-mode *),
 .field-app .field-preset-list button {
   min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px;
-  background: var(--sky-fill); color: var(--f-ink); font-size: 14px; font-weight: 500;
+  background: var(--sky-fill); color: var(--f-ink); font-size: 14px; font-weight: 500; box-shadow: none;
 }
 .field-app .field-settings-shortcuts button:hover { background: color-mix(in srgb, var(--f-ink) 12%, var(--sky-fill)); color: var(--f-ink); }
 .field-app .field-button[aria-pressed="true"]:not(.shortlist-mode *),
@@ -281,8 +323,60 @@ html[data-theme="dark"] {
 .field-app .field-panel { border: 0; border-radius: 20px; }
 .field-app .field-empty-state { border: 0; border-radius: 20px; background: var(--f-paper); }
 .field-app .shortlist-mode { margin-top: 20px; }
-.field-app :is(.field-plan-form, .field-planner-map) { border: 0; border-radius: 20px; }
+.field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section) { border: 0; border-radius: 20px; }
+.field-app :is(.field-plan-form, .field-planner-map, .field-workspace-bottom > section, .field-empty-state) { box-shadow: var(--sky-elevation); }
 .field-app .field-library h2 { font-weight: 700; letter-spacing: -0.01em; }
 @media (max-width: 850px) {
   .field-app :is(.field-settings-shortcuts button, .field-button[aria-pressed], .field-preset-list button, .shortlist-mode .field-button) { min-height: 44px; }
+}
+
+/* Dialogs: a raised sheet over a softly blurred, neutral scrim. */
+.field-app .field-dialog {
+  border: 0; border-radius: 24px; background: var(--sky-surface); color: var(--sky-label);
+  box-shadow: 0 0 0 1px var(--sky-hairline), 0 10px 24px -12px rgba(8, 18, 12, 0.25), 0 32px 80px -24px rgba(8, 18, 12, 0.5);
+}
+.field-app .field-dialog::backdrop {
+  background: rgba(10, 16, 13, 0.36);
+  -webkit-backdrop-filter: blur(6px) saturate(1.2); backdrop-filter: blur(6px) saturate(1.2);
+}
+.field-app .field-dialog > header h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+@media (prefers-reduced-motion: no-preference) {
+  .field-app .field-dialog[open] { animation: sky-sheet-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .field-app .field-dialog[open]::backdrop { animation: sky-scrim-in 240ms ease-out; }
+}
+@keyframes sky-sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+@keyframes sky-scrim-in { from { opacity: 0; } }
+@media (prefers-reduced-transparency: reduce) {
+  .field-app .field-dialog::backdrop { background: rgba(10, 16, 13, 0.8); }
+}
+
+/* Search suggestions: a floating menu with inset, rounded rows. */
+.field-app .field-search-results {
+  margin-top: 6px; padding: 6px; border: 0; border-radius: 16px;
+  background: var(--sky-surface); box-shadow: var(--sky-elevation-raised);
+}
+.field-app .field-search-results button { gap: 10px; min-height: 44px; padding: 8px 10px; border-radius: 10px; color: var(--sky-label); font-size: 14px; }
+.field-app .field-search-results button > svg:first-child { color: var(--sky-accent); }
+.field-app .field-search-results button > svg:last-child:not(:first-child) { color: var(--sky-secondary); }
+.field-app .field-search-results :is(button:hover, button[aria-selected="true"]) { background: var(--sky-fill); }
+.field-app .field-search-results p { font-size: 13px; color: var(--sky-secondary); }
+
+/* Selection and scrollbars pick up the palette. */
+.field-app ::selection { background: color-mix(in srgb, var(--sky-accent) 24%, transparent); }
+html:has(.field-app) { scrollbar-color: color-mix(in srgb, var(--sky-label) 28%, transparent) transparent; }
+
+/* Loading. A screen still fetching its code shows a centred line that fades in only if the wait
+   is noticeable; generating a report shows the spinner in a medallion (no offset shadow, so
+   the rotation cannot swing it). */
+.field-app #field-main > p { display: grid; place-items: center; min-height: 50vh; margin: 0; color: var(--sky-secondary); font-size: 15px; }
+.field-app .field-loading { gap: 10px; }
+.field-app .field-loading > svg {
+  box-sizing: content-box; margin-bottom: 10px; padding: 14px; border-radius: 50%;
+  background: var(--sky-surface); color: var(--sky-accent);
+  box-shadow: 0 0 0 1px var(--sky-hairline), 0 0 0 9px color-mix(in srgb, var(--sky-fill) 45%, transparent);
+}
+.field-app .field-loading h1 { margin: 0; font: 700 28px/1.15 var(--f-font); letter-spacing: -0.022em; color: var(--sky-label); }
+.field-app .field-loading p { font-size: 15px; color: var(--sky-secondary); }
+@media (prefers-reduced-motion: no-preference) {
+  .field-app #field-main > p { animation: sky-scrim-in 300ms ease-out 400ms both; }
 }

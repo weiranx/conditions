@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { ArrowRight, Mountain } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { markLandingSeen } from "../app/landing-gate";
 import { loadUserPreferences } from "../app/preferences";
 import { followThemePreference } from "../app/theme";
+import { BrandMark } from "./BrandMark";
 import { SkyHero } from "./sky/SkyHero";
 import { buildSkyHours, type PlannedRow } from "./sky/sky-model";
 import "./sky/tokens.css";
@@ -96,7 +97,9 @@ export default function Landing() {
       <a className="landing-skip" href="#landing-main">Skip to content</a>
       <header className="landing-bar">
         <a className="landing-brand" href="/welcome">
-          <Mountain size={22} strokeWidth={1.5} aria-hidden="true" />
+          <span className="sky-brand-tile">
+            <BrandMark size={18} />
+          </span>
           Backcountry Conditions
         </a>
         <nav aria-label="Site">

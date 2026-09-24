@@ -34,6 +34,7 @@ import {
 import { dateLabel, peaks, type Plan } from "./data";
 import { WorkspacePlan } from "./WorkspacePlan";
 import { Dialog } from "./Dialog";
+import { BrandMark } from "./BrandMark";
 import { hasCoarsePointer } from "./touch";
 import { revealStart, scrollPageToTop, useNewPageStartsAtTop } from "./page-scroll";
 import type { AppView } from "../hooks/useUrlState";
@@ -258,8 +259,8 @@ export default function FieldApp() {
               navigate("home");
             }}
           >
-            <span>
-              <Mountain size={25} strokeWidth={1.4} aria-hidden="true" />
+            <span className="sky-brand-tile">
+              <BrandMark size={20} />
             </span>
             <strong>
               Backcountry <small>Conditions</small>
@@ -304,7 +305,13 @@ export default function FieldApp() {
               aria-current={w.view === "account" ? "page" : undefined}
               onClick={() => navigate("account")}
             >
-              <UserRound size={17} />
+              {account.user ? (
+                <span className="field-sidebar-avatar" aria-hidden="true">
+                  {account.user.displayName.slice(0, 1).toUpperCase() || <UserRound size={13} />}
+                </span>
+              ) : (
+                <UserRound size={17} />
+              )}
               {account.user?.displayName || "Your account"}
             </button>
           </div>
@@ -552,7 +559,7 @@ export default function FieldApp() {
           </main>
           <footer className="field-footer">
             <span>
-              <Mountain size={16} />
+              <BrandMark size={16} />
               BACKCOUNTRY CONDITIONS
             </span>
             <p>A planning aid. Verify conditions in the field.</p>

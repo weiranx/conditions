@@ -7,6 +7,8 @@
 .sky-compare-results > .sky-notice { margin: 0 0 12px; }
 
 .sky-compare-empty { align-items: flex-start; gap: 8px; padding: 22px 24px; }
+/* The older .field-compare-intro rule strips the card to a bare rule line; keep it a card. */
+.field-comparison .sky-compare-empty.field-compare-intro { padding: 22px 24px; border: 0; border-radius: var(--sky-radius); background: var(--sky-surface); }
 .sky-compare-empty > svg { color: var(--sky-secondary); }
 .sky-compare-empty h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .sky-compare-empty p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--sky-secondary); }
